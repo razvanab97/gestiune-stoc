@@ -1,0 +1,24 @@
+-- UPDATE imagini produse Verk
+UPDATE produse SET img='https://verk.store/hpeciai/253d098b67865a8a696fd92629c101eb/eng_ps_4x-solar-garden-lamps-white-ball-white-sprinkled-10-cm-4199_1.jpg' WHERE sku='12285';
+UPDATE produse SET img='https://verk.store/hpeciai/6caa516bdecd182c5dccb627c234e3c7/eng_ps_Walkie-talkie-2x-baofeng-bf888s-pmr-2914_1.jpg' WHERE sku='14365';
+UPDATE produse SET img='https://verk.store/hpeciai/c41e17e455053058204da0adecc362d9/eng_ps_Pendulum-balls-newton-desk-perpetum-xl-560_8.jpg' WHERE sku='18031';
+UPDATE produse SET img='https://verk.store/hpeciai/f333f51dfa1ba9d806f2c33eb41767ea/eng_ps_Pendulum-balls-newton-balls-desk-large-mirror-600_10.jpg' WHERE sku='18092';
+UPDATE produse SET img='https://verk.store/hpeciai/c288e04d36ad75cd65f3d949d930908d/eng_ps_Pendulum-balls-newton-desk-large-xxl-603_1.jpg' WHERE sku='18093';
+UPDATE produse SET img='https://verk.store/hpeciai/94be71a6f34f773d697f72829d11f46b/eng_ps_Diffuser-air-humidifier-aromatherapy-fragrance-4267_1.jpg' WHERE sku='24401';
+UPDATE produse SET img='https://verk.store/hpeciai/8d3b483d5fdd071a35047d1ae3e671c7/eng_ps_Rotary-flat-mop-for-floor-cleaning-with-wringer-hygienic-5366_1.jpg' WHERE sku='27193';
+UPDATE produse SET img='https://verk.store/hpeciai/ad766f817bfe73de26b9c4bed2c71c16/eng_ps_Loft-toilet-paper-holder-loft-wc-shelf-steel-5968_1.jpg' WHERE sku='27242';
+UPDATE produse SET img='https://verk.store/hpeciai/7ba9e2599f11d25a0072c4b353f549b7/eng_pm_KETTLE-MA-2367-12-8938_1.png' WHERE sku='27367';
+UPDATE produse SET img='https://verk.store/hpeciai/e558081d7aea99d1a1cc573dfa095db2/eng_ps_Clothes-rack-on-wheels-wardrobe-stand-2622_1.jpg' WHERE sku='01570';
+UPDATE produse SET img='https://verk.store/hpeciai/8f60df04deda1f21d1429c509b389dc3/eng_ps_Shoe-rack-rack-shoe-cabinet-4-shelves-3922_1.jpg' WHERE sku='01841';
+UPDATE produse SET img='https://verk.store/hpeciai/e3ac0972786669cad951db21fd86e057/eng_ps_Gaming-desk-pad-xxl-cosmos-stars-80x30-thick-5198_1.jpg' WHERE sku='06320';
+UPDATE produse SET img='https://verk.store/hpeciai/49df5fe07fa4fca0633108c3de6c17e9/eng_ps_Phone-holder-tablet-holder-metal-non-slip-stand-6550_1.jpg' WHERE sku='04109_CZ';
+UPDATE produse SET img='https://verk.store/hpeciai/a6f6e139ebf51e76970f98f8376a62b0/eng_ps_Large-furniture-repair-kit-markers-waxes-3128_9.jpg' WHERE sku='01686';
+UPDATE produse SET img='https://verk.store/hpeciai/b74f44d03969d8a4497ad1b765527e4b/eng_ps_Furniture-repair-kit-markers-waxes-3129_10.jpg' WHERE sku='01687';
+UPDATE produse SET img='https://verk.store/hpeciai/d12206afdc8b962140adc3ac82f44f81/eng_ps_Large-gaming-mouse-pad-map-90x40-office-3008_1.jpg' WHERE sku='06205';
+UPDATE produse SET img='https://verk.store/hpeciai/bc3027d8681ed883b52b6e04d8e46888/eng_ps_Laundry-dryer-folding-stand-large-204_1.jpg' WHERE sku='01371';
+UPDATE produse SET img='https://verk.store/hpeciai/b629204c176d6f0c29665ac794777bc5/eng_ps_Charging-dock-for-ps4-pad-2x-2996_1.jpg' WHERE sku='06216';
+UPDATE produse SET img='https://verk.store/hpeciai/43e98233c55b25c3cfdf1fb2181707d6/eng_ps_Cat-litter-tray-large-closed-for-litter-shovel-sturdy-pull-out-6804_8.jpg' WHERE sku='19465_SZ';
+UPDATE produse SET img='https://verk.store/hpeciai/13c22ae6197d3473c614d6c940f9a67c/eng_ps_Rubber-swivel-chair-castors-5pcs-3103_1.jpg' WHERE sku='01725';
+UPDATE produse SET img='https://verk.store/hpeciai/98949794edfe97846710a01f687cc434/eng_ps_Shoe-rack-rack-shoe-cabinet-5-shelves-3920_1.jpg' WHERE sku='01840';
+UPDATE produse SET img='https://verk.store/hpeciai/f8c4cab408459f92cc3703d930da817c/eng_ps_Metal-safe-safe-box-key-locker-cipher-code-4217_1.jpg' WHERE sku='01882';
+UPDATE produse SET img='https://verk.store/hpeciai/fcf15cb310ae04e973aa9c316b58fba0/eng_ps_Key-ring-key-tag-100-pcs-2167_1.jpg' WHERE sku='01472';
