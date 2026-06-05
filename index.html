@@ -1472,6 +1472,37 @@ function addInvLine(){
 }
 function removeInvLine(id){document.getElementById(id)?.remove();invLines=invLines.filter(x=>x!==id);previewInv();}
 function handleInvFile(ev){const f=ev.target.files[0];if(!f)return;f.name.split('.').pop().toLowerCase()==='pdf'?parsePDFWithAI(f):parseCSV(f);}
+
+/* ── ASOCIERE INTELIGENTĂ ── */
+function fuzzyMatch(a,b){
+  a=a.toLowerCase().replace(/[^a-z0-9]/g,' ').replace(/\s+/g,' ').trim();
+  b=b.toLowerCase().replace(/[^a-z0-9]/g,' ').replace(/\s+/g,' ').trim();
+  if(a===b)return 1;
+  if(a.includes(b)||b.includes(a))return 0.9;
+  const wa=new Set(a.split(' ').filter(w=>w.length>2));
+  const wb=new Set(b.split(' ').filter(w=>w.length>2));
+  const common=[...wa].filter(w=>wb.has(w)).length;
+  const total=Math.max(wa.size,wb.size,1);
+  return common/total;
+}
+function findExistingProduct(item){
+  if(item.sku){
+    const bySku=P.find(p=>p.sku&&p.sku.toLowerCase()===item.sku.toLowerCase());
+    if(bySku)return{product:bySku,confidence:'sku',score:1};
+  }
+  let best=null,bestScore=0;
+  for(const p of P){
+    const score=fuzzyMatch(item.name||'',p.name||'');
+    if(score>bestScore){bestScore=score;best=p;}
+  }
+  if(bestScore>=0.7)return{product:best,confidence:'name',score:bestScore};
+  return null;
+}
+function calcPrices(costRon){
+  const sell=Math.round((costRon+26)*100)/100;
+  const rec=Math.round(sell*1.25*100)/100;
+  return{sell,rec};
+}
 async function parsePDFWithAI(file){
   const parsing=document.getElementById('inv-parsing');
   parsing.style.display='block';
@@ -1509,23 +1540,24 @@ async function parsePDFWithAI(file){
     let resp='';
     if(pdfText&&pdfText.trim().length>50){
       // Send extracted text to Claude
-      const prompt=`Ești un expert în citirea facturilor. Analizează textul următor extras dintr-o factură și extrage toate produsele/articolele.
+      const prompt=`Ești expert în procesarea facturilor de la distribuitori en-gros. Extrage toate produsele.
 
 TEXT FACTURĂ:
-${pdfText.slice(0,8000)}
+${pdfText.slice(0,10000)}
 
-Extrage TOATE liniile de produse. Răspunde STRICT cu un JSON array valid:
-[{"sku":"<cod produs sau referință, null dacă lipsește>","name":"<denumire completă produs>","qty":<cantitate ca număr întreg>,"priceBuy":<preț unitar fără TVA ca număr zecimal, 0 dacă lipsește>,"priceSell":<preț vânzare recomandat, 0 dacă lipsește>}]
+Detectează automat formatul:
+- maxy.eu/verk.store: "Symbol: XXXXX", qty în "N szt/pcs", preț total EUR → priceBuy=total/qty, currency=EUR
+- Skroutz: "N × XX,XX Lei" → priceBuy=prețul per buc, currency=RON
+- Facturi RO standard: cantitate × preț unitar
 
-Reguli:
-- Ignoră liniile de total, subtotal, TVA, transport
-- qty trebuie să fie număr pozitiv
-- Dacă nu găsești produse, returnează []
-- FĂRĂ text suplimentar, FĂRĂ markdown, FĂRĂ explicații`;
+Răspunde STRICT cu JSON array (fără markdown, fără explicații):
+[{"sku":"<cod/symbol sau null>","name":"<denumire în română>","qty":<întreg pozitiv>,"priceBuy":<preț/buc număr>,"currency":"<EUR sau RON>"}]
+
+Reguli: ignoră total/TVA/transport, consolidează duplicate, qty>0 obligatoriu`;
 
       resp=await callClaude([{role:'user',content:prompt}],
-        'Ești un expert în procesarea facturilor. Răspunzi DOAR cu JSON valid, niciodată cu altceva.',
-        2000);
+        'Ești expert procesare facturi. Răspunzi DOAR cu JSON array valid, niciodată altceva.',
+        3000);
     } else {
       // Fallback: try sending as base64 document with beta header
       const b64=await new Promise(res=>{
@@ -1595,34 +1627,70 @@ function previewInv(){
 function renderInvPreview(){
   const prev=document.getElementById('inv-preview');
   if(!invParsed.length){prev.innerHTML='';document.getElementById('inv-info').textContent='Adaugă produse';document.getElementById('inv-apply-btn').disabled=true;return;}
+  // Calculează prețuri RON și asociere pentru fiecare item
+  invParsed.forEach(item=>{
+    const EUR_RON=5.07;
+    if(!item.costRon){
+      item.costRon=item.currency==='EUR'?Math.round(item.priceBuy*EUR_RON*100)/100:(item.priceBuy||0);
+    }
+    const match=findExistingProduct(item);
+    item._match=match;
+    const prices=calcPrices(item.costRon);
+    item._sell=prices.sell;
+    item._rec=prices.rec;
+  });
   const rows=invParsed.map(item=>{
-    const ex=P.find(p=>p.sku&&p.sku.toLowerCase()===item.sku.toLowerCase());
-    const tag=ex?`<span class="inv-match upd">actualizează</span>`:`<span class="inv-match new">nou</span>`;
-    const nm=ex?ex.name:(item.name||item.sku);
-    return`<div class="inv-prev-row"><div class="inv-prev-nm">${esc(nm)} ${tag}</div><div class="inv-prev-q">+${item.qty}</div>${item.priceBuy>0?`<div style="font-family:var(--mono);font-size:12px;color:var(--t3);min-width:80px;text-align:right">${item.priceBuy.toFixed(2)} RON</div>`:'<div></div>'}</div>`;
+    const match=item._match;
+    let tag,nm;
+    if(match){
+      const conf=match.confidence==='sku'?'SKU exact':`nume ${Math.round(match.score*100)}%`;
+      tag=`<span class="inv-match upd" title="${conf}">↑ actualizează</span>`;
+      nm=match.product.name;
+    } else {
+      tag=`<span class="inv-match new">+ nou</span>`;
+      nm=item.name||item.sku||'Produs necunoscut';
+    }
+    const priceStr=item.costRon>0?`${item.costRon.toFixed(2)} RON${item.currency==='EUR'?` (${item.priceBuy.toFixed(2)}€)`:''}`:'' ;
+    return`<div class="inv-prev-row"><div class="inv-prev-nm">${esc(nm)} ${tag}</div><div class="inv-prev-q">+${item.qty}</div><div style="font-family:var(--mono);font-size:11px;color:var(--t3);text-align:right;min-width:100px">${priceStr}</div></div>`;
   }).join('');
-  const newC=invParsed.filter(i=>!P.find(p=>p.sku&&p.sku.toLowerCase()===i.sku.toLowerCase())).length;
-  prev.innerHTML=`<div class="inv-preview"><div class="inv-prev-title">Previzualizare (${invParsed.length})</div>${rows}</div>`;
-  document.getElementById('inv-info').textContent=`${newC} produse noi · ${invParsed.length-newC} actualizări`;
+  const newC=invParsed.filter(i=>!i._match).length;
+  const updC=invParsed.length-newC;
+  prev.innerHTML=`<div class="inv-preview"><div class="inv-prev-title">Previzualizare (${invParsed.length} produse)</div>${rows}</div>`;
+  document.getElementById('inv-info').textContent=`${newC} produse noi · ${updC} actualizări stoc`;
   document.getElementById('inv-apply-btn').disabled=false;
 }
 async function applyInvoice(){
   showLoading('Se importă factura…');
+  let updated=0,created=0;
   for(const item of invParsed){
-    const idx=P.findIndex(p=>p.sku&&p.sku.toLowerCase()===item.sku.toLowerCase());
-    if(idx>=0){
-      P[idx].bought=(P[idx].bought||0)+item.qty;
-      if(item.priceBuy>0)P[idx].priceBuyTTC=item.priceBuy;
-      if(item.priceSell>0)P[idx].priceSell=item.priceSell;
-      await saveProdToDb(P[idx],P[idx].id);
-    }else{
-      const newP={name:item.name||item.sku,sku:item.sku,bought:item.qty,sold:0,minQty:0,priceBuyTTC:item.priceBuy||0,tvaAcq:0.21,priceSell:item.priceSell||0,priceRec:0,category:'',supplier:'',img:''};
+    const costRon=item.costRon||0;
+    const prices=calcPrices(costRon);
+    const match=item._match||findExistingProduct(item);
+    if(match){
+      const p=match.product;
+      const idx=P.findIndex(x=>x.id===p.id);
+      if(idx>=0){
+        P[idx].bought=(P[idx].bought||0)+item.qty;
+        if(costRon>0){P[idx].priceBuyTTC=costRon;P[idx].priceSell=prices.sell;P[idx].priceRec=prices.rec;}
+        await saveProdToDb(P[idx],P[idx].id);
+        updated++;
+      }
+    } else {
+      const newP={
+        name:item.name||item.sku||'Produs nou',
+        sku:item.sku||null,
+        bought:item.qty,sold:0,minQty:0,
+        priceBuyTTC:costRon,tvaAcq:0.21,
+        priceSell:prices.sell,priceRec:prices.rec,
+        category:'',supplier:'',img:''
+      };
       await saveProdToDb(newP,null);
+      created++;
     }
   }
   hideLoading();
-  renderToday();renderTable();closeInvoice();
-  toast(`${invParsed.length} produse importate ✓`);
+  await loadData();renderToday();renderTable();closeInvoice();
+  toast(`✓ ${created} produse noi · ${updated} actualizate`);
 }
 
 /* JURNAL */
