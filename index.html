@@ -238,107 +238,6 @@ tr:hover td{background:var(--surf2)}
 .inv-foot{padding:1.1rem 2rem;border-top:1px solid var(--b1);display:flex;gap:8px;justify-content:space-between;align-items:center;background:var(--surf2)}
 .inv-foot-info{font-size:12px;color:var(--t3)}
 /* RAPORT STOC */
-function goPageRaport(){
-  buildRaportCats();
-  renderRaport();
-}
-function buildRaportCats(){
-  const sel=document.getElementById('rpt-cat');
-  if(!sel)return;
-  const cats=[...new Set(P.map(p=>p.category||'General').filter(Boolean))].sort();
-  const prev=sel.value;
-  sel.innerHTML='<option value="">Toate categoriile</option>'+cats.map(c=>`<option value="${esc(c)}"${c===prev?' selected':''}>${esc(c)}</option>`).join('');
-}
-function renderRaport(){
-  if(!document.getElementById('page-raport').classList.contains('on'))return;
-  const cat=document.getElementById('rpt-cat')?.value||'';
-  const sort=document.getElementById('rpt-sort')?.value||'name';
-
-  let prods=[...P];
-  if(cat)prods=prods.filter(p=>(p.category||'General')===cat);
-
-  // Sortare
-  if(sort==='name')prods.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-  else if(sort==='stoc')prods.sort((a,b)=>((b.bought||0)-(b.sold||0))-((a.bought||0)-(a.sold||0)));
-  else if(sort==='cat')prods.sort((a,b)=>(a.category||'').localeCompare(b.category||'')|| (a.name||'').localeCompare(b.name||''));
-  else if(sort==='val')prods.sort((a,b)=>(((b.bought||0)-(b.sold||0))*(b.priceBuyTTC||0))-(((a.bought||0)-(a.sold||0))*(a.priceBuyTTC||0)));
-
-  const totalStoc=prods.reduce((s,p)=>s+(p.bought||0)-(p.sold||0),0);
-  const totalVal=prods.reduce((s,p)=>s+((p.bought||0)-(p.sold||0))*(p.priceBuyTTC||0),0);
-  const totalValSell=prods.reduce((s,p)=>s+((p.bought||0)-(p.sold||0))*(p.priceSell||0),0);
-  const lowStoc=prods.filter(p=>((p.bought||0)-(p.sold||0))>0&&((p.bought||0)-(p.sold||0))<=(p.minQty||3)).length;
-  const zero=prods.filter(p=>((p.bought||0)-(p.sold||0))<=0).length;
-
-  // Stats
-  document.getElementById('rpt-stats').innerHTML=`
-    <div class="rpt-stat"><div class="rpt-stat-lbl">Produse în raport</div><div class="rpt-stat-val">${prods.length}</div><div class="rpt-stat-sub">${zero} epuizate · ${lowStoc} stoc scăzut</div></div>
-    <div class="rpt-stat"><div class="rpt-stat-lbl">Total bucăți stoc</div><div class="rpt-stat-val">${totalStoc.toLocaleString('ro-RO')}</div><div class="rpt-stat-sub">bucăți fizice</div></div>
-    <div class="rpt-stat"><div class="rpt-stat-lbl">Valoare cost</div><div class="rpt-stat-val">${totalVal.toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})} RON</div><div class="rpt-stat-sub">preț achiziție cu TVA</div></div>
-    <div class="rpt-stat"><div class="rpt-stat-lbl">Valoare vânzare</div><div class="rpt-stat-val">${totalValSell.toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})} RON</div><div class="rpt-stat-sub">la preț min vânzare</div></div>`;
-
-  // Tabel
-  const now=new Date().toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
-  let rows=prods.map((p,i)=>{
-    const stoc=(p.bought||0)-(p.sold||0);
-    const stocCls=stoc<=0?'rpt-stoc-zero':stoc<=(p.minQty||3)?'rpt-stoc-low':'rpt-stoc-ok';
-    const valCost=(stoc*(p.priceBuyTTC||0)).toFixed(2);
-    const img=p.img?`<img src="${esc(p.img)}" style="width:32px;height:32px;object-fit:contain;border-radius:4px;border:1px solid var(--b1)" onerror="this.style.display='none'">`:`<div style="width:32px;height:32px;border-radius:4px;background:var(--bg1);display:flex;align-items:center;justify-content:center;font-size:14px">📦</div>`;
-    return`<tr>
-      <td style="width:36px;text-align:center"><span style="font-size:11px;color:var(--t3)">${i+1}</span></td>
-      <td style="width:42px">${img}</td>
-      <td><div style="font-weight:600;font-size:13px">${esc(p.name||'—')}</div>${p.sku?`<div style="font-size:10px;color:var(--t3);font-family:var(--mono)">${esc(p.sku)}</div>`:''}</td>
-      <td><span class="rpt-cat-badge">${esc(p.category||'—')}</span></td>
-      <td style="text-align:center"><span class="rpt-stoc-num ${stocCls}">${stoc}</span></td>
-      <td style="font-family:var(--mono);font-size:12px;color:var(--t2)">${(p.priceBuyTTC||0).toFixed(2)}</td>
-      <td style="font-family:var(--mono);font-size:12px;color:var(--acc);font-weight:600">${(p.priceSell||0).toFixed(2)}</td>
-      <td style="font-family:var(--mono);font-size:11px;color:var(--t3)">${valCost}</td>
-      <td style="text-align:center"><div class="rpt-check"></div></td>
-      <td style="min-width:80px;border-bottom:1px solid var(--b2)"></td>
-    </tr>`;
-  }).join('');
-
-  document.getElementById('rpt-table-wrap').innerHTML=`
-    <div class="rpt-print-header">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">
-        <div>
-          <div style="font-size:20px;font-weight:700">AB HOMES INVEST S.R.L.</div>
-          <div style="font-size:13px;color:#666;margin-top:2px">Inventar fizic depozit — ${now}</div>
-          ${cat?`<div style="font-size:12px;color:#666">Categorie: ${esc(cat)}</div>`:''}
-        </div>
-        <div style="text-align:right;font-size:12px;color:#666">
-          <div>${prods.length} produse · ${totalStoc} bucăți</div>
-          <div>Cost total: ${totalVal.toFixed(2)} RON</div>
-        </div>
-      </div>
-    </div>
-    <table class="rpt-table">
-      <thead><tr>
-        <th style="width:36px">#</th>
-        <th style="width:42px"></th>
-        <th>Produs / SKU</th>
-        <th>Categorie</th>
-        <th style="text-align:center">Stoc</th>
-        <th>Cost RON</th>
-        <th>Vânz. RON</th>
-        <th>Val. cost</th>
-        <th style="text-align:center;width:40px">✓</th>
-        <th>Obs. depozit</th>
-      </tr></thead>
-      <tbody>${rows}</tbody>
-      <tfoot><tr>
-        <td colspan="4" style="font-weight:700;font-size:12px;padding:12px 14px;border-top:2px solid var(--b1)">TOTAL</td>
-        <td style="font-family:var(--mono);font-weight:700;text-align:center;border-top:2px solid var(--b1)">${totalStoc}</td>
-        <td style="border-top:2px solid var(--b1)"></td>
-        <td style="border-top:2px solid var(--b1)"></td>
-        <td style="font-family:var(--mono);font-weight:700;font-size:12px;border-top:2px solid var(--b1)">${totalVal.toFixed(2)}</td>
-        <td colspan="2" style="border-top:2px solid var(--b1)"></td>
-      </tr></tfoot>
-    </table>`;
-}
-function printRaport(){
-  window.print();
-}
-
 /* JURNAL */
 .jrnl-tb{display:flex;gap:10px;margin-bottom:1.25rem;flex-wrap:wrap;align-items:center}
 .jd-card{background:var(--surf);border:1px solid var(--b1);border-radius:var(--r2);margin-bottom:10px;overflow:hidden;box-shadow:var(--sh)}
@@ -1865,17 +1764,6 @@ async function applyInvoice(){
 }
 
 /* RAPORT STOC */
-function goPageRaport(){
-  buildRaportCats();
-  renderRaport();
-}
-function buildRaportCats(){
-  const sel=document.getElementById('rpt-cat');
-  if(!sel)return;
-  const cats=[...new Set(P.map(p=>p.category||'General').filter(Boolean))].sort();
-  const prev=sel.value;
-  sel.innerHTML='<option value="">Toate categoriile</option>'+cats.map(c=>`<option value="${esc(c)}"${c===prev?' selected':''}>${esc(c)}</option>`).join('');
-}
 function renderRaport(){
   if(!document.getElementById('page-raport').classList.contains('on'))return;
   const cat=document.getElementById('rpt-cat')?.value||'';
