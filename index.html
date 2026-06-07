@@ -655,7 +655,7 @@ function buildRaportCats(){
     <div class="inv-drop">
       <input type="file" id="inv-file" accept=".csv,.txt,.pdf" onchange="handleInvFile(event)" onclick="event.stopPropagation()">
       <div class="inv-drop-ic">📄</div>
-      <div class="inv-drop-t">Trage un fișier PDF sau CSV aici<br><small style="opacity:.6">PDF factură · CSV comandă Jumbo (auto-detectat) · CSV (cod, nume, cant, p_acq, p_vanz) · TXT</small></div>
+      <div class="inv-drop-t">Trage un fișier PDF sau CSV aici<br><small style="opacity:.6">PDF factură · CSV comandă Jumbo · CSV platformă (Produs, SKU, Categorie, Cump., ...) · CSV (cod, nume, cant, p_acq, p_vanz) · TXT — formate auto-detectate</small></div>
     </div>
     <div class="inv-parsing" id="inv-parsing"><span class="spin"></span> Se procesează cu AI…</div>
     <div class="inv-sep">sau introdu manual</div>
@@ -1560,9 +1560,14 @@ function handleInvFile(ev){const f=ev.target.files[0];if(!f)return;routeInvFile(
 // Detectează formatul fișierului (PDF / CSV preset Jumbo / CSV generic) și rutează spre parserul potrivit
 function routeInvFile(f){
   if(f.name.split('.').pop().toLowerCase()==='pdf'){parsePDFWithAI(f);return;}
-  // Preset Jumbo: detectăm automat după antetul CSV (cod_jumbo) — funcționează identic la orice comandă viitoare
+  // Preset-uri: detectăm automat formatul după antetul CSV — funcționează identic la orice comandă viitoare
   const peek=new FileReader();
-  peek.onload=e=>{/cod_jumbo/i.test(e.target.result)?parseJumboCSV(f):parseCSV(f);};
+  peek.onload=e=>{
+    const t=e.target.result;
+    if(/cod_jumbo/i.test(t))parseJumboCSV(f);
+    else if(/sku/i.test(t)&&/cump/i.test(t)&&/recomandat/i.test(t))parsePlatformCSV(f);
+    else parseCSV(f);
+  };
   peek.readAsText(f.slice(0,1000),'UTF-8');
 }
 // Buton dedicat: deschide direct selectorul de fișier pentru CSV-uri preset de comandă (ex. Jumbo)
@@ -1766,6 +1771,42 @@ function parseJumboCSV(file){
     }));
     renderInvPreview();
     toast(`Preset Jumbo detectat · ${invParsed.length} produse din comandă ✓`);
+  };
+  r.readAsText(file,'UTF-8');
+}
+/* ── PRESET PLATFORMĂ: CSV cu coloanele tabelului de inventar (Produs, SKU, Categorie, Cump., ...) — coloana Cump. = cantitate nouă de adăugat la stoc ── */
+function parsePlatformCSV(file){
+  const r=new FileReader();
+  r.onload=e2=>{
+    const rows=parseCSVRows(e2.target.result);
+    if(rows.length<2){toast('CSV gol sau nerecunoscut','err');return;}
+    const hdr=rows[0].map(h=>h.trim().toLowerCase());
+    const find=names=>{for(const n of names){const i=hdr.findIndex(h=>h.includes(n));if(i>-1)return i;}return -1;};
+    const iName=find(['produs']),iSku=find(['sku']),iCat=find(['categorie']),iQty=find(['cump']),iCost=find(['cost']);
+    const agg={};
+    for(let i=1;i<rows.length;i++){
+      const row=rows[i];
+      const sku=(row[iSku]||'').trim();
+      const qty=parseInt(row[iQty])||0;
+      if(!sku||qty<=0)continue;
+      const name=(row[iName]||'').trim().replace(/\s+/g,' ');
+      const cat=(row[iCat]||'').trim();
+      const cost=parseFloat((row[iCost]||'').replace(',','.').replace(/[^\d.]/g,''))||0;
+      if(!agg[sku])agg[sku]={sku,name,qty:0,cost:0,n:0,category:cat};
+      const a=agg[sku];
+      a.qty+=qty;
+      if(cost>0){a.cost+=cost;a.n++;}
+      if(name.length>a.name.length)a.name=name;
+      if(cat&&!a.category)a.category=cat;
+    }
+    invParsed=Object.values(agg).map(g=>({
+      sku:g.sku,name:g.name||g.sku,qty:g.qty,
+      priceBuy:g.n?Math.round(g.cost/g.n*100)/100:0,
+      currency:'RON',category:g.category,supplier:''
+    }));
+    if(!invParsed.length){toast('Nicio linie validă (SKU + Cump. > 0) găsită în CSV','err');return;}
+    renderInvPreview();
+    toast(`Preset platformă detectat · ${invParsed.length} produse din comandă ✓`);
   };
   r.readAsText(file,'UTF-8');
 }
