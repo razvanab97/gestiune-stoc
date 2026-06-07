@@ -240,6 +240,20 @@ tr:hover td{background:var(--surf2)}
 .inv-match{font-size:13px;padding:2px 8px;border-radius:12px;margin-left:8px;flex-shrink:0;font-weight:500}
 .inv-match.new{background:var(--bl-bg);color:var(--bl)}
 .inv-match.upd{background:var(--gr-bg);color:var(--gr)}
+.smi-pick{position:relative;flex-shrink:0}
+.smi-pick-btn{display:flex;align-items:center;gap:7px;max-width:240px;padding:4px 8px;font-size:12px;border:1px solid var(--b2);border-radius:var(--r);background:var(--surf);cursor:pointer;color:var(--t1)}
+.smi-pick-btn:hover{border-color:var(--acc)}
+.smi-pick-th{width:26px;height:26px;border-radius:5px;object-fit:cover;border:1px solid var(--b1);flex-shrink:0}
+.smi-pick-th-ph{width:26px;height:26px;border-radius:5px;background:var(--surf2);border:1px dashed var(--b2);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.smi-pick-nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;text-align:left}
+.smi-pick-car{color:var(--t3);font-size:10px;flex-shrink:0}
+.smi-pickdrop{position:fixed;display:none;background:var(--surf);border:1px solid var(--b2);border-radius:var(--r2);box-shadow:var(--sh2);z-index:200;width:300px;max-height:340px;overflow:hidden;flex-direction:column}
+.smi-pickdrop.on{display:flex}
+.smi-pickdrop input{margin:8px;width:calc(100% - 16px);font-size:13px;padding:7px 10px;border:1px solid var(--b2);border-radius:var(--r);background:var(--surf2)}
+.smi-pick-list{overflow-y:auto;flex:1}
+.smi-pick-item{display:flex;align-items:center;gap:9px;padding:7px 10px;cursor:pointer;font-size:13px}
+.smi-pick-item:hover{background:var(--surf2)}
+.smi-pick-item-nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
 .inv-foot{padding:1.1rem 2rem;border-top:1px solid var(--b1);display:flex;gap:8px;justify-content:space-between;align-items:center;background:var(--surf2)}
 .inv-foot-info{font-size:14px;color:var(--t3)}
 /* RAPORT STOC */
@@ -1848,29 +1862,72 @@ async function handleSyncImportFile(ev){
     ev.target.value='';
   }
 }
+function syncPickBtnHtml(idx){
+  const it=syncImpParsed[idx];
+  const p=it.produsId?P.find(x=>x.id===it.produsId):null;
+  const th=p?(p.img?`<img src="${esc(p.img)}" class="smi-pick-th" onerror="this.outerHTML='<div class=&quot;smi-pick-th-ph&quot;>📦</div>'">`:`<div class="smi-pick-th-ph">📦</div>`):'';
+  const nm=p?`${esc(p.name)}${p.sku?' · '+esc(p.sku):''}`:'— alege produs —';
+  return`<button type="button" class="smi-pick-btn" onclick="openSyncPick(event,${idx})">${th}<span class="smi-pick-nm">${nm}</span><span class="smi-pick-car">▾</span></button>`;
+}
 function renderSyncImportPreview(){
   const prev=document.getElementById('smi-preview');
   const rows=syncImpParsed.map((it,idx)=>{
     const tag=it.produsId?`<span class="inv-match upd" title="potrivire ${Math.round(it.score*100)}%">↑ ${Math.round(it.score*100)}%</span>`:`<span class="inv-match new">? fără sugestie</span>`;
-    const cur=it.produsId?P.find(p=>p.id===it.produsId):null;
-    const curOpt=cur?`<option value="${cur.id}">${esc(cur.name)}${cur.sku?' · '+esc(cur.sku):''}</option>`:`<option value="">— alege produs —</option>`;
     return`<div class="inv-prev-row" style="gap:10px">
       <input type="checkbox" ${it.include?'checked':''} onchange="syncImpParsed[${idx}].include=this.checked;updSyncImportInfo()">
       <div class="inv-prev-nm" style="flex:1">${esc(it.titluExtern)} ${tag}</div>
-      <select style="max-width:240px;font-size:12px" onfocus="lazyFillSyncSelect(this)" onchange="syncImpParsed[${idx}].produsId=+this.value||null;syncImpParsed[${idx}].include=!!(+this.value);updSyncImportInfo()">${curOpt}</select>
+      <div class="smi-pick" id="smi-pick-${idx}">${syncPickBtnHtml(idx)}</div>
     </div>`;
   }).join('');
-  prev.innerHTML=`<div class="inv-preview"><div class="inv-prev-title">Previzualizare (${syncImpParsed.length} listări)</div>${rows}</div>`;
+  prev.innerHTML=`<div class="inv-preview"><div class="inv-prev-title">Previzualizare (${syncImpParsed.length} listări)</div>${rows}</div>`+
+    `<div class="smi-pickdrop" id="smi-pickdrop"><input type="text" id="smi-pick-search" placeholder="Caută produs după nume sau SKU…" oninput="filterSyncPick()"><div class="smi-pick-list" id="smi-pick-list"></div></div>`;
   document.getElementById('smi-foot').style.display='flex';
   updSyncImportInfo();
 }
-function lazyFillSyncSelect(sel){
-  if(sel.dataset.filled)return;
-  sel.dataset.filled='1';
-  const cur=+sel.value||null;
-  const prodOpts=P.slice().sort((a,b)=>a.name.localeCompare(b.name));
-  sel.innerHTML=`<option value="">— alege produs —</option>`+prodOpts.map(p=>`<option value="${p.id}"${p.id===cur?' selected':''}>${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</option>`).join('');
+let syncPickIdx=null,syncPickProds=null;
+function openSyncPick(ev,idx){
+  ev.stopPropagation();
+  syncPickIdx=idx;
+  if(!syncPickProds)syncPickProds=P.slice().sort((a,b)=>a.name.localeCompare(b.name));
+  const drop=document.getElementById('smi-pickdrop');
+  const btn=ev.currentTarget.getBoundingClientRect();
+  let left=btn.left,top=btn.bottom+4;
+  if(left+300>window.innerWidth)left=window.innerWidth-310;
+  if(top+340>window.innerHeight)top=Math.max(8,btn.top-344);
+  drop.style.left=left+'px';drop.style.top=top+'px';
+  drop.classList.add('on');
+  const search=document.getElementById('smi-pick-search');
+  search.value='';
+  filterSyncPick();
+  search.focus();
 }
+function filterSyncPick(){
+  const q=document.getElementById('smi-pick-search').value.toLowerCase().trim();
+  const list=document.getElementById('smi-pick-list');
+  const cur=syncImpParsed[syncPickIdx]?.produsId||null;
+  const matches=(q?syncPickProds.filter(p=>p.name.toLowerCase().includes(q)||(p.sku&&p.sku.toLowerCase().includes(q))):syncPickProds).slice(0,80);
+  const rows=matches.map(p=>{
+    const th=p.img?`<img src="${esc(p.img)}" class="smi-pick-th" onerror="this.outerHTML='<div class=&quot;smi-pick-th-ph&quot;>📦</div>'">`:`<div class="smi-pick-th-ph">📦</div>`;
+    return`<div class="smi-pick-item" onclick="pickSyncProduct(${p.id})" style="${p.id===cur?'background:var(--surf2)':''}">${th}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</span></div>`;
+  }).join('');
+  list.innerHTML=rows||`<div class="smi-pick-item" style="color:var(--t3);cursor:default">Niciun produs găsit</div>`;
+}
+function pickSyncProduct(id){
+  if(syncPickIdx==null)return;
+  syncImpParsed[syncPickIdx].produsId=id||null;
+  syncImpParsed[syncPickIdx].include=!!id;
+  const host=document.getElementById('smi-pick-'+syncPickIdx);
+  if(host)host.innerHTML=syncPickBtnHtml(syncPickIdx);
+  document.getElementById('smi-pickdrop').classList.remove('on');
+  syncPickIdx=null;
+  updSyncImportInfo();
+}
+document.addEventListener('click',ev=>{
+  if(!ev.target.closest('#smi-pickdrop')&&!ev.target.closest('.smi-pick-btn')){
+    const d=document.getElementById('smi-pickdrop');
+    if(d)d.classList.remove('on');
+  }
+});
 function updSyncImportInfo(){
   const n=syncImpParsed.filter(x=>x.include&&x.produsId).length;
   document.getElementById('smi-info').textContent=`${n} mapări selectate pentru adăugare`;
@@ -2040,13 +2097,20 @@ function handlePresetCSV(ev){
 }
 
 /* ── ASOCIERE INTELIGENTĂ ── */
+const FM_STOP=new Set(['set','buc','bucati','bucată','pcs','pack','pachet','model','cod','tip','art','articol','cu','de','si','la','in','pe','din','pentru','un','o','noi','nou','noua']);
+const FM_SYN=[['lampa','lampi','lampile','lumina','lumini','luminile','bec','beculete','beculet']];
+const fmCanon=w=>{const g=FM_SYN.find(g=>g.includes(w));return g?g[0]:w;};
+function fmTokens(s){
+  return s.toLowerCase().replace(/[^a-z0-9]/g,' ').replace(/(\d+)x\b/g,'$1').replace(/\s+/g,' ').trim()
+    .split(' ').filter(w=>w.length>1&&!FM_STOP.has(w)).map(fmCanon);
+}
 function fuzzyMatch(a,b){
-  a=a.toLowerCase().replace(/[^a-z0-9]/g,' ').replace(/\s+/g,' ').trim();
-  b=b.toLowerCase().replace(/[^a-z0-9]/g,' ').replace(/\s+/g,' ').trim();
-  if(a===b)return 1;
-  if(a.includes(b)||b.includes(a))return 0.9;
-  const wa=new Set(a.split(' ').filter(w=>w.length>2));
-  const wb=new Set(b.split(' ').filter(w=>w.length>2));
+  const na=a.toLowerCase().replace(/[^a-z0-9]/g,' ').replace(/\s+/g,' ').trim();
+  const nb=b.toLowerCase().replace(/[^a-z0-9]/g,' ').replace(/\s+/g,' ').trim();
+  if(na===nb)return 1;
+  if(na.includes(nb)||nb.includes(na))return 0.9;
+  const wa=new Set(fmTokens(a));
+  const wb=new Set(fmTokens(b));
   const common=[...wa].filter(w=>wb.has(w)).length;
   const total=Math.max(wa.size,wb.size,1);
   return common/total;
