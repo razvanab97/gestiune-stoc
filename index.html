@@ -653,7 +653,7 @@ function buildRaportCats(){
     <div class="inv-drop">
       <input type="file" id="inv-file" accept=".csv,.txt,.pdf" onchange="handleInvFile(event)" onclick="event.stopPropagation()">
       <div class="inv-drop-ic">📄</div>
-      <div class="inv-drop-t">Trage un fișier PDF sau CSV aici<br><small style="opacity:.6">PDF factură · CSV (cod, nume, cant, p_acq, p_vanz) · TXT</small></div>
+      <div class="inv-drop-t">Trage un fișier PDF sau CSV aici<br><small style="opacity:.6">PDF factură · CSV comandă Jumbo (auto-detectat) · CSV (cod, nume, cant, p_acq, p_vanz) · TXT</small></div>
     </div>
     <div class="inv-parsing" id="inv-parsing"><span class="spin"></span> Se procesează cu AI…</div>
     <div class="inv-sep">sau introdu manual</div>
@@ -1554,7 +1554,14 @@ function addInvLine(){
   document.getElementById('inv-lines').appendChild(d);
 }
 function removeInvLine(id){document.getElementById(id)?.remove();invLines=invLines.filter(x=>x!==id);previewInv();}
-function handleInvFile(ev){const f=ev.target.files[0];if(!f)return;f.name.split('.').pop().toLowerCase()==='pdf'?parsePDFWithAI(f):parseCSV(f);}
+function handleInvFile(ev){
+  const f=ev.target.files[0];if(!f)return;
+  if(f.name.split('.').pop().toLowerCase()==='pdf'){parsePDFWithAI(f);return;}
+  // Preset Jumbo: detectăm automat după antetul CSV (cod_jumbo) — funcționează identic la orice comandă viitoare
+  const peek=new FileReader();
+  peek.onload=e=>{/cod_jumbo/i.test(e.target.result)?parseJumboCSV(f):parseCSV(f);};
+  peek.readAsText(f.slice(0,1000),'UTF-8');
+}
 
 /* ── ASOCIERE INTELIGENTĂ ── */
 function fuzzyMatch(a,b){
@@ -1698,6 +1705,59 @@ function parseCSV(file){
   };
   r.readAsText(file,'UTF-8');
 }
+/* ── PRESET JUMBO: CSV cu coloane page,order_date_raw,order_id,...,category,product_name,cod_jumbo,quantity,line_price_lei,... ── */
+function parseCSVRows(text){
+  const rows=[];let row=[],field='',inQ=false;
+  text=text.replace(/^﻿/,'');
+  for(let i=0;i<text.length;i++){
+    const c=text[i];
+    if(inQ){
+      if(c==='"'){if(text[i+1]==='"'){field+='"';i++;}else inQ=false;}
+      else field+=c;
+    } else if(c==='"')inQ=true;
+    else if(c===','){row.push(field);field='';}
+    else if(c==='\n'||c==='\r'){
+      if(c==='\r'&&text[i+1]==='\n')i++;
+      row.push(field);field='';
+      if(row.length>1||row[0]!=='')rows.push(row);
+      row=[];
+    } else field+=c;
+  }
+  if(field!==''||row.length){row.push(field);rows.push(row);}
+  return rows;
+}
+function parseJumboCSV(file){
+  const r=new FileReader();
+  r.onload=e2=>{
+    const rows=parseCSVRows(e2.target.result);
+    if(rows.length<2){toast('CSV gol sau nerecunoscut','err');return;}
+    const hdr=rows[0].map(h=>h.trim().toLowerCase());
+    const iCode=hdr.indexOf('cod_jumbo'),iName=hdr.indexOf('product_name'),iQty=hdr.indexOf('quantity'),iPrice=hdr.indexOf('line_price_lei'),iCat=hdr.indexOf('category');
+    const agg={};
+    for(let i=1;i<rows.length;i++){
+      const row=rows[i];
+      const sku=(row[iCode]||'').trim();
+      const qty=parseInt(row[iQty])||0;
+      if(!sku||qty<=0)continue;
+      const total=parseFloat((row[iPrice]||'').replace(',','.'))||0;
+      const name=(row[iName]||'').trim().replace(/\s+/g,' ');
+      const cat=(row[iCat]||'').trim();
+      if(!agg[sku])agg[sku]={sku,name,qty:0,total:0,category:cat};
+      const a=agg[sku];
+      a.qty+=qty;a.total+=total;
+      if(name.length>a.name.length)a.name=name;
+      if(cat&&!a.category)a.category=cat;
+    }
+    invParsed=Object.values(agg).map(g=>({
+      sku:g.sku,name:g.name||g.sku,qty:g.qty,
+      priceBuy:g.qty>0&&g.total>0?Math.round(g.total/g.qty*100)/100:0,
+      currency:'RON',category:g.category,supplier:'Jumbo'
+    }));
+    renderInvPreview();
+    toast(`Preset Jumbo detectat · ${invParsed.length} produse din comandă ✓`);
+  };
+  r.readAsText(file,'UTF-8');
+}
 function previewInv(){
   invParsed=[];
   invLines.forEach(id=>{
@@ -1765,7 +1825,7 @@ async function applyInvoice(){
         bought:item.qty,sold:0,minQty:0,
         priceBuyTTC:costRon,tvaAcq:0.21,
         priceSell:prices.sell,priceRec:prices.rec,
-        category:'',supplier:'',img:''
+        category:item.category||'',supplier:item.supplier||'',img:''
       };
       await saveProdToDb(newP,null);
       created++;
