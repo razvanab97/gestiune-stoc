@@ -362,9 +362,12 @@ function buildRaportCats(){
       <option value="out">Epuizat</option>
     </select>
     <button class="btn btn-acc" onclick="openModal()">+ Produs nou</button>
+    <button class="btn btn-sm" id="bulk-add-btn" onclick="bulkAddStock()" disabled title="Adaugă manual o cantitate de stoc la toate produsele bifate">📥 Adaugă stoc</button>
+    <button class="btn btn-sm" id="bulk-del-btn" onclick="bulkDeleteProd()" disabled title="Șterge definitiv toate produsele bifate" style="color:var(--rd);border-color:var(--rd)">🗑 Șterge selectate</button>
   </div>
   <div class="card">
     <table><thead><tr>
+      <th style="width:36px;text-align:center"><input type="checkbox" id="chk-all" onchange="toggleSelAll(this.checked)" title="Selectează tot"></th>
       <th style="width:80px"></th>
       <th style="width:28%;min-width:220px" onclick="srt('name')">Produs <span id="a-name"></span></th>
       <th style="width:13%;min-width:130px" onclick="srt('sku')">SKU</th>
@@ -383,7 +386,7 @@ function buildRaportCats(){
     <tbody id="tbody"></tbody>
     <tfoot>
       <tr style="background:rgba(155,139,181,0.15);font-weight:700;border-top:3px solid var(--acc)">
-        <td colspan="3" style="text-align:right;padding:28px 20px;color:var(--acc);font-size:14px;letter-spacing:0.03em">TOTAL:</td>
+        <td colspan="4" style="text-align:right;padding:28px 20px;color:var(--acc);font-size:14px;letter-spacing:0.03em">TOTAL:</td>
         <td colspan="2" style="text-align:center;font-family:var(--mono);font-size:16px;color:var(--acc);padding:28px 16px;white-space:nowrap">
           <div style="font-size:11px;color:var(--t3);margin-bottom:6px;font-weight:400;letter-spacing:0.02em">BUC. CUMPĂRATE</div>
           <div id="total-bought">0</div>
@@ -724,7 +727,7 @@ function pToDb(p){
 }
 
 const K='sm6_prod',TK='sm6_today',JK='sm6_jurnal';
-let P=[],TS={},JL=[],editId=null,sCol='name',sDir=1,curImg='';
+let P=[],TS={},JL=[],editId=null,sCol='name',sDir=1,curImg='',selProd=new Set();
 let invLines=[],invParsed=[],catSuggestTimer=null,lastNameForCat='';
 let sbReady=false;
 
@@ -1374,7 +1377,7 @@ function renderTable(){
   const sel=document.getElementById('fc');const pv=sel.value;
   sel.innerHTML='<option value="">Toate categoriile</option>'+cats.map(c=>`<option value="${esc(c)}"${c===pv?' selected':''}>${esc(c)}</option>`).join('');
   const tb=document.getElementById('tbody');
-  if(!list.length){tb.innerHTML=`<tr><td colspan="14" class="empty-row">Niciun produs</td></tr>`;return;}
+  if(!list.length){tb.innerHTML=`<tr><td colspan="15" class="empty-row">Niciun produs</td></tr>`;const all=document.getElementById('chk-all');if(all){all.checked=false;all.indeterminate=false;}updateBulkBtns();return;}
   tb.innerHTML=list.map(p=>{
     const s2=st(p),q2=qty(p),tqs=tqp(p);
     const bdg=s2==='ok'?`<span class="bdg bdg-ok">În stoc</span>`:s2==='low'?`<span class="bdg bdg-low">Scăzut</span>`:`<span class="bdg bdg-out">Epuizat</span>`;
@@ -1383,6 +1386,7 @@ function renderTable(){
     const th=p.img?`<img src="${esc(p.img)}" class="p-th" onerror="this.style.display='none'">`:`<div class="p-th-ph">📦</div>`;
     const tvaBadge=p.tvaAcq>0?`<span class="bdg" style="background:var(--bl-bg);color:var(--bl)">21%</span>`:`<span class="bdg" style="background:var(--surf2);color:var(--t3)">0%</span>`;
     return`<tr style="${(s2==='low'||s2==='out')?'background:#fdfaf5':''}">
+      <td style="text-align:center;vertical-align:middle"><input type="checkbox" class="chk-prod" data-id="${p.id}" ${selProd.has(p.id)?'checked':''} onchange="toggleSelProd(${p.id},this.checked)"></td>
       <td style="padding:10px 16px;text-align:center;vertical-align:middle">${th}</td>
       <td style="font-weight:500" title="${esc(p.name)}"><button class="copy-btn" onclick="copyProductName(${p.id})" title="Copiază">📋</button>${esc(p.name)}</td>
       <td style="font-family:var(--mono);font-size:12px;color:var(--t3)"><button class="copy-btn" onclick="copyProductSku(${p.id})" title="Copiază" ${!p.sku?'style="visibility:hidden"':''}>📋</button>${esc(p.sku||'—')}</td>
@@ -1416,6 +1420,9 @@ function renderTable(){
   document.getElementById('total-invested').textContent = totalInvested.toLocaleString('ro-RO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' RON';
   document.getElementById('total-invested-eur').textContent = Math.round(totalInvestedEur).toLocaleString('ro-RO') + ' €';
   document.getElementById('total-revenue').textContent = totalRevenue.toLocaleString('ro-RO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' RON';
+  const boxes=[...document.querySelectorAll('.chk-prod')],all=document.getElementById('chk-all');
+  if(all){all.checked=boxes.length>0&&boxes.every(c=>c.checked);all.indeterminate=!all.checked&&boxes.some(c=>c.checked);}
+  updateBulkBtns();
 }
 
 /* MODAL */
@@ -1503,6 +1510,54 @@ async function delProd(id){
   if(!confirm('Ștergi produsul?'))return;
   await deleteProdFromDb(id);
   renderToday();renderTable();toast('Șters');
+}
+
+/* SELECȚIE PRODUSE + ACȚIUNI ÎN MASĂ */
+function toggleSelProd(id,checked){
+  if(checked)selProd.add(id);else selProd.delete(id);
+  const all=document.getElementById('chk-all'),boxes=[...document.querySelectorAll('.chk-prod')];
+  if(all){all.checked=boxes.length>0&&boxes.every(c=>c.checked);all.indeterminate=!all.checked&&boxes.some(c=>c.checked);}
+  updateBulkBtns();
+}
+function toggleSelAll(checked){
+  document.querySelectorAll('.chk-prod').forEach(c=>{c.checked=checked;const id=+c.dataset.id;if(checked)selProd.add(id);else selProd.delete(id);});
+  const all=document.getElementById('chk-all');
+  if(all)all.indeterminate=false;
+  updateBulkBtns();
+}
+function updateBulkBtns(){
+  const n=selProd.size;
+  const ba=document.getElementById('bulk-add-btn'),bd=document.getElementById('bulk-del-btn');
+  if(ba){ba.disabled=n===0;ba.textContent=`📥 Adaugă stoc${n?' ('+n+')':''}`;}
+  if(bd){bd.disabled=n===0;bd.textContent=`🗑 Șterge selectate${n?' ('+n+')':''}`;}
+}
+async function bulkAddStock(){
+  const n=selProd.size;if(!n)return;
+  const v=prompt(`Câte bucăți adaugi la stocul fiecăruia dintre cele ${n} produse selectate?`,'');
+  if(v===null)return;
+  const add=parseInt(v);
+  if(!add||add<=0){toast('Introdu o cantitate validă','err');return;}
+  showLoading(`Se adaugă stoc la ${n} produse…`);
+  for(const id of selProd){
+    const p=P.find(x=>x.id===id);if(!p)continue;
+    await saveProdToDb({...p,bought:(p.bought||0)+add},id);
+  }
+  hideLoading();
+  selProd.clear();
+  renderToday();renderTable();
+  toast(`Stoc actualizat: +${add} buc. la ${n} produse`);
+}
+async function bulkDeleteProd(){
+  const n=selProd.size;if(!n)return;
+  if(!confirm(`Ștergi definitiv cele ${n} produse selectate? Acțiunea nu poate fi anulată.`))return;
+  showLoading(`Se șterg ${n} produse…`);
+  for(const id of[...selProd]){
+    await deleteProdFromDb(id);
+  }
+  hideLoading();
+  selProd.clear();
+  renderToday();renderTable();
+  toast(`${n} produse șterse`);
 }
 
 /* STOC CALC */
