@@ -526,6 +526,8 @@ function buildRaportCats(){
         <button class="btn btn-sm" onclick="printRaport()" style="background:var(--acc);color:var(--acc-fg)">🖨️ Printează / PDF</button>
         <button class="btn btn-sm" onclick="exportRaportCSV()">⬇ Descarcă raport stoc CSV</button>
         <button class="btn btn-sm" onclick="exportRaportExcel()">⬇ Descarcă raport stoc Excel</button>
+        <button class="btn btn-sm" onclick="document.getElementById('rpt-sup-file').click()" title="Încarcă înapoi fișierul descărcat (CSV/Excel) cu coloana Furnizor completată — se asociază automat după product_id">⬆ Încarcă furnizori din fișier</button>
+        <input type="file" id="rpt-sup-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleRaportSupplierImport(event)">
       </div>
     </div>
   </div>
@@ -2595,7 +2597,7 @@ function buildRaportExportRows(){
   return P.map(p=>{
     const stocCump=p.bought||0,stocActual=qty(p),rezervat=p.reserved||0,disponibil=stocActual-rezervat;
     return{
-      id:p.id,sku:p.sku||'',titlu:p.name||'',categorie:p.category||'',
+      id:p.id,sku:p.sku||'',titlu:p.name||'',categorie:p.category||'',furnizor:p.supplier||'',
       stocCump,stocActual,rezervat,disponibil,
       pretAch:p.priceBuyTTC||0,pretVanz:p.priceSell||0,
       status:st(p)==='out'?'Epuizat':st(p)==='low'?'Stoc scăzut':'În stoc',
@@ -2605,8 +2607,8 @@ function buildRaportExportRows(){
 }
 function exportRaportCSV(){
   const rows=buildRaportExportRows();
-  let csv='product_id,SKU,Titlu produs,Categorie,Stoc cumparare,Stoc actual,Stoc rezervat,Stoc disponibil,Pret achizitie,Pret vanzare,Status produs,Data ultimei actualizari\n';
-  rows.forEach(r=>{csv+=`"${r.id}","${r.sku}","${r.titlu}","${r.categorie}","${r.stocCump}","${r.stocActual}","${r.rezervat}","${r.disponibil}","${r.pretAch.toFixed(2)}","${r.pretVanz.toFixed(2)}","${r.status}","${r.actualizat}"\n`;});
+  let csv='product_id,SKU,Titlu produs,Categorie,Furnizor,Stoc cumparare,Stoc actual,Stoc rezervat,Stoc disponibil,Pret achizitie,Pret vanzare,Status produs,Data ultimei actualizari\n';
+  rows.forEach(r=>{csv+=`"${r.id}","${r.sku}","${r.titlu}","${r.categorie}","${r.furnizor}","${r.stocCump}","${r.stocActual}","${r.rezervat}","${r.disponibil}","${r.pretAch.toFixed(2)}","${r.pretVanz.toFixed(2)}","${r.status}","${r.actualizat}"\n`;});
   const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);a.download='raport-stoc-'+td()+'.csv';a.click();
   toast('Raport CSV descărcat ✓');
 }
@@ -2621,8 +2623,8 @@ async function exportRaportExcel(){
         document.head.appendChild(s);
       });
     }
-    const head=['product_id','SKU','Titlu produs','Categorie','Stoc cumparare','Stoc actual','Stoc rezervat','Stoc disponibil','Pret achizitie','Pret vanzare','Status produs','Data ultimei actualizari'];
-    const aoa=[head,...rows.map(r=>[r.id,r.sku,r.titlu,r.categorie,r.stocCump,r.stocActual,r.rezervat,r.disponibil,Number(r.pretAch.toFixed(2)),Number(r.pretVanz.toFixed(2)),r.status,r.actualizat])];
+    const head=['product_id','SKU','Titlu produs','Categorie','Furnizor','Stoc cumparare','Stoc actual','Stoc rezervat','Stoc disponibil','Pret achizitie','Pret vanzare','Status produs','Data ultimei actualizari'];
+    const aoa=[head,...rows.map(r=>[r.id,r.sku,r.titlu,r.categorie,r.furnizor,r.stocCump,r.stocActual,r.rezervat,r.disponibil,Number(r.pretAch.toFixed(2)),Number(r.pretVanz.toFixed(2)),r.status,r.actualizat])];
     const ws=window.XLSX.utils.aoa_to_sheet(aoa);
     const wb=window.XLSX.utils.book_new();
     window.XLSX.utils.book_append_sheet(wb,ws,'Raport stoc');
@@ -2630,6 +2632,51 @@ async function exportRaportExcel(){
     toast('Raport Excel descărcat ✓');
   }catch(err){
     toast('Eroare la generarea fișierului Excel: '+err.message,'err');
+  }
+}
+async function handleRaportSupplierImport(ev){
+  const file=ev.target.files[0];if(!file)return;
+  try{
+    if(!window.XLSX){
+      await new Promise((resolve,reject)=>{
+        const s=document.createElement('script');
+        s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload=resolve;s.onerror=reject;
+        document.head.appendChild(s);
+      });
+    }
+    const buf=await file.arrayBuffer();
+    const wb=window.XLSX.read(buf,{type:'array'});
+    const rows=window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
+    if(!rows.length){toast('Fișierul este gol','err');return;}
+    const hdr=rows[0].map(h=>String(h).trim().toLowerCase());
+    const iId=hdr.findIndex(h=>h==='product_id'||h==='id');
+    const iSup=hdr.findIndex(h=>h==='furnizor'||h==='supplier');
+    if(iId<0||iSup<0){toast('Fișierul trebuie să conțină coloanele "product_id" și "Furnizor" (folosește exportul din acest raport)','err');return;}
+    const updates=[];
+    for(let i=1;i<rows.length;i++){
+      const id=Number(rows[i][iId]);
+      if(!id)continue;
+      const furnizor=String(rows[i][iSup]||'').trim();
+      if(!furnizor)continue;
+      const p=P.find(x=>x.id===id);
+      if(!p||p.supplier===furnizor)continue;
+      updates.push({p,furnizor});
+    }
+    if(!updates.length){toast('Nicio asociere nouă de făcut — toate produsele din fișier au deja furnizorul completat corect','err');return;}
+    if(!confirm(`Se vor actualiza furnizorii pentru ${updates.length} produse pe baza fișierului încărcat. Continui?`))return;
+    showLoading(`Se actualizează furnizorii la ${updates.length} produse…`);
+    for(const{p,furnizor}of updates){
+      await saveProdToDb({...p,supplier:furnizor},p.id);
+    }
+    hideLoading();
+    renderTable();renderRaport();
+    toast(`Furnizori actualizați la ${updates.length} produse ✓`);
+  }catch(err){
+    hideLoading();
+    toast('Eroare la citirea fișierului: '+err.message,'err');
+  }finally{
+    ev.target.value='';
   }
 }
 
