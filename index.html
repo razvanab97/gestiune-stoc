@@ -296,9 +296,13 @@ function buildRaportCats(){
 .rpt-cards-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap}
 .rpt-cards-nav{display:flex;align-items:center;gap:10px}
 .rpt-cards-nav-lbl{font-size:12px;color:var(--t3);font-family:var(--mono);min-width:96px;text-align:center}
-.rpt-card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
-.rpt-card{background:var(--bg2);border:1px solid var(--b1);border-radius:var(--r2);padding:14px;display:flex;flex-direction:column;gap:8px;transition:box-shadow .15s,border-color .15s;scroll-margin-top:90px}
-.rpt-card.cur{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc)}
+.rpt-carousel{display:flex;align-items:center;justify-content:center;gap:22px;padding:12px 0 22px}
+.rpt-card{background:var(--bg2);border:1px solid var(--b1);border-radius:var(--r2);padding:14px;display:flex;flex-direction:column;gap:8px;transition:box-shadow .15s,border-color .15s,transform .2s,opacity .2s}
+.rpt-car-main{width:300px;border-color:var(--acc);box-shadow:var(--sh)}
+.rpt-car-ghost{width:130px;opacity:.4;transform:scale(.8);cursor:pointer}
+.rpt-car-ghost:hover{opacity:.7;transform:scale(.86)}
+.rpt-car-ghost .rpt-card-img{height:90px}
+.rpt-car-ghost .rpt-card-title{font-size:11px;text-align:center;-webkit-line-clamp:1}
 .rpt-card-img{width:100%;height:140px;border-radius:var(--r);overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--surf2);border:1px solid var(--b1)}
 .rpt-card-img img{width:100%;height:100%;object-fit:contain}
 .rpt-card-img .ph{font-size:40px}
@@ -2079,35 +2083,49 @@ function printRaport(){
   window.print();
 }
 
-/* CARDURI PRODUSE — actualizare rapidă stoc */
+/* CARDURI PRODUSE — actualizare rapidă stoc (carusel centrat) */
 let rptCardProds=[],rptCardIdx=0;
+function rptCardGhost(p,side){
+  const img=p.img?`<img src="${esc(p.img)}" alt="" onerror="this.parentElement.innerHTML='<span class=&quot;ph&quot;>📦</span>'">`:`<span class="ph">📦</span>`;
+  return`<div class="rpt-card rpt-car-ghost rpt-car-ghost-${side}" onclick="rptCardGoTo(${p.id})" title="${esc(p.name||'—')}">
+    <div class="rpt-card-img">${img}</div>
+    <div class="rpt-card-title">${esc(p.name||'—')}</div>
+  </div>`;
+}
 function renderRaportCards(prods){
   rptCardProds=prods;
   if(rptCardIdx>=prods.length)rptCardIdx=Math.max(0,prods.length-1);
-  const grid=document.getElementById('rpt-card-grid');
-  if(!grid)return;
+  const wrap=document.getElementById('rpt-card-grid');
+  if(!wrap)return;
   if(!prods.length){
-    grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;color:var(--t3);padding:24px;font-size:13px">Niciun produs de afișat</div>`;
+    wrap.innerHTML=`<div style="text-align:center;color:var(--t3);padding:24px;font-size:13px">Niciun produs de afișat</div>`;
     updateRptCardNavLbl();
     return;
   }
-  grid.innerHTML=prods.map((p,i)=>{
-    const stoc=qty(p);
-    const stocCls=stoc<=0?'rpt-stoc-zero':stoc<=(p.minQty||3)?'rpt-stoc-low':'rpt-stoc-ok';
-    const img=p.img?`<img src="${esc(p.img)}" alt="" onerror="this.parentElement.innerHTML='<span class=&quot;ph&quot;>📦</span>'">`:`<span class="ph">📦</span>`;
-    return`<div class="rpt-card${i===rptCardIdx?' cur':''}" id="rpt-card-${p.id}" data-idx="${i}">
-      <div class="rpt-card-img">${img}</div>
-      <div class="rpt-card-title" title="${esc(p.name||'—')}">${esc(p.name||'—')}</div>
-      <div class="rpt-card-sku">SKU: ${esc(p.sku||'—')}</div>
-      <div class="rpt-card-row"><span>Stoc cumpărare</span><strong>${p.bought||0}</strong></div>
-      <div class="rpt-card-row"><span>Stoc actual</span><strong class="${stocCls}">${stoc}</strong></div>
-      <div class="rpt-card-upd">
-        <input type="number" min="0" step="1" placeholder="Stoc nou" id="rpt-card-inp-${p.id}" onkeydown="if(event.key==='Enter')updateStockFromCard(${p.id})">
-        <button class="btn btn-sm btn-acc" onclick="updateStockFromCard(${p.id})">Actualizează stoc</button>
-      </div>
-    </div>`;
-  }).join('');
+  const n=prods.length,cur=prods[rptCardIdx];
+  const prevP=prods[(rptCardIdx-1+n)%n],nextP=prods[(rptCardIdx+1)%n];
+  const stoc=qty(cur);
+  const stocCls=stoc<=0?'rpt-stoc-zero':stoc<=(cur.minQty||3)?'rpt-stoc-low':'rpt-stoc-ok';
+  const img=cur.img?`<img src="${esc(cur.img)}" alt="" onerror="this.parentElement.innerHTML='<span class=&quot;ph&quot;>📦</span>'">`:`<span class="ph">📦</span>`;
+  const mainCard=`<div class="rpt-card rpt-car-main" id="rpt-card-${cur.id}">
+    <div class="rpt-card-img">${img}</div>
+    <div class="rpt-card-title" title="${esc(cur.name||'—')}">${esc(cur.name||'—')}</div>
+    <div class="rpt-card-sku">SKU: ${esc(cur.sku||'—')}</div>
+    <div class="rpt-card-row"><span>Stoc cumpărare</span><strong>${cur.bought||0}</strong></div>
+    <div class="rpt-card-row"><span>Stoc actual</span><strong class="${stocCls}">${stoc}</strong></div>
+    <div class="rpt-card-upd">
+      <input type="number" min="0" step="1" placeholder="Stoc nou" id="rpt-card-inp-${cur.id}" onkeydown="if(event.key==='Enter')updateStockFromCard(${cur.id})">
+      <button class="btn btn-sm btn-acc" onclick="updateStockFromCard(${cur.id})">Actualizează stoc</button>
+    </div>
+  </div>`;
+  wrap.innerHTML=`<div class="rpt-carousel">
+    ${n>1?rptCardGhost(prevP,'l'):'<div class="rpt-car-ghost" style="visibility:hidden;width:130px"></div>'}
+    ${mainCard}
+    ${n>1?rptCardGhost(nextP,'r'):'<div class="rpt-car-ghost" style="visibility:hidden;width:130px"></div>'}
+  </div>`;
   updateRptCardNavLbl();
+  const inp=document.getElementById('rpt-card-inp-'+cur.id);
+  if(inp)inp.focus({preventScroll:true});
 }
 function updateRptCardNavLbl(){
   const lbl=document.getElementById('rpt-card-pos');
@@ -2117,15 +2135,13 @@ function updateRptCardNavLbl(){
 function rptCardNav(dir){
   if(!rptCardProds.length)return;
   rptCardIdx=(rptCardIdx+dir+rptCardProds.length)%rptCardProds.length;
-  document.querySelectorAll('#rpt-card-grid .rpt-card').forEach(c=>c.classList.toggle('cur',+c.dataset.idx===rptCardIdx));
-  updateRptCardNavLbl();
-  const p=rptCardProds[rptCardIdx];
-  const card=document.getElementById('rpt-card-'+p.id);
-  if(card){
-    card.scrollIntoView({behavior:'smooth',block:'center'});
-    const inp=document.getElementById('rpt-card-inp-'+p.id);
-    if(inp)inp.focus();
-  }
+  renderRaportCards(rptCardProds);
+}
+function rptCardGoTo(id){
+  const idx=rptCardProds.findIndex(p=>p.id===id);
+  if(idx<0)return;
+  rptCardIdx=idx;
+  renderRaportCards(rptCardProds);
 }
 async function updateStockFromCard(id){
   const p=P.find(x=>x.id===id);
@@ -2136,8 +2152,10 @@ async function updateStockFromCard(id){
   if(raw===''){toast('Introdu o valoare pentru stocul nou','err');return;}
   const val=Number(raw);
   if(!Number.isFinite(val)||!Number.isInteger(val)||val<0){toast('Stoc invalid — introdu un număr întreg ≥ 0','err');return;}
+  const bought=p.bought||0;
+  if(val>bought){toast(`Stocul actual nu poate depăși stocul cumpărat (${bought} buc.)`,'err');return;}
   showLoading('Se actualizează stocul…');
-  await saveProdToDb({...p,bought:(p.sold||0)+val},id);
+  await saveProdToDb({...p,sold:bought-val},id);
   hideLoading();
   toast(`Stoc actualizat: ${p.name} → ${val} buc.`);
   renderToday();renderTable();renderRaport();
