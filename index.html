@@ -2610,15 +2610,27 @@ function exportRaportCSV(){
   const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);a.download='raport-stoc-'+td()+'.csv';a.click();
   toast('Raport CSV descărcat ✓');
 }
-function exportRaportExcel(){
+async function exportRaportExcel(){
   const rows=buildRaportExportRows();
-  const head=['product_id','SKU','Titlu produs','Categorie','Stoc cumparare','Stoc actual','Stoc rezervat','Stoc disponibil','Pret achizitie','Pret vanzare','Status produs','Data ultimei actualizari'];
-  let tbl='<table border="1"><tr>'+head.map(h=>`<th>${h}</th>`).join('')+'</tr>';
-  rows.forEach(r=>{tbl+='<tr>'+[r.id,r.sku,r.titlu,r.categorie,r.stocCump,r.stocActual,r.rezervat,r.disponibil,r.pretAch.toFixed(2),r.pretVanz.toFixed(2),r.status,r.actualizat].map(v=>`<td>${esc(String(v))}</td>`).join('')+'</tr>';});
-  tbl+='</table>';
-  const html=`<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Raport stoc</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body>${tbl}</body></html>`;
-  const a=document.createElement('a');a.href='data:application/vnd.ms-excel;charset=utf-8,﻿'+encodeURIComponent(html);a.download='raport-stoc-'+td()+'.xls';a.click();
-  toast('Raport Excel descărcat ✓');
+  try{
+    if(!window.XLSX){
+      await new Promise((resolve,reject)=>{
+        const s=document.createElement('script');
+        s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload=resolve;s.onerror=reject;
+        document.head.appendChild(s);
+      });
+    }
+    const head=['product_id','SKU','Titlu produs','Categorie','Stoc cumparare','Stoc actual','Stoc rezervat','Stoc disponibil','Pret achizitie','Pret vanzare','Status produs','Data ultimei actualizari'];
+    const aoa=[head,...rows.map(r=>[r.id,r.sku,r.titlu,r.categorie,r.stocCump,r.stocActual,r.rezervat,r.disponibil,Number(r.pretAch.toFixed(2)),Number(r.pretVanz.toFixed(2)),r.status,r.actualizat])];
+    const ws=window.XLSX.utils.aoa_to_sheet(aoa);
+    const wb=window.XLSX.utils.book_new();
+    window.XLSX.utils.book_append_sheet(wb,ws,'Raport stoc');
+    window.XLSX.writeFile(wb,'raport-stoc-'+td()+'.xlsx');
+    toast('Raport Excel descărcat ✓');
+  }catch(err){
+    toast('Eroare la generarea fișierului Excel: '+err.message,'err');
+  }
 }
 
 /* JURNAL */
