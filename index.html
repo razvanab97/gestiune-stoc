@@ -1817,9 +1817,8 @@ async function handleSyncImportFile(ev){
         const iTitle=findSub(hdr,titlePat);
         if(iTitle<0)continue;
         const iStock=findExact(hdr,stockPat);
-        const score=10+(iStock>-1?1:0);
+        const score=1+(iStock>-1?5:0);
         if(!best||score>best.score)best={rows:rws,headerIdx:r,iTitle,iStock,score};
-        break;
       }
     }
     if(!best){toast('Nu am găsit o coloană cu titlul produsului în fișier','err');parsing.style.display='none';return;}
@@ -1851,20 +1850,26 @@ async function handleSyncImportFile(ev){
 }
 function renderSyncImportPreview(){
   const prev=document.getElementById('smi-preview');
-  const prodOpts=P.slice().sort((a,b)=>a.name.localeCompare(b.name));
-  const optsHtml=`<option value="">— alege produs —</option>`+prodOpts.map(p=>`<option value="${p.id}">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</option>`).join('');
   const rows=syncImpParsed.map((it,idx)=>{
     const tag=it.produsId?`<span class="inv-match upd" title="potrivire ${Math.round(it.score*100)}%">↑ ${Math.round(it.score*100)}%</span>`:`<span class="inv-match new">? fără sugestie</span>`;
-    const sel=optsHtml.replace(`value="${it.produsId}"`,`value="${it.produsId}" selected`);
+    const cur=it.produsId?P.find(p=>p.id===it.produsId):null;
+    const curOpt=cur?`<option value="${cur.id}">${esc(cur.name)}${cur.sku?' · '+esc(cur.sku):''}</option>`:`<option value="">— alege produs —</option>`;
     return`<div class="inv-prev-row" style="gap:10px">
       <input type="checkbox" ${it.include?'checked':''} onchange="syncImpParsed[${idx}].include=this.checked;updSyncImportInfo()">
       <div class="inv-prev-nm" style="flex:1">${esc(it.titluExtern)} ${tag}</div>
-      <select style="max-width:240px;font-size:12px" onchange="syncImpParsed[${idx}].produsId=+this.value||null;syncImpParsed[${idx}].include=!!(+this.value);updSyncImportInfo()">${sel}</select>
+      <select style="max-width:240px;font-size:12px" onfocus="lazyFillSyncSelect(this)" onchange="syncImpParsed[${idx}].produsId=+this.value||null;syncImpParsed[${idx}].include=!!(+this.value);updSyncImportInfo()">${curOpt}</select>
     </div>`;
   }).join('');
   prev.innerHTML=`<div class="inv-preview"><div class="inv-prev-title">Previzualizare (${syncImpParsed.length} listări)</div>${rows}</div>`;
   document.getElementById('smi-foot').style.display='flex';
   updSyncImportInfo();
+}
+function lazyFillSyncSelect(sel){
+  if(sel.dataset.filled)return;
+  sel.dataset.filled='1';
+  const cur=+sel.value||null;
+  const prodOpts=P.slice().sort((a,b)=>a.name.localeCompare(b.name));
+  sel.innerHTML=`<option value="">— alege produs —</option>`+prodOpts.map(p=>`<option value="${p.id}"${p.id===cur?' selected':''}>${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</option>`).join('');
 }
 function updSyncImportInfo(){
   const n=syncImpParsed.filter(x=>x.include&&x.produsId).length;
