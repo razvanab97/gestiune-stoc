@@ -57,10 +57,23 @@ create table if not exists jurnal (
   created_at timestamptz default now()
 );
 
+-- MAPARI PLATFORME (eMAG/Trendyol -> produs local, pt. sincronizare stoc)
+create table if not exists platforma_mapari (
+  id bigint primary key generated always as identity,
+  platforma text not null, -- 'emag' | 'trendyol'
+  id_extern text,          -- id-ul listării pe platformă (când e cunoscut, via API)
+  titlu_extern text not null, -- titlul listării pe platformă (ancoră de potrivire, SKU-urile nu coincid)
+  produs_id bigint not null references produse(id) on delete cascade,
+  confirmat boolean default true,
+  created_at timestamptz default now()
+);
+
 -- INDEX-uri pentru performanță
 create index if not exists idx_vanzari_data on vanzari_zilnice(data);
 create index if not exists idx_jurnal_data on jurnal(data desc);
 create index if not exists idx_jurnal_product on jurnal(product_id);
+create index if not exists idx_mapari_produs on platforma_mapari(produs_id);
+create index if not exists idx_mapari_platforma on platforma_mapari(platforma);
 
 -- Auto-update updated_at pe produse
 create or replace function update_updated_at()
@@ -79,6 +92,7 @@ create trigger if not exists produse_updated_at
 alter table produse disable row level security;
 alter table vanzari_zilnice disable row level security;
 alter table jurnal disable row level security;
+alter table platforma_mapari disable row level security;
 
 -- Confirmare
 select 'Schema creat cu succes!' as status;

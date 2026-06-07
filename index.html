@@ -400,6 +400,7 @@ function buildRaportCats(){
     <button class="h-tab on" onclick="goPage('stoc',this)">Inventar</button>
     <button class="h-tab" onclick="goPage('jurnal',this)">Jurnal vânzări</button>
     <button class="h-tab" onclick="goPage('raport',this)">📋 Raport stoc</button>
+    <button class="h-tab" onclick="goPage('sync',this)">🔗 Sincronizare</button>
   </div>
   <span class="h-right" id="saved"></span>
 </header>
@@ -538,6 +539,52 @@ function buildRaportCats(){
     <span style="margin-left:auto;font-size:12px;color:var(--t3)" id="jtotal"></span>
   </div>
   <div id="jbody"></div>
+</div></div>
+
+<!-- PAGE SYNCRONIZARE -->
+<div id="page-sync" class="page"><div class="wrap">
+  <div class="card" style="padding:1rem 1.25rem;margin-bottom:1rem">
+    <div class="sec" style="margin-top:0">Stare conexiune platforme</div>
+    <div style="font-size:13px;color:var(--t2);line-height:1.6">
+      Sincronizarea automată cu eMAG și Trendyol necesită conectarea la API-urile lor (în lucru —
+      necesită credențiale de la contul de seller și un mic backend care să le păstreze în siguranță).
+      Până atunci, poți pregăti aici <b>maparea</b> dintre listările tale de pe platforme și
+      produsele din Inventar — pasul care va fi reutilizat automat când sincronizarea pornește.
+    </div>
+  </div>
+
+  <div class="card" style="padding:1rem 1.25rem;margin-bottom:1rem">
+    <div class="sec" style="margin-top:0">Adaugă mapare nouă</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:10px">
+      SKU-urile interne nu coincid cu cele de pe platforme — leagă listarea după <b>titlul</b> ei
+      de pe eMAG/Trendyol și produsul corespunzător din inventar. Poți lega mai multe listări de
+      același produs (ex: variante de culoare/mărime listate separat).
+    </div>
+    <div class="frow">
+      <div class="fld">
+        <label>Platformă</label>
+        <select id="sm-platforma">
+          <option value="emag">eMAG</option>
+          <option value="trendyol">Trendyol</option>
+        </select>
+      </div>
+      <div class="fld">
+        <label>Titlu listare pe platformă</label>
+        <input type="text" id="sm-titlu" placeholder="ex: Set 4 perne decorative bumbac 45x45cm gri" oninput="suggestSyncProduct()">
+      </div>
+    </div>
+    <div class="cat-suggest" id="sm-suggest" style="display:none"></div>
+    <div class="fld">
+      <label>Produs corespunzător din Inventar</label>
+      <select id="sm-produs"></select>
+    </div>
+    <button class="btn btn-acc btn-sm" onclick="addSyncMapping()">+ Adaugă mapare</button>
+  </div>
+
+  <div class="card" style="padding:1rem 1.25rem">
+    <div class="sec" style="margin-top:0">Mapări existente</div>
+    <div id="sync-map-list" style="font-size:13px;color:var(--t3)">Se încarcă…</div>
+  </div>
 </div></div>
 
 <!-- MODAL PRODUS -->
@@ -822,8 +869,16 @@ function pToDb(p){
     colors:p.colors||'',sizes:p.sizes||'',material:p.material||'',dims:p.dims||'',notes:p.notes||''};
 }
 
+function dbToSyncMap(r){
+  return{id:r.id,platforma:r.platforma,idExtern:r.id_extern||'',titluExtern:r.titlu_extern||'',produsId:r.produs_id,confirmat:r.confirmat!==false};
+}
+function syncMapToDb(m){
+  return{platforma:m.platforma,id_extern:m.idExtern||null,titlu_extern:m.titluExtern,produs_id:m.produsId,confirmat:m.confirmat!==false};
+}
+
 const K='sm6_prod',TK='sm6_today',JK='sm6_jurnal';
 let P=[],TS={},JL=[],editId=null,sCol='name',sDir=1,curImg='',selProd=new Set();
+let SYNCM=[],syncMapsLoaded=false;
 let invLines=[],invParsed=[],catSuggestTimer=null,lastNameForCat='';
 let sbReady=false;
 
@@ -1060,6 +1115,15 @@ function goPage(id,btn){
       else if(n>0)setTimeout(()=>tryR(n-1),300);
     };
     setTimeout(()=>tryR(20),100);
+  }
+  if(id==='sync'){
+    const tryS=async(n)=>{
+      if(P.length>0){
+        if(!syncMapsLoaded)await loadSyncMappings();
+        renderSyncPage();
+      }else if(n>0)setTimeout(()=>tryS(n-1),300);
+    };
+    setTimeout(()=>tryS(20),100);
   }
 }
 
@@ -1659,6 +1723,93 @@ async function bulkDeleteProd(){
   selProd.clear();
   renderToday();renderTable();
   toast(`${n} produse șterse`);
+}
+
+/* ── SINCRONIZARE PLATFORME (mapare produse) ── */
+async function loadSyncMappings(){
+  if(!sbReady)return;
+  try{
+    const rows=await dbGet('platforma_mapari?select=*&order=id.desc');
+    SYNCM=rows.map(dbToSyncMap);
+    syncMapsLoaded=true;
+  }catch(err){
+    toast('Eroare la încărcarea mapărilor: '+err.message,'err');
+  }
+}
+let smSuggestTimer=null;
+function suggestSyncProduct(){
+  clearTimeout(smSuggestTimer);
+  smSuggestTimer=setTimeout(doSuggestSyncProduct,300);
+}
+function doSuggestSyncProduct(){
+  const el=document.getElementById('sm-suggest');if(!el)return;
+  const title=document.getElementById('sm-titlu').value.trim();
+  if(!title||!P.length){el.style.display='none';el.innerHTML='';return;}
+  const scored=P.map(p=>({p,score:fuzzyMatch(title,p.name||'')}))
+    .filter(x=>x.score>=0.3).sort((a,b)=>b.score-a.score).slice(0,3);
+  if(!scored.length){el.style.display='none';el.innerHTML='';return;}
+  el.style.display='flex';
+  el.innerHTML='<span class="cat-chip-loading" style="width:100%">Sugestii potrivire (după titlu):</span>'+
+    scored.map(x=>`<span class="cat-chip" onclick="selectSyncProduct(${x.p.id})">📦 ${esc(x.p.name)} · ${Math.round(x.score*100)}%</span>`).join('');
+}
+function selectSyncProduct(id){
+  const sel=document.getElementById('sm-produs');if(!sel)return;
+  sel.value=id;
+}
+function fillSyncProdSelect(){
+  const sel=document.getElementById('sm-produs');if(!sel)return;
+  const cur=sel.value;
+  sel.innerHTML=P.slice().sort((a,b)=>a.name.localeCompare(b.name))
+    .map(p=>`<option value="${p.id}">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</option>`).join('');
+  if(cur)sel.value=cur;
+}
+function renderSyncPage(){
+  fillSyncProdSelect();
+  const list=document.getElementById('sync-map-list');if(!list)return;
+  if(!sbReady){list.textContent='Necesită conexiune Supabase activă.';return;}
+  if(!syncMapsLoaded){list.textContent='Se încarcă…';return;}
+  if(!SYNCM.length){list.textContent='Nu ai adăugat încă nicio mapare.';return;}
+  const plLabel={emag:'eMAG',trendyol:'Trendyol'};
+  list.innerHTML=SYNCM.map(m=>{
+    const p=P.find(x=>x.id===m.produsId);
+    return`<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--b1)">
+      <span class="badge" style="background:var(--surf2);border:1px solid var(--b1);border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600">${plLabel[m.platforma]||m.platforma}</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:13px;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.titluExtern)}</div>
+        <div style="font-size:11px;color:var(--t3)">→ ${p?esc(p.name):'<span style="color:var(--err,#e55)">produs șters</span>'}</div>
+      </div>
+      <button class="btn btn-sm" onclick="deleteSyncMapping(${m.id})">✕</button>
+    </div>`;
+  }).join('');
+}
+async function addSyncMapping(){
+  const platforma=document.getElementById('sm-platforma').value;
+  const titluExtern=document.getElementById('sm-titlu').value.trim();
+  const produsId=+document.getElementById('sm-produs').value;
+  if(!titluExtern){toast('Completează titlul listării de pe platformă','err');return;}
+  if(!produsId){toast('Alege produsul corespunzător din inventar','err');return;}
+  if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
+  try{
+    const [row]=await dbPost('platforma_mapari',syncMapToDb({platforma,titluExtern,produsId,confirmat:true}));
+    SYNCM.unshift(dbToSyncMap(row));
+    document.getElementById('sm-titlu').value='';
+    const sg=document.getElementById('sm-suggest');if(sg){sg.style.display='none';sg.innerHTML='';}
+    renderSyncPage();
+    toast('Mapare adăugată ✓');
+  }catch(err){
+    toast('Eroare la salvare: '+err.message,'err');
+  }
+}
+async function deleteSyncMapping(id){
+  if(!confirm('Ștergi această mapare?'))return;
+  try{
+    await dbDelete('platforma_mapari?id=eq.'+id);
+    SYNCM=SYNCM.filter(m=>m.id!==id);
+    renderSyncPage();
+    toast('Mapare ștearsă');
+  }catch(err){
+    toast('Eroare la ștergere: '+err.message,'err');
+  }
 }
 
 function addExtraStoc(){
