@@ -554,6 +554,34 @@ function buildRaportCats(){
   </div>
 
   <div class="card" style="padding:1rem 1.25rem;margin-bottom:1rem">
+    <div class="sec" style="margin-top:0">Import în masă din fișier (.xlsx)</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:10px">
+      Încarcă exportul de produse/oferte din Seller Center (Excel) — aplicația detectează automat
+      coloana cu titlul listării și sugerează potriviri cu produsele din inventar (după același
+      mecanism fuzzy de mai jos), pentru ca apoi să confirmi în bloc ce să se mapeze.
+    </div>
+    <div class="frow">
+      <div class="fld">
+        <label>Platformă fișier</label>
+        <select id="smi-platforma">
+          <option value="emag">eMAG</option>
+          <option value="trendyol">Trendyol</option>
+        </select>
+      </div>
+      <div class="fld">
+        <label>Fișier export (.xlsx / .xls)</label>
+        <input type="file" id="smi-file" accept=".xlsx,.xls" onchange="handleSyncImportFile(event)">
+      </div>
+    </div>
+    <div id="smi-parsing" style="display:none;font-size:12px;color:var(--t3);margin:8px 0"><span class="spin"></span> Se procesează fișierul…</div>
+    <div id="smi-preview"></div>
+    <div id="smi-foot" style="display:none;justify-content:space-between;align-items:center;margin-top:12px">
+      <span id="smi-info" style="font-size:12px;color:var(--t3)"></span>
+      <button class="btn btn-sm btn-acc" id="smi-apply-btn" onclick="applySyncImport()" disabled>Adaugă mapările selectate</button>
+    </div>
+  </div>
+
+  <div class="card" style="padding:1rem 1.25rem;margin-bottom:1rem">
     <div class="sec" style="margin-top:0">Adaugă mapare nouă</div>
     <div style="font-size:12px;color:var(--t3);margin-bottom:10px">
       SKU-urile interne nu coincid cu cele de pe platforme — leagă listarea după <b>titlul</b> ei
@@ -878,7 +906,7 @@ function syncMapToDb(m){
 
 const K='sm6_prod',TK='sm6_today',JK='sm6_jurnal';
 let P=[],TS={},JL=[],editId=null,sCol='name',sDir=1,curImg='',selProd=new Set();
-let SYNCM=[],syncMapsLoaded=false;
+let SYNCM=[],syncMapsLoaded=false,syncImpParsed=[];
 let invLines=[],invParsed=[],catSuggestTimer=null,lastNameForCat='';
 let sbReady=false;
 
@@ -1755,6 +1783,96 @@ function doSuggestSyncProduct(){
 function selectSyncProduct(id){
   const sel=document.getElementById('sm-produs');if(!sel)return;
   sel.value=id;
+}
+async function handleSyncImportFile(ev){
+  const file=ev.target.files[0];if(!file)return;
+  const platforma=document.getElementById('smi-platforma').value;
+  const parsing=document.getElementById('smi-parsing');
+  parsing.style.display='block';
+  document.getElementById('smi-preview').innerHTML='';
+  document.getElementById('smi-foot').style.display='none';
+  syncImpParsed=[];
+  try{
+    if(!window.XLSX){
+      await new Promise((resolve,reject)=>{
+        const s=document.createElement('script');
+        s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload=resolve;s.onerror=reject;
+        document.head.appendChild(s);
+      });
+    }
+    const buf=await file.arrayBuffer();
+    const wb=window.XLSX.read(buf,{type:'array'});
+    const sheet=wb.Sheets[wb.SheetNames[0]];
+    const rows=window.XLSX.utils.sheet_to_json(sheet,{header:1,defval:''});
+    if(rows.length<2){toast('Fișier gol sau nerecunoscut','err');parsing.style.display='none';return;}
+    const hdr=rows[0].map(h=>String(h).trim().toLowerCase());
+    const find=names=>{for(const n of names){const i=hdr.findIndex(h=>h.includes(n));if(i>-1)return i;}return -1;};
+    const iTitle=find(['denumire','nume produs','titlu','name','title','produs']);
+    if(iTitle<0){toast('Nu am găsit o coloană cu titlul produsului în fișier','err');parsing.style.display='none';return;}
+    const existing=new Set(SYNCM.filter(m=>m.platforma===platforma).map(m=>m.titluExtern.toLowerCase().trim()));
+    const seen=new Set();
+    for(let i=1;i<rows.length;i++){
+      const titlu=String(rows[i][iTitle]||'').trim();
+      if(!titlu||seen.has(titlu.toLowerCase())||existing.has(titlu.toLowerCase()))continue;
+      seen.add(titlu.toLowerCase());
+      const match=findExistingProduct({name:titlu});
+      syncImpParsed.push({titluExtern:titlu,produsId:match?match.product.id:null,score:match?match.score:0,include:!!match});
+    }
+    if(!syncImpParsed.length){toast('Nicio listare nouă găsită (toate sunt deja mapate sau coloana e goală)','err');parsing.style.display='none';return;}
+    parsing.style.display='none';
+    document.getElementById('smi-preview').dataset.platforma=platforma;
+    renderSyncImportPreview();
+    toast(`${syncImpParsed.length} listări detectate · ${syncImpParsed.filter(x=>x.produsId).length} cu sugestie automată ✓`);
+  }catch(err){
+    parsing.style.display='none';
+    toast('Eroare la citirea fișierului: '+err.message,'err');
+  }finally{
+    ev.target.value='';
+  }
+}
+function renderSyncImportPreview(){
+  const prev=document.getElementById('smi-preview');
+  const prodOpts=P.slice().sort((a,b)=>a.name.localeCompare(b.name));
+  const optsHtml=`<option value="">— alege produs —</option>`+prodOpts.map(p=>`<option value="${p.id}">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</option>`).join('');
+  const rows=syncImpParsed.map((it,idx)=>{
+    const tag=it.produsId?`<span class="inv-match upd" title="potrivire ${Math.round(it.score*100)}%">↑ ${Math.round(it.score*100)}%</span>`:`<span class="inv-match new">? fără sugestie</span>`;
+    const sel=optsHtml.replace(`value="${it.produsId}"`,`value="${it.produsId}" selected`);
+    return`<div class="inv-prev-row" style="gap:10px">
+      <input type="checkbox" ${it.include?'checked':''} onchange="syncImpParsed[${idx}].include=this.checked;updSyncImportInfo()">
+      <div class="inv-prev-nm" style="flex:1">${esc(it.titluExtern)} ${tag}</div>
+      <select style="max-width:240px;font-size:12px" onchange="syncImpParsed[${idx}].produsId=+this.value||null;syncImpParsed[${idx}].include=!!(+this.value);updSyncImportInfo()">${sel}</select>
+    </div>`;
+  }).join('');
+  prev.innerHTML=`<div class="inv-preview"><div class="inv-prev-title">Previzualizare (${syncImpParsed.length} listări)</div>${rows}</div>`;
+  document.getElementById('smi-foot').style.display='flex';
+  updSyncImportInfo();
+}
+function updSyncImportInfo(){
+  const n=syncImpParsed.filter(x=>x.include&&x.produsId).length;
+  document.getElementById('smi-info').textContent=`${n} mapări selectate pentru adăugare`;
+  document.getElementById('smi-apply-btn').disabled=n===0;
+}
+async function applySyncImport(){
+  if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
+  const platforma=document.getElementById('smi-preview').dataset.platforma||'emag';
+  const toAdd=syncImpParsed.filter(x=>x.include&&x.produsId);
+  if(!toAdd.length)return;
+  const btn=document.getElementById('smi-apply-btn');
+  btn.disabled=true;btn.textContent='Se adaugă…';
+  try{
+    const rows=await dbPost('platforma_mapari',toAdd.map(it=>syncMapToDb({platforma,titluExtern:it.titluExtern,produsId:it.produsId,confirmat:true})));
+    SYNCM=rows.map(dbToSyncMap).concat(SYNCM);
+    syncImpParsed=[];
+    document.getElementById('smi-preview').innerHTML='';
+    document.getElementById('smi-foot').style.display='none';
+    renderSyncPage();
+    toast(`${rows.length} mapări adăugate ✓`);
+  }catch(err){
+    toast('Eroare la salvare: '+err.message,'err');
+  }finally{
+    btn.disabled=false;btn.textContent='Adaugă mapările selectate';
+  }
 }
 function fillSyncProdSelect(){
   const sel=document.getElementById('sm-produs');if(!sel)return;
