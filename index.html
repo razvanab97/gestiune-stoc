@@ -292,11 +292,28 @@ function buildRaportCats(){
 .rpt-stoc-ok{color:#22c55e}
 .rpt-stoc-low{color:#f59e0b}
 .rpt-stoc-zero{color:#ef4444}
+.rpt-cards-wrap{margin-bottom:24px}
+.rpt-cards-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.rpt-cards-nav{display:flex;align-items:center;gap:10px}
+.rpt-cards-nav-lbl{font-size:12px;color:var(--t3);font-family:var(--mono);min-width:96px;text-align:center}
+.rpt-card-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px}
+.rpt-card{background:var(--bg2);border:1px solid var(--b1);border-radius:var(--r2);padding:14px;display:flex;flex-direction:column;gap:8px;transition:box-shadow .15s,border-color .15s;scroll-margin-top:90px}
+.rpt-card.cur{border-color:var(--acc);box-shadow:0 0 0 2px var(--acc)}
+.rpt-card-img{width:100%;height:140px;border-radius:var(--r);overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--surf2);border:1px solid var(--b1)}
+.rpt-card-img img{width:100%;height:100%;object-fit:contain}
+.rpt-card-img .ph{font-size:40px}
+.rpt-card-title{font-weight:600;font-size:14px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.rpt-card-sku{font-size:11px;font-family:var(--mono);color:var(--t3)}
+.rpt-card-row{display:flex;justify-content:space-between;font-size:12px;color:var(--t2)}
+.rpt-card-row strong{font-family:var(--mono);color:var(--t1)}
+.rpt-card-upd{display:flex;gap:6px;margin-top:4px}
+.rpt-card-upd input{width:0;flex:1;font-family:var(--mono);font-size:13px;padding:7px 10px}
+.rpt-card-upd button{flex-shrink:0}
 
 /* ── PRINT ── */
 @media print {
   @page { size: A4; margin: 15mm 12mm; }
-  header, .h-tabs, .tb-btns, #rpt-stats, .btn, button { display: none !important; }
+  header, .h-tabs, .tb-btns, #rpt-stats, .btn, button, .rpt-cards-wrap { display: none !important; }
   body { background: white !important; color: black !important; font-size: 11px; }
   .page { display: block !important; padding: 0 !important; }
   #page-stoc, #page-jurnal, #page-raport { display: none !important; }
@@ -431,8 +448,23 @@ function buildRaportCats(){
           <option value="val">Sortare: Valoare descrescătoare</option>
         </select>
         <button class="btn btn-sm" onclick="printRaport()" style="background:var(--acc)">🖨️ Printează / PDF</button>
+        <button class="btn btn-sm" onclick="exportRaportCSV()">⬇ Descarcă raport stoc CSV</button>
+        <button class="btn btn-sm" onclick="exportRaportExcel()">⬇ Descarcă raport stoc Excel</button>
       </div>
     </div>
+  </div>
+
+  <!-- Carduri produse (actualizare rapidă stoc) -->
+  <div class="rpt-cards-wrap">
+    <div class="rpt-cards-head">
+      <div class="tb-title" style="font-size:15px">🗂️ Actualizare rapidă stoc — carduri produse</div>
+      <div class="rpt-cards-nav">
+        <button class="btn btn-sm" onclick="rptCardNav(-1)" title="Produsul anterior">◀ Anterior</button>
+        <span class="rpt-cards-nav-lbl" id="rpt-card-pos">—</span>
+        <button class="btn btn-sm" onclick="rptCardNav(1)" title="Produsul următor">Următor ▶</button>
+      </div>
+    </div>
+    <div class="rpt-card-grid" id="rpt-card-grid"></div>
   </div>
 
   <!-- Stats rapide -->
@@ -1969,6 +2001,8 @@ function renderRaport(){
   else if(sort==='cat')prods.sort((a,b)=>(a.category||'').localeCompare(b.category||'')|| (a.name||'').localeCompare(b.name||''));
   else if(sort==='val')prods.sort((a,b)=>(((b.bought||0)-(b.sold||0))*(b.priceBuyTTC||0))-(((a.bought||0)-(a.sold||0))*(a.priceBuyTTC||0)));
 
+  renderRaportCards(prods);
+
   const totalStoc=prods.reduce((s,p)=>s+(p.bought||0)-(p.sold||0),0);
   const totalVal=prods.reduce((s,p)=>s+((p.bought||0)-(p.sold||0))*(p.priceBuyTTC||0),0);
   const totalValSell=prods.reduce((s,p)=>s+((p.bought||0)-(p.sold||0))*(p.priceSell||0),0);
@@ -2043,6 +2077,102 @@ function renderRaport(){
 }
 function printRaport(){
   window.print();
+}
+
+/* CARDURI PRODUSE — actualizare rapidă stoc */
+let rptCardProds=[],rptCardIdx=0;
+function renderRaportCards(prods){
+  rptCardProds=prods;
+  if(rptCardIdx>=prods.length)rptCardIdx=Math.max(0,prods.length-1);
+  const grid=document.getElementById('rpt-card-grid');
+  if(!grid)return;
+  if(!prods.length){
+    grid.innerHTML=`<div style="grid-column:1/-1;text-align:center;color:var(--t3);padding:24px;font-size:13px">Niciun produs de afișat</div>`;
+    updateRptCardNavLbl();
+    return;
+  }
+  grid.innerHTML=prods.map((p,i)=>{
+    const stoc=qty(p);
+    const stocCls=stoc<=0?'rpt-stoc-zero':stoc<=(p.minQty||3)?'rpt-stoc-low':'rpt-stoc-ok';
+    const img=p.img?`<img src="${esc(p.img)}" alt="" onerror="this.parentElement.innerHTML='<span class=&quot;ph&quot;>📦</span>'">`:`<span class="ph">📦</span>`;
+    return`<div class="rpt-card${i===rptCardIdx?' cur':''}" id="rpt-card-${p.id}" data-idx="${i}">
+      <div class="rpt-card-img">${img}</div>
+      <div class="rpt-card-title" title="${esc(p.name||'—')}">${esc(p.name||'—')}</div>
+      <div class="rpt-card-sku">SKU: ${esc(p.sku||'—')}</div>
+      <div class="rpt-card-row"><span>Stoc cumpărare</span><strong>${p.bought||0}</strong></div>
+      <div class="rpt-card-row"><span>Stoc actual</span><strong class="${stocCls}">${stoc}</strong></div>
+      <div class="rpt-card-upd">
+        <input type="number" min="0" step="1" placeholder="Stoc nou" id="rpt-card-inp-${p.id}" onkeydown="if(event.key==='Enter')updateStockFromCard(${p.id})">
+        <button class="btn btn-sm btn-acc" onclick="updateStockFromCard(${p.id})">Actualizează stoc</button>
+      </div>
+    </div>`;
+  }).join('');
+  updateRptCardNavLbl();
+}
+function updateRptCardNavLbl(){
+  const lbl=document.getElementById('rpt-card-pos');
+  if(!lbl)return;
+  lbl.textContent=rptCardProds.length?`${rptCardIdx+1} din ${rptCardProds.length}`:'—';
+}
+function rptCardNav(dir){
+  if(!rptCardProds.length)return;
+  rptCardIdx=(rptCardIdx+dir+rptCardProds.length)%rptCardProds.length;
+  document.querySelectorAll('#rpt-card-grid .rpt-card').forEach(c=>c.classList.toggle('cur',+c.dataset.idx===rptCardIdx));
+  updateRptCardNavLbl();
+  const p=rptCardProds[rptCardIdx];
+  const card=document.getElementById('rpt-card-'+p.id);
+  if(card){
+    card.scrollIntoView({behavior:'smooth',block:'center'});
+    const inp=document.getElementById('rpt-card-inp-'+p.id);
+    if(inp)inp.focus();
+  }
+}
+async function updateStockFromCard(id){
+  const p=P.find(x=>x.id===id);
+  if(!p){toast('Produs negăsit','err');return;}
+  const inp=document.getElementById('rpt-card-inp-'+id);
+  if(!inp)return;
+  const raw=inp.value.trim();
+  if(raw===''){toast('Introdu o valoare pentru stocul nou','err');return;}
+  const val=Number(raw);
+  if(!Number.isFinite(val)||!Number.isInteger(val)||val<0){toast('Stoc invalid — introdu un număr întreg ≥ 0','err');return;}
+  showLoading('Se actualizează stocul…');
+  await saveProdToDb({...p,bought:(p.sold||0)+val},id);
+  hideLoading();
+  toast(`Stoc actualizat: ${p.name} → ${val} buc.`);
+  renderToday();renderTable();renderRaport();
+}
+
+/* EXPORT RAPORT STOC */
+function buildRaportExportRows(){
+  const now=new Date().toISOString();
+  return P.map(p=>{
+    const stocCump=p.bought||0,stocActual=qty(p),rezervat=p.reserved||0,disponibil=stocActual-rezervat;
+    return{
+      id:p.id,sku:p.sku||'',titlu:p.name||'',categorie:p.category||'',
+      stocCump,stocActual,rezervat,disponibil,
+      pretAch:p.priceBuyTTC||0,pretVanz:p.priceSell||0,
+      status:st(p)==='out'?'Epuizat':st(p)==='low'?'Stoc scăzut':'În stoc',
+      actualizat:now
+    };
+  });
+}
+function exportRaportCSV(){
+  const rows=buildRaportExportRows();
+  let csv='product_id,SKU,Titlu produs,Categorie,Stoc cumparare,Stoc actual,Stoc rezervat,Stoc disponibil,Pret achizitie,Pret vanzare,Status produs,Data ultimei actualizari\n';
+  rows.forEach(r=>{csv+=`"${r.id}","${r.sku}","${r.titlu}","${r.categorie}","${r.stocCump}","${r.stocActual}","${r.rezervat}","${r.disponibil}","${r.pretAch.toFixed(2)}","${r.pretVanz.toFixed(2)}","${r.status}","${r.actualizat}"\n`;});
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);a.download='raport-stoc-'+td()+'.csv';a.click();
+  toast('Raport CSV descărcat ✓');
+}
+function exportRaportExcel(){
+  const rows=buildRaportExportRows();
+  const head=['product_id','SKU','Titlu produs','Categorie','Stoc cumparare','Stoc actual','Stoc rezervat','Stoc disponibil','Pret achizitie','Pret vanzare','Status produs','Data ultimei actualizari'];
+  let tbl='<table border="1"><tr>'+head.map(h=>`<th>${h}</th>`).join('')+'</tr>';
+  rows.forEach(r=>{tbl+='<tr>'+[r.id,r.sku,r.titlu,r.categorie,r.stocCump,r.stocActual,r.rezervat,r.disponibil,r.pretAch.toFixed(2),r.pretVanz.toFixed(2),r.status,r.actualizat].map(v=>`<td>${esc(String(v))}</td>`).join('')+'</tr>';});
+  tbl+='</table>';
+  const html=`<html xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="utf-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Raport stoc</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]--></head><body>${tbl}</body></html>`;
+  const a=document.createElement('a');a.href='data:application/vnd.ms-excel;charset=utf-8,﻿'+encodeURIComponent(html);a.download='raport-stoc-'+td()+'.xls';a.click();
+  toast('Raport Excel descărcat ✓');
 }
 
 /* JURNAL */
