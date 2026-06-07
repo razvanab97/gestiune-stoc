@@ -335,6 +335,8 @@ function buildRaportCats(){
       <div class="tb-title"><span class="live-dot"></span>Vânzări azi — <span class="day-badge" id="day-badge"></span></div>
       <div class="tb-btns">
         <button class="btn btn-sm" onclick="openInvoice()">📄 Importă factură</button>
+        <button class="btn btn-sm" onclick="openPresetCSV()" title="Încarcă direct un CSV de comandă (ex. Jumbo) — format recunoscut automat">📦 Preset CSV comandă</button>
+        <input type="file" id="preset-csv-file" accept=".csv" style="display:none" onchange="handlePresetCSV(event)">
         <button class="btn btn-sm" onclick="closeDay()">✓ Închide ziua</button>
         <button class="btn btn-sm" onclick="resetToday()">↺ Reset</button>
       </div>
@@ -1554,13 +1556,22 @@ function addInvLine(){
   document.getElementById('inv-lines').appendChild(d);
 }
 function removeInvLine(id){document.getElementById(id)?.remove();invLines=invLines.filter(x=>x!==id);previewInv();}
-function handleInvFile(ev){
-  const f=ev.target.files[0];if(!f)return;
+function handleInvFile(ev){const f=ev.target.files[0];if(!f)return;routeInvFile(f);}
+// Detectează formatul fișierului (PDF / CSV preset Jumbo / CSV generic) și rutează spre parserul potrivit
+function routeInvFile(f){
   if(f.name.split('.').pop().toLowerCase()==='pdf'){parsePDFWithAI(f);return;}
   // Preset Jumbo: detectăm automat după antetul CSV (cod_jumbo) — funcționează identic la orice comandă viitoare
   const peek=new FileReader();
   peek.onload=e=>{/cod_jumbo/i.test(e.target.result)?parseJumboCSV(f):parseCSV(f);};
   peek.readAsText(f.slice(0,1000),'UTF-8');
+}
+// Buton dedicat: deschide direct selectorul de fișier pentru CSV-uri preset de comandă (ex. Jumbo)
+function openPresetCSV(){document.getElementById('preset-csv-file').click();}
+function handlePresetCSV(ev){
+  const f=ev.target.files[0];if(!f)return;
+  openInvoice();
+  routeInvFile(f);
+  ev.target.value='';
 }
 
 /* ── ASOCIERE INTELIGENTĂ ── */
