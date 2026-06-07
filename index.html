@@ -355,6 +355,7 @@ function buildRaportCats(){
   <div class="toolbar">
     <input type="text" id="search" placeholder="Caută în inventar…" oninput="renderTable()">
     <select id="fc" onchange="renderTable()"><option value="">Toate categoriile</option></select>
+    <select id="fsup" onchange="renderTable()"><option value="">Toți furnizorii</option></select>
     <select id="fs" onchange="renderTable()">
       <option value="">Toate statusurile</option>
       <option value="ok">În stoc</option>
@@ -1361,8 +1362,9 @@ function srt(c){if(sCol===c)sDir*=-1;else{sCol=c;sDir=1;}renderTable();}
 function renderTable(){
   const q=(document.getElementById('search').value||'').toLowerCase();
   const cat=document.getElementById('fc').value;
+  const sup=document.getElementById('fsup').value;
   const s=document.getElementById('fs').value;
-  let list=P.filter(p=>{const m=!q||[p.name,p.sku,p.category,p.supplier].some(v=>(v||'').toLowerCase().includes(q));return m&&(!cat||p.category===cat)&&(!s||st(p)===s);});
+  let list=P.filter(p=>{const m=!q||[p.name,p.sku,p.category,p.supplier].some(v=>(v||'').toLowerCase().includes(q));return m&&(!cat||p.category===cat)&&(!sup||p.supplier===sup)&&(!s||st(p)===s);});
   list.sort((a,b)=>{let av=sCol==='qty'?qty(a):(a[sCol]??'');let bv=sCol==='qty'?qty(b):(b[sCol]??'');if(typeof av==='string')av=av.toLowerCase();if(typeof bv==='string')bv=bv.toLowerCase();return av<bv?-sDir:av>bv?sDir:0;});
   const tot=P.length,lowC=P.filter(p=>st(p)==='low').length,outC=P.filter(p=>st(p)==='out').length;
   const val=P.reduce((a,p)=>a+(qty(p)*(p.priceBuyTTC||0)),0);
@@ -1376,6 +1378,9 @@ function renderTable(){
   const cats=[...new Set(P.map(p=>p.category).filter(Boolean))].sort();
   const sel=document.getElementById('fc');const pv=sel.value;
   sel.innerHTML='<option value="">Toate categoriile</option>'+cats.map(c=>`<option value="${esc(c)}"${c===pv?' selected':''}>${esc(c)}</option>`).join('');
+  const sups=[...new Set(P.map(p=>p.supplier).filter(Boolean))].sort();
+  const selSup=document.getElementById('fsup');const pvSup=selSup.value;
+  selSup.innerHTML='<option value="">Toți furnizorii</option>'+sups.map(f=>`<option value="${esc(f)}"${f===pvSup?' selected':''}>${esc(f)}</option>`).join('');
   const tb=document.getElementById('tbody');
   if(!list.length){tb.innerHTML=`<tr><td colspan="15" class="empty-row">Niciun produs</td></tr>`;const all=document.getElementById('chk-all');if(all){all.checked=false;all.indeterminate=false;}updateBulkBtns();return;}
   tb.innerHTML=list.map(p=>{
