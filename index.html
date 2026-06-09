@@ -480,7 +480,7 @@ function buildRaportCats(){
     <div class="ss-wrap">
       <div class="ss-field">
         <span class="ss-lupa">🔍</span>
-        <input type="text" class="ss-inp" id="ss-inp" placeholder="Caută produs după nume sau SKU și apasă Vinde…" oninput="renderSearch()" autocomplete="off">
+        <input type="text" class="ss-inp" id="ss-inp" placeholder="Caută după nume, SKU sau cod intern și apasă Vinde…" oninput="renderSearch()" autocomplete="off">
       </div>
       <div class="ss-drop" id="ss-drop"></div>
     </div>
@@ -507,7 +507,7 @@ function buildRaportCats(){
       <th style="width:36px;text-align:center"><input type="checkbox" id="chk-all" onchange="toggleSelAll(this.checked)" title="Selectează tot"></th>
       <th style="width:80px"></th>
       <th style="width:28%;min-width:220px" onclick="srt('name')">Produs <span id="a-name"></span></th>
-      <th style="width:13%;min-width:130px" onclick="srt('sku')">SKU</th>
+      <th style="width:13%;min-width:150px" onclick="srt('sku')">SKU / Cod intern</th>
       <th style="width:10%">Categorie</th>
       <th style="width:7.5%;text-align:right" onclick="srt('bought')">Cump.</th>
       <th style="width:7.5%;text-align:right" onclick="srt('incomingQty')">Pe drum</th>
@@ -754,6 +754,7 @@ function buildRaportCats(){
         <div class="fld"><label>SKU / Cod extern</label><input id="f-sku" type="text" placeholder="CAF-001"></div>
         <div class="fld"><label>Furnizor</label><input id="f-sup" type="text" placeholder="SC Produse SRL"></div>
       </div>
+      <div class="fld"><label>Cod intern unic</label><input id="f-internal-code" type="text" placeholder="Se generează automat la salvare" readonly style="background:var(--surf3);color:var(--t2);font-family:var(--mono)"></div>
 
       <div class="sec">Caracteristici produs</div>
       <div class="frow">
@@ -874,6 +875,10 @@ function copyProductSku(id){
   const p=P.find(x=>x.id===id);
   if(p&&p.sku)copyText(p.sku);
 }
+function copyProductInternalCode(id){
+  const p=P.find(x=>x.id===id);
+  if(p?.internalCode)copyText(p.internalCode);
+}
 
 // ── SUPABASE HELPERS ──
 async function sb(method, path, body){
@@ -891,25 +896,27 @@ const dbDelete=(path)=>sb('DELETE',path);
 
 // ── MAP DB ↔ APP ──
 function dbToP(r){
-  return{id:r.id,name:r.name,sku:r.sku||'',category:r.category||'',supplier:r.supplier||'',
+  return{id:r.id,name:r.name,sku:r.sku||'',internalCode:r.internal_code||productInternalCode(r.created_at,r.id),category:r.category||'',supplier:r.supplier||'',
     bought:r.bought||0,incomingQty:r.incoming_qty||0,sold:r.sold||0,minQty:r.min_qty||0,
     priceBuyTTC:r.price_buy_ttc||0,tvaAcq:r.tva_acq??0.21,
     priceSell:r.price_sell||0,priceEmag:r.price_emag||0,priceTrendyol:r.price_trendyol||0,priceRec:r.price_rec||0,img:r.img||'',
     colors:r.colors||'',sizes:r.sizes||'',material:r.material||'',dims:r.dims||'',notes:r.notes||''};
 }
 function pToDb(p){
-  return{name:p.name,sku:p.sku||'',category:p.category||'',supplier:p.supplier||'',
+  const d={name:p.name,sku:p.sku||'',category:p.category||'',supplier:p.supplier||'',
     bought:p.bought||0,incoming_qty:p.incomingQty||0,sold:p.sold||0,min_qty:p.minQty||0,
     price_buy_ttc:p.priceBuyTTC||0,tva_acq:p.tvaAcq??0.21,
     price_sell:p.priceSell||0,price_emag:p.priceEmag||0,price_trendyol:p.priceTrendyol||0,price_rec:p.priceRec||0,img:p.img||'',
     colors:p.colors||'',sizes:p.sizes||'',material:p.material||'',dims:p.dims||'',notes:p.notes||''};
+  if(p.internalCode)d.internal_code=p.internalCode;
+  return d;
 }
 function dbSavedProductMatches(row,sent){
   return Object.entries(sent).every(([k,v])=>typeof v==='number'?Math.abs((Number(row[k])||0)-v)<0.001:String(row[k]??'')===String(v??''));
 }
 function missingProductColumn(err){return String(err?.message||err).match(/Could not find the '([^']+)' column of 'produse'/i)?.[1]||'';}
 function missingProductValues(data,missing){
-  const map={incoming_qty:'incomingQty',price_emag:'priceEmag',price_trendyol:'priceTrendyol',tva_acq:'tvaAcq'};
+  const map={incoming_qty:'incomingQty',price_emag:'priceEmag',price_trendyol:'priceTrendyol',tva_acq:'tvaAcq',internal_code:'internalCode'};
   return Object.fromEntries(missing.map(col=>[map[col]||col,data[map[col]||col]]));
 }
 async function saveProductRequest(method,path,data){
@@ -952,6 +959,11 @@ function addCustomCategory(catName){
 }
 
 function td(){return new Date().toISOString().slice(0,10);}
+function productInternalCode(date,id){
+  if(!id)return'';
+  const d=date?new Date(date):new Date(),mm=String(d.getMonth()+1).padStart(2,'0'),dd=String(d.getDate()).padStart(2,'0');
+  return`AB${mm}${dd}${id}`;
+}
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function qty(p){return(p.bought||0)-(p.sold||0);}
 function tqp(p){return TS[p.id]||0;}
@@ -1067,10 +1079,15 @@ async function saveProdToDb(data,id){
     }else{
       result=await saveProductRequest('POST','produse',data);r=result.rows;sent=result.sent;missing=result.missing;
       if(!r?.[0]?.id)throw new Error('Supabase nu a confirmat crearea produsului.');
-      const check=await dbGet(`produse?id=eq.${r[0].id}&select=*`);
+      let check=await dbGet(`produse?id=eq.${r[0].id}&select=*`);
       if(!check?.[0])throw new Error('Produsul creat nu a putut fi recitit din baza de date.');
       if(!dbSavedProductMatches(check[0],sent))throw new Error('Datele produsului creat nu corespund modificărilor.');
-      P.push({...dbToP(check[0]),...missingProductValues(data,missing)});
+      const internalCode=productInternalCode(check[0].created_at,r[0].id);
+      if(!check[0].internal_code){
+        try{const codeRows=await dbPatch(`produse?id=eq.${r[0].id}`,{internal_code:internalCode});if(codeRows?.[0])check=codeRows;}
+        catch(err){if(missingProductColumn(err)==='internal_code')missing.push('internal_code');else throw err;}
+      }
+      P.push({...dbToP(check[0]),...missingProductValues(data,missing),internalCode});
       setSyncStatus('ok','salvat');
     }
     if(missing.length)toast(`Produs salvat. Pentru câmpurile noi (${missing.join(', ')}) rulează migration_product_fields.sql în Supabase.`,'err');
@@ -1573,7 +1590,7 @@ function renderSearch(){
   const q=(document.getElementById('ss-inp').value||'').trim().toLowerCase();
   const drop=document.getElementById('ss-drop');
   if(!q){drop.classList.remove('on');drop.innerHTML='';return;}
-  const hits=P.filter(p=>(p.name||'').toLowerCase().includes(q)||(p.sku||'').toLowerCase().includes(q));
+  const hits=P.filter(p=>(p.name||'').toLowerCase().includes(q)||(p.sku||'').toLowerCase().includes(q)||(p.internalCode||'').toLowerCase().includes(q));
   if(!hits.length){drop.classList.add('on');drop.innerHTML=`<div class="ss-row" style="color:var(--t3)">Niciun produs găsit</div>`;return;}
   drop.classList.add('on');
   drop.innerHTML=hits.map(p=>{
@@ -1616,7 +1633,7 @@ function renderToday(){
   else{
     const n=todayCardProds.length,p=todayCardProds[todayCardIdx],prev=todayCardProds[(todayCardIdx-1+n)%n],next=todayCardProds[(todayCardIdx+1)%n],tqs=tqp(p),s=qty(p);
     const img=p.img?`<img src="${esc(p.img)}" alt="" onclick="openModal(${p.id})" onerror="this.parentElement.innerHTML='<span class=&quot;ph&quot;>📦</span>'">`:`<span class="ph" onclick="openModal(${p.id})">📦</span>`;
-    const main=`<div class="today-card today-card-main"><div class="today-card-img click-edit" title="Editează produs">${img}</div><div class="today-card-title"><button class="copy-btn" onclick="copyProductName(${p.id})" title="Copiază denumirea">📋</button><span>${esc(p.name)}</span></div><div class="today-card-meta"><button class="copy-btn" onclick="copyProductSku(${p.id})" title="Copiază SKU" ${!p.sku?'style="visibility:hidden"':''}>📋</button>SKU: ${esc(p.sku||'—')}</div><div class="today-card-row"><span>Stoc actual</span><strong>${s}</strong></div><div class="today-card-row"><span>Vândute azi</span><strong>${tqs}</strong></div><div class="today-card-prices"><div class="today-card-row"><span>Preț minim direct</span><strong>${p.priceSell>0?p.priceSell.toFixed(2)+' RON':'—'}</strong></div><div class="today-card-row"><span>Preț minim eMAG</span><strong>${p.priceEmag>0?p.priceEmag.toFixed(2)+' RON':'—'}</strong></div><div class="today-card-row"><span>Preț minim Trendyol</span><strong>${p.priceTrendyol>0?p.priceTrendyol.toFixed(2)+' RON':'—'}</strong></div></div><div class="today-actions"><input type="number" class="tg-inp${tqs>0?' on':''}" id="ti-${p.id}" value="${tqs}" min="0" onchange="updateTQ(${p.id})" oninput="pvTQ(${p.id})"><button class="tg-btn" onclick="qSell(${p.id})" ${s<=0?'disabled':''}>+</button><button class="tg-btn-del" onclick="deleteSale(${p.id})" ${tqs<=0?'disabled':''} title="Șterge vânzare">×</button></div></div>`;
+    const main=`<div class="today-card today-card-main"><div class="today-card-img click-edit" title="Editează produs">${img}</div><div class="today-card-title"><button class="copy-btn" onclick="copyProductName(${p.id})" title="Copiază denumirea">📋</button><span>${esc(p.name)}</span></div><div class="today-card-meta"><button class="copy-btn" onclick="copyProductSku(${p.id})" title="Copiază SKU" ${!p.sku?'style="visibility:hidden"':''}>📋</button>SKU: ${esc(p.sku||'—')}</div><div class="today-card-meta"><button class="copy-btn" onclick="copyProductInternalCode(${p.id})" title="Copiază cod intern">📋</button>Cod intern: ${esc(p.internalCode||'—')}</div><div class="today-card-row"><span>Stoc actual</span><strong>${s}</strong></div><div class="today-card-row"><span>Vândute azi</span><strong>${tqs}</strong></div><div class="today-card-prices"><div class="today-card-row"><span>Preț minim direct</span><strong>${p.priceSell>0?p.priceSell.toFixed(2)+' RON':'—'}</strong></div><div class="today-card-row"><span>Preț minim eMAG</span><strong>${p.priceEmag>0?p.priceEmag.toFixed(2)+' RON':'—'}</strong></div><div class="today-card-row"><span>Preț minim Trendyol</span><strong>${p.priceTrendyol>0?p.priceTrendyol.toFixed(2)+' RON':'—'}</strong></div></div><div class="today-actions"><input type="number" class="tg-inp${tqs>0?' on':''}" id="ti-${p.id}" value="${tqs}" min="0" onchange="updateTQ(${p.id})" oninput="pvTQ(${p.id})"><button class="tg-btn" onclick="qSell(${p.id})" ${s<=0?'disabled':''}>+</button><button class="tg-btn-del" onclick="deleteSale(${p.id})" ${tqs<=0?'disabled':''} title="Șterge vânzare">×</button></div></div>`;
     tg.innerHTML=`<div class="today-carousel">${n>1?todayCardSide(prev,'l'):'<div></div>'}<button class="today-arrow" onclick="todayCardNav(-1)">‹</button>${main}<button class="today-arrow" onclick="todayCardNav(1)">›</button>${n>1?todayCardSide(next,'r'):'<div></div>'}</div>`;
   }
   const tot=Object.values(TS).reduce((a,v)=>a+v,0);
@@ -1696,7 +1713,7 @@ function renderTable(){
   const cat=document.getElementById('fc').value;
   const sup=document.getElementById('fsup').value;
   const s=document.getElementById('fs').value;
-  let list=P.filter(p=>{const m=!q||[p.name,p.sku,p.category,p.supplier].some(v=>(v||'').toLowerCase().includes(q));return m&&(!cat||p.category===cat)&&(!sup||p.supplier===sup)&&(!s||st(p)===s);});
+  let list=P.filter(p=>{const m=!q||[p.name,p.sku,p.internalCode,p.category,p.supplier].some(v=>(v||'').toLowerCase().includes(q));return m&&(!cat||p.category===cat)&&(!sup||p.supplier===sup)&&(!s||st(p)===s);});
   list.sort((a,b)=>{let av=sCol==='qty'?qty(a):(a[sCol]??'');let bv=sCol==='qty'?qty(b):(b[sCol]??'');if(typeof av==='string')av=av.toLowerCase();if(typeof bv==='string')bv=bv.toLowerCase();return av<bv?-sDir:av>bv?sDir:0;});
   const tot=P.length,lowC=P.filter(p=>st(p)==='low').length,outC=P.filter(p=>st(p)==='out').length;
   const val=P.reduce((a,p)=>a+(qty(p)*(p.priceBuyTTC||0)),0);
@@ -1726,7 +1743,7 @@ function renderTable(){
       <td style="text-align:center;vertical-align:middle"><input type="checkbox" class="chk-prod" data-id="${p.id}" ${selProd.has(p.id)?'checked':''} onchange="toggleSelProd(${p.id},this.checked)"></td>
       <td style="padding:10px 16px;text-align:center;vertical-align:middle">${th}</td>
       <td style="font-weight:500" title="${esc(p.name)}"><button class="copy-btn" onclick="copyProductName(${p.id})" title="Copiază">📋</button>${esc(p.name)}</td>
-      <td style="font-family:var(--mono);font-size:12px;color:var(--t3)"><button class="copy-btn" onclick="copyProductSku(${p.id})" title="Copiază" ${!p.sku?'style="visibility:hidden"':''}>📋</button>${esc(p.sku||'—')}</td>
+      <td style="font-family:var(--mono);font-size:12px;color:var(--t3)"><button class="copy-btn" onclick="copyProductSku(${p.id})" title="Copiază SKU" ${!p.sku?'style="visibility:hidden"':''}>📋</button>${esc(p.sku||'—')}<div style="margin-top:4px;color:var(--acc)"><button class="copy-btn" onclick="copyProductInternalCode(${p.id})" title="Copiază cod intern">📋</button>${esc(p.internalCode||'—')}</div></td>
       <td>${catB}</td>
       <td style="text-align:right;font-family:var(--mono);color:var(--bl)">${p.bought||0}</td>
       <td style="text-align:right;font-family:var(--mono);color:${(p.incomingQty||0)>0?'var(--or)':'var(--t3)'}">${p.incomingQty||'—'}</td>
@@ -1773,6 +1790,7 @@ function openModal(id){
   document.getElementById('m-title').textContent=p?'Editează produs':'Produs nou';
   document.getElementById('f-name').value=p?.name||'';
   document.getElementById('f-sku').value=p?.sku||'';
+  document.getElementById('f-internal-code').value=p?.internalCode||'';
   document.getElementById('f-sup').value=p?.supplier||'';
   document.getElementById('f-colors').value=p?.colors||'';
   document.getElementById('f-sizes').value=p?.sizes||'';
@@ -1820,7 +1838,7 @@ async function saveProd(){
   const existing=editId?P.find(p=>p.id===editId):null;
   const tvaAcq=parseFloat(document.getElementById('f-tva-acq').value)||0;
   const d={
-    name,sku:document.getElementById('f-sku').value.trim(),
+    name,sku:document.getElementById('f-sku').value.trim(),internalCode:existing?.internalCode||'',
     supplier:document.getElementById('f-sup').value.trim(),
     colors:document.getElementById('f-colors').value.trim(),
     sizes:document.getElementById('f-sizes').value.trim(),
@@ -2737,7 +2755,7 @@ function renderRaportCards(prods){
   const mainCard=`<div class="rpt-card rpt-car-main" id="rpt-card-${cur.id}">
     <div class="rpt-card-img click-edit">${img}</div>
     <div class="rpt-card-title" title="${esc(cur.name||'—')}"><button class="copy-btn" onclick="copyProductName(${cur.id})">📋</button>${esc(cur.name||'—')}</div>
-    <div class="rpt-card-sku"><button class="copy-btn" onclick="copyProductSku(${cur.id})" ${!cur.sku?'style="visibility:hidden"':''}>📋</button>SKU: ${esc(cur.sku||'—')}</div>
+    <div class="rpt-card-sku"><button class="copy-btn" onclick="copyProductSku(${cur.id})" ${!cur.sku?'style="visibility:hidden"':''}>📋</button>SKU: ${esc(cur.sku||'—')}</div><div class="rpt-card-sku"><button class="copy-btn" onclick="copyProductInternalCode(${cur.id})">📋</button>Cod intern: ${esc(cur.internalCode||'—')}</div>
     <div class="rpt-card-row"><span>Stoc cumpărare</span><strong>${cur.bought||0}</strong></div>
     <div class="rpt-card-row"><span>Stoc actual</span><strong class="${stocCls}">${stoc}</strong></div>
     <div class="rpt-card-upd">
