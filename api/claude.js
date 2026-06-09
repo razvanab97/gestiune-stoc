@@ -1,5 +1,6 @@
 const MAX_BODY_BYTES=8*1024*1024;
 const WEB_FETCH_TOOL='web_fetch_20260309';
+const DEFAULT_MODEL='claude-sonnet-4-6';
 
 module.exports=async function handler(req,res){
   if(req.method!=='POST')return res.status(405).json({error:{message:'Metodă nepermisă'}});
@@ -12,7 +13,7 @@ module.exports=async function handler(req,res){
     if(!Array.isArray(input?.messages)||!input.messages.length)return res.status(400).json({error:{message:'Lipsesc mesajele pentru Claude'}});
 
     const body={
-      model:'claude-sonnet-4-20250514',
+      model:process.env.ANTHROPIC_MODEL||DEFAULT_MODEL,
       max_tokens:Math.min(Math.max(Number(input.max_tokens)||400,1),4000),
       messages:input.messages
     };

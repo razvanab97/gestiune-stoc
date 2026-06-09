@@ -39,6 +39,7 @@ Aplicația se conectează la Supabase deja configurat:
 4. Fă un nou deploy după salvarea variabilei
 
 Cheia este folosită numai de funcția serverless `/api/claude` și nu ajunge în browser.
+Modelul implicit este `claude-sonnet-4-6`. Opțional, îl poți schimba adăugând variabila Vercel `ANTHROPIC_MODEL`.
 
 ### Pasul 4: Testează aplicația
 
