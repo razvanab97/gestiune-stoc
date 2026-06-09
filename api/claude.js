@@ -1,5 +1,5 @@
 const MAX_BODY_BYTES=8*1024*1024;
-const ALLOWED_TOOLS=new Set(['web_fetch_20250501']);
+const WEB_FETCH_TOOL='web_fetch_20260309';
 
 module.exports=async function handler(req,res){
   if(req.method!=='POST')return res.status(405).json({error:{message:'Metodă nepermisă'}});
@@ -18,7 +18,8 @@ module.exports=async function handler(req,res){
     };
     if(typeof input.system==='string')body.system=input.system.slice(0,20000);
     if(Array.isArray(input.tools)){
-      body.tools=input.tools.filter(t=>ALLOWED_TOOLS.has(t?.type)&&t?.name==='web_fetch');
+      body.tools=input.tools.filter(t=>t?.name==='web_fetch'&&String(t?.type||'').startsWith('web_fetch_'))
+        .map(()=>({type:WEB_FETCH_TOOL,name:'web_fetch'}));
     }
 
     const headers={
