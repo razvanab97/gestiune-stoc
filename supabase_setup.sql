@@ -17,6 +17,8 @@ create table if not exists produse (
   price_buy_ttc numeric(10,2) default 0,
   tva_acq numeric(4,2) default 0.21,
   price_sell numeric(10,2) default 0,
+  price_emag numeric(10,2) default 0,
+  price_trendyol numeric(10,2) default 0,
   price_rec numeric(10,2) default 0,
   img text,
   -- Caracteristici produs
@@ -36,6 +38,8 @@ alter table produse add column if not exists material text;
 alter table produse add column if not exists dims text;
 alter table produse add column if not exists notes text;
 alter table produse add column if not exists incoming_qty integer default 0;
+alter table produse add column if not exists price_emag numeric(10,2) default 0;
+alter table produse add column if not exists price_trendyol numeric(10,2) default 0;
 
 -- VANZARI ZILNICE (today sales cache)
 create table if not exists vanzari_zilnice (

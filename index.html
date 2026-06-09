@@ -489,8 +489,9 @@ function buildRaportCats(){
       <th style="width:7.5%;text-align:right" onclick="srt('qty')">Stoc</th>
       <th style="width:8%;text-align:right" onclick="srt('priceBuyTTC')">Cost cu TVA</th>
       <th style="width:7%;text-align:right">TVA acq.</th>
-      <th style="width:8%;text-align:right" onclick="srt('priceSell')">Vânz. min.</th>
-      <th style="width:8%;text-align:right" onclick="srt('priceRec')">Recomandat</th>
+      <th style="width:8%;text-align:right" onclick="srt('priceSell')">Direct</th>
+      <th style="width:8%;text-align:right" onclick="srt('priceEmag')">eMAG</th>
+      <th style="width:8%;text-align:right" onclick="srt('priceTrendyol')">Trendyol</th>
       <th style="width:7%">Status</th>
       <th style="width:8%"></th>
     </tr></thead>
@@ -514,7 +515,7 @@ function buildRaportCats(){
           <div style="font-size:11px;color:var(--t3);margin-bottom:6px;font-weight:400;letter-spacing:0.02em">ÎN EURO</div>
           <div id="total-invested-eur">0 €</div>
         </td>
-        <td colspan="2" style="text-align:center;font-family:var(--mono);font-size:16px;color:var(--gr);padding:28px 16px;white-space:nowrap">
+        <td colspan="3" style="text-align:center;font-family:var(--mono);font-size:16px;color:var(--gr);padding:28px 16px;white-space:nowrap">
           <div style="font-size:11px;color:var(--t3);margin-bottom:6px;font-weight:400;letter-spacing:0.02em">BUC. VÂNDUTE</div>
           <div id="total-sold">0</div>
         </td>
@@ -751,23 +752,34 @@ function buildRaportCats(){
       </div>
       <div id="pc-root"></div>
 
-      <!-- PRET FINAL -->
+      <!-- PRETURI PRODUS -->
       <div style="background:var(--surf2);border-radius:var(--r);padding:.85rem 1rem;margin-top:.85rem;border:1px solid var(--b1)">
-        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);margin-bottom:.75rem">Prețuri finale</div>
+        <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);margin-bottom:.75rem">Prețuri produs · prag profit net 0</div>
         <div class="frow">
-          <div class="fld"><label>Preț minim vânzare</label><input id="f-psell" type="number" min="0" step="0.01" placeholder="0.00"></div>
-          <div class="fld"><label>Preț recomandat</label><input id="f-prec" type="number" min="0" step="0.01" placeholder="0.00"></div>
+          <div class="fld"><label>Preț achiziție</label><input id="f-pbuy" type="number" min="0" step="0.01" placeholder="0.00" oninput="pcSyncAcqFromPrice()"></div>
+          <div class="fld">
+            <label>Preț achiziție introdus</label>
+            <select id="f-acq-mode" onchange="pcSyncAcqFromPrice()">
+              <option value="gross" selected>Cu TVA</option>
+              <option value="net">Fără TVA</option>
+            </select>
+          </div>
         </div>
         <div class="frow">
-          <div class="fld"><label>Preț achiziție TTC (salvat)</label><input id="f-pbuy" type="number" min="0" step="0.01" placeholder="0.00" readonly style="background:var(--surf3);color:var(--t2)"></div>
           <div class="fld">
-            <label>TVA achiziție (salvat)</label>
-            <select id="f-tva-acq" onchange="pcSyncAcqFromSaved()">
+            <label>TVA achiziție</label>
+            <select id="f-tva-acq" onchange="pcSyncAcqFromPrice()">
               <option value="0">0%</option>
               <option value="0.21" selected>21%</option>
             </select>
           </div>
+          <div class="fld"><label>Preț vânzare directă</label><input id="f-psell" type="number" min="0" step="0.01" placeholder="0.00" readonly style="background:var(--surf3);color:var(--t2)"></div>
         </div>
+        <div class="frow">
+          <div class="fld"><label>Preț vânzare eMAG</label><input id="f-pemag" type="number" min="0" step="0.01" placeholder="0.00" readonly style="background:var(--surf3);color:var(--t2)"></div>
+          <div class="fld"><label>Preț vânzare Trendyol</label><input id="f-ptrendyol" type="number" min="0" step="0.01" placeholder="0.00" readonly style="background:var(--surf3);color:var(--t2)"></div>
+        </div>
+        <div style="font-size:11px;color:var(--t3)">Prețurile de vânzare includ TVA și acoperă toate costurile configurate în calculator pentru fiecare canal.</div>
       </div>
 
       <!-- CATEGORIE -->
@@ -853,17 +865,18 @@ const dbDelete=(path)=>sb('DELETE',path);
 function dbToP(r){
   return{id:r.id,name:r.name,sku:r.sku||'',category:r.category||'',supplier:r.supplier||'',
     bought:r.bought||0,incomingQty:r.incoming_qty||0,sold:r.sold||0,minQty:r.min_qty||0,
-    priceBuyTTC:r.price_buy_ttc||0,tvaAcq:r.tva_acq||0.21,
-    priceSell:r.price_sell||0,priceRec:r.price_rec||0,img:r.img||'',
+    priceBuyTTC:r.price_buy_ttc||0,tvaAcq:r.tva_acq??0.21,
+    priceSell:r.price_sell||0,priceEmag:r.price_emag||0,priceTrendyol:r.price_trendyol||0,priceRec:r.price_rec||0,img:r.img||'',
     colors:r.colors||'',sizes:r.sizes||'',material:r.material||'',dims:r.dims||'',notes:r.notes||''};
 }
 function pToDb(p){
   return{name:p.name,sku:p.sku||'',category:p.category||'',supplier:p.supplier||'',
     bought:p.bought||0,incoming_qty:p.incomingQty||0,sold:p.sold||0,min_qty:p.minQty||0,
-    price_buy_ttc:p.priceBuyTTC||0,tva_acq:p.tvaAcq||0.21,
-    price_sell:p.priceSell||0,price_rec:p.priceRec||0,img:p.img||'',
+    price_buy_ttc:p.priceBuyTTC||0,tva_acq:p.tvaAcq??0.21,
+    price_sell:p.priceSell||0,price_emag:p.priceEmag||0,price_trendyol:p.priceTrendyol||0,price_rec:p.priceRec||0,img:p.img||'',
     colors:p.colors||'',sizes:p.sizes||'',material:p.material||'',dims:p.dims||'',notes:p.notes||''};
 }
+function pToDbLegacy(p){const d=pToDb(p);delete d.price_emag;delete d.price_trendyol;return d;}
 
 function dbToSyncMap(r){
   return{id:r.id,platforma:r.platforma,idExtern:r.id_extern||'',titluExtern:r.titlu_extern||'',produsId:r.produs_id,confirmat:r.confirmat!==false};
@@ -990,14 +1003,17 @@ async function seedSample(){
 async function saveProdToDb(data,id){
   if(!sbReady) return saveLocalOnly(data,id);
   try{
+    let r;
     if(id){
-      const r=await dbPatch(`produse?id=eq.${id}`,pToDb(data));
+      try{r=await dbPatch(`produse?id=eq.${id}`,pToDb(data));}
+      catch(e){if(!/price_emag|price_trendyol/i.test(e.message))throw e;r=await dbPatch(`produse?id=eq.${id}`,pToDbLegacy(data));toast('Rulează migration_price_channels.sql pentru salvarea prețurilor eMAG și Trendyol','err');}
       const idx=P.findIndex(p=>p.id===id);
-      if(idx>=0&&r[0])P[idx]=dbToP(r[0]);
+      if(idx>=0&&r[0])P[idx]={...dbToP(r[0]),priceEmag:data.priceEmag||0,priceTrendyol:data.priceTrendyol||0};
       setSyncStatus('ok','salvat');
     }else{
-      const r=await dbPost('produse',pToDb(data));
-      if(r&&r[0])P.push(dbToP(r[0]));
+      try{r=await dbPost('produse',pToDb(data));}
+      catch(e){if(!/price_emag|price_trendyol/i.test(e.message))throw e;r=await dbPost('produse',pToDbLegacy(data));toast('Rulează migration_price_channels.sql pentru salvarea prețurilor eMAG și Trendyol','err');}
+      if(r&&r[0])P.push({...dbToP(r[0]),priceEmag:data.priceEmag||0,priceTrendyol:data.priceTrendyol||0});
       setSyncStatus('ok','salvat');
     }
     // also cache locally
@@ -1379,8 +1395,9 @@ Răspunde STRICT cu JSON:
     const currency=String(productData.currency||'RON').toUpperCase();
     if(price>0&&currency==='RON'){
       document.getElementById('f-tva-acq').value='0.21';
-      const acqExVat=price/1.21;
-      Object.keys(pcState).forEach(ch=>{pcState[ch].acq=acqExVat;pcState[ch].vat=21;});pcRender();
+      document.getElementById('f-acq-mode').value='gross';
+      document.getElementById('f-pbuy').value=price.toFixed(2);
+      pcSyncAcqFromPrice();
       status.innerHTML+=`<br><span style="color:var(--gr)">✓ Preț achiziție: ${price.toFixed(2)} RON cu TVA</span>`;
     }else if(price>0){
       status.innerHTML+=`<br><span style="color:var(--or)">⚠ Preț găsit: ${price.toFixed(2)} ${esc(currency)} (nu a fost completat automat)</span>`;
@@ -1430,12 +1447,18 @@ function pcCalculate(ch,v){
   rows.push(['Profit brut',gross],['Impozit companie',-tax],['Profit net în companie',net]);
   return{sell,vat,revenue,costs,gross,tax,net,margin,vatCollected,vatDeductible,vatPay,rows};
 }
-function pcRecommend(targetPct){
-  const v={...pcState[pcChannel]},target=(targetPct===undefined?(+v.target||10):targetPct)/100;let lo=0,hi=Math.max(1000,(+v.acq||0)*20+100);
-  const zero=pcCalculate(pcChannel,{...v,sell:0});if(zero.costs===0)return zero;
-  while(hi<1e9){const r=pcCalculate(pcChannel,{...v,sell:hi});if(r.revenue&&r.net/r.revenue>=target)break;hi*=2;}
-  for(let i=0;i<80;i++){const mid=(lo+hi)/2,r=pcCalculate(pcChannel,{...v,sell:mid});if(r.revenue&&r.net/r.revenue>=target)hi=mid;else lo=mid;}
-  return pcCalculate(pcChannel,{...v,sell:hi});
+function pcRecommendFor(ch,targetPct){
+  const v={...pcState[ch]},target=(targetPct===undefined?(+v.target||10):targetPct)/100;let lo=0,hi=Math.max(1000,(+v.acq||0)*20+100);
+  const zero=pcCalculate(ch,{...v,sell:0});if(zero.costs===0)return zero;
+  while(hi<1e9){const r=pcCalculate(ch,{...v,sell:hi});if(r.revenue&&r.net/r.revenue>=target)break;hi*=2;}
+  for(let i=0;i<80;i++){const mid=(lo+hi)/2,r=pcCalculate(ch,{...v,sell:mid});if(r.revenue&&r.net/r.revenue>=target)hi=mid;else lo=mid;}
+  return pcCalculate(ch,{...v,sell:hi});
+}
+function pcRecommend(targetPct){return pcRecommendFor(pcChannel,targetPct);}
+function pcZeroPrice(ch){const r=pcRecommendFor(ch,0);return Math.ceil((r.sell*(1+r.vat)-1e-9)*100)/100;}
+function pcUpdateZeroPrices(){
+  const map={direct:'f-psell',emag:'f-pemag',trendyol:'f-ptrendyol'};
+  Object.entries(map).forEach(([ch,id])=>{const el=document.getElementById(id);if(el)el.value=pcState[ch].acq>0?pcZeroPrice(ch).toFixed(2):'';});
 }
 function pcWarning(m,sell){
   if(!sell)return['',''];
@@ -1451,11 +1474,15 @@ function pcRender(){
   document.getElementById('pc-tax-micro').classList.toggle('on',pcTax==='micro');document.getElementById('pc-tax-profit').classList.toggle('on',pcTax==='profit');
   const fields=PC_FIELDS[pcChannel].map(([id,label,,unit])=>`<div class="pc-field"><label>${label}${unit?' ('+unit+')':''}</label><input type="number" min="0" step="0.01" data-pc-field="${id}" value="${v[id]??0}" onchange="pcInput('${id}',this.value)"><span></span></div>`).join('');
   document.getElementById('pc-root').innerHTML=`<div class="pc-box"><div class="pc-box-title">Recomandare automată de preț</div><div class="pc-mini"><span>Preț minim de vânzare · profit net 0</span><strong>${pcMoney(minRec.sell)} fără TVA · ${pcMoney(minRec.sell*(1+minRec.vat))} cu TVA</strong></div><div class="pc-margin-picks">${[10,20,30,40,50].map(x=>`<button class="${(+v.target||10)===x?'on':''}" onclick="pcSetMargin(${x})">${x}%</button>`).join('')}</div><div class="pc-rec-out"><div class="pc-mini"><span>Preț recomandat fără TVA · marjă ${v.target??10}%</span><strong>${pcMoney(rec.sell)}</strong></div><div class="pc-mini"><span>Preț recomandat cu TVA</span><strong>${pcMoney(rec.sell*(1+rec.vat))}</strong></div><div class="pc-mini"><span>Profit net estimat</span><strong>${pcMoney(rec.net)}</strong></div><div class="pc-mini"><span>Marjă netă</span><strong>${pcPct(rec.margin)}</strong></div></div><button class="btn btn-acc pc-apply" onclick="pcApplyRecommended()">Aplică prețul recomandat</button></div><div class="pc-box"><div class="pc-box-title">Preț de listare și costuri · ${pcChannel==='direct'?'vânzare directă':pcChannel}</div><div class="pc-grid">${fields}</div></div><div class="pc-warn ${warn[0]}">${warn[1]}</div><div class="pc-metrics"><div class="pc-metric"><span>Profit net în companie</span><strong>${pcMoney(r.net)}</strong></div><div class="pc-metric"><span>Marjă netă</span><strong>${pcPct(r.margin)}</strong></div><div class="pc-metric"><span>TVA de plată</span><strong>${pcMoney(r.vatPay)}</strong></div><div class="pc-metric"><span>Impozit companie</span><strong>${pcMoney(r.tax)}</strong></div></div><table class="pc-break"><tbody><tr><td>TVA colectată</td><td>${pcMoney(r.vatCollected)}</td></tr><tr><td>TVA deductibilă</td><td>− ${pcMoney(r.vatDeductible)}</td></tr>${r.rows.map(([l,n],i)=>`<tr class="${i===r.rows.length-1?'total':''}"><td>${l}</td><td>${pcMoney(n)}</td></tr>`).join('')}</tbody></table>`;
-  pcSyncSavedAcq();
+  pcUpdateZeroPrices();
 }
 function pcInput(id,value){
   pcState[pcChannel][id]=Math.max(0,parseFloat(value)||0);
-  if(id==='acq')Object.keys(pcState).forEach(ch=>pcState[ch].acq=pcState[pcChannel].acq);
+  if(id==='acq'){
+    Object.keys(pcState).forEach(ch=>pcState[ch].acq=pcState[pcChannel].acq);
+    const el=document.getElementById('f-pbuy'),tva=parseFloat(document.getElementById('f-tva-acq')?.value)||0;
+    document.getElementById('f-acq-mode').value='gross';if(el)el.value=(pcState[pcChannel].acq*(1+tva)).toFixed(2);
+  }
   pcRender();
 }
 function pcReset(acq=0,sell=0){
@@ -1470,13 +1497,13 @@ function pcSetMargin(n){pcState[pcChannel].target=n;pcRender();}
 function pcApplyRecommended(){
   if(!pcRecommendation)return;
   pcState[pcChannel].sell=pcRecommendation.sell;
-  const finalPrice=pcRecommendation.sell*(1+pcRecommendation.vat);
-  document.getElementById('f-psell').value=finalPrice.toFixed(2);document.getElementById('f-prec').value=finalPrice.toFixed(2);
-  pcRender();toast('Prețul recomandat a fost aplicat ✓');
+  pcRender();toast('Prețul recomandat a fost aplicat în simulare ✓');
 }
-function pcSyncSavedAcq(){
-  const acq=pcState[pcChannel]?.acq||0,tva=parseFloat(document.getElementById('f-tva-acq')?.value)||0;
-  const el=document.getElementById('f-pbuy');if(el)el.value=acq>0?(acq*(1+tva)).toFixed(2):'';
+function pcSyncAcqFromPrice(){
+  const input=Math.max(0,parseFloat(document.getElementById('f-pbuy')?.value)||0),tva=parseFloat(document.getElementById('f-tva-acq')?.value)||0;
+  const gross=document.getElementById('f-acq-mode')?.value!=='net',acq=gross&&tva>0?input/(1+tva):input;
+  Object.keys(pcState).forEach(ch=>{pcState[ch].acq=acq;pcState[ch].vat=21;});
+  pcRender();
 }
 
 /* TODAY SEARCH */
@@ -1625,7 +1652,7 @@ function renderTable(){
   const selSup=document.getElementById('fsup');const pvSup=selSup.value;
   selSup.innerHTML='<option value="">Toți furnizorii</option>'+sups.map(f=>`<option value="${esc(f)}"${f===pvSup?' selected':''}>${esc(f)}</option>`).join('');
   const tb=document.getElementById('tbody');
-  if(!list.length){tb.innerHTML=`<tr><td colspan="16" class="empty-row">Niciun produs</td></tr>`;const all=document.getElementById('chk-all');if(all){all.checked=false;all.indeterminate=false;}updateBulkBtns();return;}
+  if(!list.length){tb.innerHTML=`<tr><td colspan="17" class="empty-row">Niciun produs</td></tr>`;const all=document.getElementById('chk-all');if(all){all.checked=false;all.indeterminate=false;}updateBulkBtns();return;}
   tb.innerHTML=list.map(p=>{
     const s2=st(p),q2=qty(p),tqs=tqp(p);
     const bdg=s2==='ok'?`<span class="bdg bdg-ok">În stoc</span>`:s2==='low'?`<span class="bdg bdg-low">Scăzut</span>`:`<span class="bdg bdg-out">Epuizat</span>`;
@@ -1647,7 +1674,8 @@ function renderTable(){
       <td style="text-align:right;font-family:var(--mono);font-size:12px;color:var(--t3)">${p.priceBuyTTC>0?p.priceBuyTTC.toFixed(2):'—'}</td>
       <td style="text-align:center">${tvaBadge}</td>
       <td style="text-align:right;font-family:var(--mono);font-size:12px">${p.priceSell>0?p.priceSell.toFixed(2):'—'}</td>
-      <td style="text-align:right;font-family:var(--mono);font-size:12px;color:var(--gr)">${p.priceRec>0?p.priceRec.toFixed(2):'—'}</td>
+      <td style="text-align:right;font-family:var(--mono);font-size:12px;color:var(--gr)">${p.priceEmag>0?p.priceEmag.toFixed(2):'—'}</td>
+      <td style="text-align:right;font-family:var(--mono);font-size:12px;color:var(--gr)">${p.priceTrendyol>0?p.priceTrendyol.toFixed(2):'—'}</td>
       <td>${bdg}</td>
       <td><div class="row-acts">
         <button class="ico-btn" onclick="openModal(${p.id})" title="Editează">✏️</button>
@@ -1694,9 +1722,8 @@ function openModal(id){
   document.getElementById('f-extra').value='';
   document.getElementById('f-sold').value=p?.sold??'';
   document.getElementById('f-min').value=p?.minQty||'';
-  document.getElementById('f-psell').value=p?.priceSell||'';
-  document.getElementById('f-prec').value=p?.priceRec||'';
   document.getElementById('f-pbuy').value=p?.priceBuyTTC||'';
+  document.getElementById('f-acq-mode').value='gross';
   document.getElementById('f-tva-acq').value=p?.tvaAcq!==undefined?p.tvaAcq:'0.21';
   document.getElementById('sb-azi').textContent=p?tqp(p)||'0':'—';
   document.getElementById('cat-s').value='';
@@ -1736,10 +1763,12 @@ async function saveProd(){
     incomingQty:Math.max(0,parseInt(document.getElementById('f-incoming').value)||0),
     sold:Math.max(0,parseInt(document.getElementById('f-sold').value)||0),
     minQty:Math.max(0,parseInt(document.getElementById('f-min').value)||0),
-    priceBuyTTC:Math.max(0,parseFloat(document.getElementById('f-pbuy').value)||0),
+    priceBuyTTC:(()=>{const v=Math.max(0,parseFloat(document.getElementById('f-pbuy').value)||0);return document.getElementById('f-acq-mode').value==='net'?v*(1+tvaAcq):v;})(),
     tvaAcq,
     priceSell:Math.max(0,parseFloat(document.getElementById('f-psell').value)||0),
-    priceRec:Math.max(0,parseFloat(document.getElementById('f-prec').value)||0),
+    priceEmag:Math.max(0,parseFloat(document.getElementById('f-pemag').value)||0),
+    priceTrendyol:Math.max(0,parseFloat(document.getElementById('f-ptrendyol').value)||0),
+    priceRec:0,
     img:curImg
   };
   await saveProdToDb(d,editId);
