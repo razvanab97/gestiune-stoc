@@ -1,5 +1,6 @@
 const MAX_BODY_BYTES=8*1024*1024;
 const WEB_FETCH_TOOL='web_fetch_20260309';
+const WEB_SEARCH_TOOL='web_search_20260209';
 const DEFAULT_MODEL='claude-sonnet-4-6';
 
 module.exports=async function handler(req,res){
@@ -19,8 +20,11 @@ module.exports=async function handler(req,res){
     };
     if(typeof input.system==='string')body.system=input.system.slice(0,20000);
     if(Array.isArray(input.tools)){
-      body.tools=input.tools.filter(t=>t?.name==='web_fetch'&&String(t?.type||'').startsWith('web_fetch_'))
-        .map(()=>({type:WEB_FETCH_TOOL,name:'web_fetch'}));
+      body.tools=input.tools.flatMap(t=>{
+        if(t?.name==='web_fetch'&&String(t?.type||'').startsWith('web_fetch_'))return[{type:WEB_FETCH_TOOL,name:'web_fetch'}];
+        if(t?.name==='web_search'&&String(t?.type||'').startsWith('web_search_'))return[{type:WEB_SEARCH_TOOL,name:'web_search'}];
+        return[];
+      });
     }
 
     const headers={

@@ -741,13 +741,13 @@ function buildRaportCats(){
       <!-- CALCULATOR PRETURI -->
       <div class="sec">Calculator preț & profit</div>
       <div class="pc-tax">
-        <button id="pc-tax-micro" class="on" onclick="pcSetTax('micro')">Micro 1% din venit</button>
-        <button id="pc-tax-profit" onclick="pcSetTax('profit')">Impozit profit 16%</button>
+        <button id="pc-tax-micro" onclick="pcSetTax('micro')">Micro 1% din venit</button>
+        <button id="pc-tax-profit" class="on" onclick="pcSetTax('profit')">Impozit profit 16%</button>
       </div>
       <div class="pc-tabs">
-        <button class="pc-tab on" data-pc-tab="emag" onclick="pcTab('emag')">eMAG</button>
+        <button class="pc-tab" data-pc-tab="emag" onclick="pcTab('emag')">eMAG</button>
         <button class="pc-tab" data-pc-tab="trendyol" onclick="pcTab('trendyol')">Trendyol</button>
-        <button class="pc-tab" data-pc-tab="direct" onclick="pcTab('direct')">Vânzare directă</button>
+        <button class="pc-tab on" data-pc-tab="direct" onclick="pcTab('direct')">Vânzare directă</button>
       </div>
       <div id="pc-root"></div>
 
@@ -1235,6 +1235,25 @@ Răspunde STRICT în formatul JSON:
 }
 
 /* IMPORT FROM PRODUCT URL */
+function getJumboListingId(url){
+  try{
+    const u=new URL(url);
+    if(!/(^|\.)e-jumbo\.ro$/i.test(u.hostname))return '';
+    return (u.pathname.match(/_(\d+)\/?$/)||[])[1]||'';
+  }catch(e){return '';}
+}
+function validateImportedSku(url,data){
+  const sku=String(data.sku||'').trim(),listingId=getJumboListingId(url);
+  if(!sku||sku==='null')return{sku:'',warning:''};
+  if(listingId&&sku===listingId)return{sku:'',warning:`ID-ul paginii e-Jumbo ${listingId} a fost ignorat; nu este cod SKU.`};
+  if(listingId){
+    const evidence=String(data.sku_evidence||'').trim();
+    if(!evidence||!evidence.includes(sku)||!/(cod|sku|articol|produs|model)/i.test(evidence)){
+      return{sku:'',warning:`Codul ${sku} nu a fost completat deoarece nu are o sursă clară în pagina e-Jumbo.`};
+    }
+  }
+  return{sku,warning:''};
+}
 async function importFromUrl(){
   const urlInput=document.getElementById('f-product-url');
   const btn=document.getElementById('import-url-btn');
@@ -1251,6 +1270,12 @@ async function importFromUrl(){
   status.innerHTML='<span class="spin"></span> Accesez pagina produsului...';
   
   try{
+    let pageData={};
+    try{
+      const directResp=await fetch('/api/product-import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
+      if(directResp.ok)pageData=await directResp.json();
+    }catch(e){console.warn('Direct product import unavailable:',e);}
+
     // Fetch page content using Claude API with web_fetch
     const fetchResp=await fetch('/api/claude',{
       method:'POST',
@@ -1264,17 +1289,26 @@ async function importFromUrl(){
 Extrage toate informațiile utile pentru adăugarea produsului într-un sistem de gestiune:
 1. Titlul complet al produsului (în ROMÂNĂ - traduce dacă e în altă limbă)
 2. URL-ul imaginii principale (full URL complet, nu relativ)
-3. Codul SKU / cod intern / model (dacă există în pagină sau la finalul URL-ului)
+3. Codul SKU / cod produs / cod articol / model NUMAI dacă este afișat explicit și etichetat în conținutul paginii
 4. Categoria GENERALĂ din breadcrumb-ul magazinului (ex: "Bucătărie", nu subcategoria foarte specifică)
 5. Prețul curent al produsului ca număr și moneda
 6. Furnizorul/magazinul, materialul, dimensiunile, culorile și o descriere scurtă
 
 Nu inventa valori care nu apar în pagină. Pentru preț ignoră prețul vechi tăiat și folosește prețul curent/final.
+IMPORTANT pentru SKU:
+- Nu folosi niciodată numărul sau textul de la finalul URL-ului drept SKU.
+- La e-jumbo.ro, numărul de după ultimul caracter "_" din URL este ID-ul listării/paginii și NU este codul produsului.
+- Acceptă SKU doar dacă apare lângă o etichetă explicită precum "Cod produs", "Cod Jumbo", "SKU", "Cod articol" sau "Model".
+- În sku_evidence copiază eticheta și codul găsite în pagină. Dacă nu găsești o asemenea sursă explicită, returnează sku și sku_evidence ca null.
+- Dacă pagina este blocată sau informațiile lipsesc, folosește căutarea web după URL și titlul produsului. Pentru imagine returnează URL-ul direct al imaginii principale, nu URL-ul paginii sau un thumbnail de rezultate.
+
+Date găsite direct în metadata paginii (folosește-le dacă sunt valide și completează ce lipsește):
+${JSON.stringify(pageData)}
 
 Răspunde STRICT cu JSON:
-{"title":"<titlu tradus în română>","image":"<URL complet imagine>","sku":"<cod sau null>","category":"<categorie generală sau null>","price":<număr sau null>,"currency":"<RON/EUR/etc sau null>","supplier":"<magazin/furnizor sau null>","material":"<material sau null>","dimensions":"<dimensiuni sau null>","colors":"<culori sau null>","description":"<descriere scurtă sau null>"}`
+{"title":"<titlu tradus în română>","image":"<URL complet imagine>","sku":"<cod sau null>","sku_evidence":"<eticheta și codul exact din pagină sau null>","category":"<categorie generală sau null>","price":<număr sau null>,"currency":"<RON/EUR/etc sau null>","supplier":"<magazin/furnizor sau null>","material":"<material sau null>","dimensions":"<dimensiuni sau null>","colors":"<culori sau null>","description":"<descriere scurtă sau null>"}`
         }],
-        tools:[{type:'web_fetch_20260309',name:'web_fetch'}]
+        tools:[{type:'web_fetch_20260309',name:'web_fetch'},{type:'web_search_20260209',name:'web_search'}]
       })
     });
     
@@ -1295,7 +1329,10 @@ Răspunde STRICT cu JSON:
     const jsonMatch=responseText.match(/\{[\s\S]*\}/);
     if(!jsonMatch) throw new Error('Nu am putut extrage datele din pagină');
     
-    const productData=JSON.parse(jsonMatch[0]);
+    const aiData=JSON.parse(jsonMatch[0]);
+    const productData={...aiData};
+    ['title','image','sku','price','currency'].forEach(k=>{if(pageData[k]!==undefined&&pageData[k]!==null&&pageData[k]!=='')productData[k]=pageData[k];});
+    if(pageData.sku)productData.sku_evidence=`Cod produs din metadata paginii: ${pageData.sku}`;
     
     // Auto-fill form fields
     if(productData.title){
@@ -1309,9 +1346,12 @@ Răspunde STRICT cu JSON:
       status.innerHTML+=`<br><span style="color:var(--gr)">✓ Imagine importată</span>`;
     }
     
-    if(productData.sku&&productData.sku!=='null'){
-      document.getElementById('f-sku').value=productData.sku;
-      status.innerHTML+=`<br><span style="color:var(--gr)">✓ SKU: ${esc(productData.sku)}</span>`;
+    const importedSku=validateImportedSku(url,productData);
+    if(importedSku.sku){
+      document.getElementById('f-sku').value=importedSku.sku;
+      status.innerHTML+=`<br><span style="color:var(--gr)">✓ SKU: ${esc(importedSku.sku)}</span>`;
+    }else if(importedSku.warning){
+      status.innerHTML+=`<br><span style="color:var(--or)">⚠ ${esc(importedSku.warning)}</span>`;
     }
 
     if(productData.supplier&&productData.supplier!=='null'){
@@ -1338,9 +1378,10 @@ Răspunde STRICT cu JSON:
     const price=typeof productData.price==='number'?productData.price:parseFloat(String(productData.price||'').replace(',','.'));
     const currency=String(productData.currency||'RON').toUpperCase();
     if(price>0&&currency==='RON'){
-      ['f-psell','f-prec'].forEach(id=>document.getElementById(id).value=price.toFixed(2));
-      Object.keys(pcState).forEach(ch=>pcState[ch].sell=price);pcRender();
-      status.innerHTML+=`<br><span style="color:var(--gr)">✓ Preț: ${price.toFixed(2)} RON</span>`;
+      document.getElementById('f-tva-acq').value='0.21';
+      const acqExVat=price/1.21;
+      Object.keys(pcState).forEach(ch=>{pcState[ch].acq=acqExVat;pcState[ch].vat=21;});pcRender();
+      status.innerHTML+=`<br><span style="color:var(--gr)">✓ Preț achiziție: ${price.toFixed(2)} RON cu TVA</span>`;
     }else if(price>0){
       status.innerHTML+=`<br><span style="color:var(--or)">⚠ Preț găsit: ${price.toFixed(2)} ${esc(currency)} (nu a fost completat automat)</span>`;
     }
@@ -1359,10 +1400,10 @@ Răspunde STRICT cu JSON:
 /* PRICE CALCULATOR TABS */
 const PC_FIELDS={
   emag:[['sell','Preț vânzare fără TVA',0],['acq','Cost achiziție fără TVA',0],['vat','TVA',21,'%'],['shipCharged','Transport facturat clientului',0],['shipReal','Cost real transport',0],['commission','Comision eMAG',20,'%'],['misc','Costuri diverse',0],['accounting','Cost contabilitate / comandă',0]],
-  trendyol:[['sell','Preț vânzare fără TVA',0],['acq','Cost achiziție fără TVA',0],['vat','TVA',19,'%'],['commission','Comision Trendyol',15,'%'],['shipReal','Transport suportat de vânzător',10],['returnRate','Rată retur',7,'%'],['returnShip','Transport retur tur-retur',36],['campaign','Campanii / cupoane',0,'%'],['importTax','Taxă import / colet non-UE',0],['other','Alte costuri fixe',0]],
-  direct:[['sell','Preț vânzare fără TVA',0],['acq','Cost achiziție fără TVA',0],['vat','TVA',19,'%'],['shipCharged','Transport facturat clientului',0],['shipReal','Cost real transport',0],['packaging','Cost ambalaj',0],['accounting','Cost contabilitate / comandă',0],['processor','Comision procesator plată',1.4,'%'],['marketing','Marketing / comandă',0],['other','Alte costuri',0]]
+  trendyol:[['sell','Preț vânzare fără TVA',0],['acq','Cost achiziție fără TVA',0],['vat','TVA',21,'%'],['commission','Comision Trendyol',15,'%'],['shipReal','Transport suportat de vânzător',10],['returnRate','Rată retur',7,'%'],['returnShip','Transport retur tur-retur',36],['campaign','Campanii / cupoane',0,'%'],['importTax','Taxă import / colet non-UE',0],['other','Alte costuri fixe',0]],
+  direct:[['sell','Preț vânzare fără TVA',0],['acq','Cost achiziție fără TVA',0],['vat','TVA',21,'%'],['shipCharged','Transport facturat clientului',0],['shipReal','Cost real transport',0],['packaging','Cost ambalaj',0],['accounting','Cost contabilitate / comandă',0],['processor','Comision procesator plată',1.4,'%'],['marketing','Marketing / comandă',0],['other','Alte costuri',0]]
 };
-let pcChannel='emag',pcTax='micro',pcState={emag:{},trendyol:{},direct:{}},pcRecommendation=null;
+let pcChannel='direct',pcTax='profit',pcState={emag:{},trendyol:{},direct:{}},pcRecommendation=null;
 Object.entries(PC_FIELDS).forEach(([ch,fields])=>fields.forEach(([id,,def])=>pcState[ch][id]=def));
 function pcMoney(n){return(Number(n)||0).toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})+' lei';}
 function pcPct(n){return(Number(n)||0).toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})+'%';}
@@ -1421,7 +1462,7 @@ function pcReset(acq=0,sell=0){
   pcState={emag:{},trendyol:{},direct:{}};
   Object.entries(PC_FIELDS).forEach(([ch,fields])=>fields.forEach(([id,,def])=>pcState[ch][id]=id==='acq'?acq:id==='sell'?sell:def));
   Object.keys(pcState).forEach(ch=>pcState[ch].target=10);
-  pcChannel='emag';pcTax='micro';pcRender();
+  pcChannel='direct';pcTax='profit';pcRender();
 }
 function pcTab(id){pcChannel=id;pcRender();}
 function pcSetTax(id){pcTax=id;pcRender();}
