@@ -904,9 +904,24 @@ function pToDb(p){
     price_sell:p.priceSell||0,price_emag:p.priceEmag||0,price_trendyol:p.priceTrendyol||0,price_rec:p.priceRec||0,img:p.img||'',
     colors:p.colors||'',sizes:p.sizes||'',material:p.material||'',dims:p.dims||'',notes:p.notes||''};
 }
-function pToDbLegacy(p){const d=pToDb(p);delete d.price_emag;delete d.price_trendyol;return d;}
 function dbSavedProductMatches(row,sent){
   return Object.entries(sent).every(([k,v])=>typeof v==='number'?Math.abs((Number(row[k])||0)-v)<0.001:String(row[k]??'')===String(v??''));
+}
+function missingProductColumn(err){return String(err?.message||err).match(/Could not find the '([^']+)' column of 'produse'/i)?.[1]||'';}
+function missingProductValues(data,missing){
+  const map={incoming_qty:'incomingQty',price_emag:'priceEmag',price_trendyol:'priceTrendyol',tva_acq:'tvaAcq'};
+  return Object.fromEntries(missing.map(col=>[map[col]||col,data[map[col]||col]]));
+}
+async function saveProductRequest(method,path,data){
+  const sent={...pToDb(data)},missing=[];
+  while(true){
+    try{return{rows:method==='PATCH'?await dbPatch(path,sent):await dbPost(path,sent),sent,missing};}
+    catch(err){
+      const col=missingProductColumn(err);
+      if(!col||!(col in sent))throw err;
+      delete sent[col];missing.push(col);
+    }
+  }
 }
 
 function dbToSyncMap(r){
@@ -1039,29 +1054,26 @@ async function saveProdToDb(data,id){
     return false;
   }
   try{
-    let r,sent;
+    let result,r,sent,missing;
     if(id){
-      sent=pToDb(data);
-      try{r=await dbPatch(`produse?id=eq.${id}`,sent);}
-      catch(e){if(!/price_emag|price_trendyol/i.test(e.message))throw e;sent=pToDbLegacy(data);r=await dbPatch(`produse?id=eq.${id}`,sent);toast('Rulează migration_price_channels.sql pentru salvarea prețurilor eMAG și Trendyol','err');}
+      result=await saveProductRequest('PATCH',`produse?id=eq.${id}`,data);r=result.rows;sent=result.sent;missing=result.missing;
       if(!r?.[0])throw new Error('Produsul nu a fost găsit în baza de date.');
       const check=await dbGet(`produse?id=eq.${id}&select=*`);
       if(!check?.[0])throw new Error('Supabase nu a confirmat salvarea produsului.');
       if(!dbSavedProductMatches(check[0],sent))throw new Error('Datele recitite din Supabase nu corespund modificărilor.');
       const idx=P.findIndex(p=>p.id===id);
-      if(idx>=0)P[idx]=dbToP(check[0]);
+      if(idx>=0)P[idx]={...dbToP(check[0]),...missingProductValues(data,missing)};
       setSyncStatus('ok','salvat');
     }else{
-      sent=pToDb(data);
-      try{r=await dbPost('produse',sent);}
-      catch(e){if(!/price_emag|price_trendyol/i.test(e.message))throw e;sent=pToDbLegacy(data);r=await dbPost('produse',sent);toast('Rulează migration_price_channels.sql pentru salvarea prețurilor eMAG și Trendyol','err');}
+      result=await saveProductRequest('POST','produse',data);r=result.rows;sent=result.sent;missing=result.missing;
       if(!r?.[0]?.id)throw new Error('Supabase nu a confirmat crearea produsului.');
       const check=await dbGet(`produse?id=eq.${r[0].id}&select=*`);
       if(!check?.[0])throw new Error('Produsul creat nu a putut fi recitit din baza de date.');
       if(!dbSavedProductMatches(check[0],sent))throw new Error('Datele produsului creat nu corespund modificărilor.');
-      P.push(dbToP(check[0]));
+      P.push({...dbToP(check[0]),...missingProductValues(data,missing)});
       setSyncStatus('ok','salvat');
     }
+    if(missing.length)toast(`Produs salvat. Pentru câmpurile noi (${missing.join(', ')}) rulează migration_product_fields.sql în Supabase.`,'err');
     // also cache locally
     localStorage.setItem(K,JSON.stringify(P));
     return true;
