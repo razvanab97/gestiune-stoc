@@ -1371,49 +1371,70 @@ async function importFromUrl(){
     }catch(e){console.warn('Direct product import unavailable:',e);}
 
     // Step 2: Use DeepSeek to analyze the product data
-    const systemPrompt=`Ești un expert în identificarea produselor comerciale. Analizezi date extrase dintr-o pagină de produs pentru un sistem de gestiune stoc.
+    const systemPrompt=`Ești un expert în identificarea produselor comerciale din magazine online românești. Analizezi URL-uri și date extrase din pagini de produs pentru un sistem de gestiune stoc.
 Lista completă de categorii disponibile: ${CATS.join(', ')}.
 Răspunde ÎNTOTDEAUNA cu un JSON valid, fără text suplimentar, fără markdown.`;
 
-    const userPrompt=`Analizează următoarele date extrase dintr-o pagină de produs și completează informațiile:
+    const userPrompt=`Analizează acest URL de produs și metadata extrasă din pagină. Extrage toate informațiile disponibile despre produs.
 
 URL: ${url}
 
-Date din metadata paginii:
+Metadata extrasă din pagină:
 ${JSON.stringify(pageData, null, 2)}
 
-Extrage și completează următoarele informații:
+Instrucțiuni detaliate pentru fiecare câmp:
 
-1. **Titlu** (title): Numele complet al produsului. Dacă e în engleză sau altă limbă, tradu-l în ROMÂNĂ logic și natural (ex: "Stainless Steel Coffee Maker 1.2L" → "Cafetieră din oțel inoxidabil 1.2L"). Păstrează specificațiile numerice (greutate, dimensiuni, capacitate).
+1. **Titlu** (title): Numele complet al produsului în ROMÂNĂ.
+   - Dacă titlul e în engleză sau altă limbă, tradu-l natural în română
+   - Păstrează toate specificațiile numerice (greutate, dimensiuni, capacitate, materiale)
+   - Exemplu: "Perna decorativa de iarna Chenille gri model dungi 70x30cm" → păstrează așa
+   - Folosește URL-ul și metadata împreună pentru a determina numele corect
 
-2. **Imagine** (image): URL-ul complet al imaginii principale a produsului. Trebuie să fie un URL direct către o imagine (de obicei .jpg, .png, .webp), nu un URL de pagină.
+2. **Imagine** (image): URL-ul complet al imaginii principale.
+   - Trebuie să fie un URL direct către o imagine (.jpg, .png, .webp)
+   - Dacă metadata conține un URL relativ, completează-l cu domeniul corect
+   - Dacă nu găsești, construiește un URL logic din URL-ul paginii
 
-3. **Cod produs/SKU** (sku): Codul unic al produsului, doar dacă apare explicit în metadata paginii lângă etichete precum "Cod produs", "SKU", "Cod articol", "Model", "MPN". NU folosi ID-ul numeric din URL ca SKU. Dacă nu găsești o sursă clară, pune null.
+3. **Cod produs/SKU** (sku): Codul unic al produsului.
+   - Caută în URL: de obicei ultimul număr din URL înainte de "/" (ex: ...1525507/)
+   - Pentru e-Jumbo: ID-ul numeric din URL (ex: 1525507) ESTE codul Jumbo - folosește-l ca SKU
+   - Pentru eMAG: codul de după "/p/" sau "/pd/" din URL
+   - Pentru alte magazine: codul din URL sau din metadata
+   - Dacă nu găsești absolut nimic, pune null
 
-4. **Categorie** (category): Alege categoria cea mai potrivită DIN LISTA: ${CATS.join(', ')}. Trebuie să fie EXACT una din această listă.
+4. **Categorie** (category): Alege categoria cea mai potrivită DIN LISTA: ${CATS.join(', ')}.
+   - Trebuie să fie EXACT una din această listă
+   - Analizează titlul și URL-ul pentru a determina categoria corectă
+   - Exemplu: pernă decorativă → "Textile și decorațiuni"
 
-5. **Preț** (price) și **tip preț** (priceType): Detectează prețul din pagină și stabilește dacă este cu TVA (gross) sau fără TVA (net):
-   - Prețul afișat consumatorului final în România este de obicei cu TVA (gross)
-   - Prețurile B2B sau en-gros sunt adesea fără TVA (net)
-   - Dacă prețul e în EUR sau altă monedă, notează moneda
-   - priceType poate fi: "gross" (cu TVA), "net" (fără TVA), sau "unknown"
-   - Dacă prețul e în RON și e preț de raft/consumator, presupune "gross"
-   - Dacă metadata paginii conține prețul fără TVA explicit, folosește "net"
+5. **Preț** (price) și **tip preț** (priceType):
+   - Prețul din metadata sau din URL (de obicei în RON)
+   - Prețurile afișate pe site-uri românești pentru consumatori sunt CU TVA (gross)
+   - priceType: "gross" (cu TVA) pentru prețuri de raft/consumator
+   - Dacă metadata nu conține preț, încearcă să-l deduci din URL sau pune null
 
 6. **Monedă** (currency): RON, EUR, etc.
 
-7. **Furnizor** (supplier): Numele magazinului/furnizorului (ex: eMAG, Jumbo, Dedeman, etc.)
+7. **Furnizor** (supplier): Numele magazinului.
+   - Extrage din domeniul URL-ului
+   - Exemplu: e-jumbo.ro → "Jumbo", emag.ro → "eMAG", dedeman.ro → "Dedeman"
 
-8. **Material, dimensiuni, culori** (material, dimensions, colors): Extrage din descrierea produsului dacă sunt disponibile.
+8. **Material, dimensiuni, culori** (material, dimensions, colors):
+   - Extrage din titlu și URL
+   - Exemplu: "chenille" → material: "Chenille", "gri" → colors: "gri", "70x30cm" → dimensions: "70x30 cm"
 
 9. **Descriere** (description): O descriere scurtă în română a produsului.
 
+EXEMPLU pentru URL: https://www.e-jumbo.ro/ro/decoratiuni-casa/textile-decorare-casa/perne-paturi-chenille/perne-chenille-70x30cm/perna-decorativa-de-iarna-chenille-gri-model-dungi-70x30cm_1525507/
+Răspunsul corect ar fi:
+{"title":"Pernă decorativă de iarnă Chenille gri, model dungi, 70x30cm","image":"https://www.e-jumbo.ro/...","sku":"1525507","category":"Textile și decorațiuni","price":49.99,"priceType":"gross","currency":"RON","supplier":"Jumbo","material":"Chenille","dimensions":"70x30 cm","colors":"gri","description":"Pernă decorativă Chenille cu model dungi, ideală pentru decorarea casei în sezonul de iarnă."}
+
 IMPORTANT:
-- Nu inventa valori care nu apar în date
-- Pentru SKU: nu folosi ID-ul din URL ca SKU
+- Nu inventa valori care nu apar în date sau în URL
+- Pentru SKU: ID-ul numeric din URL este acceptabil ca SKU (e codul intern al magazinului)
 - Categoria trebuie să fie EXACT una din lista furnizată
 - Dacă nu găsești o valoare, pune null
-- Prețul trebuie să fie un număr (ex: 59.99), nu un string
+- Prețul trebuie să fie un număr (ex: 49.99), nu un string
 
 Răspunde STRICT cu JSON:
 {"title":"<titlu în română>","image":"<URL imagine>","sku":"<cod sau null>","category":"<categorie exactă din listă sau null>","price":<număr preț ca float sau null>,"priceType":"gross|net|unknown","currency":"<RON/EUR/etc sau null>","supplier":"<furnizor sau null>","material":"<material sau null>","dimensions":"<dimensiuni sau null>","colors":"<culori sau null>","description":"<descriere scurtă sau null>"}`;
