@@ -2237,6 +2237,10 @@ function findExistingProduct(item){
   if(bestScore>=0.7)return{product:best,confidence:'name',score:bestScore};
   return null;
 }
+function invoiceReceiptPlan(product,qty){
+  const received=Math.max(0,parseInt(qty)||0),incoming=Math.max(0,parseInt(product?.incomingQty)||0),fromIncoming=Math.min(incoming,received);
+  return{received,fromIncoming,extra:incoming>0?received-fromIncoming:0,incomingBefore:incoming,incomingAfter:incoming-fromIncoming};
+}
 function calcPrices(costRon){
   const sell=Math.round((costRon+26)*100)/100;
   const rec=Math.round(sell*1.25*100)/100;
@@ -2473,7 +2477,10 @@ function renderInvPreview(){
     let tag,nm;
     if(match){
       const conf=match.confidence==='sku'?'SKU exact':`nume ${Math.round(match.score*100)}%`;
-      tag=`<span class="inv-match upd" title="${conf}">↑ actualizează</span>`;
+      const receipt=invoiceReceiptPlan(match.product,item.qty);
+      tag=receipt.fromIncoming>0
+        ?`<span class="inv-match upd" title="${conf}">✓ recepționează ${receipt.fromIncoming} din pe drum${receipt.incomingAfter>0?' · rămân '+receipt.incomingAfter:''}${receipt.extra>0?' + '+receipt.extra+' extra':''}</span>`
+        :`<span class="inv-match upd" title="${conf}">↑ actualizează stoc</span>`;
       nm=match.product.name;
     } else {
       tag=`<span class="inv-match new">+ nou</span>`;
@@ -2484,13 +2491,15 @@ function renderInvPreview(){
   }).join('');
   const newC=invParsed.filter(i=>!i._match).length;
   const updC=invParsed.length-newC;
+  const receiptC=invParsed.filter(i=>i._match&&invoiceReceiptPlan(i._match.product,i.qty).fromIncoming>0).length;
+  const receiptQty=invParsed.reduce((n,i)=>n+(i._match?invoiceReceiptPlan(i._match.product,i.qty).fromIncoming:0),0);
   prev.innerHTML=`<div class="inv-preview"><div class="inv-prev-title">Previzualizare (${invParsed.length} produse)</div>${rows}</div>`;
-  document.getElementById('inv-info').textContent=`${newC} produse noi · ${updC} actualizări stoc`;
+  document.getElementById('inv-info').textContent=`${newC} produse noi · ${updC} actualizări stoc${receiptC?' · '+receiptQty+' buc. recepționate din pe drum':''}`;
   document.getElementById('inv-apply-btn').disabled=false;
 }
 async function applyInvoice(){
   showLoading('Se importă factura…');
-  let updated=0,created=0;
+  let updated=0,created=0,receivedLines=0,receivedQty=0,extraQty=0;
   for(const item of invParsed){
     const costRon=item.costRon||0;
     const prices=calcPrices(costRon);
@@ -2499,7 +2508,11 @@ async function applyInvoice(){
       const p=match.product;
       const idx=P.findIndex(x=>x.id===p.id);
       if(idx>=0){
+        const receipt=invoiceReceiptPlan(P[idx],item.qty);
         P[idx].bought=(P[idx].bought||0)+item.qty;
+        P[idx].incomingQty=receipt.incomingAfter;
+        if(receipt.fromIncoming>0){receivedLines++;receivedQty+=receipt.fromIncoming;}
+        extraQty+=receipt.extra;
         if(costRon>0){P[idx].priceBuyTTC=costRon;P[idx].priceSell=prices.sell;P[idx].priceRec=prices.rec;}
         await saveProdToDb(P[idx],P[idx].id);
         updated++;
@@ -2518,8 +2531,8 @@ async function applyInvoice(){
     }
   }
   hideLoading();
-  await loadData();renderToday();renderTable();closeInvoice();
-  toast(`✓ ${created} produse noi · ${updated} actualizate`);
+  renderToday();renderTable();closeInvoice();
+  toast(`✓ ${created} produse noi · ${updated} actualizate${receivedLines?' · '+receivedQty+' buc. recepționate':''}${extraQty?' · '+extraQty+' buc. extra':''}`);
 }
 
 /* RAPORT STOC */
