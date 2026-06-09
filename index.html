@@ -795,7 +795,7 @@ function buildRaportCats(){
           <div class="fld"><label>Preț vânzare eMAG</label><input id="f-pemag" type="number" min="0" step="0.01" placeholder="0.00" oninput="markOfferPriceManual('emag')"></div>
           <div class="fld"><label>Preț vânzare Trendyol</label><input id="f-ptrendyol" type="number" min="0" step="0.01" placeholder="0.00" oninput="markOfferPriceManual('trendyol')"></div>
         </div>
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><span style="font-size:11px;color:var(--t3)">Poți edita manual ofertele. Valorile modificate nu sunt suprascrise automat.</span><button type="button" class="btn btn-sm" onclick="resetOfferPrices()">Recalculează automat</button></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><span style="font-size:11px;color:var(--t3)">Prețurile minime Direct, eMAG și Trendyol se calculează automat la cost de achiziție și se salvează cu produsul. Le poți edita manual.</span><button type="button" class="btn btn-sm" onclick="resetOfferPrices()">Recalculează automat</button></div>
       </div>
 
       <!-- CALCULATOR PRETURI -->
@@ -1533,12 +1533,29 @@ function pcRecommendFor(ch,targetPct){
 }
 function pcRecommend(targetPct){return pcRecommendFor(pcChannel,targetPct);}
 function pcZeroPrice(ch){const r=pcRecommendFor(ch,0);return Math.ceil((r.sell*(1+r.vat)-1e-9)*100)/100;}
+function pcDefaultState(ch,acq){
+  const v={};PC_FIELDS[ch].forEach(([id,,def])=>v[id]=id==='acq'?acq:def);v.target=10;return v;
+}
+function pcZeroPriceForState(ch,v){
+  const old=pcState[ch];pcState[ch]=v;const price=pcZeroPrice(ch);pcState[ch]=old;return price;
+}
+function pcAutomaticPricesFromGross(cost,tva=.21){
+  const acq=cost>0&&tva>0?cost/(1+tva):cost;
+  const oldTax=pcTax;pcTax='profit';
+  const prices={direct:pcZeroPriceForState('direct',pcDefaultState('direct',acq)),emag:pcZeroPriceForState('emag',pcDefaultState('emag',acq)),trendyol:pcZeroPriceForState('trendyol',pcDefaultState('trendyol',acq))};
+  pcTax=oldTax;return prices;
+}
 function pcUpdateZeroPrices(force=false){
   const map={direct:'f-psell',emag:'f-pemag',trendyol:'f-ptrendyol'};
   Object.entries(map).forEach(([ch,id])=>{const el=document.getElementById(id);if(el&&(force||!offerPriceManual[ch]))el.value=pcState[ch].acq>0?pcZeroPrice(ch).toFixed(2):'';});
 }
 function markOfferPriceManual(ch){offerPriceManual[ch]=true;}
 function resetOfferPrices(){offerPriceManual={direct:false,emag:false,trendyol:false};pcUpdateZeroPrices(true);toast('Prețurile ofertelor au fost recalculate ✓');}
+function pcEnsureOfferPrices(){
+  pcSyncAcqFromPrice();
+  const map={direct:'f-psell',emag:'f-pemag',trendyol:'f-ptrendyol'};
+  Object.entries(map).forEach(([ch,id])=>{const el=document.getElementById(id);if(el&&!(parseFloat(el.value)>0)&&pcState[ch].acq>0)el.value=pcZeroPrice(ch).toFixed(2);});
+}
 function pcWarning(m,sell){
   if(!sell)return['',''];
   if(m<0)return['red','Vinzi în pierdere'];
@@ -1837,6 +1854,7 @@ async function saveProd(){
   const selC=document.querySelector('.cat-g input[type=radio]:checked');
   const existing=editId?P.find(p=>p.id===editId):null;
   const tvaAcq=parseFloat(document.getElementById('f-tva-acq').value)||0;
+  pcEnsureOfferPrices();
   const d={
     name,sku:document.getElementById('f-sku').value.trim(),internalCode:existing?.internalCode||'',
     supplier:document.getElementById('f-sup').value.trim(),
@@ -2336,9 +2354,8 @@ function invoiceReceiptPlan(product,qty){
   return{received,fromIncoming,extra:incoming>0?received-fromIncoming:0,incomingBefore:incoming,incomingAfter:incoming-fromIncoming};
 }
 function calcPrices(costRon){
-  const sell=Math.round((costRon+26)*100)/100;
-  const rec=Math.round(sell*1.25*100)/100;
-  return{sell,rec};
+  const p=pcAutomaticPricesFromGross(costRon,.21);
+  return{sell:p.direct,emag:p.emag,trendyol:p.trendyol,rec:Math.round(p.direct*1.1*100)/100};
 }
 async function parsePDFWithAI(file){
   const parsing=document.getElementById('inv-parsing');
@@ -2607,7 +2624,7 @@ async function applyInvoice(){
         P[idx].incomingQty=receipt.incomingAfter;
         if(receipt.fromIncoming>0){receivedLines++;receivedQty+=receipt.fromIncoming;}
         extraQty+=receipt.extra;
-        if(costRon>0){P[idx].priceBuyTTC=costRon;if(!P[idx].priceSell)P[idx].priceSell=prices.sell;if(!P[idx].priceRec)P[idx].priceRec=prices.rec;}
+        if(costRon>0){P[idx].priceBuyTTC=costRon;if(!P[idx].priceSell)P[idx].priceSell=prices.sell;if(!P[idx].priceEmag)P[idx].priceEmag=prices.emag;if(!P[idx].priceTrendyol)P[idx].priceTrendyol=prices.trendyol;if(!P[idx].priceRec)P[idx].priceRec=prices.rec;}
         await saveProdToDb(P[idx],P[idx].id);
         updated++;
       }
@@ -2617,7 +2634,7 @@ async function applyInvoice(){
         sku:item.sku||null,
         bought:item.qty,sold:0,minQty:0,
         priceBuyTTC:costRon,tvaAcq:0.21,
-        priceSell:prices.sell,priceRec:prices.rec,
+        priceSell:prices.sell,priceEmag:prices.emag,priceTrendyol:prices.trendyol,priceRec:prices.rec,
         category:item.category||'',supplier:item.supplier||'',img:''
       };
       await saveProdToDb(newP,null);
