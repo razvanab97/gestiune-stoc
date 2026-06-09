@@ -10,7 +10,7 @@ A Romanian-language inventory/stock management app ("Stoc Manager - AB HOMES") f
 
 There is no build, lint, or test tooling — this is a hand-edited static file.
 
-- **Run locally**: open `index.html` directly in a browser (or serve the directory with any static file server, e.g. `python3 -m http.server`). Note: AI-powered features (image analysis, URL import, PDF invoice parsing, category suggestions) only work when deployed on Vercel or claude.ai — they call `https://api.anthropic.com/v1/messages` directly from the browser with **no API key in the request**, relying on the hosting environment to proxy/authenticate the call. They will visibly fail (toast: "Funcționează doar pe claude.ai!") when run from the local filesystem.
+- **Run locally**: open `index.html` directly in a browser (or serve the directory with any static file server, e.g. `python3 -m http.server`). AI-powered features require the Vercel serverless endpoint `/api/openai` and the `OPENAI_API_KEY` environment variable, so they do not work when opening the HTML file directly.
 - **Deploy**: drag-and-drop `index.html` onto Vercel (per README), or push to the connected git remote. `vercel.json` configures the static build, rewrites all routes to `/index.html`, and sets security headers (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection).
 - **Database setup/migrations**: run the SQL files manually in the Supabase Dashboard → SQL Editor (Project: `nuvgwytanlgvcffxeahs`). `supabase_setup.sql` is the schema (idempotent — safe to re-run; uses `create table if not exists` / `add column if not exists`). `insert_produse.sql`, `update_images.sql`, `update_images_verk.sql` are one-off data-import scripts generated from supplier invoices/catalogs — not part of normal dev flow.
 
@@ -43,8 +43,8 @@ Three tables, no RLS (single-user, anon key is safe to expose client-side per RE
 - `vanzari_zilnice` — cache of today's sales per product (unique on `data, product_id`, used for the quick-sell UI)
 - `jurnal` — permanent sales journal/history (one row per product per day sold)
 
-### AI integrations (Claude API, all via `callClaude()` ~line 966)
-All call `api.anthropic.com/v1/messages` with model `claude-sonnet-4-20250514` directly from the browser (no key — see note above):
+### AI integrations (OpenAI Responses API, via `callAI()`)
+All AI requests go through the Vercel serverless endpoint `/api/openai`; the API key is never exposed in the browser:
 - `doSuggestCat` — suggests 1-3 product categories from the product name as the user types
 - `analyzeImage` — detects product name/category from an uploaded photo
 - `importFromUrl` — imports a product (title translated, image, SKU) from a product page URL

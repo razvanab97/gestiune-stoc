@@ -1,6 +1,6 @@
 # 📦 Gestiune Stoc - Aplicație Inventar
 
-Aplicație web pentru gestiunea stocului cu integrare Supabase și funcții AI (Claude).
+Aplicație web pentru gestiunea stocului cu integrare Supabase și funcții AI OpenAI.
 
 ## 🚀 Deploy rapid pe Vercel
 
@@ -31,15 +31,15 @@ Aplicația se conectează la Supabase deja configurat:
 6. Click **"Run"** (sau Ctrl+Enter)
 7. Dacă vezi "Success. No rows returned" → gata! ✅
 
-### Pasul 3: Configurează Claude AI
+### Pasul 3: Configurează OpenAI
 
-1. Creează o cheie API în [Anthropic Console](https://console.anthropic.com/settings/keys)
+1. Creează o cheie API în [OpenAI Platform](https://platform.openai.com/api-keys)
 2. În Vercel deschide proiectul → **Settings → Environment Variables**
-3. Adaugă variabila `ANTHROPIC_API_KEY` cu cheia ta și selectează **Production**, **Preview** și **Development**
+3. Adaugă variabila `OPENAI_API_KEY` cu cheia ta și selectează **Production**, **Preview** și **Development**
 4. Fă un nou deploy după salvarea variabilei
 
-Cheia este folosită numai de funcția serverless `/api/claude` și nu ajunge în browser.
-Modelul implicit este `claude-sonnet-4-6`. Opțional, îl poți schimba adăugând variabila Vercel `ANTHROPIC_MODEL`.
+Cheia este folosită numai de funcția serverless `/api/openai` și nu ajunge în browser.
+Modelul implicit este `gpt-4.1-mini`. Opțional, îl poți schimba adăugând variabila Vercel `OPENAI_MODEL`.
 
 ### Pasul 4: Testează aplicația
 
@@ -58,7 +58,7 @@ Deschide link-ul Vercel în browser:
 ✅ 140+ categorii în română  
 ✅ Statistici și alerte stoc minim  
 
-### Funcționează pe Vercel după configurarea `ANTHROPIC_API_KEY`:
+### Funcționează pe Vercel după configurarea `OPENAI_API_KEY`:
 🤖 Analiză poză cu AI → detectare produs + categorie  
 🤖 Import automat din URL produs → titlu (tradus) + poză + SKU  
 🤖 Import factură PDF → extragere produse  
@@ -91,19 +91,19 @@ const SUPA_KEY='eyJhbGc...';
 → Ai rulat SQL-ul în Supabase? Vezi Pasul 2 de mai sus.
 
 **"Analiza AI nu funcționează"**
-→ Verifică variabila `ANTHROPIC_API_KEY` în Vercel și fă un nou deploy.
+→ Verifică variabila `OPENAI_API_KEY` în Vercel și fă un nou deploy.
 
 **"Eroare la salvare produs"**
 → Verifică că tabelele există în Supabase (rulează SQL-ul din nou).
 
 **"Import URL nu funcționează"**
-→ Verifică variabila `ANTHROPIC_API_KEY` în Vercel și fă un nou deploy.
+→ Verifică variabila `OPENAI_API_KEY` în Vercel și fă un nou deploy.
 
 ## 📝 Notițe tehnice
 
 - **Framework**: HTML + JavaScript vanilla (no dependencies)
 - **Database**: Supabase (PostgreSQL)
-- **AI**: Claude Sonnet 4 API
+- **AI**: OpenAI Responses API
 - **Hosting**: Vercel (static site)
 - **Fonts**: DM Sans, Roboto Mono (Google Fonts)
 
@@ -123,4 +123,4 @@ Pentru întrebări sau bug-uri, verifică:
 
 ---
 
-**Developed with ❤️ using Claude AI**
+**AI powered by OpenAI**

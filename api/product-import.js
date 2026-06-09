@@ -34,12 +34,16 @@ function parseProduct(html,url){
   const offer=Array.isArray(product?.offers)?product.offers[0]:product?.offers||{};
   const image=Array.isArray(product?.image)?product.image[0]:product?.image;
   const absolute=v=>{try{return new URL(v,url).href;}catch(e){return '';}};
+  const cleanText=html.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+  const breadcrumbs=[...html.matchAll(/<(?:a|span)[^>]*(?:breadcrumb|category)[^>]*>([\s\S]*?)<\/(?:a|span)>/gi)].map(m=>decode(m[1].replace(/<[^>]+>/g,' '))).filter(Boolean).slice(0,12);
   return{
     title:product?.name||meta(html,'og:title')||meta(html,'twitter:title')||'',
     image:absolute(image||meta(html,'og:image')||meta(html,'twitter:image')||meta(html,'image')),
     sku:String(product?.sku||product?.mpn||meta(html,'product:retailer_item_id')||'').trim(),
     price:parsePrice(offer?.price||offer?.lowPrice||meta(html,'product:price:amount')||meta(html,'og:price:amount')),
-    currency:String(offer?.priceCurrency||meta(html,'product:price:currency')||meta(html,'og:price:currency')||'').toUpperCase()
+    currency:String(offer?.priceCurrency||meta(html,'product:price:currency')||meta(html,'og:price:currency')||'').toUpperCase(),
+    breadcrumbs,
+    pageText:cleanText.slice(0,30000)
   };
 }
 function isPrivateHost(host){
