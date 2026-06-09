@@ -9,9 +9,11 @@ Aplicație web pentru gestiunea stocului cu integrare Supabase și funcții AI (
 1. Mergi la [vercel.com](https://vercel.com)
 2. **Sign up / Log in** (cu GitHub, GitLab sau email)
 3. Click **"Add New" → "Project"**
-4. **Drag & drop** fișierul `index.html` în zona de upload
+4. Importă repository-ul GitHub care conține proiectul complet
 5. Click **"Deploy"**
 6. Gata! Primești un link de genul: `https://your-project.vercel.app`
+
+Nu încărca doar `index.html`: funcțiile AI au nevoie și de folderul `api/` plus `vercel.json`.
 
 ### Pasul 2: Configurează Supabase (OBLIGATORIU)
 
@@ -29,7 +31,16 @@ Aplicația se conectează la Supabase deja configurat:
 6. Click **"Run"** (sau Ctrl+Enter)
 7. Dacă vezi "Success. No rows returned" → gata! ✅
 
-### Pasul 3: Testează aplicația
+### Pasul 3: Configurează Claude AI
+
+1. Creează o cheie API în [Anthropic Console](https://console.anthropic.com/settings/keys)
+2. În Vercel deschide proiectul → **Settings → Environment Variables**
+3. Adaugă variabila `ANTHROPIC_API_KEY` cu cheia ta și selectează **Production**, **Preview** și **Development**
+4. Fă un nou deploy după salvarea variabilei
+
+Cheia este folosită numai de funcția serverless `/api/claude` și nu ajunge în browser.
+
+### Pasul 4: Testează aplicația
 
 Deschide link-ul Vercel în browser:
 - Ar trebui să vezi ecranul "Se conectează la Supabase..."
@@ -46,7 +57,7 @@ Deschide link-ul Vercel în browser:
 ✅ 140+ categorii în română  
 ✅ Statistici și alerte stoc minim  
 
-### Funcționează DOAR pe Vercel (sau claude.ai):
+### Funcționează pe Vercel după configurarea `ANTHROPIC_API_KEY`:
 🤖 Analiză poză cu AI → detectare produs + categorie  
 🤖 Import automat din URL produs → titlu (tradus) + poză + SKU  
 🤖 Import factură PDF → extragere produse  
@@ -69,10 +80,9 @@ const SUPA_KEY='eyJhbGc...';
 
 ### Actualizează aplicația
 
-1. Modifici `index.html` local
-2. Mergi pe Vercel Dashboard → proiectul tău → **Deployments**
-3. Drag & drop din nou `index.html`
-4. Vercel actualizează automat
+1. Modifici fișierele local
+2. Faci commit și push în repository-ul conectat la Vercel
+3. Vercel publică automat noua versiune
 
 ## 🐛 Probleme frecvente
 
@@ -80,13 +90,13 @@ const SUPA_KEY='eyJhbGc...';
 → Ai rulat SQL-ul în Supabase? Vezi Pasul 2 de mai sus.
 
 **"Analiza AI nu funcționează"**
-→ Normal dacă deschizi fișierul local (din Finder). Folosește link-ul Vercel.
+→ Verifică variabila `ANTHROPIC_API_KEY` în Vercel și fă un nou deploy.
 
 **"Eroare la salvare produs"**
 → Verifică că tabelele există în Supabase (rulează SQL-ul din nou).
 
 **"Import URL nu funcționează"**
-→ Funcționează doar pe Vercel sau claude.ai, nu local.
+→ Verifică variabila `ANTHROPIC_API_KEY` în Vercel și fă un nou deploy.
 
 ## 📝 Notițe tehnice
 
