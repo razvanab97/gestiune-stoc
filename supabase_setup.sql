@@ -11,6 +11,7 @@ create table if not exists produse (
   category text,
   supplier text,
   bought integer default 0,
+  incoming_qty integer default 0,
   sold integer default 0,
   min_qty integer default 0,
   price_buy_ttc numeric(10,2) default 0,
@@ -34,6 +35,7 @@ alter table produse add column if not exists sizes text;
 alter table produse add column if not exists material text;
 alter table produse add column if not exists dims text;
 alter table produse add column if not exists notes text;
+alter table produse add column if not exists incoming_qty integer default 0;
 
 -- VANZARI ZILNICE (today sales cache)
 create table if not exists vanzari_zilnice (
