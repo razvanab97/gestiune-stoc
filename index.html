@@ -1383,24 +1383,40 @@ Date din metadata paginii:
 ${JSON.stringify(pageData, null, 2)}
 
 Extrage și completează următoarele informații:
-1. Titlul complet al produsului (în ROMÂNĂ - traduce dacă e în altă limbă)
-2. URL-ul imaginii principale (full URL complet)
-3. Codul SKU / cod produs / cod articol - doar dacă apare explicit în metadata paginii
-4. Categoria cea mai potrivită DIN LISTA: ${CATS.join(', ')}
-5. Prețul (ca număr)
-6. Moneda (RON, EUR, etc.)
-7. Furnizorul/magazinul
-8. Materialul, dimensiunile, culorile
-9. O descriere scurtă
+
+1. **Titlu** (title): Numele complet al produsului. Dacă e în engleză sau altă limbă, tradu-l în ROMÂNĂ logic și natural (ex: "Stainless Steel Coffee Maker 1.2L" → "Cafetieră din oțel inoxidabil 1.2L"). Păstrează specificațiile numerice (greutate, dimensiuni, capacitate).
+
+2. **Imagine** (image): URL-ul complet al imaginii principale a produsului. Trebuie să fie un URL direct către o imagine (de obicei .jpg, .png, .webp), nu un URL de pagină.
+
+3. **Cod produs/SKU** (sku): Codul unic al produsului, doar dacă apare explicit în metadata paginii lângă etichete precum "Cod produs", "SKU", "Cod articol", "Model", "MPN". NU folosi ID-ul numeric din URL ca SKU. Dacă nu găsești o sursă clară, pune null.
+
+4. **Categorie** (category): Alege categoria cea mai potrivită DIN LISTA: ${CATS.join(', ')}. Trebuie să fie EXACT una din această listă.
+
+5. **Preț** (price) și **tip preț** (priceType): Detectează prețul din pagină și stabilește dacă este cu TVA (gross) sau fără TVA (net):
+   - Prețul afișat consumatorului final în România este de obicei cu TVA (gross)
+   - Prețurile B2B sau en-gros sunt adesea fără TVA (net)
+   - Dacă prețul e în EUR sau altă monedă, notează moneda
+   - priceType poate fi: "gross" (cu TVA), "net" (fără TVA), sau "unknown"
+   - Dacă prețul e în RON și e preț de raft/consumator, presupune "gross"
+   - Dacă metadata paginii conține prețul fără TVA explicit, folosește "net"
+
+6. **Monedă** (currency): RON, EUR, etc.
+
+7. **Furnizor** (supplier): Numele magazinului/furnizorului (ex: eMAG, Jumbo, Dedeman, etc.)
+
+8. **Material, dimensiuni, culori** (material, dimensions, colors): Extrage din descrierea produsului dacă sunt disponibile.
+
+9. **Descriere** (description): O descriere scurtă în română a produsului.
 
 IMPORTANT:
 - Nu inventa valori care nu apar în date
 - Pentru SKU: nu folosi ID-ul din URL ca SKU
 - Categoria trebuie să fie EXACT una din lista furnizată
 - Dacă nu găsești o valoare, pune null
+- Prețul trebuie să fie un număr (ex: 59.99), nu un string
 
 Răspunde STRICT cu JSON:
-{"title":"<titlu în română>","image":"<URL imagine>","sku":"<cod sau null>","category":"<categorie exactă din listă sau null>","price":<număr sau null>,"currency":"<monedă sau null>","supplier":"<furnizor sau null>","material":"<material sau null>","dimensions":"<dimensiuni sau null>","colors":"<culori sau null>","description":"<descriere scurtă sau null>"}`;
+{"title":"<titlu în română>","image":"<URL imagine>","sku":"<cod sau null>","category":"<categorie exactă din listă sau null>","price":<număr preț ca float sau null>,"priceType":"gross|net|unknown","currency":"<RON/EUR/etc sau null>","supplier":"<furnizor sau null>","material":"<material sau null>","dimensions":"<dimensiuni sau null>","colors":"<culori sau null>","description":"<descriere scurtă sau null>"}`;
 
     const fetchResp=await fetch('/api/deepseek-import',{
       method:'POST',
