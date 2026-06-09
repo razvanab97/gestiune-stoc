@@ -1593,7 +1593,7 @@ function pcUpdateZeroPrices(force=false){
 function markOfferPriceManual(ch){offerPriceManual[ch]=true;}
 function resetOfferPrices(){offerPriceManual={direct:false,emag:false,trendyol:false};pcUpdateZeroPrices(true);toast('Prețurile ofertelor au fost recalculate ✓');}
 function pcEnsureOfferPrices(){
-  pcSyncAcqFromPrice();
+  pcSyncAcqFromPrice(false);
   const map={direct:'f-psell',emag:'f-pemag',trendyol:'f-ptrendyol'};
   Object.entries(map).forEach(([ch,id])=>{const el=document.getElementById(id);if(el&&!(parseFloat(el.value)>0)&&pcState[ch].acq>0)el.value=pcZeroPrice(ch).toFixed(2);});
 }
@@ -1636,9 +1636,10 @@ function pcApplyRecommended(){
   pcState[pcChannel].sell=pcRecommendation.sell;
   pcRender();toast('Prețul recomandat a fost aplicat în simulare ✓');
 }
-function pcSyncAcqFromPrice(){
+function pcSyncAcqFromPrice(recalculate=true){
   const input=Math.max(0,parseFloat(document.getElementById('f-pbuy')?.value)||0),tva=parseFloat(document.getElementById('f-tva-acq')?.value)||0;
   const gross=document.getElementById('f-acq-mode')?.value!=='net',acq=gross&&tva>0?input/(1+tva):input;
+  if(recalculate)offerPriceManual={direct:false,emag:false,trendyol:false};
   Object.keys(pcState).forEach(ch=>{pcState[ch].acq=acq;pcState[ch].vat=21;});
   pcRender();
 }
@@ -2665,7 +2666,7 @@ async function applyInvoice(){
         P[idx].incomingQty=receipt.incomingAfter;
         if(receipt.fromIncoming>0){receivedLines++;receivedQty+=receipt.fromIncoming;}
         extraQty+=receipt.extra;
-        if(costRon>0){P[idx].priceBuyTTC=costRon;if(!P[idx].priceSell)P[idx].priceSell=prices.sell;if(!P[idx].priceEmag)P[idx].priceEmag=prices.emag;if(!P[idx].priceTrendyol)P[idx].priceTrendyol=prices.trendyol;if(!P[idx].priceRec)P[idx].priceRec=prices.rec;}
+        if(costRon>0){P[idx].priceBuyTTC=costRon;P[idx].priceSell=prices.sell;P[idx].priceEmag=prices.emag;P[idx].priceTrendyol=prices.trendyol;P[idx].priceRec=prices.rec;}
         await saveProdToDb(P[idx],P[idx].id);
         updated++;
       }
