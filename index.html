@@ -788,13 +788,13 @@ function buildRaportCats(){
               <option value="0.21" selected>21%</option>
             </select>
           </div>
-          <div class="fld"><label>Preț vânzare directă</label><input id="f-psell" type="number" min="0" step="0.01" placeholder="0.00" readonly style="background:var(--surf3);color:var(--t2)"></div>
+          <div class="fld"><label>Preț vânzare directă</label><input id="f-psell" type="number" min="0" step="0.01" placeholder="0.00" oninput="markOfferPriceManual('direct')"></div>
         </div>
         <div class="frow">
-          <div class="fld"><label>Preț vânzare eMAG</label><input id="f-pemag" type="number" min="0" step="0.01" placeholder="0.00" readonly style="background:var(--surf3);color:var(--t2)"></div>
-          <div class="fld"><label>Preț vânzare Trendyol</label><input id="f-ptrendyol" type="number" min="0" step="0.01" placeholder="0.00" readonly style="background:var(--surf3);color:var(--t2)"></div>
+          <div class="fld"><label>Preț vânzare eMAG</label><input id="f-pemag" type="number" min="0" step="0.01" placeholder="0.00" oninput="markOfferPriceManual('emag')"></div>
+          <div class="fld"><label>Preț vânzare Trendyol</label><input id="f-ptrendyol" type="number" min="0" step="0.01" placeholder="0.00" oninput="markOfferPriceManual('trendyol')"></div>
         </div>
-        <div style="font-size:11px;color:var(--t3)">Prețurile de vânzare includ TVA și acoperă toate costurile configurate în calculator pentru fiecare canal.</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap"><span style="font-size:11px;color:var(--t3)">Poți edita manual ofertele. Valorile modificate nu sunt suprascrise automat.</span><button type="button" class="btn btn-sm" onclick="resetOfferPrices()">Recalculează automat</button></div>
       </div>
 
       <!-- CALCULATOR PRETURI -->
@@ -824,7 +824,7 @@ function buildRaportCats(){
   </div>
   <div class="m-foot">
     <button class="btn" onclick="closeModal()">Anulează</button>
-    <button class="btn btn-acc" onclick="saveProd()">Salvează produs</button>
+    <button class="btn btn-acc" id="save-prod-btn" onclick="saveProd()">Salvează produs</button>
   </div>
 </div>
 </div>
@@ -905,6 +905,9 @@ function pToDb(p){
     colors:p.colors||'',sizes:p.sizes||'',material:p.material||'',dims:p.dims||'',notes:p.notes||''};
 }
 function pToDbLegacy(p){const d=pToDb(p);delete d.price_emag;delete d.price_trendyol;return d;}
+function dbSavedProductMatches(row,sent){
+  return Object.entries(sent).every(([k,v])=>typeof v==='number'?Math.abs((Number(row[k])||0)-v)<0.001:String(row[k]??'')===String(v??''));
+}
 
 function dbToSyncMap(r){
   return{id:r.id,platforma:r.platforma,idExtern:r.id_extern||'',titluExtern:r.titlu_extern||'',produsId:r.produs_id,confirmat:r.confirmat!==false};
@@ -914,7 +917,7 @@ function syncMapToDb(m){
 }
 
 const K='sm6_prod',TK='sm6_today',JK='sm6_jurnal';
-let P=[],TS={},JL=[],editId=null,sCol='name',sDir=1,curImg='',selProd=new Set();
+let P=[],TS={},JL=[],editId=null,sCol='name',sDir=1,curImg='',selProd=new Set(),savingProduct=false;
 let SYNCM=[],syncMapsLoaded=false,syncImpParsed=[];
 let invLines=[],invParsed=[],catSuggestTimer=null,lastNameForCat='';
 let sbReady=false;
@@ -1029,26 +1032,43 @@ async function seedSample(){
 
 // ── SAVE PRODUCT ──
 async function saveProdToDb(data,id){
-  if(!sbReady) return saveLocalOnly(data,id);
+  if(!sbReady){
+    saveLocalOnly(data,id);
+    setSyncStatus('err','nesalvat în baza de date');
+    toast('Nu există conexiune la Supabase. Modificarea a fost păstrată local, dar nu este încă salvată în baza de date.','err');
+    return false;
+  }
   try{
-    let r;
+    let r,sent;
     if(id){
-      try{r=await dbPatch(`produse?id=eq.${id}`,pToDb(data));}
-      catch(e){if(!/price_emag|price_trendyol/i.test(e.message))throw e;r=await dbPatch(`produse?id=eq.${id}`,pToDbLegacy(data));toast('Rulează migration_price_channels.sql pentru salvarea prețurilor eMAG și Trendyol','err');}
+      sent=pToDb(data);
+      try{r=await dbPatch(`produse?id=eq.${id}`,sent);}
+      catch(e){if(!/price_emag|price_trendyol/i.test(e.message))throw e;sent=pToDbLegacy(data);r=await dbPatch(`produse?id=eq.${id}`,sent);toast('Rulează migration_price_channels.sql pentru salvarea prețurilor eMAG și Trendyol','err');}
+      if(!r?.[0])throw new Error('Produsul nu a fost găsit în baza de date.');
+      const check=await dbGet(`produse?id=eq.${id}&select=*`);
+      if(!check?.[0])throw new Error('Supabase nu a confirmat salvarea produsului.');
+      if(!dbSavedProductMatches(check[0],sent))throw new Error('Datele recitite din Supabase nu corespund modificărilor.');
       const idx=P.findIndex(p=>p.id===id);
-      if(idx>=0&&r[0])P[idx]={...dbToP(r[0]),priceEmag:data.priceEmag||0,priceTrendyol:data.priceTrendyol||0};
+      if(idx>=0)P[idx]=dbToP(check[0]);
       setSyncStatus('ok','salvat');
     }else{
-      try{r=await dbPost('produse',pToDb(data));}
-      catch(e){if(!/price_emag|price_trendyol/i.test(e.message))throw e;r=await dbPost('produse',pToDbLegacy(data));toast('Rulează migration_price_channels.sql pentru salvarea prețurilor eMAG și Trendyol','err');}
-      if(r&&r[0])P.push({...dbToP(r[0]),priceEmag:data.priceEmag||0,priceTrendyol:data.priceTrendyol||0});
+      sent=pToDb(data);
+      try{r=await dbPost('produse',sent);}
+      catch(e){if(!/price_emag|price_trendyol/i.test(e.message))throw e;sent=pToDbLegacy(data);r=await dbPost('produse',sent);toast('Rulează migration_price_channels.sql pentru salvarea prețurilor eMAG și Trendyol','err');}
+      if(!r?.[0]?.id)throw new Error('Supabase nu a confirmat crearea produsului.');
+      const check=await dbGet(`produse?id=eq.${r[0].id}&select=*`);
+      if(!check?.[0])throw new Error('Produsul creat nu a putut fi recitit din baza de date.');
+      if(!dbSavedProductMatches(check[0],sent))throw new Error('Datele produsului creat nu corespund modificărilor.');
+      P.push(dbToP(check[0]));
       setSyncStatus('ok','salvat');
     }
     // also cache locally
     localStorage.setItem(K,JSON.stringify(P));
+    return true;
   }catch(err){
     setSyncStatus('err','Eroare salvare');
     toast('Eroare salvare: '+err.message,'err');
+    return false;
   }
 }
 
@@ -1448,7 +1468,7 @@ const PC_FIELDS={
   trendyol:[['sell','Preț vânzare fără TVA',0],['acq','Cost achiziție fără TVA',0],['vat','TVA',21,'%'],['commission','Comision Trendyol',15,'%'],['shipReal','Transport suportat de vânzător',10],['returnRate','Rată retur',7,'%'],['returnShip','Transport retur tur-retur',36],['campaign','Campanii / cupoane',0,'%'],['importTax','Taxă import / colet non-UE',0],['other','Alte costuri fixe',0]],
   direct:[['sell','Preț vânzare fără TVA',0],['acq','Cost achiziție fără TVA',0],['vat','TVA',21,'%'],['shipCharged','Transport facturat clientului',0],['shipReal','Cost real transport',0],['packaging','Cost ambalaj',0],['accounting','Cost contabilitate / comandă',0],['processor','Comision procesator plată',1.4,'%'],['marketing','Marketing / comandă',0],['other','Alte costuri',0]]
 };
-let pcChannel='direct',pcTax='profit',pcState={emag:{},trendyol:{},direct:{}},pcRecommendation=null;
+let pcChannel='direct',pcTax='profit',pcState={emag:{},trendyol:{},direct:{}},pcRecommendation=null,offerPriceManual={direct:false,emag:false,trendyol:false};
 Object.entries(PC_FIELDS).forEach(([ch,fields])=>fields.forEach(([id,,def])=>pcState[ch][id]=def));
 function pcMoney(n){return(Number(n)||0).toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})+' lei';}
 function pcPct(n){return(Number(n)||0).toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})+'%';}
@@ -1484,10 +1504,12 @@ function pcRecommendFor(ch,targetPct){
 }
 function pcRecommend(targetPct){return pcRecommendFor(pcChannel,targetPct);}
 function pcZeroPrice(ch){const r=pcRecommendFor(ch,0);return Math.ceil((r.sell*(1+r.vat)-1e-9)*100)/100;}
-function pcUpdateZeroPrices(){
+function pcUpdateZeroPrices(force=false){
   const map={direct:'f-psell',emag:'f-pemag',trendyol:'f-ptrendyol'};
-  Object.entries(map).forEach(([ch,id])=>{const el=document.getElementById(id);if(el)el.value=pcState[ch].acq>0?pcZeroPrice(ch).toFixed(2):'';});
+  Object.entries(map).forEach(([ch,id])=>{const el=document.getElementById(id);if(el&&(force||!offerPriceManual[ch]))el.value=pcState[ch].acq>0?pcZeroPrice(ch).toFixed(2):'';});
 }
+function markOfferPriceManual(ch){offerPriceManual[ch]=true;}
+function resetOfferPrices(){offerPriceManual={direct:false,emag:false,trendyol:false};pcUpdateZeroPrices(true);toast('Prețurile ofertelor au fost recalculate ✓');}
 function pcWarning(m,sell){
   if(!sell)return['',''];
   if(m<0)return['red','Vinzi în pierdere'];
@@ -1753,6 +1775,10 @@ function openModal(id){
   document.getElementById('f-pbuy').value=p?.priceBuyTTC||'';
   document.getElementById('f-acq-mode').value='gross';
   document.getElementById('f-tva-acq').value=p?.tvaAcq!==undefined?p.tvaAcq:'0.21';
+  offerPriceManual={direct:!!p?.priceSell,emag:!!p?.priceEmag,trendyol:!!p?.priceTrendyol};
+  document.getElementById('f-psell').value=p?.priceSell||'';
+  document.getElementById('f-pemag').value=p?.priceEmag||'';
+  document.getElementById('f-ptrendyol').value=p?.priceTrendyol||'';
   document.getElementById('sb-azi').textContent=p?tqp(p)||'0':'—';
   document.getElementById('cat-s').value='';
   document.getElementById('cat-suggest').innerHTML='<span class="cat-chip-loading">Scrie numele produsului pentru sugestii…</span>';
@@ -1775,9 +1801,11 @@ function openModal(id){
 function closeModal(){document.getElementById('ov').classList.remove('on');editId=null;}
 
 async function saveProd(){
+  if(savingProduct)return;
   const name=document.getElementById('f-name').value.trim();
   if(!name){document.getElementById('f-name').focus();return;}
   const selC=document.querySelector('.cat-g input[type=radio]:checked');
+  const existing=editId?P.find(p=>p.id===editId):null;
   const tvaAcq=parseFloat(document.getElementById('f-tva-acq').value)||0;
   const d={
     name,sku:document.getElementById('f-sku').value.trim(),
@@ -1787,7 +1815,7 @@ async function saveProd(){
     material:document.getElementById('f-material').value.trim(),
     dims:document.getElementById('f-dims').value.trim(),
     notes:document.getElementById('f-notes').value.trim(),
-    category:selC?selC.value:'',
+    category:selC?selC.value:existing?.category||'',
     bought:Math.max(0,parseInt(document.getElementById('f-bought').value)||0),
     incomingQty:Math.max(0,parseInt(document.getElementById('f-incoming').value)||0),
     sold:Math.max(0,parseInt(document.getElementById('f-sold').value)||0),
@@ -1800,9 +1828,16 @@ async function saveProd(){
     priceRec:0,
     img:curImg
   };
-  await saveProdToDb(d,editId);
-  toast(editId?'Actualizat':'Adăugat');
-  closeModal();renderToday();renderTable();
+  const btn=document.getElementById('save-prod-btn'),label=btn.textContent;
+  savingProduct=true;btn.disabled=true;btn.textContent='Se salvează…';
+  try{
+    const saved=await saveProdToDb(d,editId);
+    if(!saved)return;
+    toast(editId?'Actualizat și salvat în baza de date':'Adăugat și salvat în baza de date');
+    closeModal();renderToday();renderTable();
+  }finally{
+    savingProduct=false;btn.disabled=false;btn.textContent=label;
+  }
 }
 
 async function delProd(id){
@@ -2542,7 +2577,7 @@ async function applyInvoice(){
         P[idx].incomingQty=receipt.incomingAfter;
         if(receipt.fromIncoming>0){receivedLines++;receivedQty+=receipt.fromIncoming;}
         extraQty+=receipt.extra;
-        if(costRon>0){P[idx].priceBuyTTC=costRon;P[idx].priceSell=prices.sell;P[idx].priceRec=prices.rec;}
+        if(costRon>0){P[idx].priceBuyTTC=costRon;if(!P[idx].priceSell)P[idx].priceSell=prices.sell;if(!P[idx].priceRec)P[idx].priceRec=prices.rec;}
         await saveProdToDb(P[idx],P[idx].id);
         updated++;
       }
