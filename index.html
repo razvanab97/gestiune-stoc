@@ -1363,56 +1363,63 @@ async function importFromUrl(){
   status.innerHTML='<span class="spin"></span> Accesez pagina produsului...';
   
   try{
+    // Step 1: Extract page metadata using product-import
     let pageData={};
     try{
       const directResp=await fetch('/api/product-import',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
       if(directResp.ok)pageData=await directResp.json();
     }catch(e){console.warn('Direct product import unavailable:',e);}
 
-    // Fetch page content using Claude API with web_fetch
-    const fetchResp=await fetch('/api/claude',{
+    // Step 2: Use DeepSeek to analyze the product data
+    const systemPrompt=`Ești un expert în identificarea produselor comerciale. Analizezi date extrase dintr-o pagină de produs pentru un sistem de gestiune stoc.
+Lista completă de categorii disponibile: ${CATS.join(', ')}.
+Răspunde ÎNTOTDEAUNA cu un JSON valid, fără text suplimentar, fără markdown.`;
+
+    const userPrompt=`Analizează următoarele date extrase dintr-o pagină de produs și completează informațiile:
+
+URL: ${url}
+
+Date din metadata paginii:
+${JSON.stringify(pageData, null, 2)}
+
+Extrage și completează următoarele informații:
+1. Titlul complet al produsului (în ROMÂNĂ - traduce dacă e în altă limbă)
+2. URL-ul imaginii principale (full URL complet)
+3. Codul SKU / cod produs / cod articol - doar dacă apare explicit în metadata paginii
+4. Categoria cea mai potrivită DIN LISTA: ${CATS.join(', ')}
+5. Prețul (ca număr)
+6. Moneda (RON, EUR, etc.)
+7. Furnizorul/magazinul
+8. Materialul, dimensiunile, culorile
+9. O descriere scurtă
+
+IMPORTANT:
+- Nu inventa valori care nu apar în date
+- Pentru SKU: nu folosi ID-ul din URL ca SKU
+- Categoria trebuie să fie EXACT una din lista furnizată
+- Dacă nu găsești o valoare, pune null
+
+Răspunde STRICT cu JSON:
+{"title":"<titlu în română>","image":"<URL imagine>","sku":"<cod sau null>","category":"<categorie exactă din listă sau null>","price":<număr sau null>,"currency":"<monedă sau null>","supplier":"<furnizor sau null>","material":"<material sau null>","dimensions":"<dimensiuni sau null>","colors":"<culori sau null>","description":"<descriere scurtă sau null>"}`;
+
+    const fetchResp=await fetch('/api/deepseek-import',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body:JSON.stringify({
-        max_tokens:3000,
-        messages:[{
-          role:'user',
-          content:`Accesează URL-ul: ${url}
-
-Extrage toate informațiile utile pentru adăugarea produsului într-un sistem de gestiune:
-1. Titlul complet al produsului (în ROMÂNĂ - traduce dacă e în altă limbă)
-2. URL-ul imaginii principale (full URL complet, nu relativ)
-3. Codul SKU / cod produs / cod articol / model NUMAI dacă este afișat explicit și etichetat în conținutul paginii
-4. Categoria GENERALĂ din breadcrumb-ul magazinului (ex: "Bucătărie", nu subcategoria foarte specifică)
-5. Prețul curent al produsului ca număr și moneda
-6. Furnizorul/magazinul, materialul, dimensiunile, culorile și o descriere scurtă
-
-Nu inventa valori care nu apar în pagină. Pentru preț ignoră prețul vechi tăiat și folosește prețul curent/final.
-IMPORTANT pentru SKU:
-- Nu folosi niciodată numărul sau textul de la finalul URL-ului drept SKU.
-- La e-jumbo.ro, numărul de după ultimul caracter "_" din URL este ID-ul listării/paginii și NU este codul produsului.
-- Acceptă SKU doar dacă apare lângă o etichetă explicită precum "Cod produs", "Cod Jumbo", "SKU", "Cod articol" sau "Model".
-- În sku_evidence copiază eticheta și codul găsite în pagină. Dacă nu găsești o asemenea sursă explicită, returnează sku și sku_evidence ca null.
-- Dacă pagina este blocată sau informațiile lipsesc, folosește căutarea web după URL și titlul produsului. Pentru imagine returnează URL-ul direct al imaginii principale, nu URL-ul paginii sau un thumbnail de rezultate.
-
-Date găsite direct în metadata paginii (folosește-le dacă sunt valide și completează ce lipsește):
-${JSON.stringify(pageData)}
-
-Răspunde STRICT cu JSON:
-{"title":"<titlu tradus în română>","image":"<URL complet imagine>","sku":"<cod sau null>","sku_evidence":"<eticheta și codul exact din pagină sau null>","category":"<categorie generală sau null>","price":<număr sau null>,"currency":"<RON/EUR/etc sau null>","supplier":"<magazin/furnizor sau null>","material":"<material sau null>","dimensions":"<dimensiuni sau null>","colors":"<culori sau null>","description":"<descriere scurtă sau null>"}`
-        }],
-        tools:[{type:'web_fetch_20260309',name:'web_fetch'},{type:'web_search_20260209',name:'web_search'}]
+        max_tokens:2000,
+        system:systemPrompt,
+        messages:[{role:'user',content:userPrompt}]
       })
     });
     
     if(!fetchResp.ok){
       const err=await fetchResp.json();
-      throw new Error(err.error?.message||'Eroare la accesarea paginii');
+      throw new Error(err.error?.message||'Eroare la analiza cu DeepSeek');
     }
     
     const data=await fetchResp.json();
     
-    // Extract response text from content blocks
+    // Extract response text
     const textBlocks=data.content.filter(c=>c.type==='text');
     if(textBlocks.length===0) throw new Error('Nu am primit răspuns de la AI');
     
