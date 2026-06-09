@@ -1,13 +1,13 @@
 const MAX_HTML_BYTES=3*1024*1024;
 
 function decode(s=''){
-  return String(s).replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'").replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').trim();
+  return String(s).replace(/"/g,'"').replace(/&#39;|'/g,"'").replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>').trim();
 }
 function meta(html,key){
   const safe=key.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
   const patterns=[
-    new RegExp(`<meta[^>]+(?:property|name|itemprop)=["']${safe}["'][^>]+content=["']([^"']+)["'][^>]*>`,'i'),
-    new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name|itemprop)=["']${safe}["'][^>]*>`,'i')
+    new RegExp('<meta[^>]+(?:property|name|itemprop)=["\']'+safe+'["\'][^>]+content=["\']([^"\']+)["\'][^>]*>','i'),
+    new RegExp('<meta[^>]+content=["\']([^"\']+)["\'][^>]+(?:property|name|itemprop)=["\']'+safe+'["\'][^>]*>','i')
   ];
   for(const p of patterns){const m=html.match(p);if(m)return decode(m[1]);}
   return '';
@@ -48,17 +48,80 @@ function isPrivateHost(host){
     /^169\.254\./.test(host)||/^172\.(1[6-9]|2\d|3[01])\./.test(host);
 }
 
+// Extrage date specifice Jumbo din HTML (Context JSON inline)
+function extractJumboData(html,url){
+  const result={};
+  // Caută obiectul Context inline
+  const ctxMatch=html.match(/Context:\s*(\{[\s\S]*?\}),\s*Url:/);
+  if(ctxMatch){
+    try{
+      const ctx=JSON.parse(ctxMatch[1]);
+      if(ctx.Item?.Id)result.jumbo_item_id=String(ctx.Item.Id);
+      if(ctx.Currency?.Code)result.currency=ctx.Currency.Code;
+      if(ctx.Currency?.Symbol)result.currency_symbol=ctx.Currency.Symbol;
+    }catch(e){}
+  }
+  // Caută titlul din <title>
+  const titleMatch=html.match(/<title>([^<]+)<\/title>/i);
+  if(titleMatch)result.page_title=decode(titleMatch[1]);
+  // Caută prețul - de obicei într-un span cu clasă specială
+  const priceMatch=html.match(/<span[^>]*class="[^"]*productPrice[^"]*"[^>]*>([^<]+)<\/span>/i);
+  if(priceMatch)result.price_text=decode(priceMatch[1]);
+  // Caută prețul și în alte formate
+  const priceMatch2=html.match(/<span[^>]*class="[^"]*price-value[^"]*"[^>]*>([^<]+)<\/span>/i);
+  if(priceMatch2)result.price_text=decode(priceMatch2[1]);
+  // Caută SKU/Cod Jumbo în textul paginii
+  const skuMatch=html.match(/Cod\s+Jumbo[:\s]*(\d{4,})/i);
+  if(skuMatch)result.sku=skuMatch[1].trim();
+  // Caută imaginea principală
+  const imgMatch=html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+  if(imgMatch)result.image=imgMatch[1];
+  // Caută descrierea
+  const descMatch=html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["'][^>]*>/i);
+  if(descMatch)result.description=decode(descMatch[1]);
+  return result;
+}
+
 module.exports=async function handler(req,res){
   if(req.method!=='POST')return res.status(405).json({error:{message:'Metodă nepermisă'}});
   try{
     const url=String(req.body?.url||'').trim(),parsed=new URL(url);
     if(!['http:','https:'].includes(parsed.protocol))throw new Error('URL invalid');
     if(isPrivateHost(parsed.hostname.toLowerCase()))throw new Error('Adresa nu este permisă');
-    const response=await fetch(url,{headers:{'user-agent':'Mozilla/5.0 (compatible; StocManager/1.0)','accept':'text/html,application/xhtml+xml'}});
-    if(!response.ok)throw new Error(`Pagina a răspuns cu status ${response.status}`);
+    
+    // Folosim un User-Agent realist de Chrome pe Mac
+    const headers={
+      'user-agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+      'accept-language':'ro-RO,ro;q=0.9,en;q=0.8',
+      'sec-fetch-dest':'document',
+      'sec-fetch-mode':'navigate',
+      'sec-fetch-site':'none',
+      'sec-fetch-user':'?1',
+      'upgrade-insecure-requests':'1'
+    };
+    
+    const response=await fetch(url,{headers});
+    if(!response.ok)throw new Error('Pagina a raspuns cu status '+response.status);
     const html=(await response.text()).slice(0,MAX_HTML_BYTES);
-    return res.status(200).json(parseProduct(html,url));
+    
+    // Parsează datele standard (JSON-LD, meta tags)
+    const standard=parseProduct(html,url);
+    
+    // Parsează date specifice Jumbo
+    const jumbo=extractJumboData(html,url);
+    
+    // Combină: preferă datele specifice Jumbo pentru SKU
+    const result={
+      title:standard.title||jumbo.page_title||'',
+      image:standard.image||jumbo.image||'',
+      sku:jumbo.sku||standard.sku||'',
+      price:standard.price||parsePrice(jumbo.price_text),
+      currency:standard.currency||jumbo.currency||''
+    };
+    
+    return res.status(200).json(result);
   }catch(err){
-    return res.status(422).json({error:{message:err.message||'Pagina nu a putut fi citită'}});
+    return res.status(422).json({error:{message:err.message||'Pagina nu a putut fi citita'}});
   }
 };
