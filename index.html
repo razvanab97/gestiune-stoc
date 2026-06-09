@@ -1328,25 +1328,18 @@ Răspunde STRICT în formatul JSON:
 }
 
 /* IMPORT FROM PRODUCT URL */
-function getJumboListingId(url){
-  try{
-    const u=new URL(url);
-    if(!/(^|\.)e-jumbo\.ro$/i.test(u.hostname))return '';
-    return (u.pathname.match(/_(\d+)\/?$/)||[])[1]||'';
-  }catch(e){return '';}
-}
 function validateImportedSku(url,data){
-  const sku=String(data.sku||'').trim(),listingId=getJumboListingId(url);
+  const sku=String(data.sku||'').trim();
   if(!sku||sku==='null')return{sku:'',warning:''};
-  // Pentru Jumbo: ID-ul numeric din URL ESTE codul Jumbo - îl acceptăm ca SKU
-  if(listingId&&sku===listingId){
-    return{sku, warning:''};
+  // Verificăm dacă SKU-ul are o sursă clară (metadata paginii)
+  const evidence=String(data.sku_evidence||'').trim();
+  if(evidence&&evidence.includes(sku)&&/(cod|sku|articol|produs|model)/i.test(evidence)){
+    return{sku,warning:''};
   }
-  if(listingId){
-    const evidence=String(data.sku_evidence||'').trim();
-    if(!evidence||!evidence.includes(sku)||!/(cod|sku|articol|produs|model)/i.test(evidence)){
-      return{sku:'',warning:`Codul ${sku} nu a fost completat deoarece nu are o sursă clară în pagina e-Jumbo.`};
-    }
+  // Dacă nu avem evidență clară, dar SKU-ul pare valid (nu e doar un număr din URL)
+  if(/^\d+$/.test(sku)&&sku.length>6){
+    // Numere lungi >6 cifre probabil sunt coduri reale (ex: 1206033)
+    return{sku,warning:''};
   }
   return{sku,warning:''};
 }
@@ -1399,10 +1392,10 @@ Instrucțiuni detaliate pentru fiecare câmp:
    - Dacă nu găsești, construiește un URL logic din URL-ul paginii
 
 3. **Cod produs/SKU** (sku): Codul unic al produsului.
-   - Caută în URL: de obicei ultimul număr din URL înainte de "/" (ex: ...1525507/)
-   - Pentru e-Jumbo: ID-ul numeric din URL (ex: 1525507) ESTE codul Jumbo - folosește-l ca SKU
+   - Caută în metadata paginii: "Cod Jumbo: XXXXXX", "SKU:", "Cod produs:", "Model:", "MPN:"
+   - Pentru e-Jumbo: codul real apare ca "Cod Jumbo: 1206033" în pagină - NU folosi ID-ul numeric din URL (ex: 1525507) care e doar un ID de pagină
    - Pentru eMAG: codul de după "/p/" sau "/pd/" din URL
-   - Pentru alte magazine: codul din URL sau din metadata
+   - Pentru alte magazine: codul din metadata paginii
    - Dacă nu găsești absolut nimic, pune null
 
 4. **Categorie** (category): Alege categoria cea mai potrivită DIN LISTA: ${CATS.join(', ')}.
@@ -1430,11 +1423,11 @@ Instrucțiuni detaliate pentru fiecare câmp:
 
 EXEMPLU pentru URL: https://www.e-jumbo.ro/ro/decoratiuni-casa/textile-decorare-casa/perne-paturi-chenille/perne-chenille-70x30cm/perna-decorativa-de-iarna-chenille-gri-model-dungi-70x30cm_1525507/
 Răspunsul corect ar fi:
-{"title":"Pernă decorativă de iarnă Chenille gri, model dungi, 70x30cm","image":"https://www.e-jumbo.ro/...","sku":"1525507","category":"Textile și decorațiuni","price":49.99,"priceType":"gross","currency":"RON","supplier":"Jumbo","material":"Chenille","dimensions":"70x30 cm","colors":"gri","description":"Pernă decorativă Chenille cu model dungi, ideală pentru decorarea casei în sezonul de iarnă."}
+{"title":"Pernă decorativă de iarnă Chenille gri, model dungi, 70x30cm","image":"https://www.e-jumbo.ro/...","sku":"1206033","category":"Textile și decorațiuni","price":49.99,"priceType":"gross","currency":"RON","supplier":"Jumbo","material":"Chenille","dimensions":"70x30 cm","colors":"gri","description":"Pernă decorativă Chenille cu model dungi, ideală pentru decorarea casei în sezonul de iarnă."}
 
 IMPORTANT:
 - Nu inventa valori care nu apar în date sau în URL
-- Pentru SKU: ID-ul numeric din URL este acceptabil ca SKU (e codul intern al magazinului)
+- Pentru SKU: codul real al produsului (ex: "Cod Jumbo: 1206033") - NU ID-ul numeric din URL
 - Categoria trebuie să fie EXACT una din lista furnizată
 - Dacă nu găsești o valoare, pune null
 - Prețul trebuie să fie un număr (ex: 49.99), nu un string
@@ -1486,26 +1479,13 @@ Răspunde STRICT cu JSON:
       status.innerHTML+=`<br><span style="color:var(--gr)">✓ Imagine importată</span>`;
     }
     
-    // Extrage codul Jumbo direct din URL (mai fiabil decât DeepSeek)
-    const jumboId=getJumboListingId(url);
-    let skuValue='';
-    let skuWarning='';
-    if(jumboId){
-      // Pentru Jumbo, codul din URL ESTE codul produsului
-      skuValue=jumboId;
-      status.innerHTML+=`<br><span style="color:var(--gr)">✓ Cod Jumbo: ${esc(jumboId)}</span>`;
-    }else{
-      const importedSku=validateImportedSku(url,productData);
-      if(importedSku.sku){
-        skuValue=importedSku.sku;
-        status.innerHTML+=`<br><span style="color:var(--gr)">✓ SKU: ${esc(importedSku.sku)}</span>`;
-      }else if(importedSku.warning){
-        skuWarning=importedSku.warning;
-        status.innerHTML+=`<br><span style="color:var(--or)">⚠ ${esc(importedSku.warning)}</span>`;
-      }
-    }
-    if(skuValue){
-      document.getElementById('f-sku').value=skuValue;
+    // Validează și completează SKU-ul extras de DeepSeek
+    const importedSku=validateImportedSku(url,productData);
+    if(importedSku.sku){
+      document.getElementById('f-sku').value=importedSku.sku;
+      status.innerHTML+=`<br><span style="color:var(--gr)">✓ SKU: ${esc(importedSku.sku)}</span>`;
+    }else if(importedSku.warning){
+      status.innerHTML+=`<br><span style="color:var(--or)">⚠ ${esc(importedSku.warning)}</span>`;
     }
 
     if(productData.supplier&&productData.supplier!=='null'){
