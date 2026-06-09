@@ -719,7 +719,7 @@ function buildRaportCats(){
 
       <!-- DIRECT -->
       <div class="pc-panel on" id="pcp-direct">
-        <div class="pc-row"><label>Preț achiziție (fără TVA)</label><input type="number" id="pc-pret" min="0" step="0.01" placeholder="0.00" oninput="pcCalc()"><span class="unit">RON</span></div>
+        <div class="pc-row"><label>Preț achiziție fără TVA</label><input type="number" id="pc-pret" min="0" step="0.01" placeholder="0.00" oninput="pcCalc('net')"><span class="unit">RON</span></div>
         <div class="pc-row">
           <label>TVA achiziție</label>
           <select id="pc-tva" onchange="pcCalc()">
@@ -728,7 +728,7 @@ function buildRaportCats(){
           </select>
           <span class="unit"></span>
         </div>
-        <div class="pc-row"><label>Preț achiziție cu TVA</label><div class="cv" id="pc-ttc">0.00</div><span class="unit">RON</span></div>
+        <div class="pc-row"><label>Preț achiziție cu TVA</label><input type="number" id="pc-ttc" min="0" step="0.01" placeholder="0.00" oninput="pcCalc('ttc')"><span class="unit">RON</span></div>
         <div class="pc-div"></div>
         <div class="pc-row"><label>Transport furnizor / buc</label><input type="number" id="pc-tr" min="0" step="0.01" value="0" oninput="pcCalc()"><span class="unit">RON</span></div>
         <div class="pc-row"><label>Ambalaj / buc</label><input type="number" id="pc-amb" min="0" step="0.01" value="0" oninput="pcCalc()"><span class="unit">RON</span></div>
@@ -812,7 +812,7 @@ function buildRaportCats(){
           <div class="fld"><label>Preț achiziție TTC (salvat)</label><input id="f-pbuy" type="number" min="0" step="0.01" placeholder="0.00" readonly style="background:var(--surf3);color:var(--t2)"></div>
           <div class="fld">
             <label>TVA achiziție (salvat)</label>
-            <select id="f-tva-acq">
+            <select id="f-tva-acq" onchange="document.getElementById('pc-tva').value=this.value;pcCalc()">
               <option value="0">0%</option>
               <option value="0.21" selected>21%</option>
             </select>
@@ -926,7 +926,7 @@ const K='sm6_prod',TK='sm6_today',JK='sm6_jurnal';
 let P=[],TS={},JL=[],editId=null,sCol='name',sDir=1,curImg='',selProd=new Set();
 let SYNCM=[],syncMapsLoaded=false,syncImpParsed=[];
 let invLines=[],invParsed=[],catSuggestTimer=null,lastNameForCat='';
-let sbReady=false;
+let sbReady=false,pcAcqSource='net';
 
 // Categorii custom - salvate în localStorage
 let CATS = JSON.parse(localStorage.getItem('customCategories') || '[]');
@@ -1414,7 +1414,7 @@ function pcTab(id,btn){
   if(id==='emag')pcCalcEmag();else if(id==='trendyol')pcCalcTrendyol();
 }
 function pcGetCost(){
-  const pretAcq=fv('pc-pret'),tva=fv('pc-tva'),ttc=pretAcq*(1+tva);
+  const ttc=fv('pc-ttc');
   const tr=fv('pc-tr'),amb=fv('pc-amb'),stor=fv('pc-stor'),alte=fv('pc-alte');
   return{ttc,cost:ttc+tr+amb+stor+alte};
 }
@@ -1425,11 +1425,19 @@ function pcResultHtml(pret,cost,deductions,label){
   const rows=deductions.map(d=>`<div class="pc-br-row"><span class="pc-br-lbl">— ${d.l}</span><span class="pc-br-val neg">${fmtBr(-d.v)}</span></div>`).join('');
   return`<div class="pc-result-bar"><div class="pc-res-grid"><div class="pc-res-cell"><div class="pc-res-lbl">Profit net</div><div class="pc-res-val${profit<0?' neg':''}">${profit.toFixed(2)}</div></div><div class="pc-res-cell"><div class="pc-res-lbl">Marjă</div><div class="pc-res-val" style="color:${cls}">${marja.toFixed(1)}%</div></div><div class="pc-res-cell"><div class="pc-res-lbl">Cost total</div><div class="pc-res-val">${cost.toFixed(2)}</div></div></div><div class="pc-br-row"><span class="pc-br-lbl">Preț ${label}</span><span class="pc-br-val pos">${fmtBr(pret)}</span></div><div class="pc-br-row"><span class="pc-br-lbl">— Cost produs total</span><span class="pc-br-val neg">${fmtBr(-cost)}</span></div>${rows}<div class="pc-br-row" style="font-weight:500"><span class="pc-br-lbl" style="opacity:1">= Profit net</span><span class="pc-br-val ${profit>=0?'pos':'neg'}">${fmtBr(profit)}</span></div></div>`;
 }
-function pcCalc(){
+function pcCalc(source){
+  if(source)pcAcqSource=source;else source=pcAcqSource;
+  const netEl=document.getElementById('pc-pret'),ttcEl=document.getElementById('pc-ttc'),tva=fv('pc-tva');
+  if(source==='ttc'){
+    const ttc=fv('pc-ttc');
+    netEl.value=ttc>0?(ttc/(1+tva)).toFixed(2):'';
+  }else{
+    const net=fv('pc-pret');
+    ttcEl.value=net>0?(net*(1+tva)).toFixed(2):'';
+  }
   const{ttc,cost}=pcGetCost();
-  document.getElementById('pc-ttc').textContent=ttc.toFixed(2);
   document.getElementById('pc-cost').textContent=cost.toFixed(2);
-  document.getElementById('f-pbuy').value=ttc.toFixed(2);
+  document.getElementById('f-pbuy').value=ttc>0?ttc.toFixed(2):'';
   document.getElementById('f-tva-acq').value=document.getElementById('pc-tva').value;
   const pretV=fv('pc-vanz');
   const res=document.getElementById('pc-result-direct');
@@ -1703,6 +1711,7 @@ function openModal(id){
     document.getElementById('pc-pret').value=pretFaraTva.toFixed(2);
     document.getElementById('pc-tva').value=p.tvaAcq||0;
   }else{document.getElementById('pc-pret').value='';document.getElementById('pc-tva').value='0.21';}
+  pcAcqSource='net';
   ['pc-tr','pc-amb','pc-stor','pc-alte'].forEach(id=>document.getElementById(id).value='0');
   document.getElementById('pc-vanz').value=p?.priceSell||'';
   document.getElementById('pc-marja-d').value='20';
