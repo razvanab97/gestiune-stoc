@@ -27,6 +27,10 @@ function parsePrice(v){
   const n=Number(c.includes(',')?c.replace(/\./g,'').replace(',','.'):c);
   return Number.isFinite(n)&&n>0?n:null;
 }
+function absUrl(v,base){
+  if(!v||!v.trim())return '';
+  try{return new URL(v.trim(),base).href;}catch(e){return '';}
+}
 function findJsonLd(html){
   for(const m of html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)){
     try{
@@ -42,10 +46,19 @@ function findJsonLd(html){
   }
   return null;
 }
+
+// Extrage cuvinte cheie din slug-ul URL (ex: /fantana-arteziana-frunze-aurii/ → "fantana arteziana frunze aurii")
+function slugFromUrl(url){
+  try{
+    const parts=new URL(url).pathname.split('/').filter(Boolean);
+    const lastSlug=parts[parts.length-1]||parts[parts.length-2]||'';
+    return lastSlug.replace(/[-_]/g,' ').replace(/\.(html?|php|aspx?)$/i,'').trim();
+  }catch(e){return '';}
+}
+
 function extractFromHtml(html,url){
   const product=findJsonLd(html);
   const offer=Array.isArray(product?.offers)?product.offers[0]:product?.offers||{};
-  const abs=v=>{try{return new URL(v,url).href;}catch(e){return'';}};
   const imgArr=Array.isArray(product?.image)?product.image[0]:product?.image;
   const priceRaw=offer.price||metaTag(html,'product:price:amount')||metaTag(html,'og:price:amount')||'';
   const currency=offer.priceCurrency||metaTag(html,'product:price:currency')||metaTag(html,'og:price:currency')||'';
@@ -54,14 +67,20 @@ function extractFromHtml(html,url){
     ...[...html.matchAll(/["']ean[13]?["']\s*:\s*["']?(\d{8,14})["']?/gi)].map(m=>m[1])
   ].filter(v=>v&&/^\d{8,14}$/.test(v));
   const jumboSku=(html.match(/Cod\s+Jumbo[:\s]*(\d{4,})/i)||[])[1]||'';
+  // Imaginea: încearcă JSON-LD, og:image, twitter:image, primul img mare din pagină
+  const img=
+    absUrl(imgArr,url)||
+    absUrl(metaTag(html,'og:image'),url)||
+    absUrl(metaTag(html,'twitter:image'),url)||
+    absUrl((html.match(/<img[^>]+(?:class="[^"]*(?:main|product|hero|featured|primary)[^"]*"|id="[^"]*(?:main|product|hero)[^"]*")[^>]+src="([^"]+)"/i)||[])[1]||'',url)||
+    '';
+  const description=
+    String(product?.description||'').slice(0,300)||
+    metaTag(html,'og:description')||
+    metaTag(html,'description')||
+    '';
   const name=product?.name||metaTag(html,'og:title')||metaTag(html,'twitter:title')||decode((html.match(/<title>([^<]+)<\/title>/i)||[])[1]||'');
-  return{
-    name,
-    img:abs(imgArr||'')||abs(metaTag(html,'og:image'))||abs(metaTag(html,'twitter:image'))||'',
-    price:parsePrice(priceRaw),
-    currency:currency.toUpperCase()||'',
-    ean:eanCands[0]||jumboSku||''
-  };
+  return{name,img,description,price:parsePrice(priceRaw),currency:currency.toUpperCase()||'',ean:eanCands[0]||jumboSku||''};
 }
 
 async function fetchHtml(url){
@@ -73,31 +92,26 @@ async function fetchHtml(url){
     if(!r.ok)return '';
     const buf=await r.arrayBuffer();
     return new TextDecoder().decode(new Uint8Array(buf,0,Math.min(buf.byteLength,MAX_HTML)));
-  }catch(e){
-    clearTimeout(t);
-    return '';
-  }
+  }catch(e){clearTimeout(t);return '';}
 }
 
-async function aiExtract(url,htmlSnippet){
+async function aiExtract(url,htmlSnippet,slug){
   const ctrl=new AbortController();
   const t=setTimeout(()=>ctrl.abort(),5000);
   try{
-    const prompt=`Extrage din URL-ul și textul de mai jos: numele produsului, prețul (număr), moneda (RON/EUR/PLN etc.), EAN/SKU dacă există.\nURL: ${url}\n${htmlSnippet?'Text:\n'+htmlSnippet:''}\nRăspunde DOAR cu JSON: {"name":"...","price":0,"currency":"RON","ean":""}`;
+    const hint=slug?`Slug URL: "${slug}"\n`:'';
+    const prompt=`${hint}URL: ${url}\n${htmlSnippet?'Text pagină:\n'+htmlSnippet+'\n':''}\nExtrage din produsul de mai sus:\n- "name": denumirea produsului în ROMÂNĂ (traduce dacă e în altă limbă)\n- "description": 2-3 caracteristici principale în română (materiale, culori, dimensiuni, utilizare), max 150 caractere\n- "price": prețul ca număr\n- "currency": moneda (RON/EUR/PLN etc.)\n- "ean": EAN sau cod produs dacă există, altfel ""\n- "img": URL imagine dacă e vizibil, altfel ""\nRăspunde DOAR cu JSON: {"name":"...","description":"...","price":0,"currency":"RON","ean":"","img":""}`;
     const r=await fetch('https://api.openai.com/v1/chat/completions',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+process.env.OPENAI_API_KEY},
-      body:JSON.stringify({model:'gpt-4o-mini',max_tokens:200,messages:[{role:'user',content:prompt}]}),
+      body:JSON.stringify({model:'gpt-4o-mini',max_tokens:250,messages:[{role:'user',content:prompt}]}),
       signal:ctrl.signal
     });
     clearTimeout(t);
     const data=await r.json();
     const text=data.choices?.[0]?.message?.content||'{}';
     return JSON.parse(text.replace(/```json|```/g,'').trim());
-  }catch(e){
-    clearTimeout(t);
-    return null;
-  }
+  }catch(e){clearTimeout(t);return null;}
 }
 
 module.exports=async function handler(req,res){
@@ -106,30 +120,32 @@ module.exports=async function handler(req,res){
   const {url}=req.body||{};
   if(!url||typeof url!=='string')return res.status(400).json({error:'URL lipsă'});
 
-  // Always return 200 — client decides if data is useful
-  const empty={name:'',img:'',price:null,currency:'RON',ean:''};
+  const empty={name:'',img:'',description:'',price:null,currency:'RON',ean:''};
+  const slug=slugFromUrl(url);
 
   const html=await fetchHtml(url);
   const extracted=html?extractFromHtml(html,url):empty;
 
-  if(extracted.name){
-    return res.json(extracted);
+  if(extracted.name&&extracted.img){
+    return res.json({...extracted,slug});
   }
 
-  // No name from HTML — try AI with URL + partial text
+  // Fallback AI: dacă lipsesc date importante (fără nume sau fără imagine)
   const snippet=html
-    ?html.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,3000)
+    ?html.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,3500)
     :'';
-  const ai=await aiExtract(url,snippet);
-  if(ai&&ai.name){
+  const ai=await aiExtract(url,snippet,slug);
+  if(ai){
     return res.json({
-      name:ai.name||'',
-      img:extracted.img||'',
+      name:ai.name||extracted.name||'',
+      img:ai.img||extracted.img||'',
+      description:ai.description||extracted.description||'',
       price:ai.price>0?ai.price:(extracted.price||null),
       currency:ai.currency||extracted.currency||'RON',
-      ean:ai.ean||extracted.ean||''
+      ean:ai.ean||extracted.ean||'',
+      slug
     });
   }
 
-  return res.json(empty);
+  return res.json({...extracted,slug});
 };

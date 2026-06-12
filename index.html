@@ -1992,9 +1992,9 @@ async function doResearch(){
     if(!srcResp.ok)throw new Error('Serverul nu a putut procesa cererea ('+srcResp.status+')');
     const src=await srcResp.json();
     if(!src.name)throw new Error('Produsul nu a putut fi extras — site-ul poate bloca accesul automat. Încearcă cu AI ▼');
-    const scrapeResp=await fetch('/api/research-scrape',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:src.name,ean:src.ean||''})});
+    const scrapeResp=await fetch('/api/research-scrape',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:src.name,description:src.description||'',slug:src.slug||'',ean:src.ean||''})});
     const platforms=scrapeResp.ok?await scrapeResp.json():{emag:null,trendyol:null};
-    const item={url,name:src.name,img:src.img||'',priceBuy:src.price||0,ean:src.ean||'',emag:platforms.emag,trendyol:platforms.trendyol,emagPrice:platforms.emag?.minPrice||0,trendyolPrice:platforms.trendyol?.minPrice||0};
+    const item={url,name:src.name,img:src.img||'',description:src.description||'',priceBuy:src.price||0,ean:src.ean||'',emag:platforms.emag,trendyol:platforms.trendyol,emagPrice:platforms.emag?.minPrice||0,trendyolPrice:platforms.trendyol?.minPrice||0};
     researchData=item;
     renderResearchResult(item);
     saveResearchToHistory(item);
@@ -2063,6 +2063,7 @@ function renderResearchResult(item){
   div.innerHTML=`<div class="research-card">
     <div class="research-card-head">${img}<div class="research-card-info">
       <div class="research-card-title">${esc(item.name||'—')}</div>
+      ${item.description?`<div style="font-size:12px;color:var(--t3);margin:2px 0 4px">${esc(item.description)}</div>`:''}
       <div class="research-card-price">Preț achiziție: ${item.priceBuy>0?item.priceBuy.toFixed(2)+' RON (cu TVA)':'—'}${item.ean?' · EAN: '+esc(item.ean):''}</div>
     </div></div>
     <div class="research-platforms">${emagBlock}${trendyolBlock}</div>
@@ -2070,7 +2071,9 @@ function renderResearchResult(item){
       <button class="btn btn-sm btn-acc" onclick="addResearchToInventar()">+ Adaugă în inventar</button>
       <button class="btn btn-sm" onclick="openCalcForResearch()">🧮 Calculează</button>
       <a href="${esc(item.url||'#')}" target="_blank" class="btn btn-sm">↗ Sursă</a>
-      ${item.img?`<a href="https://lens.google.com/uploadbyurl?url=${encodeURIComponent(item.img)}" target="_blank" class="btn btn-sm" title="Caută vizual cu Google Lens">🔍 Google Lens</a>`:''}
+      ${item.img
+        ?`<a href="https://lens.google.com/uploadbyurl?url=${encodeURIComponent(item.img)}" target="_blank" class="btn btn-sm" title="Caută vizual cu Google Lens">🔍 Google Lens</a>`
+        :`<a href="https://www.google.com/search?q=${encodeURIComponent(item.name)}&tbm=shop" target="_blank" class="btn btn-sm" title="Caută pe Google Shopping">🔍 Google</a>`}
     </div>
   </div>`;
   wrap.style.display='';
