@@ -1,4 +1,4 @@
-const MAX_HTML=3*1024*1024;
+const MAX_HTML=2*1024*1024;
 
 const FETCH_HEADERS={
   'user-agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -50,18 +50,54 @@ function extractFromHtml(html,url){
   const priceRaw=offer.price||metaTag(html,'product:price:amount')||metaTag(html,'og:price:amount')||'';
   const currency=offer.priceCurrency||metaTag(html,'product:price:currency')||metaTag(html,'og:price:currency')||'';
   const eanCands=[
-    product?.gtin13||product?.gtin8||product?.gtin||product?.mpn||offer.gtin13||offer.gtin||'',
+    String(product?.gtin13||product?.gtin8||product?.gtin||product?.mpn||offer.gtin13||offer.gtin||''),
     ...[...html.matchAll(/["']ean[13]?["']\s*:\s*["']?(\d{8,14})["']?/gi)].map(m=>m[1])
-  ].filter(v=>v&&/^\d{8,14}$/.test(String(v)));
-  // Jumbo-specific: SKU from page text
+  ].filter(v=>v&&/^\d{8,14}$/.test(v));
   const jumboSku=(html.match(/Cod\s+Jumbo[:\s]*(\d{4,})/i)||[])[1]||'';
+  const name=product?.name||metaTag(html,'og:title')||metaTag(html,'twitter:title')||decode((html.match(/<title>([^<]+)<\/title>/i)||[])[1]||'');
   return{
-    name:product?.name||metaTag(html,'og:title')||metaTag(html,'twitter:title')||decode((html.match(/<title>([^<]+)<\/title>/i)||[])[1]||''),
-    img:abs(imgArr)||abs(metaTag(html,'og:image'))||abs(metaTag(html,'twitter:image'))||'',
+    name,
+    img:abs(imgArr||'')||abs(metaTag(html,'og:image'))||abs(metaTag(html,'twitter:image'))||'',
     price:parsePrice(priceRaw),
     currency:currency.toUpperCase()||'',
     ean:eanCands[0]||jumboSku||''
   };
+}
+
+async function fetchHtml(url){
+  const ctrl=new AbortController();
+  const t=setTimeout(()=>ctrl.abort(),6000);
+  try{
+    const r=await fetch(url,{headers:FETCH_HEADERS,redirect:'follow',signal:ctrl.signal});
+    clearTimeout(t);
+    if(!r.ok)return '';
+    const buf=await r.arrayBuffer();
+    return new TextDecoder().decode(new Uint8Array(buf,0,Math.min(buf.byteLength,MAX_HTML)));
+  }catch(e){
+    clearTimeout(t);
+    return '';
+  }
+}
+
+async function aiExtract(url,htmlSnippet){
+  const ctrl=new AbortController();
+  const t=setTimeout(()=>ctrl.abort(),5000);
+  try{
+    const prompt=`Extrage din URL-ul și textul de mai jos: numele produsului, prețul (număr), moneda (RON/EUR/PLN etc.), EAN/SKU dacă există.\nURL: ${url}\n${htmlSnippet?'Text:\n'+htmlSnippet:''}\nRăspunde DOAR cu JSON: {"name":"...","price":0,"currency":"RON","ean":""}`;
+    const r=await fetch('https://api.openai.com/v1/chat/completions',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+process.env.OPENAI_API_KEY},
+      body:JSON.stringify({model:'gpt-4o-mini',max_tokens:200,messages:[{role:'user',content:prompt}]}),
+      signal:ctrl.signal
+    });
+    clearTimeout(t);
+    const data=await r.json();
+    const text=data.choices?.[0]?.message?.content||'{}';
+    return JSON.parse(text.replace(/```json|```/g,'').trim());
+  }catch(e){
+    clearTimeout(t);
+    return null;
+  }
 }
 
 module.exports=async function handler(req,res){
@@ -70,51 +106,30 @@ module.exports=async function handler(req,res){
   const {url}=req.body||{};
   if(!url||typeof url!=='string')return res.status(400).json({error:'URL lipsă'});
 
-  let html='',fetchError='';
-  try{
-    const r=await fetch(url,{headers:FETCH_HEADERS,redirect:'follow',signal:AbortSignal.timeout(9000)});
-    if(!r.ok)throw new Error('HTTP '+r.status);
-    const buf=await r.arrayBuffer();
-    html=new TextDecoder().decode(new Uint8Array(buf).slice(0,MAX_HTML));
-  }catch(e){
-    fetchError=e.message;
-  }
+  // Always return 200 — client decides if data is useful
+  const empty={name:'',img:'',price:null,currency:'RON',ean:''};
 
-  // Try to extract from HTML if we got any
-  const extracted=html?extractFromHtml(html,url):{name:'',img:'',price:null,currency:'',ean:''};
+  const html=await fetchHtml(url);
+  const extracted=html?extractFromHtml(html,url):empty;
 
-  // If we got a name from HTML, return it
   if(extracted.name){
-    res.json(extracted);
-    return;
+    return res.json(extracted);
   }
 
-  // Fallback: use AI to extract from URL + partial HTML or just URL
-  try{
-    const cleanHtml=html
-      ?html.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').slice(0,4000)
-      :'';
-    const prompt=`Extrage din textul acestei pagini de produs: numele produsului, prețul (număr), moneda (RON/EUR/PLN etc.), codul EAN sau SKU dacă există.\nURL: ${url}\n${cleanHtml?'Text pagină:\n'+cleanHtml:''}\nRăspunde DOAR cu JSON: {"name":"...","price":0.0,"currency":"RON","ean":"","img":""}`;
-    const aiRes=await fetch('https://api.openai.com/v1/chat/completions',{
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+process.env.OPENAI_API_KEY},
-      body:JSON.stringify({model:'gpt-4o-mini',max_tokens:300,messages:[{role:'user',content:prompt}]})
+  // No name from HTML — try AI with URL + partial text
+  const snippet=html
+    ?html.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,3000)
+    :'';
+  const ai=await aiExtract(url,snippet);
+  if(ai&&ai.name){
+    return res.json({
+      name:ai.name||'',
+      img:extracted.img||'',
+      price:ai.price>0?ai.price:(extracted.price||null),
+      currency:ai.currency||extracted.currency||'RON',
+      ean:ai.ean||extracted.ean||''
     });
-    const aiData=await aiRes.json();
-    const text=aiData.choices?.[0]?.message?.content||'{}';
-    const j=JSON.parse(text.replace(/```json|```/g,'').trim());
-    res.json({
-      name:j.name||'',
-      img:j.img||extracted.img||'',
-      price:j.price>0?j.price:(extracted.price||null),
-      currency:j.currency||extracted.currency||'RON',
-      ean:j.ean||extracted.ean||''
-    });
-  }catch(e){
-    if(fetchError){
-      res.status(502).json({error:'Nu s-a putut accesa pagina: '+fetchError});
-    }else{
-      res.json(extracted);
-    }
   }
+
+  return res.json(empty);
 };
