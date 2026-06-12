@@ -80,7 +80,16 @@ function extractFromHtml(html,url){
     metaTag(html,'description')||
     '';
   const name=product?.name||metaTag(html,'og:title')||metaTag(html,'twitter:title')||decode((html.match(/<title>([^<]+)<\/title>/i)||[])[1]||'');
-  return{name,img,description,price:parsePrice(priceRaw),currency:currency.toUpperCase()||'',ean:eanCands[0]||jumboSku||''};
+  const characteristics=[];
+  if(product?.additionalProperty){
+    const ap=Array.isArray(product.additionalProperty)?product.additionalProperty:[product.additionalProperty];
+    ap.slice(0,3).forEach(p=>{if(p.name&&p.value)characteristics.push(p.name+': '+p.value);});
+  }
+  if(!characteristics.length&&description){
+    const pts=description.split(/[|·•;]/);
+    if(pts.length>=2)pts.slice(0,3).forEach(p=>{const t=p.trim();if(t.length>3&&t.length<80)characteristics.push(t);});
+  }
+  return{name,img,description,price:parsePrice(priceRaw),currency:currency.toUpperCase()||'',ean:eanCands[0]||jumboSku||'',characteristics};
 }
 
 async function fetchHtml(url){
@@ -100,7 +109,7 @@ async function aiExtract(url,htmlSnippet,slug){
   const t=setTimeout(()=>ctrl.abort(),5000);
   try{
     const hint=slug?`Slug URL: "${slug}"\n`:'';
-    const prompt=`${hint}URL: ${url}\n${htmlSnippet?'Text pagină:\n'+htmlSnippet+'\n':''}\nExtrage din produsul de mai sus:\n- "name": denumirea produsului în ROMÂNĂ (traduce dacă e în altă limbă)\n- "description": 2-3 caracteristici principale în română (materiale, culori, dimensiuni, utilizare), max 150 caractere\n- "price": prețul ca număr\n- "currency": moneda (RON/EUR/PLN etc.)\n- "ean": EAN sau cod produs dacă există, altfel ""\n- "img": URL imagine dacă e vizibil, altfel ""\nRăspunde DOAR cu JSON: {"name":"...","description":"...","price":0,"currency":"RON","ean":"","img":""}`;
+    const prompt=`${hint}URL: ${url}\n${htmlSnippet?'Text pagină:\n'+htmlSnippet+'\n':''}\nExtrage din produsul de mai sus:\n- "name": denumirea produsului în ROMÂNĂ (traduce dacă e în altă limbă)\n- "characteristics": array cu max 3 caracteristici cheie în română, concise (ex: ["Material: aluminiu", "Culoare: auriu", "22×13×28 cm"])\n- "description": max 100 caractere text liber în română cu caracteristicile principale (pentru căutare)\n- "price": prețul ca număr\n- "currency": moneda (RON/EUR/PLN etc.)\n- "ean": EAN sau cod produs dacă există, altfel ""\n- "img": URL imagine dacă e vizibil, altfel ""\nRăspunde DOAR cu JSON: {"name":"...","characteristics":[],"description":"...","price":0,"currency":"RON","ean":"","img":""}`;
     const r=await fetch('https://api.openai.com/v1/chat/completions',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+process.env.OPENAI_API_KEY},
@@ -140,6 +149,7 @@ module.exports=async function handler(req,res){
       name:ai.name||extracted.name||'',
       img:ai.img||extracted.img||'',
       description:ai.description||extracted.description||'',
+      characteristics:Array.isArray(ai.characteristics)&&ai.characteristics.length?ai.characteristics:extracted.characteristics||[],
       price:ai.price>0?ai.price:(extracted.price||null),
       currency:ai.currency||extracted.currency||'RON',
       ean:ai.ean||extracted.ean||'',
