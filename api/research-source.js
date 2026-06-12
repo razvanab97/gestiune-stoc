@@ -1,9 +1,7 @@
-import OpenAI from 'openai';
-
 const UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
 const MAX_HTML=4*1024*1024;
 
-function decode(s=''){return String(s).replace(/"/g,'"').replace(/&#39;|'/g,"'").replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').trim();}
+function decode(s=''){return String(s).replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'").replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').trim();}
 function metaTag(html,key){
   const safe=key.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
   const pats=[
@@ -56,8 +54,9 @@ function extractFromHtml(html,url){
   };
 }
 
-export default async function handler(req,res){
-  if(req.method!=='POST')return res.status(405).end();
+module.exports=async function handler(req,res){
+  if(req.method!=='POST')return res.status(405).json({error:'Metodă nepermisă'});
+  if(!process.env.OPENAI_API_KEY)return res.status(503).json({error:'OPENAI_API_KEY lipsă'});
   const {url}=req.body||{};
   if(!url||typeof url!=='string')return res.status(400).json({error:'URL lipsă'});
 
@@ -73,25 +72,26 @@ export default async function handler(req,res){
 
   const extracted=extractFromHtml(html,url);
 
-  // If name/price missing, use AI to extract
   if(!extracted.name||(extracted.price===null)){
     try{
-      const openai=new OpenAI({apiKey:process.env.OPENAI_API_KEY});
       const cleanHtml=html.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').slice(0,5000);
-      const resp=await openai.chat.completions.create({
-        model:'gpt-4o-mini',
-        max_tokens:300,
-        messages:[{role:'user',content:`Extrage din textul acestei pagini de produs: numele produsului, prețul (număr), moneda (RON/EUR/PLN etc.), codul EAN dacă există.\nRăspunde DOAR cu JSON: {"name":"...","price":0.0,"currency":"RON","ean":""}\n\nText pagină:\n${cleanHtml}`}]
+      const aiRes=await fetch('https://api.openai.com/v1/chat/completions',{
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+process.env.OPENAI_API_KEY},
+        body:JSON.stringify({
+          model:'gpt-4o-mini',max_tokens:300,
+          messages:[{role:'user',content:`Extrage din textul acestei pagini de produs: numele produsului, prețul (număr), moneda (RON/EUR/PLN etc.), codul EAN dacă există.\nRăspunde DOAR cu JSON: {"name":"...","price":0.0,"currency":"RON","ean":""}\n\nText pagină:\n${cleanHtml}`}]
+        })
       });
-      try{
-        const j=JSON.parse(resp.choices[0].message.content.replace(/```json|```/g,'').trim());
-        if(!extracted.name&&j.name)extracted.name=j.name;
-        if(extracted.price===null&&j.price>0)extracted.price=j.price;
-        if(!extracted.currency&&j.currency)extracted.currency=j.currency;
-        if(!extracted.ean&&j.ean)extracted.ean=j.ean;
-      }catch(e){}
+      const aiData=await aiRes.json();
+      const text=aiData.choices?.[0]?.message?.content||'';
+      const j=JSON.parse(text.replace(/```json|```/g,'').trim());
+      if(!extracted.name&&j.name)extracted.name=j.name;
+      if(extracted.price===null&&j.price>0)extracted.price=j.price;
+      if(!extracted.currency&&j.currency)extracted.currency=j.currency;
+      if(!extracted.ean&&j.ean)extracted.ean=j.ean;
     }catch(e){}
   }
 
   res.json(extracted);
-}
+};

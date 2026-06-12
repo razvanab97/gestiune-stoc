@@ -487,6 +487,33 @@ function buildRaportCats(){
 .research-hist-name{font-size:14px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .research-hist-meta{font-size:12px;color:var(--t3);font-family:var(--mono);margin-top:2px}
 @media(max-width:640px){.research-platforms{grid-template-columns:1fr}.research-card-head{flex-direction:column}.research-card-img,.research-card-img-ph{width:80px;height:80px;font-size:28px}}
+/* ── COPY BUTTON ── */
+.copy-nm-btn{background:none;border:none;cursor:pointer;padding:0 4px;font-size:13px;opacity:.55;vertical-align:middle;line-height:1;transition:opacity .15s}
+.copy-nm-btn:hover{opacity:1}
+/* ── EMAG CALCULATOR ── */
+.emag-calc{display:flex;flex-direction:column;gap:12px}
+.emag-rec{background:var(--surf);border:1px solid var(--acc);border-radius:var(--r2);padding:1.25rem;box-shadow:0 2px 8px rgba(167,139,250,.12)}
+.emag-rec-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--acc);margin-bottom:1rem}
+.emag-rec-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:.75rem}
+.emag-rec-item{background:var(--surf2);border-radius:var(--r);padding:.75rem 1rem}
+.emag-rec-item>span{display:block;font-size:12px;color:var(--t3);margin-bottom:4px}
+.emag-rec-item>strong{display:block;font-size:17px;font-weight:700;font-family:var(--mono);color:var(--t1)}
+.emag-rec-item>small{display:block;font-size:11px;color:var(--t3);font-family:var(--mono);margin-top:2px}
+.emag-margin-picks{display:flex;gap:6px;margin-bottom:.75rem;flex-wrap:wrap}
+.emag-margin-picks button{padding:5px 14px;border-radius:20px;border:1px solid var(--b2);background:var(--surf2);font-size:13px;cursor:pointer;color:var(--t2)}
+.emag-margin-picks button.on{background:var(--acc);color:var(--acc-fg);border-color:var(--acc)}
+.emag-sec{background:var(--surf);border:1px solid var(--b1);border-radius:var(--r2);overflow:hidden}
+.emag-sec-hd{padding:.75rem 1rem;cursor:pointer;font-weight:600;font-size:14px;display:flex;align-items:center;gap:8px;user-select:none;background:var(--surf2)}
+.emag-sec-hd:hover{background:var(--surf)}
+.emag-sec-arr{font-size:10px;color:var(--t3);width:12px;flex-shrink:0}
+.emag-sec-body{padding:1rem;border-top:1px solid var(--b1)}
+.emag-tip-livr{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.emag-tip-livr button{padding:7px 16px;border-radius:20px;border:1px solid var(--b2);background:var(--surf2);font-size:13px;cursor:pointer;color:var(--t2)}
+.emag-tip-livr button.on{background:var(--acc);color:var(--acc-fg);border-color:var(--acc)}
+.emag-derived{font-size:14px;font-weight:600;font-family:var(--mono);padding:7px 0;color:var(--t1)}
+.emag-derived small{font-size:12px;font-weight:400;color:var(--t3);font-family:inherit}
+.emag-note{font-size:13px;color:var(--t3);padding:6px 0}
+@media(max-width:600px){.emag-rec-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -653,10 +680,6 @@ function buildRaportCats(){
   <div class="tb">
     <div class="tb-head">
       <div class="tb-title">🧮 Calculator profit</div>
-      <div class="tb-btns">
-        <button class="btn btn-sm btn-transport on" id="transport-ramburs-btn" onclick="setEmagTransport(20)" title="Transport ramburs eMAG">Ramburs 20 RON</button>
-        <button class="btn btn-sm btn-transport" id="transport-easybox-btn" onclick="setEmagTransport(3)" title="Transport Easybox eMAG">Easybox 3 RON</button>
-      </div>
     </div>
     <div class="calc-prod-bar">
       <label>Produs:</label>
@@ -1592,6 +1615,7 @@ const PC_FIELDS={
 };
 let pcChannel='direct',pcTax='profit',pcState={emag:{},trendyol:{},direct:{}},pcRecommendation=null,offerPriceManual={direct:false,emag:false,trendyol:false};
 Object.entries(PC_FIELDS).forEach(([ch,fields])=>fields.forEach(([id,,def])=>pcState[ch][id]=def));
+let emagCalc={pretEur:0,curs:5,tvaAch:0,pretV:0,tvaV:19,comision:20,tipLivr:'nongenius',transCl:0,transReal:0,contab:2,consum:1,alte:0,impozit:'profit',targetMargin:20,open:{achizitie:true,vanzare:true,transport:true,cheltuieli:true,impozit:false}};
 function pcMoney(n){return(Number(n)||0).toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})+' lei';}
 function pcPct(n){return(Number(n)||0).toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})+'%';}
 function pcTaxValue(revenue,gross){return pcTax==='micro'?Math.max(0,revenue)*.01:Math.max(0,gross)*.16;}
@@ -1656,10 +1680,68 @@ function pcWarning(m,sell){
   if(m<20)return['yellow','Sub marja de siguranță recomandată (20%)'];
   return['',''];
 }
+
+/* ── EMAG DEDICATED CALCULATOR ── */
+const emMoney=n=>(Math.round((+n||0)*100)/100).toFixed(2).replace('.',',')+' lei';
+const emPct=n=>(Math.round((+n||0)*10)/10).toFixed(1).replace('.',',')+' %';
+function geniusContrib(pCuTVA){if(pCuTVA<40)return 3;if(pCuTVA<50)return 4;if(pCuTVA<75)return 5;return 8;}
+function computeEmag(s){
+  const pAch=(+s.pretEur||0)*(+s.curs||5),tvaV=(+s.tvaV||19)/100,pV=+s.pretV||0;
+  const pCuTVA=pV*(1+tvaV),tCl=s.tipLivr==='acasa'?(+s.transCl||0):0;
+  const comBrut=(pCuTVA+tCl*(1+tvaV))*(+s.comision||0)/100,comNet=tvaV>0?comBrut/(1+tvaV):comBrut;
+  const gC=s.tipLivr==='genius'?geniusContrib(pCuTVA):0;
+  const costTrans=s.tipLivr==='acasa'?(+s.transReal||0):gC;
+  const venit=pV+tCl,tvaCol=pV*tvaV+tCl*tvaV,tvaDed=comNet*tvaV,tvaVir=tvaCol-tvaDed;
+  const costuri=pAch+comNet+costTrans+(+s.contab||0)+(+s.consum||0)+(+s.alte||0);
+  const profBrut=venit-costuri,imp=s.impozit==='micro'?Math.max(0,venit)*0.01:Math.max(0,profBrut)*0.16;
+  const profNet=profBrut-imp,marja=venit>0?profNet/venit*100:0;
+  return{pAch,pCuTVA,comBrut,comNet,gC,costTrans,tCl,venit,tvaCol,tvaDed,tvaVir,costuri,profBrut,imp,profNet,marja,tvaV,pV};
+}
+function findEmagPrice(targetPct){
+  const t=targetPct/100;let lo=0,hi=Math.max(1000,(+emagCalc.pretEur||0)*(+emagCalc.curs||5)*50+500);
+  while(hi<1e9){const r=computeEmag({...emagCalc,pretV:hi});if(r.venit>0&&r.profNet/r.venit>=t)break;hi*=2;}
+  for(let i=0;i<80;i++){const mid=(lo+hi)/2,r=computeEmag({...emagCalc,pretV:mid});(r.venit>0&&r.profNet/r.venit>=t)?hi=mid:lo=mid;}
+  return hi;
+}
+function emagInput(k,v){emagCalc[k]=['tipLivr','impozit'].includes(k)?v:(v===''?0:+v||0);emagRender();}
+function emagToggleSec(k){emagCalc.open[k]=!emagCalc.open[k];emagRender();}
+function emagSetMargin(n){emagCalc.targetMargin=n;emagRender();}
+function emagApplyRec(){emagCalc.pretV=Math.round(findEmagPrice(emagCalc.targetMargin)*100)/100;emagRender();toast('Preț recomandat aplicat în simulare ✓');}
+function emagRender(){
+  const s=emagCalc,r=computeEmag(s),tvaV=r.tvaV||0.19;
+  const p0=findEmagPrice(0),pRec=findEmagPrice(s.targetMargin);
+  const warn=r.pV>0?(r.marja<0?['red','Vinzi în pierdere pe eMAG']:r.marja<10?['yellow','Marjă sub 10% — risc ridicat la campanii și retururi']:r.marja<20?['yellow','Sub marja recomandată de 20%']:['','']):['',''];
+  const eInp=(k,lbl)=>`<div class="pc-field"><label>${lbl}</label><input type="number" min="0" step="0.01" value="${+s[k]||0}" onchange="emagInput('${k}',this.value)"><span></span></div>`;
+  const eSel=(k,lbl,opts)=>`<div class="pc-field"><label>${lbl}</label><select onchange="emagInput('${k}',this.value)">${opts.map(([v,t])=>`<option value="${v}"${String(s[k])===String(v)?' selected':''}>${t}</option>`).join('')}</select></div>`;
+  const sHd=(k,lbl)=>`<div class="emag-sec-hd" onclick="emagToggleSec('${k}')"><span class="emag-sec-arr">${s.open[k]?'▼':'▶'}</span>${lbl}</div>`;
+  const achB=s.open.achizitie?`<div class="emag-sec-body"><div class="pc-grid">${eInp('pretEur','Preț achiziție EUR')}${eInp('curs','Curs EUR/RON')}</div><div class="pc-grid">${eSel('tvaAch','TVA achiziție',[['0','0%'],['9','9%'],['19','19%']])}<div class="pc-field"><label>Preț achiziție RON (net)</label><div class="emag-derived">${emMoney(r.pAch)}<small> cu TVA: ${emMoney(r.pAch*(1+(+s.tvaAch||0)/100))}</small></div></div></div></div>`:'';
+  const vB=s.open.vanzare?`<div class="emag-sec-body"><div class="pc-grid">${eInp('pretV','Preț vânzare fără TVA')}${eSel('tvaV','TVA vânzare',[['9','9%'],['19','19%']])}</div><div class="pc-grid">${eInp('comision','Comision eMAG (%)')}<div class="pc-field"><label>Preț listare cu TVA</label><div class="emag-derived">${emMoney(r.pCuTVA)}</div></div></div></div>`:'';
+  const tB=s.open.transport?`<div class="emag-sec-body"><div class="emag-tip-livr"><button class="${s.tipLivr==='acasa'?'on':''}" onclick="emagInput('tipLivr','acasa')">🏠 Acasă (ramburs)</button><button class="${s.tipLivr==='nongenius'?'on':''}" onclick="emagInput('tipLivr','nongenius')">📦 Non-Genius</button><button class="${s.tipLivr==='genius'?'on':''}" onclick="emagInput('tipLivr','genius')">⚡ Genius</button></div>${s.tipLivr==='acasa'?`<div class="pc-grid">${eInp('transCl','Transport perceput client (RON)')}${eInp('transReal','Transport real plătit (RON)')}</div>`:s.tipLivr==='genius'?`<div class="pc-field"><label>Contribuție Genius</label><div class="emag-derived">${emMoney(r.gC)}<small> (calculat din prețul cu TVA ${emMoney(r.pCuTVA)})</small></div></div>`:`<div class="emag-note">Costul transportului este absorbit în prețul de listare.</div>`}</div>`:'';
+  const cB=s.open.cheltuieli?`<div class="emag-sec-body"><div class="pc-grid">${eInp('contab','Contabilitate / comandă')}${eInp('consum','Consumabile / ambalare')}</div><div class="pc-grid">${eInp('alte','Alte costuri')}</div></div>`:'';
+  const iB=s.open.impozit?`<div class="emag-sec-body"><div class="emag-tip-livr"><button class="${s.impozit==='micro'?'on':''}" onclick="emagInput('impozit','micro')">Micro 1% din venit</button><button class="${s.impozit==='profit'?'on':''}" onclick="emagInput('impozit','profit')">Impozit profit 16%</button></div></div>`:'';
+  document.getElementById('pc-root').innerHTML=`<div class="emag-calc">
+  <div class="emag-rec"><div class="emag-rec-title">🎯 Prețuri recomandate eMAG</div><div class="emag-rec-grid"><div class="emag-rec-item"><span>Prag profit 0</span><strong>${emMoney(p0)}</strong><small>cu TVA: ${emMoney(p0*(1+tvaV))}</small></div><div class="emag-rec-item"><span>La ${s.targetMargin}% marjă netă</span><strong>${emMoney(pRec)}</strong><small>cu TVA: ${emMoney(pRec*(1+tvaV))}</small></div></div><div class="emag-margin-picks">${[0,10,20,30].map(x=>`<button class="${s.targetMargin===x?'on':''}" onclick="emagSetMargin(${x})">${x}%</button>`).join('')}</div><button class="btn btn-acc btn-sm" onclick="emagApplyRec()">Aplică ${s.targetMargin}% în simulare</button></div>
+  <div class="emag-sec">${sHd('achizitie','Achiziție')}${achB}</div>
+  <div class="emag-sec">${sHd('vanzare','Vânzare')}${vB}</div>
+  <div class="emag-sec">${sHd('transport','Transport')}${tB}</div>
+  <div class="emag-sec">${sHd('cheltuieli','Cheltuieli operaționale')}${cB}</div>
+  <div class="emag-sec">${sHd('impozit','Impozit companie')}${iB}</div>
+  <div class="pc-warn ${warn[0]}">${warn[1]}</div>
+  <div class="pc-metrics"><div class="pc-metric"><span>Profit net</span><strong>${emMoney(r.profNet)}</strong></div><div class="pc-metric"><span>Marjă netă</span><strong>${emPct(r.marja)}</strong></div><div class="pc-metric"><span>TVA de virat</span><strong>${emMoney(r.tvaVir)}</strong></div><div class="pc-metric"><span>Impozit companie</span><strong>${emMoney(r.imp)}</strong></div></div>
+  <details class="pc-details"><summary>Vezi calculul complet</summary><table class="pc-break"><tbody><tr><td>Venit brut (fără TVA)</td><td>${emMoney(r.venit)}</td></tr><tr><td>Cost achiziție</td><td>− ${emMoney(r.pAch)}</td></tr><tr><td>Comision eMAG net</td><td>− ${emMoney(r.comNet)}</td></tr><tr><td>Cost transport</td><td>− ${emMoney(r.costTrans)}</td></tr><tr><td>Contabilitate</td><td>− ${emMoney(+s.contab||0)}</td></tr><tr><td>Consumabile</td><td>− ${emMoney(+s.consum||0)}</td></tr><tr><td>Alte costuri</td><td>− ${emMoney(+s.alte||0)}</td></tr><tr><td>Profit brut</td><td>${emMoney(r.profBrut)}</td></tr><tr><td>TVA colectată</td><td>${emMoney(r.tvaCol)}</td></tr><tr><td>TVA deductibilă (comision)</td><td>− ${emMoney(r.tvaDed)}</td></tr><tr><td>TVA de virat</td><td>${emMoney(r.tvaVir)}</td></tr><tr><td>Impozit (${s.impozit==='micro'?'micro 1%':'profit 16%'})</td><td>− ${emMoney(r.imp)}</td></tr><tr class="total"><td>Profit net în companie</td><td>${emMoney(r.profNet)}</td></tr></tbody></table></details>
+</div>`;
+}
+
 function pcRender(){
+  document.querySelectorAll('[data-pc-tab]').forEach(b=>b.classList.toggle('on',b.dataset.pcTab===pcChannel));
+  const pcTaxEl=document.getElementById('pc-tax-micro')?.closest('.pc-tax');
+  if(pcChannel==='emag'){
+    if(pcTaxEl)pcTaxEl.style.display='none';
+    emagRender();return;
+  }
+  if(pcTaxEl)pcTaxEl.style.display='';
   const v=pcState[pcChannel],r=pcCalculate(pcChannel,v),minRec=pcRecommend(0),rec=pcRecommend(),warn=pcWarning(r.margin,r.sell);
   pcRecommendation=rec;
-  document.querySelectorAll('[data-pc-tab]').forEach(b=>b.classList.toggle('on',b.dataset.pcTab===pcChannel));
   document.getElementById('pc-tax-micro')?.classList.toggle('on',pcTax==='micro');document.getElementById('pc-tax-profit')?.classList.toggle('on',pcTax==='profit');
   const fields=PC_FIELDS[pcChannel].map(([id,label,,unit])=>`<div class="pc-field"><label>${label}${unit?' ('+unit+')':''}</label><input type="number" min="0" step="0.01" data-pc-field="${id}" value="${v[id]??0}" onchange="pcInput('${id}',this.value)"><span></span></div>`).join('');
   document.getElementById('pc-root').innerHTML=`<div class="pc-workspace"><div class="pc-box"><div class="pc-box-title">Recomandare automată · ${pcChannel==='direct'?'vânzare directă':pcChannel}</div><div class="pc-mini"><span>Prag profit net 0</span><strong>${pcMoney(minRec.sell)} fără TVA · ${pcMoney(minRec.sell*(1+minRec.vat))} cu TVA</strong></div><div class="pc-margin-picks">${[10,20,30,40,50].map(x=>`<button class="${(+v.target||10)===x?'on':''}" onclick="pcSetMargin(${x})">${x}%</button>`).join('')}</div><div class="pc-rec-out"><div class="pc-mini"><span>Recomandat fără TVA · marjă ${v.target??10}%</span><strong>${pcMoney(rec.sell)}</strong></div><div class="pc-mini"><span>Recomandat cu TVA</span><strong>${pcMoney(rec.sell*(1+rec.vat))}</strong></div><div class="pc-mini"><span>Profit net estimat</span><strong>${pcMoney(rec.net)}</strong></div><div class="pc-mini"><span>Marjă netă</span><strong>${pcPct(rec.margin)}</strong></div></div><button class="btn btn-acc pc-apply" onclick="pcApplyRecommended()">Aplică în simulare</button></div><div class="pc-box"><div class="pc-box-title">Preț de listare și costuri</div><div class="pc-grid">${fields}</div></div></div><div class="pc-warn ${warn[0]}">${warn[1]}</div><div class="pc-metrics"><div class="pc-metric"><span>Profit net</span><strong>${pcMoney(r.net)}</strong></div><div class="pc-metric"><span>Marjă netă</span><strong>${pcPct(r.margin)}</strong></div><div class="pc-metric"><span>TVA de plată</span><strong>${pcMoney(r.vatPay)}</strong></div><div class="pc-metric"><span>Impozit companie</span><strong>${pcMoney(r.tax)}</strong></div></div><details class="pc-details"><summary>Vezi calculul complet</summary><table class="pc-break"><tbody><tr><td>TVA colectată</td><td>${pcMoney(r.vatCollected)}</td></tr><tr><td>TVA deductibilă</td><td>− ${pcMoney(r.vatDeductible)}</td></tr>${r.rows.map(([l,n],i)=>`<tr class="${i===r.rows.length-1?'total':''}"><td>${l}</td><td>${pcMoney(n)}</td></tr>`).join('')}</tbody></table></details>`;
@@ -1741,8 +1823,13 @@ function loadCalcProduct(id){
   const p=P.find(x=>x.id==id);if(!p)return;
   const tva=p.tvaAcq??0.21,acq=p.priceBuyTTC>0?p.priceBuyTTC/(1+tva):0;
   pcReset(acq,0);
+  emagCalc.pretEur=Math.round(acq/(emagCalc.curs||5)*100)/100;
+  emagCalc.tvaAch=p.tvaAcq?Math.round(p.tvaAcq*100):0;
+  emagCalc.pretV=p.priceRec||0;
+  pcChannel='emag';
   const lbl=document.getElementById('calc-product-lbl');
   if(lbl)lbl.textContent=p.name;
+  pcRender();
 }
 function openCalcForProduct(id){
   closeModal();
@@ -1750,6 +1837,10 @@ function openCalcForProduct(id){
   if(p){
     const tva=p.tvaAcq??0.21,acq=p.priceBuyTTC>0?p.priceBuyTTC/(1+tva):0;
     pcReset(acq,0);
+    emagCalc.pretEur=Math.round(acq/(emagCalc.curs||5)*100)/100;
+    emagCalc.tvaAch=p.tvaAcq?Math.round(p.tvaAcq*100):0;
+    emagCalc.pretV=p.priceRec||0;
+    pcChannel='emag';
     const lbl=document.getElementById('calc-product-lbl');if(lbl)lbl.textContent=p.name;
     buildCalcProductSelector();
     const sel=document.getElementById('calc-prod-sel');if(sel)sel.value=id||'';
@@ -1757,11 +1848,12 @@ function openCalcForProduct(id){
   const btn=document.getElementById('h-tab-calc');if(btn)goPage('calc',btn);
 }
 const CALC_SK='sm6_calc_state';
-function saveCalcState(){localStorage.setItem(CALC_SK,JSON.stringify({pcState,pcChannel,pcTax}));toast('Calculator salvat ✓');}
+function saveCalcState(){localStorage.setItem(CALC_SK,JSON.stringify({pcState,pcChannel,pcTax,emagCalc}));toast('Calculator salvat ✓');}
 function loadCalcState(){
   const s=JSON.parse(localStorage.getItem(CALC_SK)||'null');
   if(!s){toast('Nicio stare salvată');return;}
   pcState=s.pcState;pcChannel=s.pcChannel||'direct';pcTax=s.pcTax||'profit';
+  if(s.emagCalc){emagCalc={...emagCalc,...s.emagCalc,open:{...emagCalc.open,...(s.emagCalc.open||{})}};}
   pcRender();toast('Calculator restaurat ✓');
 }
 function setEmagTransport(roi){
@@ -1931,7 +2023,8 @@ function renderSearch(){
   drop.innerHTML=hits.map(p=>{
     const s=qty(p);const tqs=tqp(p);
     const th=p.img?`<img src="${esc(p.img)}" class="ss-th click-edit" onclick="openModal(${p.id})" title="Editează produs" onerror="this.style.display='none'">`:`<div class="ss-th-ph click-edit" onclick="openModal(${p.id})" title="Editează produs">📦</div>`;
-    return`<div class="ss-row">${th}<div class="ss-inf"><div class="ss-nm">${esc(p.name)}</div><div class="ss-meta">stoc: ${s}${p.priceSell>0?' · min '+p.priceSell.toFixed(2)+' RON':''}</div></div>
+    const copyBtn=`<button class="copy-nm-btn" onclick="event.stopPropagation();copyProductName(${p.id})" title="Copiază denumire">📋</button>`;
+    return`<div class="ss-row">${th}<div class="ss-inf"><div class="ss-nm">${copyBtn}${esc(p.name)}</div><div class="ss-meta">stoc: ${s}${p.priceSell>0?' · min '+p.priceSell.toFixed(2)+' RON':''}</div></div>
       <div class="ss-act">${tqs>0?`<span class="ss-sold-b">azi: ${tqs}</span>`:''}
         <input type="number" class="ss-qty" id="ssq-${p.id}" value="1" min="1">
         <button class="sell-btn" onclick="sellSearch(${p.id})" ${s<=0?'disabled':''}>Vinde</button>

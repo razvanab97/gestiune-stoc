@@ -22,7 +22,6 @@ async function scrapeEmag(query){
     const link=topItem?.url||`https://www.emag.ro/search/${encodeURIComponent(query)}`;
     return{minPrice,offerCount:items.length,link};
   }catch(e){
-    // fallback: parse HTML search page
     try{
       const url=`https://www.emag.ro/search/${encodeURIComponent(query)}`;
       const r=await fetch(url,{headers:{'User-Agent':UA,'Accept':'text/html'},signal:AbortSignal.timeout(10000)});
@@ -38,12 +37,10 @@ async function scrapeEmag(query){
 
 async function scrapeTrendyol(query){
   try{
-    // Trendyol Romania search
     const url=`https://www.trendyol.com/sr?q=${encodeURIComponent(query)}&culture=ro-RO&currency=RON`;
     const r=await fetch(url,{headers:{'User-Agent':UA,'Accept':'text/html','Accept-Language':'ro-RO,ro;q=0.9'},signal:AbortSignal.timeout(10000)});
     if(!r.ok)throw new Error('HTTP '+r.status);
     const html=await r.text();
-    // Extract __NEXT_DATA__ or prices from HTML
     const nextDataMatch=html.match(/<script id="__NEXT_DATA__" type="application\/json">([\s\S]*?)<\/script>/);
     if(nextDataMatch){
       try{
@@ -56,7 +53,6 @@ async function scrapeTrendyol(query){
         }
       }catch(e){}
     }
-    // Fallback: regex on page
     const priceMatches=[...html.matchAll(/["']sellingPrice["']\s*:\s*([0-9]+(?:\.[0-9]+)?)/g)].map(m=>parseFloat(m[1])).filter(v=>v>0);
     if(priceMatches.length){
       const minPrice=Math.min(...priceMatches);
@@ -66,11 +62,10 @@ async function scrapeTrendyol(query){
   }catch(e){return null;}
 }
 
-export default async function handler(req,res){
-  if(req.method!=='POST')return res.status(405).end();
+module.exports=async function handler(req,res){
+  if(req.method!=='POST')return res.status(405).json({error:'Metodă nepermisă'});
   const {query}=req.body||{};
   if(!query||typeof query!=='string')return res.status(400).json({error:'Query lipsă'});
-
   const [emag,trendyol]=await Promise.all([scrapeEmag(query),scrapeTrendyol(query)]);
   res.json({emag,trendyol});
-}
+};
