@@ -1,5 +1,15 @@
-const UA='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36';
-const MAX_HTML=4*1024*1024;
+const MAX_HTML=3*1024*1024;
+
+const FETCH_HEADERS={
+  'user-agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+  'accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+  'accept-language':'ro-RO,ro;q=0.9,en;q=0.8',
+  'sec-fetch-dest':'document',
+  'sec-fetch-mode':'navigate',
+  'sec-fetch-site':'none',
+  'sec-fetch-user':'?1',
+  'upgrade-insecure-requests':'1'
+};
 
 function decode(s=''){return String(s).replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'").replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').trim();}
 function metaTag(html,key){
@@ -20,7 +30,6 @@ function parsePrice(v){
 function findJsonLd(html){
   for(const m of html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)){
     try{
-      const obj=JSON.parse(m[1]);
       const find=o=>{
         if(!o||typeof o!=='object')return null;
         if(Array.isArray(o)){for(const x of o){const r=find(x);if(r)return r;}return null;}
@@ -28,7 +37,7 @@ function findJsonLd(html){
         if(o['@graph'])return find(o['@graph']);
         return null;
       };
-      const p=find(obj);if(p)return p;
+      const p=find(JSON.parse(m[1]));if(p)return p;
     }catch(e){}
   }
   return null;
@@ -38,19 +47,20 @@ function extractFromHtml(html,url){
   const offer=Array.isArray(product?.offers)?product.offers[0]:product?.offers||{};
   const abs=v=>{try{return new URL(v,url).href;}catch(e){return'';}};
   const imgArr=Array.isArray(product?.image)?product.image[0]:product?.image;
-  const imgMeta=metaTag(html,'og:image')||metaTag(html,'twitter:image');
   const priceRaw=offer.price||metaTag(html,'product:price:amount')||metaTag(html,'og:price:amount')||'';
   const currency=offer.priceCurrency||metaTag(html,'product:price:currency')||metaTag(html,'og:price:currency')||'';
   const eanCands=[
     product?.gtin13||product?.gtin8||product?.gtin||product?.mpn||offer.gtin13||offer.gtin||'',
     ...[...html.matchAll(/["']ean[13]?["']\s*:\s*["']?(\d{8,14})["']?/gi)].map(m=>m[1])
   ].filter(v=>v&&/^\d{8,14}$/.test(String(v)));
+  // Jumbo-specific: SKU from page text
+  const jumboSku=(html.match(/Cod\s+Jumbo[:\s]*(\d{4,})/i)||[])[1]||'';
   return{
-    name:product?.name||metaTag(html,'og:title')||metaTag(html,'twitter:title')||'',
-    img:abs(imgArr)||abs(imgMeta)||'',
+    name:product?.name||metaTag(html,'og:title')||metaTag(html,'twitter:title')||decode((html.match(/<title>([^<]+)<\/title>/i)||[])[1]||''),
+    img:abs(imgArr)||abs(metaTag(html,'og:image'))||abs(metaTag(html,'twitter:image'))||'',
     price:parsePrice(priceRaw),
     currency:currency.toUpperCase()||'',
-    ean:eanCands[0]||''
+    ean:eanCands[0]||jumboSku||''
   };
 }
 
@@ -60,38 +70,51 @@ module.exports=async function handler(req,res){
   const {url}=req.body||{};
   if(!url||typeof url!=='string')return res.status(400).json({error:'URL lipsă'});
 
-  let html='';
+  let html='',fetchError='';
   try{
-    const r=await fetch(url,{headers:{'User-Agent':UA,'Accept':'text/html,application/xhtml+xml,*/*;q=0.9'},redirect:'follow',signal:AbortSignal.timeout(12000)});
+    const r=await fetch(url,{headers:FETCH_HEADERS,redirect:'follow',signal:AbortSignal.timeout(9000)});
     if(!r.ok)throw new Error('HTTP '+r.status);
     const buf=await r.arrayBuffer();
-    html=new TextDecoder().decode(buf.slice(0,MAX_HTML));
+    html=new TextDecoder().decode(new Uint8Array(buf).slice(0,MAX_HTML));
   }catch(e){
-    return res.status(502).json({error:'Nu s-a putut accesa URL-ul: '+e.message});
+    fetchError=e.message;
   }
 
-  const extracted=extractFromHtml(html,url);
+  // Try to extract from HTML if we got any
+  const extracted=html?extractFromHtml(html,url):{name:'',img:'',price:null,currency:'',ean:''};
 
-  if(!extracted.name||(extracted.price===null)){
-    try{
-      const cleanHtml=html.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').slice(0,5000);
-      const aiRes=await fetch('https://api.openai.com/v1/chat/completions',{
-        method:'POST',
-        headers:{'Content-Type':'application/json','Authorization':'Bearer '+process.env.OPENAI_API_KEY},
-        body:JSON.stringify({
-          model:'gpt-4o-mini',max_tokens:300,
-          messages:[{role:'user',content:`Extrage din textul acestei pagini de produs: numele produsului, prețul (număr), moneda (RON/EUR/PLN etc.), codul EAN dacă există.\nRăspunde DOAR cu JSON: {"name":"...","price":0.0,"currency":"RON","ean":""}\n\nText pagină:\n${cleanHtml}`}]
-        })
-      });
-      const aiData=await aiRes.json();
-      const text=aiData.choices?.[0]?.message?.content||'';
-      const j=JSON.parse(text.replace(/```json|```/g,'').trim());
-      if(!extracted.name&&j.name)extracted.name=j.name;
-      if(extracted.price===null&&j.price>0)extracted.price=j.price;
-      if(!extracted.currency&&j.currency)extracted.currency=j.currency;
-      if(!extracted.ean&&j.ean)extracted.ean=j.ean;
-    }catch(e){}
+  // If we got a name from HTML, return it
+  if(extracted.name){
+    res.json(extracted);
+    return;
   }
 
-  res.json(extracted);
+  // Fallback: use AI to extract from URL + partial HTML or just URL
+  try{
+    const cleanHtml=html
+      ?html.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').slice(0,4000)
+      :'';
+    const prompt=`Extrage din textul acestei pagini de produs: numele produsului, prețul (număr), moneda (RON/EUR/PLN etc.), codul EAN sau SKU dacă există.\nURL: ${url}\n${cleanHtml?'Text pagină:\n'+cleanHtml:''}\nRăspunde DOAR cu JSON: {"name":"...","price":0.0,"currency":"RON","ean":"","img":""}`;
+    const aiRes=await fetch('https://api.openai.com/v1/chat/completions',{
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+process.env.OPENAI_API_KEY},
+      body:JSON.stringify({model:'gpt-4o-mini',max_tokens:300,messages:[{role:'user',content:prompt}]})
+    });
+    const aiData=await aiRes.json();
+    const text=aiData.choices?.[0]?.message?.content||'{}';
+    const j=JSON.parse(text.replace(/```json|```/g,'').trim());
+    res.json({
+      name:j.name||'',
+      img:j.img||extracted.img||'',
+      price:j.price>0?j.price:(extracted.price||null),
+      currency:j.currency||extracted.currency||'RON',
+      ean:j.ean||extracted.ean||''
+    });
+  }catch(e){
+    if(fetchError){
+      res.status(502).json({error:'Nu s-a putut accesa pagina: '+fetchError});
+    }else{
+      res.json(extracted);
+    }
+  }
 };
