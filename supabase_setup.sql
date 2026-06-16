@@ -95,12 +95,32 @@ create table if not exists platforma_mapari (
   created_at timestamptz default now()
 );
 
+-- OBSERVAȚII PREȚURI DIN RESEARCH / LISTĂRI EXTERNE
+create table if not exists listing_price_observations (
+  id bigint primary key generated always as identity,
+  product_name text,
+  source_url text not null,
+  platform text,
+  listing_title text,
+  price numeric(10,2),
+  currency text default 'RON',
+  match_score integer default 0,
+  optimization_score integer default 0,
+  is_same_product text,
+  image_url text,
+  notes text,
+  created_at timestamptz default now()
+);
+
 -- INDEX-uri pentru performanță
 create index if not exists idx_vanzari_data on vanzari_zilnice(data);
 create index if not exists idx_jurnal_data on jurnal(data desc);
 create index if not exists idx_jurnal_product on jurnal(product_id);
 create index if not exists idx_mapari_produs on platforma_mapari(produs_id);
 create index if not exists idx_mapari_platforma on platforma_mapari(platforma);
+create index if not exists idx_lpo_product on listing_price_observations(product_name);
+create index if not exists idx_lpo_url on listing_price_observations(source_url);
+create index if not exists idx_lpo_created on listing_price_observations(created_at desc);
 
 -- Auto-update updated_at pe produse
 create or replace function update_updated_at()
@@ -120,6 +140,7 @@ alter table produse disable row level security;
 alter table vanzari_zilnice disable row level security;
 alter table jurnal disable row level security;
 alter table platforma_mapari disable row level security;
+alter table listing_price_observations disable row level security;
 
 -- Confirmare
 select 'Schema creat cu succes!' as status;

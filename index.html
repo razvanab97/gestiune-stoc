@@ -506,6 +506,31 @@ function buildRaportCats(){
 .research-weak-toggle{margin-top:8px;font-size:12px;color:var(--t3);background:none;border:none;cursor:pointer;text-align:left;padding:0}
 .research-weak{display:none;margin-top:8px}
 .research-weak.on{display:flex;flex-direction:column;gap:8px}
+.listing-card{background:var(--surf);border:1px solid var(--acc);border-radius:var(--r2);padding:1rem;margin:0 0 1rem;box-shadow:var(--sh)}
+.listing-title{font-size:16px;font-weight:800;line-height:1.3;margin-bottom:8px}
+.listing-desc{font-size:13px;color:var(--t2);line-height:1.55;white-space:pre-wrap;margin:8px 0}
+.listing-bullets{margin:8px 0 0;padding-left:18px;color:var(--t2);font-size:13px;line-height:1.45}
+.listing-imgs{display:flex;gap:8px;overflow-x:auto;margin:10px 0;padding-bottom:4px}
+.listing-imgs img{width:74px;height:74px;object-fit:contain;border:1px solid var(--b1);border-radius:8px;background:var(--surf2);flex:0 0 auto}
+.listing-specs{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.listing-specs span{font-size:11px;color:var(--t2);background:var(--surf2);border:1px solid var(--b1);border-radius:999px;padding:3px 8px}
+.listing-links-box{margin-top:12px;padding-top:12px;border-top:1px solid var(--b1)}
+.listing-links-box textarea{width:100%;min-height:82px;resize:vertical;font-size:13px;font-family:var(--mono);line-height:1.45}
+.listing-analysis{display:grid;gap:10px;margin-top:10px}
+.listing-analysis-row{background:var(--surf2);border:1px solid var(--b1);border-radius:var(--r);padding:10px}
+.listing-analysis-head{display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:6px}
+.listing-analysis-title{font-size:13px;font-weight:700;line-height:1.3}
+.listing-pill{font-size:11px;font-weight:800;border-radius:999px;padding:3px 8px;white-space:nowrap}
+.listing-pill.ok{color:var(--gr);background:rgba(34,197,94,.11)}
+.listing-pill.mid{color:#f59e0b;background:rgba(245,158,11,.12)}
+.listing-pill.low{color:var(--rd);background:rgba(239,68,68,.1)}
+.listing-analysis-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;color:var(--t2)}
+.listing-analysis-grid ul{margin:4px 0 0;padding-left:16px}
+.listing-price-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:10px 0}
+.listing-price-box{background:var(--surf2);border:1px solid var(--b1);border-radius:var(--r);padding:8px}
+.listing-price-box span{display:block;font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.04em}
+.listing-price-box strong{font-family:var(--mono);font-size:15px;color:var(--t1)}
+@media(max-width:640px){.listing-analysis-grid{grid-template-columns:1fr}.research-cand{grid-template-columns:40px 1fr}.research-cand-actions{grid-column:2;align-items:flex-start;flex-direction:row}}
 /* ── COPY BUTTON ── */
 .copy-nm-btn{background:none;border:none;cursor:pointer;padding:0 4px;font-size:13px;opacity:.55;vertical-align:middle;line-height:1;transition:opacity .15s}
 .copy-nm-btn:hover{opacity:1}
@@ -811,10 +836,19 @@ function buildRaportCats(){
       <button class="btn btn-acc" onclick="doResearch()" id="research-btn">🔍 Caută</button>
     </div>
     <div class="research-hint">Surse cu parser dedicat: Jumbo · Maxy.eu · verk.store · i-want.pl — orice alt URL e procesat cu AI. Fallback manual disponibil pe card.</div>
+    <div class="listing-links-box">
+      <div class="sec" style="margin:0 0 8px">🔗 Analiză listări externe</div>
+      <textarea id="listing-links" placeholder="Lipește aici linkuri eMAG / Trendyol / alte anunțuri, câte unul pe linie. Sistemul verifică dacă par același produs, cât de bine sunt optimizate și ce merită folosit."></textarea>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
+        <button class="btn btn-sm btn-acc" onclick="analyzeExternalListings()" id="listing-analyze-btn">🔎 Analizează listările</button>
+        <span style="font-size:12px;color:var(--t3)">Tip: fă întâi Research pe produsul sursă, apoi adaugă linkurile concurente.</span>
+      </div>
+    </div>
   </div>
 
   <div id="research-result-wrap" style="display:none">
     <div id="research-result"></div>
+    <div id="listing-result"></div>
     <div style="text-align:center;margin-bottom:1rem">
       <button class="btn btn-sm" id="research-ai-btn" onclick="doResearchAI()" style="display:none">✦ Încearcă cu AI (fallback)</button>
     </div>
@@ -1966,6 +2000,7 @@ function setEmagTransport(roi){
 /* RESEARCH FUNCTIONS */
 const RESEARCH_HK='sm6_research_history';
 let researchData=null;
+let listingData=null;
 function getResearchHistory(){return JSON.parse(localStorage.getItem(RESEARCH_HK)||'[]');}
 function saveResearchToHistory(item){
   const h=getResearchHistory();
@@ -2007,6 +2042,8 @@ async function doResearch(){
   const btn=document.getElementById('research-btn');
   btn.disabled=true;btn.textContent='⏳ Se caută…';
   document.getElementById('research-result-wrap').style.display='none';
+  const lr=document.getElementById('listing-result');if(lr)lr.innerHTML='';
+  listingData=null;
   document.getElementById('research-ai-btn').style.display='none';
   try{
     const srcResp=await fetch('/api/research-source',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url})});
@@ -2113,6 +2150,179 @@ function toggleWeakResearch(platformKey){
   const el=document.getElementById('research-weak-'+platformKey);
   if(el)el.classList.toggle('on');
 }
+function researchListingUrls(){
+  if(!researchData)return[];
+  const urls=[researchData.url];
+  ['emag','trendyol'].forEach(k=>{
+    const p=researchData[k];
+    if(p?.activeMatch?.link)urls.push(p.activeMatch.link);
+    else if(p?.link)urls.push(p.link);
+  });
+  return[...new Set(urls.filter(Boolean))].slice(0,6);
+}
+function listingTextareaUrls(){
+  const raw=document.getElementById('listing-links')?.value||'';
+  return[...new Set((raw.match(/https?:\/\/[^\s,]+/g)||[]).map(u=>u.replace(/[)\].,;]+$/,'')))].slice(0,8);
+}
+function researchProductPayload(){
+  return{
+    name:researchData?.name||'',
+    description:researchData?.description||'',
+    characteristics:researchData?.characteristics||[],
+    priceBuy:researchData?.priceBuy||0,
+    currency:researchData?.currency||'',
+    ean:researchData?.ean||'',
+    img:researchData?.img||'',
+    emag:researchData?.emag?.activeMatch||null,
+    trendyol:researchData?.trendyol?.activeMatch||null
+  };
+}
+async function buildListingFromResearch(){
+  if(!researchData){toast('Fă întâi research pentru un produs');return;}
+  const btn=document.getElementById('listing-build-btn');
+  const out=document.getElementById('listing-result');
+  if(btn){btn.disabled=true;btn.textContent='⏳ Generez anunț…';}
+  if(out)out.innerHTML=`<div class="listing-card"><span class="spin"></span> Adun informațiile din linkuri și creez anunțul…</div>`;
+  try{
+    const payload={product:researchProductPayload(),urls:researchListingUrls()};
+    const r=await fetch('/api/listing-builder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data=await r.json();
+    if(!r.ok)throw new Error(data.error?.message||data.error||'Generator indisponibil');
+    listingData=data.listing||{};
+    researchData.listing=listingData;
+    renderListingResult(listingData,data.pages||[]);
+    toast('Anunț generat ✓');
+  }catch(e){
+    if(out)out.innerHTML=`<div class="listing-card" style="border-color:var(--rd);color:var(--rd)">⚠️ ${esc(e.message||'Eroare generator')}</div>`;
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='✨ Generează anunț';}
+  }
+}
+async function analyzeExternalListings(){
+  const urls=listingTextareaUrls();
+  const out=document.getElementById('listing-result');
+  const btn=document.getElementById('listing-analyze-btn');
+  if(!urls.length){toast('Lipește cel puțin un link de anunț');return;}
+  if(!researchData&&!confirm('Nu ai un produs reper din Research. Analiza poate fi mai slabă. Continui?'))return;
+  if(btn){btn.disabled=true;btn.textContent='⏳ Analizez…';}
+  if(out)out.innerHTML=`<div class="listing-card"><span class="spin"></span> Citesc listările externe și compar titluri, poze, specificații…</div>`;
+  try{
+    const r=await fetch('/api/listing-builder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'analyze',product:researchProductPayload(),urls})});
+    const data=await r.json();
+    if(!r.ok)throw new Error(data.error?.message||data.error||'Analiza nu a reușit');
+    const a=data.analysis||{};
+    listingData=a.improved_listing||null;
+    if(researchData)researchData.listing=listingData;
+    await saveListingPriceObservations(a,data.pages||[]);
+    renderListingAnalysis(a,data.pages||[]);
+    toast('Analiză listări finalizată ✓');
+  }catch(e){
+    if(out)out.innerHTML=`<div class="listing-card" style="border-color:var(--rd);color:var(--rd)">⚠️ ${esc(e.message||'Eroare analiză')}</div>`;
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='🔎 Analizează listările';}
+  }
+}
+function scoreCls(n){return n>=80?'ok':n>=50?'mid':'low';}
+function moneyRON(n,curr){
+  if(!(Number(n)>0))return'—';
+  return Number(n).toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})+' '+(curr||'RON');
+}
+function listingPriceStats(a){
+  const ps=(a.listings||[]).map(x=>({price:Number(x.price)||0,currency:x.currency||'RON',match:Number(x.match_score)||0})).filter(x=>x.price>0&&x.match>=50);
+  const ron=ps.filter(x=>String(x.currency).toUpperCase()==='RON').map(x=>x.price).sort((a,b)=>a-b);
+  if(!ron.length)return a.price_summary||{};
+  const avg=ron.reduce((s,x)=>s+x,0)/ron.length,mid=Math.floor(ron.length/2),med=ron.length%2?ron[mid]:(ron[mid-1]+ron[mid])/2;
+  return{valid_prices:ron,min:ron[0],max:ron[ron.length-1],average:avg,median:med,recommended_reference_price:med,notes:a.price_summary?.notes||'Calculat din listările cu match peste 50% și preț RON.'};
+}
+async function saveListingPriceObservations(a,pages){
+  if(!sbReady||!Array.isArray(a.listings)||!a.listings.length)return;
+  const pageMap=Object.fromEntries((pages||[]).map(p=>[p.url,p]));
+  const rows=a.listings.map(r=>{
+    const p=pageMap[r.url]||{};
+    return{product_name:researchData?.name||'',source_url:r.url,platform:r.platform||p.host||'',listing_title:r.extracted_title||p.title||'',price:Number(r.price||p.price)||null,currency:r.currency||p.currency||'RON',match_score:Number(r.match_score)||0,optimization_score:Number(r.optimization_score)||0,is_same_product:r.is_same_product||'',image_url:(p.images||[])[0]||'',notes:[...(r.reusable_parts||[]),...(r.weaknesses||[])].join(' | ').slice(0,1000)};
+  }).filter(r=>r.source_url);
+  if(!rows.length)return;
+  try{
+    await dbPost('listing_price_observations',rows);
+    toast('Prețuri salvate în baza de date ✓');
+  }catch(e){
+    toast('Analiza e gata, dar prețurile nu s-au salvat. Rulează schema nouă în Supabase.','err');
+  }
+}
+function renderListingAnalysis(a,pages){
+  const out=document.getElementById('listing-result');if(!out)return;
+  const rows=Array.isArray(a.listings)?a.listings:[];
+  const improved=a.improved_listing||{};
+  const patterns=Array.isArray(a.best_patterns)?a.best_patterns:[];
+  const missing=Array.isArray(a.missing_info)?a.missing_info:[];
+  const ps=listingPriceStats(a);
+  out.innerHTML=`<div class="listing-card">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:8px">
+      <div class="sec" style="margin:0;color:var(--acc)">🔎 Analiză listări externe</div>
+      ${improved.title?`<button class="btn btn-sm btn-acc" onclick="applyListingToProduct()">Aplică varianta îmbunătățită</button>`:''}
+    </div>
+    ${ps.valid_prices?.length?`<div class="listing-price-summary">
+      <div class="listing-price-box"><span>Minim</span><strong>${moneyRON(ps.min,'RON')}</strong></div>
+      <div class="listing-price-box"><span>Medie</span><strong>${moneyRON(ps.average,'RON')}</strong></div>
+      <div class="listing-price-box"><span>Mediană</span><strong>${moneyRON(ps.median,'RON')}</strong></div>
+      <div class="listing-price-box"><span>Maxim</span><strong>${moneyRON(ps.max,'RON')}</strong></div>
+    </div><div style="font-size:11px;color:var(--t3);margin-bottom:8px">${esc(ps.notes||'')}</div>`:''}
+    ${rows.length?`<div class="listing-analysis">${rows.map(r=>`<div class="listing-analysis-row">
+      <div class="listing-analysis-head">
+        <div><div class="listing-analysis-title">${esc(r.extracted_title||r.url||'Listare')}</div><div style="font-size:11px;color:var(--t3)">${esc(r.platform||'altul')} · ${moneyRON(r.price,r.currency)} · <a href="${esc(r.url||'#')}" target="_blank" style="color:var(--acc)">deschide</a></div></div>
+        <div style="display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end"><span class="listing-pill ${scoreCls(Number(r.match_score)||0)}">Match ${Number(r.match_score)||0}%</span><span class="listing-pill ${scoreCls(Number(r.optimization_score)||0)}">Optimizare ${Number(r.optimization_score)||0}%</span></div>
+      </div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:6px">Produs: ${esc(r.is_same_product||'incert')}</div>
+      <div class="listing-analysis-grid">
+        <div><strong>Ce e bun</strong>${Array.isArray(r.strengths)?`<ul>${r.strengths.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}</div>
+        <div><strong>Ce putem lua</strong>${Array.isArray(r.reusable_parts)?`<ul>${r.reusable_parts.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}</div>
+        <div><strong>Minusuri</strong>${Array.isArray(r.weaknesses)?`<ul>${r.weaknesses.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}</div>
+        <div><strong>Specificații găsite</strong>${Array.isArray(r.specs_found)?`<ul>${r.specs_found.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:''}</div>
+      </div>
+      ${r.image_notes?`<div style="font-size:12px;color:var(--t3);margin-top:6px">Poze: ${esc(r.image_notes)}</div>`:''}
+    </div>`).join('')}</div>`:'<div style="font-size:13px;color:var(--t3)">Nu s-au putut analiza listări individuale.</div>'}
+    ${patterns.length?`<div style="margin-top:12px"><strong style="font-size:13px">Tipare bune observate</strong><ul class="listing-bullets">${patterns.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:''}
+    ${missing.length?`<div style="margin-top:8px"><strong style="font-size:13px">Informații lipsă de completat</strong><ul class="listing-bullets">${missing.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:''}
+  </div>`;
+  if(improved.title)renderListingResult(improved,pages);
+}
+function renderListingResult(l,pages){
+  const out=document.getElementById('listing-result');if(!out)return;
+  const imgs=(l.images&&l.images.length?l.images:[l.main_image,researchData?.img]).filter(Boolean);
+  const specs=l.specs||{};
+  out.innerHTML=`<div class="listing-card">
+    <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:8px">
+      <div class="sec" style="margin:0;color:var(--acc)">✨ Anunț generat</div>
+      <button class="btn btn-sm btn-acc" onclick="applyListingToProduct()">Aplică în produs</button>
+    </div>
+    <div class="listing-title">${esc(l.title||researchData?.name||'')}</div>
+    ${l.short_title?`<div style="font-size:12px;color:var(--t3);margin-bottom:6px">Titlu scurt: ${esc(l.short_title)}</div>`:''}
+    ${imgs.length?`<div class="listing-imgs">${imgs.slice(0,10).map(u=>`<img src="${esc(u)}" onerror="this.style.display='none'" alt="">`).join('')}</div>`:''}
+    ${l.description?`<div class="listing-desc">${esc(l.description)}</div>`:''}
+    ${Array.isArray(l.bullets)&&l.bullets.length?`<ul class="listing-bullets">${l.bullets.map(b=>`<li>${esc(b)}</li>`).join('')}</ul>`:''}
+    ${Object.keys(specs).length?`<div class="listing-specs">${Object.entries(specs).filter(([k,v])=>v).map(([k,v])=>`<span>${esc(k)}: ${esc(v)}</span>`).join('')}</div>`:''}
+    ${Array.isArray(l.seo_keywords)&&l.seo_keywords.length?`<div style="font-size:11px;color:var(--t3);margin-top:8px">Keywords: ${esc(l.seo_keywords.join(', '))}</div>`:''}
+    ${l.source_notes?`<div style="font-size:11px;color:var(--t3);margin-top:8px">${esc(l.source_notes)}</div>`:''}
+  </div>`;
+}
+function applyListingToProduct(){
+  const l=listingData||researchData?.listing;if(!l){toast('Nu există anunț generat');return;}
+  openModal();
+  setTimeout(()=>{
+    if(l.title)document.getElementById('f-name').value=l.title;
+    const img=l.main_image||(l.images||[])[0]||researchData?.img;
+    if(img){document.getElementById('f-imgurl').value=img;onImgUrl();}
+    if(l.description)document.getElementById('f-notes').value=l.description;
+    const specs=l.specs||{};
+    if(specs.Material)document.getElementById('f-material').value=specs.Material;
+    if(specs.Dimensiuni)document.getElementById('f-dims').value=specs.Dimensiuni;
+    if(specs.Culoare)document.getElementById('f-colors').value=specs.Culoare;
+    if(researchData?.priceBuy>0){document.getElementById('f-pbuy-ttc').value=researchData.priceBuy.toFixed(2);syncAcqFields('ttc');}
+    if(researchData?.ean)document.getElementById('f-sku').value=researchData.ean;
+    if(researchData?.url){try{document.getElementById('f-sup').value=new URL(researchData.url).hostname.replace(/^www\./,'');}catch(e){}}
+    suggestCatFromName();
+  },80);
+}
 function calcResearchScore(item){
   if(!item.priceBuy||item.priceBuy<=0)return{score:0,label:'Fără preț',color:'var(--t3)'};
   const eM=item.emagPrice>0?calcResearchMargin(item.priceBuy,item.emagPrice,'emag'):null;
@@ -2187,6 +2397,7 @@ function renderResearchResult(item){
     <div class="research-platforms">${emagBlock}${trendyolBlock}</div>
     <div class="research-card-actions">
       <button class="btn btn-sm btn-acc" onclick="addResearchToInventar()">+ Adaugă în inventar</button>
+      <button class="btn btn-sm btn-acc" id="listing-build-btn" onclick="buildListingFromResearch()">✨ Generează anunț</button>
       <button class="btn btn-sm" onclick="openCalcForResearch()">🧮 Calculează</button>
       <a href="${esc(item.url||'#')}" target="_blank" class="btn btn-sm">↗ Sursă</a>
       ${item.img
