@@ -31,6 +31,14 @@ function absUrl(v,base){
   if(!v||!v.trim())return '';
   try{return new URL(v.trim(),base).href;}catch(e){return '';}
 }
+function cleanSlug(s=''){
+  return String(s||'')
+    .replace(/\.(html?|php|aspx?)$/i,'')
+    .replace(/[_-]\d{4,}$/,'')
+    .replace(/[-_]/g,' ')
+    .replace(/\s+/g,' ')
+    .trim();
+}
 function findJsonLd(html){
   for(const m of html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)){
     try{
@@ -42,7 +50,21 @@ function findJsonLd(html){
         return null;
       };
       const p=find(JSON.parse(m[1]));if(p)return p;
-    }catch(e){}
+    }catch(e){
+      try{
+        const fixed=m[1]
+          .replace(/:\s*""([^"]*?)""/g,': "$1"')
+          .replace(/,\s*([}\]])/g,'$1');
+        const find=o=>{
+          if(!o||typeof o!=='object')return null;
+          if(Array.isArray(o)){for(const x of o){const r=find(x);if(r)return r;}return null;}
+          if(o['@type']==='Product'||(Array.isArray(o['@type'])&&o['@type'].includes('Product')))return o;
+          if(o['@graph'])return find(o['@graph']);
+          return null;
+        };
+        const p=find(JSON.parse(fixed));if(p)return p;
+      }catch(e2){}
+    }
   }
   return null;
 }
@@ -52,7 +74,7 @@ function slugFromUrl(url){
   try{
     const parts=new URL(url).pathname.split('/').filter(Boolean);
     const lastSlug=parts[parts.length-1]||parts[parts.length-2]||'';
-    return lastSlug.replace(/[-_]/g,' ').replace(/\.(html?|php|aspx?)$/i,'').trim();
+    return cleanSlug(lastSlug);
   }catch(e){return '';}
 }
 
@@ -60,7 +82,12 @@ function extractFromHtml(html,url){
   const product=findJsonLd(html);
   const offer=Array.isArray(product?.offers)?product.offers[0]:product?.offers||{};
   const imgArr=Array.isArray(product?.image)?product.image[0]:product?.image;
-  const priceRaw=offer.price||metaTag(html,'product:price:amount')||metaTag(html,'og:price:amount')||'';
+  const priceRaw=
+    offer.price||
+    metaTag(html,'product:price:amount')||
+    metaTag(html,'og:price:amount')||
+    (html.match(/"fpf_product_price"\s*:\s*"([^"]+)"/i)||[])[1]||
+    '';
   const currency=offer.priceCurrency||metaTag(html,'product:price:currency')||metaTag(html,'og:price:currency')||'';
   const eanCands=[
     String(product?.gtin13||product?.gtin8||product?.gtin||product?.mpn||offer.gtin13||offer.gtin||''),
@@ -125,7 +152,6 @@ async function aiExtract(url,htmlSnippet,slug){
 
 module.exports=async function handler(req,res){
   if(req.method!=='POST')return res.status(405).json({error:'Metodă nepermisă'});
-  if(!process.env.OPENAI_API_KEY)return res.status(503).json({error:'OPENAI_API_KEY lipsă'});
   const {url}=req.body||{};
   if(!url||typeof url!=='string')return res.status(400).json({error:'URL lipsă'});
 
@@ -135,8 +161,12 @@ module.exports=async function handler(req,res){
   const html=await fetchHtml(url);
   const extracted=html?extractFromHtml(html,url):empty;
 
-  if(extracted.name&&extracted.img){
+  if(extracted.name&&extracted.img&&extracted.price){
     return res.json({...extracted,slug});
+  }
+
+  if(!process.env.OPENAI_API_KEY){
+    return res.json({...extracted,slug,warning:extracted.name?'OPENAI_API_KEY lipsă — fallback AI sărit':'OPENAI_API_KEY lipsă și produsul nu a putut fi extras complet'});
   }
 
   // Fallback AI: dacă lipsesc date importante (fără nume sau fără imagine)

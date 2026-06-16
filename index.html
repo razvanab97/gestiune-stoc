@@ -491,6 +491,21 @@ function buildRaportCats(){
 .research-chip{font-size:11px;background:var(--surf2);border:1px solid var(--b1);border-radius:20px;padding:2px 10px;color:var(--t2);white-space:nowrap}
 .research-score-badge{display:inline-flex;align-items:center;font-size:12px;font-weight:700;padding:3px 10px;border-radius:20px;border:2px solid;white-space:nowrap;flex-shrink:0;line-height:1.4}
 .research-hist-score{font-size:11px;font-weight:700;padding:2px 8px;border-radius:12px;background:var(--surf2);flex-shrink:0;white-space:nowrap;margin-right:6px}
+.research-blocked{font-size:12px;color:#f59e0b;background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.35);border-radius:var(--r);padding:8px 10px;margin-bottom:8px;line-height:1.35}
+.research-cands{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+.research-cand{display:grid;grid-template-columns:46px 1fr auto;gap:8px;align-items:center;background:var(--surf);border:1px solid var(--b1);border-radius:var(--r);padding:8px}
+.research-cand.active{border-color:var(--acc);box-shadow:0 0 0 1px rgba(167,139,250,.22)}
+.research-cand-img{width:46px;height:46px;border-radius:8px;object-fit:contain;background:var(--surf2);border:1px solid var(--b1)}
+.research-cand-title{font-size:12px;font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.research-cand-meta{font-size:11px;color:var(--t3);font-family:var(--mono);margin-top:3px}
+.research-cand-score{font-size:11px;font-weight:800;border-radius:999px;padding:3px 7px;white-space:nowrap;text-align:center;margin-bottom:6px}
+.research-cand-score.ok{color:var(--gr);background:rgba(34,197,94,.11)}
+.research-cand-score.mid{color:#f59e0b;background:rgba(245,158,11,.12)}
+.research-cand-score.low{color:var(--rd);background:rgba(239,68,68,.1)}
+.research-cand-actions{display:flex;flex-direction:column;align-items:flex-end;gap:4px}
+.research-weak-toggle{margin-top:8px;font-size:12px;color:var(--t3);background:none;border:none;cursor:pointer;text-align:left;padding:0}
+.research-weak{display:none;margin-top:8px}
+.research-weak.on{display:flex;flex-direction:column;gap:8px}
 /* ── COPY BUTTON ── */
 .copy-nm-btn{background:none;border:none;cursor:pointer;padding:0 4px;font-size:13px;opacity:.55;vertical-align:middle;line-height:1;transition:opacity .15s}
 .copy-nm-btn:hover{opacity:1}
@@ -2000,13 +2015,16 @@ async function doResearch(){
     if(!src.name)throw new Error('Produsul nu a putut fi extras — site-ul poate bloca accesul automat. Încearcă cu AI ▼');
     const scrapeResp=await fetch('/api/research-scrape',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:src.name,description:src.description||'',slug:src.slug||'',ean:src.ean||''})});
     const platforms=scrapeResp.ok?await scrapeResp.json():{emag:null,trendyol:null};
-    const _sc=calcResearchScore({priceBuy:src.price||0,emagPrice:platforms.emag?.minPrice||0,trendyolPrice:platforms.trendyol?.minPrice||0,emag:platforms.emag,trendyol:platforms.trendyol});
-    const item={url,name:src.name,img:src.img||'',description:src.description||'',characteristics:src.characteristics||[],priceBuy:src.price||0,ean:src.ean||'',emag:platforms.emag,trendyol:platforms.trendyol,emagPrice:platforms.emag?.minPrice||0,trendyolPrice:platforms.trendyol?.minPrice||0,score:_sc.score,scoreLabel:_sc.label,scoreColor:_sc.color};
+    const base={url,name:src.name,img:src.img||'',description:src.description||'',characteristics:src.characteristics||[],priceBuy:src.price||0,currency:src.currency||'',ean:src.ean||''};
+    const emag=prepareResearchPlatform(platforms.emag,base,'emag');
+    const trendyol=prepareResearchPlatform(platforms.trendyol,base,'trendyol');
+    const _sc=calcResearchScore({priceBuy:base.priceBuy,emagPrice:emag?.activeMatch?.price||0,trendyolPrice:trendyol?.activeMatch?.price||0,emag,trendyol});
+    const item={...base,emag,trendyol,emagPrice:emag?.activeMatch?.price||0,trendyolPrice:trendyol?.activeMatch?.price||0,score:_sc.score,scoreLabel:_sc.label,scoreColor:_sc.color};
     researchData=item;
     renderResearchResult(item);
     saveResearchToHistory(item);
     renderResearchHistory();
-    if(!platforms.emag&&!platforms.trendyol){
+    if(platforms.emag?.blocked||platforms.trendyol?.blocked||(!platforms.emag&&!platforms.trendyol)){
       document.getElementById('research-ai-btn').style.display='';
     }
   }catch(e){
@@ -2023,10 +2041,10 @@ async function doResearchAI(){
     if(!r.ok)throw new Error('Eroare AI');
     const data=await r.json();
     if(researchData){
-      researchData.emag=data.emag||researchData.emag;
-      researchData.trendyol=data.trendyol||researchData.trendyol;
-      researchData.emagPrice=data.emag?.minPrice||researchData.emagPrice||0;
-      researchData.trendyolPrice=data.trendyol?.minPrice||researchData.trendyolPrice||0;
+      researchData.emag=prepareResearchPlatform(data.emag||researchData.emag,researchData,'emag');
+      researchData.trendyol=prepareResearchPlatform(data.trendyol||researchData.trendyol,researchData,'trendyol');
+      researchData.emagPrice=researchData.emag?.activeMatch?.price||data.emag?.minPrice||researchData.emagPrice||0;
+      researchData.trendyolPrice=researchData.trendyol?.activeMatch?.price||data.trendyol?.minPrice||researchData.trendyolPrice||0;
       const _sc=calcResearchScore(researchData);researchData.score=_sc.score;researchData.scoreLabel=_sc.label;researchData.scoreColor=_sc.color;
     }
     renderResearchResult(researchData||data);
@@ -2044,6 +2062,56 @@ function calcResearchMargin(buyPrice,sellPrice,ch){
   const net=sell-acq-commNet-ship-acc-pkg;
   const margin=sell>0?net/sell*100:0;
   return{net,margin};
+}
+function researchNorm(s){
+  return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\p{L}\p{N}\s]/giu,' ').replace(/\s+/g,' ').trim();
+}
+function researchTokens(s){
+  const stop=new Set('de cu si și pentru in în din la pe ca un o ale al the and for with sau plus pat'.split(' '));
+  return researchNorm(s).split(' ').filter(w=>w.length>2&&!stop.has(w));
+}
+function researchDims(s){
+  return [...String(s||'').matchAll(/\d+(?:[.,]\d+)?\s*(?:x|×)\s*\d+(?:[.,]\d+)?(?:\s*(?:x|×)\s*\d+(?:[.,]\d+)?)?\s*(?:cm|mm|m)?|\d+(?:[.,]\d+)?\s*(?:cm|mm|m|l|ml|kg|g)/gi)].map(m=>researchNorm(m[0]));
+}
+function scoreResearchCandidate(c,base){
+  const bName=base.name||'',cName=c.title||'';
+  const bt=researchTokens(bName),ct=researchTokens(cName);
+  const overlap=bt.length?bt.filter(t=>ct.includes(t)).length/bt.length:0;
+  const nameScore=Math.round(Math.min(35,overlap*35));
+  const bd=researchDims([bName,base.description,(base.characteristics||[]).join(' ')].join(' '));
+  const cd=researchDims(cName);
+  const dimHit=bd.length&&cd.length?bd.some(d=>cd.includes(d)):false;
+  const charScore=dimHit?20:Math.round(Math.min(20,overlap*12));
+  const hay=researchNorm([cName,c.link].join(' '));
+  const ean=String(base.ean||'').trim();
+  const eanScore=ean&&hay.includes(ean)?10:0;
+  const imgScore=c.img?(nameScore>=24||eanScore?35:20):0;
+  const score=Math.max(0,Math.min(100,nameScore+charScore+eanScore+imgScore));
+  const zone=score>=80?'ok':score>=50?'mid':'low';
+  const label=score>=80?'Sigur':score>=50?'Confirmă':'Slab';
+  const reason=[c.img?'poză disponibilă':'fără poză',`${Math.round(overlap*100)}% nume`,dimHit?'dimensiune OK':'dimensiune neconfirmată',eanScore?'cod OK':''].filter(Boolean).join(' · ');
+  return{...c,score,zone,label,reason};
+}
+function prepareResearchPlatform(platform,base,key){
+  if(!platform)return null;
+  const candidates=(platform.candidates||[]).map(c=>scoreResearchCandidate(c,base)).sort((a,b)=>b.score-a.score||a.price-b.price).slice(0,5);
+  const strong=candidates.filter(c=>c.score>=80);
+  const active=platform.activeMatch||(strong.length?strong.reduce((m,c)=>!m||c.price<m.price?c:m,null):null);
+  return{...platform,candidates,activeMatch:active||null,minPrice:active?.price||platform.minPrice||null,offerCount:candidates.length||platform.offerCount||0};
+}
+function chooseResearchCandidate(platformKey,idx){
+  if(!researchData||!researchData[platformKey])return;
+  const c=researchData[platformKey].candidates?.[idx];if(!c)return;
+  researchData[platformKey].activeMatch=c;
+  researchData[platformKey].minPrice=c.price;
+  researchData[platformKey+'Price']=c.price;
+  const _sc=calcResearchScore(researchData);researchData.score=_sc.score;researchData.scoreLabel=_sc.label;researchData.scoreColor=_sc.color;
+  renderResearchResult(researchData);
+  toast('Candidat selectat ✓');
+}
+function toggleWeakResearch(platformKey){
+  const el=document.getElementById('research-weak-'+platformKey);
+  if(el)el.classList.toggle('on');
 }
 function calcResearchScore(item){
   if(!item.priceBuy||item.priceBuy<=0)return{score:0,label:'Fără preț',color:'var(--t3)'};
@@ -2067,24 +2135,45 @@ function renderResearchResult(item){
   if(!wrap||!div)return;
   const img=item.img?`<img class="research-card-img" src="${esc(item.img)}" onerror="this.src=''" alt="">`:
     `<div class="research-card-img-ph">📦</div>`;
-  const emagM=item.emagPrice>0&&item.priceBuy>0?calcResearchMargin(item.priceBuy,item.emagPrice,'emag'):null;
-  const trendyolM=item.trendyolPrice>0&&item.priceBuy>0?calcResearchMargin(item.priceBuy,item.trendyolPrice,'trendyol'):null;
+  const emagPrice=item.emag?.activeMatch?.price||item.emagPrice||0;
+  const trendyolPrice=item.trendyol?.activeMatch?.price||item.trendyolPrice||0;
+  const emagM=emagPrice>0&&item.priceBuy>0?calcResearchMargin(item.priceBuy,emagPrice,'emag'):null;
+  const trendyolM=trendyolPrice>0&&item.priceBuy>0?calcResearchMargin(item.priceBuy,trendyolPrice,'trendyol'):null;
   const sc=item.score!=null?{score:item.score,label:item.scoreLabel||'',color:item.scoreColor||'var(--t3)'}:calcResearchScore(item);
   const chips=(item.characteristics||[]).filter(Boolean);
-  const platBlock=(plat,price,offerCount,link,margin)=>{
+  const platBlock=(plat,key,platform,price,offerCount,link,margin)=>{
     const fallbackLink=plat==='eMAG'
       ?`https://www.emag.ro/search/${encodeURIComponent((item.name||'').split(' ').slice(0,5).join(' '))}`
       :`https://www.trendyol.com/sr?q=${encodeURIComponent((item.name||'').split(' ').slice(0,5).join(' '))}&culture=ro-RO&currency=RON`;
     const href=link||fallbackLink;
+    const cands=platform?.candidates||[];
+    const visible=cands.filter(c=>c.score>=50);
+    const weak=cands.filter(c=>c.score<50);
+    const candHtml=visible.length?`<div class="research-cands">${visible.map(c=>{
+      const i=cands.indexOf(c),act=platform?.activeMatch&&platform.activeMatch.link===c.link;
+      return`<div class="research-cand ${act?'active':''}">
+        ${c.img?`<img class="research-cand-img" src="${esc(c.img)}" onerror="this.style.display='none'" alt="">`:`<div class="research-cand-img"></div>`}
+        <div><div class="research-cand-title">${esc(c.title)}</div><div class="research-cand-meta">${c.price.toFixed(2)} RON · ${esc(c.reason||'')}</div></div>
+        <div class="research-cand-actions"><span class="research-cand-score ${c.zone}">${c.score}% ${c.label}</span><button class="btn btn-sm" onclick="chooseResearchCandidate('${key}',${i})" style="font-size:11px;padding:5px 8px">${act?'Selectat':'Alege'}</button></div>
+      </div>`;
+    }).join('')}</div>`:'';
+    const weakHtml=weak.length?`<button class="research-weak-toggle" onclick="toggleWeakResearch('${key}')">Arată rezultate slabe (${weak.length})</button><div class="research-weak" id="research-weak-${key}">${weak.map(c=>`<div class="research-cand">
+      ${c.img?`<img class="research-cand-img" src="${esc(c.img)}" onerror="this.style.display='none'" alt="">`:`<div class="research-cand-img"></div>`}
+      <div><div class="research-cand-title">${esc(c.title)}</div><div class="research-cand-meta">${c.price.toFixed(2)} RON · ${esc(c.reason||'')}</div></div>
+      <div class="research-cand-actions"><span class="research-cand-score low">${c.score}% Slab</span></div>
+    </div>`).join('')}</div>`:'';
+    const blocked=platform?.blocked?`<div class="research-blocked">Platforma a blocat căutarea automată${platform.status?' (status '+platform.status+')':''}. Folosește linkul manual sau fallback AI.</div>`:'';
     return`<div class="research-plat"><div class="research-plat-name">${plat}</div>
+    ${blocked}
     ${price>0?`<div class="research-plat-price">${price.toFixed(2)} RON</div>
-    <div class="research-plat-meta">${offerCount?offerCount+' oferte':'—'}</div>
+    <div class="research-plat-meta">${offerCount?offerCount+' candidați':'—'}${platform?.activeMatch?' · preț activ: '+esc(platform.activeMatch.title).slice(0,32):''}</div>
     ${margin?`<div class="research-plat-margin ${margin.net>=0?'pos':'neg'}">Marjă est.: ${margin.margin.toFixed(1)}% (${margin.net>0?'+':''}${margin.net.toFixed(2)} RON)</div>`:''}`:
     `<div style="color:var(--t3);font-size:12px;margin-bottom:6px">Preț nedetectat automat</div>`}
-    <a href="${esc(href)}" target="_blank" class="btn btn-sm" style="font-size:12px">↗ Caută pe ${plat}</a></div>`;
+    <a href="${esc(href)}" target="_blank" class="btn btn-sm" style="font-size:12px">↗ Caută pe ${plat}</a>
+    ${candHtml}${weakHtml}</div>`;
   };
-  const emagBlock=platBlock('eMAG',item.emagPrice,item.emag?.offerCount,item.emag?.link,emagM);
-  const trendyolBlock=platBlock('Trendyol',item.trendyolPrice,item.trendyol?.offerCount,item.trendyol?.link,trendyolM);
+  const emagBlock=platBlock('eMAG','emag',item.emag,emagPrice,item.emag?.offerCount,item.emag?.link,emagM);
+  const trendyolBlock=platBlock('Trendyol','trendyol',item.trendyol,trendyolPrice,item.trendyol?.offerCount,item.trendyol?.link,trendyolM);
   div.innerHTML=`<div class="research-card">
     <div class="research-card-head">${img}<div class="research-card-info">
       <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:6px">
