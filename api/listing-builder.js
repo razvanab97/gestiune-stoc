@@ -84,6 +84,59 @@ function outputText(data){
   if(typeof data?.output_text==='string')return data.output_text;
   return(data?.output||[]).flatMap(i=>i?.content||[]).filter(x=>x?.type==='output_text').map(x=>x.text||'').join('\n');
 }
+function jsonBlock(text=''){
+  const cleaned=String(text||'').replace(/```json|```/gi,'').trim();
+  let start=cleaned.indexOf('{');
+  if(start<0)return '{}';
+  let depth=0,inStr=false,esc=false,end=-1;
+  for(let i=start;i<cleaned.length;i++){
+    const ch=cleaned[i];
+    if(inStr){
+      if(esc)esc=false;
+      else if(ch==='\\')esc=true;
+      else if(ch==='"')inStr=false;
+      continue;
+    }
+    if(ch==='"')inStr=true;
+    else if(ch==='{')depth++;
+    else if(ch==='}'){
+      depth--;
+      if(depth===0){end=i;break;}
+    }
+  }
+  return end>=start?cleaned.slice(start,end+1):cleaned.slice(start,cleaned.lastIndexOf('}')+1);
+}
+function parseLooseJson(text){
+  const raw=jsonBlock(text)
+    .replace(/\u0000/g,'')
+    .replace(/,\s*([}\]])/g,'$1')
+    .replace(/[“”]/g,'"')
+    .replace(/[‘’]/g,"'");
+  return JSON.parse(raw);
+}
+async function repairJsonWithAI(raw,mode){
+  const prompt=`Repară textul de mai jos într-un JSON valid. Păstrează exact structura și informațiile, doar corectează virgule, ghilimele, escape-uri și acolade. Răspunde DOAR cu JSON valid, fără explicații.
+
+Mod: ${mode}
+
+TEXT:
+${String(raw||'').slice(0,24000)}`;
+  const ai=await fetch('https://api.openai.com/v1/responses',{
+    method:'POST',
+    headers:{'content-type':'application/json','authorization':'Bearer '+process.env.OPENAI_API_KEY},
+    body:JSON.stringify({model:process.env.OPENAI_MODEL||'gpt-4.1-mini',max_output_tokens:2200,input:[{role:'user',content:[{type:'input_text',text:prompt}]}]})
+  });
+  const data=await ai.json();
+  if(!ai.ok)throw new Error('Repararea JSON a eșuat');
+  return parseLooseJson(outputText(data));
+}
+async function parseAiJson(text,mode){
+  try{return parseLooseJson(text);}
+  catch(err){
+    try{return await repairJsonWithAI(text,mode);}
+    catch(err2){throw new Error(`JSON AI invalid și nereparabil: ${err.message}`);}
+  }
+}
 
 module.exports=async function handler(req,res){
   if(req.method!=='POST')return res.status(405).json({error:'Metodă nepermisă'});
@@ -148,7 +201,7 @@ Format JSON:
     const data=await ai.json();
     if(!ai.ok)return res.status(ai.status).json(data);
     const text=outputText(data);
-    const json=JSON.parse((text.match(/\{[\s\S]*\}/)||['{}'])[0]);
+    const json=await parseAiJson(text,mode);
     return res.status(200).json(mode==='analyze'?{analysis:json,pages}:{listing:json,pages});
   }catch(err){
     return res.status(500).json({error:'Eroare generator anunț: '+(err.message||err)});
