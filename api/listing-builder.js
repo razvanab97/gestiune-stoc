@@ -37,35 +37,50 @@ function isLikelyProductImage(url=''){
   return /\.(jpe?g|png|webp)(\?|$)/i.test(url)&&!isJunkImage(url);
 }
 
+// eMAG necesită minim 600×800px pentru imagini
+const EMAG_MIN_W=600,EMAG_MIN_H=800;
+
 // Scorează calitatea unei imagini pe baza URL-ului — fără fetch, doar euristică
+// Include și estimare rezoluție pentru cerințele eMAG (min 600×800)
 function scoreImageUrl(url=''){
   const u=url.toLowerCase();
   let score=50;
 
   // Semnale pozitive — lifestyle/impact/detalii
-  if(/lifestyle|ambiance|scene|context|staged|model|room|interior|setting|decor|styled|styled/i.test(u))score+=35;
+  if(/lifestyle|ambiance|scene|context|staged|model|room|interior|setting|decor|styled/i.test(u))score+=35;
   if(/spec|technical|detail|dimension|measure|annotated|infographic/i.test(u))score+=25;
   if(/main|hero|primary|featured|cover|banner|principal|principale/i.test(u))score+=20;
-  if(/[-_]1\.|-01\.|-001\.|_01\.|_001\./i.test(u))score+=12; // prima variantă
+  if(/[-_]1\.|-01\.|-001\.|_01\.|_001\./i.test(u))score+=12;
   if(/[-_]2\.|-02\.|_02\./i.test(u))score+=8;
 
-  // Dimensiune din URL — mai mare = mai bun
+  // Dimensiune din URL — estimare rezoluție pentru filtrare eMAG
+  // Penalizăm mai agresiv imaginile care par să fie sub 600×800
   const dims=u.match(/[_\-x](\d{3,4})[_\-x](\d{3,4})/);
   if(dims){
-    const mx=Math.max(+dims[1],+dims[2]);
-    if(mx>=1000)score+=25;
-    else if(mx>=600)score+=12;
-    else if(mx>=300)score+=5;
-    else if(mx<200)score-=20;
+    const w=+dims[1],h=+dims[2],mx=Math.max(w,h),mn=Math.min(w,h);
+    if(mx>=1200)score+=30;
+    else if(mx>=800)score+=18;
+    else if(mx>=600)score+=8;
+    else if(mx<600||mn<400)score-=35; // probabil sub 600×800 — penalizare puternică
+    else if(mx<400)score-=50;
   }
   const wq=u.match(/[?&](?:w|width|imwidth|size)=(\d+)/);
-  if(wq){const w=+wq[1];if(w>=800)score+=18;else if(w>=400)score+=8;else if(w<200)score-=20;}
+  if(wq){
+    const w=+wq[1];
+    if(w>=1000)score+=22;
+    else if(w>=800)score+=15;
+    else if(w>=600)score+=8;
+    else if(w<600)score-=30; // sub minimul eMAG
+    else if(w<400)score-=50;
+  }
+  // Detectare pattern-uri cunoscute de imagini mari (Jumbo, Maxy, Verk etc.)
+  if(/[/_](\d{4,})[/_]/.test(u)&&parseInt(u.match(/[/_](\d{4,})[/_]/)?.[1]||'0')>=800)score+=10;
 
   // Semnale negative — generic/mic/junk
   if(/white.?bg|fond.?blanc|white.?back|weiss|fondo.?blanco/i.test(u))score-=8;
-  if(/thumb(?:nail)?|mini|small|xs|_s\.|_m\./i.test(u))score-=20;
-  if(/50x|75x|100x|150x|icon|logo|badge|sprite/i.test(u))score-=30;
-  if(/placeholder|loading|blank|pixel|1x1|empty/i.test(u))score-=50;
+  if(/thumb(?:nail)?|mini|small|xs|_s\.|_m\./i.test(u))score-=25;
+  if(/50x|75x|100x|150x|200x|icon|logo|badge|sprite/i.test(u))score-=40;
+  if(/placeholder|loading|blank|pixel|1x1|empty/i.test(u))score-=60;
 
   // Format bonus
   if(/\.webp/i.test(u))score+=5;
@@ -76,9 +91,9 @@ function scoreImageUrl(url=''){
 function scoreLabel(score){
   if(score>=80)return'impact/lifestyle';
   if(score>=65)return'produs principal';
-  if(score>=50)return'produs generic';
-  if(score>=35)return'thumbnail/mic';
-  return'junk';
+  if(score>=50)return'produs ≥600px';
+  if(score>=35)return'rezoluție mică';
+  return'prea mic/junk';
 }
 
 function findProductJson(html){
@@ -294,10 +309,12 @@ description_html: HTML structurat cu imagini intercalate:
 - Folosește <p>, <ul>, <li>, <strong>; 1200-1800 caractere text (fără taguri HTML)
 
 ━━━ REGULI SELECȚIE IMAGINI ━━━
+- eMAG necesită MINIM 600×800px — preferă imagini cu scor ≥50 (rezoluție ≥600px estimată)
 - Selectează din lista de mai sus exact 10 URL-uri (sau mai puțin dacă nu există)
-- INDEX 0 (prima): OBLIGATORIU imagine cu scor ≥60, de preferință "impact/lifestyle" sau cu specificații — NU fundal alb generic, NU thumbnail
+- INDEX 0 (prima): OBLIGATORIU imagine cu scor ≥60, de preferință "impact/lifestyle" sau cu specificații — NU fundal alb generic, NU thumbnail, NU imagini cu scor sub 50
 - Ordinea: impact/lifestyle → specificații/detalii → produs principal → alte unghiuri → pachet
-- Dacă scorul e sub 35 ("junk"), exclude acea imagine
+- Dacă scorul e sub 35 ("prea mic/junk"), exclude acea imagine
+- Preferă URL-uri care conțin dimensiuni mari (ex: 1200x1200, 800x, w=1000) față de cele cu dimensiuni mici
 - Copiază URL-urile EXACT, fără modificare
 - Imaginile din description_html trebuie să fie URL-uri din lista de imagini selectate
 
