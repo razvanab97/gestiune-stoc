@@ -189,7 +189,8 @@ async function fetchEmagCandidates(query){
       const data=await rj.json().catch(()=>null);
       if(data){
         const cands=parseEmagJsonCandidates(data);
-        if(cands.length){clearTimeout(t);return{candidates:cands,blocked:false,status:200};}
+        const totalCount=data?.data?.count||data?.count||data?.total||0;
+        if(cands.length){clearTimeout(t);return{candidates:cands,blocked:false,status:200,totalCount};}
       }
     }
     // Fallback HTML
@@ -201,7 +202,10 @@ async function fetchEmagCandidates(query){
       ||/captcha|awswaf|cf-browser-verification|robot|verificare.*securitate/i.test(html)
       ||(!html.includes('product-title')&&!html.includes('card-v2')&&!html.includes('data-product')&&html.length>10000);
     if(!r.ok||blocked)return{candidates:[],blocked:true,status:r.status};
-    return{candidates:parseEmagHtmlCandidates(html),blocked:false,status:r.status};
+    // Extrage totalCount din HTML
+    const tcM=html.match(/"count"\s*:\s*(\d+)/)||html.match(/(\d+)\s*(?:produse|rezultate)\s*găsite/i)||html.match(/data-total-count="(\d+)"/i);
+    const totalCount=tcM?parseInt(tcM[1]):0;
+    return{candidates:parseEmagHtmlCandidates(html),blocked:false,status:r.status,totalCount};
   }catch(e){
     clearTimeout(t);
     return{candidates:[],blocked:true,status:0,error:e.message};
@@ -339,7 +343,7 @@ async function scrapeEmag(queries,ean){
       const prices=er.candidates.map(c=>c.price).filter(v=>v>0);
       const minPrice=prices.length?Math.min(...prices):null;
       const top=er.candidates.find(c=>c.price===minPrice)||er.candidates[0];
-      return{minPrice,offerCount:er.candidates.length,link:top?.link||searchLink,candidates:er.candidates,query:ean,usedEan:true};
+      return{minPrice,offerCount:er.candidates.length,totalCount:er.totalCount||0,link:top?.link||searchLink,candidates:er.candidates,query:ean,usedEan:true};
     }
   }
 
@@ -391,7 +395,7 @@ async function scrapeEmag(queries,ean){
       const prices=candidates.map(c=>c.price).filter(v=>v>0);
       const minPrice=prices.length?Math.min(...prices):null;
       const top=candidates.find(c=>c.price===minPrice)||candidates[0];
-      return{minPrice,offerCount:candidates.length,link:top?.link||searchLink,candidates,query:q};
+      return{minPrice,offerCount:candidates.length,totalCount:er.totalCount||0,link:top?.link||searchLink,candidates,query:q};
     }
   }
   return{minPrice:null,offerCount:0,link:searchLink,candidates:[],query:queries[0]||''};
