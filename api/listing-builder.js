@@ -24,6 +24,9 @@ function parsePrice(v){
   const n=Number(c.includes(',')?c.replace(/\./g,'').replace(',','.'):c);
   return Number.isFinite(n)&&n>0?n:null;
 }
+function srcsetUrls(v=''){
+  return String(v||'').split(',').map(x=>x.trim().split(/\s+/)[0]).filter(Boolean);
+}
 function isPrivateHost(host){
   return host==='localhost'||host.endsWith('.localhost')||host==='0.0.0.0'||host==='::1'||/^127\./.test(host)||/^10\./.test(host)||/^192\.168\./.test(host)||/^169\.254\./.test(host)||/^172\.(1[6-9]|2\d|3[01])\./.test(host);
 }
@@ -47,7 +50,8 @@ function parsePage(html,url){
     image,
     meta(html,'og:image'),
     meta(html,'twitter:image'),
-    ...[...html.matchAll(/<img[^>]+(?:src|data-src)=["']([^"']+)["'][^>]*>/gi)].map(m=>m[1])
+    ...[...html.matchAll(/<img[^>]+(?:src|data-src|data-original|data-lazy-src)=["']([^"']+)["'][^>]*>/gi)].map(m=>m[1]),
+    ...[...html.matchAll(/<img[^>]+(?:srcset|data-srcset)=["']([^"']+)["'][^>]*>/gi)].flatMap(m=>srcsetUrls(m[1]))
   ].map(x=>absUrl(x,url)).filter(Boolean);
   const uniq=[...new Set(imgs)].filter(x=>!/(sprite|logo|icon|placeholder|blank)/i.test(x)).slice(0,8);
   const title=decode(product.name||meta(html,'og:title')||meta(html,'twitter:title')||(html.match(/<title>([^<]+)<\/title>/i)||[])[1]||'');
@@ -142,12 +146,36 @@ module.exports=async function handler(req,res){
   if(req.method!=='POST')return res.status(405).json({error:'Metodă nepermisă'});
   if(!process.env.OPENAI_API_KEY)return res.status(503).json({error:'OPENAI_API_KEY lipsă'});
   try{
-    const mode=req.body?.mode==='analyze'?'analyze':'build';
+    const mode=['analyze','synthesize'].includes(req.body?.mode)?req.body.mode:'build';
     const urls=[...new Set((req.body?.urls||[]).filter(u=>/^https?:\/\//i.test(String(u||''))).slice(0,8))];
     const product=req.body?.product||{};
     if(!urls.length&&!product.name)return res.status(400).json({error:'Lipsesc linkurile sau produsul'});
     const pages=await Promise.all(urls.map(fetchPage));
-    const prompt=mode==='analyze'
+    const prompt=mode==='synthesize'
+      ?`Ești specialist senior în creare anunțuri marketplace pentru România. Primești mai multe linkuri de anunțuri / produse și trebuie să construiești UN SINGUR anunț nou, foarte bun, fără să copiezi mecanic texte lungi.
+
+Obiectiv:
+- extrage cele mai bune idei din titluri, descrieri, beneficii și specificații
+- alege cele mai bune poze disponibile și returnează linkurile lor
+- creează un titlu comercial, descriere, bullet-uri, specificații și keywords
+- notează titlurile sursă care au fost utile
+
+Reguli:
+- Scrie în română.
+- Nu inventa specificații tehnice care nu apar în pagini.
+- Nu copia descrieri integral; rescrie într-o variantă originală, clară și mai bună.
+- Dacă linkurile par produse diferite, marchează în source_notes ce trebuie reconfirmat.
+- Titlul max 130 caractere.
+- Descrierea 700-1200 caractere.
+- Imaginile trebuie să fie URL-uri reale găsite în pagini.
+- Returnează STRICT JSON valid.
+
+Pagini analizate:
+${JSON.stringify(pages).slice(0,24000)}
+
+Format JSON:
+{"title":"...","short_title":"...","description":"...","bullets":["..."],"seo_keywords":["..."],"specs":{"Brand":"...","Material":"...","Dimensiuni":"...","Culoare":"...","Utilizare":"...","Conținut pachet":"..."},"main_image":"https://...","images":["https://..."],"best_images":["https://..."],"source_titles":["..."],"source_notes":"ce pagini au fost utile, ce pare incert și ce trebuie verificat manual"}`
+      :mode==='analyze'
       ?`Ești specialist în marketplace-uri eMAG/Trendyol și optimizare de anunțuri. Analizează listările externe comparativ cu produsul de bază.
 
 Obiectiv:
@@ -196,7 +224,7 @@ Format JSON:
     const ai=await fetch('https://api.openai.com/v1/responses',{
       method:'POST',
       headers:{'content-type':'application/json','authorization':'Bearer '+process.env.OPENAI_API_KEY},
-      body:JSON.stringify({model:process.env.OPENAI_MODEL||'gpt-4.1-mini',max_output_tokens:1800,input:[{role:'user',content:[{type:'input_text',text:prompt}]}]})
+      body:JSON.stringify({model:process.env.OPENAI_MODEL||'gpt-4.1-mini',max_output_tokens:mode==='synthesize'?2600:1800,input:[{role:'user',content:[{type:'input_text',text:prompt}]}]})
     });
     const data=await ai.json();
     if(!ai.ok)return res.status(ai.status).json(data);
