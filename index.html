@@ -930,6 +930,7 @@ function buildRaportCats(){
     <div class="research-tabs">
       <button class="research-tab on" id="research-tab-product" onclick="researchMode('product')">Research produs</button>
       <button class="research-tab" id="research-tab-listing" onclick="researchMode('listing')">Generator anunț din linkuri</button>
+      <button class="research-tab" id="research-tab-competition" onclick="researchMode('competition')">Scorecard competitori</button>
     </div>
     <div class="research-mode on" id="research-mode-product">
       <div class="research-url-bar">
@@ -958,11 +959,37 @@ function buildRaportCats(){
         </div>
       </div>
     </div>
+    <div class="research-mode" id="research-mode-competition">
+      <div class="comp-lab-grid">
+        <div class="comp-lab-panel">
+          <div class="sec" style="margin:0 0 8px">📊 Scorecard competitori</div>
+          <div style="font-size:12px;color:var(--t3);line-height:1.45;margin-bottom:10px">
+            Lipește linkuri eMAG / Trendyol / marketplace-uri similare. Sistemul estimează cererea, nivelul de competiție, oportunitatea AB HOMES și ce trebuie făcut ca listarea noastră să câștige.
+          </div>
+          <div class="comp-lab-fields">
+            <input id="comp-lab-product" type="text" placeholder="Nume produs / idee produs">
+            <input id="comp-lab-buy" type="number" min="0" step="0.01" placeholder="Cost achiziție RON">
+          </div>
+          <textarea id="comp-lab-links" placeholder="Lipește aici 2-8 linkuri concurente, câte unul pe linie..."></textarea>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
+            <button class="btn btn-sm btn-acc" id="comp-lab-btn" onclick="analyzeCompetitorLab()">🔍 Analizează oportunitatea</button>
+            <button class="btn btn-sm" onclick="fillCompLabFromResearch()">Folosește produsul curent</button>
+            <button class="btn btn-sm" onclick="document.getElementById('comp-lab-links').value=''">Curăță linkuri</button>
+          </div>
+        </div>
+        <div class="comp-lab-panel">
+          <div class="sec" style="margin:0 0 8px">Cum interpretezi</div>
+          <div class="scorecard-section" style="margin-bottom:8px"><h4>Semnale bune</h4><ul><li>review-uri multe + rating bun</li><li>preț suficient peste costul tău</li><li>listări concurente slabe vizual</li><li>poze/specs incomplete la concurenți</li></ul></div>
+          <div class="scorecard-section"><h4>Semnale de risc</h4><ul><li>prețuri foarte mici</li><li>mulți selleri puternici</li><li>rating slab din probleme reale</li><li>produs cu retur / garanție mare</li></ul></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="research-result-wrap" style="display:none">
     <div id="research-result"></div>
     <div id="listing-result"></div>
+    <div id="competition-result"></div>
     <div style="text-align:center;margin-bottom:1rem">
       <button class="btn btn-sm" id="research-ai-btn" onclick="doResearchAI()" style="display:none">✦ Încearcă cu AI (fallback)</button>
     </div>
@@ -2173,7 +2200,7 @@ function setEmagTransport(roi){
 const RESEARCH_HK='sm6_research_history';
 let researchData=null;
 let listingData=null;
-let listingFactoryData=null;
+let listingFactoryData=null,competitionLabData=null;
 async function ensureXLSX(){
   if(window.XLSX)return window.XLSX;
   await new Promise((resolve,reject)=>{
@@ -2198,11 +2225,20 @@ function clearResearchHistory(){
   toast('Istoric șters ✓');
 }
 function researchMode(mode){
-  ['product','listing'].forEach(m=>{
+  ['product','listing','competition'].forEach(m=>{
     document.getElementById('research-tab-'+m)?.classList.toggle('on',m===mode);
     document.getElementById('research-mode-'+m)?.classList.toggle('on',m===mode);
   });
   const wrap=document.getElementById('research-result-wrap');
+  const cr=document.getElementById('competition-result'),rr=document.getElementById('research-result'),lr=document.getElementById('listing-result');
+  if(cr)cr.style.display=mode==='competition'?'':'none';
+  if(rr)rr.style.display=mode==='competition'?'none':'';
+  if(lr)lr.style.display=mode==='competition'?'none':'';
+  if(mode==='competition'){
+    wrap.style.display=competitionLabData?'block':'none';
+    if(competitionLabData)renderCompetitionLab(competitionLabData);
+    return;
+  }
   if(mode==='listing'){
     wrap.style.display=listingFactoryData?'block':'none';
     if(listingFactoryData)renderListingFactoryResult(listingFactoryData.listing,listingFactoryData.pages);
@@ -2427,6 +2463,9 @@ function listingTextareaUrls(){
 }
 function listingFactoryUrls(){
   return extractUrlsFromText(document.getElementById('listing-factory-links')?.value||'');
+}
+function compLabUrls(){
+  return extractUrlsFromText(document.getElementById('comp-lab-links')?.value||'');
 }
 async function apiJson(path,payload,timeoutMs=45000){
   const ctrl=new AbortController(),t=setTimeout(()=>ctrl.abort(),timeoutMs);
@@ -2828,6 +2867,80 @@ function calcResearchScore(item){
   return{score:s,label,color};
 }
 /* ── Competitor analysis ── */
+function fillCompLabFromResearch(){
+  if(!researchData){toast('Nu ai încă un produs curent în Research');return;}
+  const n=document.getElementById('comp-lab-product'),b=document.getElementById('comp-lab-buy');
+  if(n)n.value=researchData.name||'';
+  if(b&&researchData.priceBuy)b.value=researchData.priceBuy.toFixed(2);
+  const links=[
+    researchData.emag?.activeMatch?.link||researchData.emag?.link,
+    researchData.trendyol?.activeMatch?.link||researchData.trendyol?.link
+  ].filter(Boolean);
+  const ta=document.getElementById('comp-lab-links');
+  if(ta&&!ta.value.trim()&&links.length)ta.value=links.join('\n');
+  toast('Date preluate din research ✓');
+}
+function scoreTone(n,invert=false){
+  const v=Number(n)||0,good=invert?100-v:v;
+  return good>=75?'var(--gr)':good>=50?'#f59e0b':good>=30?'#f97316':'var(--rd)';
+}
+async function analyzeCompetitorLab(){
+  const urls=compLabUrls(),productName=(document.getElementById('comp-lab-product')?.value||researchData?.name||'').trim();
+  const priceBuy=parseFloat(document.getElementById('comp-lab-buy')?.value)||researchData?.priceBuy||0;
+  const btn=document.getElementById('comp-lab-btn'),wrap=document.getElementById('research-result-wrap'),out=document.getElementById('competition-result');
+  if(urls.length<2){toast('Adaugă cel puțin 2 linkuri concurente');return;}
+  if(btn){btn.disabled=true;btn.textContent='⏳ Analizez…';}
+  if(wrap)wrap.style.display='block';
+  if(out){out.style.display='';out.innerHTML=`<div class="listing-card"><span class="spin"></span> Analizez competitorii, scorurile și oportunitatea AB HOMES…</div>`;}
+  try{
+    const data=await apiJson('/api/competitor-analyze',{urls,productName,priceBuy},65000);
+    competitionLabData=data;
+    renderCompetitionLab(data);
+    toast('Scorecard competitori generat ✓');
+  }catch(e){
+    if(out)out.innerHTML=`<div class="listing-card" style="border-color:var(--rd);color:var(--rd)">⚠️ ${esc(e.message||'Eroare analiză competitori')}</div>`;
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='🔍 Analizează oportunitatea';}
+  }
+}
+function arrList(items){return Array.isArray(items)&&items.length?`<ul>${items.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'<div style="font-size:12px;color:var(--t3)">—</div>';}
+function renderCompetitionLab(data){
+  const out=document.getElementById('competition-result');if(!out)return;
+  out.style.display='';
+  const a=data.analysis||{}, comps=data.competitors||[];
+  const metrics=[
+    {label:'Cerere estimată',val:a.demandScore,sub:'review-uri, rating, badge-uri'},
+    {label:'Competiție',val:a.competitionScore,sub:'prețuri, selleri, calitate listări',invert:true},
+    {label:'Oportunitate',val:a.opportunityScore,sub:'șansa AB HOMES de intrare'}
+  ];
+  const rows=comps.map(c=>`<div class="scorecard-row">
+    <div class="scorecard-row-title"><a href="${esc(c.url||'#')}" target="_blank" style="color:inherit;text-decoration:none">${esc(c.title||c.url||'Competitor')}</a></div>
+    <div class="scorecard-row-meta">${c.price>0?Number(c.price).toFixed(2)+' RON':'—'}</div>
+    <div class="scorecard-row-meta">${c.rating>0?'★'+Number(c.rating).toFixed(1)+' / '+(c.reviewCount||0)+' rec.':'fără rating'}</div>
+    <div class="scorecard-row-meta">${c.imageCount||0} poze</div>
+  </div>`).join('');
+  out.innerHTML=`<div class="listing-card">
+    <div class="scorecard-hero">
+      <div class="scorecard-verdict">${esc(a.verdict||'Verdict în lucru')}</div>
+      <div class="scorecard-summary">${esc(a.summary||'Analiza a fost generată din semnalele publice ale competitorilor.')}</div>
+    </div>
+    <div class="scorecard-grid">
+      ${metrics.map(m=>`<div class="scorecard-metric"><span>${m.label}</span><strong style="color:${scoreTone(m.val,m.invert)}">${Number(m.val||0)}/100</strong><small>${m.sub}</small></div>`).join('')}
+      <div class="scorecard-metric"><span>Preț recomandat</span><strong>${a.suggestedPrice>0?Number(a.suggestedPrice).toFixed(2)+' RON':'—'}</strong><small>pe baza concurenței</small></div>
+      <div class="scorecard-metric"><span>Max achiziție</span><strong>${a.maxBuyPrice>0?Number(a.maxBuyPrice).toFixed(2)+' RON':'—'}</strong><small>pentru marjă sănătoasă</small></div>
+      <div class="scorecard-metric"><span>Risc retur</span><strong style="font-size:18px">${esc(a.returnRisk||'—')}</strong><small>${esc(a.riskNotes||'')}</small></div>
+    </div>
+    <div class="scorecard-sections">
+      <div class="scorecard-section"><h4>💡 Oportunități</h4>${arrList(a.opportunities)}</div>
+      <div class="scorecard-section"><h4>📌 Recomandări listare</h4>${arrList(a.recommendations)}</div>
+      <div class="scorecard-section"><h4>🖼 Poze necesare</h4>${arrList(a.photoRecommendations)}</div>
+      <div class="scorecard-section"><h4>🎁 Bundle / poziționare</h4>${arrList([a.positioning,...(a.bundleIdeas||[])].filter(Boolean))}</div>
+      <div class="scorecard-section"><h4>✓ Ce fac bine competitorii</h4>${arrList(a.listingStrengths)}</div>
+      <div class="scorecard-section"><h4>⚠️ Ce trebuie reconfirmat</h4>${arrList(a.toVerify)}</div>
+    </div>
+    ${rows?`<div style="margin-top:14px"><strong style="font-size:13px">Competitori analizați</strong><div class="scorecard-table">${rows}</div></div>`:''}
+  </div>`;
+}
 function getCS(key){return compState[key]||(compState[key]={open:false,urls:[],items:[],analysis:null,loading:false});}
 function toggleComp(key){const cs=getCS(key);cs.open=!cs.open;refreshCompSection(key);}
 function addCompUrl(key){

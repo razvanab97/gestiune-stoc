@@ -87,6 +87,30 @@ module.exports=async function handler(req,res){
 
   const valid=competitors.filter(c=>!c.error&&(c.title||c.price>0));
   let analysis=null;
+  const prices=valid.map(c=>c.price).filter(v=>v>0).sort((a,b)=>a-b);
+  const avg=prices.length?prices.reduce((s,x)=>s+x,0)/prices.length:0;
+  const ratingVals=valid.map(c=>c.rating).filter(v=>v>0);
+  const ratingAvg=ratingVals.length?ratingVals.reduce((s,x)=>s+x,0)/ratingVals.length:0;
+  const reviewSum=valid.reduce((s,c)=>s+(c.reviewCount||0),0);
+  const demandScore=Math.max(0,Math.min(100,Math.round(Math.log10(reviewSum+1)*28+(ratingAvg>=4.4?18:ratingAvg>=4?10:0)+valid.filter(c=>c.badges?.length).length*5)));
+  const competitionScore=Math.max(0,Math.min(100,Math.round(valid.length*12+(prices.length>2?12:0)+valid.filter(c=>c.imageCount>=5&&c.hasSpecs).length*12)));
+  const suggestedPrice=prices.length?Math.round((prices[Math.floor(prices.length/2)]||avg)*100)/100:0;
+  const maxBuyPrice=suggestedPrice>0?Math.round((suggestedPrice/1.21*0.52)*100)/100:0;
+  const opportunityScore=Math.max(0,Math.min(100,Math.round(demandScore*.55+(100-competitionScore)*.25+(priceBuy&&maxBuyPrice?Math.min(25,Math.max(-10,(maxBuyPrice-priceBuy)/Math.max(priceBuy,1)*30)):8))));
+  const fallbackAnalysis={
+    demandScore,competitionScore,opportunityScore,
+    verdict:opportunityScore>=75?'Testează produsul - oportunitate bună':opportunityScore>=55?'Testează prudent 5-10 buc':opportunityScore>=35?'Intră doar cu preț foarte bun':'Evită momentan',
+    priceMin:prices[0]||0,priceMax:prices[prices.length-1]||0,priceAvg:avg,suggestedPrice,ratingAvg,maxBuyPrice,
+    returnRisk:'mediu',riskNotes:'Estimare automată; verifică manual review-urile negative.',
+    positioning:'Poziționare AB HOMES: listare mai completă, poze clare cu dimensiuni și beneficii explicate.',
+    opportunities:['Îmbunătățește titlul SEO și pune beneficiile principale în primele cuvinte','Adaugă poze cu dimensiuni, utilizare și detalii de material','Completează specificațiile mai clar decât competitorii'],
+    recommendations:['Titlu cu brand AB HOMES + tip produs + dimensiuni/material/culoare','Descriere amplă cu utilizări concrete și avantaje','Preț poziționat în jurul medianei, nu cel mai mic'],
+    photoRecommendations:['poză principală curată pe fundal alb','poză cu dimensiuni vizibile','poză de utilizare/lifestyle','poză cu detalii/material','poză cu conținutul pachetului'],
+    listingStrengths:valid.slice(0,3).map(c=>`${c.title||'Competitor'}: ${c.price?c.price+' RON':''}${c.reviewCount?' · '+c.reviewCount+' review-uri':''}`),
+    bundleIdeas:['set 2 buc / pachet economic dacă prețul e prea competitiv','bundle cu produs complementar din aceeași categorie'],
+    toVerify:['review-uri negative recurente','cost real transport/retur','dacă imaginile competitorilor arată același produs'],
+    summary:`Au fost analizați ${valid.length} competitori. Cererea pare ${demandScore>=65?'bună':demandScore>=40?'medie':'slabă'}, iar competiția este ${competitionScore>=65?'ridicată':competitionScore>=40?'medie':'redusă'}.`
+  };
 
   if(apiKey&&valid.length){
     try{
@@ -110,18 +134,18 @@ module.exports=async function handler(req,res){
         headers:{'Content-Type':'application/json','Authorization':`Bearer ${apiKey}`},
         body:JSON.stringify({
           model:'gpt-4o-mini',
-          input:`Ești expert în optimizare listing eMAG România. Analizează competitorii pentru produsul "${productName||'?'}" (prețul meu de achiziție: ${priceBuy||'?'} RON):\n\n${rows}\n\nRăspunde STRICT cu JSON:\n{"priceMin":<nr>,"priceMax":<nr>,"priceAvg":<nr>,"suggestedPrice":<nr>,"ratingAvg":<nr>,"titleInsights":["<obs1>","<obs2>"],"listingStrengths":["<ce fac bine>"],"opportunities":["<unde poți câștiga>"],"recommendations":["<rec1>","<rec2>","<rec3>"],"summary":"<2 propoziții sinteză>"}`,
-          max_output_tokens:900
+          input:`Ești expert în research produse și optimizare listing eMAG/Trendyol România pentru brandul AB HOMES. Analizează competitorii pentru produsul "${productName||'?'}" (prețul meu de achiziție: ${priceBuy||'?'} RON):\n\n${rows}\n\nDă un scorecard clar pentru decizie de cumpărare/listare. Răspunde STRICT cu JSON valid:\n{"demandScore":0,"competitionScore":0,"opportunityScore":0,"verdict":"Testează / Evită / Cumpără doar sub X lei","priceMin":0,"priceMax":0,"priceAvg":0,"suggestedPrice":0,"maxBuyPrice":0,"ratingAvg":0,"returnRisk":"scăzut/mediu/ridicat","riskNotes":"...","positioning":"cum să poziționăm AB HOMES","titleInsights":["..."],"listingStrengths":["..."],"opportunities":["..."],"recommendations":["..."],"photoRecommendations":["poză principală","poză dimensiuni","poză funcționalitate"],"bundleIdeas":["..."],"toVerify":["..."],"summary":"2 propoziții sinteză"}`,
+          max_output_tokens:1500
         })
       });
       if(resp.ok){
         const d=await resp.json();
         const text=d?.output?.[0]?.content?.[0]?.text||'';
         const m=text.match(/\{[\s\S]*\}/);
-        if(m)analysis=JSON.parse(m[0]);
+        if(m)analysis={...fallbackAnalysis,...JSON.parse(m[0])};
       }
     }catch(e){}
   }
 
-  res.json({competitors,valid:valid.length,analysis});
+  res.json({competitors,valid:valid.length,analysis:analysis||fallbackAnalysis});
 };
