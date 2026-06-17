@@ -112,6 +112,13 @@ create table if not exists listing_price_observations (
   created_at timestamptz default now()
 );
 
+-- SETĂRI GLOBALE APLICAȚIE
+create table if not exists setari_app (
+  key text primary key,
+  value text,
+  updated_at timestamptz default now()
+);
+
 -- INDEX-uri pentru performanță
 create index if not exists idx_vanzari_data on vanzari_zilnice(data);
 create index if not exists idx_jurnal_data on jurnal(data desc);
@@ -141,6 +148,7 @@ alter table vanzari_zilnice disable row level security;
 alter table jurnal disable row level security;
 alter table platforma_mapari disable row level security;
 alter table listing_price_observations disable row level security;
+alter table setari_app disable row level security;
 
 -- Confirmare
 select 'Schema creat cu succes!' as status;
