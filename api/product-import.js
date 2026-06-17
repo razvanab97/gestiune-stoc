@@ -26,19 +26,47 @@ function findProductJson(value){
   if(value['@graph'])return findProductJson(value['@graph']);
   return null;
 }
+function scoreImgUrl(u){
+  if(!u||!u.startsWith('http'))return-1;
+  const l=u.toLowerCase();
+  if(/thumb|icon|sprite|placeholder|logo|pixel|1x1|blank/.test(l))return-30;
+  let s=0;
+  const dimM=l.match(/[_\-\/](\d{3,4})[xX×](\d{3,4})/);
+  if(dimM){const w=+dimM[1],h=+dimM[2];if(w>=1200||h>=1200)s+=40;else if(w>=800||h>=800)s+=20;else if(w>=600||h>=600)s+=5;else s-=20;}
+  if(l.includes('large')||l.includes('big')||l.includes('full')||l.includes('zoom')||l.includes('original'))s+=15;
+  if(l.includes('small')||l.includes('tiny')||l.includes('xs')||l.includes('_s.'))s-=20;
+  return s;
+}
 function parseProduct(html,url){
   let product=null;
   for(const match of html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)){
     try{product=findProductJson(JSON.parse(match[1]));if(product)break;}catch(e){}
   }
   const offer=Array.isArray(product?.offers)?product.offers[0]:product?.offers||{};
-  const image=Array.isArray(product?.image)?product.image[0]:product?.image;
-  const absolute=v=>{try{return new URL(v,url).href;}catch(e){return '';}};
+  const absolute=v=>{try{return v?new URL(v,url).href:'';}catch(e){return '';}};
+
+  // Colectează toate imaginile candidat
+  const candidates=new Set();
+  const addImg=v=>{const a=absolute(v);if(a&&a.startsWith('http'))candidates.add(a);};
+  if(Array.isArray(product?.image))product.image.forEach(addImg);
+  else if(product?.image)addImg(product.image);
+  addImg(meta(html,'og:image'));addImg(meta(html,'twitter:image'));addImg(meta(html,'image'));
+  // Imagini din JSON embed-uri în HTML
+  for(const m of html.matchAll(/"(?:image|imageUrl|img|photo|thumbnail|large_image|zoom_image|fullImage)":\s*"(https?[^"]+)"/gi))addImg(m[1]);
+  // Imagini din data-zoom-image sau data-large
+  for(const m of html.matchAll(/data-(?:zoom-image|large-image|original|src)=["']([^"']+)["']/gi))addImg(m[1]);
+
+  const imgList=[...candidates].filter(u=>!u.includes('logo')&&!u.includes('sprite')&&!u.includes('pixel'));
+  // Sortează după scor — preferă imagini mari
+  imgList.sort((a,b)=>scoreImgUrl(b)-scoreImgUrl(a));
+  const bestImage=imgList[0]||'';
+
   const cleanText=html.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
   const breadcrumbs=[...html.matchAll(/<(?:a|span)[^>]*(?:breadcrumb|category)[^>]*>([\s\S]*?)<\/(?:a|span)>/gi)].map(m=>decode(m[1].replace(/<[^>]+>/g,' '))).filter(Boolean).slice(0,12);
   return{
     title:product?.name||meta(html,'og:title')||meta(html,'twitter:title')||'',
-    image:absolute(image||meta(html,'og:image')||meta(html,'twitter:image')||meta(html,'image')),
+    image:bestImage,
+    images:imgList.slice(0,5),
     sku:String(product?.sku||product?.mpn||meta(html,'product:retailer_item_id')||'').trim(),
     price:parsePrice(offer?.price||offer?.lowPrice||meta(html,'product:price:amount')||meta(html,'og:price:amount')),
     currency:String(offer?.priceCurrency||meta(html,'product:price:currency')||meta(html,'og:price:currency')||'').toUpperCase(),
