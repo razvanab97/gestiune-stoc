@@ -2047,6 +2047,16 @@ function setEmagTransport(roi){
 const RESEARCH_HK='sm6_research_history';
 let researchData=null;
 let listingData=null;
+async function ensureXLSX(){
+  if(window.XLSX)return window.XLSX;
+  await new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+    s.onload=resolve;s.onerror=reject;
+    document.head.appendChild(s);
+  });
+  return window.XLSX;
+}
 function getResearchHistory(){return JSON.parse(localStorage.getItem(RESEARCH_HK)||'[]');}
 function saveResearchToHistory(item){
   const h=getResearchHistory();
@@ -2280,6 +2290,82 @@ function listingPriceStats(a){
   const avg=ron.reduce((s,x)=>s+x,0)/ron.length,mid=Math.floor(ron.length/2),med=ron.length%2?ron[mid]:(ron[mid-1]+ron[mid])/2;
   return{valid_prices:ron,min:ron[0],max:ron[ron.length-1],average:avg,median:med,recommended_reference_price:med,notes:a.price_summary?.notes||'Calculat din listările cu match peste 50% și preț RON.'};
 }
+function safeFileName(s){return String(s||'produs').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/gi,'-').replace(/^-+|-+$/g,'').slice(0,60)||'produs';}
+function hashInt(s){let h=0;String(s||'').split('').forEach(ch=>{h=((h<<5)-h+ch.charCodeAt(0))|0;});return Math.abs(h)||Date.now()%1000000000;}
+function num4(n){return Number(n)>0?Math.round(Number(n)*10000)/10000:'';}
+function emagNetPriceFromGross(gross){return Number(gross)>0?gross/1.21:'';}
+function emagOfferRow(l){
+  const title=(l?.title||researchData?.name||'').slice(0,250);
+  const ean=String(researchData?.ean||'').replace(/\D/g,'');
+  const sku=String(researchData?.sku||ean||safeFileName(title).toUpperCase()).slice(0,60);
+  const category=researchData?.category||researchData?.categoryName||'';
+  let brand=researchData?.brand||researchData?.supplier||'Generic';
+  try{if(!researchData?.brand&&researchData?.url)brand=new URL(researchData.url).hostname.replace(/^www\./,'').split('.')[0]||brand;}catch(e){}
+  const stock=Math.max(1,Number(researchData?.stock||researchData?.qty||1)||1);
+  const p=P.find(x=>(ean&&String(x.sku||'').replace(/\D/g,'')===ean)||researchNorm(x.name)===researchNorm(researchData?.name));
+  const minGross=p?.priceEmag||pcAutomaticPricesFromGross(Number(researchData?.priceBuy)||0,.21).emag||0;
+  const refGross=Number(researchData?.emagPrice||researchData?.emag?.activeMatch?.price||0);
+  const saleGross=minGross||refGross||0;
+  const maxGross=Math.max(saleGross,refGross,minGross)*1.35;
+  return[
+    title,
+    category,
+    brand,
+    sku,
+    sku,
+    ean.length>=8&&ean.length<=13?ean:'',
+    p?.id||hashInt(sku),
+    1,
+    num4(emagNetPriceFromGross(saleGross)),
+    refGross?num4(emagNetPriceFromGross(refGross)):'',
+    0.21,
+    'RON',
+    stock,
+    1,
+    '',
+    '',
+    num4(emagNetPriceFromGross(minGross||saleGross)),
+    num4(emagNetPriceFromGross(maxGross||saleGross))
+  ];
+}
+async function downloadEmagOfferPreset(){
+  try{
+    const l=listingData||researchData?.listing||{};
+    if(!researchData&&!l.title){toast('Fă întâi research sau generează un anunț');return;}
+    const XLSX=await ensureXLSX();
+    const hdr1=['Produs - read only','','','Product identification','','','ID oferta','Status','Pret oferta','','','Moneda','Stoc & disponibilitate oferta','','','Detalii oferta','Validare preturi',''];
+    const hdr2=new Array(18).fill('');
+    const hdr3=['name','category_name','brand_name','part_number_key','part_number','ean','vendor_ext_id','status','sale_price','retail_recommended_price','vat_rate','offer_currency','stock','handling_time','lead_time','start_date','min_sale_price','max_sale_price'];
+    const hdr4=['Info','Info','Info','Obligatoriu','Obligatoriu','Optional/Obligatoriu','Obligatoriu','Obligatoriu','Obligatoriu','Optional','Obligatoriu','Obligatoriu','Obligatoriu','Optional','Optional','Optional','Obligatoriu','Obligatoriu'];
+    const hdr5=['Validare nume produs','Nume categorie','Brand','Part number key (PNK)','Product code','EAN produs','ID produs','Status','Pret vanzare','PRP','TVA','Moneda','Stoc','In cate zile predai comanda curierului','In cate zile poti reaproviziona','Programare modificari','Pret minim','Pret maxim'];
+    const row=emagOfferRow(l);
+    const wb=XLSX.utils.book_new();
+    const ws=XLSX.utils.aoa_to_sheet([hdr1,hdr2,hdr3,hdr4,hdr5,row]);
+    ws['!merges']=[
+      {s:{r:0,c:0},e:{r:0,c:2}},{s:{r:0,c:3},e:{r:0,c:5}},{s:{r:0,c:8},e:{r:0,c:10}},
+      {s:{r:0,c:12},e:{r:0,c:14}},{s:{r:0,c:16},e:{r:0,c:17}}
+    ];
+    ws['!cols']=[25,18,16,18,22,15,13,12,14,14,10,10,10,18,18,18,14,14].map(w=>({wch:w}));
+    XLSX.utils.book_append_sheet(wb,ws,'Oferte');
+    const def=[
+      ['Grup','Camp','Denumire camp','Descriere','Valori acceptate','Obligativitate'],
+      ['Product info','part_number_key','Part number key (PNK)','Identificator produs eMAG/catalog','Text','Obligatoriu'],
+      ['Product info','part_number','Cod produs','Cod produs/producător','Text','Obligatoriu'],
+      ['Product info','name','Nume produs','Denumirea produsului','Text','Obligatoriu'],
+      ['Product info','category_name','Nume categorie','Categoria eMAG','Text','Obligatoriu'],
+      ['Product info','brand_name','Brand','Brand produs','Text','Obligatoriu'],
+      ['Offer - Price','sale_price','Preț vânzare','Preț fără TVA','Numeric max. 4 zecimale','Obligatoriu'],
+      ['Offer - Price','vat_rate','TVA','Exprimat subunitar: 0.21 pentru 21%','Numeric','Obligatoriu'],
+      ['Offer - Stock','stock','Stoc','Stoc listat','Număr întreg','Obligatoriu'],
+      ['Offer - Price Check','min_sale_price','Preț minim','Preț minim fără TVA','Numeric max. 4 zecimale','Obligatoriu'],
+      ['Offer - Price Check','max_sale_price','Preț maxim','Preț maxim fără TVA','Numeric max. 4 zecimale','Obligatoriu']
+    ];
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(def),'Definitia datelor');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Produs - read only'],['Fișier generat din AB HOMES Stoc Manager pentru pregătire ofertă eMAG. Verifică PNK/categoria/brandul în ERP înainte de import.']]),'Instructiuni');
+    XLSX.writeFile(wb,`emag-preset-oferta-${safeFileName(row[0])}.xlsx`);
+    toast('Preset eMAG descărcat ✓');
+  }catch(e){toast('Eroare export preset eMAG: '+(e.message||e),'err');}
+}
 async function saveListingPriceObservations(a,pages){
   if(!sbReady||!Array.isArray(a.listings)||!a.listings.length)return;
   const pageMap=Object.fromEntries((pages||[]).map(p=>[p.url,p]));
@@ -2339,7 +2425,10 @@ function renderListingResult(l,pages){
   out.innerHTML=`<div class="listing-card">
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:8px">
       <div class="sec" style="margin:0;color:var(--acc)">✨ Anunț generat</div>
-      <button class="btn btn-sm btn-acc" onclick="applyListingToProduct()">Aplică în produs</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+        <button class="btn btn-sm btn-acc" onclick="applyListingToProduct()">Aplică în produs</button>
+        <button class="btn btn-sm" onclick="downloadEmagOfferPreset()">📄 Preset eMAG ERP</button>
+      </div>
     </div>
     <div class="listing-title">${esc(l.title||researchData?.name||'')}</div>
     ${l.short_title?`<div style="font-size:12px;color:var(--t3);margin-bottom:6px">Titlu scurt: ${esc(l.short_title)}</div>`:''}
@@ -2444,6 +2533,7 @@ function renderResearchResult(item){
     <div class="research-card-actions">
       <button class="btn btn-sm btn-acc" onclick="addResearchToInventar()">+ Adaugă în inventar</button>
       <button class="btn btn-sm btn-acc" id="listing-build-btn" onclick="buildListingFromResearch()">✨ Generează anunț</button>
+      <button class="btn btn-sm" onclick="downloadEmagOfferPreset()">📄 Preset eMAG ERP</button>
       <button class="btn btn-sm" onclick="openCalcForResearch()">🧮 Calculează</button>
       <a href="${esc(item.url||'#')}" target="_blank" class="btn btn-sm">↗ Sursă</a>
       ${item.img
@@ -2862,14 +2952,7 @@ async function handleSyncImportFile(ev){
   document.getElementById('smi-foot').style.display='none';
   syncImpParsed=[];
   try{
-    if(!window.XLSX){
-      await new Promise((resolve,reject)=>{
-        const s=document.createElement('script');
-        s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-        s.onload=resolve;s.onerror=reject;
-        document.head.appendChild(s);
-      });
-    }
+    await ensureXLSX();
     const buf=await file.arrayBuffer();
     const wb=window.XLSX.read(buf,{type:'array'});
     const findSub=(hdr,names)=>{for(const n of names){const i=hdr.findIndex(h=>h.includes(n));if(i>-1)return i;}return -1;};
