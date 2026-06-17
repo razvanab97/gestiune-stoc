@@ -298,15 +298,21 @@ TITLU Trendyol (title_trendyol):
 - Max 100 caractere, mai scurt, poate fi în engleză sau română
 
 ━━━ REGULI DESCRIERE HTML ━━━
-description_html: HTML structurat cu imagini intercalate:
-- Intro: 1-2 propoziții cu AB HOMES și beneficiul principal
-- <img src="URL_IMAGINE_1"> (prima imagine — obligatoriu impact/lifestyle)
-- Paragraful beneficiilor (bullet list)
-- <img src="URL_IMAGINE_2"> (imagine cu specificații dacă există)
-- Detalii tehnice și utilizare
-- <img src="URL_IMAGINE_3"> (imagine lifestyle sau detaliu)
-- CTA scurt
+description_html: HTML structurat cu imagini intercalate — OBLIGATORIU minim 3 tag-uri <img>:
+
+Structură EXACTĂ (nu omite imaginile!):
+<p>[Intro cu AB HOMES și beneficiul principal]</p>
+<img src="[URL imagine 1 — impact/lifestyle, scor cel mai mare]">
+<p>[Paragraful beneficiilor principale, 2-3 fraze]</p>
+<ul><li>...</li><li>...</li><li>...</li></ul>
+<img src="[URL imagine 2 — specificații/detalii tehnice]">
+<p>[Detalii tehnice, materiale, dimensiuni, utilizare]</p>
+<img src="[URL imagine 3 — lifestyle sau unghi diferit]">
+<p>[CTA scurt: "Comandă acum..." sau "Disponibil la..."]</p>
+
 - Folosește <p>, <ul>, <li>, <strong>; 1200-1800 caractere text (fără taguri HTML)
+- IMPORTANT: dacă lista de imagini are cel puțin 3 URL-uri, toate 3 <img> sunt OBLIGATORII
+- Alege URL-uri din lista de imagini disponibile (prioritar cele cu scor mare)
 
 ━━━ REGULI SELECȚIE IMAGINI ━━━
 - eMAG necesită MINIM 600×800px — preferă imagini cu scor ≥50 (rezoluție ≥600px estimată)

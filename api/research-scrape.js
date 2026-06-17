@@ -59,7 +59,7 @@ async function generateAIQueries(name,description,characteristics,ean,apiKey){
     const charsText=Array.isArray(characteristics)&&characteristics.length
       ?characteristics.slice(0,5).join(' | ')
       :'—';
-    const prompt=`Ești expert în marketplace-uri românești. Generează interogări de căutare în ROMÂNĂ pentru un produs de vânzare.
+    const prompt=`Ești expert în marketplace-uri românești. Generează interogări de căutare SPECIFICE în ROMÂNĂ pentru un produs de vânzare.
 
 PRODUS (din catalog furnizor european — poate fi în olandeză, poloneză, franceză, germană sau engleză):
 Denumire originală: "${name}"
@@ -67,21 +67,29 @@ Caracteristici: ${charsText}
 EAN/Cod: ${ean||'—'}
 Descriere: "${(description||'').slice(0,200)}"
 
-PAS 1 — Identificare: Ce tip de produs este acesta? Traduce denumirea în română dacă e în altă limbă.
-Exemple de traduceri:
-  - "Decoratieve Fontein met LED" (olandeză) → fantana decorativa cu LED
-  - "Kosz wiklinowy" (poloneză) → cos rachita
-  - "Tapis de bain" (franceză) → covor baie
-  - "Blumentopf" (germană) → ghiveci flori
+PAS 1 — Traduce și identifică produsul:
+Ce tip de produs e? Traduce în română dacă e în altă limbă.
+Exemple: "Decoratieve Fontein 3 lagen LED bruin" → fantana arteziana 3 niveluri led maro
+         "Kosz wiklinowy z pokrywą naturalny" → cos rachita cu capac natural
+         "Tapis shaggy rond beige 120cm" → covor rotund shaggy bej 120cm
+         "Laterne Windlicht Bambus groß" → felinar bambus mare
 
-PAS 2 — Generează 4 query-uri pentru eMAG.ro (gândește-te cum caută un ROMÂN pe eMAG):
-- Query 1: tip produs ROMÂN + caracteristică definitorie (max 4 cuvinte, cel mai specific)
-- Query 2: tip produs ROMÂN + material SAU culoare principală
-- Query 3: tip produs ROMÂN + cameră/utilizare (ex: "covor dormitor", "lampa birou")
-- Query 4: tip produs ROMÂN general (2-3 cuvinte, mai larg)
-Reguli: FĂRĂ termeni din altă limbă, FĂRĂ mărci necunoscute, FĂRĂ dimensiuni cm în primele 2
+PAS 2 — Generează 4 query-uri pentru eMAG.ro, PROGRESIV de la specific la general:
 
-PAS 3 — Generează 2 query-uri pentru Trendyol (tot în ROMÂNĂ, max 4 cuvinte fiecare, simple):
+QUERY 1 (CEL MAI SPECIFIC): include TOATE caracteristicile distinctive ale produsului.
+  Exemple BUNE: "fantana arteziana led 3 niveluri interior maro", "covor living rotund pufos bej 120", "felinar bambus decorativ mare"
+  Exemple RELE (prea vagi): "fantana decorativa", "covor living", "felinar"
+  → Pot fi 5-7 cuvinte dacă produsul are mai multe caracteristici distinctive
+  → Include culoarea, materialul, numărul de niveluri/piese, destinația (interior/exterior) dacă sunt relevante
+  → Include dimensiunea DOAR dacă e o caracteristică definitorie (ex: "covor 120cm rotund")
+
+QUERY 2 (SPECIFIC): tip produs + 2 caracteristici cheie (material/culoare/funcție)
+QUERY 3 (MEDIU): tip produs + cea mai vizibilă caracteristică
+QUERY 4 (GENERAL): 2-3 cuvinte, tip produs simplu în română
+
+Reguli pentru TOATE: FĂRĂ termeni din altă limbă, FĂRĂ mărci necunoscute
+
+PAS 3 — 2 query-uri Trendyol (în română, simple, 3-4 cuvinte):
 
 Răspunde DOAR cu JSON valid:
 {"emag":["query1","query2","query3","query4"],"trendyol":["query1","query2"]}`;
@@ -416,28 +424,34 @@ module.exports=async function handler(req,res){
     return res.status(404).json({error:'Nu s-a putut extrage prețul din linkul direct'});
   }
 
-  const {query,description,slug,ean,characteristics}=req.body||{};
+  const {query,rawQuery,platform:targetPlatform,description,slug,ean,characteristics}=req.body||{};
   if(!query||typeof query!=='string')return res.status(400).json({error:'Query lipsă'});
 
   const apiKey=process.env.OPENAI_API_KEY;
   const chars=Array.isArray(characteristics)?characteristics:[];
 
-  // Generare query-uri AI cu context complet
-  const aiQueries=await generateAIQueries(query,description||'',chars,ean||'',apiKey);
-
-  const emagQueries=aiQueries?.emag?.length
-    ?aiQueries.emag
-    :[query,...(()=>{
-        const kw=query.replace(/\b[Oo]?\d+[xX×]\d+[^,]*/gi,'').replace(/[^\p{L}\p{N}\s]/giu,' ').split(/\s+/).filter(w=>w.length>2).slice(0,5);
-        return[kw.slice(0,4).join(' '),kw.slice(0,3).join(' ')];
-      })()].filter((q,i,a)=>q.length>2&&a.indexOf(q)===i);
+  // rawQuery = retry manual cu query specific, fără regenerare AI
+  let emagQueries,trendyolQueries;
+  if(rawQuery&&typeof rawQuery==='string'&&rawQuery.length>1){
+    emagQueries=[rawQuery];
+    trendyolQueries=[rawQuery];
+  } else {
+    // Generare query-uri AI cu context complet
+    const aiQueries=await generateAIQueries(query,description||'',chars,ean||'',apiKey);
+    emagQueries=aiQueries?.emag?.length
+      ?aiQueries.emag
+      :[query,...(()=>{
+          const kw=query.replace(/\b[Oo]?\d+[xX×]\d+[^,]*/gi,'').replace(/[^\p{L}\p{N}\s]/giu,' ').split(/\s+/).filter(w=>w.length>2).slice(0,5);
+          return[kw.slice(0,4).join(' '),kw.slice(0,3).join(' ')];
+        })()].filter((q,i,a)=>q.length>2&&a.indexOf(q)===i);
+    trendyolQueries=aiQueries?.trendyol||[query.split(' ').slice(0,3).join(' ')];
+  }
 
   // Trendyol: blocat complet — returnăm query-urile AI pentru link-ul manual
-  const trendyolQueries=aiQueries?.trendyol||[query.split(' ').slice(0,3).join(' ')];
   const trendyolFallbackUrl=`https://www.trendyol.com/sr?q=${encodeURIComponent(trendyolQueries[0])}&culture=ro-RO&currency=RON`;
   const trendyol={minPrice:null,offerCount:0,link:trendyolFallbackUrl,candidates:[],query:trendyolQueries[0],blocked:true,queries:trendyolQueries};
 
   const emag=await scrapeEmag(emagQueries,ean||'');
 
-  res.json({emag,trendyol,queriesUsed:emagQueries.slice(0,4),aiQueriesGenerated:!!aiQueries});
+  res.json({emag,trendyol,queriesUsed:emagQueries.slice(0,4),aiQueriesGenerated:!rawQuery});
 };

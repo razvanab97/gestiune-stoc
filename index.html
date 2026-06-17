@@ -481,7 +481,11 @@ function buildRaportCats(){
 .research-card-price{font-size:15px;color:var(--t2);margin-bottom:10px;font-family:var(--mono)}
 .research-platforms{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:1rem}
 .research-plat{background:var(--surf2);border:1px solid var(--b1);border-radius:var(--r);padding:1rem}
-.research-plat-name{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);margin-bottom:.6rem}
+.research-plat-name{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);margin-bottom:.4rem}
+.research-query-used{font-size:11px;color:var(--t3);font-style:italic;margin-bottom:.5rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.research-retry-row{display:flex;gap:5px;margin-top:8px;align-items:center}
+.research-retry-row input{flex:1;font-size:12px;padding:5px 8px;min-width:0}
+.research-retry-row button{flex-shrink:0;font-size:11px;padding:5px 8px}
 .research-plat-price{font-size:22px;font-weight:700;font-family:var(--mono);color:var(--acc);margin-bottom:4px}
 .research-plat-meta{font-size:12px;color:var(--t3);margin-bottom:.5rem}
 .research-plat-margin{font-size:13px;font-weight:600}
@@ -2315,6 +2319,31 @@ async function applyManualPlatformLink(platformKey){
   }catch(e){toast('Eroare: '+e.message);}
   finally{if(btn){btn.disabled=false;btn.textContent='Aplică';}}
 }
+async function retryPlatformSearch(key){
+  const input=document.getElementById('research-retry-'+key);
+  const newQuery=(input?.value||'').trim();
+  if(!newQuery){toast('Introdu un query de căutare');return;}
+  const btn=document.getElementById('research-retry-btn-'+key);
+  if(btn){btn.disabled=true;btn.textContent='⏳';}
+  try{
+    const resp=await fetch('/api/research-scrape',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({query:researchData?.name||newQuery,rawQuery:newQuery,platform:key,description:researchData?.description||'',slug:'',ean:researchData?.ean||'',characteristics:researchData?.characteristics||[]})
+    });
+    if(!resp.ok)throw new Error('Eroare server');
+    const data=await resp.json();
+    if(!researchData)throw new Error('Nu există date research');
+    const base={url:researchData.url,name:researchData.name,img:researchData.img||'',description:researchData.description||'',characteristics:researchData.characteristics||[],priceBuy:researchData.priceBuy||0,currency:researchData.currency||'',ean:researchData.ean||''};
+    const updated=prepareResearchPlatform(data[key],base,key);
+    researchData[key]=updated;
+    researchData[key+'Price']=updated?.activeMatch?.price||data[key]?.minPrice||0;
+    const _sc=calcResearchScore(researchData);researchData.score=_sc.score;researchData.scoreLabel=_sc.label;researchData.scoreColor=_sc.color;
+    saveResearchToHistory(researchData);
+    renderResearchResult(researchData);
+    toast('Reîncercate cu "'+newQuery+'" ✓');
+  }catch(e){toast('Eroare: '+e.message);}
+  finally{if(btn){btn.disabled=false;btn.textContent='Reîncearcă';}}
+}
 function researchListingUrls(){
   if(!researchData)return[];
   const urls=[researchData.url];
@@ -2776,7 +2805,13 @@ function renderResearchResult(item){
       <input id="research-direct-${key}" type="text" placeholder="Lipește link direct ${plat}…" onkeydown="if(event.key==='Enter')applyManualPlatformLink('${key}')">
       <button id="research-direct-btn-${key}" class="btn btn-sm" onclick="applyManualPlatformLink('${key}')">Aplică</button>
     </div>`;
+    const queryUsed=platform?.query?`<div class="research-query-used">Căutat: "${esc(platform.query)}"</div>`:'';
+    const retryRow=`<div class="research-retry-row">
+      <input id="research-retry-${key}" type="text" placeholder="Query nou pentru ${plat}…" value="${esc(platform?.query||'')}">
+      <button id="research-retry-btn-${key}" class="btn btn-sm" onclick="retryPlatformSearch('${key}')">Reîncearcă</button>
+    </div>`;
     return`<div class="research-plat"><div class="research-plat-name">${plat}</div>
+    ${queryUsed}
     ${blockedMsg}
     ${price>0?`<div class="research-plat-price">${price.toFixed(2)} RON</div>
     <div class="research-plat-meta">${offerCount?offerCount+' candidați':'—'}${platform?.activeMatch?' · preț activ: '+esc(platform.activeMatch.title).slice(0,32):''}</div>
@@ -2784,7 +2819,8 @@ function renderResearchResult(item){
     `<div style="color:var(--t3);font-size:12px;margin-bottom:6px">Preț nedetectat automat</div>`}
     <a href="${esc(href)}" target="_blank" class="btn btn-sm" style="font-size:12px">↗ Caută pe ${plat}</a>
     ${candHtml}${weakHtml}
-    ${directLinkRow}</div>`;
+    ${directLinkRow}
+    ${retryRow}</div>`;
   };
   const emagBlock=platBlock('eMAG','emag',item.emag,emagPrice,item.emag?.offerCount,item.emag?.link,emagM);
   const trendyolBlock=platBlock('Trendyol','trendyol',item.trendyol,trendyolPrice,item.trendyol?.offerCount,item.trendyol?.link,trendyolM);
