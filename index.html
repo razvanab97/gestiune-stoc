@@ -2176,7 +2176,7 @@ async function doResearch(){
     const src=await srcResp.json();
     if(!src.name)throw new Error('Produsul nu a putut fi extras — site-ul poate bloca accesul automat. Încearcă cu AI ▼');
     setResearchStep('2/3 · Generez query-uri AI pentru eMAG…');
-    const scrapeResp=await fetch('/api/research-scrape',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:src.name,description:src.description||'',slug:src.slug||'',ean:src.ean||''})});
+    const scrapeResp=await fetch('/api/research-scrape',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query:src.name,description:src.description||'',slug:src.slug||'',ean:src.ean||'',characteristics:src.characteristics||[]})});
     setResearchStep('3/3 · Procesez candidații și calculez marjele…');
     const platforms=scrapeResp.ok?await scrapeResp.json():{emag:null,trendyol:null};
     const base={url,name:src.name,img:src.img||'',description:src.description||'',characteristics:src.characteristics||[],priceBuy:src.price||0,currency:src.currency||'',ean:src.ean||''};
@@ -2735,8 +2735,10 @@ function renderResearchResult(item){
     const blockedMsg=platform?.blocked
       ?isTrendyol
         ?`<div class="research-blocked">Trendyol blochează căutarea automată. Caută manual și lipește linkul produsului mai jos.</div>`
-        :`<div class="research-blocked">Platforma a blocat căutarea automată${platform.status?' (status '+platform.status+')':''}. Folosește linkul direct mai jos sau fallback AI.</div>`
-      :'';
+        :`<div class="research-blocked">eMAG blochează căutarea automată de pe server. Folosește linkul direct mai jos sau fallback AI.</div>`
+      :platform?.viaDDG
+        ?`<div class="research-blocked" style="color:#3b82f6;border-color:rgba(59,130,246,.35);background:rgba(59,130,246,.08)">Rezultate găsite via DuckDuckGo (eMAG a blocat serverul). Verifică prețul manual.</div>`
+        :'';
     const directLinkRow=`<div class="research-direct-link-row">
       <input id="research-direct-${key}" type="text" placeholder="Lipește link direct ${plat}…" onkeydown="if(event.key==='Enter')applyManualPlatformLink('${key}')">
       <button id="research-direct-btn-${key}" class="btn btn-sm" onclick="applyManualPlatformLink('${key}')">Aplică</button>
