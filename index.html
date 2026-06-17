@@ -50,7 +50,12 @@ header{background:var(--surf);border-bottom:1px solid var(--b1);height:56px;disp
 .stat-v.w{color:var(--am)}.stat-v.d{color:var(--rd)}.stat-v.o{color:var(--or)}.stat-v.g{color:var(--gr)}
 .stat-date-input{width:100%;height:34px;border:1px solid var(--b2);border-radius:10px;background:var(--surf2);color:var(--t1);font-family:var(--mono);font-size:14px;padding:0 9px;outline:none}
 .stat-date-input:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-light)}
+.stat-date-input:disabled{opacity:.72;cursor:not-allowed}
 .stat-note{font-size:11px;color:var(--t3);margin-top:6px;line-height:1.3}
+.stat-actions{display:flex;gap:6px;margin-top:8px}
+.stat-mini-btn{flex:1;border:1px solid var(--b2);background:var(--surf2);color:var(--t2);border-radius:9px;padding:6px 8px;font-size:11px;font-weight:600;cursor:pointer}
+.stat-mini-btn:hover{border-color:var(--acc);color:var(--acc)}
+.stat-mini-btn.primary{background:var(--acc);border-color:var(--acc);color:#fff}
 .tb{background:var(--surf);border:1px solid var(--b1);border-radius:var(--r2);padding:1.5rem;margin-bottom:1.5rem;box-shadow:var(--sh)}
 .tb-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.1rem}
 .tb-title{font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px}
@@ -1136,6 +1141,7 @@ let SYNCM=[],syncMapsLoaded=false,syncImpParsed=[];
 let invLines=[],invParsed=[],catSuggestTimer=null,lastNameForCat='';
 let sbReady=false;
 let eFacturaEmagDate=localStorage.getItem(EFK)||'';
+let eFacturaEmagEdit=!eFacturaEmagDate;
 
 // Categorii custom - salvate în localStorage
 let CATS = JSON.parse(localStorage.getItem('customCategories') || '[]');
@@ -1251,13 +1257,21 @@ async function loadGlobalSettings(){
     if(r?.[0]?.value!==undefined){
       eFacturaEmagDate=r[0].value||'';
       localStorage.setItem(EFK,eFacturaEmagDate);
+      eFacturaEmagEdit=!eFacturaEmagDate;
     }
   }catch(e){}
+}
+
+function editEFacturaEmagDate(){
+  eFacturaEmagEdit=true;
+  renderTable();
+  setTimeout(()=>document.getElementById('efactura-emag-date')?.focus(),0);
 }
 
 async function saveEFacturaEmagDate(){
   const v=document.getElementById('efactura-emag-date')?.value||'';
   eFacturaEmagDate=v;
+  eFacturaEmagEdit=!v;
   localStorage.setItem(EFK,v);
   renderTable();
   if(!sbReady){toast('Data e-Factura eMAG salvată local');return;}
@@ -2603,7 +2617,7 @@ function renderTable(){
     <div class="stat"><div class="stat-l">Vândute azi</div><div class="stat-v g">${azi}</div></div>
     <div class="stat"><div class="stat-l">Stoc scăzut</div><div class="stat-v w">${lowC}</div></div>
     <div class="stat"><div class="stat-l">Epuizate</div><div class="stat-v d">${outC}</div></div>
-    <div class="stat"><div class="stat-l">E-factura Emag</div><input type="date" class="stat-date-input" id="efactura-emag-date" value="${esc(eFacturaEmagDate)}" onchange="saveEFacturaEmagDate()"><div class="stat-note">${eFacturaEmagDate?'Ultima trimitere: '+esc(new Date(eFacturaEmagDate+'T00:00:00').toLocaleDateString('ro-RO')):'Setează ultima trimitere'}</div></div>`;
+    <div class="stat"><div class="stat-l">E-factura Emag</div><input type="date" class="stat-date-input" id="efactura-emag-date" value="${esc(eFacturaEmagDate)}" ${eFacturaEmagEdit?'':'disabled'}><div class="stat-note">${eFacturaEmagDate?'Ultima trimitere: '+esc(new Date(eFacturaEmagDate+'T00:00:00').toLocaleDateString('ro-RO')):'Setează ultima trimitere'}</div><div class="stat-actions"><button class="stat-mini-btn primary" onclick="saveEFacturaEmagDate()">Confirmă</button><button class="stat-mini-btn" onclick="editEFacturaEmagDate()">Editează</button></div></div>`;
   const cats=[...new Set(P.map(p=>p.category).filter(Boolean))].sort();
   const sel=document.getElementById('fc');const pv=sel.value;
   sel.innerHTML='<option value="">Toate categoriile</option>'+cats.map(c=>`<option value="${esc(c)}"${c===pv?' selected':''}>${esc(c)}</option>`).join('');
