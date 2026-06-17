@@ -534,6 +534,9 @@ function buildRaportCats(){
 .listing-bullets{margin:8px 0 0;padding-left:18px;color:var(--t2);font-size:13px;line-height:1.45}
 .listing-imgs{display:flex;gap:8px;overflow-x:auto;margin:10px 0;padding-bottom:4px}
 .listing-imgs img{width:74px;height:74px;object-fit:contain;border:1px solid var(--b1);border-radius:8px;background:var(--surf2);flex:0 0 auto}
+.listing-img-thumb{display:flex;flex-direction:column;align-items:center;gap:4px;flex:0 0 auto}
+.listing-img-thumb a.dl-btn{font-size:10px;color:var(--t3);background:var(--surf2);border:1px solid var(--b1);border-radius:4px;padding:2px 6px;text-decoration:none;display:block;text-align:center;white-space:nowrap}
+.listing-img-thumb a.dl-btn:hover{background:var(--acc);color:var(--acc-fg);border-color:var(--acc)}
 .listing-specs{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .listing-specs span{font-size:11px;color:var(--t2);background:var(--surf2);border:1px solid var(--b1);border-radius:999px;padding:3px 8px}
 .listing-spec-table{display:grid;gap:6px;margin-top:12px}
@@ -2556,6 +2559,11 @@ function renderListingAnalysis(a,pages){
   </div>`;
   if(improved.title)renderListingResult(improved,pages);
 }
+// Proxy imagini prin Vercel — bypass hotlink protection
+function proxyImg(url){return url?'/api/img-proxy?url='+encodeURIComponent(url):'';}
+function downloadImg(url){return url?'/api/img-proxy?url='+encodeURIComponent(url)+'&download=1':'';}
+// Rewrite <img src> în HTML pentru preview — original URL rămâne în raw/copy
+function proxyHtmlImgs(html){return(html||'').replace(/<img([^>]+?)src=["']([^"']+)["']/gi,(m,attrs,u)=>u.startsWith('/api/img-proxy')?m:`<img${attrs}src="${proxyImg(u)}"`);}
 const LISTING_DRAFT_KEY='sm6_listing_draft';
 function saveListingDraft(l){try{localStorage.setItem(LISTING_DRAFT_KEY,JSON.stringify(l));}catch(e){}}
 function loadListingDraft(){try{const s=localStorage.getItem(LISTING_DRAFT_KEY);return s?JSON.parse(s):null;}catch(e){return null;}}
@@ -2589,13 +2597,13 @@ function renderListingResult(l,pages){
     ${l.short_title?`<div style="font-size:12px;color:var(--t3);margin-bottom:4px">Titlu scurt: ${esc(l.short_title)}</div>`:''}
     ${l.title_trendyol?`<div class="listing-trendyol-sec"><span style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.04em">Titlu Trendyol</span><div style="font-size:13px;margin-top:4px">${esc(l.title_trendyol)}<button class="btn btn-sm" style="margin-left:8px;font-size:11px" onclick="copyText(${esc(JSON.stringify(l.title_trendyol))})">Copiază</button></div></div>`:''}
     ${categoryRow}
-    ${imgs.length?`<div class="listing-imgs">${imgs.slice(0,10).map((u,i)=>`<img src="${esc(u)}" onerror="this.style.display='none'" alt="" title="${i===0?'Prima imagine (impact)':'imagine '+(i+1)}" style="${i===0?'border:2px solid var(--acc)':''}">`).join('')}</div>`:''}
+    ${imgs.length?`<div class="listing-imgs">${imgs.slice(0,10).map((u,i)=>`<div class="listing-img-thumb"><img src="${esc(proxyImg(u))}" onerror="this.src='${esc(u)}'" alt="" title="${i===0?'Prima imagine (impact)':'Imagine '+(i+1)}" style="${i===0?'border:2px solid var(--acc);width:74px;height:74px;object-fit:contain;border-radius:8px;background:var(--surf2)':'width:74px;height:74px;object-fit:contain;border:1px solid var(--b1);border-radius:8px;background:var(--surf2)'}"><a class="dl-btn" href="${esc(downloadImg(u))}" target="_blank" title="Descarcă imagine">↓ Salvează</a></div>`).join('')}</div>`:''}
     ${hasHtml?`<div style="margin:10px 0 4px"><div class="listing-preview-toggle">
       <button id="listing-html-btn-preview" class="listing-preview-btn on" onclick="toggleListingHtmlView('preview')">Preview</button>
       <button id="listing-html-btn-raw" class="listing-preview-btn" onclick="toggleListingHtmlView('raw')">HTML brut</button>
       <button class="btn btn-sm" style="margin-left:auto" onclick="copyText(${esc(JSON.stringify(l.description_html||''))})">Copiază HTML</button>
     </div>
-    <div id="listing-html-preview" class="listing-html-preview on">${l.description_html||''}</div>
+    <div id="listing-html-preview" class="listing-html-preview on">${proxyHtmlImgs(l.description_html||'')}</div>
     <div id="listing-html-raw" class="listing-html-raw">${esc(l.description_html||'')}</div></div>`
     :l.description?`<div class="listing-desc">${esc(l.description)}</div>`:''}
     ${Array.isArray(l.bullets)&&l.bullets.length?`<ul class="listing-bullets">${l.bullets.map(b=>`<li>${esc(b)}</li>`).join('')}</ul>`:''}
@@ -2653,14 +2661,14 @@ function renderListingFactoryResult(l,pages){
       <button id="listing-html-btn-raw" class="listing-preview-btn" onclick="toggleListingHtmlView('raw')">HTML brut</button>
       <button class="btn btn-sm" style="margin-left:auto" onclick="copyText(${esc(JSON.stringify(l.description_html||''))})">Copiază HTML</button>
     </div>
-    <div id="listing-html-preview" class="listing-html-preview on">${l.description_html||''}</div>
+    <div id="listing-html-preview" class="listing-html-preview on">${proxyHtmlImgs(l.description_html||'')}</div>
     <div id="listing-html-raw" class="listing-html-raw">${esc(l.description_html||'')}</div></div>`
     :l?.description?`<div class="listing-desc">${esc(l.description)}</div>`:''}
     ${Array.isArray(l?.bullets)&&l.bullets.length?`<ul class="listing-bullets">${l.bullets.map(b=>`<li>${esc(b)}</li>`).join('')}</ul>`:''}
     ${renderSpecTable(specs)}
     ${Array.isArray(l?.seo_keywords)&&l.seo_keywords.length?`<div style="font-size:11px;color:var(--t3);margin-top:8px">Keywords: ${esc(l.seo_keywords.join(', '))}</div>`:''}
     ${Array.isArray(l?.source_titles)&&l.source_titles.length?`<div style="margin-top:12px"><strong style="font-size:13px">Titluri folosite ca inspirație</strong><ul class="listing-bullets">${l.source_titles.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:''}
-    ${imgs.length?`<div style="margin-top:14px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><strong style="font-size:13px">Poze selectate (${imgs.length})</strong><button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(imgs.join('\n')))})">Copiază toate linkurile</button></div><div class="listing-imgs" style="align-items:stretch">${imgs.map((u,i)=>{const r=imgRec[u]||{};return`<div class="listing-image-pick"><img src="${esc(u)}" onerror="this.style.display='none'" alt="" style="${i===0?'border:2px solid var(--acc)':''}"><div>${r.role?`<div class="listing-image-role">${esc(r.role)}</div>`:i===0?'<div class="listing-image-role">impact</div>':''}${r.reason?`<div style="font-size:12px;color:var(--t2);line-height:1.35;margin-bottom:5px">${esc(r.reason)}</div>`:''}<div class="listing-image-url">${esc(u)}</div><button class="btn btn-sm" style="margin-top:6px" onclick="copyText(${esc(JSON.stringify(u))})">Copiază link</button></div></div>`}).join('')}</div></div>`:''}
+    ${imgs.length?`<div style="margin-top:14px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><strong style="font-size:13px">Poze selectate (${imgs.length})</strong><button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(imgs.join('\n')))})">Copiază toate linkurile</button></div><div class="listing-imgs" style="align-items:stretch">${imgs.map((u,i)=>{const r=imgRec[u]||{};return`<div class="listing-image-pick"><img src="${esc(proxyImg(u))}" onerror="this.src='${esc(u)}'" alt="" style="${i===0?'border:2px solid var(--acc)':''}"><div>${r.role?`<div class="listing-image-role">${esc(r.role)}</div>`:i===0?'<div class="listing-image-role">impact</div>':''}${r.reason?`<div style="font-size:12px;color:var(--t2);line-height:1.35;margin-bottom:5px">${esc(r.reason)}</div>`:''}<div class="listing-image-url">${esc(u)}</div><div style="display:flex;gap:5px;margin-top:6px"><button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(u))})">Copiază link</button><a class="btn btn-sm" href="${esc(downloadImg(u))}" target="_blank">↓ Salvează</a></div></div></div>`}).join('')}</div></div>`:''}
     ${l?.source_notes?`<div style="font-size:11px;color:var(--t3);margin-top:8px">${esc(l.source_notes)}</div>`:''}
   </div>`;
 }
