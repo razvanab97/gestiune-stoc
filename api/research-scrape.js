@@ -50,36 +50,38 @@ async function fetchText(url,ms=6000){
   }catch(e){clearTimeout(t);return'';}
 }
 
-// AI generează query-uri optimizate — prompt specific pentru marketplace românesc
+// AI generează query-uri optimizate cu traducere explicită
 async function generateAIQueries(name,description,characteristics,ean,apiKey){
   if(!apiKey)return null;
   const ctrl=new AbortController();
-  const t=setTimeout(()=>ctrl.abort(),9000);
+  const t=setTimeout(()=>ctrl.abort(),10000);
   try{
     const charsText=Array.isArray(characteristics)&&characteristics.length
       ?characteristics.slice(0,5).join(' | ')
       :'—';
-    const prompt=`Ești expert în marketplace-uri românești. Generează interogări de căutare pentru un produs de vânzare.
+    const prompt=`Ești expert în marketplace-uri românești. Generează interogări de căutare în ROMÂNĂ pentru un produs de vânzare.
 
-PRODUS (din catalog furnizor european):
-Denumire: "${name}"
+PRODUS (din catalog furnizor european — poate fi în olandeză, poloneză, franceză, germană sau engleză):
+Denumire originală: "${name}"
 Caracteristici: ${charsText}
 EAN/Cod: ${ean||'—'}
 Descriere: "${(description||'').slice(0,200)}"
 
-SARCINĂ: Gândește-te "cum caută un cumpărător român acest produs pe eMAG.ro?"
+PAS 1 — Identificare: Ce tip de produs este acesta? Traduce denumirea în română dacă e în altă limbă.
+Exemple de traduceri:
+  - "Decoratieve Fontein met LED" (olandeză) → fantana decorativa cu LED
+  - "Kosz wiklinowy" (poloneză) → cos rachita
+  - "Tapis de bain" (franceză) → covor baie
+  - "Blumentopf" (germană) → ghiveci flori
 
-Reguli pentru query-urile eMAG:
-- Folosește terminologia ROMÂNEASCĂ specifică categoriei (ex: "covor living", "fantana arteziana", "lampa birou led")
-- Query 1: tip produs + caracteristică vizuală definitorie (max 4 cuvinte, cel mai specific)
-- Query 2: tip produs + material SAU culoare principală
-- Query 3: tip produs + utilizare/cameră (ex: "covor dormitor", "vaza living")
-- Query 4: tip produs general în română (2-3 cuvinte, mai larg)
-- Fără dimensiuni exacte în cm în primele 2 query-uri
-- Fără mărci necunoscute, fără termeni din alte limbi
+PAS 2 — Generează 4 query-uri pentru eMAG.ro (gândește-te cum caută un ROMÂN pe eMAG):
+- Query 1: tip produs ROMÂN + caracteristică definitorie (max 4 cuvinte, cel mai specific)
+- Query 2: tip produs ROMÂN + material SAU culoare principală
+- Query 3: tip produs ROMÂN + cameră/utilizare (ex: "covor dormitor", "lampa birou")
+- Query 4: tip produs ROMÂN general (2-3 cuvinte, mai larg)
+Reguli: FĂRĂ termeni din altă limbă, FĂRĂ mărci necunoscute, FĂRĂ dimensiuni cm în primele 2
 
-Reguli pentru Trendyol (2 query-uri, max 4 cuvinte fiecare, pot fi în engleză):
-- Mai scurte și generice
+PAS 3 — Generează 2 query-uri pentru Trendyol (tot în ROMÂNĂ, max 4 cuvinte fiecare, simple):
 
 Răspunde DOAR cu JSON valid:
 {"emag":["query1","query2","query3","query4"],"trendyol":["query1","query2"]}`;
@@ -87,7 +89,7 @@ Răspunde DOAR cu JSON valid:
     const r=await fetch('https://api.openai.com/v1/chat/completions',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':'Bearer '+apiKey},
-      body:JSON.stringify({model:'gpt-4o-mini',max_tokens:250,temperature:0.2,messages:[{role:'user',content:prompt}]}),
+      body:JSON.stringify({model:'gpt-4o-mini',max_tokens:300,temperature:0.2,messages:[{role:'user',content:prompt}]}),
       signal:ctrl.signal
     });
     clearTimeout(t);
@@ -186,9 +188,10 @@ async function fetchEmagCandidates(query){
     const r=await fetch(url,{headers:HDRS,signal:ctrl.signal});
     clearTimeout(t);
     const html=await r.text();
-    const blocked=r.status===403||r.status===429||r.status===511||/captcha|awswaf|cf-browser-verification|robot|verificare.*securitate/i.test(html)||
-      // dacă pagina nu conține niciun produs și are un indiciu de blocare
-      (!html.includes('product-title')&&!html.includes('card-v2')&&!html.includes('data-product')&&html.length>20000);
+    // Detectare blocare: status greșit SAU lipsă completă de carduri de produs
+    const blocked=r.status===403||r.status===429||r.status===511
+      ||/captcha|awswaf|cf-browser-verification|robot|verificare.*securitate/i.test(html)
+      ||(!html.includes('product-title')&&!html.includes('card-v2')&&!html.includes('data-product')&&html.length>10000);
     if(!r.ok||blocked)return{candidates:[],blocked:true,status:r.status};
     return{candidates:parseEmagHtmlCandidates(html),blocked:false,status:r.status};
   }catch(e){
@@ -197,7 +200,72 @@ async function fetchEmagCandidates(query){
   }
 }
 
-// DuckDuckGo site:emag.ro — fallback când eMAG blochează IP-ul Vercel
+// Extrage prețul dintr-o pagină de produs eMAG individuală (/pd/ URL)
+// Paginile de produs sunt mult mai puțin blocate decât search-ul
+async function fetchEmagProductPage(url){
+  const ctrl=new AbortController();
+  const t=setTimeout(()=>ctrl.abort(),6000);
+  try{
+    const r=await fetch(url,{headers:HDRS,signal:ctrl.signal});
+    clearTimeout(t);
+    if(!r.ok)return null;
+    const html=(await r.text()).slice(0,800000);
+
+    let title='',price=null,img='';
+
+    // Strategie 1: data-product JSON (cel mai fiabil)
+    const dp=html.match(/data-product="([^"]+)"/i);
+    if(dp){
+      try{
+        const p=JSON.parse(decode(dp[1]));
+        title=p.product_name||p.name||'';
+        price=parsePrice(p.prices?.sale_price||p.price||'');
+        img=p.image||'';
+      }catch(e){}
+    }
+
+    // Strategie 2: JSON-LD Product
+    if(!title||!price){
+      const ldMatch=html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)||[];
+      for(const m of ldMatch){
+        try{
+          const data=JSON.parse(m.replace(/<script[^>]*>|<\/script>/gi,'').trim());
+          const prod=data['@type']==='Product'?data:(data['@graph']||[]).find(x=>x['@type']==='Product');
+          if(prod){
+            if(!title)title=prod.name||'';
+            if(!price){const of=Array.isArray(prod.offers)?prod.offers[0]:prod.offers||{};price=parsePrice(of.price||'');}
+            if(!img){const im=Array.isArray(prod.image)?prod.image[0]:prod.image;if(im)img=im;}
+            if(title&&price)break;
+          }
+        }catch(e){}
+      }
+    }
+
+    // Strategie 3: selectors HTML
+    if(!title){
+      const h1=html.match(/<h1[^>]*class="[^"]*page-header[^"]*"[^>]*>([\s\S]*?)<\/h1>/i);
+      title=h1?stripTags(h1[1]):'';
+    }
+    if(!price){
+      const ph=html.match(/<p[^>]*class="[^"]*product-new-price[^"]*"[^>]*>([\s\S]*?)<\/p>/i);
+      if(ph)price=parseEmagPriceHtml(ph[1]);
+    }
+    if(!price){
+      // Caută prețul în JSON-uri embed
+      const priceJson=html.match(/"sale_price"\s*:\s*"?(\d[\d.,]+)"?/i)||html.match(/"current_price"\s*:\s*"?(\d[\d.,]+)"?/i);
+      if(priceJson)price=parsePrice(priceJson[1]);
+    }
+    if(!img){
+      img=(html.match(/<img[^>]+class="[^"]*product-gallery-image[^"]*"[^>]+src="([^"]+)"/i)||[])[1]||'';
+    }
+
+    if(title&&price)return{title:stripTags(title),price,img:absUrl(img,url),link:url,source:'emag-page'};
+    return null;
+  }catch(e){clearTimeout(t);return null;}
+}
+
+// DuckDuckGo site:emag.ro — găsim URL-uri de produse reale
+// Paginile individuale (/pd/) vor fi apoi fetch-uite pentru prețuri
 async function searchDDGEmag(query){
   const ddgUrl=`https://html.duckduckgo.com/html/?q=${encodeURIComponent('site:emag.ro '+query)}&kl=wt-wt`;
   const html=await fetchText(ddgUrl,8000);
@@ -206,50 +274,45 @@ async function searchDDGEmag(query){
   const results=[];
   const seen=new Set();
 
-  // Parcurge blocuri de rezultate — fiecare are result__url (URL real), result__a (titlu), result__snippet
-  // Separăm pe div.result
-  const blocks=html.split(/<div[^>]+class="[^"]*result[^"]*links[^"]*"[^>]*>/i).slice(1,8);
+  // Parsăm blocurile de rezultate
+  const blocks=html.split(/<div[^>]+class="[^"]*result(?:s_links)?[^"]*"[^>]*>/i).slice(1,10);
   for(const block of blocks){
-    // URL real (nu redirect DDG)
+    // URL real din result__url (nu redirect DDG)
     const urlM=block.match(/class="result__url"\s[^>]*href="(https?:\/\/(?:www\.)?emag\.ro\/[^"#?]+)"/i)
       ||block.match(/href="(https?:\/\/(?:www\.)?emag\.ro\/[^"#?]{10,})"/i);
     if(!urlM)continue;
     const link=urlM[1].split('?')[0];
+    // Preferăm paginile de produs (/pd/) față de search/categorie
+    const isPd=link.includes('/pd/');
     if(seen.has(link))continue;
     seen.add(link);
 
-    // Titlu din result__a
     const titleM=block.match(/class="result__a"[^>]*>([\s\S]*?)<\/a>/i);
     const title=titleM?stripTags(titleM[1]).trim():'';
 
-    // Snippet — poate conține prețul
     const snipM=block.match(/class="result__snippet"[^>]*>([\s\S]{0,400}?)<\/a>/i);
     const snippet=snipM?stripTags(snipM[1]):'';
 
-    // Extrage prețul din snippet (ex: "299,99 Lei", "1.299,99 RON", "300 lei")
+    // Extrage prețul din snippet dacă există
     const priceM=snippet.match(/(\d{1,4}(?:\.\d{3})?)[,.](\d{2})\s*(?:RON|Lei|lei)/i)
       ||snippet.match(/(\d{2,5})\s*(?:RON|Lei)/i);
     let price=null;
-    if(priceM&&priceM[2]){
-      price=parseFloat(priceM[1].replace(/\./g,'')+'.'+priceM[2]);
-    }else if(priceM){
-      price=parseFloat(priceM[1]);
-    }
+    if(priceM&&priceM[2])price=parseFloat(priceM[1].replace(/\./g,'')+'.'+priceM[2]);
+    else if(priceM)price=parseFloat(priceM[1]);
     if(price&&(price<5||price>99999))price=null;
 
-    if(title||link)results.push({title:title||link,link,price,source:'ddg-emag'});
-    if(results.length>=5)break;
+    results.push({title:title||link,link,price,isPd,source:'ddg-emag'});
+    if(results.length>=6)break;
   }
 
-  // Fallback simplu dacă blocurile nu s-au parsat — caută orice href emag.ro cu titlu
+  // Fallback — orice href emag.ro
   if(!results.length){
-    const simple=[...html.matchAll(/href="(https?:\/\/(?:www\.)?emag\.ro\/[^"?#]{15,})"[^>]*>([^<]{5,80})<\/a>/gi)];
-    for(const m of simple){
+    for(const m of html.matchAll(/href="(https?:\/\/(?:www\.)?emag\.ro\/[^"?#]{15,})"[^>]*>([^<]{5,80})<\/a>/gi)){
       const link=m[1].split('?')[0];
       const title=stripTags(m[2]).trim();
-      if(!link.includes('/search/')&&title&&!seen.has(link)){
+      if(!link.includes('/search/')&&!link.includes('/c/')&&title&&!seen.has(link)){
         seen.add(link);
-        results.push({title,link,price:null,source:'ddg-emag'});
+        results.push({title,link,price:null,isPd:link.includes('/pd/'),source:'ddg-emag'});
         if(results.length>=3)break;
       }
     }
@@ -261,7 +324,7 @@ async function searchDDGEmag(query){
 async function scrapeEmag(queries,ean){
   const searchLink=`https://www.emag.ro/search/${encodeURIComponent(queries[0]||'')}`;
 
-  // Dacă avem EAN valid, îl încercăm mai întâi — cel mai precis
+  // EAN valid → cel mai precis, îl încercăm primul
   if(ean&&/^\d{8,14}$/.test(ean)){
     const er=await fetchEmagCandidates(ean);
     if(!er.blocked&&er.candidates.length){
@@ -277,22 +340,38 @@ async function scrapeEmag(queries,ean){
     const candidates=er.candidates||[];
 
     if(er.blocked){
-      // eMAG blochează Vercel — încercăm DuckDuckGo site:emag.ro ca fallback
+      // eMAG blochează search-ul din Vercel
+      // Strategie: DDG găsește URL-urile de produs → fetch pagini individuale pentru prețuri
       const ddgResults=await searchDDGEmag(q);
       if(ddgResults&&ddgResults.length){
-        const withPrice=ddgResults.filter(r=>r.price>0);
-        const minPrice=withPrice.length?Math.min(...withPrice.map(r=>r.price)):null;
         const bestLink=ddgResults[0].link||searchLink;
-        // Candidații cu preț intră în sistem; fără preț servesc doar pentru link
-        const ddgCands=uniqCandidates(withPrice);
+
+        // Fetch paginile individuale de produs (/pd/) în paralel
+        // Paginile de produs sunt mai puțin agresiv blocate decât search
+        const pdUrls=ddgResults.filter(r=>r.isPd).slice(0,3);
+        const fetched=pdUrls.length
+          ?await Promise.all(pdUrls.map(r=>fetchEmagProductPage(r.link).catch(()=>null)))
+          :[];
+        const fetchedValid=fetched.filter(p=>p&&p.price>0);
+
+        // Combină: pagini fetch-uite (mai fiabile) + prețuri din snippets DDG
+        const allResults=[
+          ...fetchedValid,
+          ...ddgResults.filter(r=>r.price>0)
+        ];
+        const cands=uniqCandidates(allResults);
+
+        const prices=cands.map(c=>c.price).filter(v=>v>0);
+        const minPrice=prices.length?Math.min(...prices):null;
+
         return{
           minPrice,
-          offerCount:ddgResults.length,
-          link:bestLink,
-          candidates:ddgCands,
-          ddgLinks:ddgResults.map(r=>({title:r.title,link:r.link,price:r.price})),
+          offerCount:Math.max(cands.length,ddgResults.length),
+          link:cands[0]?.link||bestLink,
+          candidates:cands,
+          ddgLinks:ddgResults.map(r=>({title:r.title,link:r.link,price:r.price,isPd:r.isPd})),
           query:q,
-          blocked:false,
+          blocked:!cands.length&&!minPrice,
           viaDDG:true,
           status:er.status
         };
@@ -310,7 +389,7 @@ async function scrapeEmag(queries,ean){
   return{minPrice:null,offerCount:0,link:searchLink,candidates:[],query:queries[0]||''};
 }
 
-// Extrage produs dintr-un link direct (utilizatorul lipește link eMAG)
+// Extrage produs dintr-un link direct lipid de utilizator
 async function fetchDirectProduct(url){
   const ctrl=new AbortController();
   const t=setTimeout(()=>ctrl.abort(),7000);
@@ -321,21 +400,8 @@ async function fetchDirectProduct(url){
     const html=await r.text();
 
     if(url.includes('emag.ro')){
-      const dataProduct=html.match(/data-product="([^"]+)"/i);
-      let title='',price=null,img='';
-      if(dataProduct){
-        try{const p=JSON.parse(decode(dataProduct[1]));title=p.product_name||p.name||'';price=parsePrice(p.prices?.sale_price||p.price||'');img=p.image||'';}catch(e){}
-      }
-      if(!title){
-        const h1=html.match(/<h1[^>]*class="[^"]*page-header[^"]*"[^>]*>([\s\S]*?)<\/h1>/i);
-        title=h1?stripTags(h1[1]):'';
-      }
-      if(!price){
-        const ph=html.match(/<p[^>]*class="[^"]*product-new-price[^"]*"[^>]*>([\s\S]*?)<\/p>/i);
-        price=ph?parseEmagPriceHtml(ph[1]):null;
-      }
-      if(!img){img=(html.match(/<img[^>]+class="[^"]*product-gallery-image[^"]*"[^>]+src="([^"]+)"/i)||[])[1]||'';}
-      if(title&&price)return{title,price,img:absUrl(img,url),link:url,source:'direct'};
+      const result=await fetchEmagProductPage(url);
+      if(result)return{...result,source:'direct'};
     }
     return null;
   }catch(e){clearTimeout(t);return null;}
@@ -356,7 +422,7 @@ module.exports=async function handler(req,res){
   const apiKey=process.env.OPENAI_API_KEY;
   const chars=Array.isArray(characteristics)?characteristics:[];
 
-  // Generare query-uri AI cu context complet (mereu, nu ca fallback)
+  // Generare query-uri AI cu context complet
   const aiQueries=await generateAIQueries(query,description||'',chars,ean||'',apiKey);
 
   const emagQueries=aiQueries?.emag?.length
@@ -366,11 +432,12 @@ module.exports=async function handler(req,res){
         return[kw.slice(0,4).join(' '),kw.slice(0,3).join(' ')];
       })()].filter((q,i,a)=>q.length>2&&a.indexOf(q)===i);
 
+  // Trendyol: blocat complet — returnăm query-urile AI pentru link-ul manual
   const trendyolQueries=aiQueries?.trendyol||[query.split(' ').slice(0,3).join(' ')];
   const trendyolFallbackUrl=`https://www.trendyol.com/sr?q=${encodeURIComponent(trendyolQueries[0])}&culture=ro-RO&currency=RON`;
   const trendyol={minPrice:null,offerCount:0,link:trendyolFallbackUrl,candidates:[],query:trendyolQueries[0],blocked:true,queries:trendyolQueries};
 
   const emag=await scrapeEmag(emagQueries,ean||'');
 
-  res.json({emag,trendyol,queriesUsed:emagQueries.slice(0,3),aiQueriesGenerated:!!aiQueries});
+  res.json({emag,trendyol,queriesUsed:emagQueries.slice(0,4),aiQueriesGenerated:!!aiQueries});
 };
