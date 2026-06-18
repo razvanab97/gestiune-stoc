@@ -532,10 +532,13 @@ function buildRaportCats(){
 .scorecard-section h4{font-size:12px;margin:0 0 7px;color:var(--t1)}
 .scorecard-section ul{margin:0;padding-left:17px;color:var(--t2);font-size:12px;line-height:1.45}
 .scorecard-table{display:grid;gap:6px;margin-top:10px}
-.scorecard-row{display:grid;grid-template-columns:1fr auto auto auto;gap:8px;align-items:center;background:var(--surf2);border:1px solid var(--b1);border-radius:var(--r);padding:8px;font-size:12px}
+.scorecard-row{display:grid;grid-template-columns:1fr auto auto auto auto;gap:8px;align-items:center;background:var(--surf2);border:1px solid var(--b1);border-radius:var(--r);padding:8px;font-size:12px}
 .scorecard-row-title{font-weight:700;color:var(--t1);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .scorecard-row-meta{font-family:var(--mono);color:var(--t3);white-space:nowrap}
+.scorecard-row-gap.pos{color:var(--gr)}
+.scorecard-row-gap.neg{color:var(--rd)}
 @media(max-width:900px){.comp-lab-grid,.scorecard-sections{grid-template-columns:1fr}.scorecard-grid{grid-template-columns:1fr 1fr}.comp-lab-fields{grid-template-columns:1fr}}
+@media(max-width:700px){.scorecard-row{grid-template-columns:1fr 1fr}.scorecard-row-title{grid-column:1/-1;white-space:normal}.scorecard-row-meta{white-space:normal}}
 .research-plat-price{font-size:22px;font-weight:700;font-family:var(--mono);color:var(--acc);margin-bottom:4px}
 .research-plat-meta{font-size:12px;color:var(--t3);margin-bottom:.5rem}
 .research-plat-margin{font-size:13px;font-weight:600}
@@ -2456,7 +2459,14 @@ function researchListingUrls(){
   return[...new Set(urls.filter(Boolean))].slice(0,6);
 }
 function extractUrlsFromText(raw){
-  return[...new Set((raw.match(/https?:\/\/[^\s,]+/g)||[]).map(u=>u.replace(/[)\].,;]+$/,'')))].slice(0,8);
+  const txt=String(raw||'').replace(/&amp;/g,'&');
+  const found=[];
+  for(const m of txt.matchAll(/(?:https?:\/\/|www\.)[^\s<>"']+/gi)){
+    let u=m[0].replace(/[)\].,;]+$/,'');
+    if(u.startsWith('www.'))u='https://'+u;
+    try{const x=new URL(u);found.push(x.href.replace(/[)\].,;]+$/,''));}catch(e){}
+  }
+  return[...new Set(found)].slice(0,8);
 }
 function listingTextareaUrls(){
   return extractUrlsFromText(document.getElementById('listing-links')?.value||'');
@@ -2888,7 +2898,9 @@ async function analyzeCompetitorLab(){
   const urls=compLabUrls(),productName=(document.getElementById('comp-lab-product')?.value||researchData?.name||'').trim();
   const priceBuy=parseFloat(document.getElementById('comp-lab-buy')?.value)||researchData?.priceBuy||0;
   const btn=document.getElementById('comp-lab-btn'),wrap=document.getElementById('research-result-wrap'),out=document.getElementById('competition-result');
-  if(urls.length<2){toast('Adaugă cel puțin 2 linkuri concurente');return;}
+  if(!urls.length){toast('Nu am găsit niciun link valid. Lipește linkuri http/https sau www.');return;}
+  if(!productName)toast('Analizez fără titlu produs - scorul SEO va fi mai slab');
+  if(!priceBuy)toast('Analizez fără preț achiziție - nu pot calcula pragul minim AB HOMES');
   if(btn){btn.disabled=true;btn.textContent='⏳ Analizez…';}
   if(wrap)wrap.style.display='block';
   if(out){out.style.display='';out.innerHTML=`<div class="listing-card"><span class="spin"></span> Analizez competitorii, scorurile și oportunitatea AB HOMES…</div>`;}
@@ -2908,17 +2920,22 @@ function renderCompetitionLab(data){
   const out=document.getElementById('competition-result');if(!out)return;
   out.style.display='';
   const a=data.analysis||{}, comps=data.competitors||[];
+  const minSell=Number(a.minSellPrice)||0;
   const metrics=[
     {label:'Cerere estimată',val:a.demandScore,sub:'review-uri, rating, badge-uri'},
     {label:'Competiție',val:a.competitionScore,sub:'prețuri, selleri, calitate listări',invert:true},
     {label:'Oportunitate',val:a.opportunityScore,sub:'șansa AB HOMES de intrare'}
   ];
-  const rows=comps.map(c=>`<div class="scorecard-row">
+  const rows=comps.map(c=>{
+    const gap=c.price>0&&minSell?Number(c.price-minSell):Number(c.priceGapToMin)||0;
+    const gapTxt=c.price>0&&minSell?`${gap>=0?'+':''}${gap.toFixed(2)} vs minim`:'—';
+    return`<div class="scorecard-row">
     <div class="scorecard-row-title"><a href="${esc(c.url||'#')}" target="_blank" style="color:inherit;text-decoration:none">${esc(c.title||c.url||'Competitor')}</a></div>
     <div class="scorecard-row-meta">${c.price>0?Number(c.price).toFixed(2)+' RON':'—'}</div>
+    <div class="scorecard-row-meta scorecard-row-gap ${gap>=0?'pos':'neg'}">${esc(gapTxt)}</div>
     <div class="scorecard-row-meta">${c.rating>0?'★'+Number(c.rating).toFixed(1)+' / '+(c.reviewCount||0)+' rec.':'fără rating'}</div>
     <div class="scorecard-row-meta">${c.imageCount||0} poze</div>
-  </div>`).join('');
+  </div>`}).join('');
   out.innerHTML=`<div class="listing-card">
     <div class="scorecard-hero">
       <div class="scorecard-verdict">${esc(a.verdict||'Verdict în lucru')}</div>
@@ -2927,8 +2944,10 @@ function renderCompetitionLab(data){
     <div class="scorecard-grid">
       ${metrics.map(m=>`<div class="scorecard-metric"><span>${m.label}</span><strong style="color:${scoreTone(m.val,m.invert)}">${Number(m.val||0)}/100</strong><small>${m.sub}</small></div>`).join('')}
       <div class="scorecard-metric"><span>Preț recomandat</span><strong>${a.suggestedPrice>0?Number(a.suggestedPrice).toFixed(2)+' RON':'—'}</strong><small>pe baza concurenței</small></div>
+      <div class="scorecard-metric"><span>Preț minim AB HOMES</span><strong>${minSell>0?minSell.toFixed(2)+' RON':'—'}</strong><small>${esc(a.minSellAssumptions||'completează prețul de achiziție')}</small></div>
       <div class="scorecard-metric"><span>Max achiziție</span><strong>${a.maxBuyPrice>0?Number(a.maxBuyPrice).toFixed(2)+' RON':'—'}</strong><small>pentru marjă sănătoasă</small></div>
       <div class="scorecard-metric"><span>Risc retur</span><strong style="font-size:18px">${esc(a.returnRisk||'—')}</strong><small>${esc(a.riskNotes||'')}</small></div>
+      <div class="scorecard-metric"><span>Comparație preț</span><strong style="font-size:18px">${esc(a.priceGapNotes||'—')}</strong><small>față de pragul tău minim</small></div>
     </div>
     <div class="scorecard-sections">
       <div class="scorecard-section"><h4>💡 Oportunități</h4>${arrList(a.opportunities)}</div>
