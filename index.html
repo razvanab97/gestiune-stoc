@@ -1388,6 +1388,16 @@ function loadLocalFallback(){
 
 async function loadGlobalSettings(){
   eFacturaEmagDate=localStorage.getItem(EFK)||'';
+  try{
+    const r=await fetch('/api/settings?key=efactura_emag_last_date');
+    const data=await r.json();
+    if(r.ok&&data?.value!==undefined){
+      eFacturaEmagDate=data.value||'';
+      localStorage.setItem(EFK,eFacturaEmagDate);
+      eFacturaEmagEdit=!eFacturaEmagDate;
+      return;
+    }
+  }catch(e){}
   if(!sbReady)return;
   try{
     const r=await dbGet('setari_app?key=eq.efactura_emag_last_date&select=value');
@@ -1411,14 +1421,22 @@ async function saveEFacturaEmagDate(){
   eFacturaEmagEdit=!v;
   localStorage.setItem(EFK,v);
   renderTable();
-  if(!sbReady){toast('Data e-Factura eMAG salvată local');return;}
   try{
-    const updated=await dbPatch('setari_app?key=eq.efactura_emag_last_date',{value:v});
-    if(!updated?.length)await dbPost('setari_app',{key:'efactura_emag_last_date',value:v});
+    const r=await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:'efactura_emag_last_date',value:v})});
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(data.details||data.error||'Endpoint setări indisponibil');
     setSyncStatus('ok','setare salvată');
     toast('Data e-Factura eMAG salvată ✓');
   }catch(e){
-    toast('Data e-Factura eMAG e salvată local. Rulează supabase_setup.sql în Supabase pentru tabela setari_app. Detalii: '+(e.message||e),'err');
+    if(!sbReady){toast('Data e-Factura eMAG salvată local. Endpointul de setări nu a răspuns: '+(e.message||e),'err');return;}
+    try{
+      const updated=await dbPatch('setari_app?key=eq.efactura_emag_last_date',{value:v});
+      if(!updated?.length)await dbPost('setari_app',{key:'efactura_emag_last_date',value:v});
+      setSyncStatus('ok','setare salvată');
+      toast('Data e-Factura eMAG salvată ✓');
+    }catch(e2){
+      toast('Data e-Factura eMAG e salvată local, dar nu în baza de date. Detalii endpoint: '+(e.message||e)+' / client: '+(e2.message||e2),'err');
+    }
   }
 }
 
