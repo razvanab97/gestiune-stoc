@@ -1,4 +1,4 @@
-const MAX_HTML=900000;
+const MAX_HTML=900000,MAX_LINKS=20;
 
 const HDRS={
   'user-agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -423,7 +423,7 @@ module.exports=async function handler(req,res){
   if(!process.env.OPENAI_API_KEY)return res.status(503).json({error:'OPENAI_API_KEY lipsă'});
   try{
     const mode=['analyze','synthesize'].includes(req.body?.mode)?req.body.mode:'build';
-    const urls=[...new Set((req.body?.urls||[]).filter(u=>/^https?:\/\//i.test(String(u||''))).slice(0,8))];
+    const urls=[...new Set((req.body?.urls||[]).filter(u=>/^https?:\/\//i.test(String(u||''))).slice(0,MAX_LINKS))];
     const product=req.body?.product||{};
     if(!urls.length&&!product.name)return res.status(400).json({error:'Lipsesc linkurile sau produsul'});
 

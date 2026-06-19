@@ -1,7 +1,7 @@
 const SUPA_URL=process.env.SUPABASE_URL||'https://nuvgwytanlgvcffxeahs.supabase.co';
 const SUPA_KEY=process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.SUPABASE_ANON_KEY||'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51dmd3eXRhbmxndmNmZnhlYWhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MDI0OTAsImV4cCI6MjA5NTI3ODQ5MH0.lSy1CUJA9xlVv1isAyfTIxGUAbGMUIS7c3TXQ-5pcEg';
 const MAX_HTML=2*1024*1024;
-const VAT=.21,COMMISSION=.20,FIXED_COSTS=23,MIN_PROFIT=10,MIN_MARGIN=20;
+const VAT=.21,COMMISSION=.20,FIXED_COSTS=23,MIN_PROFIT=10,MIN_MARGIN=20,MAX_LINKS=20;
 
 async function supa(method,path,body){
   const r=await fetch(`${SUPA_URL}/rest/v1/${path}`,{method,headers:{'content-type':'application/json','apikey':SUPA_KEY,'authorization':'Bearer '+SUPA_KEY,'prefer':'return=representation,resolution=merge-duplicates'},body:body?JSON.stringify(body):undefined});
@@ -159,16 +159,22 @@ module.exports=async function handler(req,res){
       return res.status(200).json({project:rows?.[0]});
     }
     if(body.action==='add_links'){
-      const projectId=Number(body.project_id),urls=Array.isArray(body.urls)?body.urls:[];
+      const projectId=Number(body.project_id),urls=Array.isArray(body.urls)?body.urls.slice(0,MAX_LINKS):[];
       if(!projectId||!urls.length)return res.status(400).json({error:'Lipsesc dosarul sau linkurile'});
       const existing=await supa('GET',`research_links?project_id=eq.${projectId}&select=*`);
       const added=[],skipped=[],flagged=[];
+      const queue=[];
       for(const raw of urls){
         let norm='',pnk='';
         try{norm=normalizeUrl(raw);pnk=pnkOf(norm);}catch(e){skipped.push({url:raw,reason:'URL invalid'});continue;}
         const dupe=existing.find(l=>l.normalized_url===norm)||(pnk?existing.find(l=>l.pnk===pnk):null);
         if(dupe){skipped.push({url:raw,reason:'duplicat sigur',duplicate_of:dupe.id});continue;}
-        const data=await analyzeUrl(norm);
+        if(queue.find(x=>x.norm===norm||(pnk&&x.pnk===pnk))){skipped.push({url:raw,reason:'duplicat în lista curentă'});continue;}
+        queue.push({raw,norm,pnk});
+      }
+      const analyzed=await Promise.all(queue.map(async x=>({...x,data:await analyzeUrl(x.norm)})));
+      for(const item of analyzed){
+        const{raw,norm,pnk,data}=item;
         const probable=existing.find(l=>data.title&&l.title&&similarity(data.title,l.title)>.72&&(!data.price||!l.price||Math.abs(Number(data.price)-Number(l.price))/Math.max(Number(l.price),1)<.12));
         const row={project_id:projectId,url:String(raw).trim(),normalized_url:norm,platform:data.platform,pnk:data.pnk||pnk,title:data.title,price:data.price||0,currency:data.currency||'RON',rating:data.rating||0,review_count:data.review_count||0,images:data.images||[],specs:data.specs||{},description:data.description||'',duplicate_of:probable?.id||null,duplicate_type:probable?'probabil':'none',include_in_listing:true,status:data.error?'eroare':'analizat',error:data.error||null};
         const ins=await supa('POST','research_links',row);

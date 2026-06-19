@@ -1038,7 +1038,7 @@ th{font-weight:800!important;color:var(--t3)!important}
     <div class="research-mode" id="research-mode-listing">
       <div class="listing-links-box" style="margin-top:0;padding-top:0;border-top:none">
         <div class="sec" style="margin:0 0 8px">✨ Generator anunț nou din mai multe linkuri</div>
-        <textarea id="listing-factory-links" placeholder="Lipește aici 2-8 linkuri de anunțuri / produse. Exemplu: eMAG, Trendyol, furnizori, competitori. Sistemul extrage titluri, descrieri, specificații și linkuri de imagini, apoi face un anunț unic mai bun."></textarea>
+        <textarea id="listing-factory-links" placeholder="Lipește aici 2-20 linkuri de anunțuri / produse. Exemplu: eMAG, Trendyol, furnizori, competitori. Sistemul extrage titluri, descrieri, specificații și linkuri de imagini, apoi face un anunț unic mai bun."></textarea>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
           <button class="btn btn-sm btn-acc" onclick="buildListingFactory()" id="listing-factory-btn">✨ Generează anunț nou</button>
           <button class="btn btn-sm" onclick="document.getElementById('listing-factory-links').value=''">Curăță linkuri</button>
@@ -1057,7 +1057,7 @@ th{font-weight:800!important;color:var(--t3)!important}
             <input id="comp-lab-product" type="text" placeholder="Nume produs / idee produs">
             <input id="comp-lab-buy" type="number" min="0" step="0.01" placeholder="Cost achiziție RON">
           </div>
-          <textarea id="comp-lab-links" placeholder="Lipește aici 2-8 linkuri concurente, câte unul pe linie..."></textarea>
+          <textarea id="comp-lab-links" placeholder="Lipește aici 2-20 linkuri concurente, câte unul pe linie..."></textarea>
           <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
             <button class="btn btn-sm btn-acc" id="comp-lab-btn" onclick="analyzeCompetitorLab()">🔍 Analizează oportunitatea</button>
             <button class="btn btn-sm" onclick="fillCompLabFromResearch()">Folosește produsul curent</button>
@@ -2329,6 +2329,7 @@ let researchData=null;
 let listingData=null;
 let listingFactoryData=null,competitionLabData=null;
 let researchProjects=[],researchProjectFilter='all',researchProjectsLoaded=false;
+const MAX_RESEARCH_LINKS=20;
 async function ensureXLSX(){
   if(window.XLSX)return window.XLSX;
   await new Promise((resolve,reject)=>{
@@ -2592,7 +2593,7 @@ function researchListingUrls(){
     if(p?.activeMatch?.link)urls.push(p.activeMatch.link);
     else if(p?.link)urls.push(p.link);
   });
-  return[...new Set(urls.filter(Boolean))].slice(0,6);
+  return[...new Set(urls.filter(Boolean))].slice(0,MAX_RESEARCH_LINKS);
 }
 function extractUrlsFromText(raw){
   const txt=String(raw||'').replace(/&amp;/g,'&');
@@ -2602,7 +2603,7 @@ function extractUrlsFromText(raw){
     if(u.startsWith('www.'))u='https://'+u;
     try{const x=new URL(u);found.push(x.href.replace(/[)\].,;]+$/,''));}catch(e){}
   }
-  return[...new Set(found)].slice(0,8);
+  return[...new Set(found)].slice(0,MAX_RESEARCH_LINKS);
 }
 function listingTextareaUrls(){
   return extractUrlsFromText(document.getElementById('listing-links')?.value||'');
@@ -2679,7 +2680,7 @@ function renderResearchProjects(){
   box.innerHTML=arr.map(p=>{
     const links=p.links||[],prices=links.map(l=>+l.price||0).filter(Boolean),reviews=Math.max(0,...links.map(l=>+l.review_count||0)),hasListing=!!(p.listing&&p.listing.title);
     const best=prices.length?Math.min(...prices):0,imgs=links.reduce((s,l)=>s+(Array.isArray(l.images)?l.images.length:0),0);
-    const rows=links.slice(0,8).map(l=>{
+    const rows=links.slice(0,MAX_RESEARCH_LINKS).map(l=>{
       const pnk=l.pnk?`<span class="pnk-copy"><span>PNK ${esc(l.pnk)}</span><button onclick="copyText('${esc(l.pnk)}')">Copy</button></span>`:'<span class="research-link-meta">PNK —</span>';
       const dup=l.duplicate_type&&l.duplicate_type!=='none'?`<span class="research-link-dup">${l.duplicate_type==='probabil'?'posibil duplicat':'duplicat'}</span>`:`<span class="research-link-meta">${esc(l.status||'analizat')}</span>`;
       return`<div class="research-link-row"><div class="research-link-platform">${esc(l.platform||'altul')}</div><div class="research-link-title"><a href="${esc(l.url)}" target="_blank" style="color:inherit;text-decoration:none">${esc(l.title||l.url)}</a></div><div class="research-link-meta">${l.price?Number(l.price).toFixed(2)+' '+esc(l.currency||'RON'):'—'}</div><div class="research-link-meta">${l.review_count?l.review_count+' rev.':'0 rev.'}</div>${pnk}${dup}</div>`;
@@ -2716,7 +2717,7 @@ async function addResearchProjectLinks(projectId){
   if(!urls.length){toast('Nu am găsit linkuri valide','err');return;}
   try{
     toast('Analizez linkurile…');
-    const data=await apiJson('/api/research-projects',{action:'add_links',project_id:projectId,urls},90000);
+    const data=await apiJson('/api/research-projects',{action:'add_links',project_id:projectId,urls},240000);
     if(ta)ta.value='';
     await loadResearchProjects();
     const s=(data.skipped||[]).length,f=(data.flagged||[]).length,a=(data.added||[]).length;
@@ -2748,7 +2749,7 @@ function showSavedProjectListing(projectId){
 async function buildListingFromProject(projectId){
   const pr=researchProjects.find(p=>Number(p.id)===Number(projectId));
   if(!pr){toast('Dosarul nu există în listă','err');return;}
-  const urls=[...new Set((pr.links||[]).filter(l=>l.include_in_listing!==false).map(l=>l.url||l.normalized_url).filter(Boolean))].slice(0,8);
+  const urls=[...new Set((pr.links||[]).filter(l=>l.include_in_listing!==false).map(l=>l.url||l.normalized_url).filter(Boolean))].slice(0,MAX_RESEARCH_LINKS);
   if(urls.length<2){toast('Adaugă cel puțin 2 linkuri analizate în dosar pentru un anunț bun','err');return;}
   const btn=document.getElementById('rp-build-'+projectId),wrap=document.getElementById('research-result-wrap'),out=document.getElementById('listing-result');
   document.getElementById('research-result')?.style.setProperty('display','none');
@@ -2759,7 +2760,7 @@ async function buildListingFromProject(projectId){
   if(btn){btn.disabled=true;btn.textContent='⏳ Generez…';}
   try{
     const product={name:pr.title||'',priceBuy:Number(pr.acquisition_price)||0,supplier:pr.supplier||'AB HOMES'};
-    const data=await apiJson('/api/listing-builder',{mode:'synthesize',product,urls},70000);
+    const data=await apiJson('/api/listing-builder',{mode:'synthesize',product,urls},180000);
     const l=data.listing||{};
     listingFactoryData={listing:l,pages:data.pages||[]};
     listingData=l;
@@ -2817,7 +2818,7 @@ async function analyzeExternalListings(){
   if(btn){btn.disabled=true;btn.textContent='⏳ Analizez…';}
   if(out)out.innerHTML=`<div class="listing-card"><span class="spin"></span> Citesc listările externe și compar titluri, poze, specificații…</div>`;
   try{
-    const data=await apiJson('/api/listing-builder',{mode:'analyze',product:researchProductPayload(),urls});
+    const data=await apiJson('/api/listing-builder',{mode:'analyze',product:researchProductPayload(),urls},180000);
     const a=data.analysis||{};
     listingData=a.improved_listing||null;
     if(researchData)researchData.listing=listingData;
@@ -2840,7 +2841,7 @@ async function buildListingFactory(){
   wrap.style.display='block';
   if(out)out.innerHTML=`<div class="listing-card"><span class="spin"></span> Citesc linkurile, aleg imaginile bune și construiesc un anunț nou…</div>`;
   try{
-    const data=await apiJson('/api/listing-builder',{mode:'synthesize',product:{},urls},60000);
+    const data=await apiJson('/api/listing-builder',{mode:'synthesize',product:{},urls},180000);
     const l=data.listing||{};
     listingFactoryData={listing:l,pages:data.pages||[]};
     listingData=l;
@@ -3190,7 +3191,7 @@ async function analyzeCompetitorLab(){
   if(wrap)wrap.style.display='block';
   if(out){out.style.display='';out.innerHTML=`<div class="listing-card"><span class="spin"></span> Analizez competitorii, scorurile și oportunitatea AB HOMES…</div>`;}
   try{
-    const data=await apiJson('/api/competitor-analyze',{urls,productName,priceBuy},65000);
+    const data=await apiJson('/api/competitor-analyze',{urls,productName,priceBuy},180000);
     competitionLabData=data;
     renderCompetitionLab(data);
     toast('Scorecard competitori generat ✓');

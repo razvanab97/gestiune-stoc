@@ -1,4 +1,4 @@
-const MAX_HTML=2*1024*1024;
+const MAX_HTML=2*1024*1024,MAX_LINKS=20;
 const VAT=0.21;
 const MIN_PRICE_ASSUMPTIONS='TVA 21%, comision marketplace 20%, costuri fixe estimate 23 RON';
 
@@ -100,7 +100,7 @@ module.exports=async function handler(req,res){
     'sec-fetch-dest':'document','sec-fetch-mode':'navigate','sec-fetch-site':'none'
   };
 
-  const competitors=await Promise.all(urls.slice(0,6).map(async url=>{
+  const competitors=await Promise.all(urls.slice(0,MAX_LINKS).map(async url=>{
     try{
       const ctrl=new AbortController();
       const t=setTimeout(()=>ctrl.abort(),12000);
