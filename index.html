@@ -2677,7 +2677,7 @@ function renderResearchProjects(){
   const arr=researchProjects.filter(p=>researchProjectFilter==='all'||String(p.verdict||'').includes(researchProjectFilter));
   if(!arr.length){box.innerHTML='<div class="listing-card" style="color:var(--t3)">Nu există dosare pentru filtrul ales.</div>';return;}
   box.innerHTML=arr.map(p=>{
-    const links=p.links||[],prices=links.map(l=>+l.price||0).filter(Boolean),reviews=Math.max(0,...links.map(l=>+l.review_count||0));
+    const links=p.links||[],prices=links.map(l=>+l.price||0).filter(Boolean),reviews=Math.max(0,...links.map(l=>+l.review_count||0)),hasListing=!!(p.listing&&p.listing.title);
     const best=prices.length?Math.min(...prices):0,imgs=links.reduce((s,l)=>s+(Array.isArray(l.images)?l.images.length:0),0);
     const rows=links.slice(0,8).map(l=>{
       const pnk=l.pnk?`<span class="pnk-copy"><span>PNK ${esc(l.pnk)}</span><button onclick="copyText('${esc(l.pnk)}')">Copy</button></span>`:'<span class="research-link-meta">PNK —</span>';
@@ -2704,6 +2704,7 @@ function renderResearchProjects(){
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0">
         <button class="btn btn-sm" onclick="recalcResearchProject(${p.id})">↻ Recalculează verdict</button>
         <button class="btn btn-sm btn-acc" id="rp-build-${p.id}" onclick="buildListingFromProject(${p.id})">✨ Generează anunț din dosar</button>
+        ${hasListing?`<button class="btn btn-sm" onclick="showSavedProjectListing(${p.id})">👁 Vezi anunț salvat</button>`:''}
       </div>
       <div class="research-project-add"><textarea id="rp-links-${p.id}" placeholder="Lipește linkuri pentru acest dosar, câte unul pe linie"></textarea><button class="btn btn-sm btn-acc" onclick="addResearchProjectLinks(${p.id})">+ Adaugă & analizează</button></div>
       ${rows?`<div class="research-link-box">${rows}</div>`:'<div style="font-size:13px;color:var(--t3);margin-top:10px">Nu ai linkuri încă în acest dosar.</div>'}
@@ -2730,6 +2731,20 @@ async function recalcResearchProject(projectId){
     toast('Verdict recalculat ✓');
   }catch(e){toast(e.message||'Eroare recalculare verdict','err');}
 }
+function showSavedProjectListing(projectId){
+  const pr=researchProjects.find(p=>Number(p.id)===Number(projectId));
+  if(!pr?.listing?.title){toast('Nu există anunț salvat pentru acest dosar','err');return;}
+  const wrap=document.getElementById('research-result-wrap'),out=document.getElementById('listing-result');
+  document.getElementById('research-result')?.style.setProperty('display','none');
+  document.getElementById('competition-result')?.style.setProperty('display','none');
+  document.getElementById('decision-result')?.style.setProperty('display','none');
+  if(wrap)wrap.style.display='block';
+  if(out)out.style.display='';
+  listingFactoryData={listing:pr.listing,pages:[]};
+  listingData=pr.listing;
+  renderListingFactoryResult(pr.listing,[]);
+  toast('Anunț salvat încărcat ✓');
+}
 async function buildListingFromProject(projectId){
   const pr=researchProjects.find(p=>Number(p.id)===Number(projectId));
   if(!pr){toast('Dosarul nu există în listă','err');return;}
@@ -2750,8 +2765,8 @@ async function buildListingFromProject(projectId){
     listingData=l;
     renderListingFactoryResult(l,data.pages||[]);
     try{
-      await apiJson('/api/research-projects',{action:'set_listing_status',project_id:projectId,status:'generat'},30000);
-      const local=researchProjects.find(p=>Number(p.id)===Number(projectId));if(local)local.listing_status='generat';
+      await apiJson('/api/research-projects',{action:'save_listing',project_id:projectId,status:'generat',listing:l},30000);
+      const local=researchProjects.find(p=>Number(p.id)===Number(projectId));if(local){local.listing_status='generat';local.listing=l;}
       renderResearchProjects();
     }catch(e){toast('Anunțul e generat, dar statusul nu s-a salvat: '+(e.message||e),'err');}
     toast('Anunț generat din dosar ✓');

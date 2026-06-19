@@ -127,6 +127,7 @@ create table if not exists research_projects (
   supplier text,
   verdict text default 'Date insuficiente',
   listing_status text default 'negenerat',
+  listing jsonb default '{}'::jsonb,
   profit_estimated numeric(10,2) default 0,
   margin_estimated numeric(6,2) default 0,
   max_buy_price numeric(10,2) default 0,
@@ -172,6 +173,8 @@ create index if not exists idx_research_projects_updated on research_projects(up
 create index if not exists idx_research_links_project on research_links(project_id);
 create index if not exists idx_research_links_norm on research_links(project_id, normalized_url);
 create index if not exists idx_research_links_pnk on research_links(project_id, pnk) where pnk is not null and pnk <> '';
+
+alter table research_projects add column if not exists listing jsonb default '{}'::jsonb;
 
 -- Auto-update updated_at pe produse
 create or replace function update_updated_at()
