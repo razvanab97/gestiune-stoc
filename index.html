@@ -2698,9 +2698,13 @@ function renderResearchProjects(){
         <div class="research-project-stat"><span>Cumpără sub</span><strong>${p.max_buy_price?Number(p.max_buy_price).toFixed(2)+' RON':'—'}</strong></div>
         <div class="research-project-stat"><span>Review-uri max</span><strong>${reviews}</strong></div>
         <div class="research-project-stat"><span>Poze extrase</span><strong>${imgs}</strong></div>
+        <div class="research-project-stat"><span>Status anunț</span><strong>${esc(p.listing_status||'negenerat')}</strong></div>
       </div>
       ${p.notes?`<div class="scorecard-summary" style="margin:8px 0">${esc(p.notes)}</div>`:''}
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0"><button class="btn btn-sm" onclick="recalcResearchProject(${p.id})">↻ Recalculează verdict</button></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0">
+        <button class="btn btn-sm" onclick="recalcResearchProject(${p.id})">↻ Recalculează verdict</button>
+        <button class="btn btn-sm btn-acc" id="rp-build-${p.id}" onclick="buildListingFromProject(${p.id})">✨ Generează anunț din dosar</button>
+      </div>
       <div class="research-project-add"><textarea id="rp-links-${p.id}" placeholder="Lipește linkuri pentru acest dosar, câte unul pe linie"></textarea><button class="btn btn-sm btn-acc" onclick="addResearchProjectLinks(${p.id})">+ Adaugă & analizează</button></div>
       ${rows?`<div class="research-link-box">${rows}</div>`:'<div style="font-size:13px;color:var(--t3);margin-top:10px">Nu ai linkuri încă în acest dosar.</div>'}
     </div>`;
@@ -2725,6 +2729,37 @@ async function recalcResearchProject(projectId){
     await loadResearchProjects();
     toast('Verdict recalculat ✓');
   }catch(e){toast(e.message||'Eroare recalculare verdict','err');}
+}
+async function buildListingFromProject(projectId){
+  const pr=researchProjects.find(p=>Number(p.id)===Number(projectId));
+  if(!pr){toast('Dosarul nu există în listă','err');return;}
+  const urls=[...new Set((pr.links||[]).filter(l=>l.include_in_listing!==false).map(l=>l.url||l.normalized_url).filter(Boolean))].slice(0,8);
+  if(urls.length<2){toast('Adaugă cel puțin 2 linkuri analizate în dosar pentru un anunț bun','err');return;}
+  const btn=document.getElementById('rp-build-'+projectId),wrap=document.getElementById('research-result-wrap'),out=document.getElementById('listing-result');
+  document.getElementById('research-result')?.style.setProperty('display','none');
+  document.getElementById('competition-result')?.style.setProperty('display','none');
+  document.getElementById('decision-result')?.style.setProperty('display','none');
+  if(wrap)wrap.style.display='block';
+  if(out){out.style.display='';out.innerHTML=`<div class="listing-card"><span class="spin"></span> Generez anunț AB HOMES din dosarul „${esc(pr.title)}”…</div>`;}
+  if(btn){btn.disabled=true;btn.textContent='⏳ Generez…';}
+  try{
+    const product={name:pr.title||'',priceBuy:Number(pr.acquisition_price)||0,supplier:pr.supplier||'AB HOMES'};
+    const data=await apiJson('/api/listing-builder',{mode:'synthesize',product,urls},70000);
+    const l=data.listing||{};
+    listingFactoryData={listing:l,pages:data.pages||[]};
+    listingData=l;
+    renderListingFactoryResult(l,data.pages||[]);
+    try{
+      await apiJson('/api/research-projects',{action:'set_listing_status',project_id:projectId,status:'generat'},30000);
+      const local=researchProjects.find(p=>Number(p.id)===Number(projectId));if(local)local.listing_status='generat';
+      renderResearchProjects();
+    }catch(e){toast('Anunțul e generat, dar statusul nu s-a salvat: '+(e.message||e),'err');}
+    toast('Anunț generat din dosar ✓');
+  }catch(e){
+    if(out)out.innerHTML=`<div class="listing-card" style="border-color:var(--rd);color:var(--rd)">⚠️ ${esc(e.message||'Eroare generator anunț')}</div>`;
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='✨ Generează anunț din dosar';}
+  }
 }
 function researchProductPayload(){
   return{

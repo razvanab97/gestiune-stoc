@@ -184,6 +184,12 @@ module.exports=async function handler(req,res){
       const verdict=await recalcProject(projectId);
       return res.status(200).json(verdict);
     }
+    if(body.action==='set_listing_status'){
+      const projectId=Number(body.project_id),status=clean(body.status)||'generat';
+      if(!projectId)return res.status(400).json({error:'Lipsește dosarul'});
+      const rows=await supa('PATCH',`research_projects?id=eq.${projectId}`,{listing_status:status,updated_at:new Date().toISOString()});
+      return res.status(200).json({project:rows?.[0]});
+    }
     return res.status(400).json({error:'Acțiune necunoscută'});
   }catch(e){
     return res.status(e.status||500).json({error:e.message||'Eroare research projects',details:e.details||null});
