@@ -646,7 +646,7 @@ function buildRaportCats(){
 .research-project-title{font-size:18px;font-weight:900;color:var(--t1);line-height:1.25}
 .research-project-meta{font-size:13px;color:var(--t3);font-family:var(--mono);margin-top:4px}
 .research-verdict{border:1px solid var(--b2);border-radius:999px;padding:5px 10px;font-size:12px;font-weight:900;white-space:nowrap;background:var(--surf2)}
-.research-project-stats{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin:10px 0}
+.research-project-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin:10px 0}
 .research-project-stat{background:var(--surf2);border:1px solid var(--b1);border-radius:var(--r);padding:8px}
 .research-project-stat span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);font-weight:900;margin-bottom:3px}
 .research-project-stat strong{font-family:var(--mono);font-size:15px;color:var(--t1)}
@@ -2693,9 +2693,14 @@ function renderResearchProjects(){
         <div class="research-project-stat"><span>Achiziție</span><strong>${p.acquisition_price?Number(p.acquisition_price).toFixed(2)+' RON':'—'}</strong></div>
         <div class="research-project-stat"><span>Linkuri</span><strong>${links.length}</strong></div>
         <div class="research-project-stat"><span>Preț minim găsit</span><strong>${best?best.toFixed(2)+' RON':'—'}</strong></div>
+        <div class="research-project-stat"><span>Profit estimat</span><strong style="color:${Number(p.profit_estimated)>=10?'var(--gr)':'var(--or)'}">${p.profit_estimated?Number(p.profit_estimated).toFixed(2)+' RON':'—'}</strong></div>
+        <div class="research-project-stat"><span>Marjă estimată</span><strong style="color:${Number(p.margin_estimated)>=20?'var(--gr)':'var(--or)'}">${p.margin_estimated?Number(p.margin_estimated).toFixed(2)+'%':'—'}</strong></div>
+        <div class="research-project-stat"><span>Cumpără sub</span><strong>${p.max_buy_price?Number(p.max_buy_price).toFixed(2)+' RON':'—'}</strong></div>
         <div class="research-project-stat"><span>Review-uri max</span><strong>${reviews}</strong></div>
         <div class="research-project-stat"><span>Poze extrase</span><strong>${imgs}</strong></div>
       </div>
+      ${p.notes?`<div class="scorecard-summary" style="margin:8px 0">${esc(p.notes)}</div>`:''}
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0"><button class="btn btn-sm" onclick="recalcResearchProject(${p.id})">↻ Recalculează verdict</button></div>
       <div class="research-project-add"><textarea id="rp-links-${p.id}" placeholder="Lipește linkuri pentru acest dosar, câte unul pe linie"></textarea><button class="btn btn-sm btn-acc" onclick="addResearchProjectLinks(${p.id})">+ Adaugă & analizează</button></div>
       ${rows?`<div class="research-link-box">${rows}</div>`:'<div style="font-size:13px;color:var(--t3);margin-top:10px">Nu ai linkuri încă în acest dosar.</div>'}
     </div>`;
@@ -2712,6 +2717,14 @@ async function addResearchProjectLinks(projectId){
     const s=(data.skipped||[]).length,f=(data.flagged||[]).length,a=(data.added||[]).length;
     toast(`Linkuri adăugate: ${a}${s?' · duplicate/skip: '+s:''}${f?' · posibile duplicate: '+f:''} ✓`);
   }catch(e){toast(e.message||'Eroare adăugare linkuri','err');}
+}
+async function recalcResearchProject(projectId){
+  try{
+    toast('Recalculez verdictul…');
+    await apiJson('/api/research-projects',{action:'recalc_project',project_id:projectId},30000);
+    await loadResearchProjects();
+    toast('Verdict recalculat ✓');
+  }catch(e){toast(e.message||'Eroare recalculare verdict','err');}
 }
 function researchProductPayload(){
   return{
