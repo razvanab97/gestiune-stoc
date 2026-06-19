@@ -532,13 +532,20 @@ function buildRaportCats(){
 .scorecard-section h4{font-size:12px;margin:0 0 7px;color:var(--t1)}
 .scorecard-section ul{margin:0;padding-left:17px;color:var(--t2);font-size:12px;line-height:1.45}
 .scorecard-table{display:grid;gap:6px;margin-top:10px}
-.scorecard-row{display:grid;grid-template-columns:1fr auto auto auto auto;gap:8px;align-items:center;background:var(--surf2);border:1px solid var(--b1);border-radius:var(--r);padding:8px;font-size:12px}
+.scorecard-row{display:grid;grid-template-columns:1fr auto auto auto auto auto;gap:8px;align-items:center;background:var(--surf2);border:1px solid var(--b1);border-radius:var(--r);padding:8px;font-size:12px}
 .scorecard-row-title{font-weight:700;color:var(--t1);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .scorecard-row-meta{font-family:var(--mono);color:var(--t3);white-space:nowrap}
 .scorecard-row-gap.pos{color:var(--gr)}
 .scorecard-row-gap.neg{color:var(--rd)}
+.pnk-copy{display:flex;align-items:center;gap:5px;background:rgba(167,139,250,.12);border:1px solid var(--acc);border-radius:999px;padding:3px 7px;color:var(--t1);font-family:var(--mono);font-size:11px}
+.pnk-copy button{border:0;background:transparent;color:var(--acc);font-size:11px;cursor:pointer;padding:0}
+.decision-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+.decision-card{background:var(--surf);border:1px solid var(--b1);border-radius:var(--r);padding:12px}
+.decision-card span{display:block;font-size:10px;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;font-weight:800;margin-bottom:5px}
+.decision-card strong{display:block;font-size:20px;color:var(--t1);font-family:var(--mono)}
+.decision-card small{display:block;color:var(--t3);font-size:11px;margin-top:4px;line-height:1.35}
 @media(max-width:900px){.comp-lab-grid,.scorecard-sections{grid-template-columns:1fr}.scorecard-grid{grid-template-columns:1fr 1fr}.comp-lab-fields{grid-template-columns:1fr}}
-@media(max-width:700px){.scorecard-row{grid-template-columns:1fr 1fr}.scorecard-row-title{grid-column:1/-1;white-space:normal}.scorecard-row-meta{white-space:normal}}
+@media(max-width:700px){.scorecard-row{grid-template-columns:1fr 1fr}.scorecard-row-title{grid-column:1/-1;white-space:normal}.scorecard-row-meta{white-space:normal}.decision-grid{grid-template-columns:1fr}}
 .research-plat-price{font-size:22px;font-weight:700;font-family:var(--mono);color:var(--acc);margin-bottom:4px}
 .research-plat-meta{font-size:12px;color:var(--t3);margin-bottom:.5rem}
 .research-plat-margin{font-size:13px;font-weight:600}
@@ -934,6 +941,7 @@ function buildRaportCats(){
       <button class="research-tab on" id="research-tab-product" onclick="researchMode('product')">Research produs</button>
       <button class="research-tab" id="research-tab-listing" onclick="researchMode('listing')">Generator anunț din linkuri</button>
       <button class="research-tab" id="research-tab-competition" onclick="researchMode('competition')">Scorecard competitori</button>
+      <button class="research-tab" id="research-tab-decision" onclick="researchMode('decision')">Decizie produs</button>
     </div>
     <div class="research-mode on" id="research-mode-product">
       <div class="research-url-bar">
@@ -987,12 +995,32 @@ function buildRaportCats(){
         </div>
       </div>
     </div>
+    <div class="research-mode" id="research-mode-decision">
+      <div class="comp-lab-grid">
+        <div class="comp-lab-panel">
+          <div class="sec" style="margin:0 0 8px">🧭 Decizie produs</div>
+          <div style="font-size:12px;color:var(--t3);line-height:1.45;margin-bottom:10px">
+            Centralizează produsul curent, costul de achiziție, competitorii analizați, pragul minim AB HOMES și zonele care cer reconfirmare. Folosește întâi Research produs + Scorecard competitori pentru verdict complet.
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="btn btn-sm btn-acc" onclick="renderProductDecision()">Generează verdict</button>
+            <button class="btn btn-sm" onclick="researchMode('product')">Mergi la Research produs</button>
+            <button class="btn btn-sm" onclick="researchMode('competition')">Mergi la Scorecard</button>
+          </div>
+        </div>
+        <div class="comp-lab-panel">
+          <div class="sec" style="margin:0 0 8px">Regulă de lucru</div>
+          <div class="scorecard-section"><h4>Validare recomandată</h4><ul><li>sub 50% match: nu cumpăra fără verificare manuală</li><li>50-80% match: cere reconfirmare</li><li>80-100% match: compară prețul cu pragul minim</li><li>decizia finală se ia pe profit + risc retur + calitate listing</li></ul></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div id="research-result-wrap" style="display:none">
     <div id="research-result"></div>
     <div id="listing-result"></div>
     <div id="competition-result"></div>
+    <div id="decision-result"></div>
     <div style="text-align:center;margin-bottom:1rem">
       <button class="btn btn-sm" id="research-ai-btn" onclick="doResearchAI()" style="display:none">✦ Încearcă cu AI (fallback)</button>
     </div>
@@ -2247,18 +2275,24 @@ function clearResearchHistory(){
   toast('Istoric șters ✓');
 }
 function researchMode(mode){
-  ['product','listing','competition'].forEach(m=>{
+  ['product','listing','competition','decision'].forEach(m=>{
     document.getElementById('research-tab-'+m)?.classList.toggle('on',m===mode);
     document.getElementById('research-mode-'+m)?.classList.toggle('on',m===mode);
   });
   const wrap=document.getElementById('research-result-wrap');
-  const cr=document.getElementById('competition-result'),rr=document.getElementById('research-result'),lr=document.getElementById('listing-result');
+  const cr=document.getElementById('competition-result'),rr=document.getElementById('research-result'),lr=document.getElementById('listing-result'),dr=document.getElementById('decision-result');
   if(cr)cr.style.display=mode==='competition'?'':'none';
-  if(rr)rr.style.display=mode==='competition'?'none':'';
-  if(lr)lr.style.display=mode==='competition'?'none':'';
+  if(dr)dr.style.display=mode==='decision'?'':'none';
+  if(rr)rr.style.display=(mode==='competition'||mode==='decision')?'none':'';
+  if(lr)lr.style.display=(mode==='competition'||mode==='decision')?'none':'';
   if(mode==='competition'){
     wrap.style.display=competitionLabData?'block':'none';
     if(competitionLabData)renderCompetitionLab(competitionLabData);
+    return;
+  }
+  if(mode==='decision'){
+    wrap.style.display='block';
+    renderProductDecision();
     return;
   }
   if(mode==='listing'){
@@ -2495,6 +2529,10 @@ function listingFactoryUrls(){
 }
 function compLabUrls(){
   return extractUrlsFromText(document.getElementById('comp-lab-links')?.value||'');
+}
+function extractPnkFromUrl(url){
+  const m=String(url||'').match(/\/pd\/([A-Z0-9]+)\/?/i);
+  return m?m[1].toUpperCase():'';
 }
 async function apiJson(path,payload,timeoutMs=45000){
   const ctrl=new AbortController(),t=setTimeout(()=>ctrl.abort(),timeoutMs);
@@ -2935,6 +2973,9 @@ async function analyzeCompetitorLab(){
   }
 }
 function arrList(items){return Array.isArray(items)&&items.length?`<ul>${items.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'<div style="font-size:12px;color:var(--t3)">—</div>';}
+function pnkBadge(pnk){
+  return pnk?`<div class="pnk-copy"><span>PNK ${esc(pnk)}</span><button onclick="copyText('${esc(pnk)}')" title="Copiază PNK">Copy</button></div>`:'<div class="scorecard-row-meta">PNK —</div>';
+}
 function renderCompetitionLab(data){
   const out=document.getElementById('competition-result');if(!out)return;
   out.style.display='';
@@ -2946,10 +2987,12 @@ function renderCompetitionLab(data){
     {label:'Oportunitate',val:a.opportunityScore,sub:'șansa AB HOMES de intrare'}
   ];
   const rows=comps.map(c=>{
+    const pnk=c.pnk||extractPnkFromUrl(c.url);
     const gap=c.price>0&&minSell?Number(c.price-minSell):Number(c.priceGapToMin)||0;
     const gapTxt=c.price>0&&minSell?`${gap>=0?'+':''}${gap.toFixed(2)} vs minim`:'—';
     return`<div class="scorecard-row">
     <div class="scorecard-row-title"><a href="${esc(c.url||'#')}" target="_blank" style="color:inherit;text-decoration:none">${esc(c.title||c.url||'Competitor')}</a></div>
+    ${pnkBadge(pnk)}
     <div class="scorecard-row-meta">${c.price>0?Number(c.price).toFixed(2)+' RON':'—'}</div>
     <div class="scorecard-row-meta scorecard-row-gap ${gap>=0?'pos':'neg'}">${esc(gapTxt)}</div>
     <div class="scorecard-row-meta">${c.rating>0?'★'+Number(c.rating).toFixed(1)+' / '+(c.reviewCount||0)+' rec.':'fără rating'}</div>
@@ -2977,6 +3020,48 @@ function renderCompetitionLab(data){
       <div class="scorecard-section"><h4>⚠️ Ce trebuie reconfirmat</h4>${arrList(a.toVerify)}</div>
     </div>
     ${rows?`<div style="margin-top:14px"><strong style="font-size:13px">Competitori analizați</strong><div class="scorecard-table">${rows}</div></div>`:''}
+  </div>`;
+}
+function renderProductDecision(){
+  const out=document.getElementById('decision-result');if(!out)return;
+  out.style.display='';
+  const r=researchData||{}, comp=competitionLabData||{}, a=comp.analysis||{}, comps=comp.competitors||[];
+  const buy=Number(r.priceBuy||document.getElementById('comp-lab-buy')?.value||a.priceBuy)||0;
+  const name=(r.name||document.getElementById('comp-lab-product')?.value||a.productName||'Produs necompletat').trim();
+  const minSell=Number(a.minSellPrice)||pcAutomaticPricesFromGross(buy,.21).emag||0;
+  const compPrices=comps.map(c=>Number(c.price)||0).filter(Boolean).sort((x,y)=>x-y);
+  const median=compPrices.length?compPrices[Math.floor(compPrices.length/2)]:Number(a.suggestedPrice)||0;
+  const opp=Number(a.opportunityScore)||0, demand=Number(a.demandScore)||0, competition=Number(a.competitionScore)||0;
+  const underMin=compPrices.filter(p=>minSell&&p<minSell).length;
+  const verdict=(!buy||!compPrices.length)?'Date insuficiente':opp>=70&&underMin<=1?'Testează produsul':opp>=50?'Testează prudent 5 buc':underMin>=Math.ceil(compPrices.length/2)?'Evită la costul actual':'Cumpără doar sub preț mai bun';
+  const color=verdict.includes('Evită')?'var(--rd)':verdict.includes('prudent')||verdict.includes('insuficiente')?'#f59e0b':'var(--gr)';
+  const checks=[
+    buy?`Cost achiziție introdus: ${buy.toFixed(2)} RON`:'Lipsește costul de achiziție',
+    minSell?`Prag minim AB HOMES estimat: ${minSell.toFixed(2)} RON`:'Lipsește prag minim',
+    median?`Preț competitor median: ${median.toFixed(2)} RON`:'Nu există prețuri competitor',
+    comps.length?`${comps.length} linkuri competitor analizate`:'Nu există scorecard competitori',
+    underMin?`${underMin} competitori sunt sub pragul minim`:'Niciun competitor sub pragul minim cunoscut'
+  ];
+  const pnkRows=comps.map(c=>({pnk:c.pnk||extractPnkFromUrl(c.url),title:c.title||c.url||'Competitor'})).filter(x=>x.pnk);
+  out.innerHTML=`<div class="listing-card">
+    <div class="scorecard-hero">
+      <div class="scorecard-verdict" style="color:${color}">${esc(verdict)}</div>
+      <div class="scorecard-summary">${esc(name)}${buy?' · achiziție '+buy.toFixed(2)+' RON':''}. Verdict calculat din profit minim, scor oportunitate și prețuri competitor.</div>
+    </div>
+    <div class="decision-grid">
+      <div class="decision-card"><span>Oportunitate</span><strong style="color:${scoreTone(opp)}">${opp}/100</strong><small>din scorecard competitori</small></div>
+      <div class="decision-card"><span>Cerere</span><strong style="color:${scoreTone(demand)}">${demand}/100</strong><small>review-uri, rating, badge-uri</small></div>
+      <div class="decision-card"><span>Competiție</span><strong style="color:${scoreTone(competition,true)}">${competition}/100</strong><small>mai mic e mai bine</small></div>
+      <div class="decision-card"><span>Preț minim</span><strong>${minSell?minSell.toFixed(2)+' RON':'—'}</strong><small>prag AB HOMES estimat</small></div>
+      <div class="decision-card"><span>Mediană competitor</span><strong>${median?median.toFixed(2)+' RON':'—'}</strong><small>reper de listare</small></div>
+      <div class="decision-card"><span>Competitori sub prag</span><strong style="color:${underMin?'var(--rd)':'var(--gr)'}">${underMin}</strong><small>sub prețul minim estimat</small></div>
+    </div>
+    <div class="scorecard-sections">
+      <div class="scorecard-section"><h4>Checklist decizie</h4>${arrList(checks)}</div>
+      <div class="scorecard-section"><h4>Ce reconfirmi manual</h4>${arrList(a.toVerify||['dacă produsul este identic','cost real transport/retur','calitatea pozelor și dimensiunile'])}</div>
+      <div class="scorecard-section"><h4>Acțiuni recomandate</h4>${arrList(a.recommendations||['completează research produs','adaugă 3-5 linkuri concurente','generează anunț AB HOMES'])}</div>
+      <div class="scorecard-section"><h4>PNK-uri eMAG</h4>${pnkRows.length?`<ul>${pnkRows.map(x=>`<li><button class="btn btn-sm" style="font-size:11px;margin-right:6px" onclick="copyText('${esc(x.pnk)}')">Copy</button><span style="font-family:var(--mono)">${esc(x.pnk)}</span> · ${esc(x.title).slice(0,90)}</li>`).join('')}</ul>`:'<div style="font-size:12px;color:var(--t3)">Nu am găsit PNK-uri eMAG în linkuri.</div>'}</div>
+    </div>
   </div>`;
 }
 function getCS(key){return compState[key]||(compState[key]={open:false,urls:[],items:[],analysis:null,loading:false});}

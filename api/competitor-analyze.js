@@ -22,9 +22,13 @@ function minSellFromBuy(priceBuy){
   }
   return Math.round(hi*100)/100;
 }
+function extractPnk(url){
+  const m=String(url||'').match(/\/pd\/([A-Z0-9]+)\/?/i);
+  return m?m[1].toUpperCase():'';
+}
 
 function extractPageData(html,url){
-  const d={url,title:'',price:0,rating:0,reviewCount:0,imageCount:0,hasBullets:false,hasSpecs:false,descLength:0,badges:[],seller:'',error:null};
+  const d={url,pnk:extractPnk(url),title:'',price:0,rating:0,reviewCount:0,imageCount:0,hasBullets:false,hasSpecs:false,descLength:0,badges:[],seller:'',error:null};
 
   // Titlu
   const tm=html.match(/<h1[^>]*class="[^"]*page-title[^"]*"[^>]*>([\s\S]*?)<\/h1>/i)
@@ -102,10 +106,10 @@ module.exports=async function handler(req,res){
       const t=setTimeout(()=>ctrl.abort(),12000);
       const r=await fetch(url,{headers:hdrs,signal:ctrl.signal,redirect:'follow'});
       clearTimeout(t);
-      if(!r.ok)return{url,error:`HTTP ${r.status}`,title:'',price:0};
+      if(!r.ok)return{url,pnk:extractPnk(url),error:`HTTP ${r.status}`,title:'',price:0};
       const html=(await r.text()).slice(0,MAX_HTML);
       return extractPageData(html,url);
-    }catch(e){return{url,error:e.message,title:'',price:0};}
+    }catch(e){return{url,pnk:extractPnk(url),error:e.message,title:'',price:0};}
   }));
 
   const valid=competitors.filter(c=>!c.error&&(c.title||c.price>0));
