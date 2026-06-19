@@ -119,6 +119,46 @@ create table if not exists setari_app (
   updated_at timestamptz default now()
 );
 
+-- DOSARE RESEARCH PRODUSE
+create table if not exists research_projects (
+  id bigint primary key generated always as identity,
+  title text not null,
+  acquisition_price numeric(10,2) default 0,
+  supplier text,
+  verdict text default 'Date insuficiente',
+  listing_status text default 'negenerat',
+  profit_estimated numeric(10,2) default 0,
+  margin_estimated numeric(6,2) default 0,
+  max_buy_price numeric(10,2) default 0,
+  notes text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
+create table if not exists research_links (
+  id bigint primary key generated always as identity,
+  project_id bigint not null references research_projects(id) on delete cascade,
+  url text not null,
+  normalized_url text not null,
+  platform text default 'altul',
+  pnk text,
+  title text,
+  price numeric(10,2) default 0,
+  currency text default 'RON',
+  rating numeric(4,2) default 0,
+  review_count integer default 0,
+  images jsonb default '[]'::jsonb,
+  specs jsonb default '{}'::jsonb,
+  description text,
+  duplicate_of bigint references research_links(id) on delete set null,
+  duplicate_type text default 'none',
+  include_in_listing boolean default true,
+  status text default 'analizat',
+  error text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+
 -- INDEX-uri pentru performanță
 create index if not exists idx_vanzari_data on vanzari_zilnice(data);
 create index if not exists idx_jurnal_data on jurnal(data desc);
@@ -128,6 +168,10 @@ create index if not exists idx_mapari_platforma on platforma_mapari(platforma);
 create index if not exists idx_lpo_product on listing_price_observations(product_name);
 create index if not exists idx_lpo_url on listing_price_observations(source_url);
 create index if not exists idx_lpo_created on listing_price_observations(created_at desc);
+create index if not exists idx_research_projects_updated on research_projects(updated_at desc);
+create index if not exists idx_research_links_project on research_links(project_id);
+create index if not exists idx_research_links_norm on research_links(project_id, normalized_url);
+create index if not exists idx_research_links_pnk on research_links(project_id, pnk) where pnk is not null and pnk <> '';
 
 -- Auto-update updated_at pe produse
 create or replace function update_updated_at()
@@ -149,6 +193,12 @@ alter table jurnal disable row level security;
 alter table platforma_mapari disable row level security;
 alter table listing_price_observations disable row level security;
 alter table setari_app disable row level security;
+alter table research_projects disable row level security;
+alter table research_links disable row level security;
+
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on research_projects to anon, authenticated;
+grant select, insert, update, delete on research_links to anon, authenticated;
 
 -- Confirmare
 select 'Schema creat cu succes!' as status;
