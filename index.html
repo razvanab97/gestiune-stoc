@@ -156,6 +156,16 @@ tr:hover td{background:var(--surf2)}
 .m-col{padding:1.5rem 1.75rem}
 .m-col-l{border-right:1px solid var(--b1);background:var(--surf2)}
 .m-col-r{min-width:0}
+.m-sales-history{grid-column:1/-1;border-top:1px solid var(--b1);background:var(--surf2);padding:1.1rem 1.75rem}
+.m-sales-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:8px}
+.m-sales-title{font-size:13px;font-weight:900;text-transform:uppercase;letter-spacing:.06em;color:var(--t3)}
+.m-sales-total{font-family:var(--mono);font-size:13px;font-weight:900;color:var(--t1)}
+.m-sales-list{display:grid;gap:6px}
+.m-sales-row{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;background:var(--surf);border:1px solid var(--b1);border-radius:var(--r);padding:8px 10px;font-size:13px}
+.m-sales-date{font-weight:800;color:var(--t1)}
+.m-sales-qty{font-family:var(--mono);font-weight:900;color:var(--acc)}
+.m-sales-value{font-family:var(--mono);color:var(--t3)}
+.m-sales-empty{font-size:13px;color:var(--t3);background:var(--surf);border:1px dashed var(--b2);border-radius:var(--r);padding:10px}
 .sec{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);margin:1rem 0 .5rem;padding-bottom:5px;border-bottom:1px solid var(--b1)}
 .sec:first-child{margin-top:0}
 .fld{margin-bottom:.9rem}
@@ -1259,6 +1269,7 @@ th{font-weight:800!important;color:var(--t3)!important}
       <input type="text" id="cat-s" class="cat-s" placeholder="Filtrează categorii…" oninput="buildCats(this.value)">
       <div class="cat-g" id="cat-g"></div>
     </div>
+    <div class="m-sales-history" id="m-sales-history"></div>
   </div>
   <div class="m-foot">
     <button class="btn" onclick="closeModal()">Anulează</button>
@@ -3531,6 +3542,22 @@ function renderSearch(){
       </div></div>`;
   }).join('');
 }
+function productSalesHistory(productId){
+  if(!productId)return[];
+  return JL.map(day=>{
+    const qty=(day.entries||[]).filter(en=>Number(en.id)===Number(productId)).reduce((s,en)=>s+(Number(en.qty)||0),0);
+    const value=(day.entries||[]).filter(en=>Number(en.id)===Number(productId)).reduce((s,en)=>s+((Number(en.qty)||0)*(Number(en.priceSell)||0)),0);
+    return{date:day.date,qty,value};
+  }).filter(x=>x.qty>0).sort((a,b)=>b.date.localeCompare(a.date));
+}
+function renderProductSalesHistory(productId){
+  const box=document.getElementById('m-sales-history');if(!box)return;
+  if(!productId){box.innerHTML='<div class="m-sales-head"><div class="m-sales-title">Istoric vânzări produs</div></div><div class="m-sales-empty">Produs nou — istoricul apare după prima salvare și vânzare.</div>';return;}
+  const rows=productSalesHistory(productId),total=rows.reduce((s,r)=>s+r.qty,0),value=rows.reduce((s,r)=>s+r.value,0);
+  if(!rows.length){box.innerHTML='<div class="m-sales-head"><div class="m-sales-title">Istoric vânzări produs</div></div><div class="m-sales-empty">Nu există vânzări în jurnal pentru acest produs.</div>';return;}
+  box.innerHTML=`<div class="m-sales-head"><div class="m-sales-title">Istoric vânzări produs</div><div class="m-sales-total">${total} buc${value>0?' · '+value.toFixed(2)+' RON':''}</div></div>
+    <div class="m-sales-list">${rows.map(r=>`<div class="m-sales-row"><div class="m-sales-date">${esc(new Date(r.date+'T00:00:00').toLocaleDateString('ro-RO'))}</div><div class="m-sales-qty">${r.qty} buc</div><div class="m-sales-value">${r.value>0?r.value.toFixed(2)+' RON':'—'}</div></div>`).join('')}</div>`;
+}
 async function sellSearch(id){
   const inp=document.getElementById('ssq-'+id);
   const n=Math.max(1,parseInt(inp?.value)||1);
@@ -3757,6 +3784,7 @@ function openModal(id){
   else{hidePrev();document.getElementById('f-imgurl').value='';}
   document.getElementById('f-img').value='';
   document.getElementById('ai-img-btn').disabled=!curImg;
+  renderProductSalesHistory(p?.id||null);
   buildCats('');calcStoc();
   document.getElementById('ov').classList.add('on');
   const body=document.querySelector('#ov .m-body');if(body)body.scrollTop=0;
