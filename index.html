@@ -755,7 +755,7 @@ th{font-weight:800!important;color:var(--t3)!important}
   </div>
   <div class="stats" id="stats"></div>
   <div class="toolbar">
-    <input type="text" id="search" placeholder="Caută în inventar…" oninput="renderTable()">
+    <input type="text" id="search" placeholder="Caută în inventar după nume, SKU/cod extern sau cod intern…" oninput="renderTable()">
     <select id="fc" onchange="renderTable()"><option value="">Toate categoriile</option></select>
     <select id="fsup" onchange="renderTable()"><option value="">Toți furnizorii</option></select>
     <select id="fs" onchange="renderTable()">
@@ -3501,18 +3501,30 @@ function openCalcForResearch(){
 }
 
 /* TODAY SEARCH */
+function invSearchNorm(v){
+  return String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+}
+function invSearchDigits(v){return String(v||'').replace(/\D/g,'');}
+function prodMatchesSearch(p,qRaw){
+  const q=invSearchNorm(qRaw),qd=invSearchDigits(qRaw);
+  if(!q)return true;
+  const vals=[p.name,p.sku,p.internalCode,p.category,p.supplier,p.notes,p.material,p.dims,p.colors];
+  if(vals.some(v=>invSearchNorm(v).includes(q)))return true;
+  return qd.length>=3&&vals.some(v=>invSearchDigits(v).includes(qd));
+}
 function renderSearch(){
-  const q=(document.getElementById('ss-inp').value||'').trim().toLowerCase();
+  const q=(document.getElementById('ss-inp').value||'').trim();
   const drop=document.getElementById('ss-drop');
   if(!q){drop.classList.remove('on');drop.innerHTML='';return;}
-  const hits=P.filter(p=>(p.name||'').toLowerCase().includes(q)||(p.sku||'').toLowerCase().includes(q)||(p.internalCode||'').toLowerCase().includes(q));
+  const hits=P.filter(p=>prodMatchesSearch(p,q));
   if(!hits.length){drop.classList.add('on');drop.innerHTML=`<div class="ss-row" style="color:var(--t3)">Niciun produs găsit</div>`;return;}
   drop.classList.add('on');
   drop.innerHTML=hits.map(p=>{
     const s=qty(p);const tqs=tqp(p);
     const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="ss-th click-edit" onclick="openModal(${p.id})" title="Editează produs" onerror="this.style.display='none'">`:`<div class="ss-th-ph click-edit" onclick="openModal(${p.id})" title="Editează produs">📦</div>`;
     const copyBtn=`<button class="copy-nm-btn" onclick="event.stopPropagation();copyProductName(${p.id})" title="Copiază denumire">📋</button>`;
-    return`<div class="ss-row">${th}<div class="ss-inf"><div class="ss-nm">${esc(p.name)}${copyBtn}</div><div class="ss-meta">stoc: ${s}${p.priceSell>0?' · min '+p.priceSell.toFixed(2)+' RON':''}</div></div>
+    const skuMeta=[p.sku?'SKU: '+p.sku:'',p.internalCode?'Cod intern: '+p.internalCode:''].filter(Boolean).join(' · ');
+    return`<div class="ss-row">${th}<div class="ss-inf"><div class="ss-nm">${esc(p.name)}${copyBtn}</div><div class="ss-meta">${esc(skuMeta||'fără cod')} · stoc: ${s}${p.priceSell>0?' · min '+p.priceSell.toFixed(2)+' RON':''}</div></div>
       <div class="ss-act">${tqs>0?`<span class="ss-sold-b">azi: ${tqs}</span>`:''}
         <input type="number" class="ss-qty" id="ssq-${p.id}" value="1" min="1">
         <button class="sell-btn" onclick="sellSearch(${p.id})" ${s<=0?'disabled':''}>Vinde</button>
@@ -3627,11 +3639,11 @@ async function closeDay(){
 /* TABLE */
 function srt(c){if(sCol===c)sDir*=-1;else{sCol=c;sDir=1;}renderTable();}
 function renderTable(){
-  const q=(document.getElementById('search').value||'').toLowerCase();
+  const q=(document.getElementById('search').value||'').trim();
   const cat=document.getElementById('fc').value;
   const sup=document.getElementById('fsup').value;
   const s=document.getElementById('fs').value;
-  let list=P.filter(p=>{const m=!q||[p.name,p.sku,p.internalCode,p.category,p.supplier].some(v=>(v||'').toLowerCase().includes(q));return m&&(!cat||p.category===cat)&&(!sup||p.supplier===sup)&&(!s||st(p)===s);});
+  let list=P.filter(p=>{const m=prodMatchesSearch(p,q);return m&&(!cat||p.category===cat)&&(!sup||p.supplier===sup)&&(!s||st(p)===s);});
   list.sort((a,b)=>{let av=sCol==='qty'?qty(a):(a[sCol]??'');let bv=sCol==='qty'?qty(b):(b[sCol]??'');if(typeof av==='string')av=av.toLowerCase();if(typeof bv==='string')bv=bv.toLowerCase();return av<bv?-sDir:av>bv?sDir:0;});
   const tot=P.length,lowC=P.filter(p=>st(p)==='low').length,outC=P.filter(p=>st(p)==='out').length;
   const val=P.reduce((a,p)=>a+(qty(p)*(p.priceBuyTTC||0)),0);
