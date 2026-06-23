@@ -1162,20 +1162,20 @@ th{font-weight:800!important;color:var(--t3)!important}
         <div class="sb-inputs">
           <div class="sb-cell">
             <label>Cumpărate</label>
-            <input id="f-bought" type="number" min="0" placeholder="0" oninput="calcStoc()">
+            <input id="f-bought" type="text" inputmode="decimal" placeholder="0" oninput="calcStoc()">
             <div class="sb-extra">
-              <input id="f-extra" type="number" min="0" placeholder="Extra peste comandă" onkeydown="if(event.key==='Enter'){event.preventDefault();addExtraStoc();}">
+              <input id="f-extra" type="text" inputmode="decimal" placeholder="Extra peste comandă" onkeydown="if(event.key==='Enter'){event.preventDefault();addExtraStoc();}">
               <button type="button" class="btn btn-sm" onclick="addExtraStoc()" title="Adaugă peste cantitatea comandată inițial">+ Extra</button>
             </div>
           </div>
           <div class="sb-cell">
             <label>Pe drum / comandate</label>
-            <input id="f-incoming" type="number" min="0" placeholder="0" oninput="calcStoc()">
+            <input id="f-incoming" type="text" inputmode="decimal" placeholder="0" oninput="calcStoc()">
             <div class="sb-extra">
               <button type="button" class="btn btn-sm" onclick="receiveIncoming()" title="Mută produsele sosite în cantitatea cumpărată">✓ Recepționează</button>
             </div>
           </div>
-          <div class="sb-cell"><label>Vândute total</label><input id="f-sold" type="number" min="0" placeholder="0" oninput="calcStoc()"></div>
+          <div class="sb-cell"><label>Vândute total</label><input id="f-sold" type="text" inputmode="decimal" placeholder="0" oninput="calcStoc()"></div>
         </div>
         <div class="sb-res">
           <div class="sb-rc"><div class="sb-rl">Stoc actual</div><div class="sb-rv" id="sb-act">0</div></div>
@@ -1183,7 +1183,7 @@ th{font-weight:800!important;color:var(--t3)!important}
           <div class="sb-rc"><div class="sb-rl">Vândute azi</div><div class="sb-rv" id="sb-azi" style="opacity:.55">—</div><div class="sb-rs">din panoul zilnic</div></div>
         </div>
       </div>
-      <div class="fld"><label>Stoc minim (alertă)</label><input id="f-min" type="number" min="0" placeholder="5" style="width:60%"></div>
+      <div class="fld"><label>Stoc minim (alertă)</label><input id="f-min" type="text" inputmode="decimal" placeholder="5" style="width:60%"></div>
     </div>
 
     <!-- COL DREAPTA: info + preturi + categorie -->
@@ -1416,8 +1416,18 @@ function productInternalCode(date,id){
   return`AB${mm}${dd}${id}`;
 }
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
-function qty(p){return(p.bought||0)-(p.sold||0);}
-function tqp(p){return TS[p.id]||0;}
+function parseQtyVal(v,def=0){
+  let s=String(v??'').trim().replace(',', '.');
+  if(/^0[1-9]$/.test(s))s='0.'+s.slice(1);
+  const n=Number(s);
+  return Number.isFinite(n)?Math.round(n*100)/100:def;
+}
+function fmtQty(n){
+  n=Math.round((Number(n)||0)*100)/100;
+  return n.toLocaleString('ro-RO',{maximumFractionDigits:2});
+}
+function qty(p){return parseQtyVal(p.bought)-parseQtyVal(p.sold);}
+function tqp(p){return parseQtyVal(TS[p.id]);}
 function st(p){const q=qty(p);if(q<=0)return'out';if(p.minQty>0&&q<=p.minQty)return'low';return'ok';}
 function fv(id){return parseFloat(document.getElementById(id)?.value)||0;}
 function fmtBr(n){return(n>=0?'+':'')+n.toFixed(2)+' RON';}
@@ -3535,9 +3545,9 @@ function renderSearch(){
     const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="ss-th click-edit" onclick="openModal(${p.id})" title="Editează produs" onerror="this.style.display='none'">`:`<div class="ss-th-ph click-edit" onclick="openModal(${p.id})" title="Editează produs">📦</div>`;
     const copyBtn=`<button class="copy-nm-btn" onclick="event.stopPropagation();copyProductName(${p.id})" title="Copiază denumire">📋</button>`;
     const skuMeta=[p.sku?'SKU: '+p.sku:'',p.internalCode?'Cod intern: '+p.internalCode:''].filter(Boolean).join(' · ');
-    return`<div class="ss-row">${th}<div class="ss-inf"><div class="ss-nm">${esc(p.name)}${copyBtn}</div><div class="ss-meta">${esc(skuMeta||'fără cod')} · stoc: ${s}${p.priceSell>0?' · min '+p.priceSell.toFixed(2)+' RON':''}</div></div>
-      <div class="ss-act">${tqs>0?`<span class="ss-sold-b">azi: ${tqs}</span>`:''}
-        <input type="number" class="ss-qty" id="ssq-${p.id}" value="1" min="1">
+    return`<div class="ss-row">${th}<div class="ss-inf"><div class="ss-nm">${esc(p.name)}${copyBtn}</div><div class="ss-meta">${esc(skuMeta||'fără cod')} · stoc: ${fmtQty(s)}${p.priceSell>0?' · min '+p.priceSell.toFixed(2)+' RON':''}</div></div>
+      <div class="ss-act">${tqs>0?`<span class="ss-sold-b">azi: ${fmtQty(tqs)}</span>`:''}
+        <input type="text" inputmode="decimal" class="ss-qty" id="ssq-${p.id}" value="1">
         <button class="sell-btn" onclick="sellSearch(${p.id})">Vinde</button>
       </div></div>`;
   }).join('');
@@ -3555,12 +3565,13 @@ function renderProductSalesHistory(productId){
   if(!productId){box.innerHTML='<div class="m-sales-head"><div class="m-sales-title">Istoric vânzări produs</div></div><div class="m-sales-empty">Produs nou — istoricul apare după prima salvare și vânzare.</div>';return;}
   const rows=productSalesHistory(productId),total=rows.reduce((s,r)=>s+r.qty,0),value=rows.reduce((s,r)=>s+r.value,0);
   if(!rows.length){box.innerHTML='<div class="m-sales-head"><div class="m-sales-title">Istoric vânzări produs</div></div><div class="m-sales-empty">Nu există vânzări în jurnal pentru acest produs.</div>';return;}
-  box.innerHTML=`<div class="m-sales-head"><div class="m-sales-title">Istoric vânzări produs</div><div class="m-sales-total">${total} buc${value>0?' · '+value.toFixed(2)+' RON':''}</div></div>
-    <div class="m-sales-list">${rows.map(r=>`<div class="m-sales-row"><div class="m-sales-date">${esc(new Date(r.date+'T00:00:00').toLocaleDateString('ro-RO'))}</div><div class="m-sales-qty">${r.qty} buc</div><div class="m-sales-value">${r.value>0?r.value.toFixed(2)+' RON':'—'}</div></div>`).join('')}</div>`;
+  box.innerHTML=`<div class="m-sales-head"><div class="m-sales-title">Istoric vânzări produs</div><div class="m-sales-total">${fmtQty(total)} buc${value>0?' · '+value.toFixed(2)+' RON':''}</div></div>
+    <div class="m-sales-list">${rows.map(r=>`<div class="m-sales-row"><div class="m-sales-date">${esc(new Date(r.date+'T00:00:00').toLocaleDateString('ro-RO'))}</div><div class="m-sales-qty">${fmtQty(r.qty)} buc</div><div class="m-sales-value">${r.value>0?r.value.toFixed(2)+' RON':'—'}</div></div>`).join('')}</div>`;
 }
 async function sellSearch(id){
   const inp=document.getElementById('ssq-'+id);
-  const n=Math.max(1,parseInt(inp?.value)||1);
+  const n=parseQtyVal(inp?.value,1);
+  if(n<=0){toast('Introdu o cantitate validă','err');return;}
   const p=P.find(x=>x.id===id);if(!p)return;
   const c=n;
   TS[id]=(TS[id]||0)+c;p.sold=(p.sold||0)+c;
@@ -3571,14 +3582,14 @@ async function sellSearch(id){
   }
   await saveJurnalEntry(p,c);
   renderToday();renderTable();renderSearch();
-  toast(`Vândut: ${c}× ${p.name}${qty(p)<0?' · stoc pe minus: '+qty(p):''}`);
+  toast(`Vândut: ${fmtQty(c)}× ${p.name}${qty(p)<0?' · stoc pe minus: '+fmtQty(qty(p)):''}`);
 }
 
 /* TODAY GRID */
 let todayCardProds=[],todayCardIdx=0;
 function todayCardSide(p,side){
   const img=p.img?`<img src="${esc(imgSrc(p.img))}" alt="" onclick="event.stopPropagation();openModal(${p.id})" onerror="this.parentElement.innerHTML='<span class=&quot;ph&quot;>📦</span>'">`:`<span class="ph" onclick="event.stopPropagation();openModal(${p.id})">📦</span>`;
-  return`<div class="today-card today-card-side" onclick="todayCardGoTo(${p.id})" title="${esc(p.name)}"><div class="today-card-img click-edit">${img}</div><div class="today-card-title">${esc(p.name)}</div><div class="today-card-meta">azi ${tqp(p)} buc.</div></div>`;
+  return`<div class="today-card today-card-side" onclick="todayCardGoTo(${p.id})" title="${esc(p.name)}"><div class="today-card-img click-edit">${img}</div><div class="today-card-title">${esc(p.name)}</div><div class="today-card-meta">azi ${fmtQty(tqp(p))} buc.</div></div>`;
 }
 function renderToday(){
   const _prevId=todayCardProds[todayCardIdx]?.id;
@@ -3590,21 +3601,21 @@ function renderToday(){
   else{
     const n=todayCardProds.length,p=todayCardProds[todayCardIdx],prev=todayCardProds[(todayCardIdx-1+n)%n],next=todayCardProds[(todayCardIdx+1)%n],tqs=tqp(p),s=qty(p);
     const img=p.img?`<img src="${esc(imgSrc(p.img))}" alt="" onclick="openModal(${p.id})" onerror="this.parentElement.innerHTML='<span class=&quot;ph&quot;>📦</span>'">`:`<span class="ph" onclick="openModal(${p.id})">📦</span>`;
-    const main=`<div class="today-card today-card-main"><div class="today-card-img click-edit" title="Editează produs">${img}</div><div class="today-card-title"><button class="copy-btn" onclick="copyProductName(${p.id})" title="Copiază denumirea">📋</button><span>${esc(p.name)}</span></div><div class="today-card-meta"><button class="copy-btn" onclick="copyProductSku(${p.id})" title="Copiază SKU" ${!p.sku?'style="visibility:hidden"':''}>📋</button>SKU: ${esc(p.sku||'—')}</div><div class="today-card-meta"><button class="copy-btn" onclick="copyProductInternalCode(${p.id})" title="Copiază cod intern">📋</button>Cod intern: ${esc(p.internalCode||'—')}</div><div class="today-card-row"><span>Stoc actual</span><strong style="${s<0?'color:var(--rd)':''}">${s}</strong></div><div class="today-card-row"><span>Vândute azi</span><strong>${tqs}</strong></div><div class="today-card-prices"><div class="today-card-row"><span>Preț minim direct</span><strong>${p.priceSell>0?p.priceSell.toFixed(2)+' RON':'—'}</strong></div><div class="today-card-row"><span>Preț minim eMAG</span><strong>${p.priceEmag>0?p.priceEmag.toFixed(2)+' RON':'—'}</strong></div><div class="today-card-row"><span>Preț minim Trendyol</span><strong>${p.priceTrendyol>0?p.priceTrendyol.toFixed(2)+' RON':'—'}</strong></div></div><div class="today-actions"><input type="number" class="tg-inp${tqs>0?' on':''}" id="ti-${p.id}" value="${tqs}" min="0" onchange="updateTQ(${p.id})" oninput="pvTQ(${p.id})"><button class="tg-btn" onclick="qSell(${p.id})">+</button><button class="tg-btn-del" onclick="deleteSale(${p.id})" ${tqs<=0?'disabled':''} title="Șterge vânzare">×</button></div></div>`;
+    const main=`<div class="today-card today-card-main"><div class="today-card-img click-edit" title="Editează produs">${img}</div><div class="today-card-title"><button class="copy-btn" onclick="copyProductName(${p.id})" title="Copiază denumirea">📋</button><span>${esc(p.name)}</span></div><div class="today-card-meta"><button class="copy-btn" onclick="copyProductSku(${p.id})" title="Copiază SKU" ${!p.sku?'style="visibility:hidden"':''}>📋</button>SKU: ${esc(p.sku||'—')}</div><div class="today-card-meta"><button class="copy-btn" onclick="copyProductInternalCode(${p.id})" title="Copiază cod intern">📋</button>Cod intern: ${esc(p.internalCode||'—')}</div><div class="today-card-row"><span>Stoc actual</span><strong style="${s<0?'color:var(--rd)':''}">${fmtQty(s)}</strong></div><div class="today-card-row"><span>Vândute azi</span><strong>${fmtQty(tqs)}</strong></div><div class="today-card-prices"><div class="today-card-row"><span>Preț minim direct</span><strong>${p.priceSell>0?p.priceSell.toFixed(2)+' RON':'—'}</strong></div><div class="today-card-row"><span>Preț minim eMAG</span><strong>${p.priceEmag>0?p.priceEmag.toFixed(2)+' RON':'—'}</strong></div><div class="today-card-row"><span>Preț minim Trendyol</span><strong>${p.priceTrendyol>0?p.priceTrendyol.toFixed(2)+' RON':'—'}</strong></div></div><div class="today-actions"><input type="text" inputmode="decimal" class="tg-inp${tqs>0?' on':''}" id="ti-${p.id}" value="${fmtQty(tqs)}" onchange="updateTQ(${p.id})" oninput="pvTQ(${p.id})"><button class="tg-btn" onclick="qSell(${p.id})">+</button><button class="tg-btn-del" onclick="deleteSale(${p.id})" ${tqs<=0?'disabled':''} title="Șterge vânzare">×</button></div></div>`;
     tg.innerHTML=`<div class="today-carousel">${n>1?todayCardSide(prev,'l'):'<div></div>'}<button class="today-arrow" onclick="todayCardNav(-1)">‹</button>${main}<button class="today-arrow" onclick="todayCardNav(1)">›</button>${n>1?todayCardSide(next,'r'):'<div></div>'}</div>`;
   }
   const tot=Object.values(TS).reduce((a,v)=>a+v,0);
   const val=P.reduce((a,p)=>a+(tqp(p)*(p.priceSell||0)),0);
   document.getElementById('tb-sum').innerHTML=tot>0
-    ?`<span>Total azi: <strong>${tot} buc</strong></span><span>Valoare: <strong>${val.toFixed(2)} RON</strong></span><span>${Object.keys(TS).filter(k=>TS[k]>0).length} produse</span>`
+    ?`<span>Total azi: <strong>${fmtQty(tot)} buc</strong></span><span>Valoare: <strong>${val.toFixed(2)} RON</strong></span><span>${Object.keys(TS).filter(k=>TS[k]>0).length} produse</span>`
     :`<span style="font-style:italic;opacity:.6">Nicio vânzare. Caută un produs mai sus sau apasă + în grilă.</span>`;
 }
 function todayCardNav(dir){if(!todayCardProds.length)return;todayCardIdx=(todayCardIdx+dir+todayCardProds.length)%todayCardProds.length;renderToday();}
 function todayCardGoTo(id){const i=todayCardProds.findIndex(p=>p.id===id);if(i>=0){todayCardIdx=i;renderToday();}}
-function pvTQ(id){const i=document.getElementById('ti-'+id);i.classList.toggle('on',parseInt(i.value)||0);}
+function pvTQ(id){const i=document.getElementById('ti-'+id);i.classList.toggle('on',parseQtyVal(i.value)>0);}
 async function updateTQ(id){
   const i=document.getElementById('ti-'+id);
-  const nv=Math.max(0,parseInt(i.value)||0);
+  const nv=Math.max(0,parseQtyVal(i.value));
   const p=P.find(x=>x.id===id);if(!p)return;
   const ov=TS[id]||0;const d=nv-ov;
   p.sold=Math.max(0,(p.sold||0)+d);
@@ -3624,7 +3635,7 @@ async function qSell(id){
     await saveTodaySale(id,TS[id]);
   }
   await saveJurnalEntry(p,1);
-  renderToday();renderTable();toast(`${p.name}${qty(p)<0?' · stoc pe minus: '+qty(p):''}`);
+  renderToday();renderTable();toast(`${p.name}${qty(p)<0?' · stoc pe minus: '+fmtQty(qty(p)):''}`);
 }
 
 async function deleteSale(id){
@@ -3694,7 +3705,7 @@ function renderTable(){
     const s2=st(p),q2=qty(p),tqs=tqp(p);
     const bdg=s2==='ok'?`<span class="bdg bdg-ok">În stoc</span>`:s2==='low'?`<span class="bdg bdg-low">Scăzut</span>`:`<span class="bdg bdg-out">Epuizat</span>`;
     const catB=p.category?`<span class="bdg bdg-cat">${esc(p.category)}</span>`:'—';
-    const aziB=tqs>0?`<span class="bdg bdg-azi">−${tqs}</span>`:`<span style="color:var(--t3);font-family:var(--mono);font-size:12px">—</span>`;
+    const aziB=tqs>0?`<span class="bdg bdg-azi">−${fmtQty(tqs)}</span>`:`<span style="color:var(--t3);font-family:var(--mono);font-size:12px">—</span>`;
     const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="p-th click-edit" onclick="openModal(${p.id})" title="Editează produs" onerror="this.style.display='none'">`:`<div class="p-th-ph click-edit" onclick="openModal(${p.id})" title="Editează produs">📦</div>`;
     const tvaBadge=p.tvaAcq>0?`<span class="bdg" style="background:var(--bl-bg);color:var(--bl)">21%</span>`:`<span class="bdg" style="background:var(--surf2);color:var(--t3)">0%</span>`;
     return`<tr style="${(s2==='low'||s2==='out')?'background:rgba(255,184,77,.05)':''}">
@@ -3703,11 +3714,11 @@ function renderTable(){
       <td style="font-weight:500" title="${esc(p.name)}"><button class="copy-btn" onclick="copyProductName(${p.id})" title="Copiază">📋</button>${esc(p.name)}</td>
       <td style="font-family:var(--mono);font-size:12px;color:var(--t3)"><button class="copy-btn" onclick="copyProductSku(${p.id})" title="Copiază SKU" ${!p.sku?'style="visibility:hidden"':''}>📋</button>${esc(p.sku||'—')}<div style="margin-top:4px;color:var(--acc)"><button class="copy-btn" onclick="copyProductInternalCode(${p.id})" title="Copiază cod intern">📋</button>${esc(p.internalCode||'—')}</div></td>
       <td>${catB}</td>
-      <td style="text-align:right;font-family:var(--mono);color:var(--bl)">${p.bought||0}</td>
-      <td style="text-align:right;font-family:var(--mono);color:${(p.incomingQty||0)>0?'var(--or)':'var(--t3)'}">${p.incomingQty||'—'}</td>
-      <td style="text-align:right;font-family:var(--mono);color:var(--gr)">${p.sold||0}</td>
+      <td style="text-align:right;font-family:var(--mono);color:var(--bl)">${fmtQty(p.bought)}</td>
+      <td style="text-align:right;font-family:var(--mono);color:${(p.incomingQty||0)>0?'var(--or)':'var(--t3)'}">${(p.incomingQty||0)>0?fmtQty(p.incomingQty):'—'}</td>
+      <td style="text-align:right;font-family:var(--mono);color:var(--gr)">${fmtQty(p.sold)}</td>
       <td style="text-align:right">${aziB}</td>
-      <td style="text-align:right;font-family:var(--mono);font-weight:500;${q2<0?'color:var(--rd)':''}">${q2}</td>
+      <td style="text-align:right;font-family:var(--mono);font-weight:500;${q2<0?'color:var(--rd)':''}">${fmtQty(q2)}</td>
       <td style="text-align:right;font-family:var(--mono);font-size:12px;color:var(--t3)">${p.priceBuyTTC>0?p.priceBuyTTC.toFixed(2):'—'}</td>
       <td style="text-align:center">${tvaBadge}</td>
       <td style="text-align:right;font-family:var(--mono);font-size:12px">${p.priceSell>0?p.priceSell.toFixed(2):'—'}</td>
@@ -3731,9 +3742,9 @@ function renderTable(){
   const eurRate = 4.97; // Curs RON/EUR (actualizează manual la nevoie)
   const totalInvestedEur = totalInvested / eurRate;
   
-  document.getElementById('total-bought').textContent = totalBought.toLocaleString('ro-RO');
-  document.getElementById('total-incoming').textContent = totalIncoming.toLocaleString('ro-RO');
-  document.getElementById('total-sold').textContent = totalSold.toLocaleString('ro-RO');
+  document.getElementById('total-bought').textContent = fmtQty(totalBought);
+  document.getElementById('total-incoming').textContent = fmtQty(totalIncoming);
+  document.getElementById('total-sold').textContent = fmtQty(totalSold);
   document.getElementById('total-invested').textContent = totalInvested.toLocaleString('ro-RO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' RON';
   document.getElementById('total-invested-eur').textContent = Math.round(totalInvestedEur).toLocaleString('ro-RO') + ' €';
   document.getElementById('total-revenue').textContent = totalRevenue.toLocaleString('ro-RO', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + ' RON';
@@ -3756,11 +3767,11 @@ function openModal(id){
   document.getElementById('f-material').value=p?.material||'';
   document.getElementById('f-dims').value=p?.dims||'';
   document.getElementById('f-notes').value=p?.notes||'';
-  document.getElementById('f-bought').value=p?.bought??'';
-  document.getElementById('f-incoming').value=p?.incomingQty??'';
+  document.getElementById('f-bought').value=p?fmtQty(p.bought):'';
+  document.getElementById('f-incoming').value=p?fmtQty(p.incomingQty):'';
   document.getElementById('f-extra').value='';
-  document.getElementById('f-sold').value=p?.sold??'';
-  document.getElementById('f-min').value=p?.minQty||'';
+  document.getElementById('f-sold').value=p?fmtQty(p.sold):'';
+  document.getElementById('f-min').value=p?.minQty?fmtQty(p.minQty):'';
   const _tva=p?.tvaAcq!==undefined?p.tvaAcq:0.21;
   const _ttc=p?.priceBuyTTC||0,_net=_ttc>0&&_tva>0?_ttc/(1+_tva):_ttc;
   document.getElementById('f-pbuy-ttc').value=_ttc||'';
@@ -3809,10 +3820,10 @@ async function saveProd(){
     dims:document.getElementById('f-dims').value.trim(),
     notes:document.getElementById('f-notes').value.trim(),
     category:selC?selC.value:existing?.category||'',
-    bought:Math.max(0,parseInt(document.getElementById('f-bought').value)||0),
-    incomingQty:Math.max(0,parseInt(document.getElementById('f-incoming').value)||0),
-    sold:Math.max(0,parseInt(document.getElementById('f-sold').value)||0),
-    minQty:Math.max(0,parseInt(document.getElementById('f-min').value)||0),
+    bought:Math.max(0,parseQtyVal(document.getElementById('f-bought').value)),
+    incomingQty:Math.max(0,parseQtyVal(document.getElementById('f-incoming').value)),
+    sold:Math.max(0,parseQtyVal(document.getElementById('f-sold').value)),
+    minQty:Math.max(0,parseQtyVal(document.getElementById('f-min').value)),
     priceBuyTTC:Math.max(0,parseFloat(document.getElementById('f-pbuy-ttc').value)||0),
     tvaAcq,
     priceSell:Math.max(0,parseFloat(document.getElementById('f-psell').value)||0),
@@ -3862,7 +3873,7 @@ async function bulkAddStock(){
   const n=selProd.size;if(!n)return;
   const v=prompt(`Câte bucăți adaugi la stocul fiecăruia dintre cele ${n} produse selectate?`,'');
   if(v===null)return;
-  const add=parseInt(v);
+  const add=parseQtyVal(v);
   if(!add||add<=0){toast('Introdu o cantitate validă','err');return;}
   showLoading(`Se adaugă stoc la ${n} produse…`);
   for(const id of selProd){
@@ -4156,21 +4167,21 @@ async function deleteSyncMapping(id){
 
 function addExtraStoc(){
   const exInp=document.getElementById('f-extra');
-  const extra=parseInt(exInp.value)||0;
+  const extra=parseQtyVal(exInp.value);
   if(extra<=0){toast('Introdu o cantitate extra validă','err');exInp.focus();return;}
   const boughtInp=document.getElementById('f-bought');
-  const cur=parseInt(boughtInp.value)||0;
-  boughtInp.value=cur+extra;
+  const cur=parseQtyVal(boughtInp.value);
+  boughtInp.value=fmtQty(cur+extra);
   exInp.value='';
   calcStoc();
   toast(`+${extra} buc. extra adăugate — apasă Salvează pentru a persista`);
 }
 
 function receiveIncoming(){
-  const incomingInp=document.getElementById('f-incoming'),incoming=Math.max(0,parseInt(incomingInp.value)||0);
+  const incomingInp=document.getElementById('f-incoming'),incoming=Math.max(0,parseQtyVal(incomingInp.value));
   if(!incoming){toast('Nu există produse pe drum pentru recepție','err');incomingInp.focus();return;}
   const boughtInp=document.getElementById('f-bought');
-  boughtInp.value=(parseInt(boughtInp.value)||0)+incoming;
+  boughtInp.value=fmtQty(parseQtyVal(boughtInp.value)+incoming);
   incomingInp.value='0';
   calcStoc();
   toast(`${incoming} buc. recepționate — apasă Salvează pentru a persista`);
@@ -4178,13 +4189,13 @@ function receiveIncoming(){
 
 /* STOC CALC */
 function calcStoc(){
-  const b=parseInt(document.getElementById('f-bought').value)||0;
-  const incoming=Math.max(0,parseInt(document.getElementById('f-incoming').value)||0);
-  const s=parseInt(document.getElementById('f-sold').value)||0;
+  const b=parseQtyVal(document.getElementById('f-bought').value);
+  const incoming=Math.max(0,parseQtyVal(document.getElementById('f-incoming').value));
+  const s=parseQtyVal(document.getElementById('f-sold').value);
   const v=b-s,el=document.getElementById('sb-act');
-  el.textContent=v;el.className='sb-rv'+(v<0?' neg':'');
+  el.textContent=fmtQty(v);el.className='sb-rv'+(v<0?' neg':'');
   const future=document.getElementById('sb-future');
-  future.textContent=v+incoming;future.className='sb-rv'+(v+incoming<0?' neg':'');
+  future.textContent=fmtQty(v+incoming);future.className='sb-rv'+(v+incoming<0?' neg':'');
 }
 
 /* IMAGE */
@@ -4699,10 +4710,10 @@ function renderRaportCards(prods){
     <div class="rpt-card-img click-edit">${img}</div>
     <div class="rpt-card-title" title="${esc(cur.name||'—')}"><button class="copy-btn" onclick="copyProductName(${cur.id})">📋</button>${esc(cur.name||'—')}</div>
     <div class="rpt-card-sku"><button class="copy-btn" onclick="copyProductSku(${cur.id})" ${!cur.sku?'style="visibility:hidden"':''}>📋</button>SKU: ${esc(cur.sku||'—')}</div><div class="rpt-card-sku"><button class="copy-btn" onclick="copyProductInternalCode(${cur.id})">📋</button>Cod intern: ${esc(cur.internalCode||'—')}</div>
-    <div class="rpt-card-row"><span>Stoc cumpărare</span><strong>${cur.bought||0}</strong></div>
-    <div class="rpt-card-row"><span>Stoc actual</span><strong class="${stocCls}">${stoc}</strong></div>
+    <div class="rpt-card-row"><span>Stoc cumpărare</span><strong>${fmtQty(cur.bought)}</strong></div>
+    <div class="rpt-card-row"><span>Stoc actual</span><strong class="${stocCls}">${fmtQty(stoc)}</strong></div>
     <div class="rpt-card-upd">
-      <input type="number" min="0" step="1" placeholder="Stoc nou" id="rpt-card-inp-${cur.id}" onkeydown="if(event.key==='Enter')updateStockFromCard(${cur.id})">
+      <input type="text" inputmode="decimal" placeholder="Stoc nou" id="rpt-card-inp-${cur.id}" onkeydown="if(event.key==='Enter')updateStockFromCard(${cur.id})">
       <button class="btn btn-sm btn-acc" onclick="updateStockFromCard(${cur.id})">Actualizează stoc</button>
     </div>
   </div>`;
@@ -4738,14 +4749,14 @@ async function updateStockFromCard(id){
   if(!inp)return;
   const raw=inp.value.trim();
   if(raw===''){toast('Introdu o valoare pentru stocul nou','err');return;}
-  const val=Number(raw);
-  if(!Number.isFinite(val)||!Number.isInteger(val)||val<0){toast('Stoc invalid — introdu un număr întreg ≥ 0','err');return;}
-  const bought=p.bought||0;
-  if(val>bought){toast(`Stocul actual nu poate depăși stocul cumpărat (${bought} buc.)`,'err');return;}
+  const val=parseQtyVal(raw,NaN);
+  if(!Number.isFinite(val)||val<0){toast('Stoc invalid — introdu un număr ≥ 0','err');return;}
+  const bought=parseQtyVal(p.bought);
+  if(val>bought){toast(`Stocul actual nu poate depăși stocul cumpărat (${fmtQty(bought)} buc.)`,'err');return;}
   showLoading('Se actualizează stocul…');
   await saveProdToDb({...p,sold:bought-val},id);
   hideLoading();
-  toast(`Stoc actualizat: ${p.name} → ${val} buc.`);
+  toast(`Stoc actualizat: ${p.name} → ${fmtQty(val)} buc.`);
   renderToday();renderTable();renderRaport();
 }
 

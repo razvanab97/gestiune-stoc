@@ -11,10 +11,10 @@ create table if not exists produse (
   internal_code text,
   category text,
   supplier text,
-  bought integer default 0,
-  incoming_qty integer default 0,
-  sold integer default 0,
-  min_qty integer default 0,
+  bought numeric(10,2) default 0,
+  incoming_qty numeric(10,2) default 0,
+  sold numeric(10,2) default 0,
+  min_qty numeric(10,2) default 0,
   price_buy_ttc numeric(10,2) default 0,
   tva_acq numeric(4,2) default 0.21,
   price_sell numeric(10,2) default 0,
@@ -39,9 +39,14 @@ alter table produse add column if not exists material text;
 alter table produse add column if not exists dims text;
 alter table produse add column if not exists notes text;
 alter table produse add column if not exists internal_code text;
-alter table produse add column if not exists incoming_qty integer default 0;
+alter table produse add column if not exists incoming_qty numeric(10,2) default 0;
 alter table produse add column if not exists price_emag numeric(10,2) default 0;
 alter table produse add column if not exists price_trendyol numeric(10,2) default 0;
+
+alter table produse alter column bought type numeric(10,2) using bought::numeric;
+alter table produse alter column incoming_qty type numeric(10,2) using incoming_qty::numeric;
+alter table produse alter column sold type numeric(10,2) using sold::numeric;
+alter table produse alter column min_qty type numeric(10,2) using min_qty::numeric;
 
 update produse
 set internal_code = 'AB' || to_char(coalesce(created_at, now()) at time zone 'Europe/Bucharest', 'MMDD') || id
@@ -67,7 +72,7 @@ create table if not exists vanzari_zilnice (
   id bigint primary key generated always as identity,
   data date not null default current_date,
   product_id bigint references produse(id) on delete cascade,
-  qty integer default 0,
+  qty numeric(10,2) default 0,
   unique(data, product_id)
 );
 
@@ -80,9 +85,12 @@ create table if not exists jurnal (
   category text,
   price_sell numeric(10,2) default 0,
   img text,
-  qty integer default 0,
+  qty numeric(10,2) default 0,
   created_at timestamptz default now()
 );
+
+alter table vanzari_zilnice alter column qty type numeric(10,2) using qty::numeric;
+alter table jurnal alter column qty type numeric(10,2) using qty::numeric;
 
 -- MAPARI PLATFORME (eMAG/Trendyol -> produs local, pt. sincronizare stoc)
 create table if not exists platforma_mapari (
