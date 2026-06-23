@@ -3527,15 +3527,15 @@ function renderSearch(){
     return`<div class="ss-row">${th}<div class="ss-inf"><div class="ss-nm">${esc(p.name)}${copyBtn}</div><div class="ss-meta">${esc(skuMeta||'fără cod')} · stoc: ${s}${p.priceSell>0?' · min '+p.priceSell.toFixed(2)+' RON':''}</div></div>
       <div class="ss-act">${tqs>0?`<span class="ss-sold-b">azi: ${tqs}</span>`:''}
         <input type="number" class="ss-qty" id="ssq-${p.id}" value="1" min="1">
-        <button class="sell-btn" onclick="sellSearch(${p.id})" ${s<=0?'disabled':''}>Vinde</button>
+        <button class="sell-btn" onclick="sellSearch(${p.id})">Vinde</button>
       </div></div>`;
   }).join('');
 }
 async function sellSearch(id){
   const inp=document.getElementById('ssq-'+id);
   const n=Math.max(1,parseInt(inp?.value)||1);
-  const p=P.find(x=>x.id===id);if(!p||qty(p)<=0)return;
-  const c=Math.min(n,qty(p));
+  const p=P.find(x=>x.id===id);if(!p)return;
+  const c=n;
   TS[id]=(TS[id]||0)+c;p.sold=(p.sold||0)+c;
   // update sold in DB
   if(sbReady){
@@ -3544,7 +3544,7 @@ async function sellSearch(id){
   }
   await saveJurnalEntry(p,c);
   renderToday();renderTable();renderSearch();
-  toast(`Vândut: ${c}× ${p.name}`);
+  toast(`Vândut: ${c}× ${p.name}${qty(p)<0?' · stoc pe minus: '+qty(p):''}`);
 }
 
 /* TODAY GRID */
@@ -3563,7 +3563,7 @@ function renderToday(){
   else{
     const n=todayCardProds.length,p=todayCardProds[todayCardIdx],prev=todayCardProds[(todayCardIdx-1+n)%n],next=todayCardProds[(todayCardIdx+1)%n],tqs=tqp(p),s=qty(p);
     const img=p.img?`<img src="${esc(imgSrc(p.img))}" alt="" onclick="openModal(${p.id})" onerror="this.parentElement.innerHTML='<span class=&quot;ph&quot;>📦</span>'">`:`<span class="ph" onclick="openModal(${p.id})">📦</span>`;
-    const main=`<div class="today-card today-card-main"><div class="today-card-img click-edit" title="Editează produs">${img}</div><div class="today-card-title"><button class="copy-btn" onclick="copyProductName(${p.id})" title="Copiază denumirea">📋</button><span>${esc(p.name)}</span></div><div class="today-card-meta"><button class="copy-btn" onclick="copyProductSku(${p.id})" title="Copiază SKU" ${!p.sku?'style="visibility:hidden"':''}>📋</button>SKU: ${esc(p.sku||'—')}</div><div class="today-card-meta"><button class="copy-btn" onclick="copyProductInternalCode(${p.id})" title="Copiază cod intern">📋</button>Cod intern: ${esc(p.internalCode||'—')}</div><div class="today-card-row"><span>Stoc actual</span><strong>${s}</strong></div><div class="today-card-row"><span>Vândute azi</span><strong>${tqs}</strong></div><div class="today-card-prices"><div class="today-card-row"><span>Preț minim direct</span><strong>${p.priceSell>0?p.priceSell.toFixed(2)+' RON':'—'}</strong></div><div class="today-card-row"><span>Preț minim eMAG</span><strong>${p.priceEmag>0?p.priceEmag.toFixed(2)+' RON':'—'}</strong></div><div class="today-card-row"><span>Preț minim Trendyol</span><strong>${p.priceTrendyol>0?p.priceTrendyol.toFixed(2)+' RON':'—'}</strong></div></div><div class="today-actions"><input type="number" class="tg-inp${tqs>0?' on':''}" id="ti-${p.id}" value="${tqs}" min="0" onchange="updateTQ(${p.id})" oninput="pvTQ(${p.id})"><button class="tg-btn" onclick="qSell(${p.id})" ${s<=0?'disabled':''}>+</button><button class="tg-btn-del" onclick="deleteSale(${p.id})" ${tqs<=0?'disabled':''} title="Șterge vânzare">×</button></div></div>`;
+    const main=`<div class="today-card today-card-main"><div class="today-card-img click-edit" title="Editează produs">${img}</div><div class="today-card-title"><button class="copy-btn" onclick="copyProductName(${p.id})" title="Copiază denumirea">📋</button><span>${esc(p.name)}</span></div><div class="today-card-meta"><button class="copy-btn" onclick="copyProductSku(${p.id})" title="Copiază SKU" ${!p.sku?'style="visibility:hidden"':''}>📋</button>SKU: ${esc(p.sku||'—')}</div><div class="today-card-meta"><button class="copy-btn" onclick="copyProductInternalCode(${p.id})" title="Copiază cod intern">📋</button>Cod intern: ${esc(p.internalCode||'—')}</div><div class="today-card-row"><span>Stoc actual</span><strong style="${s<0?'color:var(--rd)':''}">${s}</strong></div><div class="today-card-row"><span>Vândute azi</span><strong>${tqs}</strong></div><div class="today-card-prices"><div class="today-card-row"><span>Preț minim direct</span><strong>${p.priceSell>0?p.priceSell.toFixed(2)+' RON':'—'}</strong></div><div class="today-card-row"><span>Preț minim eMAG</span><strong>${p.priceEmag>0?p.priceEmag.toFixed(2)+' RON':'—'}</strong></div><div class="today-card-row"><span>Preț minim Trendyol</span><strong>${p.priceTrendyol>0?p.priceTrendyol.toFixed(2)+' RON':'—'}</strong></div></div><div class="today-actions"><input type="number" class="tg-inp${tqs>0?' on':''}" id="ti-${p.id}" value="${tqs}" min="0" onchange="updateTQ(${p.id})" oninput="pvTQ(${p.id})"><button class="tg-btn" onclick="qSell(${p.id})">+</button><button class="tg-btn-del" onclick="deleteSale(${p.id})" ${tqs<=0?'disabled':''} title="Șterge vânzare">×</button></div></div>`;
     tg.innerHTML=`<div class="today-carousel">${n>1?todayCardSide(prev,'l'):'<div></div>'}<button class="today-arrow" onclick="todayCardNav(-1)">‹</button>${main}<button class="today-arrow" onclick="todayCardNav(1)">›</button>${n>1?todayCardSide(next,'r'):'<div></div>'}</div>`;
   }
   const tot=Object.values(TS).reduce((a,v)=>a+v,0);
@@ -3590,14 +3590,14 @@ async function updateTQ(id){
   renderToday();renderTable();
 }
 async function qSell(id){
-  const p=P.find(x=>x.id===id);if(!p||qty(p)<=0)return;
+  const p=P.find(x=>x.id===id);if(!p)return;
   TS[id]=(TS[id]||0)+1;p.sold=(p.sold||0)+1;
   if(sbReady){
     try{await dbPatch(`produse?id=eq.${id}`,{sold:p.sold});}catch(e){}
     await saveTodaySale(id,TS[id]);
   }
   await saveJurnalEntry(p,1);
-  renderToday();renderTable();toast(p.name);
+  renderToday();renderTable();toast(`${p.name}${qty(p)<0?' · stoc pe minus: '+qty(p):''}`);
 }
 
 async function deleteSale(id){
