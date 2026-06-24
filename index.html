@@ -4357,7 +4357,7 @@ function routeInvFile(f){
   peek.onload=e=>{
     const t=e.target.result;
     if(/symbol/i.test(t)&&/quantity/i.test(t)&&/priceperpiece_ron/i.test(t))parseSupplierRonCSV(f);
-    else if(/cod_jumbo/i.test(t))parseJumboCSV(f);
+    else if(/cod_jumbo/i.test(t)||(/(^|[\n\r])\s*cod\s*;/i.test(t)&&/cantitate/i.test(t)&&/pretperbucata/i.test(t)))parseJumboCSV(f);
     else if(/sku/i.test(t)&&/cump/i.test(t)&&/recomandat/i.test(t))parsePlatformCSV(f);
     else parseCSV(f);
   };
@@ -4533,7 +4533,7 @@ function parseCSV(file){
   r.readAsText(file,'UTF-8');
 }
 /* ── PRESET JUMBO: CSV cu coloane page,order_date_raw,order_id,...,category,product_name,cod_jumbo,quantity,line_price_lei,... ── */
-function parseCSVRows(text){
+function parseCSVRows(text,delim=','){
   const rows=[];let row=[],field='',inQ=false;
   text=text.replace(/^﻿/,'');
   for(let i=0;i<text.length;i++){
@@ -4542,7 +4542,7 @@ function parseCSVRows(text){
       if(c==='"'){if(text[i+1]==='"'){field+='"';i++;}else inQ=false;}
       else field+=c;
     } else if(c==='"')inQ=true;
-    else if(c===','){row.push(field);field='';}
+    else if(c===delim){row.push(field);field='';}
     else if(c==='\n'||c==='\r'){
       if(c==='\r'&&text[i+1]==='\n')i++;
       row.push(field);field='';
@@ -4553,22 +4553,30 @@ function parseCSVRows(text){
   if(field!==''||row.length){row.push(field);rows.push(row);}
   return rows;
 }
+function detectCsvDelimiter(text){
+  const first=(text.replace(/^﻿/,'').split(/\r?\n/).find(l=>l.trim())||'');
+  return (first.match(/;/g)||[]).length>(first.match(/,/g)||[]).length?';':',';
+}
 function parseJumboCSV(file){
   const r=new FileReader();
   r.onload=e2=>{
-    const rows=parseCSVRows(e2.target.result);
+    const text=e2.target.result,delim=detectCsvDelimiter(text);
+    const rows=parseCSVRows(text,delim);
     if(rows.length<2){toast('CSV gol sau nerecunoscut','err');return;}
     const hdr=rows[0].map(h=>h.trim().toLowerCase());
-    const iCode=hdr.indexOf('cod_jumbo'),iName=hdr.indexOf('product_name'),iQty=hdr.indexOf('quantity'),iPrice=hdr.indexOf('line_price_lei'),iCat=hdr.indexOf('category');
+    const find=names=>{for(const n of names){const i=hdr.findIndex(h=>h===n||h.includes(n));if(i>-1)return i;}return -1;};
+    const iCode=find(['cod_jumbo','cod']),iName=find(['product_name','produs','nume']),iQty=find(['quantity','cantitate']),iPrice=find(['line_price_lei','pretperbucata','pret_per_bucata','pret']),iCat=find(['category','categorie']);
+    if(iCode<0||iQty<0||iPrice<0){toast('CSV Jumbo invalid: lipsesc Cod/Cantitate/PretPerBucata','err');return;}
     const agg={};
     for(let i=1;i<rows.length;i++){
       const row=rows[i];
       const sku=(row[iCode]||'').trim();
       const qty=parseQtyVal(row[iQty]);
       if(!sku||qty<=0)continue;
-      const total=parseFloat((row[iPrice]||'').replace(',','.'))||0;
-      const name=(row[iName]||'').trim().replace(/\s+/g,' ');
-      const cat=(row[iCat]||'').trim();
+      const rawPrice=parseFloat((row[iPrice]||'').replace(',','.').replace(/[^\d.]/g,''))||0;
+      const total=hdr[iPrice]?.includes('line_price')?rawPrice:rawPrice*qty;
+      const name=iName>-1?(row[iName]||'').trim().replace(/\s+/g,' '):'';
+      const cat=iCat>-1?(row[iCat]||'').trim():'';
       if(!agg[sku])agg[sku]={sku,name,qty:0,total:0,category:cat};
       const a=agg[sku];
       a.qty+=qty;a.total+=total;
