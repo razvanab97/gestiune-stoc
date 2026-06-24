@@ -114,6 +114,15 @@ header{background:var(--surf);border-bottom:1px solid var(--b1);height:56px;disp
 .tb-sum strong{color:var(--t1);font-family:var(--mono)}
 .toolbar{display:flex;gap:8px;margin-bottom:1.1rem;flex-wrap:wrap;align-items:center}
 .toolbar>*{max-width:100%}
+.multi-filter{position:relative;min-width:190px}
+.multi-btn{width:100%;height:39px;border:1px solid var(--b2);border-radius:var(--r);background:var(--surf);color:var(--t1);font:600 15px var(--font);padding:8px 11px;text-align:left;cursor:pointer;display:flex;justify-content:space-between;gap:8px;align-items:center}
+.multi-btn:hover{border-color:var(--acc)}
+.multi-menu{position:absolute;z-index:30;top:calc(100% + 6px);left:0;right:0;max-height:260px;overflow:auto;background:var(--surf);border:1px solid var(--b2);border-radius:var(--r);box-shadow:var(--sh2);padding:8px;display:none}
+.multi-filter.on .multi-menu{display:block}
+.multi-opt{display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:8px;font-size:13px;color:var(--t2);cursor:pointer}
+.multi-opt:hover{background:var(--surf2);color:var(--t1)}
+.multi-opt input{accent-color:var(--acc)}
+.multi-clear{width:100%;border:1px dashed var(--b2);background:var(--surf2);color:var(--t3);border-radius:8px;padding:7px;margin-bottom:6px;font:700 12px var(--font);cursor:pointer}
 input[type=text],input[type=number],select,textarea{font-family:var(--font);font-size:15px;padding:8px 11px;border:1px solid var(--b2);border-radius:var(--r);background:var(--surf);color:var(--t1);outline:none;transition:all .15s}
 input:focus,select:focus,textarea:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-light)}
 #search{flex:1;min-width:200px}
@@ -775,12 +784,17 @@ th{font-weight:800!important;color:var(--t3)!important}
   <div class="toolbar">
     <input type="text" id="search" placeholder="Caută în inventar după nume, SKU/cod extern sau cod intern…" oninput="renderTable()">
     <select id="fc" onchange="renderTable()"><option value="">Toate categoriile</option></select>
-    <select id="fsup" onchange="renderTable()"><option value="">Toți furnizorii</option></select>
+    <div class="multi-filter" id="fsup-wrap">
+      <button type="button" class="multi-btn" id="fsup-btn" onclick="toggleSupplierFilter()">Toți furnizorii <span>▾</span></button>
+      <div class="multi-menu" id="fsup-menu"></div>
+    </div>
     <select id="fs" onchange="renderTable()">
       <option value="">Toate statusurile</option>
       <option value="ok">În stoc</option>
       <option value="low">Scăzut</option>
       <option value="out">Epuizat</option>
+      <option value="recent">Adăugate recent</option>
+      <option value="oldest">Cele mai vechi</option>
     </select>
     <button class="btn btn-acc" onclick="openModal()">+ Produs nou</button>
     <button class="btn btn-sm" id="bulk-add-btn" onclick="bulkAddStock()" disabled title="Adaugă manual o cantitate de stoc la toate produsele bifate">📥 Adaugă stoc</button>
@@ -1360,7 +1374,7 @@ function dbToP(r){
     bought:r.bought||0,incomingQty:r.incoming_qty||0,sold:r.sold||0,minQty:r.min_qty||0,
     priceBuyTTC:r.price_buy_ttc||0,priceBuyPrevTTC:r.price_buy_prev_ttc||0,priceBuyChangedAt:r.price_buy_changed_at||'',tvaAcq:r.tva_acq??0.21,
     priceSell:r.price_sell||0,priceEmag:r.price_emag||0,priceTrendyol:r.price_trendyol||0,priceRec:r.price_rec||0,img:r.img||'',
-    colors:r.colors||'',sizes:r.sizes||'',material:r.material||'',dims:r.dims||'',notes:r.notes||''};
+    colors:r.colors||'',sizes:r.sizes||'',material:r.material||'',dims:r.dims||'',notes:r.notes||'',createdAt:r.created_at||'',updatedAt:r.updated_at||''};
 }
 function pToDb(p){
   const d={name:p.name,sku:p.sku||'',category:p.category||'',supplier:p.supplier||'',
@@ -1428,7 +1442,7 @@ async function saveStockOrderHistory(order){
 }
 
 const K='sm6_prod',TK='sm6_today',JK='sm6_jurnal',OK='sm6_stock_orders',EFK='sm6_efactura_emag_date';
-let P=[],TS={},JL=[],OI=[],editId=null,sCol='name',sDir=1,jMode='sales',curImg='',selProd=new Set(),savingProduct=false,invSourceName='';
+let P=[],TS={},JL=[],OI=[],editId=null,sCol='name',sDir=1,jMode='sales',curImg='',selProd=new Set(),selSuppliers=new Set(),savingProduct=false,invSourceName='';
 let compState={};
 let SYNCM=[],syncMapsLoaded=false,syncImpParsed=[];
 let invLines=[],invParsed=[],catSuggestTimer=null,lastNameForCat='';
@@ -3729,13 +3743,29 @@ async function closeDay(){
 
 /* TABLE */
 function srt(c){if(sCol===c)sDir*=-1;else{sCol=c;sDir=1;}renderTable();}
+function prodCreatedTime(p){
+  const t=p.createdAt?new Date(p.createdAt).getTime():NaN;
+  return Number.isFinite(t)?t:(Number(p.id)||0);
+}
+function toggleSupplierFilter(){document.getElementById('fsup-wrap')?.classList.toggle('on');}
+function clearSupplierFilter(ev){ev?.stopPropagation();selSuppliers.clear();renderTable();}
+function toggleSupplierValue(v,checked){checked?selSuppliers.add(v):selSuppliers.delete(v);renderTable();}
+function renderSupplierFilter(sups){
+  const wrap=document.getElementById('fsup-wrap'),btn=document.getElementById('fsup-btn'),menu=document.getElementById('fsup-menu');if(!wrap||!btn||!menu)return;
+  [...selSuppliers].forEach(s=>{if(!sups.includes(s))selSuppliers.delete(s);});
+  btn.innerHTML=(selSuppliers.size?`${selSuppliers.size} furnizori selectați`:'Toți furnizorii')+' <span>▾</span>';
+  menu.innerHTML=`<button type="button" class="multi-clear" onclick="clearSupplierFilter(event)">Toți furnizorii</button>`+
+    sups.map(f=>`<label class="multi-opt"><input type="checkbox" value="${esc(f)}" ${selSuppliers.has(f)?'checked':''} onchange="toggleSupplierValue(this.value,this.checked)"> ${esc(f)}</label>`).join('');
+}
 function renderTable(){
   const q=(document.getElementById('search').value||'').trim();
   const cat=document.getElementById('fc').value;
-  const sup=document.getElementById('fsup').value;
   const s=document.getElementById('fs').value;
-  let list=P.filter(p=>{const m=prodMatchesSearch(p,q);return m&&(!cat||p.category===cat)&&(!sup||p.supplier===sup)&&(!s||st(p)===s);});
-  list.sort((a,b)=>{let av=sCol==='qty'?qty(a):(a[sCol]??'');let bv=sCol==='qty'?qty(b):(b[sCol]??'');if(typeof av==='string')av=av.toLowerCase();if(typeof bv==='string')bv=bv.toLowerCase();return av<bv?-sDir:av>bv?sDir:0;});
+  const statusFilter=['ok','low','out'].includes(s)?s:'';
+  let list=P.filter(p=>{const m=prodMatchesSearch(p,q);return m&&(!cat||p.category===cat)&&(!selSuppliers.size||selSuppliers.has(p.supplier||''))&&(!statusFilter||st(p)===statusFilter);});
+  if(s==='recent')list.sort((a,b)=>prodCreatedTime(b)-prodCreatedTime(a));
+  else if(s==='oldest')list.sort((a,b)=>prodCreatedTime(a)-prodCreatedTime(b));
+  else list.sort((a,b)=>{let av=sCol==='qty'?qty(a):(a[sCol]??'');let bv=sCol==='qty'?qty(b):(b[sCol]??'');if(typeof av==='string')av=av.toLowerCase();if(typeof bv==='string')bv=bv.toLowerCase();return av<bv?-sDir:av>bv?sDir:0;});
   const tot=P.length,lowC=P.filter(p=>st(p)==='low').length,outC=P.filter(p=>st(p)==='out').length;
   const val=P.reduce((a,p)=>a+(qty(p)*(p.priceBuyTTC||0)),0);
   const azi=Object.values(TS).reduce((a,v)=>a+v,0);
@@ -3750,8 +3780,7 @@ function renderTable(){
   const sel=document.getElementById('fc');const pv=sel.value;
   sel.innerHTML='<option value="">Toate categoriile</option>'+cats.map(c=>`<option value="${esc(c)}"${c===pv?' selected':''}>${esc(c)}</option>`).join('');
   const sups=[...new Set(P.map(p=>p.supplier).filter(Boolean))].sort();
-  const selSup=document.getElementById('fsup');const pvSup=selSup.value;
-  selSup.innerHTML='<option value="">Toți furnizorii</option>'+sups.map(f=>`<option value="${esc(f)}"${f===pvSup?' selected':''}>${esc(f)}</option>`).join('');
+  renderSupplierFilter(sups);
   const tb=document.getElementById('tbody');
   if(!list.length){tb.innerHTML=`<tr><td colspan="17" class="empty-row">Niciun produs</td></tr>`;const all=document.getElementById('chk-all');if(all){all.checked=false;all.indeterminate=false;}updateBulkBtns();return;}
   tb.innerHTML=list.map(p=>{
