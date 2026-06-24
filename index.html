@@ -1375,6 +1375,7 @@ function dbToP(r){
   return{id:r.id,name:r.name,sku:r.sku||'',internalCode:r.internal_code||productInternalCode(r.created_at,r.id),category:r.category||'',supplier:r.supplier||'',
     bought:r.bought||0,incomingQty:r.incoming_qty||0,sold:r.sold||0,minQty:r.min_qty||0,
     priceBuyTTC:r.price_buy_ttc||0,priceBuyPrevTTC:r.price_buy_prev_ttc||0,priceBuyChangedAt:r.price_buy_changed_at||'',tvaAcq:r.tva_acq??0.21,
+    stockAddedAt:r.stock_added_at||'',lastStockAddedQty:r.last_stock_added_qty||0,
     priceSell:r.price_sell||0,priceEmag:r.price_emag||0,priceTrendyol:r.price_trendyol||0,priceRec:r.price_rec||0,img:r.img||'',
     colors:r.colors||'',sizes:r.sizes||'',material:r.material||'',dims:r.dims||'',notes:r.notes||'',createdAt:r.created_at||'',updatedAt:r.updated_at||''};
 }
@@ -1382,6 +1383,7 @@ function pToDb(p){
   const d={name:p.name,sku:p.sku||'',category:p.category||'',supplier:p.supplier||'',
     bought:p.bought||0,incoming_qty:p.incomingQty||0,sold:p.sold||0,min_qty:p.minQty||0,
     price_buy_ttc:p.priceBuyTTC||0,price_buy_prev_ttc:p.priceBuyPrevTTC||0,price_buy_changed_at:p.priceBuyChangedAt||null,tva_acq:p.tvaAcq??0.21,
+    stock_added_at:p.stockAddedAt||null,last_stock_added_qty:p.lastStockAddedQty||0,
     price_sell:p.priceSell||0,price_emag:p.priceEmag||0,price_trendyol:p.priceTrendyol||0,price_rec:p.priceRec||0,img:p.img||'',
     colors:p.colors||'',sizes:p.sizes||'',material:p.material||'',dims:p.dims||'',notes:p.notes||''};
   if(p.internalCode)d.internal_code=p.internalCode;
@@ -1389,13 +1391,13 @@ function pToDb(p){
 }
 function dbSavedProductMatches(row,sent){
   return Object.entries(sent).every(([k,v])=>{
-    if(k==='price_buy_changed_at'&&v)return Math.abs(new Date(row[k]).getTime()-new Date(v).getTime())<1000;
+    if((k==='price_buy_changed_at'||k==='stock_added_at')&&v)return Math.abs(new Date(row[k]).getTime()-new Date(v).getTime())<1000;
     return typeof v==='number'?Math.abs((Number(row[k])||0)-v)<0.001:String(row[k]??'')===String(v??'');
   });
 }
 function missingProductColumn(err){return String(err?.message||err).match(/Could not find the '([^']+)' column of 'produse'/i)?.[1]||'';}
 function missingProductValues(data,missing){
-  const map={incoming_qty:'incomingQty',price_emag:'priceEmag',price_trendyol:'priceTrendyol',tva_acq:'tvaAcq',internal_code:'internalCode',price_buy_prev_ttc:'priceBuyPrevTTC',price_buy_changed_at:'priceBuyChangedAt'};
+  const map={incoming_qty:'incomingQty',price_emag:'priceEmag',price_trendyol:'priceTrendyol',tva_acq:'tvaAcq',internal_code:'internalCode',price_buy_prev_ttc:'priceBuyPrevTTC',price_buy_changed_at:'priceBuyChangedAt',stock_added_at:'stockAddedAt',last_stock_added_qty:'lastStockAddedQty'};
   return Object.fromEntries(missing.map(col=>[map[col]||col,data[map[col]||col]]));
 }
 async function saveProductRequest(method,path,data){
@@ -3750,6 +3752,8 @@ function prodCreatedTime(p){
   return Number.isFinite(t)?t:(Number(p.id)||0);
 }
 function stockAddedTime(p){
+  const direct=p.stockAddedAt?new Date(p.stockAddedAt).getTime():0;
+  if(Number.isFinite(direct)&&direct>0)return direct;
   let best=0;
   for(const o of OI){
     const t=o.createdAt?new Date(o.createdAt).getTime():0;
@@ -3757,7 +3761,10 @@ function stockAddedTime(p){
     const hit=(o.details||[]).some(d=>(d.productId&&Number(d.productId)===Number(p.id))||(p.sku&&d.sku&&String(d.sku).toLowerCase()===String(p.sku).toLowerCase()));
     if(hit)best=t;
   }
-  return best;
+  if(best>0)return best;
+  const upd=p.updatedAt?new Date(p.updatedAt).getTime():0;
+  const sevenDays=7*24*60*60*1000;
+  return Number.isFinite(upd)&&upd>0&&Date.now()-upd<=sevenDays&&parseQtyVal(p.bought)>0?upd:0;
 }
 function toggleSupplierFilter(){document.getElementById('fsup-wrap')?.classList.toggle('on');}
 function clearSupplierFilter(ev){ev?.stopPropagation();selSuppliers.clear();renderTable();}
@@ -4700,6 +4707,7 @@ function renderInvPreview(){
 async function applyInvoice(){
   showLoading('Se importă factura…');
   let updated=0,created=0,skipped=0,receivedLines=0,receivedQty=0,extraQty=0;
+  const stockStamp=new Date().toISOString();
   const orderDetails=[];
   for(const item of invParsed){
     const costRon=item.costRon||0;
@@ -4713,6 +4721,8 @@ async function applyInvoice(){
         const receipt=invoiceReceiptPlan(P[idx],item.qty);
         P[idx].bought=(P[idx].bought||0)+item.qty;
         P[idx].incomingQty=receipt.incomingAfter;
+        P[idx].stockAddedAt=stockStamp;
+        P[idx].lastStockAddedQty=item.qty;
         if(receipt.fromIncoming>0){receivedLines++;receivedQty+=receipt.fromIncoming;}
         extraQty+=receipt.extra;
         if(costRon>0){
@@ -4733,6 +4743,7 @@ async function applyInvoice(){
         name:item.name||item.sku||'Produs nou',
         sku:item.sku||null,
         bought:item.qty,sold:0,minQty:0,
+        stockAddedAt:stockStamp,lastStockAddedQty:item.qty,
         priceBuyTTC:costRon,tvaAcq:0.21,
         priceSell:prices.sell,priceEmag:prices.emag,priceTrendyol:prices.trendyol,priceRec:prices.rec,
         category:item.category||'',supplier:item.supplier||'',img:''

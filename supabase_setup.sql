@@ -15,6 +15,8 @@ create table if not exists produse (
   incoming_qty numeric(10,2) default 0,
   sold numeric(10,2) default 0,
   min_qty numeric(10,2) default 0,
+  stock_added_at timestamptz,
+  last_stock_added_qty numeric(10,2) default 0,
   price_buy_ttc numeric(10,2) default 0,
   price_buy_prev_ttc numeric(10,2) default 0,
   price_buy_changed_at timestamptz,
@@ -42,6 +44,8 @@ alter table produse add column if not exists dims text;
 alter table produse add column if not exists notes text;
 alter table produse add column if not exists internal_code text;
 alter table produse add column if not exists incoming_qty numeric(10,2) default 0;
+alter table produse add column if not exists stock_added_at timestamptz;
+alter table produse add column if not exists last_stock_added_qty numeric(10,2) default 0;
 alter table produse add column if not exists price_emag numeric(10,2) default 0;
 alter table produse add column if not exists price_trendyol numeric(10,2) default 0;
 alter table produse add column if not exists price_buy_prev_ttc numeric(10,2) default 0;
@@ -51,6 +55,7 @@ alter table produse alter column bought type numeric(10,2) using bought::numeric
 alter table produse alter column incoming_qty type numeric(10,2) using incoming_qty::numeric;
 alter table produse alter column sold type numeric(10,2) using sold::numeric;
 alter table produse alter column min_qty type numeric(10,2) using min_qty::numeric;
+alter table produse alter column last_stock_added_qty type numeric(10,2) using last_stock_added_qty::numeric;
 alter table produse alter column price_buy_prev_ttc type numeric(10,2) using price_buy_prev_ttc::numeric;
 
 update produse
