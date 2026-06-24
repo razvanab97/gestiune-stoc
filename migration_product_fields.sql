@@ -22,6 +22,23 @@ alter table produse alter column price_buy_prev_ttc type numeric(10,2) using pri
 alter table vanzari_zilnice alter column qty type numeric(10,2) using qty::numeric;
 alter table jurnal alter column qty type numeric(10,2) using qty::numeric;
 
+create table if not exists comenzi_stoc (
+  id bigint primary key generated always as identity,
+  source text default 'Import stoc',
+  total_items integer default 0,
+  total_qty numeric(10,2) default 0,
+  total_value numeric(12,2) default 0,
+  updated_count integer default 0,
+  created_count integer default 0,
+  skipped_count integer default 0,
+  details jsonb default '[]'::jsonb,
+  created_at timestamptz default now()
+);
+
+create index if not exists idx_comenzi_stoc_created on comenzi_stoc(created_at desc);
+alter table comenzi_stoc disable row level security;
+grant select, insert, update, delete on comenzi_stoc to anon, authenticated;
+
 update produse
 set internal_code = 'AB' || to_char(coalesce(created_at, now()) at time zone 'Europe/Bucharest', 'MMDD') || id
 where internal_code is null or internal_code = '';

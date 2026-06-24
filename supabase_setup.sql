@@ -132,6 +132,20 @@ create table if not exists setari_app (
   updated_at timestamptz default now()
 );
 
+-- ISTORIC COMENZI / INCARCARI STOC
+create table if not exists comenzi_stoc (
+  id bigint primary key generated always as identity,
+  source text default 'Import stoc',
+  total_items integer default 0,
+  total_qty numeric(10,2) default 0,
+  total_value numeric(12,2) default 0,
+  updated_count integer default 0,
+  created_count integer default 0,
+  skipped_count integer default 0,
+  details jsonb default '[]'::jsonb,
+  created_at timestamptz default now()
+);
+
 -- DOSARE RESEARCH PRODUSE
 create table if not exists research_projects (
   id bigint primary key generated always as identity,
@@ -186,6 +200,7 @@ create index if not exists idx_research_projects_updated on research_projects(up
 create index if not exists idx_research_links_project on research_links(project_id);
 create index if not exists idx_research_links_norm on research_links(project_id, normalized_url);
 create index if not exists idx_research_links_pnk on research_links(project_id, pnk) where pnk is not null and pnk <> '';
+create index if not exists idx_comenzi_stoc_created on comenzi_stoc(created_at desc);
 
 alter table research_projects add column if not exists listing jsonb default '{}'::jsonb;
 
@@ -209,12 +224,14 @@ alter table jurnal disable row level security;
 alter table platforma_mapari disable row level security;
 alter table listing_price_observations disable row level security;
 alter table setari_app disable row level security;
+alter table comenzi_stoc disable row level security;
 alter table research_projects disable row level security;
 alter table research_links disable row level security;
 
 grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on research_projects to anon, authenticated;
 grant select, insert, update, delete on research_links to anon, authenticated;
+grant select, insert, update, delete on comenzi_stoc to anon, authenticated;
 
 -- Confirmare
 select 'Schema creat cu succes!' as status;

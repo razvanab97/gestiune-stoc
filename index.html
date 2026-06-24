@@ -306,6 +306,9 @@ function buildRaportCats(){
 }
 /* JURNAL */
 .jrnl-tb{display:flex;gap:10px;margin-bottom:1.25rem;flex-wrap:wrap;align-items:center}
+.jrnl-switch{display:flex;gap:6px;border:1px solid var(--b1);background:var(--surf);border-radius:999px;padding:4px}
+.jrnl-switch button{border:0;background:transparent;color:var(--t3);border-radius:999px;padding:7px 12px;font-size:13px;font-weight:700;cursor:pointer}
+.jrnl-switch button.on{background:var(--acc);color:var(--acc-fg)}
 .jd-card{background:var(--surf);border:1px solid var(--b1);border-radius:var(--r2);margin-bottom:10px;overflow:hidden;box-shadow:var(--sh)}
 .jd-head{display:flex;align-items:center;gap:14px;padding:1rem 1.5rem;cursor:pointer;user-select:none;transition:background .12s}
 .jd-head:hover{background:var(--surf2)}
@@ -326,6 +329,7 @@ function buildRaportCats(){
 .jp-cat{font-size:13px;color:var(--t3)}
 .jp-qty{font-family:var(--mono);font-size:16px;font-weight:500;color:var(--acc);min-width:50px;text-align:right}
 .jp-val{font-family:var(--mono);font-size:14px;color:var(--t3);min-width:90px;text-align:right}
+.jp-meta{font-size:12px;color:var(--t3);font-family:var(--mono);margin-top:3px}
 .jrnl-empty{text-align:center;padding:4rem;color:var(--t3)}
 .toast{position:fixed;bottom:1.75rem;right:1.75rem;background:var(--acc);color:var(--acc-fg);padding:11px 20px;border-radius:var(--r);font-size:15px;font-weight:500;opacity:0;transform:translateY(10px);transition:all .2s;z-index:600;pointer-events:none;box-shadow:var(--sh2)}
 .toast.on{opacity:1;transform:translateY(0)}
@@ -880,6 +884,10 @@ th{font-weight:800!important;color:var(--t3)!important}
 
 <div id="page-jurnal" class="page"><div class="wrap">
   <div class="jrnl-tb">
+    <div class="jrnl-switch">
+      <button id="jmode-sales" class="on" onclick="setJMode('sales')">Vânzări</button>
+      <button id="jmode-orders" onclick="setJMode('orders')">Comenzi stoc</button>
+    </div>
     <input type="text" id="js" placeholder="Caută produs…" oninput="renderJurnal()" style="width:240px">
     <select id="jm" onchange="renderJurnal()"></select>
     <button class="btn btn-sm" onclick="exportCSV()">↓ Export CSV</button>
@@ -1392,9 +1400,35 @@ function dbToSyncMap(r){
 function syncMapToDb(m){
   return{platforma:m.platforma,id_extern:m.idExtern||null,titlu_extern:m.titluExtern,produs_id:m.produsId,confirmat:m.confirmat!==false};
 }
+function dbToStockOrder(r){
+  return{id:r.id,createdAt:r.created_at||new Date().toISOString(),source:r.source||'Import stoc',
+    totalItems:r.total_items||0,totalQty:Number(r.total_qty)||0,totalValue:Number(r.total_value)||0,
+    updatedCount:r.updated_count||0,createdCount:r.created_count||0,skippedCount:r.skipped_count||0,
+    details:Array.isArray(r.details)?r.details:[]};
+}
+function stockOrderToDb(o){
+  return{source:o.source||'Import stoc',total_items:o.totalItems||0,total_qty:o.totalQty||0,total_value:o.totalValue||0,
+    updated_count:o.updatedCount||0,created_count:o.createdCount||0,skipped_count:o.skippedCount||0,details:o.details||[]};
+}
+function loadLocalStockOrders(){try{return JSON.parse(localStorage.getItem(OK)||'[]');}catch(e){return[];}}
+async function saveStockOrderHistory(order){
+  order.createdAt=order.createdAt||new Date().toISOString();
+  OI=[order,...OI].slice(0,200);
+  localStorage.setItem(OK,JSON.stringify(OI));
+  if(sbReady){
+    try{
+      const rows=await dbPost('comenzi_stoc',stockOrderToDb(order));
+      if(rows?.[0])OI=[dbToStockOrder(rows[0]),...OI.filter(o=>o!==order)].slice(0,200);
+      localStorage.setItem(OK,JSON.stringify(OI));
+    }catch(e){
+      console.warn('Nu s-a salvat istoricul comenzii în Supabase:',e);
+      toast('Comanda a fost salvată local. Pentru salvare în baza de date rulează SQL-ul pentru comenzi_stoc.','err');
+    }
+  }
+}
 
-const K='sm6_prod',TK='sm6_today',JK='sm6_jurnal',EFK='sm6_efactura_emag_date';
-let P=[],TS={},JL=[],editId=null,sCol='name',sDir=1,curImg='',selProd=new Set(),savingProduct=false;
+const K='sm6_prod',TK='sm6_today',JK='sm6_jurnal',OK='sm6_stock_orders',EFK='sm6_efactura_emag_date';
+let P=[],TS={},JL=[],OI=[],editId=null,sCol='name',sDir=1,jMode='sales',curImg='',selProd=new Set(),savingProduct=false,invSourceName='';
 let compState={};
 let SYNCM=[],syncMapsLoaded=false,syncImpParsed=[];
 let invLines=[],invParsed=[],catSuggestTimer=null,lastNameForCat='';
@@ -1486,6 +1520,17 @@ async function load(){
     });
     JL=Object.values(jMap).sort((a,b)=>b.date.localeCompare(a.date));
 
+    // istoric comenzi/incarcari stoc
+    showLoading('Se încarcă istoricul comenzilor de stoc…');
+    try{
+      const oRows=await dbGet('comenzi_stoc?select=*&order=created_at.desc');
+      OI=oRows.map(dbToStockOrder);
+      localStorage.setItem(OK,JSON.stringify(OI));
+    }catch(e){
+      OI=loadLocalStockOrders();
+      console.warn('comenzi_stoc unavailable:',e);
+    }
+
     // fallback to sample if empty
     if(!P.length){
       showLoading('Se adaugă produse demo…');
@@ -1511,6 +1556,7 @@ function loadLocalFallback(){
   try{const r=localStorage.getItem(K);if(r)P=JSON.parse(r);}catch(e){}
   if(!P.length)P=sample();
   try{const r=localStorage.getItem(JK);if(r)JL=JSON.parse(r);}catch(e){}
+  OI=loadLocalStockOrders();
   const today=td();
   try{const r=localStorage.getItem(TK);if(r){const o=JSON.parse(r);if(o.date===today)TS=o.sales||{};else TS={};}else TS={};}catch(e){TS={};}
   setSyncStatus('err','Mod offline');
@@ -4235,7 +4281,7 @@ function updCats(){document.querySelectorAll('.cat-g label').forEach(l=>l.classL
 
 /* INVOICE */
 function openInvoice(){
-  invLines=[];invParsed=[];
+  invLines=[];invParsed=[];invSourceName='Manual';
   document.getElementById('inv-lines').innerHTML='';
   document.getElementById('inv-preview').innerHTML='';
   document.getElementById('inv-file').value='';
@@ -4253,7 +4299,7 @@ function addInvLine(){
   document.getElementById('inv-lines').appendChild(d);
 }
 function removeInvLine(id){document.getElementById(id)?.remove();invLines=invLines.filter(x=>x!==id);previewInv();}
-function handleInvFile(ev){const f=ev.target.files[0];if(!f)return;routeInvFile(f);}
+function handleInvFile(ev){const f=ev.target.files[0];if(!f)return;invSourceName=f.name||'Fișier import';routeInvFile(f);}
 // Detectează formatul fișierului (PDF / CSV preset Jumbo / CSV generic) și rutează spre parserul potrivit
 function routeInvFile(f){
   if(f.name.split('.').pop().toLowerCase()==='pdf'){parsePDFWithAI(f);return;}
@@ -4273,6 +4319,7 @@ function openPresetCSV(){document.getElementById('preset-csv-file').click();}
 function handlePresetCSV(ev){
   const f=ev.target.files[0];if(!f)return;
   openInvoice();
+  invSourceName=f.name||'CSV reaprovizionare';
   routeInvFile(f);
   ev.target.value='';
 }
@@ -4611,6 +4658,7 @@ function renderInvPreview(){
 async function applyInvoice(){
   showLoading('Se importă factura…');
   let updated=0,created=0,skipped=0,receivedLines=0,receivedQty=0,extraQty=0;
+  const orderDetails=[];
   for(const item of invParsed){
     const costRon=item.costRon||0;
     const prices=calcPrices(costRon);
@@ -4619,20 +4667,23 @@ async function applyInvoice(){
       const p=match.product;
       const idx=P.findIndex(x=>x.id===p.id);
       if(idx>=0){
+        const oldCostBefore=Number(P[idx].priceBuyTTC)||0;
         const receipt=invoiceReceiptPlan(P[idx],item.qty);
         P[idx].bought=(P[idx].bought||0)+item.qty;
         P[idx].incomingQty=receipt.incomingAfter;
         if(receipt.fromIncoming>0){receivedLines++;receivedQty+=receipt.fromIncoming;}
         extraQty+=receipt.extra;
         if(costRon>0){
-          const oldCost=Number(P[idx].priceBuyTTC)||0;
+          const oldCost=oldCostBefore;
           if(oldCost>0&&Math.abs(oldCost-costRon)>=0.005){P[idx].priceBuyPrevTTC=oldCost;P[idx].priceBuyChangedAt=new Date().toISOString();}
           P[idx].priceBuyTTC=costRon;P[idx].priceSell=prices.sell;P[idx].priceEmag=prices.emag;P[idx].priceTrendyol=prices.trendyol;P[idx].priceRec=prices.rec;
         }
         await saveProdToDb(P[idx],P[idx].id);
+        orderDetails.push({status:'actualizat',sku:item.sku||P[idx].sku||'',productId:P[idx].id,name:P[idx].name,qty:item.qty,price:costRon,value:Math.round((item.qty||0)*costRon*100)/100,oldPrice:oldCostBefore});
         updated++;
       }
     } else if(item.onlyExisting){
+      orderDetails.push({status:'cod negăsit',sku:item.sku||'',productId:null,name:item.name||item.sku||'Produs negăsit',qty:item.qty,price:costRon,value:Math.round((item.qty||0)*costRon*100)/100});
       skipped++;
       continue;
     } else {
@@ -4645,11 +4696,22 @@ async function applyInvoice(){
         category:item.category||'',supplier:item.supplier||'',img:''
       };
       await saveProdToDb(newP,null);
+      orderDetails.push({status:'produs nou',sku:item.sku||'',productId:null,name:newP.name,qty:item.qty,price:costRon,value:Math.round((item.qty||0)*costRon*100)/100});
       created++;
     }
   }
+  if(orderDetails.length){
+    await saveStockOrderHistory({
+      source:invSourceName||'Import stoc',
+      totalItems:orderDetails.length,
+      totalQty:orderDetails.reduce((s,i)=>s+parseQtyVal(i.qty),0),
+      totalValue:Math.round(orderDetails.reduce((s,i)=>s+(Number(i.value)||0),0)*100)/100,
+      updatedCount:updated,createdCount:created,skippedCount:skipped,
+      details:orderDetails
+    });
+  }
   hideLoading();
-  renderToday();renderTable();closeInvoice();
+  renderToday();renderTable();buildJMonths();if(jMode==='orders')renderJurnal();closeInvoice();
   toast(`✓ ${created} produse noi · ${updated} actualizate${skipped?' · '+skipped+' coduri sărite':''}${receivedLines?' · '+fmtQty(receivedQty)+' buc. recepționate':''}${extraQty?' · '+fmtQty(extraQty)+' buc. extra':''}`);
 }
 
@@ -4922,10 +4984,20 @@ async function handleRaportSupplierImport(ev){
 /* JURNAL */
 function buildJMonths(){
   const sel=document.getElementById('jm');const pv=sel.value;
-  const ms=[...new Set(JL.map(d=>d.date.slice(0,7)))].sort((a,b)=>b.localeCompare(a));
+  const salesMs=JL.map(d=>d.date.slice(0,7));
+  const orderMs=OI.map(o=>(o.createdAt||'').slice(0,7)).filter(Boolean);
+  const ms=[...new Set([...(jMode==='orders'?orderMs:salesMs)])].sort((a,b)=>b.localeCompare(a));
   sel.innerHTML='<option value="">Toate lunile</option>'+ms.map(m=>{const[y,mo]=m.split('-');return`<option value="${m}"${m===pv?' selected':''}>${new Date(y,mo-1).toLocaleDateString('ro-RO',{month:'long',year:'numeric'})}</option>`;}).join('');
 }
+function setJMode(mode){
+  jMode=mode;
+  document.getElementById('jmode-sales')?.classList.toggle('on',mode==='sales');
+  document.getElementById('jmode-orders')?.classList.toggle('on',mode==='orders');
+  document.getElementById('js').placeholder=mode==='orders'?'Caută în comenzi după produs/cod…':'Caută produs…';
+  buildJMonths();renderJurnal();
+}
 function renderJurnal(){
+  if(jMode==='orders'){renderStockOrders();return;}
   const q=(document.getElementById('js').value||'').toLowerCase();
   const mo=document.getElementById('jm').value;
   let days=[...JL];if(mo)days=days.filter(d=>d.date.startsWith(mo));
@@ -4938,18 +5010,46 @@ function renderJurnal(){
     gQ+=dQ;gV+=dV;
     const dlbl=new Date(day.date+'T12:00:00').toLocaleDateString('ro-RO',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
     const id='jd'+day.date;
-    return`<div class="jd-card"><div class="jd-head" onclick="togJ('${id}')"><span class="jd-date">${dlbl}</span><div class="jd-stats"><span><strong>${dQ}</strong> buc</span><span><strong>${dV.toFixed(2)}</strong> RON</span><span>${ent.length} produse</span></div><span class="jd-chev" id="${id}-c">▼</span></div>
-      <div class="jd-body" id="${id}">${ent.map(en=>{const th=en.img?`<img src="${esc(imgSrc(en.img))}" class="jp-th click-edit" onclick="openModal(${en.id})" title="Editează produs" onerror="this.style.display='none'">`:`<div class="jp-th-ph click-edit" onclick="openModal(${en.id})" title="Editează produs">📦</div>`;return`<div class="jp-row">${th}<div class="jp-nm">${esc(en.name)}<br><span class="jp-cat">${esc(en.category||'—')}</span></div><div class="jp-qty">× ${en.qty}</div><div class="jp-val">${en.priceSell>0?(en.qty*en.priceSell).toFixed(2)+' RON':'—'}</div><button class="jp-del" onclick="deleteJournalEntry('${day.date}',${en.id},${en.qty})" title="Șterge vânzare">×</button></div>`;}).join('')}</div></div>`;
+    return`<div class="jd-card"><div class="jd-head" onclick="togJ('${id}')"><span class="jd-date">${dlbl}</span><div class="jd-stats"><span><strong>${fmtQty(dQ)}</strong> buc</span><span><strong>${dV.toFixed(2)}</strong> RON</span><span>${ent.length} produse</span></div><span class="jd-chev" id="${id}-c">▼</span></div>
+      <div class="jd-body" id="${id}">${ent.map(en=>{const th=en.img?`<img src="${esc(imgSrc(en.img))}" class="jp-th click-edit" onclick="openModal(${en.id})" title="Editează produs" onerror="this.style.display='none'">`:`<div class="jp-th-ph click-edit" onclick="openModal(${en.id})" title="Editează produs">📦</div>`;return`<div class="jp-row">${th}<div class="jp-nm">${esc(en.name)}<br><span class="jp-cat">${esc(en.category||'—')}</span></div><div class="jp-qty">× ${fmtQty(en.qty)}</div><div class="jp-val">${en.priceSell>0?(en.qty*en.priceSell).toFixed(2)+' RON':'—'}</div><button class="jp-del" onclick="deleteJournalEntry('${day.date}',${en.id},${en.qty})" title="Șterge vânzare">×</button></div>`;}).join('')}</div></div>`;
   }).join('');
-  document.getElementById('jtotal').textContent=`Total: ${gQ} buc · ${gV.toFixed(2)} RON`;
+  document.getElementById('jtotal').textContent=`Total: ${fmtQty(gQ)} buc · ${gV.toFixed(2)} RON`;
+}
+function renderStockOrders(){
+  const q=(document.getElementById('js').value||'').toLowerCase(),mo=document.getElementById('jm').value;
+  let rows=[...OI];if(mo)rows=rows.filter(o=>(o.createdAt||'').startsWith(mo));
+  if(q)rows=rows.filter(o=>(o.source||'').toLowerCase().includes(q)||(o.details||[]).some(d=>[d.name,d.sku,d.status].some(v=>String(v||'').toLowerCase().includes(q))));
+  const body=document.getElementById('jbody');
+  if(!rows.length){body.innerHTML=`<div class="jrnl-empty">Nicio comandă de stoc încărcată</div>`;document.getElementById('jtotal').textContent='';return;}
+  let gQ=0,gV=0,gI=0;
+  body.innerHTML=rows.map((o,i)=>{
+    gQ+=o.totalQty||0;gV+=o.totalValue||0;gI+=o.totalItems||0;
+    const dt=new Date(o.createdAt||Date.now()).toLocaleString('ro-RO',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    const id='ord'+(o.id||i);
+    const lines=(o.details||[]).map(d=>{
+      const delta=priceDeltaHtml(Number(d.oldPrice)||0,Number(d.price)||0);
+      const cls=d.status==='cod negăsit'?'miss':(d.status==='produs nou'?'new':'upd');
+      return`<div class="jp-row"><div class="jp-th-ph">📦</div><div class="jp-nm">${esc(d.name||'—')}<br><span class="jp-cat">SKU: ${esc(d.sku||'—')} · <span class="inv-match ${cls}" style="margin-left:0">${esc(d.status||'actualizat')}</span></span>${delta?`<div class="jp-meta">${delta}</div>`:''}</div><div class="jp-qty">+${fmtQty(d.qty)}</div><div class="jp-val">${Number(d.price)>0?Number(d.price).toFixed(2)+' RON/buc':'—'}<br><span class="jp-cat">${Number(d.value)>0?Number(d.value).toFixed(2)+' RON':'—'}</span></div></div>`;
+    }).join('');
+    return`<div class="jd-card"><div class="jd-head" onclick="togJ('${id}')"><span class="jd-date">${esc(o.source||'Import stoc')}<br><span class="jp-cat">${dt}</span></span><div class="jd-stats"><span><strong>${fmtQty(o.totalQty)}</strong> buc</span><span><strong>${Number(o.totalValue||0).toFixed(2)}</strong> RON</span><span>${o.updatedCount||0} actualizate · ${o.createdCount||0} noi · ${o.skippedCount||0} sărite</span></div><span class="jd-chev" id="${id}-c">▼</span></div><div class="jd-body" id="${id}">${lines||'<div class="jrnl-empty">Fără detalii</div>'}</div></div>`;
+  }).join('');
+  document.getElementById('jtotal').textContent=`Total comenzi: ${rows.length} · ${fmtQty(gQ)} buc · ${gV.toFixed(2)} RON · ${gI} linii`;
 }
 function togJ(id){document.getElementById(id)?.classList.toggle('op');document.getElementById(id+'-c')?.classList.toggle('op');}
 function exportCSV(){
+  if(jMode==='orders'){exportStockOrdersCSV();return;}
   const mo=document.getElementById('jm').value;
   let days=[...JL];if(mo)days=days.filter(d=>d.date.startsWith(mo));
   let csv='Data,Produs,Categorie,Cantitate,Pret vanzare,Valoare\n';
   days.forEach(day=>day.entries.forEach(en=>{csv+=`"${day.date}","${en.name}","${en.category||''}","${en.qty}","${en.priceSell||0}","${(en.qty*(en.priceSell||0)).toFixed(2)}"\n`;}));
   const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);a.download='vanzari'+(mo?'-'+mo:'')+'.csv';a.click();
+}
+function exportStockOrdersCSV(){
+  const mo=document.getElementById('jm').value;
+  let rows=[...OI];if(mo)rows=rows.filter(o=>(o.createdAt||'').startsWith(mo));
+  let csv='Data,Sursa,Status,SKU,Produs,Cantitate,Pret achizitie,Valoare,Pret vechi\n';
+  rows.forEach(o=>(o.details||[]).forEach(d=>{csv+=`"${o.createdAt||''}","${o.source||''}","${d.status||''}","${d.sku||''}","${d.name||''}","${d.qty||0}","${d.price||0}","${d.value||0}","${d.oldPrice||0}"\n`;}));
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);a.download='comenzi-stoc'+(mo?'-'+mo:'')+'.csv';a.click();
 }
 
 async function deleteJournalEntry(date, productId, qty){
