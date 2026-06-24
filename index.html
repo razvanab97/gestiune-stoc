@@ -4411,6 +4411,11 @@ function invoiceReceiptPlan(product,qty){
   const received=Math.max(0,parseQtyVal(qty)),incoming=Math.max(0,parseQtyVal(product?.incomingQty)),fromIncoming=Math.min(incoming,received);
   return{received,fromIncoming,extra:incoming>0?received-fromIncoming:0,incomingBefore:incoming,incomingAfter:incoming-fromIncoming};
 }
+function stockImportPlan(product,addQty){
+  const before=qty(product),add=parseQtyVal(addQty),after=Math.round((before+add)*100)/100;
+  const compensated=before<0?Math.min(add,Math.abs(before)):0;
+  return{before,add,after,compensated};
+}
 function priceChangeInfo(oldPrice,newPrice){
   oldPrice=Number(oldPrice)||0;newPrice=Number(newPrice)||0;
   if(oldPrice<=0||newPrice<=0||Math.abs(oldPrice-newPrice)<0.005)return null;
@@ -4692,7 +4697,9 @@ function renderInvPreview(){
     const priceStr=item.costRon>0?`${item.costRon.toFixed(2)} RON${item.currency==='EUR'?` (${item.priceBuy.toFixed(2)}€)`:''}`:'' ;
     const oldPrice=match?.product?.priceBuyTTC||0;
     const delta=match&&item.costRon>0?priceDeltaHtml(oldPrice,item.costRon):'';
-    return`<div class="inv-prev-row"><div class="inv-prev-nm">${esc(nm)} ${tag}</div><div class="inv-prev-q">+${fmtQty(item.qty)}</div><div style="font-family:var(--mono);font-size:11px;color:var(--t3);text-align:right;min-width:120px">${priceStr}${delta}</div></div>`;
+    const stockPlan=match?stockImportPlan(match.product,item.qty):null;
+    const stockInfo=stockPlan?`<div class="jp-meta">Stoc: ${fmtQty(stockPlan.before)} + ${fmtQty(stockPlan.add)} = ${fmtQty(stockPlan.after)}${stockPlan.compensated>0?' · compensează minus '+fmtQty(stockPlan.compensated):''}</div>`:'';
+    return`<div class="inv-prev-row"><div class="inv-prev-nm">${esc(nm)} ${tag}${stockInfo}</div><div class="inv-prev-q">+${fmtQty(item.qty)}</div><div style="font-family:var(--mono);font-size:11px;color:var(--t3);text-align:right;min-width:120px">${priceStr}${delta}</div></div>`;
   }).join('');
   const newC=invParsed.filter(i=>!i._match).length;
   const updC=invParsed.length-newC;
@@ -4718,6 +4725,7 @@ async function applyInvoice(){
       const idx=P.findIndex(x=>x.id===p.id);
       if(idx>=0){
         const oldCostBefore=Number(P[idx].priceBuyTTC)||0;
+        const stockPlan=stockImportPlan(P[idx],item.qty);
         const receipt=invoiceReceiptPlan(P[idx],item.qty);
         P[idx].bought=(P[idx].bought||0)+item.qty;
         P[idx].incomingQty=receipt.incomingAfter;
@@ -4731,7 +4739,7 @@ async function applyInvoice(){
           P[idx].priceBuyTTC=costRon;P[idx].priceSell=prices.sell;P[idx].priceEmag=prices.emag;P[idx].priceTrendyol=prices.trendyol;P[idx].priceRec=prices.rec;
         }
         await saveProdToDb(P[idx],P[idx].id);
-        orderDetails.push({status:'actualizat',sku:item.sku||P[idx].sku||'',productId:P[idx].id,name:P[idx].name,qty:item.qty,price:costRon,value:Math.round((item.qty||0)*costRon*100)/100,oldPrice:oldCostBefore});
+        orderDetails.push({status:'actualizat',sku:item.sku||P[idx].sku||'',productId:P[idx].id,name:P[idx].name,qty:item.qty,price:costRon,value:Math.round((item.qty||0)*costRon*100)/100,oldPrice:oldCostBefore,stockBefore:stockPlan.before,stockAfter:stockPlan.after,negativeCompensated:stockPlan.compensated});
         updated++;
       }
     } else if(item.onlyExisting){
@@ -5082,7 +5090,8 @@ function renderStockOrders(){
     const lines=(o.details||[]).map(d=>{
       const delta=priceDeltaHtml(Number(d.oldPrice)||0,Number(d.price)||0);
       const cls=d.status==='cod negăsit'?'miss':(d.status==='produs nou'?'new':'upd');
-      return`<div class="jp-row"><div class="jp-th-ph">📦</div><div class="jp-nm">${esc(d.name||'—')}<br><span class="jp-cat">SKU: ${esc(d.sku||'—')} · <span class="inv-match ${cls}" style="margin-left:0">${esc(d.status||'actualizat')}</span></span>${delta?`<div class="jp-meta">${delta}</div>`:''}</div><div class="jp-qty">+${fmtQty(d.qty)}</div><div class="jp-val">${Number(d.price)>0?Number(d.price).toFixed(2)+' RON/buc':'—'}<br><span class="jp-cat">${Number(d.value)>0?Number(d.value).toFixed(2)+' RON':'—'}</span></div></div>`;
+      const stockLine=Number.isFinite(Number(d.stockBefore))?`<div class="jp-meta">Stoc: ${fmtQty(d.stockBefore)} + ${fmtQty(d.qty)} = ${fmtQty(d.stockAfter)}${Number(d.negativeCompensated)>0?' · minus compensat '+fmtQty(d.negativeCompensated):''}</div>`:'';
+      return`<div class="jp-row"><div class="jp-th-ph">📦</div><div class="jp-nm">${esc(d.name||'—')}<br><span class="jp-cat">SKU: ${esc(d.sku||'—')} · <span class="inv-match ${cls}" style="margin-left:0">${esc(d.status||'actualizat')}</span></span>${delta?`<div class="jp-meta">${delta}</div>`:''}${stockLine}</div><div class="jp-qty">+${fmtQty(d.qty)}</div><div class="jp-val">${Number(d.price)>0?Number(d.price).toFixed(2)+' RON/buc':'—'}<br><span class="jp-cat">${Number(d.value)>0?Number(d.value).toFixed(2)+' RON':'—'}</span></div></div>`;
     }).join('');
     return`<div class="jd-card"><div class="jd-head" onclick="togJ('${id}')"><span class="jd-date">${esc(o.source||'Import stoc')}<br><span class="jp-cat">${dt}</span></span><div class="jd-stats"><span><strong>${fmtQty(o.totalQty)}</strong> buc</span><span><strong>${Number(o.totalValue||0).toFixed(2)}</strong> RON</span><span>${o.updatedCount||0} actualizate · ${o.createdCount||0} noi · ${o.skippedCount||0} sărite</span></div><span class="jd-chev" id="${id}-c">▼</span></div><div class="jd-body" id="${id}">${lines||'<div class="jrnl-empty">Fără detalii</div>'}</div></div>`;
   }).join('');
@@ -5100,8 +5109,8 @@ function exportCSV(){
 function exportStockOrdersCSV(){
   const mo=document.getElementById('jm').value;
   let rows=[...OI];if(mo)rows=rows.filter(o=>(o.createdAt||'').startsWith(mo));
-  let csv='Data,Sursa,Status,SKU,Produs,Cantitate,Pret achizitie,Valoare,Pret vechi\n';
-  rows.forEach(o=>(o.details||[]).forEach(d=>{csv+=`"${o.createdAt||''}","${o.source||''}","${d.status||''}","${d.sku||''}","${d.name||''}","${d.qty||0}","${d.price||0}","${d.value||0}","${d.oldPrice||0}"\n`;}));
+  let csv='Data,Sursa,Status,SKU,Produs,Cantitate,Pret achizitie,Valoare,Pret vechi,Stoc inainte,Stoc dupa,Minus compensat\n';
+  rows.forEach(o=>(o.details||[]).forEach(d=>{csv+=`"${o.createdAt||''}","${o.source||''}","${d.status||''}","${d.sku||''}","${d.name||''}","${d.qty||0}","${d.price||0}","${d.value||0}","${d.oldPrice||0}","${d.stockBefore??''}","${d.stockAfter??''}","${d.negativeCompensated||0}"\n`;}));
   const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);a.download='comenzi-stoc'+(mo?'-'+mo:'')+'.csv';a.click();
 }
 
