@@ -16,6 +16,8 @@ create table if not exists produse (
   sold numeric(10,2) default 0,
   min_qty numeric(10,2) default 0,
   price_buy_ttc numeric(10,2) default 0,
+  price_buy_prev_ttc numeric(10,2) default 0,
+  price_buy_changed_at timestamptz,
   tva_acq numeric(4,2) default 0.21,
   price_sell numeric(10,2) default 0,
   price_emag numeric(10,2) default 0,
@@ -42,11 +44,14 @@ alter table produse add column if not exists internal_code text;
 alter table produse add column if not exists incoming_qty numeric(10,2) default 0;
 alter table produse add column if not exists price_emag numeric(10,2) default 0;
 alter table produse add column if not exists price_trendyol numeric(10,2) default 0;
+alter table produse add column if not exists price_buy_prev_ttc numeric(10,2) default 0;
+alter table produse add column if not exists price_buy_changed_at timestamptz;
 
 alter table produse alter column bought type numeric(10,2) using bought::numeric;
 alter table produse alter column incoming_qty type numeric(10,2) using incoming_qty::numeric;
 alter table produse alter column sold type numeric(10,2) using sold::numeric;
 alter table produse alter column min_qty type numeric(10,2) using min_qty::numeric;
+alter table produse alter column price_buy_prev_ttc type numeric(10,2) using price_buy_prev_ttc::numeric;
 
 update produse
 set internal_code = 'AB' || to_char(coalesce(created_at, now()) at time zone 'Europe/Bucharest', 'MMDD') || id

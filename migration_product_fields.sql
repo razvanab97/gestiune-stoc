@@ -11,11 +11,14 @@ alter table produse add column if not exists material text;
 alter table produse add column if not exists dims text;
 alter table produse add column if not exists notes text;
 alter table produse add column if not exists internal_code text;
+alter table produse add column if not exists price_buy_prev_ttc numeric(10,2) default 0;
+alter table produse add column if not exists price_buy_changed_at timestamptz;
 
 alter table produse alter column bought type numeric(10,2) using bought::numeric;
 alter table produse alter column incoming_qty type numeric(10,2) using incoming_qty::numeric;
 alter table produse alter column sold type numeric(10,2) using sold::numeric;
 alter table produse alter column min_qty type numeric(10,2) using min_qty::numeric;
+alter table produse alter column price_buy_prev_ttc type numeric(10,2) using price_buy_prev_ttc::numeric;
 alter table vanzari_zilnice alter column qty type numeric(10,2) using qty::numeric;
 alter table jurnal alter column qty type numeric(10,2) using qty::numeric;
 
