@@ -794,6 +794,8 @@ th{font-weight:800!important;color:var(--t3)!important}
       <option value="low">Scăzut</option>
       <option value="out">Epuizat</option>
       <option value="recent">Adăugate recent</option>
+      <option value="stock_recent">Stoc adăugat recent</option>
+      <option value="transit">În tranzit</option>
       <option value="oldest">Cele mai vechi</option>
     </select>
     <button class="btn btn-acc" onclick="openModal()">+ Produs nou</button>
@@ -3747,6 +3749,16 @@ function prodCreatedTime(p){
   const t=p.createdAt?new Date(p.createdAt).getTime():NaN;
   return Number.isFinite(t)?t:(Number(p.id)||0);
 }
+function stockAddedTime(p){
+  let best=0;
+  for(const o of OI){
+    const t=o.createdAt?new Date(o.createdAt).getTime():0;
+    if(!t||t<=best)continue;
+    const hit=(o.details||[]).some(d=>(d.productId&&Number(d.productId)===Number(p.id))||(p.sku&&d.sku&&String(d.sku).toLowerCase()===String(p.sku).toLowerCase()));
+    if(hit)best=t;
+  }
+  return best;
+}
 function toggleSupplierFilter(){document.getElementById('fsup-wrap')?.classList.toggle('on');}
 function clearSupplierFilter(ev){ev?.stopPropagation();selSuppliers.clear();renderTable();}
 function toggleSupplierValue(v,checked){checked?selSuppliers.add(v):selSuppliers.delete(v);renderTable();}
@@ -3762,8 +3774,9 @@ function renderTable(){
   const cat=document.getElementById('fc').value;
   const s=document.getElementById('fs').value;
   const statusFilter=['ok','low','out'].includes(s)?s:'';
-  let list=P.filter(p=>{const m=prodMatchesSearch(p,q);return m&&(!cat||p.category===cat)&&(!selSuppliers.size||selSuppliers.has(p.supplier||''))&&(!statusFilter||st(p)===statusFilter);});
+  let list=P.filter(p=>{const m=prodMatchesSearch(p,q);return m&&(!cat||p.category===cat)&&(!selSuppliers.size||selSuppliers.has(p.supplier||''))&&(!statusFilter||st(p)===statusFilter)&&(s!=='transit'||parseQtyVal(p.incomingQty)>0)&&(s!=='stock_recent'||stockAddedTime(p)>0);});
   if(s==='recent')list.sort((a,b)=>prodCreatedTime(b)-prodCreatedTime(a));
+  else if(s==='stock_recent')list.sort((a,b)=>stockAddedTime(b)-stockAddedTime(a));
   else if(s==='oldest')list.sort((a,b)=>prodCreatedTime(a)-prodCreatedTime(b));
   else list.sort((a,b)=>{let av=sCol==='qty'?qty(a):(a[sCol]??'');let bv=sCol==='qty'?qty(b):(b[sCol]??'');if(typeof av==='string')av=av.toLowerCase();if(typeof bv==='string')bv=bv.toLowerCase();return av<bv?-sDir:av>bv?sDir:0;});
   const tot=P.length,lowC=P.filter(p=>st(p)==='low').length,outC=P.filter(p=>st(p)==='out').length;
