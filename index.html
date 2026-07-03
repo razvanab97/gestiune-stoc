@@ -1429,14 +1429,21 @@ function stockOrderToDb(o){
     updated_count:o.updatedCount||0,created_count:o.createdCount||0,skipped_count:o.skippedCount||0,details:o.details||[]};
 }
 function loadLocalStockOrders(){try{return JSON.parse(localStorage.getItem(OK)||'[]');}catch(e){return[];}}
+function stockOrderKey(o){return o.id?`db:${o.id}`:`local:${o.localId||o.createdAt||''}:${o.source||''}:${o.totalItems||0}:${o.totalQty||0}`;}
+function mergeStockOrders(...groups){
+  const m=new Map();
+  groups.flat().filter(Boolean).forEach(o=>{const k=stockOrderKey(o);if(!m.has(k))m.set(k,o);});
+  return [...m.values()].sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))).slice(0,200);
+}
 async function saveStockOrderHistory(order){
   order.createdAt=order.createdAt||new Date().toISOString();
-  OI=[order,...OI].slice(0,200);
+  order.localId=order.localId||('ord-'+Date.now()+'-'+Math.random().toString(36).slice(2,8));
+  OI=mergeStockOrders([order],OI);
   localStorage.setItem(OK,JSON.stringify(OI));
   if(sbReady){
     try{
       const rows=await dbPost('comenzi_stoc',stockOrderToDb(order));
-      if(rows?.[0])OI=[dbToStockOrder(rows[0]),...OI.filter(o=>o!==order)].slice(0,200);
+      if(rows?.[0])OI=mergeStockOrders([dbToStockOrder(rows[0])],OI.filter(o=>o.localId!==order.localId));
       localStorage.setItem(OK,JSON.stringify(OI));
     }catch(e){
       console.warn('Nu s-a salvat istoricul comenzii în Supabase:',e);
@@ -1542,7 +1549,7 @@ async function load(){
     showLoading('Se încarcă istoricul comenzilor de stoc…');
     try{
       const oRows=await dbGet('comenzi_stoc?select=*&order=created_at.desc');
-      OI=oRows.map(dbToStockOrder);
+      OI=mergeStockOrders(oRows.map(dbToStockOrder),loadLocalStockOrders());
       localStorage.setItem(OK,JSON.stringify(OI));
     }catch(e){
       OI=loadLocalStockOrders();
