@@ -3097,6 +3097,14 @@ function proxyImg(url){return url?'/api/img-proxy?url='+encodeURIComponent(url):
 function downloadImg(url){return url?'/api/img-proxy?url='+encodeURIComponent(url)+'&download=1':'';}
 // Returnează sursa potrivită pt <img src>: proxy pt http(s), direct pt data: URLs
 function imgSrc(url){if(!url)return'';if(url.startsWith('data:'))return url;if(url.startsWith('http'))return proxyImg(url);return url;}
+function imgErr(el,url,mode='hide'){
+  const raw=String(url||'');
+  if(raw.startsWith('http')&&!el.dataset.rawTried){el.dataset.rawTried='1';el.src=raw;return;}
+  if(mode==='ph'&&el.parentElement)el.parentElement.innerHTML='<span class="ph">📦</span>';
+  else if(mode==='pick')el.outerHTML='<div class="smi-pick-th-ph">📦</div>';
+  else el.style.display='none';
+}
+function imgErrAttr(url,mode='hide'){return`onerror="imgErr(this,${esc(JSON.stringify(url||''))},'${mode}')"`;}
 // Rewrite <img src> în HTML pentru preview — original URL rămâne în raw/copy
 function proxyHtmlImgs(html){return(html||'').replace(/<img([^>]+?)src=["']([^"']+)["']/gi,(m,attrs,u)=>u.startsWith('/api/img-proxy')?m:`<img${attrs}src="${proxyImg(u)}"`);}
 // Verifică dimensiunile imaginii la onload și afișează badge dimensiune
@@ -3620,7 +3628,7 @@ function renderSearch(){
   drop.classList.add('on');
   drop.innerHTML=hits.map(p=>{
     const s=qty(p);const tqs=tqp(p);
-    const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="ss-th click-edit" onclick="openModal(${p.id})" title="Editează produs" onerror="this.style.display='none'">`:`<div class="ss-th-ph click-edit" onclick="openModal(${p.id})" title="Editează produs">📦</div>`;
+    const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="ss-th click-edit" onclick="openModal(${p.id})" title="Editează produs" ${imgErrAttr(p.img)}>`:`<div class="ss-th-ph click-edit" onclick="openModal(${p.id})" title="Editează produs">📦</div>`;
     const copyBtn=`<button class="copy-nm-btn" onclick="event.stopPropagation();copyProductName(${p.id})" title="Copiază denumire">📋</button>`;
     const skuMeta=[p.sku?'SKU: '+p.sku:'',p.internalCode?'Cod intern: '+p.internalCode:''].filter(Boolean).join(' · ');
     return`<div class="ss-row">${th}<div class="ss-inf"><div class="ss-nm">${esc(p.name)}${copyBtn}</div><div class="ss-meta">${esc(skuMeta||'fără cod')} · stoc: ${fmtQty(s)}${p.priceSell>0?' · min '+p.priceSell.toFixed(2)+' RON':''}</div></div>
@@ -3666,7 +3674,7 @@ async function sellSearch(id){
 /* TODAY GRID */
 let todayCardProds=[],todayCardIdx=0;
 function todayCardSide(p,side){
-  const img=p.img?`<img src="${esc(imgSrc(p.img))}" alt="" onclick="event.stopPropagation();openModal(${p.id})" onerror="this.parentElement.innerHTML='<span class=&quot;ph&quot;>📦</span>'">`:`<span class="ph" onclick="event.stopPropagation();openModal(${p.id})">📦</span>`;
+  const img=p.img?`<img src="${esc(imgSrc(p.img))}" alt="" onclick="event.stopPropagation();openModal(${p.id})" ${imgErrAttr(p.img,'ph')}>`:`<span class="ph" onclick="event.stopPropagation();openModal(${p.id})">📦</span>`;
   return`<div class="today-card today-card-side" onclick="todayCardGoTo(${p.id})" title="${esc(p.name)}"><div class="today-card-img click-edit">${img}</div><div class="today-card-title">${esc(p.name)}</div><div class="today-card-meta">azi ${fmtQty(tqp(p))} buc.</div></div>`;
 }
 function renderToday(){
@@ -3678,7 +3686,7 @@ function renderToday(){
   if(!todayCardProds.length)tg.innerHTML='<div class="empty-row">Niciun produs disponibil</div>';
   else{
     const n=todayCardProds.length,p=todayCardProds[todayCardIdx],prev=todayCardProds[(todayCardIdx-1+n)%n],next=todayCardProds[(todayCardIdx+1)%n],tqs=tqp(p),s=qty(p);
-    const img=p.img?`<img src="${esc(imgSrc(p.img))}" alt="" onclick="openModal(${p.id})" onerror="this.parentElement.innerHTML='<span class=&quot;ph&quot;>📦</span>'">`:`<span class="ph" onclick="openModal(${p.id})">📦</span>`;
+    const img=p.img?`<img src="${esc(imgSrc(p.img))}" alt="" onclick="openModal(${p.id})" ${imgErrAttr(p.img,'ph')}>`:`<span class="ph" onclick="openModal(${p.id})">📦</span>`;
     const main=`<div class="today-card today-card-main"><div class="today-card-img click-edit" title="Editează produs">${img}</div><div class="today-card-title"><button class="copy-btn" onclick="copyProductName(${p.id})" title="Copiază denumirea">📋</button><span>${esc(p.name)}</span></div><div class="today-card-meta"><button class="copy-btn" onclick="copyProductSku(${p.id})" title="Copiază SKU" ${!p.sku?'style="visibility:hidden"':''}>📋</button>SKU: ${esc(p.sku||'—')}</div><div class="today-card-meta"><button class="copy-btn" onclick="copyProductInternalCode(${p.id})" title="Copiază cod intern">📋</button>Cod intern: ${esc(p.internalCode||'—')}</div><div class="today-card-row"><span>Stoc actual</span><strong style="${s<0?'color:var(--rd)':''}">${fmtQty(s)}</strong></div><div class="today-card-row"><span>Vândute azi</span><strong>${fmtQty(tqs)}</strong></div><div class="today-card-prices"><div class="today-card-row"><span>Preț minim direct</span><strong>${p.priceSell>0?p.priceSell.toFixed(2)+' RON':'—'}</strong></div><div class="today-card-row"><span>Preț minim eMAG</span><strong>${p.priceEmag>0?p.priceEmag.toFixed(2)+' RON':'—'}</strong></div><div class="today-card-row"><span>Preț minim Trendyol</span><strong>${p.priceTrendyol>0?p.priceTrendyol.toFixed(2)+' RON':'—'}</strong></div></div><div class="today-actions"><input type="text" inputmode="decimal" class="tg-inp${tqs>0?' on':''}" id="ti-${p.id}" value="${fmtQty(tqs)}" onchange="updateTQ(${p.id})" oninput="pvTQ(${p.id})"><button class="tg-btn" onclick="qSell(${p.id})">+</button><button class="tg-btn-del" onclick="deleteSale(${p.id})" ${tqs<=0?'disabled':''} title="Șterge vânzare">×</button></div></div>`;
     tg.innerHTML=`<div class="today-carousel">${n>1?todayCardSide(prev,'l'):'<div></div>'}<button class="today-arrow" onclick="todayCardNav(-1)">‹</button>${main}<button class="today-arrow" onclick="todayCardNav(1)">›</button>${n>1?todayCardSide(next,'r'):'<div></div>'}</div>`;
   }
@@ -3815,7 +3823,7 @@ function renderTable(){
     const bdg=s2==='ok'?`<span class="bdg bdg-ok">În stoc</span>`:s2==='low'?`<span class="bdg bdg-low">Scăzut</span>`:`<span class="bdg bdg-out">Epuizat</span>`;
     const catB=p.category?`<span class="bdg bdg-cat">${esc(p.category)}</span>`:'—';
     const aziB=tqs>0?`<span class="bdg bdg-azi">−${fmtQty(tqs)}</span>`:`<span style="color:var(--t3);font-family:var(--mono);font-size:12px">—</span>`;
-    const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="p-th click-edit" onclick="openModal(${p.id})" title="Editează produs" onerror="this.style.display='none'">`:`<div class="p-th-ph click-edit" onclick="openModal(${p.id})" title="Editează produs">📦</div>`;
+    const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="p-th click-edit" onclick="openModal(${p.id})" title="Editează produs" ${imgErrAttr(p.img)}>`:`<div class="p-th-ph click-edit" onclick="openModal(${p.id})" title="Editează produs">📦</div>`;
     const tvaBadge=p.tvaAcq>0?`<span class="bdg" style="background:var(--bl-bg);color:var(--bl)">21%</span>`:`<span class="bdg" style="background:var(--surf2);color:var(--t3)">0%</span>`;
     return`<tr style="${(s2==='low'||s2==='out')?'background:rgba(255,184,77,.05)':''}">
       <td style="text-align:center;vertical-align:middle"><input type="checkbox" class="chk-prod" data-id="${p.id}" ${selProd.has(p.id)?'checked':''} onchange="toggleSelProd(${p.id},this.checked)"></td>
@@ -4134,7 +4142,7 @@ async function handleSyncImportFile(ev){
 function syncPickBtnHtml(idx){
   const it=syncImpParsed[idx];
   const p=it.produsId?P.find(x=>x.id===it.produsId):null;
-  const th=p?(p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" onerror="this.outerHTML='<div class=&quot;smi-pick-th-ph&quot;>📦</div>'">`:`<div class="smi-pick-th-ph">📦</div>`):'';
+  const th=p?(p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'pick')}>`:`<div class="smi-pick-th-ph">📦</div>`):'';
   const nm=p?`${esc(p.name)}${p.sku?' · '+esc(p.sku):''}`:'— alege produs —';
   return`<button type="button" class="smi-pick-btn" onclick="openSyncPick(event,${idx})">${th}<span class="smi-pick-nm">${nm}</span><span class="smi-pick-car">▾</span></button>`;
 }
@@ -4176,7 +4184,7 @@ function filterSyncPick(){
   const cur=syncImpParsed[syncPickIdx]?.produsId||null;
   const matches=(q?syncPickProds.filter(p=>p.name.toLowerCase().includes(q)||(p.sku&&p.sku.toLowerCase().includes(q))):syncPickProds).slice(0,80);
   const rows=matches.map(p=>{
-    const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" onerror="this.outerHTML='<div class=&quot;smi-pick-th-ph&quot;>📦</div>'">`:`<div class="smi-pick-th-ph">📦</div>`;
+    const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'pick')}>`:`<div class="smi-pick-th-ph">📦</div>`;
     return`<div class="smi-pick-item" onclick="pickSyncProduct(${p.id})" style="${p.id===cur?'background:var(--surf2)':''}">${th}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</span></div>`;
   }).join('');
   list.innerHTML=rows||`<div class="smi-pick-item" style="color:var(--t3);cursor:default">Niciun produs găsit</div>`;
@@ -4321,7 +4329,7 @@ function onImgFile(ev){
   r.readAsDataURL(f);
 }
 function onImgUrl(){const u=document.getElementById('f-imgurl').value.trim();if(u){curImg=u;showPrev(u);document.getElementById('ai-img-btn').disabled=false;}else{curImg='';hidePrev();document.getElementById('ai-img-btn').disabled=true;}}
-function showPrev(s){document.getElementById('f-prev').src=imgSrc(s);document.getElementById('f-prev').style.display='block';document.getElementById('img-ph').style.display='none';}
+function showPrev(s){const el=document.getElementById('f-prev');el.onerror=()=>imgErr(el,s);el.src=imgSrc(s);el.style.display='block';document.getElementById('img-ph').style.display='none';}
 function hidePrev(){document.getElementById('f-prev').style.display='none';document.getElementById('img-ph').style.display='flex';}
 function clearImg(){curImg='';document.getElementById('f-img').value='';document.getElementById('f-imgurl').value='';document.getElementById('ai-img-btn').disabled=true;hidePrev();}
 
@@ -4833,7 +4841,7 @@ function renderRaport(){
     const stoc=(p.bought||0)-(p.sold||0);
     const stocCls=stoc<=0?'rpt-stoc-zero':stoc<=(p.minQty||3)?'rpt-stoc-low':'rpt-stoc-ok';
     const valCost=(stoc*(p.priceBuyTTC||0)).toFixed(2);
-    const img=p.img?`<img src="${esc(imgSrc(p.img))}" style="width:32px;height:32px;object-fit:contain;border-radius:4px;border:1px solid var(--b1)" onerror="this.style.display='none'">`:`<div style="width:32px;height:32px;border-radius:4px;background:var(--bg1);display:flex;align-items:center;justify-content:center;font-size:14px">📦</div>`;
+    const img=p.img?`<img src="${esc(imgSrc(p.img))}" style="width:32px;height:32px;object-fit:contain;border-radius:4px;border:1px solid var(--b1)" ${imgErrAttr(p.img)}>`:`<div style="width:32px;height:32px;border-radius:4px;background:var(--bg1);display:flex;align-items:center;justify-content:center;font-size:14px">📦</div>`;
     return`<tr>
       <td style="width:36px;text-align:center"><span style="font-size:11px;color:var(--t3)">${i+1}</span></td>
       <td style="width:42px">${img}</td>
@@ -4893,7 +4901,7 @@ function printRaport(){
 /* CARDURI PRODUSE — actualizare rapidă stoc (carusel centrat) */
 let rptCardProds=[],rptCardIdx=0;
 function rptCardGhost(p,side){
-  const img=p.img?`<img src="${esc(imgSrc(p.img))}" alt="" onclick="event.stopPropagation();openModal(${p.id})" title="Editează produs" onerror="this.parentElement.innerHTML='<span class=&quot;ph&quot;>📦</span>'">`:`<span class="ph" onclick="event.stopPropagation();openModal(${p.id})">📦</span>`;
+  const img=p.img?`<img src="${esc(imgSrc(p.img))}" alt="" onclick="event.stopPropagation();openModal(${p.id})" title="Editează produs" ${imgErrAttr(p.img,'ph')}>`:`<span class="ph" onclick="event.stopPropagation();openModal(${p.id})">📦</span>`;
   return`<div class="rpt-card rpt-car-ghost rpt-car-ghost-${side}" onclick="rptCardGoTo(${p.id})" title="${esc(p.name||'—')}">
     <div class="rpt-card-img">${img}</div>
     <div class="rpt-card-title">${esc(p.name||'—')}</div>
@@ -4913,7 +4921,7 @@ function renderRaportCards(prods){
   const prevP=prods[(rptCardIdx-1+n)%n],nextP=prods[(rptCardIdx+1)%n];
   const stoc=qty(cur);
   const stocCls=stoc<=0?'rpt-stoc-zero':stoc<=(cur.minQty||3)?'rpt-stoc-low':'rpt-stoc-ok';
-  const img=cur.img?`<img src="${esc(imgSrc(cur.img))}" alt="" onclick="openModal(${cur.id})" title="Editează produs" onerror="this.parentElement.innerHTML='<span class=&quot;ph&quot;>📦</span>'">`:`<span class="ph" onclick="openModal(${cur.id})">📦</span>`;
+  const img=cur.img?`<img src="${esc(imgSrc(cur.img))}" alt="" onclick="openModal(${cur.id})" title="Editează produs" ${imgErrAttr(cur.img,'ph')}>`:`<span class="ph" onclick="openModal(${cur.id})">📦</span>`;
   const mainCard=`<div class="rpt-card rpt-car-main" id="rpt-card-${cur.id}">
     <div class="rpt-card-img click-edit">${img}</div>
     <div class="rpt-card-title" title="${esc(cur.name||'—')}"><button class="copy-btn" onclick="copyProductName(${cur.id})">📋</button>${esc(cur.name||'—')}</div>
@@ -5087,7 +5095,7 @@ function renderJurnal(){
     const dlbl=new Date(day.date+'T12:00:00').toLocaleDateString('ro-RO',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
     const id='jd'+day.date;
     return`<div class="jd-card"><div class="jd-head" onclick="togJ('${id}')"><span class="jd-date">${dlbl}</span><div class="jd-stats"><span><strong>${fmtQty(dQ)}</strong> buc</span><span><strong>${dV.toFixed(2)}</strong> RON</span><span>${ent.length} produse</span></div><span class="jd-chev" id="${id}-c">▼</span></div>
-      <div class="jd-body" id="${id}">${ent.map(en=>{const th=en.img?`<img src="${esc(imgSrc(en.img))}" class="jp-th click-edit" onclick="openModal(${en.id})" title="Editează produs" onerror="this.style.display='none'">`:`<div class="jp-th-ph click-edit" onclick="openModal(${en.id})" title="Editează produs">📦</div>`;return`<div class="jp-row">${th}<div class="jp-nm">${esc(en.name)}<br><span class="jp-cat">${esc(en.category||'—')}</span></div><div class="jp-qty">× ${fmtQty(en.qty)}</div><div class="jp-val">${en.priceSell>0?(en.qty*en.priceSell).toFixed(2)+' RON':'—'}</div><button class="jp-del" onclick="deleteJournalEntry('${day.date}',${en.id},${en.qty})" title="Șterge vânzare">×</button></div>`;}).join('')}</div></div>`;
+      <div class="jd-body" id="${id}">${ent.map(en=>{const th=en.img?`<img src="${esc(imgSrc(en.img))}" class="jp-th click-edit" onclick="openModal(${en.id})" title="Editează produs" ${imgErrAttr(en.img)}>`:`<div class="jp-th-ph click-edit" onclick="openModal(${en.id})" title="Editează produs">📦</div>`;return`<div class="jp-row">${th}<div class="jp-nm">${esc(en.name)}<br><span class="jp-cat">${esc(en.category||'—')}</span></div><div class="jp-qty">× ${fmtQty(en.qty)}</div><div class="jp-val">${en.priceSell>0?(en.qty*en.priceSell).toFixed(2)+' RON':'—'}</div><button class="jp-del" onclick="deleteJournalEntry('${day.date}',${en.id},${en.qty})" title="Șterge vânzare">×</button></div>`;}).join('')}</div></div>`;
   }).join('');
   document.getElementById('jtotal').textContent=`Total: ${fmtQty(gQ)} buc · ${gV.toFixed(2)} RON`;
 }
