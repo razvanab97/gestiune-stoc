@@ -875,6 +875,9 @@ th{font-weight:800!important;color:var(--t3)!important}
         <button class="btn btn-sm" onclick="printRaport()" style="background:var(--acc);color:var(--acc-fg)">🖨️ Printează / PDF</button>
         <button class="btn btn-sm" onclick="exportRaportCSV()">⬇ Descarcă raport stoc CSV</button>
         <button class="btn btn-sm" onclick="exportRaportExcel()">⬇ Descarcă raport stoc Excel</button>
+        <input type="date" id="rpt-hist-date" class="inv-sel" style="font-size:12px;padding:5px 10px;border-radius:6px;border:1px solid var(--b1);background:var(--bg2);color:var(--t1);cursor:pointer" title="Alege data pentru stoc contabil istoric">
+        <button class="btn btn-sm" onclick="exportHistoricStockCSV()" title="Calculează stocul contabil la data aleasă">📅 Stoc la dată CSV</button>
+        <button class="btn btn-sm" onclick="exportHistoricStockExcel()" title="Calculează stocul contabil la data aleasă">📅 Stoc la dată Excel</button>
         <button class="btn btn-sm" onclick="document.getElementById('rpt-sup-file').click()" title="Încarcă înapoi fișierul descărcat (CSV/Excel) cu coloana Furnizor completată — se asociază automat după product_id">⬆ Încarcă furnizori din fișier</button>
         <input type="file" id="rpt-sup-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleRaportSupplierImport(event)">
       </div>
@@ -4808,6 +4811,8 @@ function buildRaportCats(){
   sel.innerHTML='<option value="">Toate categoriile</option>'+cats.map(c=>`<option value="${esc(c)}"${c===prev?' selected':''}>${esc(c)}</option>`).join('');
 }
 function renderRaport(){
+  const hist=document.getElementById('rpt-hist-date');
+  if(hist&&!hist.value)hist.value=defaultHistoricStockDate();
   const cat=document.getElementById('rpt-cat')?.value||'';
   const sort=document.getElementById('rpt-sort')?.value||'name';
 
@@ -4989,6 +4994,83 @@ function buildRaportExportRows(){
       actualizat:now
     };
   });
+}
+function localDateISO(d){
+  const pad=n=>String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+}
+function defaultHistoricStockDate(){
+  const d=new Date();
+  return localDateISO(new Date(d.getFullYear(),d.getMonth(),0));
+}
+function saleQtyAfterDate(date){
+  const m={};
+  JL.forEach(day=>{
+    if(day.date<=date)return;
+    (day.entries||[]).forEach(en=>{if(en.id)m[en.id]=(m[en.id]||0)+parseQtyVal(en.qty);});
+  });
+  return m;
+}
+function stockAddedQtyAfterDate(date){
+  const byId={},bySku={};
+  OI.forEach(o=>{
+    const d=String(o.createdAt||'').slice(0,10);
+    if(!d||d<=date)return;
+    (o.details||[]).forEach(it=>{
+      if(it.status==='cod negăsit')return;
+      const q=parseQtyVal(it.qty);
+      if(q<=0)return;
+      if(it.productId)byId[it.productId]=(byId[it.productId]||0)+q;
+      else if(it.sku)bySku[String(it.sku).toLowerCase()]=(bySku[String(it.sku).toLowerCase()]||0)+q;
+    });
+  });
+  P.forEach(p=>{
+    const d=String(p.stockAddedAt||'').slice(0,10);
+    const hasOrder=(byId[p.id]||0)||(p.sku&&bySku[String(p.sku).toLowerCase()]);
+    if(!hasOrder&&d&&d>date&&parseQtyVal(p.lastStockAddedQty)>0)byId[p.id]=(byId[p.id]||0)+parseQtyVal(p.lastStockAddedQty);
+  });
+  return{byId,bySku};
+}
+function buildHistoricStockRows(date){
+  const sales=saleQtyAfterDate(date),adds=stockAddedQtyAfterDate(date);
+  return P.map(p=>{
+    const current=qty(p),soldAfter=sales[p.id]||0;
+    const addedAfter=(adds.byId[p.id]||0)+(p.sku?(adds.bySku[String(p.sku).toLowerCase()]||0):0);
+    const stockAt=Math.round((current+soldAfter-addedAfter)*100)/100;
+    return{
+      id:p.id,sku:p.sku||'',titlu:p.name||'',categorie:p.category||'',furnizor:p.supplier||'',
+      data:date,stocLaData:stockAt,stocCurent:current,vanduteDupaData:soldAfter,intrariDupaData:addedAfter,
+      pretAch:p.priceBuyTTC||0,valoareCost:stockAt*(p.priceBuyTTC||0),pretVanz:p.priceSell||0,
+      status:stockAt<=0?'Epuizat':(p.minQty>0&&stockAt<=p.minQty?'Stoc scăzut':'În stoc')
+    };
+  });
+}
+function selectedHistoricStockDate(){
+  const d=document.getElementById('rpt-hist-date')?.value||'';
+  if(!d){toast('Alege data pentru raportul contabil','err');return'';}
+  if(d>localDateISO(new Date())){toast('Data nu poate fi în viitor','err');return'';}
+  return d;
+}
+function exportHistoricStockCSV(){
+  const d=selectedHistoricStockDate();if(!d)return;
+  const rows=buildHistoricStockRows(d);
+  let csv='Data raport,product_id,SKU,Titlu produs,Categorie,Furnizor,Stoc contabil la data,Stoc curent,Vandute dupa data,Intrari stoc dupa data,Pret achizitie,Valoare cost,Status produs\n';
+  rows.forEach(r=>{csv+=`"${r.data}","${r.id}","${r.sku}","${r.titlu}","${r.categorie}","${r.furnizor}","${r.stocLaData}","${r.stocCurent}","${r.vanduteDupaData}","${r.intrariDupaData}","${r.pretAch.toFixed(2)}","${r.valoareCost.toFixed(2)}","${r.status}"\n`;});
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);a.download='stoc-contabil-'+d+'.csv';a.click();
+  toast('Raport stoc contabil CSV descărcat ✓');
+}
+async function exportHistoricStockExcel(){
+  const d=selectedHistoricStockDate();if(!d)return;
+  if(!window.XLSX){
+    await new Promise((res,rej)=>{const s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.onload=res;s.onerror=rej;document.head.appendChild(s);});
+  }
+  const rows=buildHistoricStockRows(d);
+  const head=['Data raport','product_id','SKU','Titlu produs','Categorie','Furnizor','Stoc contabil la data','Stoc curent','Vandute dupa data','Intrari stoc dupa data','Pret achizitie','Valoare cost','Status produs'];
+  const aoa=[head,...rows.map(r=>[r.data,r.id,r.sku,r.titlu,r.categorie,r.furnizor,r.stocLaData,r.stocCurent,r.vanduteDupaData,r.intrariDupaData,Number(r.pretAch.toFixed(2)),Number(r.valoareCost.toFixed(2)),r.status])];
+  const ws=window.XLSX.utils.aoa_to_sheet(aoa),wb=window.XLSX.utils.book_new();
+  window.XLSX.utils.book_append_sheet(wb,ws,'Stoc contabil');
+  window.XLSX.writeFile(wb,'stoc-contabil-'+d+'.xlsx');
+  toast('Raport stoc contabil Excel descărcat ✓');
 }
 function exportRaportCSV(){
   const rows=buildRaportExportRows();
