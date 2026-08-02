@@ -37,6 +37,10 @@ function scoreImgUrl(u){
   if(l.includes('small')||l.includes('tiny')||l.includes('xs')||l.includes('_s.'))s-=20;
   return s;
 }
+function findLabeledSku(text){
+  const m=text.match(/\b(?:Product code|Cod produs|Item code|Art\.?\s*no\.?|SKU|Model)\s*:?\s*([A-Za-z0-9][A-Za-z0-9._-]{3,})/i);
+  return m?m[1]:'';
+}
 function parseProduct(html,url){
   let product=null;
   for(const match of html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)){
@@ -67,7 +71,7 @@ function parseProduct(html,url){
     title:product?.name||meta(html,'og:title')||meta(html,'twitter:title')||'',
     image:bestImage,
     images:imgList.slice(0,5),
-    sku:String(product?.sku||product?.mpn||meta(html,'product:retailer_item_id')||'').trim(),
+    sku:String(product?.sku||product?.mpn||meta(html,'product:retailer_item_id')||findLabeledSku(cleanText)||'').trim(),
     price:parsePrice(offer?.price||offer?.lowPrice||meta(html,'product:price:amount')||meta(html,'og:price:amount')),
     currency:String(offer?.priceCurrency||meta(html,'product:price:currency')||meta(html,'og:price:currency')||'').toUpperCase(),
     breadcrumbs,

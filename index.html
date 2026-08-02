@@ -1385,6 +1385,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:21,text:'Import produs după link: titlul tradus de AI nu mai e suprascris de titlul original; SKU recunoscut și după eticheta "Product code" (Maxy); preț EUR convertit automat în RON fără TVA pentru furnizori externi; traducerea ține cont și de poza produsului',date:'2026-08-02'},
   {n:20,text:'Curățate fișierele de migrare SQL redundante + actualizată documentația tehnică (AGENTS.md/CLAUDE.md)',date:'2026-08-02'},
   {n:19,text:'Calculator Trendyol: transport calculat automat din tarife reale FAN/DPD (greutate, curier, rută)',date:'2026-08-02'},
   {n:18,text:'Avertizare la salvarea unui produs cu SKU deja existent',date:'2026-08-02'},
@@ -2117,10 +2118,13 @@ async function importFromUrl(){
       if(directResp.ok)pageData=await directResp.json();
     }catch(e){console.warn('Direct product import unavailable:',e);}
 
-    const responseText=await callAI([{role:'user',content:`Analizează informațiile extrase de server din pagina produsului: ${url}
+    const pageImgCandidate=(pageData.image&&pageData.image.startsWith('http'))?pageData.image:((pageData.images||[]).find(u=>u&&u.startsWith('http'))||'');
+
+    const importPrompt=`Analizează informațiile extrase de server din pagina produsului: ${url}
+${pageImgCandidate?'\nAi atașată și imaginea principală a produsului — folosește-o ca să înțelegi exact ce este produsul și tradu titlul în română cu sens, nu cuvânt cu cuvânt. Dacă traducerea literală a textului nu se potrivește cu ce arată poza, ai încredere în poză.':''}
 
 Extrage toate informațiile utile pentru adăugarea produsului într-un sistem de gestiune:
-1. Titlul complet al produsului (în ROMÂNĂ - traduce dacă e în altă limbă)
+1. Titlul complet al produsului (în ROMÂNĂ - tradu cu sens, ținând cont de imagine dacă e atașată, nu mecanic cuvânt cu cuvânt)
 2. URL-ul imaginii principale (full URL complet, nu relativ)
 3. Codul SKU / cod produs / cod articol / model NUMAI dacă este afișat explicit și etichetat în conținutul paginii
 4. Categoria cea mai potrivită, EXACT din lista: ${CATS.join(', ')}
@@ -2131,7 +2135,7 @@ Nu inventa valori care nu apar în pagină. Pentru preț ignoră prețul vechi t
 IMPORTANT pentru SKU:
 - Nu folosi niciodată numărul sau textul de la finalul URL-ului drept SKU.
 - La e-jumbo.ro, numărul de după ultimul caracter "_" din URL este ID-ul listării/paginii și NU este codul produsului.
-- Acceptă SKU doar dacă apare lângă o etichetă explicită precum "Cod produs", "Cod Jumbo", "SKU", "Cod articol" sau "Model".
+- Acceptă SKU doar dacă apare lângă o etichetă explicită precum "Cod produs", "Cod Jumbo", "SKU", "Cod articol", "Model", "Product code", "Item code" sau "Art. no.".
 - În sku_evidence copiază eticheta și codul găsite în pagină. Dacă nu găsești o asemenea sursă explicită, returnează sku și sku_evidence ca null.
 - Pentru imagine folosește URL-ul direct al imaginii principale din metadata. Nu inventa informații care lipsesc.
 
@@ -2139,8 +2143,13 @@ Date și text găsite direct în pagină (folosește-le dacă sunt valide și co
 ${JSON.stringify(pageData)}
 
 Răspunde STRICT cu JSON:
-{"title":"<titlu tradus în română>","image":"<URL complet imagine>","sku":"<cod sau null>","sku_evidence":"<eticheta și codul exact din pagină sau null>","category":"<categorie generală sau null>","price":<număr sau null>,"currency":"<RON/EUR/etc sau null>","supplier":"<magazin/furnizor sau null>","material":"<material sau null>","dimensions":"<dimensiuni sau null>","colors":"<culori sau null>","description":"<descriere scurtă sau null>"}`
-    }],null,3000);
+{"title":"<titlu tradus în română>","image":"<URL complet imagine>","sku":"<cod sau null>","sku_evidence":"<eticheta și codul exact din pagină sau null>","category":"<categorie generală sau null>","price":<număr sau null>,"currency":"<RON/EUR/etc sau null>","supplier":"<magazin/furnizor sau null>","material":"<material sau null>","dimensions":"<dimensiuni sau null>","colors":"<culori sau null>","description":"<descriere scurtă sau null>"}`;
+
+    const importContent=pageImgCandidate
+      ?[{type:'image',source:{type:'url',url:pageImgCandidate}},{type:'text',text:importPrompt}]
+      :importPrompt;
+
+    const responseText=await callAI([{role:'user',content:importContent}],null,3000);
     if(!responseText)throw new Error('Nu am primit răspuns de la AI');
     
     // Parse JSON from response
@@ -2149,7 +2158,8 @@ Răspunde STRICT cu JSON:
     
     const aiData=JSON.parse(jsonMatch[0]);
     const productData={...aiData};
-    ['title','image','images','sku','price','currency'].forEach(k=>{if(pageData[k]!==undefined&&pageData[k]!==null&&pageData[k]!=='')productData[k]=pageData[k];});
+    // titlul rămâne cel tradus de AI (nu cel brut, netradus, extras de pe pagină)
+    ['image','images','sku','price','currency'].forEach(k=>{if(pageData[k]!==undefined&&pageData[k]!==null&&pageData[k]!=='')productData[k]=pageData[k];});
     if(pageData.sku)productData.sku_evidence=`Cod produs din metadata paginii: ${pageData.sku}`;
 
     // Auto-fill form fields
@@ -2215,10 +2225,19 @@ Răspunde STRICT cu JSON:
       document.getElementById('f-pbuy-ttc').value=price.toFixed(2);
       syncAcqFields('ttc');
       status.innerHTML+=`<br><span style="color:var(--gr)">✓ Preț achiziție: ${price.toFixed(2)} RON cu TVA</span>`;
+    }else if(price>0&&currency==='EUR'){
+      const EUR_RON=5.07;
+      const priceRon=Math.round(price*EUR_RON*100)/100;
+      document.getElementById('f-tva-acq').value='0';
+      document.getElementById('f-pbuy').value=priceRon.toFixed(2);
+      syncAcqFields('net');
+      status.innerHTML+=`<br><span style="color:var(--gr)">✓ Preț achiziție: ${price.toFixed(2)} € → ${priceRon.toFixed(2)} RON fără TVA (furnizor extern, curs ${EUR_RON})</span>`;
     }else if(price>0){
       status.innerHTML+=`<br><span style="color:var(--or)">⚠ Preț găsit: ${price.toFixed(2)} ${esc(currency)} (nu a fost completat automat)</span>`;
+    }else{
+      status.innerHTML+=`<br><span style="color:var(--or)">⚠ Prețul nu a putut fi citit de pe pagină (unele magazine îl încarcă separat, prin JavaScript) — completează-l manual</span>`;
     }
-    
+
     toast('Produs importat cu succes ✓');
     
   }catch(err){
