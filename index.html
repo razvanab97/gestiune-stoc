@@ -1385,6 +1385,10 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:20,text:'Curățate fișierele de migrare SQL redundante + actualizată documentația tehnică (AGENTS.md/CLAUDE.md)',date:'2026-08-02'},
+  {n:19,text:'Calculator Trendyol: transport calculat automat din tarife reale FAN/DPD (greutate, curier, rută)',date:'2026-08-02'},
+  {n:18,text:'Avertizare la salvarea unui produs cu SKU deja existent',date:'2026-08-02'},
+  {n:17,text:'Reparată o vulnerabilitate de securitate (SSRF) la importul de linkuri din research/competitori',date:'2026-08-02'},
   {n:16,text:'Adăugat panou de notificări cu mișcările de stoc (intrări/ieșiri, dată și oră)',date:'2026-08-02'},
   {n:15,text:'Adăugat widget "Update" jos-stânga cu istoricul modificărilor aplicației',date:'2026-08-02'},
   {n:14,text:'Export stoc contabil la o dată aleasă',date:'2026-07-17'},
@@ -2235,7 +2239,30 @@ const PC_FIELDS={
 let pcChannel='direct',pcTax='profit',pcState={emag:{},trendyol:{},direct:{}},pcRecommendation=null,offerPriceManual={direct:false,emag:false,trendyol:false};
 Object.entries(PC_FIELDS).forEach(([ch,fields])=>fields.forEach(([id,,def])=>pcState[ch][id]=def));
 let emagCalc={pretEur:0,curs:5,pretLei:0,tvaAch:0,pretV:0,tvaV:21,comision:20,tipLivr:'nongenius',transCl:0,transReal:0,contab:2,consum:1,alte:0,impozit:'profit',targetMargin:20,open:{achizitie:true,vanzare:true,transport:true,cheltuieli:true}};
-let trendyolCalc={pretEur:0,curs:5,pretLei:0,tvaAch:0,pretV:0,tvaV:21,comision:15,transReal:10,contab:2,consum:1,alte:0,returnRate:7,returnShip:36,campaign:0,importTax:0,impozit:'profit',targetMargin:20,open:{achizitie:true,vanzare:true,cheltuieli:true}};
+let trendyolCalc={pretEur:0,curs:5,pretLei:0,tvaAch:0,pretV:0,tvaV:21,comision:15,transReal:10,autoTransport:1,greutate:1,curier:'FAN',ruta:'RO-RO',clientPlateste:0,contab:2,consum:1,alte:0,returnRate:7,returnShip:36,campaign:0,importTax:0,impozit:'profit',targetMargin:20,open:{achizitie:true,vanzare:true,cheltuieli:true}};
+// Tarife transport Trendyol (RON) — FAN Courier / DPD, pe kg, RO-RO/RO-GR/RO-BG
+const TY_FAN_RO=[[1,11.48],[2,11.48],[3,11.48],[4,12.41],[5,13.34],[6,14.27],[7,15.19],[8,17.00],[9,18.54],[10,19.88],[11,19.88],[12,19.88],[13,22.66],[14,22.66],[15,22.66],[16,32.45],[17,32.45],[18,32.45],[19,32.45],[20,32.45],[21,34.51],[22,34.51],[23,34.51],[24,34.51],[25,34.51],[26,38.63],[27,38.63],[28,38.63],[29,38.63],[30,38.63],[31,44.81],[32,44.81],[33,44.81],[34,44.81],[35,44.81],[36,51.00],[37,51.00],[38,51.00],[39,51.00],[40,51.00]];
+const TY_DPD_RO=[[1,11.07],[2,11.07],[3,11.07],[4,12.36],[5,13.13],[6,14.27],[7,15.84],[8,17.86],[9,20.05],[10,21.51],[11,21.51],[12,21.51],[13,24.05],[14,24.05],[15,24.05],[16,35.90],[17,35.90],[18,35.90],[19,35.90],[20,35.90],[21,40.55],[22,40.55],[23,40.55],[24,40.55],[25,40.55],[26,45.30],[27,45.30],[28,45.30],[29,45.30],[30,45.30]];
+const TY_DPD_GR=[[1,18.74],[2,18.74],[3,19.11],[4,23.47],[5,27.88],[6,32.24],[7,36.59],[8,40.95],[9,45.31],...[10,11,12,13,14,15].map(k=>[k,58.43]),...[16,17,18,19,20].map(k=>[k,93.40]),...[21,22,23,24,25].map(k=>[k,115.24]),...[26,27,28,29,30].map(k=>[k,137.08])];
+const TY_DPD_BG=[[1,13.51],[2,13.77],[3,13.77],[4,15.86],[5,17.25],[6,18.69],[7,20.09],[8,21.53],[9,22.92],...[10,11,12,13,14,15].map(k=>[k,27.57]),...[16,17,18,19,20].map(k=>[k,39.72]),...[21,22,23,24,25].map(k=>[k,47.35]),...[26,27,28,29,30].map(k=>[k,54.93])];
+function tyLookupRate(table,kg){const row=table.find(r=>r[0]>=kg);return row?row[1]:table[table.length-1][1];}
+function trendyolStandardShip(kg,curier,ruta){
+  const k=Math.ceil(kg||1);
+  if(ruta==='RO-RO'){if(curier==='FAN')return k>40?51.00+(k-40):tyLookupRate(TY_FAN_RO,k);return k>30?47.30+(k-30)*2:tyLookupRate(TY_DPD_RO,k);}
+  if(ruta==='RO-GR')return k>30?142.08+(k-30)*5:tyLookupRate(TY_DPD_GR,k);
+  if(ruta==='RO-BG')return k>30?59.93+(k-30)*5:tyLookupRate(TY_DPD_BG,k);
+  return 0;
+}
+function trendyolMinThresholdTax(net){if(net<40)return 3;if(net<50)return 4;if(net<75)return 5;if(net<125)return 8;return null;}
+function trendyolTransportInfo(netPret,kg,curier,ruta,clientPlateste){
+  if(clientPlateste)return{cost:0,label:'Client plătește transportul'};
+  const net=+netPret||0,k=+kg||1;
+  if(ruta==='RO-RO'&&net<125&&k<=10){const t=trendyolMinThresholdTax(net);if(t!==null)return{cost:t,label:`Prag sprijin transport Trendyol — ${t} RON`};}
+  if((ruta==='RO-GR'||ruta==='RO-BG')&&net<50&&k<=5)return{cost:8,label:'Prag transfrontalier — 8 RON'};
+  const std=trendyolStandardShip(k,curier,ruta);
+  const curierLbl=ruta==='RO-RO'?curier:'DPD';
+  return{cost:std,label:`Tarif standard ${curierLbl} — ${std.toFixed(2)} RON`};
+}
 let directCalc={pretEur:0,curs:5,pretLei:0,tvaAch:0,pretV:0,tvaV:21,transCl:0,transReal:0,processor:1.4,contab:2,consum:1,alte:0,marketing:0,impozit:'profit',targetMargin:20,open:{achizitie:true,vanzare:true,cheltuieli:true}};
 function pcMoney(n){return(Number(n)||0).toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})+' lei';}
 function pcPct(n){return(Number(n)||0).toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})+'%';}
@@ -2323,11 +2350,14 @@ function computeTrendyol(s){
   const pAch=+s.pretLei||0,tvaV=(+s.tvaV||21)/100,pV=+s.pretV||0;
   const pCuTVA=pV*(1+tvaV),comBrut=pCuTVA*(+s.comision||0)/100,comNet=tvaV>0?comBrut/(1+tvaV):comBrut;
   const discount=pV*(+s.campaign||0)/100,returnCost=(+s.returnRate||0)/100*(+s.returnShip||0);
+  const shipInfo=trendyolTransportInfo(pV-discount,+s.greutate||1,s.curier||'FAN',s.ruta||'RO-RO',!!(+s.clientPlateste));
+  const transReal=s.autoTransport?shipInfo.cost:(+s.transReal||0);
+  const transportLabel=s.autoTransport?shipInfo.label:'Transport manual';
   const venit=pV-comNet-discount,tvaCol=pV*tvaV,tvaDed=comNet*tvaV,tvaVir=tvaCol-tvaDed;
-  const costuri=pAch+(+s.transReal||0)+returnCost+(+s.contab||0)+(+s.consum||0)+(+s.importTax||0)+(+s.alte||0);
+  const costuri=pAch+transReal+returnCost+(+s.contab||0)+(+s.consum||0)+(+s.importTax||0)+(+s.alte||0);
   const profBrut=venit-costuri,imp=s.impozit==='micro'?Math.max(0,venit)*0.01:Math.max(0,profBrut)*0.16;
   const profNet=profBrut-imp,marja=venit>0?profNet/venit*100:0;
-  return{pAch,pCuTVA,comBrut,comNet,discount,returnCost,venit,tvaCol,tvaDed,tvaVir,costuri,profBrut,imp,profNet,marja,tvaV,pV};
+  return{pAch,pCuTVA,comBrut,comNet,discount,returnCost,venit,tvaCol,tvaDed,tvaVir,costuri,profBrut,imp,profNet,marja,tvaV,pV,transReal,transportLabel};
 }
 function computeDirect(s){
   const pAch=+s.pretLei||0,tvaV=(+s.tvaV||21)/100,pV=+s.pretV||0,tCl=+s.transCl||0;
@@ -2360,7 +2390,7 @@ function emagInput(k,v){emagCalc[k]=['tipLivr','impozit'].includes(k)?v:(v===''?
 function emagToggleSec(k){emagCalc.open[k]=!emagCalc.open[k];emagRender();}
 function emagSetMargin(n){emagCalc.targetMargin=n;emagRender();}
 function emagApplyRec(){emagCalc.pretV=Math.round(findEmagPrice(emagCalc.targetMargin)*100)/100;emagRender();toast('Preț recomandat aplicat ✓');}
-function trendyolInput(k,v){trendyolCalc[k]=k==='impozit'?v:(v===''?0:+v||0);syncAcqLei(trendyolCalc,k);trendyolRender();}
+function trendyolInput(k,v){trendyolCalc[k]=['impozit','curier','ruta'].includes(k)?v:(v===''?0:+v||0);syncAcqLei(trendyolCalc,k);trendyolRender();}
 function trendyolToggleSec(k){trendyolCalc.open[k]=!trendyolCalc.open[k];trendyolRender();}
 function trendyolSetMargin(n){trendyolCalc.targetMargin=n;trendyolRender();}
 function trendyolApplyRec(){trendyolCalc.pretV=Math.round(findTrendyolPrice(trendyolCalc.targetMargin)*100)/100;trendyolRender();toast('Preț recomandat aplicat ✓');}
@@ -2401,7 +2431,22 @@ function trendyolRender(){
   const sHd=(k,lbl)=>`<div class="emag-sec-hd" onclick="trendyolToggleSec('${k}')"><span class="emag-sec-arr">${s.open[k]?'▼':'▶'}</span>${lbl}</div>`;
   const achB=s.open.achizitie?`<div class="emag-sec-body"><div class="calc-acq-row">${inp('pretEur','EUR')}${inp('curs','Curs EUR/RON')}${inp('pretLei','RON (net)')}${sel('tvaAch','TVA ach.',[['0','0%'],['9','9%'],['19','19%'],['21','21%']])}</div><div class="emag-derived-row">Preț ach. cu TVA: <strong>${emMoney((+s.pretLei||0)*(1+(+s.tvaAch||0)/100))}</strong></div></div>`:'';
   const vB=s.open.vanzare?`<div class="emag-sec-body"><div class="pc-grid">${inp('pretV','Preț vânzare fără TVA')}${sel('tvaV','TVA vânzare',[['9','9%'],['19','19%'],['21','21%']])}${inp('comision','Comision Trendyol (%)')}</div><div class="emag-derived-row">Preț listare cu TVA: <strong>${emMoney(r.pCuTVA)}</strong> · Comision net: <strong>${emMoney(r.comNet)}</strong></div></div>`:'';
-  const chelB=s.open.cheltuieli?`<div class="emag-sec-body"><div class="pc-grid">${inp('transReal','Transport (RON)')}${inp('returnRate','Rată retur (%)')}${inp('returnShip','Transport retur (RON)')}</div><div class="pc-grid">${inp('campaign','Campanii (%)')}${inp('importTax','Taxă import')}${inp('contab','Contabilitate')}${inp('consum','Consumabile')}${inp('alte','Alte costuri')}</div>${_cImpTgl(s,'trendyolInput')}</div>`:'';
+  const transportB=`<div class="emag-tip-livr" style="margin-top:2px">
+    <button class="${+s.autoTransport?'on':''}" onclick="trendyolInput('autoTransport',1)">📊 Tarife FAN/DPD (auto)</button>
+    <button class="${!+s.autoTransport?'on':''}" onclick="trendyolInput('autoTransport',0)">✏️ Manual</button>
+  </div>${+s.autoTransport?`<div class="pc-grid" style="margin-top:8px">${inp('greutate','Greutate (kg)')}${sel('curier','Curier',[['FAN','FAN Courier'],['DPD','DPD Romania']])}</div>
+  <div class="emag-tip-livr" style="margin-top:8px">
+    <button class="${s.ruta==='RO-RO'||!s.ruta?'on':''}" onclick="trendyolInput('ruta','RO-RO')">🇷🇴 România→România</button>
+    <button class="${s.ruta==='RO-GR'?'on':''}" onclick="trendyolInput('ruta','RO-GR')">🇬🇷 România→Grecia</button>
+    <button class="${s.ruta==='RO-BG'?'on':''}" onclick="trendyolInput('ruta','RO-BG')">🇧🇬 România→Bulgaria</button>
+  </div>
+  <div class="emag-tip-livr" style="margin-top:8px">
+    <button class="${!+s.clientPlateste?'on':''}" onclick="trendyolInput('clientPlateste',0)">Seller plătește</button>
+    <button class="${+s.clientPlateste?'on':''}" onclick="trendyolInput('clientPlateste',1)">Client plătește</button>
+  </div>
+  <div class="emag-derived-row" style="margin-top:8px">${r.transportLabel} — <strong>${emMoney(r.transReal)}</strong></div>`
+  :`<div class="pc-grid" style="margin-top:8px">${inp('transReal','Transport (RON)')}</div>`}`;
+  const chelB=s.open.cheltuieli?`<div class="emag-sec-body">${transportB}<div class="pc-grid" style="margin-top:8px">${inp('returnRate','Rată retur (%)')}${inp('returnShip','Transport retur (RON)')}</div><div class="pc-grid">${inp('campaign','Campanii (%)')}${inp('importTax','Taxă import')}${inp('contab','Contabilitate')}${inp('consum','Consumabile')}${inp('alte','Alte costuri')}</div>${_cImpTgl(s,'trendyolInput')}</div>`:'';
   document.getElementById('pc-root').innerHTML=`<div class="emag-calc">
   <div class="emag-rec"><div class="emag-rec-title">🎯 Prețuri recomandate — Trendyol</div><div class="emag-rec-grid"><div class="emag-rec-item"><span>Prag profit 0</span><strong>${emMoney(p0)}</strong><small>cu TVA: ${emMoney(p0*(1+tvaV))}</small></div><div class="emag-rec-item"><span>La ${s.targetMargin}% marjă</span><strong>${emMoney(pRec)}</strong><small>cu TVA: ${emMoney(pRec*(1+tvaV))}</small></div></div><div class="emag-margin-picks">${[0,10,20,30].map(x=>`<button class="${s.targetMargin===x?'on':''}" onclick="trendyolSetMargin(${x})">${x}%</button>`).join('')}</div><button class="btn btn-acc btn-sm" onclick="trendyolApplyRec()">Aplică ${s.targetMargin}% în simulare</button></div>
   <div class="emag-sec">${sHd('achizitie','Achiziție')}${achB}</div>
@@ -2409,7 +2454,7 @@ function trendyolRender(){
   <div class="emag-sec">${sHd('cheltuieli','Cheltuieli & Impozit')}${chelB}</div>
   <div class="pc-warn ${warn[0]}">${warn[1]}</div>
   <div class="pc-metrics"><div class="pc-metric"><span>Profit net</span><strong>${emMoney(r.profNet)}</strong></div><div class="pc-metric"><span>Marjă netă</span><strong>${emPct(r.marja)}</strong></div><div class="pc-metric"><span>TVA de virat</span><strong>${emMoney(r.tvaVir)}</strong></div><div class="pc-metric"><span>Impozit companie</span><strong>${emMoney(r.imp)}</strong></div></div>
-  <details class="pc-details"><summary>Vezi calculul complet</summary><table class="pc-break"><tbody><tr><td>Preț vânzare fără TVA</td><td>${emMoney(r.pV)}</td></tr><tr><td>Comision Trendyol net</td><td>− ${emMoney(r.comNet)}</td></tr><tr><td>Discount campanii</td><td>− ${emMoney(r.discount)}</td></tr><tr><td>Cost achiziție</td><td>− ${emMoney(r.pAch)}</td></tr><tr><td>Transport</td><td>− ${emMoney(+s.transReal||0)}</td></tr><tr><td>Cost mediu retur</td><td>− ${emMoney(r.returnCost)}</td></tr><tr><td>Contabilitate</td><td>− ${emMoney(+s.contab||0)}</td></tr><tr><td>Consumabile</td><td>− ${emMoney(+s.consum||0)}</td></tr><tr><td>Taxă import</td><td>− ${emMoney(+s.importTax||0)}</td></tr><tr><td>Alte costuri</td><td>− ${emMoney(+s.alte||0)}</td></tr><tr><td>TVA de virat</td><td>${emMoney(r.tvaVir)}</td></tr><tr><td>Impozit (${s.impozit==='micro'?'micro 1%':'profit 16%'})</td><td>− ${emMoney(r.imp)}</td></tr><tr class="total"><td>Profit net în companie</td><td>${emMoney(r.profNet)}</td></tr></tbody></table></details>
+  <details class="pc-details"><summary>Vezi calculul complet</summary><table class="pc-break"><tbody><tr><td>Preț vânzare fără TVA</td><td>${emMoney(r.pV)}</td></tr><tr><td>Comision Trendyol net</td><td>− ${emMoney(r.comNet)}</td></tr><tr><td>Discount campanii</td><td>− ${emMoney(r.discount)}</td></tr><tr><td>Cost achiziție</td><td>− ${emMoney(r.pAch)}</td></tr><tr><td>Transport (${r.transportLabel})</td><td>− ${emMoney(r.transReal)}</td></tr><tr><td>Cost mediu retur</td><td>− ${emMoney(r.returnCost)}</td></tr><tr><td>Contabilitate</td><td>− ${emMoney(+s.contab||0)}</td></tr><tr><td>Consumabile</td><td>− ${emMoney(+s.consum||0)}</td></tr><tr><td>Taxă import</td><td>− ${emMoney(+s.importTax||0)}</td></tr><tr><td>Alte costuri</td><td>− ${emMoney(+s.alte||0)}</td></tr><tr><td>TVA de virat</td><td>${emMoney(r.tvaVir)}</td></tr><tr><td>Impozit (${s.impozit==='micro'?'micro 1%':'profit 16%'})</td><td>− ${emMoney(r.imp)}</td></tr><tr class="total"><td>Profit net în companie</td><td>${emMoney(r.profNet)}</td></tr></tbody></table></details>
 </div>`;
 }
 function directRender(){
