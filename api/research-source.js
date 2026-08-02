@@ -119,7 +119,16 @@ function extractFromHtml(html,url){
   return{name,img,description,price:parsePrice(priceRaw),currency:currency.toUpperCase()||'',ean:eanCands[0]||jumboSku||'',characteristics};
 }
 
+function isPrivateHost(host){
+  return host==='localhost'||host.endsWith('.localhost')||host==='0.0.0.0'||host==='::1'||
+    /^127\./.test(host)||/^10\./.test(host)||/^192\.168\./.test(host)||
+    /^169\.254\./.test(host)||/^172\.(1[6-9]|2\d|3[01])\./.test(host);
+}
+
 async function fetchHtml(url){
+  let parsed;
+  try{parsed=new URL(url);}catch(e){return '';}
+  if(!['http:','https:'].includes(parsed.protocol)||isPrivateHost(parsed.hostname.toLowerCase()))return '';
   const ctrl=new AbortController();
   const t=setTimeout(()=>ctrl.abort(),6000);
   try{

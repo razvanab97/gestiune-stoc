@@ -3,6 +3,11 @@ const VAT=0.21;
 const MIN_PRICE_ASSUMPTIONS='TVA 21%, comision marketplace 20%, costuri fixe estimate 23 RON';
 
 function n(v){return Number.isFinite(Number(v))?Number(v):0;}
+function isPrivateHost(host){
+  return host==='localhost'||host.endsWith('.localhost')||host==='0.0.0.0'||host==='::1'||
+    /^127\./.test(host)||/^10\./.test(host)||/^192\.168\./.test(host)||
+    /^169\.254\./.test(host)||/^172\.(1[6-9]|2\d|3[01])\./.test(host);
+}
 function minSellFromBuy(priceBuy){
   const buy=n(priceBuy);
   if(buy<=0)return 0;
@@ -102,6 +107,8 @@ module.exports=async function handler(req,res){
 
   const competitors=await Promise.all(urls.slice(0,MAX_LINKS).map(async url=>{
     try{
+      const parsed=new URL(url);
+      if(!['http:','https:'].includes(parsed.protocol)||isPrivateHost(parsed.hostname.toLowerCase()))return{url,pnk:extractPnk(url),error:'URL nepermis',title:'',price:0};
       const ctrl=new AbortController();
       const t=setTimeout(()=>ctrl.abort(),12000);
       const r=await fetch(url,{headers:hdrs,signal:ctrl.signal,redirect:'follow'});

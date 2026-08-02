@@ -401,8 +401,17 @@ async function scrapeEmag(queries,ean){
   return{minPrice:null,offerCount:0,link:searchLink,candidates:[],query:queries[0]||''};
 }
 
+function isPrivateHost(host){
+  return host==='localhost'||host.endsWith('.localhost')||host==='0.0.0.0'||host==='::1'||
+    /^127\./.test(host)||/^10\./.test(host)||/^192\.168\./.test(host)||
+    /^169\.254\./.test(host)||/^172\.(1[6-9]|2\d|3[01])\./.test(host);
+}
+
 // Extrage produs dintr-un link direct lipid de utilizator
 async function fetchDirectProduct(url){
+  let parsed;
+  try{parsed=new URL(url);}catch(e){return null;}
+  if(!['http:','https:'].includes(parsed.protocol)||isPrivateHost(parsed.hostname.toLowerCase()))return null;
   const ctrl=new AbortController();
   const t=setTimeout(()=>ctrl.abort(),7000);
   try{
