@@ -1358,7 +1358,7 @@ th{font-weight:800!important;color:var(--t3)!important}
     <div class="inv-drop">
       <input type="file" id="inv-file" accept=".csv,.txt,.pdf" onchange="handleInvFile(event)" onclick="event.stopPropagation()">
       <div class="inv-drop-ic">📄</div>
-      <div class="inv-drop-t">Trage un fișier PDF sau CSV aici<br><small style="opacity:.6">PDF factură · CSV comandă Jumbo · CSV platformă (Produs, SKU, Categorie, Cump., ...) · CSV (cod, nume, cant, p_acq, p_vanz) · TXT — formate auto-detectate</small></div>
+      <div class="inv-drop-t">Trage un fișier PDF sau CSV aici<br><small style="opacity:.6">PDF factură · CSV comandă Jumbo · CSV comandă Maxy/Verk (Denumire, Symbol, Cantitate, Preț EUR) · CSV platformă (Produs, SKU, Categorie, Cump., ...) · CSV (cod, nume, cant, p_acq, p_vanz) · TXT — formate auto-detectate</small></div>
     </div>
     <div class="inv-parsing" id="inv-parsing"><span class="spin"></span> Se procesează cu AI…</div>
     <div class="fld" style="margin-top:.75rem"><label>Număr factură / cod comandă (opțional)</label><input type="text" id="inv-number" placeholder="ex: FAC-2026-00123"></div>
@@ -1391,6 +1391,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:26,text:'Suport pentru CSV de comandă Maxy/Verk (Denumire, Symbol, Cantitate, Preț EUR) la "Importă factură" / "Preset CSV comandă" — recunoscut automat, testat cu comandă reală',date:'2026-08-02'},
   {n:25,text:'La "Adaugă stoc" poți actualiza și prețul de achiziție — prețul vechi rămâne salvat, apare badge-ul de diferență de preț în inventar, iar prețurile de vânzare se recalculează automat',date:'2026-08-02'},
   {n:24,text:'La import factură: produsele noi afișează SKU-ul clar (înainte și după import, cu buton de copiere), ca să fie completate ulterior după link; filtru nou "Fără imagine" pentru a le găsi oricând',date:'2026-08-02'},
   {n:23,text:'La adăugare produs: câmp nou "Preț achiziție EUR fără TVA" care se convertește automat în RON fără TVA (curs 5,07)',date:'2026-08-02'},
@@ -4631,6 +4632,7 @@ function routeInvFile(f){
     if(/symbol/i.test(t)&&/quantity/i.test(t)&&/priceperpiece_ron/i.test(t))parseSupplierRonCSV(f);
     else if(/cod_jumbo/i.test(t)||(/(^|[\n\r])\s*cod\s*;/i.test(t)&&/cantitate/i.test(t)&&/pretperbucata/i.test(t)))parseJumboCSV(f);
     else if(/sku/i.test(t)&&/cump/i.test(t)&&/recomandat/i.test(t))parsePlatformCSV(f);
+    else if(/denumire/i.test(t)&&/symbol/i.test(t)&&/cantitate/i.test(t))parseMaxyOrderCSV(f);
     else parseCSV(f);
   };
   peek.readAsText(f.slice(0,1000),'UTF-8');
@@ -4948,6 +4950,43 @@ function parsePlatformCSV(file){
     if(!invParsed.length){toast('Nicio linie validă (SKU + Cump. > 0) găsită în CSV','err');return;}
     renderInvPreview();
     toast(`Preset platformă detectat · ${invParsed.length} produse din comandă ✓`);
+  };
+  r.readAsText(file,'UTF-8');
+}
+/* ── PRESET COMANDĂ MAXY/VERK: CSV cu coloanele Denumire,Symbol,Cantitate,Pret_total_EUR,Pret_bucata_EUR ── */
+function parseMaxyOrderCSV(file){
+  const r=new FileReader();
+  r.onload=e2=>{
+    const text=e2.target.result,delim=detectCsvDelimiter(text);
+    const rows=parseCSVRows(text,delim);
+    if(rows.length<2){toast('CSV gol sau nerecunoscut','err');return;}
+    const hdr=rows[0].map(h=>h.trim().toLowerCase());
+    const find=names=>{for(const n of names){const i=hdr.findIndex(h=>h===n||h.includes(n));if(i>-1)return i;}return -1;};
+    const iName=find(['denumire','nume']),iSku=find(['symbol','sku','cod']),iQty=find(['cantitate','quantity']),iUnit=find(['pret_bucata_eur','pret_bucata','pret_buc']),iTotal=find(['pret_total_eur','pret_total']);
+    if(iSku<0||iQty<0){toast('CSV comandă invalid: lipsesc Symbol sau Cantitate','err');return;}
+    const agg={};
+    for(let i=1;i<rows.length;i++){
+      const row=rows[i];
+      const sku=(row[iSku]||'').trim();
+      const qty=parseQtyVal(row[iQty]);
+      if(!sku||qty<=0)continue;
+      const unit=iUnit>-1?parseFloat((row[iUnit]||'').replace(',','.').replace(/[^\d.]/g,''))||0:0;
+      const total=iTotal>-1?parseFloat((row[iTotal]||'').replace(',','.').replace(/[^\d.]/g,''))||0:0;
+      const priceEur=unit>0?unit:(total>0&&qty>0?Math.round(total/qty*100)/100:0);
+      const name=iName>-1?(row[iName]||'').trim().replace(/\s+/g,' '):'';
+      if(!agg[sku])agg[sku]={sku,name,qty:0,priceEur:0};
+      const a=agg[sku];
+      a.qty+=qty;
+      if(name.length>a.name.length)a.name=name;
+      if(priceEur>0)a.priceEur=priceEur;
+    }
+    invParsed=Object.values(agg).map(g=>({
+      sku:g.sku,name:g.name||g.sku,qty:g.qty,
+      priceBuy:g.priceEur,currency:'EUR',supplier:'Maxy'
+    }));
+    if(!invParsed.length){toast('Nicio linie validă (Symbol + Cantitate > 0) găsită în CSV','err');return;}
+    renderInvPreview();
+    toast(`Comandă Maxy/Verk detectată · ${invParsed.length} produse ✓`);
   };
   r.readAsText(file,'UTF-8');
 }
