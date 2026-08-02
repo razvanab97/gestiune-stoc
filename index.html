@@ -1391,6 +1391,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:25,text:'La "Adaugă stoc" poți actualiza și prețul de achiziție — prețul vechi rămâne salvat, apare badge-ul de diferență de preț în inventar, iar prețurile de vânzare se recalculează automat',date:'2026-08-02'},
   {n:24,text:'La import factură: produsele noi afișează SKU-ul clar (înainte și după import, cu buton de copiere), ca să fie completate ulterior după link; filtru nou "Fără imagine" pentru a le găsi oricând',date:'2026-08-02'},
   {n:23,text:'La adăugare produs: câmp nou "Preț achiziție EUR fără TVA" care se convertește automat în RON fără TVA (curs 5,07)',date:'2026-08-02'},
   {n:22,text:'Importul de factură reține numărul facturii / codul comenzii (câmp manual + auto-detectat din PDF), vizibil în istoricul de comenzi și în exportul CSV',date:'2026-08-02'},
@@ -4240,16 +4241,25 @@ async function bulkAddStock(){
   if(v===null)return;
   const add=parseQtyVal(v);
   if(!add||add<=0){toast('Introdu o cantitate validă','err');return;}
+  const priceInput=prompt('Preț achiziție nou, cu TVA (RON) — lasă gol ca să păstrezi prețul actual','');
+  const newCost=priceInput?Math.max(0,parseFloat(String(priceInput).replace(',','.'))||0):0;
   showLoading(`Se adaugă stoc la ${n} produse…`);
   for(const id of selProd){
     const p=P.find(x=>x.id===id);if(!p)continue;
-    await saveProdToDb({...p,bought:(p.bought||0)+add},id);
+    const data={...p,bought:(p.bought||0)+add};
+    if(newCost>0){
+      const oldCost=Number(p.priceBuyTTC)||0;
+      if(oldCost>0&&Math.abs(oldCost-newCost)>=0.005){data.priceBuyPrevTTC=oldCost;data.priceBuyChangedAt=new Date().toISOString();}
+      const prices=calcPrices(newCost);
+      data.priceBuyTTC=newCost;data.priceSell=prices.sell;data.priceEmag=prices.emag;data.priceTrendyol=prices.trendyol;data.priceRec=prices.rec;
+    }
+    await saveProdToDb(data,id);
     await logMove('in',p.name,add,'Adăugare stoc în masă');
   }
   hideLoading();
   selProd.clear();
   renderToday();renderTable();
-  toast(`Stoc actualizat: +${add} buc. la ${n} produse`);
+  toast(`Stoc actualizat: +${add} buc. la ${n} produse${newCost>0?' · preț nou '+newCost.toFixed(2)+' RON cu TVA':''}`);
 }
 async function bulkDeleteProd(){
   const n=selProd.size;if(!n)return;
