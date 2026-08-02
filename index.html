@@ -175,6 +175,10 @@ tr:hover td{background:var(--surf2)}
 .m-sales-qty{font-family:var(--mono);font-weight:900;color:var(--acc)}
 .m-sales-value{font-family:var(--mono);color:var(--t3)}
 .m-sales-empty{font-size:13px;color:var(--t3);background:var(--surf);border:1px dashed var(--b2);border-radius:var(--r);padding:10px}
+.m-stock-history{grid-column:1/-1;border-top:1px solid var(--b1);background:var(--surf2);padding:1.1rem 1.75rem}
+.m-stock-qty{font-family:var(--mono);font-weight:900;color:var(--gr)}
+.m-stock-order{font-family:var(--mono);font-size:11px;color:var(--t3);margin-top:2px}
+.m-stock-order strong{color:var(--acc)}
 .sec{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);margin:1rem 0 .5rem;padding-bottom:5px;border-bottom:1px solid var(--b1)}
 .sec:first-child{margin-top:0}
 .fld{margin-bottom:.9rem}
@@ -801,7 +805,7 @@ th{font-weight:800!important;color:var(--t3)!important}
       <div class="tb-btns">
         <button class="btn btn-sm" onclick="openInvoice()">📄 Importă factură</button>
         <button class="btn btn-sm" onclick="openPresetCSV()" title="Încarcă direct un CSV de comandă (ex. Jumbo) — format recunoscut automat">📦 Preset CSV comandă</button>
-        <input type="file" id="preset-csv-file" accept=".csv" style="display:none" onchange="handlePresetCSV(event)">
+        <input type="file" id="preset-csv-file" accept=".csv,.numbers" style="display:none" onchange="handlePresetCSV(event)">
         <button class="btn btn-sm" onclick="closeDay()">✓ Închide ziua</button>
         <button class="btn btn-sm" onclick="resetToday()">↺ Reset</button>
       </div>
@@ -1342,6 +1346,7 @@ th{font-weight:800!important;color:var(--t3)!important}
       <div class="cat-g" id="cat-g"></div>
     </div>
     <div class="m-sales-history" id="m-sales-history"></div>
+    <div class="m-stock-history" id="m-stock-history"></div>
   </div>
   <div class="m-foot">
     <button class="btn" onclick="closeModal()">Anulează</button>
@@ -1356,9 +1361,9 @@ th{font-weight:800!important;color:var(--t3)!important}
   <div class="inv-head"><h2>Importă factură</h2><button class="m-close" onclick="closeInvoice()">×</button></div>
   <div class="inv-body">
     <div class="inv-drop">
-      <input type="file" id="inv-file" accept=".csv,.txt,.pdf" onchange="handleInvFile(event)" onclick="event.stopPropagation()">
+      <input type="file" id="inv-file" accept=".csv,.txt,.pdf,.numbers" onchange="handleInvFile(event)" onclick="event.stopPropagation()">
       <div class="inv-drop-ic">📄</div>
-      <div class="inv-drop-t">Trage un fișier PDF sau CSV aici<br><small style="opacity:.6">PDF factură · CSV comandă Jumbo · CSV comandă Maxy/Verk (Denumire, Symbol, Cantitate, Preț EUR) · CSV platformă (Produs, SKU, Categorie, Cump., ...) · orice alt CSV cu o coloană de cod (SKU/Symbol/Cod) și una de cantitate — recunoscut automat · TXT</small></div>
+      <div class="inv-drop-t">Trage un fișier PDF sau CSV aici<br><small style="opacity:.6">PDF factură · CSV comandă Jumbo · CSV comandă Maxy/Verk (Denumire, Symbol, Cantitate, Preț EUR) · CSV platformă (Produs, SKU, Categorie, Cump., ...) · orice alt CSV cu o coloană de cod (SKU/Symbol/Cod) și una de cantitate — recunoscut automat · TXT<br>Fișier Numbers? Export din Numbers ca CSV (File → Export To → CSV), apoi încarcă CSV-ul</small></div>
     </div>
     <div class="inv-parsing" id="inv-parsing"><span class="spin"></span> Se procesează cu AI…</div>
     <div class="fld" style="margin-top:.75rem"><label>Număr factură / cod comandă (opțional)</label><input type="text" id="inv-number" placeholder="ex: FAC-2026-00123"></div>
@@ -3885,6 +3890,31 @@ function renderProductSalesHistory(productId){
   box.innerHTML=`<div class="m-sales-head"><div class="m-sales-title">Istoric vânzări produs</div><div class="m-sales-total">${fmtQty(total)} buc${value>0?' · '+value.toFixed(2)+' RON':''}</div></div>
     <div class="m-sales-list">${rows.map(r=>`<div class="m-sales-row"><div class="m-sales-date">${esc(new Date(r.date+'T00:00:00').toLocaleDateString('ro-RO'))}</div><div class="m-sales-qty">${fmtQty(r.qty)} buc</div><div class="m-sales-value">${r.value>0?r.value.toFixed(2)+' RON':'—'}</div></div>`).join('')}</div>`;
 }
+function productStockIntakeHistory(productId){
+  if(!productId)return[];
+  const p=P.find(x=>x.id===productId),sku=(p?.sku||'').toLowerCase();
+  const rows=[];
+  OI.forEach(o=>{
+    (o.details||[]).forEach(d=>{
+      const matches=(d.productId&&Number(d.productId)===Number(productId))||(sku&&d.sku&&String(d.sku).toLowerCase()===sku);
+      if(matches&&Number(d.qty)>0)rows.push({date:o.createdAt,qty:Number(d.qty)||0,price:Number(d.price)||0,value:Number(d.value)||0,source:o.source||'',invoiceNumber:o.invoiceNumber||'',status:d.status||''});
+    });
+  });
+  return rows.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
+}
+function renderProductStockIntakeHistory(productId){
+  const box=document.getElementById('m-stock-history');if(!box)return;
+  if(!productId){box.innerHTML='<div class="m-sales-head"><div class="m-sales-title">Istoric încărcări stoc</div></div><div class="m-sales-empty">Produs nou — istoricul apare după prima recepție de stoc.</div>';return;}
+  const rows=productStockIntakeHistory(productId),total=rows.reduce((s,r)=>s+r.qty,0);
+  if(!rows.length){box.innerHTML='<div class="m-sales-head"><div class="m-sales-title">Istoric încărcări stoc</div></div><div class="m-sales-empty">Nu există recepții de stoc înregistrate pentru acest produs.</div>';return;}
+  box.innerHTML=`<div class="m-sales-head"><div class="m-sales-title">Istoric încărcări stoc</div><div class="m-sales-total">${fmtQty(total)} buc</div></div>
+    <div class="m-sales-list">${rows.map(r=>{
+      const dt=new Date(r.date);
+      const dtLbl=isNaN(dt)?esc(r.date):dt.toLocaleString('ro-RO',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+      const orderLbl=r.invoiceNumber?`Comandă: <strong>${esc(r.invoiceNumber)}</strong>`:esc(r.source||'—');
+      return`<div class="m-sales-row"><div class="m-sales-date">${dtLbl}<div class="m-stock-order">${orderLbl}</div></div><div class="m-stock-qty">+${fmtQty(r.qty)} buc</div><div class="m-sales-value">${r.price>0?r.price.toFixed(2)+' RON/buc':'—'}</div></div>`;
+    }).join('')}</div>`;
+}
 async function sellSearch(id){
   const inp=document.getElementById('ssq-'+id);
   const n=parseQtyVal(inp?.value,1);
@@ -4153,6 +4183,7 @@ function openModal(id){
   document.getElementById('f-img').value='';
   document.getElementById('ai-img-btn').disabled=!curImg;
   renderProductSalesHistory(p?.id||null);
+  renderProductStockIntakeHistory(p?.id||null);
   buildCats('');calcStoc();
   document.getElementById('ov').classList.add('on');
   const body=document.querySelector('#ov .m-body');if(body)body.scrollTop=0;
@@ -4630,7 +4661,13 @@ function removeInvLine(id){document.getElementById(id)?.remove();invLines=invLin
 function handleInvFile(ev){const f=ev.target.files[0];if(!f)return;invSourceName=f.name||'Fișier import';routeInvFile(f);}
 // Detectează formatul fișierului (PDF / CSV preset Jumbo / CSV generic) și rutează spre parserul potrivit
 function routeInvFile(f){
-  if(f.name.split('.').pop().toLowerCase()==='pdf'){parsePDFWithAI(f);return;}
+  const ext=f.name.split('.').pop().toLowerCase();
+  if(ext==='pdf'){parsePDFWithAI(f);return;}
+  if(ext==='numbers'){
+    toast('Fișierele Numbers (.numbers) nu pot fi citite direct. Din Numbers: File → Export To → CSV, apoi încarcă fișierul CSV rezultat.','err');
+    document.getElementById('inv-parsing').style.display='none';
+    return;
+  }
   // Preset-uri: detectăm automat formatul după antetul CSV — funcționează identic la orice comandă viitoare
   const peek=new FileReader();
   peek.onload=e=>{
