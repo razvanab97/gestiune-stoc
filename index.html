@@ -52,6 +52,17 @@ header{background:var(--surf);border-bottom:1px solid var(--b1);height:56px;disp
 .stat-date-input:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-light)}
 .stat-date-input:disabled{opacity:.72;cursor:not-allowed}
 .stat-note{font-size:11px;color:var(--t3);margin-top:6px;line-height:1.3}
+#dash-stats{grid-template-columns:repeat(5,1fr)}
+.dash-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-bottom:1.5rem;align-items:start}
+.dash-plat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.dash-plat-card{background:var(--surf2);border:1px solid var(--b1);border-radius:var(--r2);padding:1.1rem;text-align:center}
+.dash-plat-ic{font-size:28px;margin-bottom:6px;line-height:1}
+.dash-plat-name{font-size:12px;color:var(--t3);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;font-weight:600}
+.dash-plat-val{font-family:var(--mono);font-size:26px;font-weight:600}
+.dash-plat-note{font-size:11px;color:var(--t3);margin-top:4px}
+.dash-activity-list{display:flex;flex-direction:column;gap:2px;max-height:340px;overflow-y:auto}
+.dash-actions{display:flex;gap:10px;flex-wrap:wrap}
+@media(max-width:900px){.dash-grid{grid-template-columns:1fr}#dash-stats{grid-template-columns:repeat(2,1fr)}.dash-plat-grid{grid-template-columns:1fr}}
 .stat-actions{display:flex;gap:6px;margin-top:8px}
 .stat-mini-btn{flex:1;border:1px solid var(--b2);background:var(--surf2);color:var(--t2);border-radius:9px;padding:6px 8px;font-size:11px;font-weight:600;cursor:pointer}
 .stat-mini-btn:hover{border-color:var(--acc);color:var(--acc)}
@@ -179,6 +190,8 @@ tr:hover td{background:var(--surf2)}
 .m-stock-qty{font-family:var(--mono);font-weight:900;color:var(--gr)}
 .m-stock-order{font-family:var(--mono);font-size:11px;color:var(--t3);margin-top:2px}
 .m-stock-order strong{color:var(--acc)}
+.m-stock-add-row{grid-column:1/-1;padding:0 1.75rem 1.25rem;background:var(--surf2)}
+.m-stock-add-row button{width:100%}
 .sec{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);margin:1rem 0 .5rem;padding-bottom:5px;border-bottom:1px solid var(--b1)}
 .sec:first-child{margin-top:0}
 .fld{margin-bottom:.9rem}
@@ -780,7 +793,8 @@ th{font-weight:800!important;color:var(--t3)!important}
 <header>
   <div class="h-logo"><div class="h-logo-ic">🏠</div>AB HOMES - Stoc Manager</div>
   <div class="h-tabs">
-    <button class="h-tab on" onclick="goPage('stoc',this)">Inventar</button>
+    <button class="h-tab on" onclick="goPage('dashboard',this)">🏠 Dashboard</button>
+    <button class="h-tab" onclick="goPage('stoc',this)">Inventar</button>
     <button class="h-tab" id="h-tab-calc" onclick="goPage('calc',this)">🧮 Calculator</button>
     <button class="h-tab" onclick="goPage('jurnal',this)">Jurnal vânzări</button>
     <button class="h-tab" onclick="goPage('raport',this)">📋 Raport stoc</button>
@@ -798,7 +812,27 @@ th{font-weight:800!important;color:var(--t3)!important}
 </header>
 
 <!-- PAGE STOC -->
-<div id="page-stoc" class="page on"><div class="wrap">
+<!-- PAGE DASHBOARD -->
+<div id="page-dashboard" class="page on"><div class="wrap">
+  <div class="stats" id="dash-stats"></div>
+  <div class="dash-grid">
+    <div class="tb">
+      <div class="tb-head"><div class="tb-title">📊 Produse pe platforme</div></div>
+      <div class="dash-plat-grid" id="dash-plat-grid"></div>
+    </div>
+    <div class="tb">
+      <div class="tb-head"><div class="tb-title">🔔 Activitate recentă</div><button class="btn btn-sm" onclick="goDashToJurnal()">Vezi tot</button></div>
+      <div class="dash-activity-list" id="dash-activity-list"></div>
+    </div>
+  </div>
+  <div class="dash-actions">
+    <button class="btn btn-acc" onclick="openModal()">+ Produs nou</button>
+    <button class="btn" onclick="openInvoice()">📄 Importă factură</button>
+    <button class="btn" onclick="openPresetCSV()">📦 Preset CSV comandă</button>
+  </div>
+</div></div>
+
+<div id="page-stoc" class="page"><div class="wrap">
   <div class="tb">
     <div class="tb-head">
       <div class="tb-title"><span class="live-dot"></span>Vânzări azi — <span class="day-badge" id="day-badge"></span></div>
@@ -1347,6 +1381,7 @@ th{font-weight:800!important;color:var(--t3)!important}
     </div>
     <div class="m-sales-history" id="m-sales-history"></div>
     <div class="m-stock-history" id="m-stock-history"></div>
+    <div class="m-stock-add-row"><button type="button" class="btn btn-sm" id="add-stock-order-btn" onclick="addStockFromProductPage()" disabled title="Pentru o comandă/factură care conține strict acest produs">📥 Adaugă stoc din comandă</button></div>
   </div>
   <div class="m-foot">
     <button class="btn" onclick="closeModal()">Anulează</button>
@@ -1396,6 +1431,9 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:33,text:'Pagină nouă "Dashboard", prima pagină la deschiderea aplicației — statistici generale, produse pe platforme (eMAG/Trendyol reale, Vinted pregătit pentru mai târziu), activitate recentă și acțiuni rapide',date:'2026-08-02'},
+  {n:32,text:'Fișierele .numbers sunt acum citite cu adevărat (via previzualizarea PDF încorporată de macOS), nu doar acceptate ca extensie — cu mesaj clar când nu au previzualizare',date:'2026-08-02'},
+  {n:31,text:'Buton nou "📥 Adaugă stoc din comandă" în fișa produsului — pentru comenzi/facturi cu un singur produs; salvează și numărul comenzii, vizibil în istoricul de încărcări',date:'2026-08-02'},
   {n:30,text:'Fișierele .numbers sunt acceptate la încărcare, dar afișează un mesaj clar (nu pot fi citite direct) — export CSV din Numbers, apoi upload',date:'2026-08-02'},
   {n:29,text:'Fișa produsului: istoric încărcări stoc (cantitate + data + numărul comenzii/facturii), lângă istoricul de vânzări',date:'2026-08-02'},
   {n:28,text:'La import CSV: parser generic pentru orice fișier cu o coloană de cod (SKU/Symbol/EAN/Cod) și una de cantitate, indiferent de denumirea/ordinea coloanelor — nu mai e nevoie de un format anume',date:'2026-08-02'},
@@ -1458,21 +1496,50 @@ async function logMove(tip,name,qty,sursa){
     catch(e){console.warn('Nu s-a salvat mișcarea de stoc în Supabase (rulează migration_activity_log.sql):',e);}
   }
 }
+function notifRowHtml(a){
+  const d=new Date(a.ts);
+  const dt=isNaN(d)?'':d.toLocaleString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const ic=a.tip==='in'?'📥':'📤';
+  return`<div class="notif-row ${a.tip==='in'?'notif-in':'notif-out'}"><span class="notif-ic">${ic}</span><div><div class="notif-name">${esc(a.name)}</div><div class="notif-meta">${a.tip==='in'?'Intrat':'Ieșit'} ${fmtQty(a.qty)} buc. · ${dt}${a.sursa?' · '+esc(a.sursa):''}</div></div></div>`;
+}
 function renderNotif(){
   const list=document.getElementById('notif-list');
   if(!list)return;
-  if(!ACT.length){
-    list.innerHTML='<div class="notif-empty">Nicio mișcare de stoc încă.</div>';
-  }else{
-    list.innerHTML=ACT.slice(0,50).map(a=>{
-      const d=new Date(a.ts);
-      const dt=isNaN(d)?'':d.toLocaleString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
-      const ic=a.tip==='in'?'📥':'📤';
-      return`<div class="notif-row ${a.tip==='in'?'notif-in':'notif-out'}"><span class="notif-ic">${ic}</span><div><div class="notif-name">${esc(a.name)}</div><div class="notif-meta">${a.tip==='in'?'Intrat':'Ieșit'} ${fmtQty(a.qty)} buc. · ${dt}${a.sursa?' · '+esc(a.sursa):''}</div></div></div>`;
-    }).join('');
-  }
+  list.innerHTML=ACT.length?ACT.slice(0,50).map(notifRowHtml).join(''):'<div class="notif-empty">Nicio mișcare de stoc încă.</div>';
   const badge=document.getElementById('notif-badge'),unread=ACT.filter(a=>!a.seen).length;
   if(badge){badge.style.display=unread>0?'flex':'none';badge.textContent=unread>9?'9+':unread;}
+}
+// ── DASHBOARD ──
+function renderDashboard(){
+  const tot=P.length,lowC=P.filter(p=>st(p)==='low').length,outC=P.filter(p=>st(p)==='out').length;
+  const val=P.reduce((a,p)=>a+(qty(p)*(p.priceBuyTTC||0)),0);
+  const azi=Object.values(TS).reduce((a,v)=>a+v,0);
+  const dashStats=document.getElementById('dash-stats');
+  if(dashStats)dashStats.innerHTML=`
+    <div class="stat"><div class="stat-l">Produse</div><div class="stat-v">${tot}</div></div>
+    <div class="stat"><div class="stat-l">Valoare stoc</div><div class="stat-v" style="font-size:15px">${val.toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})} RON</div></div>
+    <div class="stat"><div class="stat-l">Vândute azi</div><div class="stat-v g">${azi}</div></div>
+    <div class="stat"><div class="stat-l">Stoc scăzut</div><div class="stat-v w">${lowC}</div></div>
+    <div class="stat"><div class="stat-l">Epuizate</div><div class="stat-v d">${outC}</div></div>`;
+
+  const platGrid=document.getElementById('dash-plat-grid');
+  if(platGrid){
+    const emagCount=new Set(SYNCM.filter(s=>s.platforma==='emag'&&s.confirmat).map(s=>s.produsId)).size;
+    const trendyolCount=new Set(SYNCM.filter(s=>s.platforma==='trendyol'&&s.confirmat).map(s=>s.produsId)).size;
+    platGrid.innerHTML=`
+      <div class="dash-plat-card"><div class="dash-plat-ic">🛒</div><div class="dash-plat-name">eMAG</div><div class="dash-plat-val">${emagCount}</div><div class="dash-plat-note">produse sincronizate</div></div>
+      <div class="dash-plat-card"><div class="dash-plat-ic">🛍️</div><div class="dash-plat-name">Trendyol</div><div class="dash-plat-val">${trendyolCount}</div><div class="dash-plat-note">produse sincronizate</div></div>
+      <div class="dash-plat-card" style="opacity:.55"><div class="dash-plat-ic">👕</div><div class="dash-plat-name">Vinted</div><div class="dash-plat-val">—</div><div class="dash-plat-note">neconectat încă</div></div>`;
+  }
+  renderDashActivity();
+}
+function renderDashActivity(){
+  const box=document.getElementById('dash-activity-list');if(!box)return;
+  box.innerHTML=ACT.length?ACT.slice(0,12).map(notifRowHtml).join(''):'<div class="notif-empty">Nicio mișcare de stoc încă.</div>';
+}
+function goDashToJurnal(){
+  const btn=[...document.querySelectorAll('.h-tab')].find(b=>b.textContent.includes('Jurnal'));
+  if(btn)goPage('jurnal',btn);
 }
 function toggleNotifPanel(ev){
   ev.stopPropagation();
@@ -1735,11 +1802,12 @@ async function load(){
 
     sbReady=true;
     await loadGlobalSettings();
+    if(!syncMapsLoaded)await loadSyncMappings();
     setSyncStatus('ok','Supabase ✓');
     document.getElementById('day-badge').textContent=new Date().toLocaleDateString('ro-RO',{day:'numeric',month:'long'});
     hideLoading();
     buildCats('');renderToday();renderTable();buildJMonths();if(document.getElementById('page-raport')?.classList.contains('on')){buildRaportCats();renderRaport();}
-    renderUpdWidget();renderNotif();
+    renderUpdWidget();renderNotif();renderDashboard();
   }catch(err){
     setSyncStatus('err','Eroare conexiune');
     hideLoading();
@@ -1760,7 +1828,7 @@ function loadLocalFallback(){
   setSyncStatus('err','Mod offline');
   document.getElementById('day-badge').textContent=new Date().toLocaleDateString('ro-RO',{day:'numeric',month:'long'});
   buildCats('');renderToday();renderTable();buildJMonths();
-  renderUpdWidget();renderNotif();
+  renderUpdWidget();renderNotif();renderDashboard();
 }
 
 async function loadGlobalSettings(){
@@ -1965,6 +2033,15 @@ function goPage(id,btn){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.h-tab').forEach(b=>b.classList.remove('on'));
   document.getElementById('page-'+id).classList.add('on');btn.classList.add('on');
+  if(id==='dashboard'){
+    const tryD=async(n)=>{
+      if(P.length>0){
+        if(!syncMapsLoaded)await loadSyncMappings();
+        renderDashboard();
+      }else if(n>0)setTimeout(()=>tryD(n-1),300);
+    };
+    tryD(20);
+  }
   if(id==='jurnal'){buildJMonths();renderJurnal();}
   if(id==='raport'){
     const tryR=(n)=>{
@@ -4186,6 +4263,7 @@ function openModal(id){
   document.getElementById('ai-img-btn').disabled=!curImg;
   renderProductSalesHistory(p?.id||null);
   renderProductStockIntakeHistory(p?.id||null);
+  document.getElementById('add-stock-order-btn').disabled=!p?.id;
   buildCats('');calcStoc();
   document.getElementById('ov').classList.add('on');
   const body=document.querySelector('#ov .m-body');if(body)body.scrollTop=0;
@@ -4271,6 +4349,34 @@ function updateBulkBtns(){
   if(ba){ba.disabled=n===0;ba.textContent=`📥 Adaugă stoc${n?' ('+n+')':''}`;}
   if(bd){bd.disabled=n===0;bd.textContent=`🗑 Șterge selectate${n?' ('+n+')':''}`;}
 }
+// Aplică o recepție de stoc (aceeași cantitate + preț opțional) la o listă de produse,
+// actualizează prețul cu istoric, și salvează o intrare în istoricul de comenzi (comenzi_stoc)
+// — vizibilă atât în "Comenzi" (Jurnal) cât și în istoricul de încărcări din fișa fiecărui produs.
+async function applyStockIntake(products,add,newCost,orderNumber,source){
+  const details=[];
+  for(const p of products){
+    const data={...p,bought:(p.bought||0)+add};
+    if(newCost>0){
+      const oldCost=Number(p.priceBuyTTC)||0;
+      if(oldCost>0&&Math.abs(oldCost-newCost)>=0.005){data.priceBuyPrevTTC=oldCost;data.priceBuyChangedAt=new Date().toISOString();}
+      const prices=calcPrices(newCost);
+      data.priceBuyTTC=newCost;data.priceSell=prices.sell;data.priceEmag=prices.emag;data.priceTrendyol=prices.trendyol;data.priceRec=prices.rec;
+    }
+    data.stockAddedAt=new Date().toISOString();data.lastStockAddedQty=add;
+    await saveProdToDb(data,p.id);
+    await logMove('in',p.name,add,orderNumber?`Comandă ${orderNumber}`:source);
+    const price=newCost>0?newCost:(Number(p.priceBuyTTC)||0);
+    details.push({status:'actualizat',sku:p.sku||'',productId:p.id,name:p.name,qty:add,price,value:Math.round(add*price*100)/100});
+  }
+  if(details.length){
+    await saveStockOrderHistory({
+      source,invoiceNumber:(orderNumber||'').trim(),
+      totalItems:details.length,totalQty:add*details.length,
+      totalValue:Math.round(details.reduce((s,d)=>s+d.value,0)*100)/100,
+      updatedCount:details.length,createdCount:0,skippedCount:0,details
+    });
+  }
+}
 async function bulkAddStock(){
   const n=selProd.size;if(!n)return;
   const v=prompt(`Câte bucăți adaugi la stocul fiecăruia dintre cele ${n} produse selectate?`,'');
@@ -4279,23 +4385,38 @@ async function bulkAddStock(){
   if(!add||add<=0){toast('Introdu o cantitate validă','err');return;}
   const priceInput=prompt('Preț achiziție nou, cu TVA (RON) — lasă gol ca să păstrezi prețul actual','');
   const newCost=priceInput?Math.max(0,parseFloat(String(priceInput).replace(',','.'))||0):0;
+  const orderNumber=prompt('Număr comandă / factură (opțional)','')||'';
   showLoading(`Se adaugă stoc la ${n} produse…`);
-  for(const id of selProd){
-    const p=P.find(x=>x.id===id);if(!p)continue;
-    const data={...p,bought:(p.bought||0)+add};
-    if(newCost>0){
-      const oldCost=Number(p.priceBuyTTC)||0;
-      if(oldCost>0&&Math.abs(oldCost-newCost)>=0.005){data.priceBuyPrevTTC=oldCost;data.priceBuyChangedAt=new Date().toISOString();}
-      const prices=calcPrices(newCost);
-      data.priceBuyTTC=newCost;data.priceSell=prices.sell;data.priceEmag=prices.emag;data.priceTrendyol=prices.trendyol;data.priceRec=prices.rec;
-    }
-    await saveProdToDb(data,id);
-    await logMove('in',p.name,add,'Adăugare stoc în masă');
-  }
+  const products=[...selProd].map(id=>P.find(x=>x.id===id)).filter(Boolean);
+  await applyStockIntake(products,add,newCost,orderNumber,'Adăugare stoc în masă');
   hideLoading();
   selProd.clear();
   renderToday();renderTable();
   toast(`Stoc actualizat: +${add} buc. la ${n} produse${newCost>0?' · preț nou '+newCost.toFixed(2)+' RON cu TVA':''}`);
+}
+// Recepție de stoc pentru UN singur produs, direct din fișa produsului (când comanda e strict pe acel produs)
+async function addStockFromProductPage(){
+  if(!editId){toast('Salvează întâi produsul, apoi adaugă stoc din comandă','err');return;}
+  const p=P.find(x=>x.id===editId);if(!p)return;
+  const v=prompt(`Câte bucăți ai primit pentru "${p.name}"?`,'');
+  if(v===null)return;
+  const add=parseQtyVal(v);
+  if(!add||add<=0){toast('Introdu o cantitate validă','err');return;}
+  const priceInput=prompt('Preț achiziție nou, cu TVA (RON) — lasă gol ca să păstrezi prețul actual','');
+  const newCost=priceInput?Math.max(0,parseFloat(String(priceInput).replace(',','.'))||0):0;
+  const orderNumber=prompt('Număr comandă / factură (opțional)','')||'';
+  showLoading('Se adaugă stoc…');
+  await applyStockIntake([p],add,newCost,orderNumber,'Comandă produs unic');
+  hideLoading();
+  const updated=P.find(x=>x.id===editId);
+  document.getElementById('f-bought').value=fmtQty(updated.bought);
+  document.getElementById('f-pbuy-ttc').value=updated.priceBuyTTC||'';
+  document.getElementById('f-tva-acq').value=String(updated.tvaAcq??0.21);
+  syncAcqFields('ttc');
+  calcStoc();
+  renderProductStockIntakeHistory(editId);
+  renderToday();renderTable();
+  toast(`Stoc adăugat: +${add} buc.${orderNumber?' · comandă '+orderNumber:''}`);
 }
 async function bulkDeleteProd(){
   const n=selProd.size;if(!n)return;
@@ -4665,11 +4786,7 @@ function handleInvFile(ev){const f=ev.target.files[0];if(!f)return;invSourceName
 function routeInvFile(f){
   const ext=f.name.split('.').pop().toLowerCase();
   if(ext==='pdf'){parsePDFWithAI(f);return;}
-  if(ext==='numbers'){
-    toast('Fișierele Numbers (.numbers) nu pot fi citite direct. Din Numbers: File → Export To → CSV, apoi încarcă fișierul CSV rezultat.','err');
-    document.getElementById('inv-parsing').style.display='none';
-    return;
-  }
+  if(ext==='numbers'){parseNumbersFile(f);return;}
   // Preset-uri: detectăm automat formatul după antetul CSV — funcționează identic la orice comandă viitoare
   const peek=new FileReader();
   peek.onload=e=>{
@@ -4853,6 +4970,38 @@ Reguli: ignoră total/TVA/transport, consolidează duplicate, qty>0 obligatoriu`
     toast('Eroare PDF: '+err.message+'. Încearcă CSV sau introdu manual.','err');
   }
   parsing.style.display='none';
+}
+// Fișierele .numbers sunt arhive zip — nu conțin conținutul editabil în format lizibil direct,
+// dar macOS îngroapă în ele un preview PDF al foii de calcul (QuickLook/Preview.pdf), pe care
+// îl trimitem prin același flux de citire AI folosit pentru facturi PDF.
+async function parseNumbersFile(f){
+  const parsing=document.getElementById('inv-parsing');
+  parsing.style.display='block';
+  parsing.innerHTML='<span class="spin"></span> Se deschide fișierul Numbers…';
+  try{
+    if(!window.JSZip){
+      await new Promise((resolve,reject)=>{
+        const s=document.createElement('script');
+        s.src='https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
+        s.onload=resolve;s.onerror=reject;
+        document.head.appendChild(s);
+      });
+    }
+    const zip=await window.JSZip.loadAsync(f);
+    let previewFile=zip.file('QuickLook/Preview.pdf');
+    if(!previewFile){
+      const candidates=Object.keys(zip.files).filter(name=>/(^|\/)preview\.pdf$/i.test(name));
+      if(candidates.length)previewFile=zip.file(candidates[0]);
+    }
+    if(!previewFile)throw new Error('fișierul nu conține o previzualizare PDF încorporată');
+    parsing.innerHTML='<span class="spin"></span> Se citește previzualizarea foii de calcul…';
+    const blob=await previewFile.async('blob');
+    await parsePDFWithAI(blob);
+  }catch(err){
+    parsing.style.display='none';
+    console.error('parseNumbersFile error:',err);
+    toast('Nu am putut citi fișierul Numbers ('+(err.message||'eroare necunoscută')+'). Din Numbers: File → Export To → CSV, apoi încarcă fișierul CSV rezultat.','err');
+  }
 }
 function parseCSV(file){
   const r=new FileReader();
