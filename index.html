@@ -833,6 +833,7 @@ th{font-weight:800!important;color:var(--t3)!important}
       <option value="stock_recent">Stoc adăugat recent</option>
       <option value="transit">În tranzit</option>
       <option value="oldest">Cele mai vechi</option>
+      <option value="noimg">Fără imagine (de completat)</option>
     </select>
     <button class="btn btn-acc" onclick="openModal()">+ Produs nou</button>
     <button class="btn btn-sm" id="bulk-add-btn" onclick="bulkAddStock()" disabled title="Adaugă manual o cantitate de stoc la toate produsele bifate">📥 Adaugă stoc</button>
@@ -1278,6 +1279,10 @@ th{font-weight:800!important;color:var(--t3)!important}
       <div class="sec">Prețuri produs</div>
       <div style="background:var(--surf2);border-radius:var(--r);padding:.85rem 1rem;border:1px solid var(--b1)">
         <div class="frow">
+          <div class="fld"><label>Preț achiziție EUR fără TVA</label><input id="f-pbuy-eur" type="number" min="0" step="0.01" placeholder="ex: 3.75" oninput="syncAcqFromEur()"></div>
+          <div class="fld"><label>&nbsp;</label><div style="font-size:13px;color:var(--t3);padding:8px 0">furnizor extern · curs 5,07 RON/€ · se convertește mai jos, fără TVA</div></div>
+        </div>
+        <div class="frow">
           <div class="fld"><label>Preț achiziție cu TVA</label><input id="f-pbuy-ttc" type="number" min="0" step="0.01" placeholder="0.00" oninput="syncAcqFields('ttc')"></div>
           <div class="fld"><label>Preț achiziție fără TVA</label><input id="f-pbuy" type="number" min="0" step="0.01" placeholder="0.00" oninput="syncAcqFields('net')"></div>
         </div>
@@ -1356,6 +1361,7 @@ th{font-weight:800!important;color:var(--t3)!important}
       <div class="inv-drop-t">Trage un fișier PDF sau CSV aici<br><small style="opacity:.6">PDF factură · CSV comandă Jumbo · CSV platformă (Produs, SKU, Categorie, Cump., ...) · CSV (cod, nume, cant, p_acq, p_vanz) · TXT — formate auto-detectate</small></div>
     </div>
     <div class="inv-parsing" id="inv-parsing"><span class="spin"></span> Se procesează cu AI…</div>
+    <div class="fld" style="margin-top:.75rem"><label>Număr factură / cod comandă (opțional)</label><input type="text" id="inv-number" placeholder="ex: FAC-2026-00123"></div>
     <div class="inv-sep">sau introdu manual</div>
     <div class="inv-mh"><span>SKU / Cod</span><span>Cant.</span><span>P. acq.</span><span>P. vânz.</span><span></span></div>
     <div id="inv-lines"></div>
@@ -1365,7 +1371,7 @@ th{font-weight:800!important;color:var(--t3)!important}
   <div class="inv-foot">
     <span class="inv-foot-info" id="inv-info">Adaugă produse pentru previzualizare</span>
     <div style="display:flex;gap:8px">
-      <button class="btn btn-sm" onclick="closeInvoice()">Anulează</button>
+      <button class="btn btn-sm" id="inv-cancel-btn" onclick="closeInvoice()">Anulează</button>
       <button class="btn btn-sm btn-acc" id="inv-apply-btn" onclick="applyInvoice()" disabled>Importă în stoc</button>
     </div>
   </div>
@@ -1385,6 +1391,8 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:23,text:'La adăugare produs: câmp nou "Preț achiziție EUR fără TVA" care se convertește automat în RON fără TVA (curs 5,07)',date:'2026-08-02'},
+  {n:22,text:'Importul de factură reține numărul facturii / codul comenzii (câmp manual + auto-detectat din PDF), vizibil în istoricul de comenzi și în exportul CSV',date:'2026-08-02'},
   {n:21,text:'Import produs după link: titlul tradus de AI nu mai e suprascris de titlul original; SKU recunoscut și după eticheta "Product code" (Maxy); preț EUR convertit automat în RON fără TVA pentru furnizori externi; traducerea ține cont și de poza produsului',date:'2026-08-02'},
   {n:20,text:'Curățate fișierele de migrare SQL redundante + actualizată documentația tehnică (AGENTS.md/CLAUDE.md)',date:'2026-08-02'},
   {n:19,text:'Calculator Trendyol: transport calculat automat din tarife reale FAN/DPD (greutate, curier, rută)',date:'2026-08-02'},
@@ -1547,13 +1555,16 @@ function syncMapToDb(m){
 }
 function dbToStockOrder(r){
   return{id:r.id,createdAt:r.created_at||new Date().toISOString(),source:r.source||'Import stoc',
+    invoiceNumber:r.invoice_number||'',
     totalItems:r.total_items||0,totalQty:Number(r.total_qty)||0,totalValue:Number(r.total_value)||0,
     updatedCount:r.updated_count||0,createdCount:r.created_count||0,skippedCount:r.skipped_count||0,
     details:Array.isArray(r.details)?r.details:[]};
 }
 function stockOrderToDb(o){
-  return{source:o.source||'Import stoc',total_items:o.totalItems||0,total_qty:o.totalQty||0,total_value:o.totalValue||0,
+  const d={source:o.source||'Import stoc',total_items:o.totalItems||0,total_qty:o.totalQty||0,total_value:o.totalValue||0,
     updated_count:o.updatedCount||0,created_count:o.createdCount||0,skipped_count:o.skippedCount||0,details:o.details||[]};
+  if(o.invoiceNumber)d.invoice_number=o.invoiceNumber;
+  return d;
 }
 function loadLocalStockOrders(){try{return JSON.parse(localStorage.getItem(OK)||'[]');}catch(e){return[];}}
 function stockOrderKey(o){return o.id?`db:${o.id}`:`local:${o.localId||o.createdAt||''}:${o.source||''}:${o.totalItems||0}:${o.totalQty||0}`;}
@@ -1569,8 +1580,17 @@ async function saveStockOrderHistory(order){
   localStorage.setItem(OK,JSON.stringify(OI));
   if(sbReady){
     try{
-      const rows=await dbPost('comenzi_stoc',stockOrderToDb(order));
-      if(rows?.[0])OI=mergeStockOrders([dbToStockOrder(rows[0])],OI.filter(o=>o.localId!==order.localId));
+      const sent=stockOrderToDb(order);
+      let rows;
+      try{rows=await dbPost('comenzi_stoc',sent);}
+      catch(e){
+        if(sent.invoice_number&&/Could not find the 'invoice_number' column/i.test(String(e.message||e))){
+          delete sent.invoice_number;
+          rows=await dbPost('comenzi_stoc',sent);
+          toast('Numărul facturii a fost păstrat doar local. Pentru salvare în baza de date rulează migration_invoice_number.sql.','err');
+        }else throw e;
+      }
+      if(rows?.[0])OI=mergeStockOrders([{...dbToStockOrder(rows[0]),invoiceNumber:dbToStockOrder(rows[0]).invoiceNumber||order.invoiceNumber||''}],OI.filter(o=>o.localId!==order.localId));
       localStorage.setItem(OK,JSON.stringify(OI));
     }catch(e){
       console.warn('Nu s-a salvat istoricul comenzii în Supabase:',e);
@@ -2226,11 +2246,9 @@ Răspunde STRICT cu JSON:
       syncAcqFields('ttc');
       status.innerHTML+=`<br><span style="color:var(--gr)">✓ Preț achiziție: ${price.toFixed(2)} RON cu TVA</span>`;
     }else if(price>0&&currency==='EUR'){
-      const EUR_RON=5.07;
+      document.getElementById('f-pbuy-eur').value=price.toFixed(2);
+      syncAcqFromEur();
       const priceRon=Math.round(price*EUR_RON*100)/100;
-      document.getElementById('f-tva-acq').value='0';
-      document.getElementById('f-pbuy').value=priceRon.toFixed(2);
-      syncAcqFields('net');
       status.innerHTML+=`<br><span style="color:var(--gr)">✓ Preț achiziție: ${price.toFixed(2)} € → ${priceRon.toFixed(2)} RON fără TVA (furnizor extern, curs ${EUR_RON})</span>`;
     }else if(price>0){
       status.innerHTML+=`<br><span style="color:var(--or)">⚠ Preț găsit: ${price.toFixed(2)} ${esc(currency)} (nu a fost completat automat)</span>`;
@@ -2553,6 +2571,13 @@ function syncAcqFields(source){
     if(net>0){const tf=document.getElementById('f-pbuy-ttc');if(tf)tf.value=(net*(1+tva)).toFixed(2);}
     pcSyncAcqFromPrice();
   }
+}
+function syncAcqFromEur(){
+  const eur=parseFloat(document.getElementById('f-pbuy-eur')?.value)||0;
+  if(eur>0)document.getElementById('f-tva-acq').value='0';
+  const ron=eur>0?Math.round(eur*EUR_RON*100)/100:0;
+  const nf=document.getElementById('f-pbuy');if(nf)nf.value=ron>0?ron.toFixed(2):'';
+  syncAcqFields('net');
 }
 
 /* MODAL MARGIN SELECTOR */
@@ -4005,7 +4030,7 @@ function renderTable(){
   const cat=document.getElementById('fc').value;
   const s=document.getElementById('fs').value;
   const statusFilter=['ok','low','out'].includes(s)?s:'';
-  let list=P.filter(p=>{const m=prodMatchesSearch(p,q);return m&&(!cat||p.category===cat)&&(!selSuppliers.size||selSuppliers.has(p.supplier||''))&&(!statusFilter||st(p)===statusFilter)&&(s!=='transit'||parseQtyVal(p.incomingQty)>0)&&(s!=='stock_recent'||stockAddedTime(p)>0);});
+  let list=P.filter(p=>{const m=prodMatchesSearch(p,q);return m&&(!cat||p.category===cat)&&(!selSuppliers.size||selSuppliers.has(p.supplier||''))&&(!statusFilter||st(p)===statusFilter)&&(s!=='transit'||parseQtyVal(p.incomingQty)>0)&&(s!=='stock_recent'||stockAddedTime(p)>0)&&(s!=='noimg'||!p.img);});
   if(s==='recent')list.sort((a,b)=>prodCreatedTime(b)-prodCreatedTime(a));
   else if(s==='stock_recent')list.sort((a,b)=>stockAddedTime(b)-stockAddedTime(a));
   else if(s==='oldest')list.sort((a,b)=>prodCreatedTime(a)-prodCreatedTime(b));
@@ -4100,6 +4125,7 @@ function openModal(id){
   document.getElementById('f-min').value=p?.minQty?fmtQty(p.minQty):'';
   const _tva=p?.tvaAcq!==undefined?p.tvaAcq:0.21;
   const _ttc=p?.priceBuyTTC||0,_net=_ttc>0&&_tva>0?_ttc/(1+_tva):_ttc;
+  document.getElementById('f-pbuy-eur').value='';
   document.getElementById('f-pbuy-ttc').value=_ttc||'';
   document.getElementById('f-pbuy').value=_net>0?_net.toFixed(2):'';
   document.getElementById('f-tva-acq').value=String(_tva);
@@ -4566,9 +4592,12 @@ function openInvoice(){
   document.getElementById('inv-lines').innerHTML='';
   document.getElementById('inv-preview').innerHTML='';
   document.getElementById('inv-file').value='';
+  document.getElementById('inv-number').value='';
   document.getElementById('inv-parsing').style.display='none';
   document.getElementById('inv-info').textContent='Adaugă produse';
   document.getElementById('inv-apply-btn').disabled=true;
+  document.getElementById('inv-apply-btn').style.display='';
+  document.getElementById('inv-cancel-btn').textContent='Anulează';
   addInvLine();addInvLine();addInvLine();
   document.getElementById('ov-inv').classList.add('on');
 }
@@ -4659,6 +4688,7 @@ function priceDeltaHtml(oldPrice,newPrice){
   if(!d)return '';
   return`<span class="price-delta ${d.up?'up':'down'}">${d.up?'▲':'▼'} ${Math.abs(d.diff).toFixed(2)} RON (${Math.abs(d.pct).toFixed(1)}%) față de ${oldPrice.toFixed(2)}</span>`;
 }
+const EUR_RON=5.07;
 function calcPrices(costRon){
   const p=pcAutomaticPricesFromGross(costRon,.21);
   return{sell:p.direct,emag:p.emag,trendyol:p.trendyol,rec:Math.round(p.direct*1.1*100)/100};
@@ -4710,13 +4740,15 @@ Detectează automat formatul:
 - Skroutz: "N × XX,XX Lei" → priceBuy=prețul per buc, currency=RON
 - Facturi RO standard: cantitate × preț unitar
 
-Răspunde STRICT cu JSON array (fără markdown, fără explicații):
-[{"sku":"<cod/symbol sau null>","name":"<denumire în română>","qty":<întreg pozitiv>,"priceBuy":<preț/buc număr>,"currency":"<EUR sau RON>"}]
+Caută și numărul facturii sau codul comenzii (ex: "Factură nr.", "Invoice no.", "Order", "Nr. comandă") — dacă nu apare, folosește null.
+
+Răspunde STRICT cu JSON (fără markdown, fără explicații):
+{"invoiceNumber":"<numărul facturii/comenzii găsit în document sau null>","items":[{"sku":"<cod/symbol sau null>","name":"<denumire în română>","qty":<întreg pozitiv>,"priceBuy":<preț/buc număr>,"currency":"<EUR sau RON>"}]}
 
 Reguli: ignoră total/TVA/transport, consolidează duplicate, qty>0 obligatoriu`;
 
       resp=await callAI([{role:'user',content:prompt}],
-        'Ești expert procesare facturi. Răspunzi DOAR cu JSON array valid, niciodată altceva.',
+        'Ești expert procesare facturi. Răspunzi DOAR cu JSON valid, niciodată altceva.',
         3000);
     } else {
       // Fallback: send PDF as base64 document
@@ -4727,16 +4759,31 @@ Reguli: ignoră total/TVA/transport, consolidează duplicate, qty>0 obligatoriu`
       });
       resp=await callAI([{role:'user',content:[
           {type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},
-          {type:'text',text:'Extrage produsele din această factură. Răspunde STRICT cu JSON array: [{"sku":"...","name":"...","qty":N,"priceBuy":N,"currency":"EUR sau RON"}]. Fără altceva.'}
-        ]}],'Ești expert procesare facturi. Răspunzi DOAR cu JSON array valid, niciodată altceva.',2000);
+          {type:'text',text:'Extrage produsele din această factură și, dacă apare, numărul facturii/comenzii. Răspunde STRICT cu JSON: {"invoiceNumber":"<număr factură/comandă sau null>","items":[{"sku":"...","name":"...","qty":N,"priceBuy":N,"currency":"EUR sau RON"}]}. Fără altceva.'}
+        ]}],'Ești expert procesare facturi. Răspunzi DOAR cu JSON valid, niciodată altceva.',2000);
     }
 
-    // Robust JSON parse
-    const match=resp.match(/\[[\s\S]*\]/);
-    if(!match) throw new Error('Nu am găsit produse în factură');
-    invParsed=JSON.parse(match[0]);
+    // Robust JSON parse — preferă formatul nou {invoiceNumber, items}, cu fallback pe array simplu
+    let invoiceNumberDetected='';
+    invParsed=[];
+    const objMatch=resp.match(/\{[\s\S]*\}/);
+    if(objMatch){
+      try{
+        const parsed=JSON.parse(objMatch[0]);
+        if(Array.isArray(parsed.items)){invParsed=parsed.items;invoiceNumberDetected=String(parsed.invoiceNumber||'').trim();}
+      }catch(e){}
+    }
+    if(!invParsed.length){
+      const arrMatch=resp.match(/\[[\s\S]*\]/);
+      if(!arrMatch)throw new Error('Nu am găsit produse în factură');
+      invParsed=JSON.parse(arrMatch[0]);
+    }
     if(!Array.isArray(invParsed)) invParsed=[];
     invParsed=invParsed.filter(i=>i.name&&i.qty>0);
+    if(invoiceNumberDetected&&invoiceNumberDetected!=='null'){
+      const numInput=document.getElementById('inv-number');
+      if(numInput&&!numInput.value.trim())numInput.value=invoiceNumberDetected;
+    }
 
     renderInvPreview();
     toast(`${invParsed.length} produse extrase din PDF ✓`);
@@ -4907,7 +4954,6 @@ function renderInvPreview(){
   if(!invParsed.length){prev.innerHTML='';document.getElementById('inv-info').textContent='Adaugă produse';document.getElementById('inv-apply-btn').disabled=true;return;}
   // Calculează prețuri RON și asociere pentru fiecare item
   invParsed.forEach(item=>{
-    const EUR_RON=5.07;
     if(!item.costRon){
       item.costRon=item.currency==='EUR'?Math.round(item.priceBuy*EUR_RON*100)/100:(item.priceBuy||0);
     }
@@ -4931,7 +4977,7 @@ function renderInvPreview(){
       tag=`<span class="inv-match miss">cod negăsit</span>`;
       nm=item.name||item.sku||'Produs necunoscut';
     } else {
-      tag=`<span class="inv-match new">+ nou</span>`;
+      tag=`<span class="inv-match new">+ nou${item.sku?' · SKU '+esc(item.sku):''}</span>`;
       nm=item.name||item.sku||'Produs necunoscut';
     }
     const priceStr=item.costRon>0?`${item.costRon.toFixed(2)} RON${item.currency==='EUR'?` (${item.priceBuy.toFixed(2)}€)`:''}`:'' ;
@@ -5006,6 +5052,7 @@ async function applyInvoice(){
   if(orderDetails.length){
     await saveStockOrderHistory({
       source:invSourceName||'Import stoc',
+      invoiceNumber:document.getElementById('inv-number')?.value.trim()||'',
       totalItems:orderDetails.length,
       totalQty:orderDetails.reduce((s,i)=>s+parseQtyVal(i.qty),0),
       totalValue:Math.round(orderDetails.reduce((s,i)=>s+(Number(i.value)||0),0)*100)/100,
@@ -5014,7 +5061,19 @@ async function applyInvoice(){
     });
   }
   hideLoading();
-  renderToday();renderTable();buildJMonths();if(jMode==='orders')renderJurnal();closeInvoice();
+  renderToday();renderTable();buildJMonths();if(jMode==='orders')renderJurnal();
+  const newWithSku=orderDetails.filter(d=>d.status==='produs nou'&&d.sku);
+  if(newWithSku.length){
+    document.getElementById('inv-preview').innerHTML=`<div class="inv-preview"><div class="inv-prev-title">✓ Import finalizat — ${created} produse noi, ${updated} actualizate${skipped?', '+skipped+' sărite':''}</div>
+      <div style="font-size:13px;color:var(--t3);margin:6px 0 10px">Produsele noi de mai jos au fost create doar cu denumirea și prețul din factură, fără poză. Caută codul pe site-ul furnizorului și completează-le cu <strong>„Importă produs după link"</strong>:</div>
+      ${newWithSku.map(d=>`<div class="inv-prev-row"><div class="inv-prev-nm">${esc(d.name)}<div class="jp-meta">SKU: <strong style="color:var(--acc)">${esc(d.sku)}</strong></div></div><button class="btn btn-sm" onclick="copyText('${esc(d.sku).replace(/'/g,"\\'")}')">📋 Copiază SKU</button></div>`).join('')}
+    </div>`;
+    document.getElementById('inv-info').textContent=`${newWithSku.length} produse noi de completat manual`;
+    document.getElementById('inv-apply-btn').style.display='none';
+    document.getElementById('inv-cancel-btn').textContent='Închide';
+  }else{
+    closeInvoice();
+  }
   toast(`✓ ${created} produse noi · ${updated} actualizate${skipped?' · '+skipped+' coduri sărite':''}${receivedLines?' · '+fmtQty(receivedQty)+' buc. recepționate':''}${extraQty?' · '+fmtQty(extraQty)+' buc. extra':''}`);
 }
 
@@ -5400,7 +5459,7 @@ function renderJurnal(){
 function renderStockOrders(){
   const q=(document.getElementById('js').value||'').toLowerCase(),mo=document.getElementById('jm').value;
   let rows=[...OI];if(mo)rows=rows.filter(o=>(o.createdAt||'').startsWith(mo));
-  if(q)rows=rows.filter(o=>(o.source||'').toLowerCase().includes(q)||(o.details||[]).some(d=>[d.name,d.sku,d.status].some(v=>String(v||'').toLowerCase().includes(q))));
+  if(q)rows=rows.filter(o=>(o.source||'').toLowerCase().includes(q)||(o.invoiceNumber||'').toLowerCase().includes(q)||(o.details||[]).some(d=>[d.name,d.sku,d.status].some(v=>String(v||'').toLowerCase().includes(q))));
   const body=document.getElementById('jbody');
   if(!rows.length){body.innerHTML=`<div class="jrnl-empty">Nicio comandă de stoc încărcată</div>`;document.getElementById('jtotal').textContent='';return;}
   let gQ=0,gV=0,gI=0;
@@ -5414,7 +5473,7 @@ function renderStockOrders(){
       const stockLine=Number.isFinite(Number(d.stockBefore))?`<div class="jp-meta">Stoc: ${fmtQty(d.stockBefore)} + ${fmtQty(d.qty)} = ${fmtQty(d.stockAfter)}${Number(d.negativeCompensated)>0?' · minus compensat '+fmtQty(d.negativeCompensated):''}</div>`:'';
       return`<div class="jp-row"><div class="jp-th-ph">📦</div><div class="jp-nm">${esc(d.name||'—')}<br><span class="jp-cat">SKU: ${esc(d.sku||'—')} · <span class="inv-match ${cls}" style="margin-left:0">${esc(d.status||'actualizat')}</span></span>${delta?`<div class="jp-meta">${delta}</div>`:''}${stockLine}</div><div class="jp-qty">+${fmtQty(d.qty)}</div><div class="jp-val">${Number(d.price)>0?Number(d.price).toFixed(2)+' RON/buc':'—'}<br><span class="jp-cat">${Number(d.value)>0?Number(d.value).toFixed(2)+' RON':'—'}</span></div></div>`;
     }).join('');
-    return`<div class="jd-card"><div class="jd-head" onclick="togJ('${id}')"><span class="jd-date">${esc(o.source||'Import stoc')}<br><span class="jp-cat">${dt}</span></span><div class="jd-stats"><span><strong>${fmtQty(o.totalQty)}</strong> buc</span><span><strong>${Number(o.totalValue||0).toFixed(2)}</strong> RON</span><span>${o.updatedCount||0} actualizate · ${o.createdCount||0} noi · ${o.skippedCount||0} sărite</span></div><span class="jd-chev" id="${id}-c">▼</span></div><div class="jd-body" id="${id}">${lines||'<div class="jrnl-empty">Fără detalii</div>'}</div></div>`;
+    return`<div class="jd-card"><div class="jd-head" onclick="togJ('${id}')"><span class="jd-date">${esc(o.source||'Import stoc')}${o.invoiceNumber?` · <span class="bdg-cat" style="font-size:12px">📄 ${esc(o.invoiceNumber)}</span>`:''}<br><span class="jp-cat">${dt}</span></span><div class="jd-stats"><span><strong>${fmtQty(o.totalQty)}</strong> buc</span><span><strong>${Number(o.totalValue||0).toFixed(2)}</strong> RON</span><span>${o.updatedCount||0} actualizate · ${o.createdCount||0} noi · ${o.skippedCount||0} sărite</span></div><span class="jd-chev" id="${id}-c">▼</span></div><div class="jd-body" id="${id}">${lines||'<div class="jrnl-empty">Fără detalii</div>'}</div></div>`;
   }).join('');
   document.getElementById('jtotal').textContent=`Total comenzi: ${rows.length} · ${fmtQty(gQ)} buc · ${gV.toFixed(2)} RON · ${gI} linii`;
 }
@@ -5430,8 +5489,8 @@ function exportCSV(){
 function exportStockOrdersCSV(){
   const mo=document.getElementById('jm').value;
   let rows=[...OI];if(mo)rows=rows.filter(o=>(o.createdAt||'').startsWith(mo));
-  let csv='Data,Sursa,Status,SKU,Produs,Cantitate,Pret achizitie,Valoare,Pret vechi,Stoc inainte,Stoc dupa,Minus compensat\n';
-  rows.forEach(o=>(o.details||[]).forEach(d=>{csv+=`"${csvEsc(o.createdAt||'')}","${csvEsc(o.source||'')}","${csvEsc(d.status||'')}","${csvEsc(d.sku||'')}","${csvEsc(d.name||'')}","${d.qty||0}","${d.price||0}","${d.value||0}","${d.oldPrice||0}","${d.stockBefore??''}","${d.stockAfter??''}","${d.negativeCompensated||0}"\n`;}));
+  let csv='Data,Sursa,Nr. factura/comanda,Status,SKU,Produs,Cantitate,Pret achizitie,Valoare,Pret vechi,Stoc inainte,Stoc dupa,Minus compensat\n';
+  rows.forEach(o=>(o.details||[]).forEach(d=>{csv+=`"${csvEsc(o.createdAt||'')}","${csvEsc(o.source||'')}","${csvEsc(o.invoiceNumber||'')}","${csvEsc(d.status||'')}","${csvEsc(d.sku||'')}","${csvEsc(d.name||'')}","${d.qty||0}","${d.price||0}","${d.value||0}","${d.oldPrice||0}","${d.stockBefore??''}","${d.stockAfter??''}","${d.negativeCompensated||0}"\n`;}));
   const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);a.download='comenzi-stoc'+(mo?'-'+mo:'')+'.csv';a.click();
 }
 
