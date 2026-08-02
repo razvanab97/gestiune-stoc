@@ -1358,7 +1358,7 @@ th{font-weight:800!important;color:var(--t3)!important}
     <div class="inv-drop">
       <input type="file" id="inv-file" accept=".csv,.txt,.pdf" onchange="handleInvFile(event)" onclick="event.stopPropagation()">
       <div class="inv-drop-ic">📄</div>
-      <div class="inv-drop-t">Trage un fișier PDF sau CSV aici<br><small style="opacity:.6">PDF factură · CSV comandă Jumbo · CSV comandă Maxy/Verk (Denumire, Symbol, Cantitate, Preț EUR) · CSV platformă (Produs, SKU, Categorie, Cump., ...) · CSV (cod, nume, cant, p_acq, p_vanz) · TXT — formate auto-detectate</small></div>
+      <div class="inv-drop-t">Trage un fișier PDF sau CSV aici<br><small style="opacity:.6">PDF factură · CSV comandă Jumbo · CSV comandă Maxy/Verk (Denumire, Symbol, Cantitate, Preț EUR) · CSV platformă (Produs, SKU, Categorie, Cump., ...) · orice alt CSV cu o coloană de cod (SKU/Symbol/Cod) și una de cantitate — recunoscut automat · TXT</small></div>
     </div>
     <div class="inv-parsing" id="inv-parsing"><span class="spin"></span> Se procesează cu AI…</div>
     <div class="fld" style="margin-top:.75rem"><label>Număr factură / cod comandă (opțional)</label><input type="text" id="inv-number" placeholder="ex: FAC-2026-00123"></div>
@@ -1391,6 +1391,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:28,text:'La import CSV: parser generic pentru orice fișier cu o coloană de cod (SKU/Symbol/EAN/Cod) și una de cantitate, indiferent de denumirea/ordinea coloanelor — nu mai e nevoie de un format anume',date:'2026-08-02'},
   {n:27,text:'În fișa produsului: "După sosire" (actual + pe drum) nu mai apare deloc când produsul nu are nimic pe drum — evită confuzia când adaugi stoc cu "+ Extra"',date:'2026-08-02'},
   {n:26,text:'Suport pentru CSV de comandă Maxy/Verk (Denumire, Symbol, Cantitate, Preț EUR) la "Importă factură" / "Preset CSV comandă" — recunoscut automat, testat cu comandă reală',date:'2026-08-02'},
   {n:25,text:'La "Adaugă stoc" poți actualiza și prețul de achiziție — prețul vechi rămâne salvat, apare badge-ul de diferență de preț în inventar, iar prețurile de vânzare se recalculează automat',date:'2026-08-02'},
@@ -4634,10 +4635,13 @@ function routeInvFile(f){
   const peek=new FileReader();
   peek.onload=e=>{
     const t=e.target.result;
+    const hasCode=/\b(symbol|sku|cod_jumbo|cod_produs|cod_extern|product_code|item_code|barcode|\bean\b|\bcod\b|reference|\bref\b)\b/i.test(t);
+    const hasQty=/\b(cantitate|quantity|\bcant\b|\bqty\b|\bbuc\b)\b/i.test(t);
     if(/symbol/i.test(t)&&/quantity/i.test(t)&&/priceperpiece_ron/i.test(t))parseSupplierRonCSV(f);
     else if(/cod_jumbo/i.test(t)||(/(^|[\n\r])\s*cod\s*;/i.test(t)&&/cantitate/i.test(t)&&/pretperbucata/i.test(t)))parseJumboCSV(f);
     else if(/sku/i.test(t)&&/cump/i.test(t)&&/recomandat/i.test(t))parsePlatformCSV(f);
     else if(/denumire/i.test(t)&&/symbol/i.test(t)&&/cantitate/i.test(t))parseMaxyOrderCSV(f);
+    else if(hasCode&&hasQty)parseGenericCSV(f);
     else parseCSV(f);
   };
   peek.readAsText(f.slice(0,1000),'UTF-8');
@@ -4992,6 +4996,57 @@ function parseMaxyOrderCSV(file){
     if(!invParsed.length){toast('Nicio linie validă (Symbol + Cantitate > 0) găsită în CSV','err');return;}
     renderInvPreview();
     toast(`Comandă Maxy/Verk detectată · ${invParsed.length} produse ✓`);
+  };
+  r.readAsText(file,'UTF-8');
+}
+/* ── CSV GENERIC: recunoaște orice CSV cu o coloană de cod (SKU/Symbol/EAN/Cod...) și una de cantitate,
+   indiferent de denumirile sau ordinea coloanelor — asociază după cod, apoi (implicit, la aplicare) după titlu ── */
+function parseGenericCSV(file){
+  const r=new FileReader();
+  r.onload=e2=>{
+    const text=e2.target.result,delim=detectCsvDelimiter(text);
+    const rows=parseCSVRows(text,delim);
+    if(rows.length<2){toast('CSV gol sau nerecunoscut','err');return;}
+    const hdr=rows[0].map(h=>h.trim().toLowerCase());
+    const norm=s=>s.replace(/[_\s.-]/g,'');
+    const nhdr=hdr.map(norm);
+    const find=(names,exclude)=>{for(const n of names){const i=nhdr.findIndex((h,idx)=>!(exclude&&exclude.has(idx))&&(h===n||h.includes(n)));if(i>-1)return i;}return -1;};
+    const iSku=find(['symbol','sku','codjumbo','codprodus','codextern','productcode','itemcode','barcode','ean','cod','reference','ref']);
+    const iName=find(['denumire','nume','titlu','produs','productname','name','title','descriere','description']);
+    const iQty=find(['cantitate','quantity','cant','qty','buc']);
+    // "total" e verificat înaintea lui "price"/"pret" generic, ca o coloană "Total Price" să nu fie confundată cu prețul pe bucată
+    const iTotal=find(['prettotal','totalprice','valoaretotala','valoare','total']);
+    const iUnit=find(['pretbucata','pretbuc','priceperpiece','pretunitar','unitprice','pretachizitie','price'],iTotal>-1?new Set([iTotal]):null);
+    const iCurr=find(['moneda','currency','valuta']);
+    if(iSku<0||iQty<0){toast('CSV nerecunoscut: nu am găsit o coloană de cod (SKU/Symbol/Cod) și una de cantitate','err');return;}
+    const agg={};
+    for(let i=1;i<rows.length;i++){
+      const row=rows[i];
+      const sku=(row[iSku]||'').trim();
+      const qty=parseQtyVal(row[iQty]);
+      if(!sku||qty<=0)continue;
+      const unit=iUnit>-1?parseFloat((row[iUnit]||'').replace(',','.').replace(/[^\d.]/g,''))||0:0;
+      const total=iTotal>-1&&iTotal!==iUnit?parseFloat((row[iTotal]||'').replace(',','.').replace(/[^\d.]/g,''))||0:0;
+      const price=unit>0?unit:(total>0&&qty>0?Math.round(total/qty*100)/100:0);
+      const name=iName>-1?(row[iName]||'').trim().replace(/\s+/g,' '):'';
+      let currency=iCurr>-1?(row[iCurr]||'').trim().toUpperCase():'';
+      if(!currency){
+        const priceColName=unit>0?hdr[iUnit]:(total>0?hdr[iTotal]:'');
+        currency=/eur/i.test(priceColName)?'EUR':'RON';
+      }
+      if(!agg[sku])agg[sku]={sku,name,qty:0,price:0,currency};
+      const a=agg[sku];
+      a.qty+=qty;
+      if(name.length>a.name.length)a.name=name;
+      if(price>0)a.price=price;
+      if(currency)a.currency=currency;
+    }
+    invParsed=Object.values(agg).map(g=>({
+      sku:g.sku,name:g.name||g.sku,qty:g.qty,priceBuy:g.price,currency:g.currency||'RON'
+    }));
+    if(!invParsed.length){toast('Nicio linie validă (cod + cantitate > 0) găsită în CSV','err');return;}
+    renderInvPreview();
+    toast(`CSV recunoscut automat · ${invParsed.length} produse ✓`);
   };
   r.readAsText(file,'UTF-8');
 }
