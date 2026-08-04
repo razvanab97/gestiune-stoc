@@ -1487,6 +1487,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:38,text:'Modificările manuale de stoc din Inventar (fișa produsului) și Raport stoc (carduri actualizare rapidă) apar acum și ele în notificările 📥/📤, nu doar vânzările și recepțiile din comenzi',date:'2026-08-05'},
   {n:37,text:'Dublu-tap nu mai face zoom pe telefon (aplicat pe toată aplicația); pe Raport stoc, cardurile de produs+stoc apar acum primele (înainte de butoanele de export), iar toolbar-ul de export e mai compact pe mobil',date:'2026-08-02'},
   {n:36,text:'Corecții de responsive pe telefon: graficele din Dashboard nu mai depășesc ecranul, widget-ul Update e mai mic și nu mai acoperă conținut, panourile de notificări au lățime sigură, și un bug vechi de layout pe pagina Research (Dosar produs nou) e reparat',date:'2026-08-02'},
   {n:35,text:'Scos tile-ul "Profit brut" din Dashboard — calculul simplu vânzări−achiziții nu reflectă corect profitul real',date:'2026-08-02'},
@@ -4446,14 +4447,15 @@ async function saveProd(){
     const dup=P.find(p=>p.id!==editId&&p.sku&&p.sku.toLowerCase()===d.sku.toLowerCase());
     if(dup&&!confirm(`Există deja produsul "${dup.name}" cu același SKU (${d.sku}). Salvezi oricum?`))return;
   }
-  const boughtDelta=d.bought-(existing?.bought||0);
+  const qtyDelta=(d.bought-d.sold)-(existing?qty(existing):0);
   const btn=document.getElementById('save-prod-btn'),label=btn.textContent;
   savingProduct=true;btn.disabled=true;btn.textContent='Se salvează…';
   try{
     const saved=await saveProdToDb(d,editId);
     if(!saved)return;
     if(!editId&&d.bought>0)await logMove('in',d.name,d.bought,'Produs nou');
-    else if(editId&&boughtDelta>0)await logMove('in',d.name,boughtDelta,'Editare stoc manual');
+    else if(editId&&qtyDelta>0)await logMove('in',d.name,qtyDelta,'Editare manuală (Inventar)');
+    else if(editId&&qtyDelta<0)await logMove('out',d.name,-qtyDelta,'Editare manuală (Inventar)');
     toast(editId?'Actualizat și salvat în baza de date':'Adăugat și salvat în baza de date');
     closeModal();renderToday();renderTable();
   }finally{
@@ -5684,8 +5686,11 @@ async function updateStockFromCard(id){
   if(!Number.isFinite(val)||val<0){toast('Stoc invalid — introdu un număr ≥ 0','err');return;}
   const bought=parseQtyVal(p.bought);
   if(val>bought){toast(`Stocul actual nu poate depăși stocul cumpărat (${fmtQty(bought)} buc.)`,'err');return;}
+  const before=qty(p),delta=val-before;
   showLoading('Se actualizează stocul…');
   await saveProdToDb({...p,sold:bought-val},id);
+  if(delta>0)await logMove('in',p.name,delta,'Ajustare manuală din Raport stoc');
+  else if(delta<0)await logMove('out',p.name,-delta,'Ajustare manuală din Raport stoc');
   hideLoading();
   toast(`Stoc actualizat: ${p.name} → ${fmtQty(val)} buc.`);
   renderToday();renderTable();renderRaport();
