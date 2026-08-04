@@ -1437,6 +1437,7 @@ th{font-weight:800!important;color:var(--t3)!important}
     </div>
     <div class="m-sales-history" id="m-sales-history"></div>
     <div class="m-stock-history" id="m-stock-history"></div>
+    <div class="m-stock-history" id="m-manual-history"></div>
     <div class="m-stock-add-row"><button type="button" class="btn btn-sm" id="add-stock-order-btn" onclick="addStockFromProductPage()" disabled title="Pentru o comandă/factură care conține strict acest produs">📥 Adaugă stoc din comandă</button></div>
   </div>
   <div class="m-foot">
@@ -1487,6 +1488,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:39,text:'Pe pagina produsului apare acum o secțiune nouă "Istoric modificări manuale de stoc" (dată, oră, cantitate, sursă), separată de istoricul de recepții din CSV/factură',date:'2026-08-05'},
   {n:38,text:'Modificările manuale de stoc din Inventar (fișa produsului) și Raport stoc (carduri actualizare rapidă) apar acum și ele în notificările 📥/📤, nu doar vânzările și recepțiile din comenzi',date:'2026-08-05'},
   {n:37,text:'Dublu-tap nu mai face zoom pe telefon (aplicat pe toată aplicația); pe Raport stoc, cardurile de produs+stoc apar acum primele (înainte de butoanele de export), iar toolbar-ul de export e mai compact pe mobil',date:'2026-08-02'},
   {n:36,text:'Corecții de responsive pe telefon: graficele din Dashboard nu mai depășesc ecranul, widget-ul Update e mai mic și nu mai acoperă conținut, panourile de notificări au lățime sigură, și un bug vechi de layout pe pagina Research (Dosar produs nou) e reparat',date:'2026-08-02'},
@@ -1544,16 +1546,16 @@ document.addEventListener('click',ev=>{
 const AK='sm6_activity';
 let ACT=[];
 function loadLocalActivity(){try{return JSON.parse(localStorage.getItem(AK)||'[]');}catch(e){return[];}}
-async function logMove(tip,name,qty,sursa){
+async function logMove(tip,name,qty,sursa,productId){
   const q=Math.abs(parseQtyVal(qty))||0;
   if(!name||!q)return;
-  const entry={ts:new Date().toISOString(),tip,name,qty:q,sursa:sursa||'',seen:false};
+  const entry={ts:new Date().toISOString(),tip,name,qty:q,sursa:sursa||'',seen:false,productId:productId||null};
   ACT.unshift(entry);
   if(ACT.length>200)ACT.length=200;
   localStorage.setItem(AK,JSON.stringify(ACT));
   renderNotif();
   if(sbReady){
-    try{await dbPost('activitate_stoc',{tip:entry.tip,product_name:entry.name,qty:entry.qty,sursa:entry.sursa});}
+    try{await dbPost('activitate_stoc',{tip:entry.tip,product_name:entry.name,qty:entry.qty,sursa:entry.sursa,product_id:entry.productId});}
     catch(e){console.warn('Nu s-a salvat mișcarea de stoc în Supabase (rulează migration_activity_log.sql):',e);}
   }
 }
@@ -1925,7 +1927,7 @@ async function load(){
     showLoading('Se încarcă mișcările de stoc…');
     try{
       const mRows=await dbGet('activitate_stoc?select=*&order=created_at.desc&limit=100');
-      ACT=mRows.map(r=>({ts:r.created_at,tip:r.tip,name:r.product_name,qty:Number(r.qty)||0,sursa:r.sursa||'',seen:true}));
+      ACT=mRows.map(r=>({ts:r.created_at,tip:r.tip,name:r.product_name,qty:Number(r.qty)||0,sursa:r.sursa||'',seen:true,productId:r.product_id||null}));
       localStorage.setItem(AK,JSON.stringify(ACT));
     }catch(e){
       ACT=loadLocalActivity();
@@ -4132,6 +4134,25 @@ function renderProductStockIntakeHistory(productId){
       return`<div class="m-sales-row"><div class="m-sales-date">${dtLbl}<div class="m-stock-order">${orderLbl}</div></div><div class="m-stock-qty">+${fmtQty(r.qty)} buc</div><div class="m-sales-value">${r.price>0?r.price.toFixed(2)+' RON/buc':'—'}</div></div>`;
     }).join('')}</div>`;
 }
+// Modificări de stoc introduse manual (fișa produsului / carduri Raport stoc), spre deosebire de recepțiile din CSV/factură (vezi productStockIntakeHistory)
+function productManualStockHistory(productId){
+  if(!productId)return[];
+  const p=P.find(x=>x.id===productId);
+  return ACT.filter(a=>(a.sursa||'').includes('manuală')&&(Number(a.productId)===Number(productId)||(!a.productId&&p&&a.name===p.name)))
+    .sort((a,b)=>String(b.ts).localeCompare(String(a.ts)));
+}
+function renderProductManualStockHistory(productId){
+  const box=document.getElementById('m-manual-history');if(!box)return;
+  if(!productId){box.innerHTML='<div class="m-sales-head"><div class="m-sales-title">Istoric modificări manuale de stoc</div></div><div class="m-sales-empty">Produs nou — istoricul apare după prima modificare manuală de stoc.</div>';return;}
+  const rows=productManualStockHistory(productId);
+  if(!rows.length){box.innerHTML='<div class="m-sales-head"><div class="m-sales-title">Istoric modificări manuale de stoc</div></div><div class="m-sales-empty">Nu există modificări manuale de stoc înregistrate pentru acest produs.</div>';return;}
+  box.innerHTML=`<div class="m-sales-head"><div class="m-sales-title">Istoric modificări manuale de stoc</div></div>
+    <div class="m-sales-list">${rows.map(r=>{
+      const dt=new Date(r.ts);
+      const dtLbl=isNaN(dt)?esc(r.ts):dt.toLocaleString('ro-RO',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+      return`<div class="m-sales-row"><div class="m-sales-date">${dtLbl}<div class="m-stock-order">${esc(r.sursa||'—')}</div></div><div class="m-stock-qty"${r.tip==='out'?' style="color:var(--rd)"':''}>${r.tip==='in'?'+':'−'}${fmtQty(r.qty)} buc</div><div class="m-sales-value">${r.tip==='in'?'📥 Intrare':'📤 Ieșire'}</div></div>`;
+    }).join('')}</div>`;
+}
 async function sellSearch(id){
   const inp=document.getElementById('ssq-'+id);
   const n=parseQtyVal(inp?.value,1);
@@ -4146,7 +4167,7 @@ async function sellSearch(id){
   }
   localStorage.setItem(K,JSON.stringify(P));
   await saveJurnalEntry(p,c);
-  await logMove('out',p.name,c,'Vânzare din căutare');
+  await logMove('out',p.name,c,'Vânzare din căutare',p.id);
   renderToday();renderTable();renderSearch();
   toast(`Vândut: ${fmtQty(c)}× ${p.name}${qty(p)<0?' · stoc pe minus: '+fmtQty(qty(p)):''}`);
 }
@@ -4185,7 +4206,7 @@ async function updateTQ(id){
   const p=P.find(x=>x.id===id);if(!p)return;
   const ov=TS[id]||0;const d=nv-ov;
   p.sold=Math.max(0,(p.sold||0)+d);
-  if(d>0){await saveJurnalEntry(p,d);await logMove('out',p.name,d,'Ajustare vânzări azi');}
+  if(d>0){await saveJurnalEntry(p,d);await logMove('out',p.name,d,'Ajustare vânzări azi',p.id);}
   TS[id]=nv;
   if(sbReady){
     try{await dbPatch(`produse?id=eq.${id}`,{sold:p.sold});}catch(e){toast('Modificarea nu s-a sincronizat cu Supabase — a rămas doar local','err');}
@@ -4203,7 +4224,7 @@ async function qSell(id){
   }
   localStorage.setItem(K,JSON.stringify(P));
   await saveJurnalEntry(p,1);
-  await logMove('out',p.name,1,'Vânzare rapidă');
+  await logMove('out',p.name,1,'Vânzare rapidă',p.id);
   renderToday();renderTable();toast(`${p.name}${qty(p)<0?' · stoc pe minus: '+fmtQty(qty(p)):''}`);
 }
 
@@ -4401,6 +4422,7 @@ function openModal(id){
   document.getElementById('ai-img-btn').disabled=!curImg;
   renderProductSalesHistory(p?.id||null);
   renderProductStockIntakeHistory(p?.id||null);
+  renderProductManualStockHistory(p?.id||null);
   document.getElementById('add-stock-order-btn').disabled=!p?.id;
   buildCats('');calcStoc();
   document.getElementById('ov').classList.add('on');
@@ -4453,9 +4475,10 @@ async function saveProd(){
   try{
     const saved=await saveProdToDb(d,editId);
     if(!saved)return;
-    if(!editId&&d.bought>0)await logMove('in',d.name,d.bought,'Produs nou');
-    else if(editId&&qtyDelta>0)await logMove('in',d.name,qtyDelta,'Editare manuală (Inventar)');
-    else if(editId&&qtyDelta<0)await logMove('out',d.name,-qtyDelta,'Editare manuală (Inventar)');
+    const savedId=editId||P[P.length-1]?.id||null;
+    if(!editId&&d.bought>0)await logMove('in',d.name,d.bought,'Produs nou',savedId);
+    else if(editId&&qtyDelta>0)await logMove('in',d.name,qtyDelta,'Editare manuală (Inventar)',savedId);
+    else if(editId&&qtyDelta<0)await logMove('out',d.name,-qtyDelta,'Editare manuală (Inventar)',savedId);
     toast(editId?'Actualizat și salvat în baza de date':'Adăugat și salvat în baza de date');
     closeModal();renderToday();renderTable();
   }finally{
@@ -4503,7 +4526,7 @@ async function applyStockIntake(products,add,newCost,orderNumber,source){
     }
     data.stockAddedAt=new Date().toISOString();data.lastStockAddedQty=add;
     await saveProdToDb(data,p.id);
-    await logMove('in',p.name,add,orderNumber?`Comandă ${orderNumber}`:source);
+    await logMove('in',p.name,add,orderNumber?`Comandă ${orderNumber}`:source,p.id);
     const price=newCost>0?newCost:(Number(p.priceBuyTTC)||0);
     details.push({status:'actualizat',sku:p.sku||'',productId:p.id,name:p.name,qty:add,price,value:Math.round(add*price*100)/100});
   }
@@ -5462,7 +5485,7 @@ async function applyInvoice(){
           P[idx].priceBuyTTC=costRon;P[idx].priceSell=prices.sell;P[idx].priceEmag=prices.emag;P[idx].priceTrendyol=prices.trendyol;P[idx].priceRec=prices.rec;
         }
         await saveProdToDb(P[idx],P[idx].id);
-        await logMove('in',P[idx].name,item.qty,invSourceName||'Import factură');
+        await logMove('in',P[idx].name,item.qty,invSourceName||'Import factură',P[idx].id);
         orderDetails.push({status:'actualizat',sku:item.sku||P[idx].sku||'',productId:P[idx].id,name:P[idx].name,qty:item.qty,price:costRon,value:Math.round((item.qty||0)*costRon*100)/100,oldPrice:oldCostBefore,stockBefore:stockPlan.before,stockAfter:stockPlan.after,negativeCompensated:stockPlan.compensated});
         updated++;
       }
@@ -5481,8 +5504,9 @@ async function applyInvoice(){
         category:item.category||'',supplier:item.supplier||'',img:''
       };
       await saveProdToDb(newP,null);
-      await logMove('in',newP.name,item.qty,invSourceName||'Import factură · produs nou');
-      orderDetails.push({status:'produs nou',sku:item.sku||'',productId:null,name:newP.name,qty:item.qty,price:costRon,value:Math.round((item.qty||0)*costRon*100)/100});
+      const newId=P[P.length-1]?.id||null;
+      await logMove('in',newP.name,item.qty,invSourceName||'Import factură · produs nou',newId);
+      orderDetails.push({status:'produs nou',sku:item.sku||'',productId:newId,name:newP.name,qty:item.qty,price:costRon,value:Math.round((item.qty||0)*costRon*100)/100});
       created++;
     }
   }
@@ -5689,8 +5713,8 @@ async function updateStockFromCard(id){
   const before=qty(p),delta=val-before;
   showLoading('Se actualizează stocul…');
   await saveProdToDb({...p,sold:bought-val},id);
-  if(delta>0)await logMove('in',p.name,delta,'Ajustare manuală din Raport stoc');
-  else if(delta<0)await logMove('out',p.name,-delta,'Ajustare manuală din Raport stoc');
+  if(delta>0)await logMove('in',p.name,delta,'Ajustare manuală din Raport stoc',id);
+  else if(delta<0)await logMove('out',p.name,-delta,'Ajustare manuală din Raport stoc',id);
   hideLoading();
   toast(`Stoc actualizat: ${p.name} → ${fmtQty(val)} buc.`);
   renderToday();renderTable();renderRaport();
