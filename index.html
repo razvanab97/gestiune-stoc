@@ -840,6 +840,7 @@ th{font-weight:800!important;color:var(--t3)!important}
     <button class="h-tab" onclick="goPage('raport',this)">📋 Raport stoc</button>
     <button class="h-tab" onclick="goPage('sync',this)">🔗 Sincronizare</button>
     <button class="h-tab" onclick="goPage('research',this)">🔍 Research</button>
+    <button class="h-tab" onclick="goPage('archive',this)">🗄️ Arhivă</button>
   </div>
   <span class="h-right" id="saved"></span>
   <div class="notif-wrap">
@@ -932,6 +933,7 @@ th{font-weight:800!important;color:var(--t3)!important}
     </select>
     <button class="btn btn-acc" onclick="openModal()">+ Produs nou</button>
     <button class="btn btn-sm" id="bulk-add-btn" onclick="bulkAddStock()" disabled title="Adaugă manual o cantitate de stoc la toate produsele bifate">📥 Adaugă stoc</button>
+    <button class="btn btn-sm" id="bulk-archive-btn" onclick="bulkArchiveProd()" disabled title="Arhivează produsele bifate — ies din Inventar, dar rămân în rapoartele de stoc pentru contabilitate">🗄️ Arhivează selectate</button>
     <button class="btn btn-sm" id="bulk-del-btn" onclick="bulkDeleteProd()" disabled title="Șterge definitiv toate produsele bifate" style="color:var(--rd);border-color:var(--rd)">🗑 Șterge selectate</button>
   </div>
   <div class="card">
@@ -1284,6 +1286,24 @@ th{font-weight:800!important;color:var(--t3)!important}
   </div>
 </div></div>
 
+<div id="page-archive" class="page"><div class="wrap">
+  <div class="toolbar">
+    <input type="text" id="archive-search" placeholder="Caută în produsele arhivate…" oninput="renderArchivePage()">
+  </div>
+  <div class="card">
+    <table><thead><tr>
+      <th style="width:80px"></th>
+      <th style="width:30%;min-width:220px">Produs</th>
+      <th style="width:15%;min-width:150px">SKU / Cod intern</th>
+      <th style="width:12%">Categorie</th>
+      <th style="width:10%;text-align:right">Stoc</th>
+      <th style="width:14%">Arhivat la</th>
+      <th style="width:12%"></th>
+    </tr></thead>
+    <tbody id="archive-tbody"></tbody>
+    </table>
+  </div>
+</div></div>
 
 <!-- MODAL PRODUS -->
 <div class="ov" id="ov" onclick="if(event.target===this)closeModal()">
@@ -1491,6 +1511,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:42,text:'Nou: arhivare produse (ex: produse de Crăciun/sezoniere). Bifează unul sau mai multe produse în Inventar și apasă "🗄️ Arhivează selectate" — dispar din Inventar/Raport stoc, dar rămân în rapoartele de stoc pentru contabilitate (CSV/Excel). Tab nou "🗄️ Arhivă" cu lista completă și buton de dezarhivare pentru fiecare produs. IMPORTANT: rulează migration_archive_product.sql în Supabase',date:'2026-08-05'},
   {n:41,text:'Nou: marchează un produs ca "epuizat la furnizor" (din fișa produsului), cu data estimată de revenire în stoc și notificare opțională când se ajunge la acea dată. Filtru dedicat în Inventar ("🚫 Epuizat la furnizor") și tile clickabil pe Dashboard pentru lista completă. IMPORTANT: rulează migration_supplier_oos.sql în Supabase',date:'2026-08-05'},
   {n:40,text:'Pe pagina produsului apare acum și "Istoric modificări de preț" (cost achiziție, vânzare, eMAG, Trendyol) — indiferent dacă prețul se schimbă din fișa produsului, adăugare stoc în masă sau import factură. IMPORTANT: rulează migration_price_history.sql și migration_fix_activitate_stoc_rls.sql în Supabase — al doilea repară un bug prin care notificările de stoc nu se salvau deloc din cauza RLS',date:'2026-08-05'},
   {n:39,text:'Pe pagina produsului apare acum o secțiune nouă "Istoric modificări manuale de stoc" (dată, oră, cantitate, sursă), separată de istoricul de recepții din CSV/factură',date:'2026-08-05'},
@@ -1601,8 +1622,9 @@ async function logPriceChanges(productId,name,before,after,sursa){
 }
 // ── DASHBOARD ──
 function renderDashboard(){
-  const tot=P.length,lowC=P.filter(p=>st(p)==='low').length,outC=P.filter(p=>st(p)==='out').length,oosC=P.filter(p=>p.supplierOOS).length;
-  const val=P.reduce((a,p)=>a+(qty(p)*(p.priceBuyTTC||0)),0);
+  const activeP=P.filter(p=>!p.archived);
+  const tot=activeP.length,lowC=activeP.filter(p=>st(p)==='low').length,outC=activeP.filter(p=>st(p)==='out').length,oosC=activeP.filter(p=>p.supplierOOS).length;
+  const val=activeP.reduce((a,p)=>a+(qty(p)*(p.priceBuyTTC||0)),0);
   const azi=Object.values(TS).reduce((a,v)=>a+v,0);
   const dashStats=document.getElementById('dash-stats');
   if(dashStats)dashStats.innerHTML=`
@@ -1766,7 +1788,8 @@ function dbToP(r){
     stockAddedAt:r.stock_added_at||'',lastStockAddedQty:r.last_stock_added_qty||0,
     priceSell:r.price_sell||0,priceEmag:r.price_emag||0,priceTrendyol:r.price_trendyol||0,priceRec:r.price_rec||0,img:r.img||'',
     colors:r.colors||'',sizes:r.sizes||'',material:r.material||'',dims:r.dims||'',notes:r.notes||'',createdAt:r.created_at||'',updatedAt:r.updated_at||'',
-    supplierOOS:!!r.supplier_oos,supplierOOSSince:r.supplier_oos_since||'',supplierRestockEta:r.supplier_restock_eta||'',supplierNotify:!!r.supplier_notify,supplierNotified:!!r.supplier_notified};
+    supplierOOS:!!r.supplier_oos,supplierOOSSince:r.supplier_oos_since||'',supplierRestockEta:r.supplier_restock_eta||'',supplierNotify:!!r.supplier_notify,supplierNotified:!!r.supplier_notified,
+    archived:!!r.archived,archivedAt:r.archived_at||''};
 }
 function pToDb(p){
   const d={name:p.name,sku:p.sku||'',category:p.category||'',supplier:p.supplier||'',
@@ -1775,20 +1798,22 @@ function pToDb(p){
     stock_added_at:p.stockAddedAt||null,last_stock_added_qty:p.lastStockAddedQty||0,
     price_sell:p.priceSell||0,price_emag:p.priceEmag||0,price_trendyol:p.priceTrendyol||0,price_rec:p.priceRec||0,img:p.img||'',
     colors:p.colors||'',sizes:p.sizes||'',material:p.material||'',dims:p.dims||'',notes:p.notes||'',
-    supplier_oos:!!p.supplierOOS,supplier_oos_since:p.supplierOOSSince||null,supplier_restock_eta:p.supplierRestockEta||null,supplier_notify:!!p.supplierNotify,supplier_notified:!!p.supplierNotified};
+    supplier_oos:!!p.supplierOOS,supplier_oos_since:p.supplierOOSSince||null,supplier_restock_eta:p.supplierRestockEta||null,supplier_notify:!!p.supplierNotify,supplier_notified:!!p.supplierNotified,
+    archived:!!p.archived,archived_at:p.archivedAt||null};
   if(p.internalCode)d.internal_code=p.internalCode;
   return d;
 }
 function dbSavedProductMatches(row,sent){
   return Object.entries(sent).every(([k,v])=>{
-    if((k==='price_buy_changed_at'||k==='stock_added_at'||k==='supplier_oos_since')&&v)return Math.abs(new Date(row[k]).getTime()-new Date(v).getTime())<1000;
+    if((k==='price_buy_changed_at'||k==='stock_added_at'||k==='supplier_oos_since'||k==='archived_at')&&v)return Math.abs(new Date(row[k]).getTime()-new Date(v).getTime())<1000;
     return typeof v==='number'?Math.abs((Number(row[k])||0)-v)<0.001:String(row[k]??'')===String(v??'');
   });
 }
 function missingProductColumn(err){return String(err?.message||err).match(/Could not find the '([^']+)' column of 'produse'/i)?.[1]||'';}
 function missingProductValues(data,missing){
   const map={incoming_qty:'incomingQty',price_emag:'priceEmag',price_trendyol:'priceTrendyol',tva_acq:'tvaAcq',internal_code:'internalCode',price_buy_prev_ttc:'priceBuyPrevTTC',price_buy_changed_at:'priceBuyChangedAt',stock_added_at:'stockAddedAt',last_stock_added_qty:'lastStockAddedQty',
-    supplier_oos:'supplierOOS',supplier_oos_since:'supplierOOSSince',supplier_restock_eta:'supplierRestockEta',supplier_notify:'supplierNotify',supplier_notified:'supplierNotified'};
+    supplier_oos:'supplierOOS',supplier_oos_since:'supplierOOSSince',supplier_restock_eta:'supplierRestockEta',supplier_notify:'supplierNotify',supplier_notified:'supplierNotified',
+    archived:'archived',archived_at:'archivedAt'};
   return Object.fromEntries(missing.map(col=>[map[col]||col,data[map[col]||col]]));
 }
 async function saveProductRequest(method,path,data){
@@ -2252,6 +2277,10 @@ function goPage(id,btn){
     const tryC=(n)=>{if(P.length>0)buildCalcProductSelector();else if(n>0)setTimeout(()=>tryC(n-1),300);};
     setTimeout(()=>tryC(20),100);
     pcRender();
+  }
+  if(id==='archive'){
+    const tryA=(n)=>{if(P.length>0)renderArchivePage();else if(n>0)setTimeout(()=>tryA(n-1),300);};
+    setTimeout(()=>tryA(20),100);
   }
   if(id==='research'){
     const tryRs=(n)=>{if(P.length>0){}else if(n>0)setTimeout(()=>tryRs(n-1),300);};
@@ -4127,7 +4156,7 @@ function renderSearch(){
   const q=(document.getElementById('ss-inp').value||'').trim();
   const drop=document.getElementById('ss-drop');
   if(!q){drop.classList.remove('on');drop.innerHTML='';return;}
-  const hits=P.filter(p=>prodMatchesSearch(p,q));
+  const hits=P.filter(p=>!p.archived&&prodMatchesSearch(p,q));
   if(!hits.length){drop.classList.add('on');drop.innerHTML=`<div class="ss-row" style="color:var(--t3)">Niciun produs găsit</div>`;return;}
   drop.classList.add('on');
   drop.innerHTML=hits.map(p=>{
@@ -4320,7 +4349,7 @@ function todayCardSide(p,side){
 }
 function renderToday(){
   const _prevId=todayCardProds[todayCardIdx]?.id;
-  todayCardProds=P.slice().sort((a,b)=>tqp(b)-tqp(a)||(a.name||'').localeCompare(b.name||''));
+  todayCardProds=P.filter(p=>!p.archived).sort((a,b)=>tqp(b)-tqp(a)||(a.name||'').localeCompare(b.name||''));
   if(_prevId){const _ni=todayCardProds.findIndex(p=>p.id===_prevId);if(_ni>=0)todayCardIdx=_ni;}
   if(todayCardIdx>=todayCardProds.length)todayCardIdx=Math.max(0,todayCardProds.length-1);
   const tg=document.getElementById('tg');
@@ -4443,13 +4472,14 @@ function renderTable(){
   const cat=document.getElementById('fc').value;
   const s=document.getElementById('fs').value;
   const statusFilter=['ok','low','out'].includes(s)?s:'';
-  let list=P.filter(p=>{const m=prodMatchesSearch(p,q);return m&&(!cat||p.category===cat)&&(!selSuppliers.size||selSuppliers.has(p.supplier||''))&&(!statusFilter||st(p)===statusFilter)&&(s!=='transit'||parseQtyVal(p.incomingQty)>0)&&(s!=='stock_recent'||stockAddedTime(p)>0)&&(s!=='noimg'||!p.img)&&(s!=='supplier_oos'||p.supplierOOS);});
+  let list=P.filter(p=>{const m=prodMatchesSearch(p,q);return m&&!p.archived&&(!cat||p.category===cat)&&(!selSuppliers.size||selSuppliers.has(p.supplier||''))&&(!statusFilter||st(p)===statusFilter)&&(s!=='transit'||parseQtyVal(p.incomingQty)>0)&&(s!=='stock_recent'||stockAddedTime(p)>0)&&(s!=='noimg'||!p.img)&&(s!=='supplier_oos'||p.supplierOOS);});
   if(s==='recent')list.sort((a,b)=>prodCreatedTime(b)-prodCreatedTime(a));
   else if(s==='stock_recent')list.sort((a,b)=>stockAddedTime(b)-stockAddedTime(a));
   else if(s==='oldest')list.sort((a,b)=>prodCreatedTime(a)-prodCreatedTime(b));
   else list.sort((a,b)=>{let av=sCol==='qty'?qty(a):(a[sCol]??'');let bv=sCol==='qty'?qty(b):(b[sCol]??'');if(typeof av==='string')av=av.toLowerCase();if(typeof bv==='string')bv=bv.toLowerCase();return av<bv?-sDir:av>bv?sDir:0;});
-  const tot=P.length,lowC=P.filter(p=>st(p)==='low').length,outC=P.filter(p=>st(p)==='out').length;
-  const val=P.reduce((a,p)=>a+(qty(p)*(p.priceBuyTTC||0)),0);
+  const activeP=P.filter(p=>!p.archived);
+  const tot=activeP.length,lowC=activeP.filter(p=>st(p)==='low').length,outC=activeP.filter(p=>st(p)==='out').length;
+  const val=activeP.reduce((a,p)=>a+(qty(p)*(p.priceBuyTTC||0)),0);
   const azi=Object.values(TS).reduce((a,v)=>a+v,0);
   document.getElementById('stats').innerHTML=`
     <div class="stat"><div class="stat-l">Produse</div><div class="stat-v">${tot}</div></div>
@@ -4650,9 +4680,10 @@ function toggleSelAll(checked){
 }
 function updateBulkBtns(){
   const n=selProd.size;
-  const ba=document.getElementById('bulk-add-btn'),bd=document.getElementById('bulk-del-btn');
+  const ba=document.getElementById('bulk-add-btn'),bd=document.getElementById('bulk-del-btn'),bar=document.getElementById('bulk-archive-btn');
   if(ba){ba.disabled=n===0;ba.textContent=`📥 Adaugă stoc${n?' ('+n+')':''}`;}
   if(bd){bd.disabled=n===0;bd.textContent=`🗑 Șterge selectate${n?' ('+n+')':''}`;}
+  if(bar){bar.disabled=n===0;bar.textContent=`🗄️ Arhivează selectate${n?' ('+n+')':''}`;}
 }
 // Aplică o recepție de stoc (aceeași cantitate + preț opțional) la o listă de produse,
 // actualizează prețul cu istoric, și salvează o intrare în istoricul de comenzi (comenzi_stoc)
@@ -4735,6 +4766,50 @@ async function bulkDeleteProd(){
   selProd.clear();
   renderToday();renderTable();
   toast(`${n} produse șterse`);
+}
+// ── ARHIVĂ PRODUSE (ex: produse de Crăciun/sezoniere — ascunse din Inventar, dar rămân în rapoartele de stoc pentru contabilitate) ──
+async function bulkArchiveProd(){
+  const n=selProd.size;if(!n)return;
+  if(!confirm(`Arhivezi cele ${n} produse selectate? Ies din Inventar, dar rămân vizibile în rapoartele de stoc pentru contabilitate (CSV/Excel).`))return;
+  showLoading(`Se arhivează ${n} produse…`);
+  const stamp=new Date().toISOString();
+  for(const id of[...selProd]){
+    const p=P.find(x=>x.id===id);if(!p)continue;
+    await saveProdToDb({...p,archived:true,archivedAt:stamp},id);
+  }
+  hideLoading();
+  selProd.clear();
+  renderToday();renderTable();
+  toast(`${n} produse arhivate`);
+}
+async function unarchiveProd(id){
+  const p=P.find(x=>x.id===id);if(!p)return;
+  showLoading('Se dezarhivează…');
+  const saved=await saveProdToDb({...p,archived:false,archivedAt:''},id);
+  hideLoading();
+  if(!saved)return;
+  toast(`${p.name}: dezarhivat, a revenit în Inventar`);
+  renderArchivePage();renderToday();renderTable();
+}
+function renderArchivePage(){
+  const tb=document.getElementById('archive-tbody');if(!tb)return;
+  const q=(document.getElementById('archive-search')?.value||'').trim();
+  const list=P.filter(p=>p.archived&&(!q||prodMatchesSearch(p,q))).sort((a,b)=>String(b.archivedAt||'').localeCompare(String(a.archivedAt||'')));
+  if(!list.length){tb.innerHTML=`<tr><td colspan="7" class="empty-row">Niciun produs arhivat${q?' pentru căutarea curentă':''}</td></tr>`;return;}
+  tb.innerHTML=list.map(p=>{
+    const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="p-th click-edit" onclick="openModal(${p.id})" title="Editează produs" ${imgErrAttr(p.img)}>`:`<div class="p-th-ph click-edit" onclick="openModal(${p.id})" title="Editează produs">📦</div>`;
+    const dt=p.archivedAt?new Date(p.archivedAt):null;
+    const dtLbl=dt&&!isNaN(dt)?dt.toLocaleDateString('ro-RO'):'—';
+    return`<tr>
+      <td>${th}</td>
+      <td class="click-edit" onclick="openModal(${p.id})">${esc(p.name)}</td>
+      <td style="font-family:var(--mono);font-size:12px">${esc(p.sku||'—')}${p.internalCode?'<br>'+esc(p.internalCode):''}</td>
+      <td>${p.category?esc(p.category):'—'}</td>
+      <td style="text-align:right;font-family:var(--mono)">${fmtQty(qty(p))}</td>
+      <td style="font-size:12px;color:var(--t3)">${dtLbl}</td>
+      <td><button class="btn btn-sm" onclick="unarchiveProd(${p.id})">↩️ Dezarhivează</button></td>
+    </tr>`;
+  }).join('');
 }
 
 /* ── SINCRONIZARE PLATFORME (mapare produse) ── */
@@ -5698,7 +5773,7 @@ function renderRaport(){
   const cat=document.getElementById('rpt-cat')?.value||'';
   const sort=document.getElementById('rpt-sort')?.value||'name';
 
-  let prods=[...P];
+  let prods=P.filter(p=>!p.archived);
   if(cat)prods=prods.filter(p=>(p.category||'General')===cat);
 
   // Sortare
