@@ -1438,6 +1438,7 @@ th{font-weight:800!important;color:var(--t3)!important}
     <div class="m-sales-history" id="m-sales-history"></div>
     <div class="m-stock-history" id="m-stock-history"></div>
     <div class="m-stock-history" id="m-manual-history"></div>
+    <div class="m-stock-history" id="m-price-history"></div>
     <div class="m-stock-add-row"><button type="button" class="btn btn-sm" id="add-stock-order-btn" onclick="addStockFromProductPage()" disabled title="Pentru o comandă/factură care conține strict acest produs">📥 Adaugă stoc din comandă</button></div>
   </div>
   <div class="m-foot">
@@ -1488,6 +1489,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:40,text:'Pe pagina produsului apare acum și "Istoric modificări de preț" (cost achiziție, vânzare, eMAG, Trendyol) — indiferent dacă prețul se schimbă din fișa produsului, adăugare stoc în masă sau import factură. IMPORTANT: rulează migration_price_history.sql și migration_fix_activitate_stoc_rls.sql în Supabase — al doilea repară un bug prin care notificările de stoc nu se salvau deloc din cauza RLS',date:'2026-08-05'},
   {n:39,text:'Pe pagina produsului apare acum o secțiune nouă "Istoric modificări manuale de stoc" (dată, oră, cantitate, sursă), separată de istoricul de recepții din CSV/factură',date:'2026-08-05'},
   {n:38,text:'Modificările manuale de stoc din Inventar (fișa produsului) și Raport stoc (carduri actualizare rapidă) apar acum și ele în notificările 📥/📤, nu doar vânzările și recepțiile din comenzi',date:'2026-08-05'},
   {n:37,text:'Dublu-tap nu mai face zoom pe telefon (aplicat pe toată aplicația); pe Raport stoc, cardurile de produs+stoc apar acum primele (înainte de butoanele de export), iar toolbar-ul de export e mai compact pe mobil',date:'2026-08-02'},
@@ -1571,6 +1573,28 @@ function renderNotif(){
   list.innerHTML=ACT.length?ACT.slice(0,50).map(notifRowHtml).join(''):'<div class="notif-empty">Nicio mișcare de stoc încă.</div>';
   const badge=document.getElementById('notif-badge'),unread=ACT.filter(a=>!a.seen).length;
   if(badge){badge.style.display=unread>0?'flex':'none';badge.textContent=unread>9?'9+':unread;}
+}
+// ── ISTORIC MODIFICĂRI DE PREȚ (achiziție/vânzare/eMAG/Trendyol, de oriunde ar veni) ──
+const PHK='sm6_price_hist';
+let PCT=[];
+const PRICE_FIELDS=[['priceBuyTTC','Cost achiziție'],['priceSell','Preț vânzare'],['priceEmag','Preț eMAG'],['priceTrendyol','Preț Trendyol']];
+function loadLocalPriceHist(){try{return JSON.parse(localStorage.getItem(PHK)||'[]');}catch(e){return[];}}
+async function logPriceChange(productId,name,tipPret,oldPrice,newPrice,sursa){
+  if(!name||!(oldPrice>0)||!(newPrice>0)||Math.abs(oldPrice-newPrice)<0.005)return;
+  const entry={ts:new Date().toISOString(),productId:productId||null,name,tipPret,oldPrice,newPrice,sursa:sursa||''};
+  PCT.unshift(entry);
+  if(PCT.length>300)PCT.length=300;
+  localStorage.setItem(PHK,JSON.stringify(PCT));
+  if(sbReady){
+    try{await dbPost('istoric_preturi',{product_id:entry.productId,product_name:entry.name,tip_pret:entry.tipPret,pret_vechi:entry.oldPrice,pret_nou:entry.newPrice,sursa:entry.sursa});}
+    catch(e){console.warn('Nu s-a salvat modificarea de preț în Supabase (rulează migration_price_history.sql):',e);}
+  }
+}
+// Compară toate câmpurile de preț dintre "before" și "after" și loghează fiecare schimbare — apelat de oriunde se salvează un produs cu preț nou (modal, adăugare stoc în masă, import factură)
+async function logPriceChanges(productId,name,before,after,sursa){
+  for(const[key,label] of PRICE_FIELDS){
+    await logPriceChange(productId,name,label,Number(before?.[key])||0,Number(after?.[key])||0,sursa);
+  }
 }
 // ── DASHBOARD ──
 function renderDashboard(){
@@ -1934,6 +1958,16 @@ async function load(){
       console.warn('activitate_stoc unavailable (rulează migration_activity_log.sql):',e);
     }
 
+    // istoric modificări de preț
+    try{
+      const phRows=await dbGet('istoric_preturi?select=*&order=created_at.desc&limit=200');
+      PCT=phRows.map(r=>({ts:r.created_at,productId:r.product_id||null,name:r.product_name,tipPret:r.tip_pret,oldPrice:Number(r.pret_vechi)||0,newPrice:Number(r.pret_nou)||0,sursa:r.sursa||''}));
+      localStorage.setItem(PHK,JSON.stringify(PCT));
+    }catch(e){
+      PCT=loadLocalPriceHist();
+      console.warn('istoric_preturi unavailable (rulează migration_price_history.sql):',e);
+    }
+
     // fallback to sample if empty
     if(!P.length){
       showLoading('Se adaugă produse demo…');
@@ -1963,6 +1997,7 @@ function loadLocalFallback(){
   try{const r=localStorage.getItem(JK);if(r)JL=JSON.parse(r);}catch(e){}
   OI=loadLocalStockOrders();
   ACT=loadLocalActivity();
+  PCT=loadLocalPriceHist();
   const today=td();
   try{const r=localStorage.getItem(TK);if(r){const o=JSON.parse(r);if(o.date===today)TS=o.sales||{};else TS={};}else TS={};}catch(e){TS={};}
   setSyncStatus('err','Mod offline');
@@ -4153,6 +4188,24 @@ function renderProductManualStockHistory(productId){
       return`<div class="m-sales-row"><div class="m-sales-date">${dtLbl}<div class="m-stock-order">${esc(r.sursa||'—')}</div></div><div class="m-stock-qty"${r.tip==='out'?' style="color:var(--rd)"':''}>${r.tip==='in'?'+':'−'}${fmtQty(r.qty)} buc</div><div class="m-sales-value">${r.tip==='in'?'📥 Intrare':'📤 Ieșire'}</div></div>`;
     }).join('')}</div>`;
 }
+// Modificări de preț (cost achiziție, vânzare, eMAG, Trendyol), de oriunde ar veni (modal, adăugare stoc în masă, import factură)
+function productPriceHistory(productId){
+  if(!productId)return[];
+  return PCT.filter(r=>Number(r.productId)===Number(productId)).sort((a,b)=>String(b.ts).localeCompare(String(a.ts)));
+}
+function renderProductPriceHistory(productId){
+  const box=document.getElementById('m-price-history');if(!box)return;
+  if(!productId){box.innerHTML='<div class="m-sales-head"><div class="m-sales-title">Istoric modificări de preț</div></div><div class="m-sales-empty">Produs nou — istoricul apare după prima modificare de preț.</div>';return;}
+  const rows=productPriceHistory(productId);
+  if(!rows.length){box.innerHTML='<div class="m-sales-head"><div class="m-sales-title">Istoric modificări de preț</div></div><div class="m-sales-empty">Nu există modificări de preț înregistrate pentru acest produs.</div>';return;}
+  box.innerHTML=`<div class="m-sales-head"><div class="m-sales-title">Istoric modificări de preț</div></div>
+    <div class="m-sales-list">${rows.map(r=>{
+      const dt=new Date(r.ts);
+      const dtLbl=isNaN(dt)?esc(r.ts):dt.toLocaleString('ro-RO',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
+      const up=r.newPrice>r.oldPrice;
+      return`<div class="m-sales-row"><div class="m-sales-date">${dtLbl}<div class="m-stock-order">${esc(r.tipPret)} · ${esc(r.sursa||'—')}</div></div><div class="m-stock-qty" style="color:var(${up?'--rd':'--gr'})">${r.oldPrice.toFixed(2)} → ${r.newPrice.toFixed(2)} RON</div><div class="m-sales-value">${up?'▲':'▼'} ${Math.abs(r.newPrice-r.oldPrice).toFixed(2)} RON</div></div>`;
+    }).join('')}</div>`;
+}
 async function sellSearch(id){
   const inp=document.getElementById('ssq-'+id);
   const n=parseQtyVal(inp?.value,1);
@@ -4423,6 +4476,7 @@ function openModal(id){
   renderProductSalesHistory(p?.id||null);
   renderProductStockIntakeHistory(p?.id||null);
   renderProductManualStockHistory(p?.id||null);
+  renderProductPriceHistory(p?.id||null);
   document.getElementById('add-stock-order-btn').disabled=!p?.id;
   buildCats('');calcStoc();
   document.getElementById('ov').classList.add('on');
@@ -4479,6 +4533,7 @@ async function saveProd(){
     if(!editId&&d.bought>0)await logMove('in',d.name,d.bought,'Produs nou',savedId);
     else if(editId&&qtyDelta>0)await logMove('in',d.name,qtyDelta,'Editare manuală (Inventar)',savedId);
     else if(editId&&qtyDelta<0)await logMove('out',d.name,-qtyDelta,'Editare manuală (Inventar)',savedId);
+    if(existing)await logPriceChanges(savedId,d.name,existing,d,'Editare manuală (Inventar)');
     toast(editId?'Actualizat și salvat în baza de date':'Adăugat și salvat în baza de date');
     closeModal();renderToday();renderTable();
   }finally{
@@ -4527,6 +4582,7 @@ async function applyStockIntake(products,add,newCost,orderNumber,source){
     data.stockAddedAt=new Date().toISOString();data.lastStockAddedQty=add;
     await saveProdToDb(data,p.id);
     await logMove('in',p.name,add,orderNumber?`Comandă ${orderNumber}`:source,p.id);
+    await logPriceChanges(p.id,p.name,p,data,orderNumber?`Comandă ${orderNumber}`:source);
     const price=newCost>0?newCost:(Number(p.priceBuyTTC)||0);
     details.push({status:'actualizat',sku:p.sku||'',productId:p.id,name:p.name,qty:add,price,value:Math.round(add*price*100)/100});
   }
@@ -5471,6 +5527,7 @@ async function applyInvoice(){
       const idx=P.findIndex(x=>x.id===p.id);
       if(idx>=0){
         const oldCostBefore=Number(P[idx].priceBuyTTC)||0;
+        const priceBefore={priceBuyTTC:P[idx].priceBuyTTC,priceSell:P[idx].priceSell,priceEmag:P[idx].priceEmag,priceTrendyol:P[idx].priceTrendyol};
         const stockPlan=stockImportPlan(P[idx],item.qty);
         const receipt=invoiceReceiptPlan(P[idx],item.qty);
         P[idx].bought=(P[idx].bought||0)+item.qty;
@@ -5486,6 +5543,7 @@ async function applyInvoice(){
         }
         await saveProdToDb(P[idx],P[idx].id);
         await logMove('in',P[idx].name,item.qty,invSourceName||'Import factură',P[idx].id);
+        await logPriceChanges(P[idx].id,P[idx].name,priceBefore,P[idx],invSourceName||'Import factură');
         orderDetails.push({status:'actualizat',sku:item.sku||P[idx].sku||'',productId:P[idx].id,name:P[idx].name,qty:item.qty,price:costRon,value:Math.round((item.qty||0)*costRon*100)/100,oldPrice:oldCostBefore,stockBefore:stockPlan.before,stockAfter:stockPlan.after,negativeCompensated:stockPlan.compensated});
         updated++;
       }
