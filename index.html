@@ -928,6 +928,7 @@ th{font-weight:800!important;color:var(--t3)!important}
       <option value="transit">În tranzit</option>
       <option value="oldest">Cele mai vechi</option>
       <option value="noimg">Fără imagine (de completat)</option>
+      <option value="supplier_oos">🚫 Epuizat la furnizor</option>
     </select>
     <button class="btn btn-acc" onclick="openModal()">+ Produs nou</button>
     <button class="btn btn-sm" id="bulk-add-btn" onclick="bulkAddStock()" disabled title="Adaugă manual o cantitate de stoc la toate produsele bifate">📥 Adaugă stoc</button>
@@ -1357,6 +1358,7 @@ th{font-weight:800!important;color:var(--t3)!important}
         <div class="fld"><label>Furnizor</label><input id="f-sup" type="text" placeholder="SC Produse SRL"></div>
       </div>
       <div class="fld"><label>Cod intern unic</label><input id="f-internal-code" type="text" placeholder="Se generează automat la salvare" readonly style="background:var(--surf3);color:var(--t2);font-family:var(--mono)"></div>
+      <div class="fld"><label>Disponibilitate la furnizor</label><div id="supplier-oos-box"></div></div>
 
       <div class="sec">Caracteristici produs</div>
       <div class="frow">
@@ -1489,6 +1491,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:41,text:'Nou: marchează un produs ca "epuizat la furnizor" (din fișa produsului), cu data estimată de revenire în stoc și notificare opțională când se ajunge la acea dată. Filtru dedicat în Inventar ("🚫 Epuizat la furnizor") și tile clickabil pe Dashboard pentru lista completă. IMPORTANT: rulează migration_supplier_oos.sql în Supabase',date:'2026-08-05'},
   {n:40,text:'Pe pagina produsului apare acum și "Istoric modificări de preț" (cost achiziție, vânzare, eMAG, Trendyol) — indiferent dacă prețul se schimbă din fișa produsului, adăugare stoc în masă sau import factură. IMPORTANT: rulează migration_price_history.sql și migration_fix_activitate_stoc_rls.sql în Supabase — al doilea repară un bug prin care notificările de stoc nu se salvau deloc din cauza RLS',date:'2026-08-05'},
   {n:39,text:'Pe pagina produsului apare acum o secțiune nouă "Istoric modificări manuale de stoc" (dată, oră, cantitate, sursă), separată de istoricul de recepții din CSV/factură',date:'2026-08-05'},
   {n:38,text:'Modificările manuale de stoc din Inventar (fișa produsului) și Raport stoc (carduri actualizare rapidă) apar acum și ele în notificările 📥/📤, nu doar vânzările și recepțiile din comenzi',date:'2026-08-05'},
@@ -1598,7 +1601,7 @@ async function logPriceChanges(productId,name,before,after,sursa){
 }
 // ── DASHBOARD ──
 function renderDashboard(){
-  const tot=P.length,lowC=P.filter(p=>st(p)==='low').length,outC=P.filter(p=>st(p)==='out').length;
+  const tot=P.length,lowC=P.filter(p=>st(p)==='low').length,outC=P.filter(p=>st(p)==='out').length,oosC=P.filter(p=>p.supplierOOS).length;
   const val=P.reduce((a,p)=>a+(qty(p)*(p.priceBuyTTC||0)),0);
   const azi=Object.values(TS).reduce((a,v)=>a+v,0);
   const dashStats=document.getElementById('dash-stats');
@@ -1607,7 +1610,8 @@ function renderDashboard(){
     <div class="stat"><div class="stat-l">Valoare stoc</div><div class="stat-v" style="font-size:15px">${val.toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})} RON</div></div>
     <div class="stat"><div class="stat-l">Vândute azi</div><div class="stat-v g">${azi}</div></div>
     <div class="stat"><div class="stat-l">Stoc scăzut</div><div class="stat-v w">${lowC}</div></div>
-    <div class="stat"><div class="stat-l">Epuizate</div><div class="stat-v d">${outC}</div></div>`;
+    <div class="stat"><div class="stat-l">Epuizate</div><div class="stat-v d">${outC}</div></div>
+    <div class="stat" style="cursor:pointer" onclick="goDashToSupplierOOS()" title="Vezi produsele epuizate la furnizor"><div class="stat-l">🚫 Epuizate la furnizor</div><div class="stat-v" style="color:var(--or)">${oosC}</div></div>`;
 
   const platGrid=document.getElementById('dash-plat-grid');
   if(platGrid){
@@ -1705,6 +1709,12 @@ function goDashToJurnal(){
   const btn=[...document.querySelectorAll('.h-tab')].find(b=>b.textContent.includes('Jurnal'));
   if(btn)goPage('jurnal',btn);
 }
+function goDashToSupplierOOS(){
+  const btn=[...document.querySelectorAll('.h-tab')].find(b=>b.textContent.includes('Inventar'));
+  if(btn)goPage('stoc',btn);
+  const fs=document.getElementById('fs');
+  if(fs){fs.value='supplier_oos';renderTable();}
+}
 function toggleNotifPanel(ev){
   ev.stopPropagation();
   const panel=document.getElementById('notif-panel');if(!panel)return;
@@ -1755,7 +1765,8 @@ function dbToP(r){
     priceBuyTTC:r.price_buy_ttc||0,priceBuyPrevTTC:r.price_buy_prev_ttc||0,priceBuyChangedAt:r.price_buy_changed_at||'',tvaAcq:r.tva_acq??0.21,
     stockAddedAt:r.stock_added_at||'',lastStockAddedQty:r.last_stock_added_qty||0,
     priceSell:r.price_sell||0,priceEmag:r.price_emag||0,priceTrendyol:r.price_trendyol||0,priceRec:r.price_rec||0,img:r.img||'',
-    colors:r.colors||'',sizes:r.sizes||'',material:r.material||'',dims:r.dims||'',notes:r.notes||'',createdAt:r.created_at||'',updatedAt:r.updated_at||''};
+    colors:r.colors||'',sizes:r.sizes||'',material:r.material||'',dims:r.dims||'',notes:r.notes||'',createdAt:r.created_at||'',updatedAt:r.updated_at||'',
+    supplierOOS:!!r.supplier_oos,supplierOOSSince:r.supplier_oos_since||'',supplierRestockEta:r.supplier_restock_eta||'',supplierNotify:!!r.supplier_notify,supplierNotified:!!r.supplier_notified};
 }
 function pToDb(p){
   const d={name:p.name,sku:p.sku||'',category:p.category||'',supplier:p.supplier||'',
@@ -1763,19 +1774,21 @@ function pToDb(p){
     price_buy_ttc:p.priceBuyTTC||0,price_buy_prev_ttc:p.priceBuyPrevTTC||0,price_buy_changed_at:p.priceBuyChangedAt||null,tva_acq:p.tvaAcq??0.21,
     stock_added_at:p.stockAddedAt||null,last_stock_added_qty:p.lastStockAddedQty||0,
     price_sell:p.priceSell||0,price_emag:p.priceEmag||0,price_trendyol:p.priceTrendyol||0,price_rec:p.priceRec||0,img:p.img||'',
-    colors:p.colors||'',sizes:p.sizes||'',material:p.material||'',dims:p.dims||'',notes:p.notes||''};
+    colors:p.colors||'',sizes:p.sizes||'',material:p.material||'',dims:p.dims||'',notes:p.notes||'',
+    supplier_oos:!!p.supplierOOS,supplier_oos_since:p.supplierOOSSince||null,supplier_restock_eta:p.supplierRestockEta||null,supplier_notify:!!p.supplierNotify,supplier_notified:!!p.supplierNotified};
   if(p.internalCode)d.internal_code=p.internalCode;
   return d;
 }
 function dbSavedProductMatches(row,sent){
   return Object.entries(sent).every(([k,v])=>{
-    if((k==='price_buy_changed_at'||k==='stock_added_at')&&v)return Math.abs(new Date(row[k]).getTime()-new Date(v).getTime())<1000;
+    if((k==='price_buy_changed_at'||k==='stock_added_at'||k==='supplier_oos_since')&&v)return Math.abs(new Date(row[k]).getTime()-new Date(v).getTime())<1000;
     return typeof v==='number'?Math.abs((Number(row[k])||0)-v)<0.001:String(row[k]??'')===String(v??'');
   });
 }
 function missingProductColumn(err){return String(err?.message||err).match(/Could not find the '([^']+)' column of 'produse'/i)?.[1]||'';}
 function missingProductValues(data,missing){
-  const map={incoming_qty:'incomingQty',price_emag:'priceEmag',price_trendyol:'priceTrendyol',tva_acq:'tvaAcq',internal_code:'internalCode',price_buy_prev_ttc:'priceBuyPrevTTC',price_buy_changed_at:'priceBuyChangedAt',stock_added_at:'stockAddedAt',last_stock_added_qty:'lastStockAddedQty'};
+  const map={incoming_qty:'incomingQty',price_emag:'priceEmag',price_trendyol:'priceTrendyol',tva_acq:'tvaAcq',internal_code:'internalCode',price_buy_prev_ttc:'priceBuyPrevTTC',price_buy_changed_at:'priceBuyChangedAt',stock_added_at:'stockAddedAt',last_stock_added_qty:'lastStockAddedQty',
+    supplier_oos:'supplierOOS',supplier_oos_since:'supplierOOSSince',supplier_restock_eta:'supplierRestockEta',supplier_notify:'supplierNotify',supplier_notified:'supplierNotified'};
   return Object.fromEntries(missing.map(col=>[map[col]||col,data[map[col]||col]]));
 }
 async function saveProductRequest(method,path,data){
@@ -1982,6 +1995,7 @@ async function load(){
     hideLoading();
     buildCats('');renderToday();renderTable();buildJMonths();if(document.getElementById('page-raport')?.classList.contains('on')){buildRaportCats();renderRaport();}
     renderUpdWidget();renderNotif();renderDashboard();
+    checkSupplierRestockAlerts();
   }catch(err){
     setSyncStatus('err','Eroare conexiune');
     hideLoading();
@@ -4206,6 +4220,79 @@ function renderProductPriceHistory(productId){
       return`<div class="m-sales-row"><div class="m-sales-date">${dtLbl}<div class="m-stock-order">${esc(r.tipPret)} · ${esc(r.sursa||'—')}</div></div><div class="m-stock-qty" style="color:var(${up?'--rd':'--gr'})">${r.oldPrice.toFixed(2)} → ${r.newPrice.toFixed(2)} RON</div><div class="m-sales-value">${up?'▲':'▼'} ${Math.abs(r.newPrice-r.oldPrice).toFixed(2)} RON</div></div>`;
     }).join('')}</div>`;
 }
+// ── DISPONIBILITATE LA FURNIZOR (epuizat la furnizor, ETA revenire în stoc, notificare) ──
+function fmtDateRo(s){if(!s)return'—';const d=new Date(s+'T00:00:00');return isNaN(d)?s:d.toLocaleDateString('ro-RO');}
+function renderSupplierOOSBox(p){
+  const box=document.getElementById('supplier-oos-box');if(!box)return;
+  if(!p){box.innerHTML='<div style="font-size:12px;color:var(--t3);padding:6px 0">Salvează produsul întâi.</div>';return;}
+  if(!p.supplierOOS){
+    box.innerHTML=`<button type="button" class="btn btn-sm" onclick="markSupplierOOS(${p.id})">🚫 Marchează: epuizat la furnizor</button>`;
+    return;
+  }
+  const eta=p.supplierRestockEta;
+  const notifyBtn=eta?`<button type="button" class="btn btn-sm" onclick="toggleSupplierNotify(${p.id})">${p.supplierNotify?'🔕 Dezactivează notificare':'🔔 Activează notificare'}</button>`:'';
+  box.innerHTML=`<div style="font-size:13px;color:var(--or);font-weight:700;margin-bottom:6px">🚫 Epuizat la furnizor${p.supplierOOSSince?' din '+fmtDateRo(p.supplierOOSSince.slice(0,10)):''}${eta?' · revine estimat: '+fmtDateRo(eta):''}</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button type="button" class="btn btn-sm" onclick="clearSupplierOOS(${p.id})">✅ Disponibil din nou</button>${notifyBtn}</div>
+    ${p.supplierNotify?'<div style="font-size:12px;color:var(--gr);margin-top:6px">🔔 Notificare activă — vei fi anunțat la data estimată, cât timp ai aplicația deschisă</div>':''}`;
+}
+async function markSupplierOOS(id){
+  const p=P.find(x=>x.id===id);if(!p)return;
+  const raw=prompt('În câte zile ar trebui să revină în stoc la furnizor?\n(sau introdu o dată exactă, format AAAA-LL-ZZ)','14');
+  if(raw===null)return;
+  const trimmed=raw.trim();
+  let eta='';
+  if(/^\d{4}-\d{2}-\d{2}$/.test(trimmed))eta=trimmed;
+  else{
+    const days=parseInt(trimmed,10);
+    if(Number.isFinite(days)&&days>=0){const d=new Date();d.setDate(d.getDate()+days);eta=localDateISO(d);}
+  }
+  const data={...p,supplierOOS:true,supplierOOSSince:new Date().toISOString(),supplierRestockEta:eta,supplierNotify:false,supplierNotified:false};
+  showLoading('Se salvează…');
+  const saved=await saveProdToDb(data,id);
+  hideLoading();
+  if(!saved)return;
+  toast(`${p.name}: marcat epuizat la furnizor${eta?' · revine estimat '+fmtDateRo(eta):''}`);
+  renderSupplierOOSBox(P.find(x=>x.id===id));
+  renderTable();
+}
+async function clearSupplierOOS(id){
+  const p=P.find(x=>x.id===id);if(!p)return;
+  const data={...p,supplierOOS:false,supplierOOSSince:'',supplierRestockEta:'',supplierNotify:false,supplierNotified:false};
+  showLoading('Se salvează…');
+  const saved=await saveProdToDb(data,id);
+  hideLoading();
+  if(!saved)return;
+  toast(`${p.name}: disponibil din nou la furnizor`);
+  renderSupplierOOSBox(P.find(x=>x.id===id));
+  renderTable();
+}
+async function toggleSupplierNotify(id){
+  const p=P.find(x=>x.id===id);if(!p)return;
+  const turnOn=!p.supplierNotify;
+  if(turnOn&&typeof Notification!=='undefined'&&Notification.permission==='default'){
+    try{await Notification.requestPermission();}catch(e){}
+  }
+  const data={...p,supplierNotify:turnOn,supplierNotified:false};
+  showLoading('Se salvează…');
+  const saved=await saveProdToDb(data,id);
+  hideLoading();
+  if(!saved)return;
+  toast(turnOn?`Notificare activată pentru „${p.name}"`:`Notificare dezactivată pentru „${p.name}"`);
+  renderSupplierOOSBox(P.find(x=>x.id===id));
+}
+// Verifică la încărcare/periodic dacă a venit ziua estimată de revenire în stoc pentru produsele cu notificare activă
+async function checkSupplierRestockAlerts(){
+  const today=td();
+  const due=P.filter(p=>p.supplierOOS&&p.supplierNotify&&!p.supplierNotified&&p.supplierRestockEta&&p.supplierRestockEta<=today);
+  for(const p of due){
+    toast(`🔔 ${p.name} ar trebui să revină azi în stoc la furnizor`);
+    if(typeof Notification!=='undefined'&&Notification.permission==='granted'){
+      try{new Notification('Revenire în stoc la furnizor',{body:p.name,tag:'supplier-restock-'+p.id});}catch(e){}
+    }
+    const data={...p,supplierNotified:true};
+    await saveProdToDb(data,p.id);
+  }
+}
 async function sellSearch(id){
   const inp=document.getElementById('ssq-'+id);
   const n=parseQtyVal(inp?.value,1);
@@ -4356,7 +4443,7 @@ function renderTable(){
   const cat=document.getElementById('fc').value;
   const s=document.getElementById('fs').value;
   const statusFilter=['ok','low','out'].includes(s)?s:'';
-  let list=P.filter(p=>{const m=prodMatchesSearch(p,q);return m&&(!cat||p.category===cat)&&(!selSuppliers.size||selSuppliers.has(p.supplier||''))&&(!statusFilter||st(p)===statusFilter)&&(s!=='transit'||parseQtyVal(p.incomingQty)>0)&&(s!=='stock_recent'||stockAddedTime(p)>0)&&(s!=='noimg'||!p.img);});
+  let list=P.filter(p=>{const m=prodMatchesSearch(p,q);return m&&(!cat||p.category===cat)&&(!selSuppliers.size||selSuppliers.has(p.supplier||''))&&(!statusFilter||st(p)===statusFilter)&&(s!=='transit'||parseQtyVal(p.incomingQty)>0)&&(s!=='stock_recent'||stockAddedTime(p)>0)&&(s!=='noimg'||!p.img)&&(s!=='supplier_oos'||p.supplierOOS);});
   if(s==='recent')list.sort((a,b)=>prodCreatedTime(b)-prodCreatedTime(a));
   else if(s==='stock_recent')list.sort((a,b)=>stockAddedTime(b)-stockAddedTime(a));
   else if(s==='oldest')list.sort((a,b)=>prodCreatedTime(a)-prodCreatedTime(b));
@@ -4401,7 +4488,7 @@ function renderTable(){
       <td style="text-align:right;font-family:var(--mono);font-size:12px">${p.priceSell>0?p.priceSell.toFixed(2):'—'}</td>
       <td style="text-align:right;font-family:var(--mono);font-size:12px;color:var(--gr)">${p.priceEmag>0?p.priceEmag.toFixed(2):'—'}</td>
       <td style="text-align:right;font-family:var(--mono);font-size:12px;color:var(--gr)">${p.priceTrendyol>0?p.priceTrendyol.toFixed(2):'—'}</td>
-      <td>${bdg}</td>
+      <td>${bdg}${p.supplierOOS?`<br><span class="bdg" style="background:rgba(255,138,61,.15);color:var(--or);margin-top:4px" title="Epuizat la furnizor${p.supplierRestockEta?' · revine '+fmtDateRo(p.supplierRestockEta):''}">🚫 Furnizor</span>`:''}</td>
       <td><div class="row-acts">
         <button class="ico-btn" onclick="openModal(${p.id})" title="Editează">✏️</button>
         <button class="ico-btn" onclick="openCalcForProduct(${p.id})" title="Calculator profit">🧮</button>
@@ -4477,6 +4564,7 @@ function openModal(id){
   renderProductStockIntakeHistory(p?.id||null);
   renderProductManualStockHistory(p?.id||null);
   renderProductPriceHistory(p?.id||null);
+  renderSupplierOOSBox(p||null);
   document.getElementById('add-stock-order-btn').disabled=!p?.id;
   buildCats('');calcStoc();
   document.getElementById('ov').classList.add('on');
@@ -6078,6 +6166,8 @@ function rptCardKeyHandler(e){
 }
 document.addEventListener('keydown',rptCardKeyHandler);
 document.addEventListener('click',ev=>{if(!ev.target.closest('#ss-drop')&&!ev.target.closest('.ss-field'))document.getElementById('ss-drop').classList.remove('on');});
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkSupplierRestockAlerts();});
+setInterval(checkSupplierRestockAlerts,10*60*1000);
 load();
 </script>
 </body>
