@@ -69,6 +69,18 @@ header{background:var(--surf);border-bottom:1px solid var(--b1);height:56px;disp
 .dash-total-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
 .dash-total-val{font-family:var(--mono);font-size:20px;font-weight:600}
 .dash-total-sub{font-size:12px;color:var(--t3);font-family:var(--mono);margin-top:2px}
+.dash-total-delta{font-size:12px;font-family:var(--mono);font-weight:700;margin-top:4px}
+.dash-total-delta.up{color:var(--gr)}
+.dash-total-delta.down{color:var(--rd)}
+.dash-toggle-wrap{display:flex;gap:6px}
+.dash-toggle-btn{background:var(--surf2);border:1px solid var(--b1);border-radius:var(--r);padding:5px 12px;font-size:12px;font-weight:600;color:var(--t3);cursor:pointer}
+.dash-toggle-btn.on{background:var(--acc-light);color:var(--acc);border-color:var(--acc)}
+.dash-rank-row{display:grid;grid-template-columns:24px 1fr auto;gap:10px;align-items:center;background:var(--surf);border:1px solid var(--b1);border-radius:var(--r);padding:8px 10px;font-size:13px;margin-bottom:6px}
+.dash-rank-n{font-family:var(--mono);color:var(--t3);font-weight:700;text-align:center}
+.dash-rank-nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dash-rank-bar-wrap{grid-column:1/-1;height:4px;background:var(--surf3);border-radius:2px;overflow:hidden;margin-top:-2px}
+.dash-rank-bar{height:100%;border-radius:2px}
+.dash-rank-val{font-family:var(--mono);font-size:12px;color:var(--t2);text-align:right;white-space:nowrap}
 .dash-charts{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
 .dash-chart-box{min-width:0}
 .dash-chart-title{font-size:13px;font-weight:600;color:var(--t2);margin-bottom:8px}
@@ -858,7 +870,7 @@ th{font-weight:800!important;color:var(--t3)!important}
   <div class="stats" id="dash-stats"></div>
 
   <div class="tb">
-    <div class="tb-head"><div class="tb-title">💰 Vânzări &amp; achiziții</div><button class="btn btn-sm" onclick="goDashToJurnal()">Vezi jurnalul complet</button></div>
+    <div class="tb-head"><div class="tb-title">💰 Vânzări &amp; achiziții</div><div style="display:flex;gap:10px;align-items:center"><div class="dash-toggle-wrap"><button class="dash-toggle-btn on" id="dash-mode-value" onclick="setDashChartMode('value')">RON</button><button class="dash-toggle-btn" id="dash-mode-qty" onclick="setDashChartMode('qty')">Bucăți</button></div><button class="btn btn-sm" onclick="goDashToJurnal()">Vezi jurnalul complet</button></div></div>
     <div class="dash-totals" id="dash-totals"></div>
     <div class="dash-charts">
       <div class="dash-chart-box">
@@ -869,6 +881,17 @@ th{font-weight:800!important;color:var(--t3)!important}
         <div class="dash-chart-title">Pe luni (ultimele 12)</div>
         <div id="dash-chart-months"></div>
       </div>
+    </div>
+  </div>
+
+  <div class="dash-grid">
+    <div class="tb">
+      <div class="tb-head"><div class="tb-title">🏆 Top produse vândute <span style="font-size:12px;font-weight:400;color:var(--t3)">— luna aceasta</span></div></div>
+      <div id="dash-top-products"></div>
+    </div>
+    <div class="tb">
+      <div class="tb-head"><div class="tb-title">🏭 Achiziții pe furnizor</div></div>
+      <div id="dash-supplier-purch"></div>
     </div>
   </div>
 
@@ -1511,6 +1534,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:44,text:'Dashboard mult mai complet: comparație vânzări/achiziții față de luna trecută (▲/▼ %), clasament "Top produse vândute" în luna curentă, "Achiziții pe furnizor", și comutare RON/Bucăți pe graficele pe zile/luni',date:'2026-08-07'},
   {n:43,text:'Fix: la salvarea unui produs apărea, pentru o fracțiune de secundă, un mesaj roșu fals de eroare (era suprascris instant de confirmarea reală de succes) — ținea de coloane noi (supplier_oos etc.) neîncă migrate în Supabase; salvarea era mereu reușită, doar mesajul era greșit. Avertismentul merge acum doar în consolă, nu mai apare ca eroare vizibilă',date:'2026-08-06'},
   {n:42,text:'Nou: arhivare produse (ex: produse de Crăciun/sezoniere). Bifează unul sau mai multe produse în Inventar și apasă "🗄️ Arhivează selectate" — dispar din Inventar/Raport stoc, dar rămân în rapoartele de stoc pentru contabilitate (CSV/Excel). Tab nou "🗄️ Arhivă" cu lista completă și buton de dezarhivare pentru fiecare produs. IMPORTANT: rulează migration_archive_product.sql în Supabase',date:'2026-08-05'},
   {n:41,text:'Nou: marchează un produs ca "epuizat la furnizor" (din fișa produsului), cu data estimată de revenire în stoc și notificare opțională când se ajunge la acea dată. Filtru dedicat în Inventar ("🚫 Epuizat la furnizor") și tile clickabil pe Dashboard pentru lista completă. IMPORTANT: rulează migration_supplier_oos.sql în Supabase',date:'2026-08-05'},
@@ -1682,47 +1706,137 @@ function lastNDays(n){
   for(let i=n-1;i>=0;i--){
     const d=new Date(now.getFullYear(),now.getMonth(),now.getDate()-i);
     const key=localDateISO(d);
-    out.push({key,lbl:d.toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit'}),sales:sales[key]?.value||0,purch:purch[key]?.value||0});
+    out.push({key,lbl:d.toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit'}),sales:sales[key]?.value||0,purch:purch[key]?.value||0,salesQty:sales[key]?.qty||0,purchQty:purch[key]?.qty||0});
   }
   return out;
 }
 const MONTH_ABBR=['ian','feb','mar','apr','mai','iun','iul','aug','sep','oct','noi','dec'];
 function lastNMonths(n){
   const sales=salesByDate(),purch=purchasesByDate(),salesM={},purchM={};
-  Object.entries(sales).forEach(([d,v])=>{const k=d.slice(0,7);salesM[k]=(salesM[k]||0)+v.value;});
-  Object.entries(purch).forEach(([d,v])=>{const k=d.slice(0,7);purchM[k]=(purchM[k]||0)+v.value;});
+  Object.entries(sales).forEach(([d,v])=>{const k=d.slice(0,7);if(!salesM[k])salesM[k]={value:0,qty:0};salesM[k].value+=v.value;salesM[k].qty+=v.qty;});
+  Object.entries(purch).forEach(([d,v])=>{const k=d.slice(0,7);if(!purchM[k])purchM[k]={value:0,qty:0};purchM[k].value+=v.value;purchM[k].qty+=v.qty;});
   const out=[],now=new Date();
   for(let i=n-1;i>=0;i--){
     const d=new Date(now.getFullYear(),now.getMonth()-i,1);
     const key=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-    out.push({key,lbl:MONTH_ABBR[d.getMonth()]+' '+String(d.getFullYear()).slice(2),sales:salesM[key]||0,purch:purchM[key]||0});
+    out.push({key,lbl:MONTH_ABBR[d.getMonth()]+' '+String(d.getFullYear()).slice(2),sales:salesM[key]?.value||0,purch:purchM[key]?.value||0,salesQty:salesM[key]?.qty||0,purchQty:purchM[key]?.qty||0});
   }
   return out;
 }
-function renderBarChart(containerId,rows){
+let dashChartMode='value';
+function setDashChartMode(mode){
+  dashChartMode=mode;
+  document.getElementById('dash-mode-value')?.classList.toggle('on',mode==='value');
+  document.getElementById('dash-mode-qty')?.classList.toggle('on',mode==='qty');
+  renderBarChart('dash-chart-days',lastNDays(14),mode);
+  renderBarChart('dash-chart-months',lastNMonths(12),mode);
+}
+function renderBarChart(containerId,rows,mode){
+  mode=mode||dashChartMode;
   const box=document.getElementById(containerId);if(!box)return;
-  const max=Math.max(1,...rows.flatMap(r=>[r.sales,r.purch]));
-  const money=v=>v.toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2});
+  const kS=mode==='qty'?'salesQty':'sales',kP=mode==='qty'?'purchQty':'purch';
+  const max=Math.max(1,...rows.flatMap(r=>[r[kS],r[kP]]));
+  const fmt=v=>mode==='qty'?fmtQty(v)+' buc':v.toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})+' RON';
   const bars=rows.map(r=>{
-    const hS=Math.max(2,Math.round(r.sales/max*100)),hP=Math.max(2,Math.round(r.purch/max*100));
+    const hS=Math.max(2,Math.round(r[kS]/max*100)),hP=Math.max(2,Math.round(r[kP]/max*100));
     return`<div class="bchart-group"><div class="bchart-pair">
-      <div class="bchart-bar" style="height:${hS}%;background:var(--dash-sales)" title="Vânzări ${esc(r.lbl)}: ${money(r.sales)} RON"></div>
-      <div class="bchart-bar" style="height:${hP}%;background:var(--dash-purch)" title="Achiziții ${esc(r.lbl)}: ${money(r.purch)} RON"></div>
+      <div class="bchart-bar" style="height:${hS}%;background:var(--dash-sales)" title="Vânzări ${esc(r.lbl)}: ${fmt(r[kS])}"></div>
+      <div class="bchart-bar" style="height:${hP}%;background:var(--dash-purch)" title="Achiziții ${esc(r.lbl)}: ${fmt(r[kP])}"></div>
     </div><div class="bchart-lbl">${esc(r.lbl)}</div></div>`;
   }).join('');
   box.innerHTML=`<div class="bchart-legend"><span class="bchart-legend-item"><span class="bchart-dot" style="background:var(--dash-sales)"></span>Vânzări</span><span class="bchart-legend-item"><span class="bchart-dot" style="background:var(--dash-purch)"></span>Achiziții</span></div><div class="bchart-bars">${bars}</div>`;
 }
+// Vânzări/achiziții agregate pe lună (cheie "AAAA-LL") — folosit pentru comparația lună curentă vs precedentă
+function monthlyTotals(){
+  const sales=salesByDate(),purch=purchasesByDate(),salesM={},purchM={};
+  Object.entries(sales).forEach(([d,v])=>{const k=d.slice(0,7);salesM[k]=(salesM[k]||0)+v.value;});
+  Object.entries(purch).forEach(([d,v])=>{const k=d.slice(0,7);purchM[k]=(purchM[k]||0)+v.value;});
+  return{salesM,purchM};
+}
+function monthOverMonthDelta(){
+  const{salesM,purchM}=monthlyTotals();
+  const now=new Date(),curKey=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const prevD=new Date(now.getFullYear(),now.getMonth()-1,1),prevKey=`${prevD.getFullYear()}-${String(prevD.getMonth()+1).padStart(2,'0')}`;
+  const pct=(cur,prev)=>prev>0?((cur-prev)/prev*100):(cur>0?100:0);
+  const curSales=salesM[curKey]||0,prevSales=salesM[prevKey]||0,curPurch=purchM[curKey]||0,prevPurch=purchM[prevKey]||0;
+  return{curSales,prevSales,pctSales:pct(curSales,prevSales),curPurch,prevPurch,pctPurch:pct(curPurch,prevPurch)};
+}
+function deltaBadgeHtml(pct){
+  if(!Number.isFinite(pct)||pct===0)return'<div class="dash-total-delta">— față de luna trecută</div>';
+  const up=pct>0;
+  return`<div class="dash-total-delta ${up?'up':'down'}">${up?'▲':'▼'} ${Math.abs(pct).toFixed(1)}% față de luna trecută</div>`;
+}
+// Top produse vândute în luna curentă, după valoare
+function topProductsSoldThisMonth(n){
+  n=n||8;
+  const ym=`${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`;
+  const map={};
+  JL.forEach(day=>{
+    if(!String(day.date||'').startsWith(ym))return;
+    (day.entries||[]).forEach(en=>{
+      const key=en.id;
+      if(!map[key])map[key]={id:en.id,name:en.name||'—',qty:0,value:0};
+      map[key].qty+=Number(en.qty)||0;
+      map[key].value+=(Number(en.qty)||0)*(Number(en.priceSell)||0);
+    });
+  });
+  return Object.values(map).sort((a,b)=>b.value-a.value).slice(0,n);
+}
+// Achiziții (din comenzi_stoc) grupate pe furnizorul produsului cumpărat
+function purchasesBySupplier(n){
+  n=n||8;
+  const map={};
+  OI.forEach(o=>{
+    (o.details||[]).forEach(d=>{
+      if(!(Number(d.value)>0))return;
+      const prod=d.productId?P.find(p=>p.id===d.productId):null;
+      const sup=(prod?.supplier||'').trim()||'Furnizor necunoscut';
+      if(!map[sup])map[sup]={supplier:sup,qty:0,value:0};
+      map[sup].qty+=Number(d.qty)||0;map[sup].value+=Number(d.value)||0;
+    });
+  });
+  const rows=Object.values(map).sort((a,b)=>b.value-a.value);
+  if(rows.length<=n)return rows;
+  const top=rows.slice(0,n-1),rest=rows.slice(n-1);
+  top.push({supplier:'Alți furnizori ('+rest.length+')',qty:rest.reduce((s,r)=>s+r.qty,0),value:rest.reduce((s,r)=>s+r.value,0)});
+  return top;
+}
+function renderDashTopProducts(){
+  const box=document.getElementById('dash-top-products');if(!box)return;
+  const rows=topProductsSoldThisMonth(8);
+  if(!rows.length){box.innerHTML='<div class="m-sales-empty">Nicio vânzare luna aceasta încă.</div>';return;}
+  const max=Math.max(1,...rows.map(r=>r.value));
+  box.innerHTML=rows.map((r,i)=>`<div class="dash-rank-row">
+    <div class="dash-rank-n">${i+1}</div>
+    <div class="dash-rank-nm" title="${esc(r.name)}">${esc(r.name)}</div>
+    <div class="dash-rank-val">${fmtQty(r.qty)} buc · ${r.value.toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})} RON</div>
+    <div class="dash-rank-bar-wrap"><div class="dash-rank-bar" style="width:${Math.max(3,Math.round(r.value/max*100))}%;background:var(--dash-sales)"></div></div>
+  </div>`).join('');
+}
+function renderDashSupplierPurchases(){
+  const box=document.getElementById('dash-supplier-purch');if(!box)return;
+  const rows=purchasesBySupplier(8);
+  if(!rows.length){box.innerHTML='<div class="m-sales-empty">Nicio achiziție înregistrată încă.</div>';return;}
+  const max=Math.max(1,...rows.map(r=>r.value));
+  box.innerHTML=rows.map(r=>`<div class="dash-rank-row" style="grid-template-columns:1fr auto">
+    <div class="dash-rank-nm" title="${esc(r.supplier)}">${esc(r.supplier)}</div>
+    <div class="dash-rank-val">${fmtQty(r.qty)} buc · ${r.value.toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})} RON</div>
+    <div class="dash-rank-bar-wrap"><div class="dash-rank-bar" style="width:${Math.max(3,Math.round(r.value/max*100))}%;background:var(--dash-purch)"></div></div>
+  </div>`).join('');
+}
 function renderDashSalesPurchases(){
   const totalsBox=document.getElementById('dash-totals');
   if(totalsBox){
-    const s=allTimeSalesTotal(),p=allTimePurchasesTotal();
+    const s=allTimeSalesTotal(),p=allTimePurchasesTotal(),d=monthOverMonthDelta();
     totalsBox.innerHTML=`
-      <div class="dash-total-card"><div class="dash-total-lbl"><span class="dash-total-dot" style="background:var(--dash-sales)"></span>Vânzări totale</div><div class="dash-total-val">${s.value.toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})} RON</div><div class="dash-total-sub">${fmtQty(s.qty)} buc. vândute</div></div>
-      <div class="dash-total-card"><div class="dash-total-lbl"><span class="dash-total-dot" style="background:var(--dash-purch)"></span>Achiziții totale</div><div class="dash-total-val">${p.value.toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})} RON</div><div class="dash-total-sub">${fmtQty(p.qty)} buc. cumpărate</div></div>
+      <div class="dash-total-card"><div class="dash-total-lbl"><span class="dash-total-dot" style="background:var(--dash-sales)"></span>Vânzări totale</div><div class="dash-total-val">${s.value.toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})} RON</div><div class="dash-total-sub">${fmtQty(s.qty)} buc. vândute</div>${deltaBadgeHtml(d.pctSales)}</div>
+      <div class="dash-total-card"><div class="dash-total-lbl"><span class="dash-total-dot" style="background:var(--dash-purch)"></span>Achiziții totale</div><div class="dash-total-val">${p.value.toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})} RON</div><div class="dash-total-sub">${fmtQty(p.qty)} buc. cumpărate</div>${deltaBadgeHtml(d.pctPurch)}</div>
       <div class="dash-total-card"><div class="dash-total-lbl">Azi</div><div class="dash-total-val">${fmtQty(Object.values(TS).reduce((a,v)=>a+v,0))} buc.</div><div class="dash-total-sub">vândute azi</div></div>`;
   }
   renderBarChart('dash-chart-days',lastNDays(14));
   renderBarChart('dash-chart-months',lastNMonths(12));
+  renderDashTopProducts();
+  renderDashSupplierPurchases();
 }
 function renderDashActivity(){
   const box=document.getElementById('dash-activity-list');if(!box)return;
