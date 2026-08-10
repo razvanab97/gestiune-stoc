@@ -848,14 +848,14 @@ th{font-weight:800!important;color:var(--t3)!important}
 <header>
   <div class="h-logo"><div class="h-logo-ic">🏠</div>AB HOMES - Stoc Manager</div>
   <div class="h-tabs">
-    <button class="h-tab on" onclick="goPage('dashboard',this)">🏠 Dashboard</button>
-    <button class="h-tab" onclick="goPage('stoc',this)">Inventar</button>
-    <button class="h-tab" id="h-tab-calc" onclick="goPage('calc',this)">🧮 Calculator</button>
-    <button class="h-tab" onclick="goPage('jurnal',this)">Jurnal vânzări</button>
-    <button class="h-tab" onclick="goPage('raport',this)">📋 Raport stoc</button>
-    <button class="h-tab" onclick="goPage('sync',this)">🔗 Sincronizare</button>
-    <button class="h-tab" onclick="goPage('research',this)">🔍 Research</button>
-    <button class="h-tab" onclick="goPage('archive',this)">🗄️ Arhivă</button>
+    <button class="h-tab on" data-page="dashboard" onclick="goPage('dashboard',this)">🏠 Dashboard</button>
+    <button class="h-tab" data-page="stoc" onclick="goPage('stoc',this)">Vânzări</button>
+    <button class="h-tab" id="h-tab-calc" data-page="calc" onclick="goPage('calc',this)">🧮 Calculator</button>
+    <button class="h-tab" data-page="jurnal" onclick="goPage('jurnal',this)">Jurnal vânzări</button>
+    <button class="h-tab" data-page="raport" onclick="goPage('raport',this)">📋 Raport stoc</button>
+    <button class="h-tab" data-page="sync" onclick="goPage('sync',this)">🔗 Sincronizare</button>
+    <button class="h-tab" data-page="research" onclick="goPage('research',this)">🔍 Research</button>
+    <button class="h-tab" data-page="archive" onclick="goPage('archive',this)">🗄️ Arhivă</button>
   </div>
   <span class="h-right" id="saved"></span>
   <div class="notif-wrap">
@@ -1537,6 +1537,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:46,text:'Link-ul din bara de adresă reflectă acum secțiunea selectată (#dashboard, #stoc, #raport...) — trimiți link-ul cuiva și i se deschide direct acea secțiune. Tab-ul "Inventar" s-a redenumit în "Vânzări"',date:'2026-08-10'},
   {n:45,text:'La "Vândute azi" din Inventar, lângă butonul + a apărut și un buton − , ca să corectezi rapid o vânzare adăugată din greșeală, fără să ștergi tot contorul zilei',date:'2026-08-10'},
   {n:44,text:'Dashboard mult mai complet: comparație vânzări/achiziții față de luna trecută (▲/▼ %), clasament "Top produse vândute" în luna curentă, "Achiziții pe furnizor", și comutare RON/Bucăți pe graficele pe zile/luni',date:'2026-08-07'},
   {n:43,text:'Fix: la salvarea unui produs apărea, pentru o fracțiune de secundă, un mesaj roșu fals de eroare (era suprascris instant de confirmarea reală de succes) — ținea de coloane noi (supplier_oos etc.) neîncă migrate în Supabase; salvarea era mereu reușită, doar mesajul era greșit. Avertismentul merge acum doar în consolă, nu mai apare ca eroare vizibilă',date:'2026-08-06'},
@@ -2363,9 +2364,14 @@ function sample(){
 
 /* PAGE */
 function goPage(id,btn){
+  const pageEl=document.getElementById('page-'+id);
+  if(!pageEl)return;
+  btn=btn||document.querySelector(`.h-tab[data-page="${id}"]`);
+  if(!btn)return;
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('on'));
   document.querySelectorAll('.h-tab').forEach(b=>b.classList.remove('on'));
-  document.getElementById('page-'+id).classList.add('on');btn.classList.add('on');
+  pageEl.classList.add('on');btn.classList.add('on');
+  history.replaceState(null,'','#'+id);
   if(id==='dashboard'){
     const tryD=async(n)=>{
       if(P.length>0){
@@ -6375,6 +6381,13 @@ document.addEventListener('keydown',rptCardKeyHandler);
 document.addEventListener('click',ev=>{if(!ev.target.closest('#ss-drop')&&!ev.target.closest('.ss-field'))document.getElementById('ss-drop').classList.remove('on');});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkSupplierRestockAlerts();});
 setInterval(checkSupplierRestockAlerts,10*60*1000);
+// Deschide direct secțiunea din link (#stoc, #raport, #dashboard...), dacă există în URL
+const initHash=(location.hash||'').replace('#','');
+if(initHash&&document.getElementById('page-'+initHash))goPage(initHash);
+window.addEventListener('hashchange',()=>{
+  const h=(location.hash||'').replace('#','');
+  if(h&&document.getElementById('page-'+h))goPage(h);
+});
 load();
 </script>
 </body>
