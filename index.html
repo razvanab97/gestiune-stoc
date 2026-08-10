@@ -1537,6 +1537,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:47,text:'Fix: la actualizarea rapidă de stoc din Raport stoc, dacă produsul nu avea încă stoc cumpărat înregistrat, aplicația refuza actualizarea ("nu poate depăși stocul cumpărat 0 buc."). Acum, dacă introduci un stoc mai mare decât ce era cumpărat, se actualizează automat și numărul de produse cumpărate',date:'2026-08-10'},
   {n:46,text:'Link-ul din bara de adresă reflectă acum secțiunea selectată (#dashboard, #stoc, #raport...) — trimiți link-ul cuiva și i se deschide direct acea secțiune. Tab-ul "Inventar" s-a redenumit în "Vânzări"',date:'2026-08-10'},
   {n:45,text:'La "Vândute azi" din Inventar, lângă butonul + a apărut și un buton − , ca să corectezi rapid o vânzare adăugată din greșeală, fără să ștergi tot contorul zilei',date:'2026-08-10'},
   {n:44,text:'Dashboard mult mai complet: comparație vânzări/achiziții față de luna trecută (▲/▼ %), clasament "Top produse vândute" în luna curentă, "Achiziții pe furnizor", și comutare RON/Bucăți pe graficele pe zile/luni',date:'2026-08-07'},
@@ -6067,11 +6068,13 @@ async function updateStockFromCard(id){
   if(raw===''){toast('Introdu o valoare pentru stocul nou','err');return;}
   const val=parseQtyVal(raw,NaN);
   if(!Number.isFinite(val)||val<0){toast('Stoc invalid — introdu un număr ≥ 0','err');return;}
-  const bought=parseQtyVal(p.bought);
-  if(val>bought){toast(`Stocul actual nu poate depăși stocul cumpărat (${fmtQty(bought)} buc.)`,'err');return;}
+  const bought=parseQtyVal(p.bought),sold=parseQtyVal(p.sold);
   const before=qty(p),delta=val-before;
+  // Dacă stocul nou depășește ce aveam înregistrat ca „cumpărat" (ex: produs nou, fără stoc adăugat încă),
+  // creștem cumpărat ca să acopere diferența, fără să atingem vânzările deja înregistrate.
+  const data=val>bought?{...p,bought:val+sold,sold}:{...p,sold:bought-val};
   showLoading('Se actualizează stocul…');
-  await saveProdToDb({...p,sold:bought-val},id);
+  await saveProdToDb(data,id);
   if(delta>0)await logMove('in',p.name,delta,'Ajustare manuală din Raport stoc',id);
   else if(delta<0)await logMove('out',p.name,-delta,'Ajustare manuală din Raport stoc',id);
   hideLoading();
