@@ -1215,7 +1215,15 @@ th{font-weight:800!important;color:var(--t3)!important}
             <button onclick="setResearchProjectFilter('Evită',this)">Evită</button>
             <button onclick="setResearchProjectFilter('Date insuficiente',this)">Date insuficiente</button>
           </div>
-          <div class="research-hint" style="margin:10px 0 0">Pasul 1: salvăm dosarele și linkurile în Supabase. Verdictul complet și generatorul din dosar vin în pașii următori.</div>
+          <div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap">
+            <select id="rp-sort" onchange="renderResearchProjects()">
+              <option value="recent">Sortare: actualizate recent</option>
+              <option value="profit">Sortare: profit estimat ↓</option>
+              <option value="margin">Sortare: marjă estimată ↓</option>
+            </select>
+            <button class="btn btn-sm" id="rp-recalc-all-btn" onclick="recalcAllResearchProjects()">↻ Recalculează toate</button>
+          </div>
+          <div class="research-hint" style="margin:10px 0 0">Adaugă linkul furnizorului (cost) și linkuri eMAG/Trendyol (preț de piață) în dosar — verdictul și profitul se calculează automat.</div>
         </div>
       </div>
       <div id="research-projects-list" class="research-projects-list"></div>
@@ -1226,7 +1234,7 @@ th{font-weight:800!important;color:var(--t3)!important}
         <button class="btn btn-acc" onclick="doResearch()" id="research-btn">🔍 Caută</button>
       </div>
       <div id="research-step" class="research-step"></div>
-      <div class="research-hint">Surse cu parser dedicat: Jumbo · Maxy.eu · verk.store · i-want.pl — orice alt URL e procesat cu AI. Linkuri directe eMAG/Trendyol disponibile pe card.</div>
+      <div class="research-hint">Funcționează bine pentru verk.store și Jumbo (pagini cu date structurate). Maxy.eu nu poate fi citit automat — site-ul își încarcă produsele cu JavaScript, nu apar în pagina brută. Linkuri directe eMAG/Trendyol disponibile pe card.</div>
       <div class="listing-links-box">
         <div class="sec" style="margin:0 0 8px">🔗 Analiză listări externe</div>
         <textarea id="listing-links" placeholder="Lipește aici până la 20 linkuri eMAG / Trendyol / alte anunțuri, câte unul pe linie. Sistemul verifică dacă par același produs, cât de bine sunt optimizate și ce merită folosit."></textarea>
@@ -1537,6 +1545,8 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:49,text:'Research, pachet de îmbunătățiri: (1) reparat bug de conversie valutară — un link de furnizor în PLN/EUR era tratat greșit ca RON în calculul de profit; (2) buton nou „📦 Adaugă în Inventar" pe fiecare dosar, care creează produsul direct cu nume/poză/cost din dosar; (3) „↻ Recalculează toate" — reface verdictul pentru toate dosarele dintr-un click; (4) sortare dosare după profit/marjă; (5) „🔄 Reverifică prețurile" — reanalizează linkurile existente și ține istoric când se schimbă un preț. IMPORTANT: rulează migration_research_price_history.sql în Supabase pentru istoricul de preț',date:'2026-08-11'},
+  {n:48,text:'Research: reparat verdictul de dosar — un link de furnizor (Jumbo/Maxy/Verk, adăugat ca sursă de cost) nu mai intră accidental în calculul prețului de piață/concurenței. Actualizat și textul de ajutor: verk.store și Jumbo merg bine, Maxy.eu nu poate fi citit automat (site JavaScript). IMPORTANT: rulează migration_fix_research_rls.sql în Supabase — fără el, Research nu salvează nimic (dosare/linkuri)',date:'2026-08-10'},
   {n:47,text:'Fix: la actualizarea rapidă de stoc din Raport stoc, dacă produsul nu avea încă stoc cumpărat înregistrat, aplicația refuza actualizarea ("nu poate depăși stocul cumpărat 0 buc."). Acum, dacă introduci un stoc mai mare decât ce era cumpărat, se actualizează automat și numărul de produse cumpărate',date:'2026-08-10'},
   {n:46,text:'Link-ul din bara de adresă reflectă acum secțiunea selectată (#dashboard, #stoc, #raport...) — trimiți link-ul cuiva și i se deschide direct acea secțiune. Tab-ul "Inventar" s-a redenumit în "Vânzări"',date:'2026-08-10'},
   {n:45,text:'La "Vândute azi" din Inventar, lângă butonul + a apărut și un buton − , ca să corectezi rapid o vânzare adăugată din greșeală, fără să ștergi tot contorul zilei',date:'2026-08-10'},
@@ -3434,6 +3444,10 @@ async function createResearchProject(){
 function renderResearchProjects(){
   const box=document.getElementById('research-projects-list');if(!box)return;
   const arr=researchProjects.filter(p=>researchProjectFilter==='all'||String(p.verdict||'').includes(researchProjectFilter));
+  const sortMode=document.getElementById('rp-sort')?.value||'recent';
+  if(sortMode==='profit')arr.sort((a,b)=>(Number(b.profit_estimated)||0)-(Number(a.profit_estimated)||0));
+  else if(sortMode==='margin')arr.sort((a,b)=>(Number(b.margin_estimated)||0)-(Number(a.margin_estimated)||0));
+  else arr.sort((a,b)=>String(b.updated_at||b.created_at||'').localeCompare(String(a.updated_at||a.created_at||'')));
   if(!arr.length){box.innerHTML='<div class="listing-card" style="color:var(--t3)">Nu există dosare pentru filtrul ales.</div>';return;}
   box.innerHTML=arr.map(p=>{
     const links=p.links||[],prices=links.map(l=>+l.price||0).filter(Boolean),reviews=Math.max(0,...links.map(l=>+l.review_count||0)),hasListing=!!(p.listing&&p.listing.title);
@@ -3462,8 +3476,10 @@ function renderResearchProjects(){
       ${p.notes?`<div class="scorecard-summary" style="margin:8px 0">${esc(p.notes)}</div>`:''}
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0">
         <button class="btn btn-sm" onclick="recalcResearchProject(${p.id})">↻ Recalculează verdict</button>
+        <button class="btn btn-sm" onclick="recheckResearchProjectPrices(${p.id})" ${links.length?'':'disabled'} title="Re-analizează linkurile existente și verifică dacă prețurile s-au schimbat">🔄 Reverifică prețurile</button>
         <button class="btn btn-sm btn-acc" id="rp-build-${p.id}" onclick="buildListingFromProject(${p.id})">✨ Generează anunț din dosar</button>
         ${hasListing?`<button class="btn btn-sm" onclick="showSavedProjectListing(${p.id})">👁 Vezi anunț salvat</button>`:''}
+        <button class="btn btn-sm" style="color:var(--gr);border-color:var(--gr)" onclick="addResearchProjectToInventar(${p.id})" title="Creează produsul în Inventar, cu numele/poza/costul din dosar">📦 Adaugă în Inventar</button>
       </div>
       <div class="research-project-add"><textarea id="rp-links-${p.id}" placeholder="Lipește până la 20 linkuri pentru acest dosar, câte unul pe linie"></textarea><button class="btn btn-sm btn-acc" onclick="addResearchProjectLinks(${p.id})">+ Adaugă & analizează</button></div>
       ${rows?`<div class="research-link-box">${rows}</div>`:'<div style="font-size:13px;color:var(--t3);margin-top:10px">Nu ai linkuri încă în acest dosar.</div>'}
@@ -3489,6 +3505,52 @@ async function recalcResearchProject(projectId){
     await loadResearchProjects();
     toast('Verdict recalculat ✓');
   }catch(e){toast(e.message||'Eroare recalculare verdict','err');}
+}
+// Recalculează verdictul pentru TOATE dosarele salvate — util pentru o verificare periodică rapidă
+async function recalcAllResearchProjects(){
+  if(!researchProjects.length){toast('Niciun dosar de recalculat','err');return;}
+  const btn=document.getElementById('rp-recalc-all-btn');
+  if(btn){btn.disabled=true;btn.textContent='⏳ Recalculez…';}
+  let ok=0,fail=0;
+  for(const p of researchProjects){
+    try{await apiJson('/api/research-projects',{action:'recalc_project',project_id:p.id},30000);ok++;}
+    catch(e){fail++;}
+  }
+  await loadResearchProjects();
+  if(btn){btn.disabled=false;btn.textContent='↻ Recalculează toate';}
+  toast(`Recalculate ${ok} dosare${fail?' · '+fail+' eșuate':''} ✓`);
+}
+// Re-analizează linkurile deja existente într-un dosar (nu doar cele noi), ca să prindem
+// schimbări de preț la furnizor/competitori de la ultima verificare.
+async function recheckResearchProjectPrices(projectId){
+  try{
+    toast('Reverific prețurile…');
+    const data=await apiJson('/api/research-projects',{action:'recheck_links',project_id:projectId},240000);
+    await loadResearchProjects();
+    const changed=data.changed||0,checked=data.checked||0;
+    toast(changed?`${changed} din ${checked} prețuri s-au schimbat de la ultima verificare ✓`:`Verificat ${checked} linkuri — niciun preț schimbat`);
+  }catch(e){toast(e.message||'Eroare reverificare prețuri','err');}
+}
+// Creează produsul în Inventar direct dintr-un dosar Research — nume + preț achiziție din dosar,
+// poza din primul link cu imagini (preferă linkul de furnizor, sursa reală a costului).
+function addResearchProjectToInventar(projectId){
+  const p=researchProjects.find(x=>Number(x.id)===Number(projectId));
+  if(!p){toast('Dosar negăsit','err');return;}
+  const links=p.links||[];
+  const withImg=links.find(l=>l.platform==='furnizor'&&Array.isArray(l.images)&&l.images.length)
+    ||links.find(l=>Array.isArray(l.images)&&l.images.length);
+  const img=withImg?.images?.[0]||'';
+  openModal();
+  setTimeout(()=>{
+    const n=document.getElementById('f-name');if(n)n.value=p.title||'';
+    const s=document.getElementById('f-sup');if(s&&p.supplier)s.value=p.supplier;
+    if(img){showPrev(img);curImg=img;document.getElementById('f-imgurl').value=img.startsWith('data:')?'':img;document.getElementById('ai-img-btn').disabled=false;}
+    if(p.acquisition_price>0){
+      document.getElementById('f-pbuy-ttc').value=Number(p.acquisition_price).toFixed(2);
+      syncAcqFields('ttc');
+    }
+    if(p.title)suggestCatFromName();
+  },80);
 }
 function showSavedProjectListing(projectId){
   const pr=researchProjects.find(p=>Number(p.id)===Number(projectId));

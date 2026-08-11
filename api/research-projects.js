@@ -2,6 +2,14 @@ const SUPA_URL=process.env.SUPABASE_URL||'https://nuvgwytanlgvcffxeahs.supabase.
 const SUPA_KEY=process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.SUPABASE_ANON_KEY||'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51dmd3eXRhbmxndmNmZnhlYWhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MDI0OTAsImV4cCI6MjA5NTI3ODQ5MH0.lSy1CUJA9xlVv1isAyfTIxGUAbGMUIS7c3TXQ-5pcEg';
 const MAX_HTML=2*1024*1024;
 const VAT=.21,COMMISSION=.20,FIXED_COSTS=23,MIN_PROFIT=10,MIN_MARGIN=20,MAX_LINKS=20;
+// Curs aproximativ de conversie în RON — la fel ca EUR_RON hardcodat în index.html pentru prețurile din Inventar.
+// Fără asta, un link de furnizor în PLN/EUR era tratat ca RON direct, denaturând profitul/marja calculate.
+const FX_TO_RON={RON:1,LEI:1,EUR:5.07,PLN:1.15,USD:4.65,GBP:5.9};
+function toRon(price,currency){
+  const p=Number(price)||0;if(!p)return 0;
+  const rate=FX_TO_RON[String(currency||'RON').toUpperCase()]||1;
+  return Math.round(p*rate*100)/100;
+}
 
 async function supa(method,path,body){
   const r=await fetch(`${SUPA_URL}/rest/v1/${path}`,{method,headers:{'content-type':'application/json','apikey':SUPA_KEY,'authorization':'Bearer '+SUPA_KEY,'prefer':'return=representation,resolution=merge-duplicates'},body:body?JSON.stringify(body):undefined});
@@ -96,12 +104,16 @@ function riskFlags(project,links,marketMin,minZero){
   return flags;
 }
 function projectVerdict(project,links){
-  const valid=links.filter(l=>Number(l.price)>0&&l.status!=='eroare');
-  const prices=valid.map(l=>Number(l.price)||0).filter(Boolean);
+  // Prețul de piață se calculează DOAR din linkuri competitor (eMAG/Trendyol/altul) — linkurile
+  // de furnizor (Jumbo/Maxy/Verk etc., adăugate ca sursă de cost) nu trebuie să se amestece în
+  // referința de preț de vânzare, altfel prețul de achiziție al furnizorului corupe verdictul.
+  const valid=links.filter(l=>l.platform!=='furnizor'&&Number(l.price)>0&&l.status!=='eroare');
+  const prices=valid.map(l=>toRon(l.price,l.currency)).filter(Boolean);
+  const convertedCount=valid.filter(l=>String(l.currency||'RON').toUpperCase()!=='RON'&&String(l.currency||'RON').toUpperCase()!=='LEI').length;
   const buy=Number(project.acquisition_price)||0,marketMin=prices.length?Math.min(...prices):0,marketMedian=median(prices);
   const reviewMax=Math.max(0,...valid.map(l=>Number(l.review_count)||0));
   if(!buy)return{verdict:'Date insuficiente',profit_estimated:0,margin_estimated:0,max_buy_price:0,notes:'Lipsește prețul de achiziție.'};
-  if(!marketMin)return{verdict:'Date insuficiente',profit_estimated:0,margin_estimated:0,max_buy_price:0,notes:'Lipsește un preț competitor valid.'};
+  if(!marketMin)return{verdict:'Date insuficiente',profit_estimated:0,margin_estimated:0,max_buy_price:0,notes:'Lipsește un preț competitor valid (linkurile de furnizor nu contează ca preț de piață).'};
   const ref=marketMin,profit=calcProfit(buy,ref),maxBuy=maxBuyForSale(ref),minZero=minSaleForBuy(buy,0,0),flags=riskFlags(project,valid,marketMin,minZero);
   const profitable=profit.profit>=MIN_PROFIT&&profit.margin>=MIN_MARGIN;
   let verdict='Date insuficiente',notes=[];
@@ -119,6 +131,7 @@ function projectVerdict(project,links){
     notes.push(reviewMax<10?'Profitabil, dar fără suficiente review-uri; se testează, nu se blochează.':'Profitabil, dar datele de piață sunt încă limitate.');
   }
   notes.push(`Referință piață: minim ${marketMin.toFixed(2)} RON, mediană ${marketMedian?marketMedian.toFixed(2):'—'} RON. Prag zero profit estimat: ${minZero.toFixed(2)} RON.`);
+  if(convertedCount)notes.push(`${convertedCount} preț(uri) convertite automat în RON (curs aproximativ) — verifică manual dacă decizia e la limită.`);
   return{verdict,profit_estimated:profit.profit,margin_estimated:profit.margin,max_buy_price:maxBuy,notes:notes.join(' ')};
 }
 async function recalcProject(projectId){
@@ -183,6 +196,28 @@ module.exports=async function handler(req,res){
       await supa('PATCH',`research_projects?id=eq.${projectId}`,{updated_at:new Date().toISOString()});
       const verdict=await recalcProject(projectId);
       return res.status(200).json({added,skipped,flagged,verdict:verdict.project});
+    }
+    if(body.action==='recheck_links'){
+      const projectId=Number(body.project_id);
+      if(!projectId)return res.status(400).json({error:'Lipsește dosarul'});
+      const existing=await supa('GET',`research_links?project_id=eq.${projectId}&select=*`);
+      if(!existing.length)return res.status(200).json({checked:0,changed:0});
+      const reanalyzed=await Promise.all(existing.map(async l=>({link:l,data:await analyzeUrl(l.url)})));
+      let changed=0;
+      const history=[];
+      for(const{link,data}of reanalyzed){
+        const oldPrice=Number(link.price)||0,newPrice=Number(data.price)||0;
+        const priceChanged=Math.abs(oldPrice-newPrice)>=0.01;
+        if(priceChanged){
+          changed++;
+          history.push({link_id:link.id,project_id:projectId,url:link.url,old_price:oldPrice,new_price:newPrice,currency:data.currency||link.currency||'RON'});
+        }
+        await supa('PATCH',`research_links?id=eq.${link.id}`,{title:data.title||link.title,price:data.price||0,currency:data.currency||link.currency||'RON',rating:data.rating||link.rating||0,review_count:data.review_count||link.review_count||0,images:data.images||link.images||[],description:data.description||link.description||'',status:data.error?'eroare':'analizat',error:data.error||null,updated_at:new Date().toISOString()});
+      }
+      if(history.length){try{await supa('POST','research_price_history',history);}catch(e){/* tabela poate lipsi dacă migrarea nu a fost rulată — reverificarea tot funcționează, doar fără istoric */}}
+      await supa('PATCH',`research_projects?id=eq.${projectId}`,{updated_at:new Date().toISOString()});
+      const verdict=await recalcProject(projectId);
+      return res.status(200).json({checked:existing.length,changed,verdict:verdict.project});
     }
     if(body.action==='recalc_project'){
       const projectId=Number(body.project_id);
