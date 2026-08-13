@@ -1418,7 +1418,7 @@ th{font-weight:800!important;color:var(--t3)!important}
           <div class="sb-cell"><label>Vândute total</label><input id="f-sold" type="text" inputmode="decimal" placeholder="0" oninput="calcStoc()"></div>
         </div>
         <div class="sb-res">
-          <div class="sb-rc"><div class="sb-rl">Stoc actual</div><div class="sb-rv" id="sb-act">0</div></div>
+          <div class="sb-rc"><div class="sb-rl">Stoc actual</div><div class="sb-rv" id="sb-act">0</div><button type="button" class="btn btn-sm" style="margin-top:6px" onclick="correctStocActual()" title="Corectează direct stocul actual, fără să calculezi cumpărat/vândut">✏️ Corectează</button></div>
           <div class="sb-rc" id="sb-future-row"><div class="sb-rl">După sosire</div><div class="sb-rv" id="sb-future">0</div><div class="sb-rs">actual + pe drum</div></div>
           <div class="sb-rc"><div class="sb-rl">Vândute azi</div><div class="sb-rv" id="sb-azi" style="opacity:.55">—</div><div class="sb-rs">din panoul zilnic</div></div>
         </div>
@@ -1576,6 +1576,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:58,text:'Buton nou „✏️ Corectează" lângă Stoc actual, în fișa produsului — introduci direct stocul corect (bucăți), fără să calculezi manual cumpărat/vândut. Nu se salvează pe loc — completează doar formularul, ca să confirmi cu Salvează și să eviți o greșeală din greșeală',date:'2026-08-13'},
   {n:57,text:'Semnul EasyBox apare acum și pe cardul din "Vânzări azi", în dreapta sus lângă titlul produsului — vezi dintr-o privire dacă produsul poate fi trimis prin easybox',date:'2026-08-12'},
   {n:56,text:'Cardul principal din "Vânzări azi" — poza produsului e mult mai mare (150px→210px), iar titlul mai mic, ca poza să fie punctul central',date:'2026-08-12'},
   {n:55,text:'Semnul EasyBox din tabelul Vânzări e acum un badge colorat, mai mare și mai vizibil (fundal + margine), în loc de un simplu caracter mic',date:'2026-08-12'},
@@ -5445,6 +5446,27 @@ function calcStoc(){
     const future=document.getElementById('sb-future');
     future.textContent=fmtQty(v+incoming);future.className='sb-rv'+(v+incoming<0?' neg':'');
   }
+}
+// Corectează direct stocul actual (bucăți disponibile), fără să calculezi manual cumpărat/vândut.
+// Nu salvează nimic pe loc — doar completează câmpurile din formular; corectarea devine definitivă
+// abia la apăsarea butonului Salvează, ca o eventuală greșeală să poată fi anulată închizând fereastra.
+function correctStocActual(){
+  const boughtEl=document.getElementById('f-bought'),soldEl=document.getElementById('f-sold');
+  const bought=Math.max(0,parseQtyVal(boughtEl.value)),sold=Math.max(0,parseQtyVal(soldEl.value));
+  const current=bought-sold;
+  const raw=prompt('Stoc actual corect (bucăți):',fmtQty(current));
+  if(raw===null)return;
+  const val=parseQtyVal(raw,NaN);
+  if(!Number.isFinite(val)||val<0){toast('Valoare invalidă — introdu un număr ≥ 0','err');return;}
+  if(val===current){toast('Stocul actual e deja '+fmtQty(val)+' buc.');return;}
+  if(val>bought){
+    // stocul cerut depășește ce era cumpărat — creștem cumpărat ca să acopere diferența (ca la Raport stoc)
+    boughtEl.value=fmtQty(val+sold);
+  }else{
+    soldEl.value=fmtQty(bought-val);
+  }
+  calcStoc();
+  toast(`Stoc actual pregătit: ${fmtQty(val)} buc. — apasă Salvează ca să confirmi`);
 }
 
 /* IMAGE */
