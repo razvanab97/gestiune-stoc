@@ -1576,6 +1576,8 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:60,text:'Salvările (produs, vânzări, jurnal, comenzi de stoc) nu mai scriu deloc în browser (localStorage) atunci când Supabase reușește — merg direct și doar în Supabase. Cache-ul local rămâne doar ca plasă de siguranță pentru mod offline, când Supabase chiar nu răspunde',date:'2026-08-14'},
+  {n:59,text:'Fix real: eroarea „The quota has been exceeded" la salvare produs — cache-ul local (localStorage) era plin, dar produsul CHIAR se salva corect în Supabase; doar mesajul era greșit și te făcea să crezi că a picat salvarea. Aplicat peste tot în aplicație (nu doar la produse), ca aceeași confuzie să nu mai apară nicăieri',date:'2026-08-14'},
   {n:58,text:'Buton nou „✏️ Corectează" lângă Stoc actual, în fișa produsului — introduci direct stocul corect (bucăți), fără să calculezi manual cumpărat/vândut. Nu se salvează pe loc — completează doar formularul, ca să confirmi cu Salvează și să eviți o greșeală din greșeală',date:'2026-08-13'},
   {n:57,text:'Semnul EasyBox apare acum și pe cardul din "Vânzări azi", în dreapta sus lângă titlul produsului — vezi dintr-o privire dacă produsul poate fi trimis prin easybox',date:'2026-08-12'},
   {n:56,text:'Cardul principal din "Vânzări azi" — poza produsului e mult mai mare (150px→210px), iar titlul mai mic, ca poza să fie punctul central',date:'2026-08-12'},
@@ -1659,11 +1661,12 @@ async function logMove(tip,name,qty,sursa,productId){
   const entry={ts:new Date().toISOString(),tip,name,qty:q,sursa:sursa||'',seen:false,productId:productId||null};
   ACT.unshift(entry);
   if(ACT.length>200)ACT.length=200;
-  localStorage.setItem(AK,JSON.stringify(ACT));
   renderNotif();
   if(sbReady){
     try{await dbPost('activitate_stoc',{tip:entry.tip,product_name:entry.name,qty:entry.qty,sursa:entry.sursa,product_id:entry.productId});}
-    catch(e){console.warn('Nu s-a salvat mișcarea de stoc în Supabase (rulează migration_activity_log.sql):',e);}
+    catch(e){console.warn('Nu s-a salvat mișcarea de stoc în Supabase (rulează migration_activity_log.sql):',e);safeLocalSet(AK,JSON.stringify(ACT));}
+  }else{
+    safeLocalSet(AK,JSON.stringify(ACT));
   }
 }
 function notifRowHtml(a){
@@ -1689,10 +1692,11 @@ async function logPriceChange(productId,name,tipPret,oldPrice,newPrice,sursa){
   const entry={ts:new Date().toISOString(),productId:productId||null,name,tipPret,oldPrice,newPrice,sursa:sursa||''};
   PCT.unshift(entry);
   if(PCT.length>300)PCT.length=300;
-  localStorage.setItem(PHK,JSON.stringify(PCT));
   if(sbReady){
     try{await dbPost('istoric_preturi',{product_id:entry.productId,product_name:entry.name,tip_pret:entry.tipPret,pret_vechi:entry.oldPrice,pret_nou:entry.newPrice,sursa:entry.sursa});}
-    catch(e){console.warn('Nu s-a salvat modificarea de preț în Supabase (rulează migration_price_history.sql):',e);}
+    catch(e){console.warn('Nu s-a salvat modificarea de preț în Supabase (rulează migration_price_history.sql):',e);safeLocalSet(PHK,JSON.stringify(PCT));}
+  }else{
+    safeLocalSet(PHK,JSON.stringify(PCT));
   }
 }
 // Compară toate câmpurile de preț dintre "before" și "after" și loghează fiecare schimbare — apelat de oriunde se salvează un produs cu preț nou (modal, adăugare stoc în masă, import factură)
@@ -1913,7 +1917,7 @@ function toggleNotifPanel(ev){
   const panel=document.getElementById('notif-panel');if(!panel)return;
   const willOpen=!panel.classList.contains('on');
   panel.classList.toggle('on');
-  if(willOpen&&ACT.some(a=>!a.seen)){ACT.forEach(a=>a.seen=true);localStorage.setItem(AK,JSON.stringify(ACT));renderNotif();}
+  if(willOpen&&ACT.some(a=>!a.seen)){ACT.forEach(a=>a.seen=true);safeLocalSet(AK,JSON.stringify(ACT));renderNotif();}
 }
 document.addEventListener('click',ev=>{
   const panel=document.getElementById('notif-panel');
@@ -2032,7 +2036,6 @@ async function saveStockOrderHistory(order){
   order.createdAt=order.createdAt||new Date().toISOString();
   order.localId=order.localId||('ord-'+Date.now()+'-'+Math.random().toString(36).slice(2,8));
   OI=mergeStockOrders([order],OI);
-  localStorage.setItem(OK,JSON.stringify(OI));
   if(sbReady){
     try{
       const sent=stockOrderToDb(order);
@@ -2046,15 +2049,30 @@ async function saveStockOrderHistory(order){
         }else throw e;
       }
       if(rows?.[0])OI=mergeStockOrders([{...dbToStockOrder(rows[0]),invoiceNumber:dbToStockOrder(rows[0]).invoiceNumber||order.invoiceNumber||''}],OI.filter(o=>o.localId!==order.localId));
-      localStorage.setItem(OK,JSON.stringify(OI));
     }catch(e){
       console.warn('Nu s-a salvat istoricul comenzii în Supabase:',e);
       toast('Comanda a fost salvată local. Pentru salvare în baza de date rulează SQL-ul pentru comenzi_stoc.','err');
+      safeLocalSet(OK,JSON.stringify(OI));
     }
+  }else{
+    safeLocalSet(OK,JSON.stringify(OI));
   }
 }
 
 const K='sm6_prod',TK='sm6_today',JK='sm6_jurnal',OK='sm6_stock_orders',EFK='sm6_efactura_emag_date';
+// Cache local pentru produse — NU trebuie să poată bloca un flux care deja a salvat cu succes în
+// Supabase. Dacă localStorage e plin ("quota exceeded", frecvent pe Safari cu poze mari în base64),
+// eșuează silențios (doar console.warn) în loc să arunce o eroare care pare că salvarea a picat.
+function saveLocalCache(){
+  try{localStorage.setItem(K,JSON.stringify(P));}
+  catch(e){console.warn('Nu s-a putut actualiza cache-ul local (localStorage plin?):',e);}
+}
+// La fel ca saveLocalCache, dar generic pentru orice altă cheie — cache-ul local nu trebuie
+// să poată transforma o salvare reușită în Supabase într-un fals "eroare de salvare".
+function safeLocalSet(key,value){
+  try{localStorage.setItem(key,value);}
+  catch(e){console.warn('Nu s-a putut scrie în localStorage ('+key+'):',e);}
+}
 let P=[],TS={},JL=[],OI=[],editId=null,sCol='name',sDir=1,jMode='sales',curImg='',selProd=new Set(),selSuppliers=new Set(),savingProduct=false,invSourceName='';
 let compState={};
 let SYNCM=[],syncMapsLoaded=false,syncImpParsed=[];
@@ -2072,7 +2090,7 @@ function addCustomCategory(catName){
   if(!catName || CATS.includes(catName)) return;
   CATS.push(catName);
   CATS.sort();
-  localStorage.setItem('customCategories', JSON.stringify(CATS));
+  safeLocalSet('customCategories', JSON.stringify(CATS));
   buildCats('');
   toast('Categorie adăugată ✓');
 }
@@ -2153,7 +2171,7 @@ async function load(){
     try{
       const oRows=await dbGet('comenzi_stoc?select=*&order=created_at.desc');
       OI=mergeStockOrders(oRows.map(dbToStockOrder),loadLocalStockOrders());
-      localStorage.setItem(OK,JSON.stringify(OI));
+      safeLocalSet(OK,JSON.stringify(OI));
     }catch(e){
       OI=loadLocalStockOrders();
       console.warn('comenzi_stoc unavailable:',e);
@@ -2164,7 +2182,7 @@ async function load(){
     try{
       const mRows=await dbGet('activitate_stoc?select=*&order=created_at.desc&limit=100');
       ACT=mRows.map(r=>({ts:r.created_at,tip:r.tip,name:r.product_name,qty:Number(r.qty)||0,sursa:r.sursa||'',seen:true,productId:r.product_id||null}));
-      localStorage.setItem(AK,JSON.stringify(ACT));
+      safeLocalSet(AK,JSON.stringify(ACT));
     }catch(e){
       ACT=loadLocalActivity();
       console.warn('activitate_stoc unavailable (rulează migration_activity_log.sql):',e);
@@ -2174,7 +2192,7 @@ async function load(){
     try{
       const phRows=await dbGet('istoric_preturi?select=*&order=created_at.desc&limit=200');
       PCT=phRows.map(r=>({ts:r.created_at,productId:r.product_id||null,name:r.product_name,tipPret:r.tip_pret,oldPrice:Number(r.pret_vechi)||0,newPrice:Number(r.pret_nou)||0,sursa:r.sursa||''}));
-      localStorage.setItem(PHK,JSON.stringify(PCT));
+      safeLocalSet(PHK,JSON.stringify(PCT));
     }catch(e){
       PCT=loadLocalPriceHist();
       console.warn('istoric_preturi unavailable (rulează migration_price_history.sql):',e);
@@ -2226,7 +2244,7 @@ async function loadGlobalSettings(){
     const data=await r.json();
     if(r.ok&&data?.value!==undefined){
       eFacturaEmagDate=data.value||'';
-      localStorage.setItem(EFK,eFacturaEmagDate);
+      safeLocalSet(EFK,eFacturaEmagDate);
       eFacturaEmagEdit=!eFacturaEmagDate;
       return;
     }
@@ -2236,7 +2254,7 @@ async function loadGlobalSettings(){
     const r=await dbGet('setari_app?key=eq.efactura_emag_last_date&select=value');
     if(r?.[0]?.value!==undefined){
       eFacturaEmagDate=r[0].value||'';
-      localStorage.setItem(EFK,eFacturaEmagDate);
+      safeLocalSet(EFK,eFacturaEmagDate);
       eFacturaEmagEdit=!eFacturaEmagDate;
     }
   }catch(e){}
@@ -2252,7 +2270,7 @@ async function saveEFacturaEmagDate(){
   const v=document.getElementById('efactura-emag-date')?.value||'';
   eFacturaEmagDate=v;
   eFacturaEmagEdit=!v;
-  localStorage.setItem(EFK,v);
+  safeLocalSet(EFK,v);
   renderTable();
   try{
     const r=await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:'efactura_emag_last_date',value:v})});
@@ -2315,8 +2333,6 @@ async function saveProdToDb(data,id){
       setSyncStatus('ok','salvat');
     }
     if(missing.length)console.warn(`Produs salvat, dar câmpurile noi (${missing.join(', ')}) nu s-au putut scrie în Supabase — rulează migrarea SQL corespunzătoare (vezi widget-ul de Update-uri).`);
-    // also cache locally
-    localStorage.setItem(K,JSON.stringify(P));
     return true;
   }catch(err){
     setSyncStatus('err','Eroare salvare');
@@ -2326,38 +2342,36 @@ async function saveProdToDb(data,id){
 }
 
 async function deleteProdFromDb(id){
-  if(!sbReady){P=P.filter(p=>p.id!==id);delete TS[id];localStorage.setItem(K,JSON.stringify(P));return;}
+  if(!sbReady){P=P.filter(p=>p.id!==id);delete TS[id];saveLocalCache();return;}
   try{
     await dbDelete(`produse?id=eq.${id}`);
     await dbDelete(`vanzari_zilnice?product_id=eq.${id}`);
     P=P.filter(p=>p.id!==id);delete TS[id];
-    localStorage.setItem(K,JSON.stringify(P));
     setSyncStatus('ok','șters');
   }catch(err){setSyncStatus('err','Eroare ștergere');toast('Eroare: '+err.message,'err');}
 }
 
 // ── SAVE TODAY SALES ──
 async function saveTodaySale(productId, qty){
-  if(!sbReady){localStorage.setItem(TK,JSON.stringify({date:td(),sales:TS}));return;}
+  if(!sbReady){safeLocalSet(TK,JSON.stringify({date:td(),sales:TS}));return;}
   try{
     const today=td();
     // upsert
     await sb('POST','vanzari_zilnice',{data:today,product_id:productId,qty},{
       'Prefer':'resolution=merge-duplicates,return=representation'
     });
-    localStorage.setItem(TK,JSON.stringify({date:td(),sales:TS}));
     setSyncStatus('ok',new Date().toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}));
   }catch(err){
     // try upsert differently
     try{
       await dbPatch(`vanzari_zilnice?data=eq.${td()}&product_id=eq.${productId}`,{qty});
     }catch(e2){}
-    localStorage.setItem(TK,JSON.stringify({date:td(),sales:TS}));
+    safeLocalSet(TK,JSON.stringify({date:td(),sales:TS}));
   }
 }
 
 async function saveTodayAllSales(){
-  if(!sbReady){localStorage.setItem(TK,JSON.stringify({date:td(),sales:TS}));return;}
+  if(!sbReady){safeLocalSet(TK,JSON.stringify({date:td(),sales:TS}));return;}
   const today=td();
   for(const [pid,q] of Object.entries(TS)){
     if(q>0){
@@ -2368,7 +2382,7 @@ async function saveTodayAllSales(){
       }
     }
   }
-  localStorage.setItem(TK,JSON.stringify({date:today,sales:TS}));
+  safeLocalSet(TK,JSON.stringify({date:today,sales:TS}));
 }
 
 // ── SAVE JURNAL ──
@@ -2380,7 +2394,7 @@ async function saveJurnalEntry(p, q){
     const ex=day.entries.find(en=>en.id===p.id);
     if(ex)ex.qty+=q;else day.entries.push({id:p.id,name:p.name,category:p.category||'',priceSell:p.priceSell||0,img:p.img||'',qty:q});
     JL.sort((a,b)=>b.date.localeCompare(a.date));
-    localStorage.setItem(JK,JSON.stringify(JL));
+    safeLocalSet(JK,JSON.stringify(JL));
     return;
   }
   try{
@@ -2396,15 +2410,14 @@ async function saveJurnalEntry(p, q){
     const jMap={};
     jRows.forEach(r=>{if(!jMap[r.data])jMap[r.data]={date:r.data,entries:[]};jMap[r.data].entries.push({id:r.product_id,name:r.product_name,category:r.category||'',priceSell:r.price_sell||0,img:r.img||'',qty:r.qty});});
     JL=Object.values(jMap).sort((a,b)=>b.date.localeCompare(a.date));
-    localStorage.setItem(JK,JSON.stringify(JL));
     setSyncStatus('ok',new Date().toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}));
-  }catch(err){setSyncStatus('err','Eroare jurnal');}
+  }catch(err){setSyncStatus('err','Eroare jurnal');safeLocalSet(JK,JSON.stringify(JL));}
 }
 
 function saveLocalOnly(data,id){
   if(id){const i=P.findIndex(p=>p.id===id);if(i>=0)P[i]={...P[i],...data};}
   else{P.push({id:P.reduce((m,p)=>Math.max(m,p.id),0)+1,...data});}
-  localStorage.setItem(K,JSON.stringify(P));
+  saveLocalCache();
 }
 
 function sample(){
@@ -3117,7 +3130,7 @@ function openCalcForProduct(id){
   const btn=document.getElementById('h-tab-calc');if(btn)goPage('calc',btn);
 }
 const CALC_SK='sm6_calc_state';
-function saveCalcState(){localStorage.setItem(CALC_SK,JSON.stringify({pcState,pcChannel,pcTax,emagCalc,trendyolCalc,directCalc}));toast('Calculator salvat ✓');}
+function saveCalcState(){safeLocalSet(CALC_SK,JSON.stringify({pcState,pcChannel,pcTax,emagCalc,trendyolCalc,directCalc}));toast('Calculator salvat ✓');}
 function loadCalcState(){
   const s=JSON.parse(localStorage.getItem(CALC_SK)||'null');
   if(!s){toast('Nicio stare salvată');return;}
@@ -3156,7 +3169,7 @@ function saveResearchToHistory(item){
   const h=getResearchHistory();
   h.unshift({...item,date:new Date().toISOString()});
   if(h.length>50)h.length=50;
-  localStorage.setItem(RESEARCH_HK,JSON.stringify(h));
+  safeLocalSet(RESEARCH_HK,JSON.stringify(h));
 }
 function clearResearchHistory(){
   if(!confirm('Ștergi tot istoricul de research?'))return;
@@ -3892,7 +3905,7 @@ function checkImgDims(img){
   if(!ok)img.style.opacity='0.6';
 }
 const LISTING_DRAFT_KEY='sm6_listing_draft';
-function saveListingDraft(l){try{localStorage.setItem(LISTING_DRAFT_KEY,JSON.stringify(l));}catch(e){}}
+function saveListingDraft(l){try{safeLocalSet(LISTING_DRAFT_KEY,JSON.stringify(l));}catch(e){}}
 function loadListingDraft(){try{const s=localStorage.getItem(LISTING_DRAFT_KEY);return s?JSON.parse(s):null;}catch(e){return null;}}
 function toggleListingHtmlView(mode){
   ['preview','raw'].forEach(m=>{
@@ -4562,10 +4575,11 @@ async function sellSearch(id){
   TS[id]=(TS[id]||0)+c;p.sold=(p.sold||0)+c;
   // update sold in DB
   if(sbReady){
-    try{await dbPatch(`produse?id=eq.${id}`,{sold:p.sold});}catch(e){toast('Vânzarea nu s-a sincronizat cu Supabase — a rămas doar local','err');}
+    try{await dbPatch(`produse?id=eq.${id}`,{sold:p.sold});}catch(e){toast('Vânzarea nu s-a sincronizat cu Supabase — a rămas doar local','err');saveLocalCache();}
     await saveTodaySale(id,TS[id]);
+  }else{
+    saveLocalCache();
   }
-  localStorage.setItem(K,JSON.stringify(P));
   await saveJurnalEntry(p,c);
   await logMove('out',p.name,c,'Vânzare din căutare',p.id);
   renderToday();renderTable();renderSearch();
@@ -4609,20 +4623,22 @@ async function updateTQ(id){
   if(d>0){await saveJurnalEntry(p,d);await logMove('out',p.name,d,'Ajustare vânzări azi',p.id);}
   TS[id]=nv;
   if(sbReady){
-    try{await dbPatch(`produse?id=eq.${id}`,{sold:p.sold});}catch(e){toast('Modificarea nu s-a sincronizat cu Supabase — a rămas doar local','err');}
+    try{await dbPatch(`produse?id=eq.${id}`,{sold:p.sold});}catch(e){toast('Modificarea nu s-a sincronizat cu Supabase — a rămas doar local','err');saveLocalCache();}
     await saveTodaySale(id,nv);
+  }else{
+    saveLocalCache();
   }
-  localStorage.setItem(K,JSON.stringify(P));
   renderToday();renderTable();
 }
 async function qSell(id){
   const p=P.find(x=>x.id===id);if(!p)return;
   TS[id]=(TS[id]||0)+1;p.sold=(p.sold||0)+1;
   if(sbReady){
-    try{await dbPatch(`produse?id=eq.${id}`,{sold:p.sold});}catch(e){toast('Vânzarea nu s-a sincronizat cu Supabase — a rămas doar local','err');}
+    try{await dbPatch(`produse?id=eq.${id}`,{sold:p.sold});}catch(e){toast('Vânzarea nu s-a sincronizat cu Supabase — a rămas doar local','err');saveLocalCache();}
     await saveTodaySale(id,TS[id]);
+  }else{
+    saveLocalCache();
   }
-  localStorage.setItem(K,JSON.stringify(P));
   await saveJurnalEntry(p,1);
   await logMove('out',p.name,1,'Vânzare rapidă',p.id);
   renderToday();renderTable();toast(`${p.name}${qty(p)<0?' · stoc pe minus: '+fmtQty(qty(p)):''}`);
@@ -4634,10 +4650,11 @@ async function qUnsell(id){
   if(cur<=0)return;
   TS[id]=cur-1;p.sold=Math.max(0,(p.sold||0)-1);
   if(sbReady){
-    try{await dbPatch(`produse?id=eq.${id}`,{sold:p.sold});}catch(e){toast('Modificarea nu s-a sincronizat cu Supabase — a rămas doar local','err');}
+    try{await dbPatch(`produse?id=eq.${id}`,{sold:p.sold});}catch(e){toast('Modificarea nu s-a sincronizat cu Supabase — a rămas doar local','err');saveLocalCache();}
     await saveTodaySale(id,TS[id]);
+  }else{
+    saveLocalCache();
   }
-  localStorage.setItem(K,JSON.stringify(P));
   renderToday();renderTable();
 }
 
@@ -4652,10 +4669,11 @@ async function deleteSale(id){
   TS[id]=0;
   
   if(sbReady){
-    try{await dbPatch(`produse?id=eq.${id}`,{sold:p.sold});}catch(e){toast('Ștergerea nu s-a sincronizat cu Supabase — a rămas doar local','err');}
+    try{await dbPatch(`produse?id=eq.${id}`,{sold:p.sold});}catch(e){toast('Ștergerea nu s-a sincronizat cu Supabase — a rămas doar local','err');saveLocalCache();}
     await saveTodaySale(id,0);
+  }else{
+    saveLocalCache();
   }
-  localStorage.setItem(K,JSON.stringify(P));
   toast('Vânzare ștearsă ✓');
   renderToday();renderTable();
 }
@@ -4663,14 +4681,14 @@ async function deleteSale(id){
 async function resetToday(){
   if(!confirm('Resetezi contorul zilnic?'))return;
   P.forEach(p=>{p.sold=Math.max(0,(p.sold||0)-(TS[p.id]||0));});
+  let failed=0;
   if(sbReady){
     try{await dbDelete(`vanzari_zilnice?data=eq.${td()}`);}catch(e){}
-    let failed=0;
     for(const p of P){try{await dbPatch(`produse?id=eq.${p.id}`,{sold:p.sold});}catch(e){failed++;}}
     if(failed)toast(`${failed} produse nu s-au sincronizat cu Supabase — au rămas doar local`,'err');
   }
-  localStorage.setItem(K,JSON.stringify(P));
-  TS={};localStorage.setItem(TK,JSON.stringify({date:td(),sales:{}}));
+  TS={};
+  if(!sbReady||failed>0){saveLocalCache();safeLocalSet(TK,JSON.stringify({date:td(),sales:{}}));}
   renderToday();renderTable();toast('Resetat');
 }
 async function closeDay(){
