@@ -791,7 +791,9 @@ function buildRaportCats(){
 .research-project-filters button{border:1px solid var(--b2);background:var(--surf2);color:var(--t2);border-radius:999px;padding:6px 11px;font-size:12px;font-weight:800;cursor:pointer}
 .research-project-filters button.on{background:var(--acc);border-color:var(--acc);color:var(--acc-fg)}
 .research-projects-list{display:grid;gap:12px;margin-top:12px}
-.research-project-card{background:var(--surf);border:1px solid var(--b1);border-radius:var(--r2);padding:1rem;box-shadow:var(--sh)}
+.research-project-card{background:var(--surf);border:1px solid var(--b1);border-radius:var(--r2);padding:1rem;box-shadow:var(--sh);transition:box-shadow .3s}
+.research-project-card.rsx-flash{animation:rsxFlash 1.6s ease-out}
+@keyframes rsxFlash{0%{box-shadow:0 0 0 3px var(--acc)}100%{box-shadow:var(--sh)}}
 .research-project-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:10px}
 .research-project-title{font-size:18px;font-weight:900;color:var(--t1);line-height:1.25}
 .research-project-meta{font-size:13px;color:var(--t3);font-family:var(--mono);margin-top:4px}
@@ -1562,6 +1564,12 @@ th{font-weight:800!important;color:var(--t3)!important}
           <div class="research-hint" style="margin:10px 0 0">Adaugă linkul furnizorului (cost) și linkuri eMAG/Trendyol (preț de piață) în dosar — verdictul și profitul se calculează automat.</div>
         </div>
       </div>
+      <div class="tb" id="research-top-wrap" style="display:none">
+        <div class="tb-head">
+          <div class="tb-title">🏆 Top produse cercetate <span style="font-size:12px;font-weight:400;color:var(--t3)">— după profit estimat, doar dosare cu preț de piață confirmat</span></div>
+        </div>
+        <div id="research-top-list"></div>
+      </div>
       <div id="research-projects-list" class="research-projects-list"></div>
     </div>
     <div class="research-mode" id="research-mode-product">
@@ -1647,13 +1655,6 @@ th{font-weight:800!important;color:var(--t3)!important}
     </div>
   </div>
 
-  <div class="tb" id="research-history-wrap" style="display:none">
-    <div class="tb-head">
-      <div class="tb-title">📋 Clasament produse cercetate <span style="font-size:12px;font-weight:400;color:var(--t3)">— sortat după scor</span></div>
-      <button class="btn btn-sm" onclick="clearResearchHistory()" style="color:var(--rd)">🗑 Șterge tot</button>
-    </div>
-    <div id="research-history"></div>
-  </div>
 </div></div>
 
 <div id="page-archive" class="page"><div class="wrap">
@@ -1890,6 +1891,8 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:100,text:'Research: buton nou „💾 Salvează anunțul" pe anunțul generat cu Generatorul de sine stătător (fără dosar în spate) — dacă îți place, îl păstrezi într-un dosar minim, ca să-l regăsești oricând. Orice anunț generat (din dosar sau salvat) are acum și un buton „🔗 Vezi dosarul în Research" care te duce direct la dosarul lui, cu cardul evidențiat',date:'2026-08-18'},
+  {n:99,text:'Research: „📋 Clasament produse cercetate" (rămășiță din fluxul vechi, moartă de când s-a trecut pe Dosare) a devenit „🏆 Top produse cercetate" — un top 5 dosare după profit estimat, calculat DOAR din linkuri de piață verificate/confirmate (nu din candidați neconfirmați cu scor 50-79). Click pe un rând te duce direct la dosarul respectiv',date:'2026-08-18'},
   {n:98,text:'Research: pagina se încarcă instant, fără pauză — dosarele apar imediat dintr-o copie locală (cache), fără spinner, în timp ce datele proaspete se aduc tăcut în fundal și înlocuiesc cache-ul când sunt gata. Doar prima vizită vreodată (fără nicio copie locală încă) mai arată spinner-ul de încărcare',date:'2026-08-17'},
   {n:97,text:'Research: două scoruri noi, separate de scorul de potrivire (Match) existent — Completeness Score (cât de completă e o listare eMAG/Trendyol: titlu, poze, descriere, specificații, identificare produs, ofertă) și Quality Score (cât de bine e făcută: claritate titlu, structură descriere, social proof, trust — fără preț). Calculate determinist, fără AI, din datele deja salvate. Bonus: descoperit că eMAG expune specificații structurate (Material/Culoare/Dimensiuni/etc.) niciodată folosite până acum — acum se extrag și salvează automat',date:'2026-08-17'},
   {n:96,text:'Research: eliminat spinner-ul care ștergea toată lista de dosare („Încarc dosarele…") la fiecare acțiune mică — adăugare poză, confirmare, ștergere link, reverificare prețuri, recalculare verdict. Acum fiecare acțiune își actualizează direct, local, doar ce s-a schimbat, din răspunsul deja primit de la server — fără refetch, fără „refresh" vizual. Verificat: nicio altă pagină din aplicație nu avea acest tipar',date:'2026-08-17'},
@@ -2969,8 +2972,7 @@ function goPage(id,btn){
   if(id==='research'){
     const tryRs=(n)=>{if(P.length>0){}else if(n>0)setTimeout(()=>tryRs(n-1),300);};
     setTimeout(()=>tryRs(20),100);
-    if(!researchProjectsLoaded)loadResearchProjects();
-    renderResearchHistory();
+    if(!researchProjectsLoaded)loadResearchProjects();else renderResearchTopProducts();
     // Restaurează draft listing dacă există
     if(!listingData){
       const draft=loadListingDraft();
@@ -3667,12 +3669,6 @@ function saveResearchToHistory(item){
   if(h.length>50)h.length=50;
   safeLocalSet(RESEARCH_HK,JSON.stringify(h));
 }
-function clearResearchHistory(){
-  if(!confirm('Ștergi tot istoricul de research?'))return;
-  localStorage.removeItem(RESEARCH_HK);
-  renderResearchHistory();
-  toast('Istoric șters ✓');
-}
 function researchMode(mode){
   ['projects','product','listing','competition','decision'].forEach(m=>{
     document.getElementById('research-tab-'+m)?.classList.toggle('on',m===mode);
@@ -3707,21 +3703,45 @@ function researchMode(mode){
     if(researchData){renderResearchResult(researchData);if(listingData)renderListingResult(listingData,[]);}
   }
 }
-function renderResearchHistory(){
-  const h=getResearchHistory();
-  const wrap=document.getElementById('research-history-wrap');
-  const body=document.getElementById('research-history');
+// Un dosar contează pentru clasament doar dacă are cel puțin un link de piață (eMAG/Trendyol) VERIFICAT —
+// analizat cu succes ȘI confirmat/inclus (nu un candidat neconfirmat cu scor 50-79 din PDF, care așteaptă
+// bifa „confirmă"). Altfel profitul e doar o presupunere neverificată și nu ar trebui să apară în top.
+function researchVerifiedProfit(p){
+  const verified=(p.links||[]).some(l=>l.platform!=='furnizor'&&l.status==='analizat'&&l.include_in_listing!==false&&Number(l.price)>0);
+  return verified?Number(p.profit_estimated)||0:null;
+}
+function renderResearchTopProducts(){
+  const wrap=document.getElementById('research-top-wrap'),body=document.getElementById('research-top-list');
   if(!wrap||!body)return;
-  if(!h.length){wrap.style.display='none';return;}
+  const ranked=researchProjects.map(p=>({p,profit:researchVerifiedProfit(p)})).filter(x=>x.profit!=null&&x.profit>0).sort((a,b)=>b.profit-a.profit).slice(0,5);
+  if(!ranked.length){wrap.style.display='none';return;}
   wrap.style.display='';
-  const sorted=h.map((item,i)=>({...item,_oi:i})).sort((a,b)=>(b.score||0)-(a.score||0));
-  body.innerHTML=sorted.map(item=>{
-    const d=new Date(item.date).toLocaleDateString('ro-RO');
-    const img=item.img?`<img class="research-hist-img" src="${esc(imgSrc(item.img))}" onerror="this.src=''" alt="">`:
+  body.innerHTML=ranked.map(({p,profit},i)=>{
+    const img=p.cover_image?`<img class="research-hist-img" src="${esc(p.cover_image)}" alt="">`:
       `<div class="research-hist-img" style="display:flex;align-items:center;justify-content:center;font-size:22px">📦</div>`;
-    const scoreBadge=item.score!=null?`<span class="research-hist-score" style="color:${item.scoreColor||'var(--t3)'}">${item.score}/10</span>`:'';
-    return`<div class="research-hist-item">${img}<div class="research-hist-info"><div class="research-hist-name">${esc(item.name||'—')}</div><div class="research-hist-meta">${d} · achiziție: ${item.priceBuy?item.priceBuy.toFixed(2)+' RON':'—'}${item.emagPrice?' · eMAG: '+item.emagPrice.toFixed(2)+' RON':''} ${item.trendyolPrice?' · Trendyol: '+item.trendyolPrice.toFixed(2)+' RON':''}</div></div>${scoreBadge}<button class="btn btn-sm" onclick="reloadResearchItem(${item._oi})" style="font-size:12px">↺</button></div>`;
+    return`<div class="research-hist-item" style="cursor:pointer" onclick="goToResearchProject(${p.id})" title="Deschide acest dosar">
+      <div style="font-weight:800;color:var(--t3);width:18px;text-align:center;flex-shrink:0">#${i+1}</div>
+      ${img}
+      <div class="research-hist-info"><div class="research-hist-name">${esc(p.title||'—')}</div><div class="research-hist-meta">${esc(p.verdict||'')} · achiziție: ${p.acquisition_price?Number(p.acquisition_price).toFixed(2)+' RON':'—'}</div></div>
+      <span class="research-hist-score" style="color:var(--gr)">+${profit.toFixed(2)} RON</span>
+    </div>`;
   }).join('');
+}
+// Comută pe tab-ul Dosare, desface cardul dat (dacă era restrâns) și derulează/evidențiază-l — folosit
+// atât de clasamentul de mai sus, cât și de linkul „Vezi dosarul în Research" de pe un anunț generat.
+function goToResearchProject(id){
+  goPage('research');
+  researchMode('projects');
+  researchCollapsed.delete(id);
+  saveResearchCollapsed();
+  renderResearchProjects();
+  setTimeout(()=>{
+    const card=document.getElementById('rp-card-'+id);
+    if(!card)return;
+    card.scrollIntoView({behavior:'smooth',block:'center'});
+    card.classList.add('rsx-flash');
+    setTimeout(()=>card.classList.remove('rsx-flash'),1600);
+  },80);
 }
 function reloadResearchItem(idx){
   const h=getResearchHistory();
@@ -3761,7 +3781,6 @@ async function doResearch(){
     setResearchStep('');
     renderResearchResult(item);
     saveResearchToHistory(item);
-    renderResearchHistory();
     if(platforms.emag?.blocked||(!platforms.emag&&!platforms.trendyol)){
       document.getElementById('research-ai-btn').style.display='';
     }
@@ -4402,6 +4421,7 @@ function renderResearchProjects(){
   // Ține cache-ul local la zi cu orice modificare (nu doar la reîncărcarea de la server), ca după un
   // refresh de pagină să nu se vadă o versiune veche pentru o clipă înainte de răspunsul serverului.
   if(researchProjectsLoaded)saveResearchProjectsCache(researchProjects);
+  renderResearchTopProducts();
   const arr=researchProjects.filter(p=>researchProjectFilter==='all'||String(p.verdict||'').includes(researchProjectFilter));
   const sortMode=document.getElementById('rp-sort')?.value||'recent';
   if(sortMode==='profit')arr.sort((a,b)=>(Number(b.profit_estimated)||0)-(Number(a.profit_estimated)||0));
@@ -4493,7 +4513,7 @@ function renderResearchProjects(){
         <label for="rppdf-trendyol-${p.id}" class="rsx-btn rsx-btn-secondary" style="cursor:pointer">📄 PDF rezultate Trendyol (poți selecta mai multe)</label>
       </div>
       ${table}`;
-    return`<div class="research-project-card">
+    return`<div class="research-project-card" id="rp-card-${p.id}">
       <div class="rsx-head" onclick="toggleResearchProjectCard(${p.id})">
         <div class="rsx-head-l">
           ${headerImg}
@@ -4874,6 +4894,30 @@ async function buildListingFactory(){
     if(btn){btn.disabled=false;btn.textContent='✨ Generează anunț nou';}
   }
 }
+// Anunțul din Generatorul de sine stătător (buildListingFactory, listingProjectId=null) nu are niciun
+// dosar în spate, deci nu se salvează nicăieri — dacă utilizatorul îl place, îi creăm un dosar Research
+// minimal doar ca să-l țină (același loc unde „trăiesc" anunțurile generate din Dosare), apoi butonul
+// devine automat „🔗 Vezi dosarul în Research" la următorul render (vezi renderListingFactoryResult).
+async function saveStandaloneListing(){
+  const l=listingFactoryData?.listing||listingData;
+  if(!l?.title){toast('Nu există anunț de salvat','err');return;}
+  const btn=document.getElementById('listing-save-btn');
+  if(btn){btn.disabled=true;btn.textContent='⏳ Salvez…';}
+  try{
+    const data=await apiJson('/api/research-projects',{action:'create_project',title:l.title.slice(0,240),acquisition_price:0,supplier:''},30000);
+    const project={...data.project,links:[]};
+    await apiJson('/api/research-projects',{action:'save_listing',project_id:project.id,status:'generat',listing:l},30000);
+    project.listing=l;project.listing_status='generat';
+    researchProjects.unshift(project);
+    listingProjectId=project.id;
+    renderResearchProjects();
+    renderListingFactoryResult(l,listingFactoryData?.pages||[]);
+    toast('Anunț salvat — îl găsești în Dosare ✓');
+  }catch(e){
+    toast(e.message||'Eroare salvare anunț','err');
+    if(btn){btn.disabled=false;btn.textContent='💾 Salvează anunțul';}
+  }
+}
 function scoreCls(n){return n>=80?'ok':n>=50?'mid':'low';}
 function moneyRON(n,curr){
   if(!(Number(n)>0))return'—';
@@ -5136,6 +5180,8 @@ function renderListingFactoryResult(l,pages){
       ${l.category_emag?`<span class="listing-category-chip">📦 eMAG: ${esc(l.category_emag)}</span>`:''}
       ${l.category_trendyol?`<span class="listing-category-chip">🛍 Trendyol: ${esc(l.category_trendyol)}</span>`:''}
     </div>`:'';
+  const projectLinkBtn=listingProjectId?`<button class="btn btn-sm" onclick="goToResearchProject(${listingProjectId})">🔗 Vezi dosarul în Research</button>`
+    :`<button class="btn btn-sm" id="listing-save-btn" onclick="saveStandaloneListing()">💾 Salvează anunțul</button>`;
   out.innerHTML=`<div class="listing-card">
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:8px">
       <div class="sec" style="margin:0;color:var(--acc)">✨ Anunț nou sintetizat</div>
@@ -5143,6 +5189,7 @@ function renderListingFactoryResult(l,pages){
         <button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(l?.title||''))})">Copiază titlu</button>
         <button class="btn btn-sm btn-acc" onclick="applyListingToProduct()">Aplică în produs</button>
         <button class="btn btn-sm" onclick="downloadEmagOfferPreset()">📄 Preset eMAG ERP</button>
+        ${projectLinkBtn}
       </div>
     </div>
     <div class="listing-title">${esc(l?.title||'')}</div>
