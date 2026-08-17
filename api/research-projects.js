@@ -303,6 +303,13 @@ module.exports=async function handler(req,res){
       const verdict=await recalcProject(projectId);
       return res.status(200).json({added:ins||rows,verdict:verdict.project});
     }
+    if(body.action==='delete_project'){
+      // research_links are legate cu "on delete cascade" pe project_id — ștergerea dosarului șterge automat toate linkurile.
+      const projectId=Number(body.project_id);
+      if(!projectId)return res.status(400).json({error:'Lipsește dosarul'});
+      await supa('DELETE',`research_projects?id=eq.${projectId}`);
+      return res.status(200).json({deleted:projectId});
+    }
     if(body.action==='delete_link'){
       const linkId=Number(body.link_id);
       if(!linkId)return res.status(400).json({error:'Lipsește linkul'});

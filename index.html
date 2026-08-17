@@ -1739,6 +1739,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:90,text:'Research: fiecare dosar are acum buton 🗑 (lângă verdict) pentru ștergerea lui completă, cu toate linkurile din el — nu doar linkurile individuale se puteau șterge până acum. Fix: un dosar restrâns rămâne restrâns și după reîncărcarea paginii sau schimbarea de tab, nu doar în sesiunea curentă — se redeschide doar când apeși explicit pe el',date:'2026-08-17'},
   {n:89,text:'Research: orice link care nu se poate deschide automat (eMAG/Trendyol când AI-ul e blocat, nu doar Jumbo/Maxy) arată acum „📷 Adaugă poze (max 5)" direct pe acel link — poți încărca până la 5 poze ale listării dintr-o dată, combinate de AI într-un singur rezultat (titlu, preț, brand, vânzător). Peste 5 poze, sistemul te îndrumă spre PDF (mai jos, per dosar) — mai practic pentru multe capturi',date:'2026-08-17'},
   {n:88,text:'Research: promptul AI pentru PDF-uri recunoaște acum și pagini de produs individual (nu doar pagini de căutare cu multe produse mici) — util când salvezi ca PDF o pagină de produs de pe Trendyol/eMAG cu scroll pe mai multe pagini. Fișierele PDF peste ~6MB sunt respinse cu un mesaj clar înainte de trimitere (limita reală e la request-ul AI, nu la citirea PDF-ului) — exportă la o rezoluție mai mică dacă apare acest mesaj',date:'2026-08-17'},
   {n:87,text:'Research: brand-ul și vânzătorul se extrag acum din toate sursele, nu doar de pe linkurile eMAG/Verk citite automat — și din screenshot-urile Jumbo/Maxy (AI vision) și din anunțurile citite dintr-un PDF cu rezultate de căutare, dacă apar vizibil pe pagină',date:'2026-08-17'},
@@ -3961,18 +3962,39 @@ async function createResearchProject(){
     }
   }catch(e){toast(e.message||'Eroare creare dosar','err');}
 }
-const researchCollapsed=new Set();
+// Stare restrânsă persistată (nu doar în memorie) — un dosar rămâne restrâns pe reload/navigare între
+// pagini, până apeși explicit pe el ca să-l redeschizi, nu doar în sesiunea curentă.
+const RESEARCH_COLLAPSED_KEY='sm6_research_collapsed';
+function loadResearchCollapsed(){try{return new Set(JSON.parse(localStorage.getItem(RESEARCH_COLLAPSED_KEY)||'[]'));}catch(e){return new Set();}}
+function saveResearchCollapsed(){try{safeLocalSet(RESEARCH_COLLAPSED_KEY,JSON.stringify([...researchCollapsed]));}catch(e){}}
+const researchCollapsed=loadResearchCollapsed();
 function toggleResearchProjectCard(id){
   if(researchCollapsed.has(id))researchCollapsed.delete(id);else researchCollapsed.add(id);
+  saveResearchCollapsed();
   renderResearchProjects();
 }
 function collapseAllResearchProjects(){
   researchProjects.forEach(p=>researchCollapsed.add(p.id));
+  saveResearchCollapsed();
   renderResearchProjects();
 }
 function expandAllResearchProjects(){
   researchCollapsed.clear();
+  saveResearchCollapsed();
   renderResearchProjects();
+}
+async function deleteResearchProject(projectId,ev){
+  ev?.stopPropagation();
+  const proj=researchProjects.find(p=>Number(p.id)===Number(projectId));
+  if(!confirm(`Ștergi tot dosarul „${proj?.title||projectId}" (inclusiv toate linkurile lui)? Nu se poate anula.`))return;
+  try{
+    await apiJson('/api/research-projects',{action:'delete_project',project_id:projectId},20000);
+    researchProjects=researchProjects.filter(p=>Number(p.id)!==Number(projectId));
+    researchCollapsed.delete(projectId);
+    saveResearchCollapsed();
+    renderResearchProjects();
+    toast('Dosar șters ✓');
+  }catch(e){toast(e.message||'Eroare la ștergerea dosarului','err');}
 }
 function renderResearchProjects(){
   const box=document.getElementById('research-projects-list');if(!box)return;
@@ -4041,7 +4063,10 @@ function renderResearchProjects(){
     return`<div class="research-project-card">
       <div class="research-project-head" style="cursor:pointer" onclick="toggleResearchProjectCard(${p.id})">
         <div><span style="display:inline-block;width:14px">${collapsed?'▸':'▾'}</span><div class="research-project-title" style="display:inline">${esc(p.title)}</div><div class="research-project-meta">#${p.id} · ${new Date(p.updated_at||p.created_at).toLocaleDateString('ro-RO')} ${p.supplier?'· '+esc(p.supplier):''}${collapsed?' · '+links.length+' linkuri':''}</div></div>
-        <div class="research-verdict" style="color:${verdictColor(p.verdict)}">${esc(p.verdict||'Date insuficiente')}</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div class="research-verdict" style="color:${verdictColor(p.verdict)}">${esc(p.verdict||'Date insuficiente')}</div>
+          <button class="research-link-del" onclick="deleteResearchProject(${p.id},event)" title="Șterge tot dosarul, inclusiv linkurile lui">🗑</button>
+        </div>
       </div>
       ${collapsed?'':body}
     </div>`;
