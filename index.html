@@ -1702,6 +1702,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:65,text:'La Import comenzi, odată ce o linie e asociată cu un produs, apare imediat stocul intern (actual → după vânzare), ca să decizi pe loc dacă confirmi vânzarea sau amâni livrarea. Cantitatea de stoc scăzută e acum editabilă direct (− / +, lângă preț) — utilă când eMAG vinde ca set, dar stocul intern e ținut altfel. Apare și un titlu gata de pus pe AWB (cantitate + nume/SKU intern, nu titlul de pe eMAG), cu buton de copiere',date:'2026-08-17'},
   {n:64,text:'Trei completări la Import comenzi (Comenzi Platforme): (1) linie cu buton manual „⏳ Amână livrarea" când produsul asociat are stoc 0/negativ — dacă apeși, linia nu se importă acum (stocul nu se atinge), dacă nu apeși, se aplică normal și stocul poate intra pe minus; (2) traducere automată în previzualizare pentru titluri în bulgară/maghiară/greacă, ca să știi din prima la ce produs se referă; (3) în selectorul de produs, opțiune nouă „Nu există — trebuie adăugat ca produs nou", care creează automat produsul la aplicare (ca la importul de facturi)',date:'2026-08-17'},
   {n:63,text:'La import comenzi eMAG, PNK-ul apare acum și cu țara în paranteză — RO/HU/BG, dedusă din moneda comenzii (RON/HUF/EUR), pentru cele 3 piețe pe care operează eMAG. După asociere, în fișa produsului apare o secțiune „PNK-uri eMAG pe țară" cu o coloană separată pentru fiecare piață pe care produsul e listat. Necesită migration_platforma_mapari_tara.sql în Supabase',date:'2026-08-17'},
   {n:62,text:'Două completări: (1) în „Comenzi Platforme" → Import comenzi, poți șterge acum un import greșit dintr-o zi — se elimină liniile din Profit/Total încasări și se readaugă automat stocul scăzut la import; (2) buton nou ⚙️ în header — personalizează ordinea paginilor din navigare (↑/↓, cu resetare la ordinea implicită), salvată pe acest browser',date:'2026-08-17'},
@@ -5838,25 +5839,50 @@ function pcomPickBtnHtml(idx){
   const nm=p?`${esc(p.name)}${p.sku?' · '+esc(p.sku):''}`:'— alege produs —';
   return`<button type="button" class="smi-pick-btn" onclick="openPcomPick(event,${idx})">${th}<span class="smi-pick-nm">${nm}</span><span class="smi-pick-car">▾</span></button>`;
 }
-// Buton manual pentru liniile potrivite cu un produs care are stoc 0 sau negativ — omul decide dacă
-// amână livrarea (nu se scade stocul, linia rămâne deoparte pentru mai târziu) sau trimite oricum
-// (aplicarea continuă normal, iar stocul poate intra pe minus, ca la orice altă vânzare din aplicație).
+// La momentul asocierii (automată sau manuală), arată imediat stocul intern — actual și proiectat
+// după scăderea cantității de mai jos — ca omul să decidă pe loc: confirmă vânzarea (nu face nimic)
+// sau amână livrarea (nu se scade stocul, linia rămâne deoparte pentru mai târziu). Butonul de amânare
+// apare doar când vânzarea ar duce stocul la 0 sau sub 0; altfel aplicarea continuă normal.
 function pcomStockWarningHtml(idx){
   const it=pcImpParsed[idx];
   if(!it.produsId)return'';
   const p=P.find(x=>x.id===it.produsId);
   if(!p)return'';
-  const q=qty(p);
-  if(q>0&&!it.amanat)return'';
+  const cur=qty(p),proj=cur-(Number(it.cantitate)||0);
+  const problem=proj<=0;
+  const stockLbl=`<span style="font-size:11px;font-weight:${problem?700:400};color:var(${problem?'--rd':'--t3'})">${problem?'⚠️ ':''}Stoc actual ${fmtQty(cur)} → după vânzare ${fmtQty(proj)}</span>`;
   const btn=it.amanat
     ?`<button type="button" class="btn btn-sm" style="color:var(--gr);border-color:var(--gr)" onclick="togglePcomAmanat(${idx})">↺ Anulează amânarea</button>`
     :`<button type="button" class="btn btn-sm" style="color:var(--or);border-color:var(--or)" onclick="togglePcomAmanat(${idx})">⏳ Amână livrarea</button>`;
-  const warn=q<=0?`<span style="color:var(--rd);font-size:11px;font-weight:700">⚠️ Stoc ${fmtQty(q)}</span>`:'';
-  return`<div style="display:flex;gap:8px;align-items:center;margin-top:5px">${warn}${btn}${it.amanat?'<span style="font-size:11px;color:var(--or)">Amânat — nu se importă acum</span>':''}</div>`;
+  return`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:5px">${stockLbl}${(problem||it.amanat)?btn:''}${it.amanat?'<span style="font-size:11px;color:var(--or)">Amânat — nu se importă acum</span>':''}</div>`;
 }
 function togglePcomAmanat(idx){
   pcImpParsed[idx].amanat=!pcImpParsed[idx].amanat;
   renderPcomImportPreview();
+}
+function pcomAdjustQty(idx,delta){
+  const it=pcImpParsed[idx];
+  it.cantitate=Math.max(1,(Number(it.cantitate)||1)+delta);
+  renderPcomImportPreview();
+}
+// Titlul care se pune pe AWB la expediere — cantitatea (corectată mai sus, poate diferi de cea din
+// comandă când eMAG vinde seturi/pachete cu altă granularitate decât stocul intern) + numele/SKU-ul
+// intern, nu titlul de marketing de pe eMAG (care a fost util doar ca să găsim produsul, în pasul 1).
+function pcomAwbTitle(idx){
+  const it=pcImpParsed[idx];
+  if(it.newProduct)return`${it.cantitate}x ${it.titluRo||it.titluExtern}`;
+  const p=it.produsId?P.find(x=>x.id===it.produsId):null;
+  if(!p)return'';
+  return`${it.cantitate}x ${p.name}${p.sku?' | '+p.sku:''}`;
+}
+function pcomAwbTitleHtml(idx){
+  const title=pcomAwbTitle(idx);
+  if(!title)return'';
+  return`<div style="display:flex;align-items:center;gap:6px;margin-top:5px;font-size:12px;color:var(--t1)"><span title="Titlu pentru AWB">📦 ${esc(title)}</span><button type="button" class="btn btn-sm" style="padding:2px 6px;font-size:11px" onclick="copyPcomAwbTitle(${idx})">Copy</button></div>`;
+}
+function copyPcomAwbTitle(idx){
+  const title=pcomAwbTitle(idx);
+  if(title)copyText(title);
 }
 function renderPcomImportPreview(){
   const prev=document.getElementById('pcmi-preview');
@@ -5866,11 +5892,12 @@ function renderPcomImportPreview(){
     else if(it.viaPnk)tag='<span class="inv-match upd" title="PNK deja asociat">✓ PNK cunoscut</span>';
     else if(it.produsId)tag=`<span class="inv-match upd" title="potrivire ${Math.round(it.score*100)}%">↑ ${Math.round(it.score*100)}%</span>`;
     else tag='<span class="inv-match new">? fără sugestie</span>';
-    const priceInfo=`${it.cantitate}× · ${it.pretTotalCuTva.toFixed(2)} ${it.moneda}${it.moneda!=='RON'?' ('+pcomToRon(it.pretTotalCuTva,it.moneda).toFixed(2)+' RON)':''}`;
+    const qtyStepper=`<button type="button" onclick="pcomAdjustQty(${idx},-1)" style="width:16px;height:16px;padding:0;border:1px solid var(--b2);border-radius:3px;background:var(--surf);color:var(--t2);font-size:11px;line-height:1;cursor:pointer" title="Scade cantitatea de stoc">−</button> <b>${it.cantitate}×</b> <button type="button" onclick="pcomAdjustQty(${idx},1)" style="width:16px;height:16px;padding:0;border:1px solid var(--b2);border-radius:3px;background:var(--surf);color:var(--t2);font-size:11px;line-height:1;cursor:pointer" title="Crește cantitatea de stoc (ex: eMAG vinde ca set)">+</button>`;
+    const priceInfoHtml=`${qtyStepper} · ${it.pretTotalCuTva.toFixed(2)} ${esc(it.moneda)}${it.moneda!=='RON'?' ('+pcomToRon(it.pretTotalCuTva,it.moneda).toFixed(2)+' RON)':''}`;
     const titluHtml=it.titluRo?`${esc(it.titluExtern)}<div style="font-size:12px;color:var(--acc);font-style:italic;margin-top:2px">🌐 ${esc(it.titluRo)}</div>`:esc(it.titluExtern);
     return`<div class="inv-prev-row" style="gap:10px${it.amanat?';opacity:.65':''}">
       <input type="checkbox" ${it.include?'checked':''} onchange="pcImpParsed[${idx}].include=this.checked;updPcomImportInfo()">
-      <div class="inv-prev-nm" style="flex:1">${titluHtml} ${tag}<div style="font-size:11px;color:var(--t3);font-family:var(--mono)">${esc(priceInfo)}${it.pnk?' · PNK '+esc(it.pnk)+(it.tara?' ('+esc(it.tara)+')':''):''}${it.comandaId?' · #'+esc(it.comandaId):''}</div>${pcomStockWarningHtml(idx)}</div>
+      <div class="inv-prev-nm" style="flex:1">${titluHtml} ${tag}<div style="font-size:11px;color:var(--t3);font-family:var(--mono)">${priceInfoHtml}${it.pnk?' · PNK '+esc(it.pnk)+(it.tara?' ('+esc(it.tara)+')':''):''}${it.comandaId?' · #'+esc(it.comandaId):''}</div>${pcomAwbTitleHtml(idx)}${pcomStockWarningHtml(idx)}</div>
       <div class="smi-pick" id="pcmi-pick-${idx}">${pcomPickBtnHtml(idx)}</div>
     </div>`;
   }).join('');
