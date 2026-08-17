@@ -1711,6 +1711,8 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:71,text:'La Trendyol, Codul de bare e folosit acum ca substitut de PNK pentru asociere automată — dar cum nu e mereu de încredere (uneori pare cod de colet, nu de produs), sistemul mai ține minte și titlul exact al fiecărei linii confirmate. Dacă la o comandă viitoare Trendyol dă alt cod de bare pentru același produs, se recunoaște oricum după titlu, fără AI sau alegere manuală din nou',date:'2026-08-17'},
+  {n:70,text:'Import comenzi funcționează acum și pentru Trendyol, pe baza unui export real (nu mai e „best-effort"): recunoaște automat rândul de headere chiar și cu un rând de avertisment înainte, preia Nr. comandă/Data/Titlu/Cantitate și Valoarea facturii (Trendyol nu are coloane separate fără/cu TVA — prețul fără TVA se deduce automat). Trendyol nu are un echivalent de PNK de încredere, așa că nu se memorează automat asocieri după cod — doar potrivire după titlu/AI, cu verificare umană, ca de obicei',date:'2026-08-17'},
   {n:69,text:'Jurnal vânzări încărca tot istoricul din tabelă la fiecare deschidere — acum arată implicit doar luna cea mai recentă (rapid, restul rămâne un click distanță la „Toate lunile", nimic nu s-a pierdut). Am mai găsit și reparat cauza reală a lentorii: fiecare vânzare (inclusiv fiecare linie dintr-un import din Comenzi Platforme) re-descărca întregul jurnal ca să-l actualizeze local — acum se actualizează direct, fără nicio re-descărcare',date:'2026-08-17'},
   {n:68,text:'Profitul la Import comenzi nu mai e o formulă generică (TVA/comision fixe) — folosește acum același motor de calcul care a stabilit deja Prețul minim eMAG/Trendyol al produsului, cu costul real de achiziție și prețul real din comandă. Fiecare linie asociată arată acum Fără TVA / Cu TVA / Profit estimat, plus un avertisment dacă ai vândut sub prețul minim configurat pe produs pentru platforma respectivă',date:'2026-08-17'},
   {n:67,text:'Fix: importul de comenzi eșua integral („0 linii importate") dacă migrarea coloanei „tara" pe platforma_mapari nu era rulată — acum o eventuală eroare la memorarea asocierii PNK nu mai anulează restul liniei (comanda tot se salvează, stocul tot se scade). În plus, fiecare vânzare din import apare acum și în „Vânzări azi" și în „Jurnal vânzări" pe ziua curentă, exact ca o vânzare rapidă manuală — pe lângă evidența din Comenzi Platforme',date:'2026-08-17'},
@@ -5746,14 +5748,20 @@ function pcomParseDate(v){
 // Cod produs / PNK / Cantitate / Pret fara TVA/buc / Pret total cu TVA / Moneda). Pentru Trendyol, header-ele
 // exacte nu au fost încă verificate pe un fișier real — aliasurile de mai jos sunt cea mai bună estimare.
 const PCOM_HDR_ALIASES={
-  comanda:['nr. comanda','nr comanda','order number','order id','sipariş no','siparis no'],
+  comanda:['nr. comanda','nr comanda','numărul comenzii','order number','order id','sipariş no','siparis no'],
   data:['data comenzii','order date','sipariş tarihi','siparis tarihi'],
   titlu:['nume produs','denumire produs','product name','ürün adı','urun adi'],
-  codProdus:['cod produs','product code','stok kodu'],
-  pnk:['pnk','part number key','part number key (pnk)'],
+  codProdus:['cod produs','product code','cod de bare','barcode','stok kodu'],
+  // La Trendyol nu există un PNK propriu-zis — folosim "Cod de bare" (prima coloană) ca substitut,
+  // deși nu e la fel de fiabil (uneori pare cod de colet, nu de produs); de-asta ținem și un al doilea
+  // fir de memorie, după titlul exact (vezi mai jos), ca un cod nesigur să nu fie singura șansă de reținere
+  pnk:['pnk','part number key','part number key (pnk)','cod de bare','barcode'],
   cantitate:['cantitate','quantity','qty','miktar'],
   pretFaraTva:['pret fara tva/buc','pret fara tva','price without vat','unit price','birim fiyat'],
   pretTotalCuTva:['pret total cu tva','total price','price with vat','toplam tutar'],
+  // Trendyol nu are coloane separate fără/cu TVA — doar valoarea facturată pe toată linia (cu TVA);
+  // prețul fără TVA per bucată se deduce din ea (vezi handlePcomImportFile)
+  pretTotalFactura:['valoarea facturii','invoice value','fatura tutarı'],
   moneda:['moneda','currency','para birimi']
 };
 function pcomFindCol(hdrLower,keys){
@@ -5808,12 +5816,18 @@ async function handlePcomImportFile(ev){
     const wb=window.XLSX.read(buf,{type:'array'});
     const rows=window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
     if(!rows.length){toast('Fișier gol','err');parsing.style.display='none';return;}
-    const hdrLower=rows[0].map(h=>String(h).trim().toLowerCase());
-    const col={};
-    for(const key in PCOM_HDR_ALIASES)col[key]=pcomFindCol(hdrLower,PCOM_HDR_ALIASES[key]);
-    if(col.titlu<0){toast('Nu am găsit coloana cu numele produsului în fișier','err');parsing.style.display='none';return;}
+    // unele exporturi (Trendyol) au un rând de avertisment/notă înaintea rândului real de headere —
+    // căutăm în primele câteva rânduri pe cel care conține efectiv titlul produsului + cantitatea
+    let headerRowIdx=-1,col={};
+    for(let hr=0;hr<Math.min(5,rows.length);hr++){
+      const hdrLower=rows[hr].map(h=>String(h).trim().toLowerCase());
+      const testCol={};
+      for(const key in PCOM_HDR_ALIASES)testCol[key]=pcomFindCol(hdrLower,PCOM_HDR_ALIASES[key]);
+      if(testCol.titlu>-1&&testCol.cantitate>-1){headerRowIdx=hr;col=testCol;break;}
+    }
+    if(headerRowIdx<0){toast('Nu am găsit coloana cu numele produsului în fișier','err');parsing.style.display='none';return;}
     const existingKeys=new Set(PCOM.filter(o=>o.platforma===platforma).map(o=>o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern)));
-    for(let i=1;i<rows.length;i++){
+    for(let i=headerRowIdx+1;i<rows.length;i++){
       const r=rows[i];
       const titlu=String(r[col.titlu]||'').trim();
       if(!titlu)continue;
@@ -5824,20 +5838,36 @@ async function handlePcomImportFile(ev){
       if(existingKeys.has(key))continue;
       const data=pcomParseDate(col.data>-1?r[col.data]:'')||td();
       const cantitate=col.cantitate>-1?(Number(r[col.cantitate])||1):1;
-      const pretFaraTva=col.pretFaraTva>-1?(Number(r[col.pretFaraTva])||0):0;
-      const pretTotalCuTva=col.pretTotalCuTva>-1?(Number(r[col.pretTotalCuTva])||0):0;
+      let pretFaraTva,pretTotalCuTva;
+      if(col.pretTotalFactura>-1&&col.pretFaraTva<0&&col.pretTotalCuTva<0){
+        // Trendyol: nicio coloană fără/cu TVA separată — doar valoarea facturată pe toată linia
+        // (după eventuala reducere), cu TVA inclus; deducem prețul fără TVA per bucată la cota de 21%
+        const lineTotal=Number(r[col.pretTotalFactura])||0;
+        pretTotalCuTva=lineTotal;
+        pretFaraTva=cantitate>0?Math.round((lineTotal/cantitate/1.21)*100)/100:0;
+      }else{
+        pretFaraTva=col.pretFaraTva>-1?(Number(r[col.pretFaraTva])||0):0;
+        pretTotalCuTva=col.pretTotalCuTva>-1?(Number(r[col.pretTotalCuTva])||0):0;
+      }
       const moneda=col.moneda>-1?String(r[col.moneda]||'RON').trim().toUpperCase():'RON';
       const tara=platforma==='emag'?pcomCountryFromCurrency(moneda,titlu):'';
-      let produsId=null,score=0,viaPnk=false;
+      let produsId=null,score=0,viaPnk=false,viaTitle=false;
       if(pnk){
         const m=SYNCM.find(s=>s.platforma===platforma&&s.confirmat&&s.idExtern===pnk);
         if(m){produsId=m.produsId;score=1;viaPnk=true;}
+      }
+      // al doilea fir de memorie, după titlul exact — mai ales pentru Trendyol, unde codul de bare
+      // nu e mereu de încredere; odată ce un titlu a fost confirmat manual o dată, se recunoaște automat
+      if(!produsId){
+        const titleKey=titlu.toLowerCase().trim();
+        const mt=SYNCM.find(s=>s.platforma===platforma&&s.confirmat&&s.titluExtern.toLowerCase().trim()===titleKey);
+        if(mt){produsId=mt.produsId;score=1;viaTitle=true;}
       }
       if(!produsId){
         const match=findExistingProduct({name:titlu});
         if(match){produsId=match.product.id;score=match.score;}
       }
-      pcImpParsed.push({comandaId,data,pnk,tara,codProdus,titluExtern:titlu,cantitate,pretFaraTva,pretTotalCuTva,moneda,produsId,score,viaPnk,include:!!produsId});
+      pcImpParsed.push({comandaId,data,pnk,tara,codProdus,titluExtern:titlu,cantitate,pretFaraTva,pretTotalCuTva,moneda,produsId,score,viaPnk,viaTitle,include:!!produsId});
     }
     parsing.style.display='none';
     if(!pcImpParsed.length){toast('Nicio linie nouă de importat (toate există deja sau fișierul e gol)','err');return;}
@@ -5946,7 +5976,8 @@ function renderPcomImportPreview(){
   const rows=pcImpParsed.map((it,idx)=>{
     let tag;
     if(it.newProduct)tag='<span class="inv-match new" title="Va fi creat un produs nou la aplicare">🆕 produs nou</span>';
-    else if(it.viaPnk)tag='<span class="inv-match upd" title="PNK deja asociat">✓ PNK cunoscut</span>';
+    else if(it.viaPnk)tag='<span class="inv-match upd" title="Cod/PNK deja asociat">✓ Cod cunoscut</span>';
+    else if(it.viaTitle)tag='<span class="inv-match upd" title="Titlu identic confirmat anterior">✓ Titlu cunoscut</span>';
     else if(it.produsId)tag=`<span class="inv-match upd" title="potrivire ${Math.round(it.score*100)}%">↑ ${Math.round(it.score*100)}%</span>`;
     else tag='<span class="inv-match new">? fără sugestie</span>';
     const qtyStepper=`<button type="button" onclick="pcomAdjustQty(${idx},-1)" style="width:16px;height:16px;padding:0;border:1px solid var(--b2);border-radius:3px;background:var(--surf);color:var(--t2);font-size:11px;line-height:1;cursor:pointer" title="Scade cantitatea de stoc">−</button> <b>${it.cantitate}×</b> <button type="button" onclick="pcomAdjustQty(${idx},1)" style="width:16px;height:16px;padding:0;border:1px solid var(--b2);border-radius:3px;background:var(--surf);color:var(--t2);font-size:11px;line-height:1;cursor:pointer" title="Crește cantitatea de stoc (ex: eMAG vinde ca set)">+</button>`;
@@ -6117,14 +6148,25 @@ async function applyPcomImport(){
           throw errInsert;
         }
         if(inserted?.[0])PCOM.unshift(dbToPcom(inserted[0]));
-        // memorează asocierea PNK→produs (cu țara aferentă) — într-un try separat: dacă tabela platforma_mapari
-        // nu are încă rulată migrarea coloanei "tara", nu trebuie ca asta să anuleze restul liniei (comandă+stoc)
+        // memorează asocierea, pe două fire în paralel — cod (PNK/cod de bare) ȘI titlu exact — într-un
+        // try separat de restul liniei: dacă tabela platforma_mapari nu are încă rulată migrarea coloanei
+        // "tara", nu trebuie ca asta să anuleze comanda+stocul deja salvate. Al doilea fir (titlu) contează
+        // mai ales la Trendyol, unde codul de bare nu e mereu de încredere ca unic semnal de reținere.
         if(it.pnk&&!SYNCM.some(s=>s.platforma===platforma&&s.idExtern===it.pnk)){
           try{
             const mRows=await dbPost('platforma_mapari',syncMapToDb({platforma,idExtern:it.pnk,titluExtern:it.titluExtern,produsId:p.id,confirmat:true,tara:it.tara}));
             if(mRows?.[0])SYNCM.unshift(dbToSyncMap(mRows[0]));
           }catch(errMap){
-            console.warn('Nu s-a putut salva asocierea PNK→produs (verifică migration_platforma_mapari_tara.sql):',errMap);
+            console.warn('Nu s-a putut salva asocierea cod→produs (verifică migration_platforma_mapari_tara.sql):',errMap);
+          }
+        }
+        const titleKeyLc=it.titluExtern.toLowerCase().trim();
+        if(!SYNCM.some(s=>s.platforma===platforma&&s.titluExtern.toLowerCase().trim()===titleKeyLc)){
+          try{
+            const mRows2=await dbPost('platforma_mapari',syncMapToDb({platforma,idExtern:'',titluExtern:it.titluExtern,produsId:p.id,confirmat:true,tara:it.tara}));
+            if(mRows2?.[0])SYNCM.unshift(dbToSyncMap(mRows2[0]));
+          }catch(errMap2){
+            console.warn('Nu s-a putut salva asocierea titlu→produs:',errMap2);
           }
         }
         // scade stocul — o vânzare reală s-a produs
