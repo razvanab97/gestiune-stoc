@@ -852,6 +852,9 @@ function buildRaportCats(){
 .rsx-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px;cursor:pointer}
 .rsx-head-l{display:flex;gap:14px;align-items:flex-start;min-width:0}
 .rsx-head-img,.rsx-head-img-ph{width:64px;height:64px;border-radius:var(--r);object-fit:contain;background:var(--surf2);border:1px solid var(--b1);flex-shrink:0}
+.rsx-head-img-wrap{position:relative;display:inline-block;cursor:pointer;flex-shrink:0}
+.rsx-head-img-hint{position:absolute;bottom:-4px;right:-4px;width:20px;height:20px;border-radius:50%;background:var(--acc);color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;border:2px solid var(--surf);opacity:0;transition:opacity .15s}
+.rsx-head-img-wrap:hover .rsx-head-img-hint{opacity:1}
 .rsx-head-img-ph{display:flex;align-items:center;justify-content:center;font-size:26px}
 .rsx-head-title{font-size:19px;font-weight:800;color:var(--t1);line-height:1.28}
 .rsx-head-meta{font-size:13px;color:var(--t3);font-family:var(--mono);margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
@@ -4128,6 +4131,21 @@ async function deleteResearchProject(projectId,ev){
     toast('Dosar șters ✓');
   }catch(e){toast(e.message||'Eroare la ștergerea dosarului','err');}
 }
+// Poză de copertă setată manual pe dosar — utilă când niciun link nu are încă o poză extrasă automat
+// (JSON-LD/screenshot); click pe poză/cutia-placeholder din header, separat de restrângerea cardului.
+async function handleProjectImageFile(projectId,inputEl){
+  const file=inputEl?.files?.[0];if(!file)return;
+  try{
+    const dataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(file);});
+    if(!dataUrl||!dataUrl.startsWith('data:image'))throw new Error('Fișier imagine invalid');
+    await apiJson('/api/research-projects',{action:'set_project_image',project_id:projectId,image:dataUrl},30000);
+    const proj=researchProjects.find(p=>Number(p.id)===Number(projectId));
+    if(proj)proj.cover_image=dataUrl;
+    renderResearchProjects();
+    toast('Poză actualizată ✓');
+  }catch(e){toast(e.message||'Eroare la încărcarea pozei','err');}
+  finally{if(inputEl)inputEl.value='';}
+}
 function renderResearchProjects(){
   const box=document.getElementById('research-projects-list');if(!box)return;
   // Panoul vechi de research pe un singur produs (research-result-wrap) nu trebuie să rămână vizibil
@@ -4176,8 +4194,9 @@ function renderResearchProjects(){
     }).join('');
     const table=rows?`<div class="rsx-table-wrap"><table class="rsx-table"><thead><tr><th>Sursă</th><th>Produs</th><th>Brand</th><th>Vândut de</th><th>Preț</th><th>Scor</th><th>PNK</th><th>Confirmă</th><th>Acțiuni</th></tr></thead><tbody>${rows}</tbody></table></div>`:'<div style="font-size:13px;color:var(--t3)">Nu ai linkuri încă în acest dosar.</div>';
     const collapsed=researchCollapsed.has(p.id);
-    const imgSrc=(links.find(l=>l.platform==='furnizor'&&Array.isArray(l.images)&&l.images.length)||links.find(l=>Array.isArray(l.images)&&l.images.length))?.images?.[0]||'';
-    const headerImg=imgSrc?`<img class="rsx-head-img" src="${esc(imgSrc)}" alt="">`:`<div class="rsx-head-img-ph">📦</div>`;
+    const imgSrc=p.cover_image||(links.find(l=>l.platform==='furnizor'&&Array.isArray(l.images)&&l.images.length)||links.find(l=>Array.isArray(l.images)&&l.images.length))?.images?.[0]||'';
+    const headerImgInner=imgSrc?`<img class="rsx-head-img" src="${esc(imgSrc)}" alt="">`:`<div class="rsx-head-img-ph">📦</div>`;
+    const headerImg=`<label class="rsx-head-img-wrap" for="rp-img-${p.id}" onclick="event.stopPropagation()" title="${imgSrc?'Schimbă poza':'Adaugă o poză'}">${headerImgInner}<span class="rsx-head-img-hint">📷</span></label><input type="file" accept="image/*" id="rp-img-${p.id}" style="display:none" onchange="handleProjectImageFile(${p.id},this)">`;
     const kpis=[
       ['Achiziție',p.acquisition_price?Number(p.acquisition_price).toFixed(2)+' RON':'—',''],
       ['Linkuri',String(links.length),''],

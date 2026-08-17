@@ -303,6 +303,18 @@ module.exports=async function handler(req,res){
       const verdict=await recalcProject(projectId);
       return res.status(200).json({added:ins||rows,verdict:verdict.project});
     }
+    if(body.action==='set_project_image'){
+      // Poză de copertă setată manual — folosită doar când niciun link din dosar nu are deja o poză
+      // extrasă automat (JSON-LD/screenshot). Stocată direct ca data URL, la fel ca pozele de pe linkuri.
+      const projectId=Number(body.project_id);
+      if(!projectId)return res.status(400).json({error:'Lipsește dosarul'});
+      const image=String(body.image||'');
+      if(!image.startsWith('data:image'))return res.status(400).json({error:'Imagine invalidă'});
+      const rows=await supa('PATCH',`research_projects?id=eq.${projectId}`,{cover_image:image,updated_at:new Date().toISOString()});
+      const project=rows?.[0];
+      if(!project)return res.status(404).json({error:'Dosarul nu a fost găsit'});
+      return res.status(200).json({project});
+    }
     if(body.action==='delete_project'){
       // research_links are legate cu "on delete cascade" pe project_id — ștergerea dosarului șterge automat toate linkurile.
       const projectId=Number(body.project_id);
