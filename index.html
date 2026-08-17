@@ -382,6 +382,10 @@ tr:hover td{background:var(--surf2)}
 .pcom-country-grid{display:flex;gap:18px;flex-wrap:wrap;margin-top:8px}
 .pcom-country-col{display:flex;flex-direction:column;gap:6px}
 .pcom-country-lbl{font-size:11px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+.pcom-group{border:1px solid var(--b1);border-radius:var(--r);margin:10px 0;padding:0 14px;background:var(--surf2)}
+.pcom-group-hd{font-size:12px;font-weight:700;color:var(--acc);padding:10px 0 4px}
+.pcom-group .pcom-prev-row{border-bottom:1px solid var(--b1)}
+.pcom-group .pcom-prev-row:last-of-type{border-bottom:none}
 .tabcfg-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 4px;border-bottom:1px solid var(--b1);font-size:13px}
 .tabcfg-row:last-child{border-bottom:none}
 .tabcfg-arrows{display:flex;gap:4px}
@@ -1273,6 +1277,7 @@ th{font-weight:800!important;color:var(--t3)!important}
         <div id="pcmi-foot" style="display:none;justify-content:space-between;align-items:center;margin-top:12px">
           <span id="pcmi-info" style="font-size:12px;color:var(--t3)"></span>
           <div style="display:flex;gap:8px">
+            <button class="btn btn-sm" onclick="resetPcomImportPage()" title="Golește previzualizarea curentă — rămâne salvată automat altfel, chiar dacă schimbi pagina sau revii mâine">↻ Resetează pagina</button>
             <button class="btn btn-sm" id="pcmi-ai-btn" onclick="pcomAiMatchUnmatched()" style="display:none">🤖 Potrivește restul cu AI</button>
             <button class="btn btn-sm btn-acc" id="pcmi-apply-btn" onclick="applyPcomImport()" disabled>Aplică import</button>
           </div>
@@ -1313,6 +1318,11 @@ th{font-weight:800!important;color:var(--t3)!important}
         <div id="pcom-profit-months"></div>
         <div class="sec">Pe zi</div>
         <div id="pcom-profit-days"></div>
+      </div>
+      <div class="card" style="padding:1rem 1.25rem;margin-top:1rem">
+        <div class="sec" style="margin-top:0">Comenzi individuale</div>
+        <div style="font-size:12px;color:var(--t3);margin-bottom:8px">Șterge o comandă greșit importată — stocul scăzut la import se readaugă automat.</div>
+        <div id="pcom-profit-orders" style="max-height:420px;overflow-y:auto"></div>
       </div>
     </div>
 
@@ -1711,6 +1721,9 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:74,text:'Mai multe completări la Import comenzi: cantitatea de stoc poate fi acum zecimală (ex: 1,5 — utilă când o comandă nu se traduce 1:1 în stoc); previzualizarea neaplicată nu se mai pierde la schimbarea paginii sau la reîncărcare — rămâne exact cum ai lăsat-o, cu un buton nou „↻ Resetează pagina" pentru când vrei să pornești curat; sugestiile AI nu se mai bifează automat — le confirmi tu manual, ca o sugestie greșită să nu ajungă importată din greșeală. Fix: o eroare de ordonare făcea ca liniile grupate pe comandă să apară amestecate, nu în ordinea din fișier',date:'2026-08-17'},
+  {n:73,text:'La Import comenzi, liniile Trendyol cu același „Nr. pachet" (produse diferite din aceeași comandă a clientului, expediate împreună) apar acum grupate sub un singur card „📦 Comandă #... · N produse", nu ca linii separate care păreau comenzi diferite. Fiecare produs rămâne editabil individual (produs, cantitate, stoc), dar apare și un titlu AWB combinat pentru tot pachetul, cu buton de copiat',date:'2026-08-17'},
+  {n:72,text:'În Comenzi Platforme → Profit vânzări, apare acum lista comenzilor individuale importate, fiecare cu buton „🗑️ Șterge" propriu — util când doar o comandă a fost greșit asociată, nu tot fișierul. Ca la ștergerea unui import întreg, stocul scăzut e readăugat automat, iar toate cifrele (vânzări/profit/marjă, pe lună, pe zi, total încasări) se recalculează pe loc',date:'2026-08-17'},
   {n:71,text:'La Trendyol, Codul de bare e folosit acum ca substitut de PNK pentru asociere automată — dar cum nu e mereu de încredere (uneori pare cod de colet, nu de produs), sistemul mai ține minte și titlul exact al fiecărei linii confirmate. Dacă la o comandă viitoare Trendyol dă alt cod de bare pentru același produs, se recunoaște oricum după titlu, fără AI sau alegere manuală din nou',date:'2026-08-17'},
   {n:70,text:'Import comenzi funcționează acum și pentru Trendyol, pe baza unui export real (nu mai e „best-effort"): recunoaște automat rândul de headere chiar și cu un rând de avertisment înainte, preia Nr. comandă/Data/Titlu/Cantitate și Valoarea facturii (Trendyol nu are coloane separate fără/cu TVA — prețul fără TVA se deduce automat). Trendyol nu are un echivalent de PNK de încredere, așa că nu se memorează automat asocieri după cod — doar potrivire după titlu/AI, cu verificare umană, ca de obicei',date:'2026-08-17'},
   {n:69,text:'Jurnal vânzări încărca tot istoricul din tabelă la fiecare deschidere — acum arată implicit doar luna cea mai recentă (rapid, restul rămâne un click distanță la „Toate lunile", nimic nu s-a pierdut). Am mai găsit și reparat cauza reală a lentorii: fiecare vânzare (inclusiv fiecare linie dintr-un import din Comenzi Platforme) re-descărca întregul jurnal ca să-l actualizeze local — acum se actualizează direct, fără nicio re-descărcare',date:'2026-08-17'},
@@ -2340,6 +2353,7 @@ let P=[],TS={},JL=[],OI=[],editId=null,sCol='name',sDir=1,jMode='sales',curImg='
 let compState={};
 let SYNCM=[],syncMapsLoaded=false,syncImpParsed=[];
 let PCOM=[],pcomLoaded=false,pcImpParsed=[],pcImpPlatforma='emag';
+const PCIK='sm6_pcom_import';
 let invLines=[],invParsed=[],catSuggestTimer=null,lastNameForCat='';
 let sbReady=false;
 let eFacturaEmagDate=localStorage.getItem(EFK)||'';
@@ -2485,7 +2499,7 @@ async function load(){
     document.getElementById('day-badge').textContent=new Date().toLocaleDateString('ro-RO',{day:'numeric',month:'long'});
     hideLoading();
     buildCats('');renderToday();renderTable();buildJMonths();if(document.getElementById('page-raport')?.classList.contains('on')){buildRaportCats();renderRaport();}
-    renderUpdWidget();renderNotif();renderDashboard();
+    renderUpdWidget();renderNotif();renderDashboard();loadPcomImportState();
     checkSupplierRestockAlerts();
   }catch(err){
     setSyncStatus('err','Eroare conexiune');
@@ -2508,7 +2522,7 @@ function loadLocalFallback(){
   setSyncStatus('err','Mod offline');
   document.getElementById('day-badge').textContent=new Date().toLocaleDateString('ro-RO',{day:'numeric',month:'long'});
   buildCats('');renderToday();renderTable();buildJMonths();
-  renderUpdWidget();renderNotif();renderDashboard();
+  renderUpdWidget();renderNotif();renderDashboard();loadPcomImportState();
 }
 
 async function loadGlobalSettings(){
@@ -5749,6 +5763,10 @@ function pcomParseDate(v){
 // exacte nu au fost încă verificate pe un fișier real — aliasurile de mai jos sunt cea mai bună estimare.
 const PCOM_HDR_ALIASES={
   comanda:['nr. comanda','nr comanda','numărul comenzii','order number','order id','sipariş no','siparis no'],
+  // Trendyol pune mai multe produse diferite dintr-o singură comandă a clientului pe rânduri separate,
+  // dar cu ACELAȘI număr de pachet (se expediază împreună, într-un singur AWB) — îl folosim ca să le
+  // regrupăm vizual la previzualizare (vezi pcomGroupKey/renderPcomImportPreview), nu ca linii separate.
+  pachet:['nr. pachet','package number','paket no'],
   data:['data comenzii','order date','sipariş tarihi','siparis tarihi'],
   titlu:['nume produs','denumire produs','product name','ürün adı','urun adi'],
   codProdus:['cod produs','product code','cod de bare','barcode','stok kodu'],
@@ -5832,6 +5850,7 @@ async function handlePcomImportFile(ev){
       const titlu=String(r[col.titlu]||'').trim();
       if(!titlu)continue;
       const comandaId=col.comanda>-1?String(r[col.comanda]||'').trim():'';
+      const pachetId=col.pachet>-1?String(r[col.pachet]||'').trim():'';
       const pnk=col.pnk>-1?String(r[col.pnk]||'').trim():'';
       const codProdus=col.codProdus>-1?String(r[col.codProdus]||'').trim():'';
       const key=comandaId+'|'+(pnk||codProdus||titlu);
@@ -5867,7 +5886,7 @@ async function handlePcomImportFile(ev){
         const match=findExistingProduct({name:titlu});
         if(match){produsId=match.product.id;score=match.score;}
       }
-      pcImpParsed.push({comandaId,data,pnk,tara,codProdus,titluExtern:titlu,cantitate,pretFaraTva,pretTotalCuTva,moneda,produsId,score,viaPnk,viaTitle,include:!!produsId});
+      pcImpParsed.push({comandaId,pachetId,data,pnk,tara,codProdus,titluExtern:titlu,cantitate,pretFaraTva,pretTotalCuTva,moneda,produsId,score,viaPnk,viaTitle,include:!!produsId});
     }
     parsing.style.display='none';
     if(!pcImpParsed.length){toast('Nicio linie nouă de importat (toate există deja sau fișierul e gol)','err');return;}
@@ -5932,8 +5951,18 @@ function pcomOpenAddProductForLine(idx){
 }
 function pcomAdjustQty(idx,delta){
   const it=pcImpParsed[idx];
-  it.cantitate=Math.max(1,(Number(it.cantitate)||1)+delta);
+  it.cantitate=Math.max(0.5,Math.round(((Number(it.cantitate)||1)+delta)*100)/100);
   renderPcomImportPreview();
+}
+// Cantitatea de stoc poate fi și zecimală (ex: 1,5) — util când o comandă de N bucăți dintr-un
+// pachet/set corespunde altui număr de unități interne (ex: 4 în comandă = 6 în stocul intern)
+function pcomSetQty(idx,val){
+  const it=pcImpParsed[idx];
+  const n=Number(String(val).replace(',','.'));
+  it.cantitate=Math.max(0.5,Math.round((n||1)*100)/100);
+  // amânat cu setTimeout: onchange rulează în timpul unui blur pe input-ul din DOM-ul pe care tocmai
+  // îl înlocuim — dacă îl înlocuim sincron aici, browserul aruncă "node no longer a child" pe unele căi
+  setTimeout(renderPcomImportPreview,0);
 }
 // Titlul care se pune pe AWB la expediere — cantitatea (corectată mai sus, poate diferi de cea din
 // comandă când eMAG vinde seturi/pachete cu altă granularitate decât stocul intern) + numele/SKU-ul
@@ -5971,28 +6000,94 @@ function pcomFinancialsHtml(idx){
   const minLbl=fin.minPret>0?` · Preț minim configurat: ${fin.minPret.toFixed(2)} RON${fin.subMinim?' ⚠️ vândut sub minim':''}`:'';
   return`<div style="font-size:11px;color:var(--t3);margin-top:4px">Fără TVA: ${fin.vanzareFaraTva.toFixed(2)} RON · Cu TVA: ${fin.vanzareCuTva.toFixed(2)} RON · Profit est.: <b style="color:var(${profitColor})">${totalProfit.toFixed(2)} RON</b> (${fin.marja.toFixed(1)}%)${minLbl?`<span style="color:${fin.subMinim?'var(--rd)':'var(--t3)'}">${esc(minLbl)}</span>`:''}</div>`;
 }
+// Trendyol pune produse diferite dintr-o singură comandă a clientului pe rânduri separate, dar cu
+// același "Nr. pachet" (se expediază împreună, un singur AWB) — regrupăm liniile după acel număr (sau
+// după nr. comandă, dacă pachetul lipsește), ca să nu pară comenzi separate în previzualizare.
+let pcomGroups=[];
+function pcomComputeGroups(){
+  // Map, nu obiect simplu: comandaId/pachetId sunt șiruri numerice (ex: "499855037"), iar un obiect JS
+  // reordonează automat cheile care arată ca numere întregi, în ordine crescătoare — asta amesteca ordinea
+  // liniilor din previzualizare față de ordinea reală din fișier. Map păstrează mereu ordinea de inserare.
+  const map=new Map();
+  pcImpParsed.forEach((it,idx)=>{
+    const key=it.pachetId||it.comandaId||('_line'+idx);
+    if(!map.has(key))map.set(key,[]);
+    map.get(key).push(idx);
+  });
+  pcomGroups=[...map.values()];
+}
+function pcomGroupAwbTitle(gIdx){
+  const idxs=pcomGroups[gIdx]||[];
+  return idxs.map(i=>pcomAwbTitle(i)).filter(Boolean).join(' + ');
+}
+function copyPcomGroupAwbTitle(gIdx){
+  const title=pcomGroupAwbTitle(gIdx);
+  if(title)copyText(title);
+}
+function pcomRowHtml(idx,showOwnAwb){
+  const it=pcImpParsed[idx];
+  let tag;
+  if(it.newProduct)tag='<span class="inv-match new" title="Va fi creat un produs nou la aplicare">🆕 produs nou</span>';
+  else if(it.viaPnk)tag='<span class="inv-match upd" title="Cod/PNK deja asociat">✓ Cod cunoscut</span>';
+  else if(it.viaTitle)tag='<span class="inv-match upd" title="Titlu identic confirmat anterior">✓ Titlu cunoscut</span>';
+  else if(it.produsId)tag=`<span class="inv-match upd" title="potrivire ${Math.round(it.score*100)}%">↑ ${Math.round(it.score*100)}%</span>`;
+  else tag='<span class="inv-match new">? fără sugestie</span>';
+  const qtyBtnStyle='width:16px;height:16px;padding:0;border:1px solid var(--b2);border-radius:3px;background:var(--surf);color:var(--t2);font-size:11px;line-height:1;cursor:pointer';
+  const qtyStepper=`<button type="button" onclick="pcomAdjustQty(${idx},-0.5)" style="${qtyBtnStyle}" title="Scade cantitatea de stoc">−</button> <input type="number" step="0.5" min="0.5" value="${it.cantitate}" onchange="pcomSetQty(${idx},this.value)" title="Cantitate de stoc — poate fi și zecimală (ex: 1,5), când o comandă nu se traduce 1:1 în unități interne" style="width:46px;text-align:center;font-family:var(--mono);font-size:11px;padding:2px 1px;border:1px solid var(--b2);border-radius:3px;background:var(--surf);color:var(--t1)">× <button type="button" onclick="pcomAdjustQty(${idx},0.5)" style="${qtyBtnStyle}" title="Crește cantitatea de stoc (ex: eMAG vinde ca set)">+</button>`;
+  const priceInfoHtml=`${qtyStepper} · ${it.pretTotalCuTva.toFixed(2)} ${esc(it.moneda)}${it.moneda!=='RON'?' ('+pcomToRon(it.pretTotalCuTva,it.moneda).toFixed(2)+' RON)':''}`;
+  // titlul de pe eMAG/Trendyol contează doar ca reper de căutare (pasul 1) — îl arătăm mic, discret
+  const titluHtml=`<div class="pcom-platform-title">${esc(it.titluExtern)}${it.titluRo?` <span class="pcom-platform-title-ro">🌐 ${esc(it.titluRo)}</span>`:''} ${tag}</div>`;
+  const awbHtml=it.newProduct?'':(showOwnAwb?pcomAwbTitleHtml(idx):'');
+  return`<div class="inv-prev-row pcom-prev-row${it.amanat?' pcom-row-amanat':''}">
+    <input type="checkbox" ${it.include?'checked':''} onchange="pcImpParsed[${idx}].include=this.checked;updPcomImportInfo()">
+    <div class="inv-prev-nm pcom-prev-nm">${titluHtml}<div class="pcom-meta-line">${priceInfoHtml}${it.pnk?' · PNK '+esc(it.pnk)+(it.tara?' ('+esc(it.tara)+')':''):''}${it.comandaId?' · #'+esc(it.comandaId):''}</div>${it.newProduct?pcomNewProductPromptHtml(idx):(awbHtml+pcomFinancialsHtml(idx)+pcomStockWarningHtml(idx))}</div>
+    <div class="smi-pick" id="pcmi-pick-${idx}">${pcomPickBtnHtml(idx)}</div>
+  </div>`;
+}
 function renderPcomImportPreview(){
   const prev=document.getElementById('pcmi-preview');
-  const rows=pcImpParsed.map((it,idx)=>{
-    let tag;
-    if(it.newProduct)tag='<span class="inv-match new" title="Va fi creat un produs nou la aplicare">🆕 produs nou</span>';
-    else if(it.viaPnk)tag='<span class="inv-match upd" title="Cod/PNK deja asociat">✓ Cod cunoscut</span>';
-    else if(it.viaTitle)tag='<span class="inv-match upd" title="Titlu identic confirmat anterior">✓ Titlu cunoscut</span>';
-    else if(it.produsId)tag=`<span class="inv-match upd" title="potrivire ${Math.round(it.score*100)}%">↑ ${Math.round(it.score*100)}%</span>`;
-    else tag='<span class="inv-match new">? fără sugestie</span>';
-    const qtyStepper=`<button type="button" onclick="pcomAdjustQty(${idx},-1)" style="width:16px;height:16px;padding:0;border:1px solid var(--b2);border-radius:3px;background:var(--surf);color:var(--t2);font-size:11px;line-height:1;cursor:pointer" title="Scade cantitatea de stoc">−</button> <b>${it.cantitate}×</b> <button type="button" onclick="pcomAdjustQty(${idx},1)" style="width:16px;height:16px;padding:0;border:1px solid var(--b2);border-radius:3px;background:var(--surf);color:var(--t2);font-size:11px;line-height:1;cursor:pointer" title="Crește cantitatea de stoc (ex: eMAG vinde ca set)">+</button>`;
-    const priceInfoHtml=`${qtyStepper} · ${it.pretTotalCuTva.toFixed(2)} ${esc(it.moneda)}${it.moneda!=='RON'?' ('+pcomToRon(it.pretTotalCuTva,it.moneda).toFixed(2)+' RON)':''}`;
-    // titlul de pe eMAG contează doar ca reper de căutare (pasul 1) — îl arătăm mic, discret
-    const titluHtml=`<div class="pcom-platform-title">${esc(it.titluExtern)}${it.titluRo?` <span class="pcom-platform-title-ro">🌐 ${esc(it.titluRo)}</span>`:''} ${tag}</div>`;
-    return`<div class="inv-prev-row pcom-prev-row${it.amanat?' pcom-row-amanat':''}">
-      <input type="checkbox" ${it.include?'checked':''} onchange="pcImpParsed[${idx}].include=this.checked;updPcomImportInfo()">
-      <div class="inv-prev-nm pcom-prev-nm">${titluHtml}<div class="pcom-meta-line">${priceInfoHtml}${it.pnk?' · PNK '+esc(it.pnk)+(it.tara?' ('+esc(it.tara)+')':''):''}${it.comandaId?' · #'+esc(it.comandaId):''}</div>${it.newProduct?pcomNewProductPromptHtml(idx):(pcomAwbTitleHtml(idx)+pcomFinancialsHtml(idx)+pcomStockWarningHtml(idx))}</div>
-      <div class="smi-pick" id="pcmi-pick-${idx}">${pcomPickBtnHtml(idx)}</div>
-    </div>`;
+  pcomComputeGroups();
+  const groupsHtml=pcomGroups.map((idxs,gIdx)=>{
+    if(idxs.length<=1)return pcomRowHtml(idxs[0],true);
+    const linesHtml=idxs.map(i=>pcomRowHtml(i,false)).join('');
+    const groupAwb=pcomGroupAwbTitle(gIdx);
+    const pachetLabel=pcImpParsed[idxs[0]].pachetId||pcImpParsed[idxs[0]].comandaId;
+    const groupAwbHtml=groupAwb?`<div class="pcom-awb-box" style="margin:2px 14px 10px"><span class="pcom-awb-title" title="Titlu combinat pentru AWB">📦 ${esc(groupAwb)}</span><button type="button" class="btn btn-acc pcom-awb-copy" onclick="copyPcomGroupAwbTitle(${gIdx})">📋 Copiază tot pachetul</button></div>`:'';
+    return`<div class="pcom-group"><div class="pcom-group-hd">📦 Comandă${pachetLabel?' #'+esc(pachetLabel):''} · ${idxs.length} produse — se expediază împreună</div>${linesHtml}${groupAwbHtml}</div>`;
   }).join('');
-  prev.innerHTML=`<div class="inv-preview"><div class="inv-prev-title">Previzualizare (${pcImpParsed.length} linii)</div>${rows}</div>`;
+  prev.innerHTML=`<div class="inv-preview"><div class="inv-prev-title">Previzualizare (${pcImpParsed.length} linii)</div>${groupsHtml}</div>`;
   document.getElementById('pcmi-foot').style.display='flex';
   updPcomImportInfo();
+  savePcomImportState();
+}
+// Previzualizarea neaplicată nu mai dispare la schimbarea paginii sau la reîncărcare — rămâne exact
+// cum ai lăsat-o (linii, cantități, asocieri) până o aplici sau apeși „Resetează pagina" explicit.
+function savePcomImportState(){
+  safeLocalSet(PCIK,JSON.stringify({platforma:pcImpPlatforma,parsed:pcImpParsed}));
+}
+function loadPcomImportState(){
+  try{
+    const raw=localStorage.getItem(PCIK);
+    if(!raw)return;
+    const saved=JSON.parse(raw);
+    if(saved&&Array.isArray(saved.parsed)&&saved.parsed.length){
+      pcImpParsed=saved.parsed;
+      pcImpPlatforma=saved.platforma||'emag';
+      const sel=document.getElementById('pcmi-platforma');if(sel)sel.value=pcImpPlatforma;
+      renderPcomImportPreview();
+      const noMatch=pcImpParsed.filter(x=>!x.produsId&&!x.newProduct).length;
+      const aiBtn=document.getElementById('pcmi-ai-btn');if(aiBtn)aiBtn.style.display=noMatch?'':'none';
+    }
+  }catch(e){console.warn('Nu s-a putut reîncărca previzualizarea Comenzi Platforme:',e);}
+}
+function resetPcomImportPage(){
+  if(pcImpParsed.length&&!confirm('Golești previzualizarea curentă? Liniile neaplicate încă se pierd (cele deja aplicate rămân salvate, neatinse).'))return;
+  pcImpParsed=[];
+  localStorage.removeItem(PCIK);
+  document.getElementById('pcmi-preview').innerHTML='';
+  document.getElementById('pcmi-foot').style.display='none';
+  document.getElementById('pcmi-ai-btn').style.display='none';
+  toast('Previzualizare golită ✓');
 }
 let pcomPickIdx=null,pcomPickProds=null;
 function openPcomPick(ev,idx){
@@ -6078,7 +6173,9 @@ async function pcomAiMatchUnmatched(){
       const linesText=batchIdxs.map(i=>`${i}: ${pcImpParsed[i].titluExtern}`).join('\n');
       const prompt=`Ai o listă de produse din inventar (id: nume) și o listă de titluri de comenzi de pe eMAG/Trendyol
 (unele pot fi în altă limbă — tradu-le mental în română ca să le poți compara). Pentru fiecare titlu,
-găsește cel mai probabil produs corespunzător din inventar, sau null dacă nu există nimic asemănător.
+găsește produsul corespunzător din inventar DOAR dacă ești cu adevărat încrezător că e același produs.
+Un răspuns greșit e mai rău decât niciun răspuns — nu ghici un produs doar ca să completezi câmpul;
+dacă nu ești sigur sau nu găsești nimic clar asemănător, răspunde null.
 
 PRODUSE INVENTAR:
 ${prodList}
@@ -6097,13 +6194,14 @@ Răspunde STRICT cu JSON, fără markdown: {"matches":[{"index":<indexul liniei>
         if(!pcImpParsed[i]||m.produsId==null)return;
         const pid=Number(m.produsId);
         if(!P.some(p=>p.id===pid))return;
-        pcImpParsed[i].produsId=pid;pcImpParsed[i].score=.6;pcImpParsed[i].include=true;
+        // sugestie AI — nu se bifează automat; omul trebuie să confirme manual că e corectă
+        pcImpParsed[i].produsId=pid;pcImpParsed[i].score=.6;pcImpParsed[i].include=false;
         matched++;
       });
     }
     renderPcomImportPreview();
     btn.style.display='none';
-    toast(`AI a găsit sugestii pentru ${matched} din ${idxs.length} linii — verifică-le înainte de aplicare`);
+    toast(`AI a găsit sugestii pentru ${matched} din ${idxs.length} linii — bifează-le manual pe cele corecte înainte de aplicare`);
   }catch(err){
     toast('Eroare AI: '+err.message,'err');
   }finally{
@@ -6191,6 +6289,7 @@ async function applyPcomImport(){
       document.getElementById('pcmi-preview').innerHTML='';
       document.getElementById('pcmi-foot').style.display='none';
       document.getElementById('pcmi-ai-btn').style.display='none';
+      localStorage.removeItem(PCIK);
     }
     renderPcomImportHistory();renderTable();renderToday();renderDashboard();
     toast(`${ok} linii importate ✓${failed?` · ${failed} au eșuat`:''}${amanateCount?` · ${amanateCount} amânate (fără stoc)`:''}${newProductCount?` · ${newProductCount} produse noi de adăugat`:''}`,failed&&!ok?'err':undefined);
@@ -6239,6 +6338,41 @@ function renderPcomProfit(){
   daysEl.innerHTML=dayKeys.length?`<table class="pcom-table"><thead><tr><th>Zi</th><th>Bucăți</th><th>Vânzări</th><th>Profit estimat</th></tr></thead><tbody>${
     dayKeys.map(k=>`<tr><td>${esc(k)}</td><td>${byDay[k].qty}</td><td>${byDay[k].vanzari.toFixed(2)} RON</td><td>${byDay[k].profit.toFixed(2)} RON</td></tr>`).join('')
   }</tbody></table>`:'<div class="empty-row">Nicio comandă importată încă</div>';
+  renderPcomProfitOrders(rows);
+}
+// Lista comenzilor individuale importate, cu buton de ștergere per comandă (nu doar per import întreg) —
+// pentru cazul în care o SINGURĂ linie a fost greșit asociată/importată, nu tot fișierul.
+function renderPcomProfitOrders(rows){
+  const host=document.getElementById('pcom-profit-orders');if(!host)return;
+  const sorted=[...rows].sort((a,b)=>String(b.createdAt||b.data).localeCompare(String(a.createdAt||a.data)));
+  if(!sorted.length){host.innerHTML='<div class="empty-row">Nicio comandă importată încă</div>';return;}
+  host.innerHTML=sorted.map(o=>{
+    const plLabel=o.platforma==='emag'?'eMAG':'Trendyol';
+    return`<div class="pcom-batch-row">
+      <div class="pcom-batch-info"><b>${esc(plLabel)}</b> · ${esc(o.data)} · ${esc(o.produsNume||o.titluExtern)} · ${o.cantitate}× · ${o.pretTotalCuTvaRon.toFixed(2)} RON${o.comandaId?' · #'+esc(o.comandaId):''}</div>
+      <button type="button" class="btn btn-sm" style="color:var(--rd);border-color:var(--rd);flex-shrink:0" onclick="deletePcomOrder(${o.id})">🗑️ Șterge</button>
+    </div>`;
+  }).join('');
+}
+async function deletePcomOrder(id){
+  const o=PCOM.find(x=>x.id===id);
+  if(!o)return;
+  if(!confirm(`Ștergi comanda „${o.produsNume||o.titluExtern}" (${o.cantitate}× · ${o.pretTotalCuTvaRon.toFixed(2)} RON)? Stocul scăzut la import va fi readăugat.`))return;
+  if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
+  try{
+    await dbDelete(`platforma_comenzi?id=eq.${id}`);
+    const p=P.find(x=>x.id===o.produsId);
+    if(p){
+      p.sold=Math.max(0,(p.sold||0)-o.cantitate);
+      try{await dbPatch(`produse?id=eq.${p.id}`,{sold:p.sold});}catch(e){console.warn('Nu am putut readăuga stocul pentru',p.name,e);}
+      await logMove('in',p.name,o.cantitate,`Anulare comandă ${o.platforma==='emag'?'eMAG':'Trendyol'} (comandă ${o.comandaId||'—'})`,p.id);
+    }
+    PCOM=PCOM.filter(x=>x.id!==id);
+    renderPcomProfit();renderPcomImportHistory();renderPcomTotals();renderTable();renderToday();renderDashboard();
+    toast('Comandă ștearsă — stoc corectat ✓');
+  }catch(err){
+    toast('Eroare la ștergere: '+err.message,'err');
+  }
 }
 function renderPcomTotals(){
   const grid=document.getElementById('pcom-totals-grid');
