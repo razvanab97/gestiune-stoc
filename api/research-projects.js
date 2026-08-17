@@ -49,6 +49,15 @@ function priceFrom(s){
   return Math.round((parseFloat(v)||0)*100)/100;
 }
 function uniq(arr){return[...new Set(arr.filter(Boolean))];}
+// Logo-uri/iconițe/elemente UI prinse de regexurile largi de <img> — nu sunt poze de produs.
+// Același tipar ca isJunkImage din api/listing-builder.js, aplicat și aici (lipsea complet).
+function isJunkImageUrl(u=''){
+  return !u||/(sprite|logo|icon|placeholder|blank|favicon|avatar|loading|pixel|1x1|badge|seal|rating|star|\/flag|arrow|\/btn|button|bg-|background|\.svg(\?|$))/i.test(u);
+}
+// Aceeași poză apare des la mai multe rezoluții (?width=80 vs ?width=720 pe eMAG) — le tratăm ca UNA
+// singură (păstrăm varianta cu rezoluție mai mare), altfel „numărul de poze” e umflat artificial.
+function imageDedupKey(u){try{const x=new URL(u);x.search='';return x.toString();}catch(e){return u;}}
+function imageWidthHint(u){const m=String(u||'').match(/[?&]width=(\d+)/i);return m?parseInt(m[1]):0;}
 // Caută primul bloc JSON-LD de tip schema.org Product din pagină — Verk și i-want.pl (WooCommerce) îl au
 // standard, cu date mult mai de încredere decât regex pe HTML brut (nume/preț/descriere completă/EAN real).
 function extractJsonLdProduct(html){
@@ -141,7 +150,21 @@ function extract(html,url){
   for(const m of html.matchAll(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/gi))imgs.push(m[1]);
   for(const m of html.matchAll(/"(?:image|imageUrl|bigImage)"\s*:\s*"([^"]+)"/gi))imgs.push(m[1]);
   for(const m of html.matchAll(/<(?:img|source)[^>]+(?:src|data-src|data-zoom-image)=["']([^"']+)["']/gi))imgs.push(m[1]);
-  data.images=uniq(imgs.map(x=>{try{return new URL(x,url).toString()}catch(e){return''}})).slice(0,16);
+  let absImgs=imgs.map(x=>{try{return new URL(x,url).toString()}catch(e){return''}}).filter(x=>x&&!isJunkImageUrl(x));
+  // eMAG afișează des poze ale altor produse pe aceeași pagină (variantă vecină din selector, recomandări
+  // „s-ar putea să-ți placă"), sub același tipar de URL — le izolăm strict la id-ul de produs identificat
+  // din singura imagine oficială (JSON-LD), altfel am număra/afișa poze ale unui produs GREȘIT.
+  if(data.platform==='emag'){
+    const idSrc=(ld?.images||[])[0]||'';
+    const idMatch=idSrc.match(/\/products\/(\d+)\/(\d+)\//);
+    if(idMatch)absImgs=absImgs.filter(u=>u.includes(`/products/${idMatch[1]}/${idMatch[2]}/`));
+  }
+  const seenImgs=new Map();
+  for(const u of absImgs){
+    const key=imageDedupKey(u);
+    if(!seenImgs.has(key)||imageWidthHint(u)>imageWidthHint(seenImgs.get(key)))seenImgs.set(key,u);
+  }
+  data.images=[...seenImgs.values()].slice(0,16);
   return data;
 }
 function similarity(a,b){
