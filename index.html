@@ -1711,6 +1711,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:69,text:'Jurnal vânzări încărca tot istoricul din tabelă la fiecare deschidere — acum arată implicit doar luna cea mai recentă (rapid, restul rămâne un click distanță la „Toate lunile", nimic nu s-a pierdut). Am mai găsit și reparat cauza reală a lentorii: fiecare vânzare (inclusiv fiecare linie dintr-un import din Comenzi Platforme) re-descărca întregul jurnal ca să-l actualizeze local — acum se actualizează direct, fără nicio re-descărcare',date:'2026-08-17'},
   {n:68,text:'Profitul la Import comenzi nu mai e o formulă generică (TVA/comision fixe) — folosește acum același motor de calcul care a stabilit deja Prețul minim eMAG/Trendyol al produsului, cu costul real de achiziție și prețul real din comandă. Fiecare linie asociată arată acum Fără TVA / Cu TVA / Profit estimat, plus un avertisment dacă ai vândut sub prețul minim configurat pe produs pentru platforma respectivă',date:'2026-08-17'},
   {n:67,text:'Fix: importul de comenzi eșua integral („0 linii importate") dacă migrarea coloanei „tara" pe platforma_mapari nu era rulată — acum o eventuală eroare la memorarea asocierii PNK nu mai anulează restul liniei (comanda tot se salvează, stocul tot se scade). În plus, fiecare vânzare din import apare acum și în „Vânzări azi" și în „Jurnal vânzări" pe ziua curentă, exact ca o vânzare rapidă manuală — pe lângă evidența din Comenzi Platforme',date:'2026-08-17'},
   {n:66,text:'Ajustări la Import comenzi: titlul de pe eMAG e acum mic/discret (util doar ca reper de căutare), iar titlul pentru AWB e evidențiat, cu buton mare de copiat — layout mai curat, structurat pe secțiuni. De asemenea, „produs nou" nu se mai creează automat la aplicare — linia rămâne pe pagină cu un buton „+ Adaugă produs" care deschide formularul normal, ca să completezi corect categorie/preț/poză înainte să intre în stoc',date:'2026-08-17'},
@@ -2333,7 +2334,7 @@ function safeLocalSet(key,value){
   try{localStorage.setItem(key,value);}
   catch(e){console.warn('Nu s-a putut scrie în localStorage ('+key+'):',e);}
 }
-let P=[],TS={},JL=[],OI=[],editId=null,sCol='name',sDir=1,jMode='sales',curImg='',selProd=new Set(),selSuppliers=new Set(),savingProduct=false,invSourceName='';
+let P=[],TS={},JL=[],OI=[],editId=null,sCol='name',sDir=1,jMode='sales',curImg='',selProd=new Set(),selSuppliers=new Set(),savingProduct=false,invSourceName='',jMonthDefaulted=false;
 let compState={};
 let SYNCM=[],syncMapsLoaded=false,syncImpParsed=[];
 let PCOM=[],pcomLoaded=false,pcImpParsed=[],pcImpPlatforma='emag';
@@ -2657,14 +2658,17 @@ async function saveTodayAllSales(){
 }
 
 // ── SAVE JURNAL ──
+// Actualizează JL (în memorie) direct cu o singură intrare — fără să re-descarce tot jurnalul.
+function applyJurnalEntryLocal(ds,p,q){
+  let day=JL.find(d=>d.date===ds);
+  if(!day){day={date:ds,entries:[]};JL.unshift(day);}
+  const ex=day.entries.find(en=>en.id===p.id);
+  if(ex)ex.qty+=q;else day.entries.push({id:p.id,name:p.name,category:p.category||'',priceSell:p.priceSell||0,img:p.img||'',qty:q});
+}
 async function saveJurnalEntry(p, q){
   const ds=td();
   if(!sbReady){
-    let day=JL.find(d=>d.date===ds);
-    if(!day){day={date:ds,entries:[]};JL.push(day);}
-    const ex=day.entries.find(en=>en.id===p.id);
-    if(ex)ex.qty+=q;else day.entries.push({id:p.id,name:p.name,category:p.category||'',priceSell:p.priceSell||0,img:p.img||'',qty:q});
-    JL.sort((a,b)=>b.date.localeCompare(a.date));
+    applyJurnalEntryLocal(ds,p,q);
     safeLocalSet(JK,JSON.stringify(JL));
     return;
   }
@@ -2676,11 +2680,10 @@ async function saveJurnalEntry(p, q){
     }else{
       await dbPost('jurnal',{data:ds,product_id:p.id,product_name:p.name,category:p.category||'',price_sell:p.priceSell||0,img:p.img||'',qty:q});
     }
-    // refresh jurnal local
-    const jRows=await dbGet('jurnal?select=*&order=data.desc');
-    const jMap={};
-    jRows.forEach(r=>{if(!jMap[r.data])jMap[r.data]={date:r.data,entries:[]};jMap[r.data].entries.push({id:r.product_id,name:r.product_name,category:r.category||'',priceSell:r.price_sell||0,img:r.img||'',qty:r.qty});});
-    JL=Object.values(jMap).sort((a,b)=>b.date.localeCompare(a.date));
+    // actualizează local, fără re-descărcare completă — jurnalul poate avea mii de rânduri după luni
+    // de utilizare, iar refetch-ul întregii tabele la fiecare vânzare (inclusiv la import în bloc din
+    // Comenzi Platforme, unde se apelează o dată per linie) e exact ce făcea Jurnalul lent la deschidere
+    applyJurnalEntryLocal(ds,p,q);
     setSyncStatus('ok',new Date().toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}));
   }catch(err){setSyncStatus('err','Eroare jurnal');safeLocalSet(JK,JSON.stringify(JL));}
 }
@@ -7321,6 +7324,10 @@ function buildJMonths(){
   const orderMs=OI.map(o=>(o.createdAt||'').slice(0,7)).filter(Boolean);
   const ms=[...new Set([...(jMode==='orders'?orderMs:salesMs)])].sort((a,b)=>b.localeCompare(a));
   sel.innerHTML='<option value="">Toate lunile</option>'+ms.map(m=>{const[y,mo]=m.split('-');return`<option value="${m}"${m===pv?' selected':''}>${new Date(y,mo-1).toLocaleDateString('ro-RO',{month:'long',year:'numeric'})}</option>`;}).join('');
+  // Prima dată când se deschide jurnalul, arată doar luna cea mai recentă (randare rapidă, nu tot
+  // istoricul dintr-o dată) — "Toate lunile" rămâne oricând un click distanță. Doar o singură dată,
+  // ca o alegere manuală ulterioară de "Toate lunile" să nu fie suprascrisă la fiecare re-render.
+  if(!pv&&!jMonthDefaulted&&ms.length){sel.value=ms[0];jMonthDefaulted=true;}
 }
 function setJMode(mode){
   jMode=mode;
@@ -7401,16 +7408,14 @@ async function deleteJournalEntry(date, productId, qty){
       // Scade cantitatea din sold
       p.sold=Math.max(0,(p.sold||0)-qty);
       await dbPatch(`produse?id=eq.${productId}`,{sold:p.sold});
-      
-      // Reîncarcă jurnalul
-      const jRows=await dbGet('jurnal?select=*&order=data.desc');
-      const jMap={};
-      jRows.forEach(r=>{
-        if(!jMap[r.data])jMap[r.data]={date:r.data,entries:[]};
-        jMap[r.data].entries.push({id:r.product_id,name:r.product_name,category:r.category||'',priceSell:r.price_sell||0,img:r.img||'',qty:r.qty});
-      });
-      JL=Object.values(jMap).sort((a,b)=>b.date.localeCompare(a.date));
-      
+
+      // elimină local intrarea ștearsă, fără re-descărcarea întregului jurnal
+      const day=JL.find(d=>d.date===date);
+      if(day){
+        day.entries=day.entries.filter(en=>en.id!==productId);
+        if(!day.entries.length)JL=JL.filter(d=>d.date!==date);
+      }
+
       renderJurnal();
       renderTable();
       toast('Vânzare ștearsă ✓');
