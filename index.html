@@ -1734,6 +1734,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:82,text:'Research: lângă linkurile de furnizor a apărut buton „✦ AI" — generează căutări eMAG/Trendyol mult mai precise decât linkul simplu din titlu, folosind AI care traduce titlul și ȘI analizează poza principală a produsului (inclusiv screenshot-ul de la Jumbo/Maxy) ca să prindă detalii (culoare, material, formă) care nu apar în titlu. E vechiul mecanism de generare inteligentă a căutării, reactivat și îmbunătățit cu analiză de poză, care nu exista înainte',date:'2026-08-17'},
   {n:81,text:'Research: la crearea unui dosar nou, câmpul „Furnizor" acceptă acum direct un link (Jumbo/Maxy/Verk/i-want) — recunoaște automat furnizorul după domeniu, completează numele în câmp și salvează linkul ca sursă a dosarului, fără să mai fie nevoie să-l lipești separat în caseta de linkuri de mai jos',date:'2026-08-17'},
   {n:80,text:'Research: buton nou „🚀 Analizează tot dosarul" — recalculează verdictul ȘI regenerează draftul de anunț dintr-un singur click, din toate sursele disponibile (linkuri normale + date citite din screenshot Jumbo/Maxy + candidați din PDF), fără să blocheze dacă mai lipsește ceva. Generatorul de anunț folosește acum și textul deja extras din screenshot/PDF, nu doar linkurile care se pot deschide automat',date:'2026-08-17'},
   {n:79,text:'Research: navigarea a fost redusă de la 5 la 2 taburi — „Dosare" și „Generator anunțuri" — restul (Research produs, Scorecard competitori, Decizie produs) erau fluxuri vechi, paralele, care confundau mai mult decât ajutau; dosarele acoperă acum tot ce era nevoie. Pagina Dosare are și un ghid rapid pliabil („ℹ️ Cum funcționează"), scris pentru colegii care nu au construit sistemul',date:'2026-08-17'},
@@ -3784,6 +3785,53 @@ function researchSearchLinks(title){
   if(!q)return null;
   return{emag:`https://www.emag.ro/search/${encodeURIComponent(q)}`,trendyol:`https://www.trendyol.com/sr?q=${encodeURIComponent(q)}&culture=ro-RO&currency=RON`};
 }
+// Versiunea AI a căutării: reface generateAIQueries (vechiul api/research-scrape.js) — traduce titlul,
+// generează query-uri progresive (specific → general), dar AICI trimite ȘI poza principală la AI vision,
+// ca să identifice detalii vizuale (culoare/material/formă) care nu apar în titlu — nu exista înainte.
+const researchAiQueryCache={};
+function findResearchLink(linkId){
+  for(const p of researchProjects){const l=(p.links||[]).find(x=>Number(x.id)===Number(linkId));if(l)return l;}
+  return null;
+}
+async function generateAiSearchLinks(linkId){
+  const link=findResearchLink(linkId);
+  if(!link){toast('Linkul nu a fost găsit','err');return;}
+  const btn=document.getElementById('rlai-'+linkId),out=document.getElementById('rlsearch-'+linkId);
+  if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span>';}
+  try{
+    let queries=researchAiQueryCache[linkId];
+    if(!queries){
+      const img=link.images?.[0];
+      const content=[{type:'text',text:`Ești expert în marketplace-uri românești. Produs sursă — titlu: "${link.title||''}"${link.description?`, descriere: "${String(link.description).slice(0,300)}"`:''}.${img?' Am atașat și poza principală a produsului — folosește-o ca să identifici detalii vizuale (culoare, material, formă, tip) care NU apar în titlu, ca să faci query-urile mai precise.':''}
+Tradu în română dacă titlul e în altă limbă. Generează interogări de căutare ÎN ROMÂNĂ pentru acest produs:
+- 4 query-uri pentru eMAG.ro, progresiv de la specific (toate caracteristicile distinctive) la general (2-3 cuvinte)
+- 2 query-uri pentru Trendyol, simple, 3-4 cuvinte
+Răspunde STRICT cu JSON: {"emag":["q1","q2","q3","q4"],"trendyol":["q1","q2"]}`}];
+      if(img){
+        if(img.startsWith('data:image')){
+          const mt=img.match(/data:(image\/\w+);/)?.[1]||'image/jpeg',b64=img.split(',')[1];
+          if(b64&&b64.length>=100)content.unshift({type:'image',source:{type:'base64',media_type:mt,data:b64}});
+        }else if(/^https?:\/\//i.test(img)){
+          content.unshift({type:'image',source:{type:'url',url:img}});
+        }
+      }
+      const resp=await callAI([{role:'user',content}],'Ești expert în marketplace-uri românești. Răspunzi DOAR cu JSON valid, fără markdown.',400);
+      const match=resp.trim().match(/\{[\s\S]*\}/);
+      if(!match)throw new Error('Răspuns invalid de la AI');
+      queries=JSON.parse(match[0]);
+      if(!Array.isArray(queries.emag)||!queries.emag.length)throw new Error('AI nu a generat query-uri valide');
+      researchAiQueryCache[linkId]=queries;
+    }
+    const emagUrl=`https://www.emag.ro/search/${encodeURIComponent(queries.emag[0])}`;
+    const trendyolUrl=queries.trendyol?.[0]?`https://www.trendyol.com/sr?q=${encodeURIComponent(queries.trendyol[0])}&culture=ro-RO&currency=RON`:null;
+    if(out)out.innerHTML=`<span class="research-link-meta">✦ <a href="${esc(emagUrl)}" target="_blank" style="color:var(--acc)">eMAG: ${esc(queries.emag[0])}</a>${trendyolUrl?` · <a href="${esc(trendyolUrl)}" target="_blank" style="color:var(--acc)">Trendyol: ${esc(queries.trendyol[0])}</a>`:''}</span>`;
+    if(btn)btn.remove();
+    toast('Căutare AI generată — dă click pe link ✓');
+  }catch(e){
+    toast(e.message||'Eroare generare căutare AI','err');
+    if(btn){btn.disabled=false;btn.textContent='✦ AI';}
+  }
+}
 function researchPlatformStats(p){
   const links=(p.links||[]).filter(l=>l.include_in_listing!==false&&l.status!=='eroare'&&Number(l.price)>0);
   const out={};
@@ -3919,7 +3967,7 @@ function renderResearchProjects(){
       const pnk=l.pnk?`<span class="pnk-copy"><span>PNK ${esc(l.pnk)}</span><button onclick="copyText('${esc(l.pnk)}')">Copy</button></span>`:'<span class="research-link-meta">PNK —</span>';
       const dup=l.duplicate_type&&l.duplicate_type!=='none'?`<span class="research-link-dup">${l.duplicate_type==='probabil'?'posibil duplicat':'duplicat'}</span>`:`<span class="research-link-meta">${l.source==='screenshot'?'📷 din screenshot':l.source==='pdf'?'📄 din PDF':esc(l.status||'analizat')}</span>`;
       const searchLinks=l.platform==='furnizor'&&l.title?researchSearchLinks(l.title):null;
-      const search=searchLinks?`<span class="research-link-meta"><a href="${esc(searchLinks.emag)}" target="_blank" style="color:var(--acc)">🔍 eMAG</a> · <a href="${esc(searchLinks.trendyol)}" target="_blank" style="color:var(--acc)">🔍 Trendyol</a></span>`:pnk;
+      const search=searchLinks?`<span id="rlsearch-${l.id}" class="research-link-meta"><a href="${esc(searchLinks.emag)}" target="_blank" style="color:var(--acc)">🔍 eMAG</a> · <a href="${esc(searchLinks.trendyol)}" target="_blank" style="color:var(--acc)">🔍 Trendyol</a></span> <button class="btn btn-sm" id="rlai-${l.id}" onclick="generateAiSearchLinks(${l.id})" title="Generează căutare mai precisă cu AI — folosește și poza principală dacă există">✦ AI</button>`:pnk;
       const revOrScore=l.score!=null?`<span class="research-link-meta" style="color:${l.score_zone==='ok'?'var(--gr)':l.score_zone==='mid'?'#f59e0b':'var(--t3)'}">scor ${l.score}</span>`:`<span class="research-link-meta">${l.review_count?l.review_count+' rev.':'0 rev.'}</span>`;
       const tail=l.source==='pdf'&&l.score_zone==='mid'?`<label class="research-link-meta" style="cursor:pointer;white-space:nowrap"><input type="checkbox" ${l.include_in_listing?'checked':''} onchange="toggleLinkInclude(${l.id},this.checked)"> confirmă</label>`:dup;
       const titleUrl=l.source==='pdf'?'javascript:void(0)':esc(l.url);
@@ -3988,7 +4036,8 @@ Răspunde STRICT în format JSON: {"title":"<titlu>","price":<număr>,"currency"
     if(!match)throw new Error('Răspuns invalid de la AI');
     const info=JSON.parse(match[0]);
     if(!info.title)throw new Error('AI nu a putut citi titlul din screenshot — încearcă o poză mai clară');
-    await apiJson('/api/research-projects',{action:'set_link_data',link_id:linkId,title:info.title,price:info.price||0,currency:info.currency||'RON',description:info.description||''},45000);
+    // Poza rămâne salvată — refolosită mai jos ca "poză principală" la generarea AI a căutării eMAG/Trendyol.
+    await apiJson('/api/research-projects',{action:'set_link_data',link_id:linkId,title:info.title,price:info.price||0,currency:info.currency||'RON',description:info.description||'',images:[dataUrl]},45000);
     toast('Screenshot analizat ✓');
     await loadResearchProjects();
   }catch(e){
