@@ -1379,7 +1379,7 @@ th{font-weight:800!important;color:var(--t3)!important}
             <input id="rp-title" type="text" placeholder="Titlu / idee produs">
             <input id="rp-buy" type="number" min="0" step="0.01" placeholder="Achiziție RON">
           </div>
-          <input id="rp-supplier" type="text" placeholder="Furnizor principal (opțional)" style="width:100%;margin-bottom:8px">
+          <input id="rp-supplier" type="text" placeholder="Furnizor principal — sau lipește linkul sursă (Jumbo/Maxy/Verk/i-want)" style="width:100%;margin-bottom:8px" onchange="detectResearchSupplierLink(this)">
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             <button class="btn btn-sm btn-acc" onclick="createResearchProject()">+ Creează dosar</button>
             <button class="btn btn-sm" onclick="loadResearchProjects()">↻ Reîncarcă</button>
@@ -1734,6 +1734,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:81,text:'Research: la crearea unui dosar nou, câmpul „Furnizor" acceptă acum direct un link (Jumbo/Maxy/Verk/i-want) — recunoaște automat furnizorul după domeniu, completează numele în câmp și salvează linkul ca sursă a dosarului, fără să mai fie nevoie să-l lipești separat în caseta de linkuri de mai jos',date:'2026-08-17'},
   {n:80,text:'Research: buton nou „🚀 Analizează tot dosarul" — recalculează verdictul ȘI regenerează draftul de anunț dintr-un singur click, din toate sursele disponibile (linkuri normale + date citite din screenshot Jumbo/Maxy + candidați din PDF), fără să blocheze dacă mai lipsește ceva. Generatorul de anunț folosește acum și textul deja extras din screenshot/PDF, nu doar linkurile care se pot deschide automat',date:'2026-08-17'},
   {n:79,text:'Research: navigarea a fost redusă de la 5 la 2 taburi — „Dosare" și „Generator anunțuri" — restul (Research produs, Scorecard competitori, Decizie produs) erau fluxuri vechi, paralele, care confundau mai mult decât ajutau; dosarele acoperă acum tot ce era nevoie. Pagina Dosare are și un ghid rapid pliabil („ℹ️ Cum funcționează"), scris pentru colegii care nu au construit sistemul',date:'2026-08-17'},
   {n:78,text:'Research: când căutarea automată pe eMAG/Trendyol nu găsește nimic, poți strânge screenshot-uri ale rezultatelor căutării manuale într-un singur PDF și-l încărca în dosar — AI-ul citește fiecare anunț (titlu, preț, descriere, fără poze) și le scorează automat față de produsul din dosar: cele cu potrivire sigură (80-100) intră direct ca „listări urmărite", cele de mijloc (50-79) apar cu o bifă „confirmă" pentru verificare manuală, iar cele slabe sunt ignorate automat',date:'2026-08-17'},
@@ -3849,17 +3850,55 @@ function setResearchProjectFilter(f,btn){
   btn?.classList.add('on');
   renderResearchProjects();
 }
+// Numele furnizorului din domeniul link-ului — Jumbo/Maxy/Verk/i-want au nume dedicate,
+// orice alt domeniu primește un nume generic derivat (ex. exemplu.ro → "Exemplu").
+function researchSupplierNameFromUrl(url){
+  try{
+    const h=new URL(url).hostname.replace(/^www\./,'').toLowerCase();
+    if(h.includes('jumbo.'))return'Jumbo';
+    if(h.includes('maxy.'))return'Maxy';
+    if(h.includes('verk.'))return'Verk';
+    if(h.includes('i-want.'))return'i-want.pl';
+    const base=h.split('.').slice(-2)[0]||h;
+    return base.charAt(0).toUpperCase()+base.slice(1);
+  }catch(e){return'';}
+}
+// Când lipești un link în câmpul de furnizor, îl recunoaște automat, îi pune numele detectat în
+// câmp (ca text) și ține minte link-ul original ca să fie salvat direct la crearea dosarului.
+function detectResearchSupplierLink(el){
+  const v=(el.value||'').trim();
+  if(!/^https?:\/\//i.test(v)){delete el.dataset.url;return;}
+  const name=researchSupplierNameFromUrl(v);
+  if(!name)return;
+  el.dataset.url=v;
+  el.value=name;
+  toast('Furnizor detectat: '+name+' — linkul se salvează la crearea dosarului');
+}
 async function createResearchProject(){
   const title=(document.getElementById('rp-title')?.value||'').trim();
   const acquisition_price=parseFloat(document.getElementById('rp-buy')?.value)||0;
-  const supplier=(document.getElementById('rp-supplier')?.value||'').trim();
+  const supplierEl=document.getElementById('rp-supplier');
+  const rawSupplier=(supplierEl?.value||'').trim();
+  const supplierUrl=supplierEl?.dataset.url||(/^https?:\/\//i.test(rawSupplier)?rawSupplier:'');
+  const supplier=supplierUrl?researchSupplierNameFromUrl(supplierUrl)||rawSupplier:rawSupplier;
   if(!title){toast('Completează titlul dosarului','err');return;}
   try{
     const data=await apiJson('/api/research-projects',{action:'create_project',title,acquisition_price,supplier},30000);
-    researchProjects.unshift({...data.project,links:[]});
-    ['rp-title','rp-buy','rp-supplier'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+    const project={...data.project,links:[]};
+    researchProjects.unshift(project);
+    ['rp-title','rp-buy','rp-supplier'].forEach(id=>{const el=document.getElementById(id);if(el){el.value='';delete el.dataset.url;}});
     renderResearchProjects();
-    toast('Dosar Research creat ✓');
+    if(supplierUrl){
+      try{
+        const linkData=await apiJson('/api/research-projects',{action:'add_links',project_id:project.id,urls:[supplierUrl]},60000);
+        project.links=linkData.added||[];
+        if(linkData.verdict)Object.assign(project,linkData.verdict);
+        renderResearchProjects();
+        toast('Dosar creat și link sursă adăugat ✓');
+      }catch(e){toast('Dosar creat, dar linkul sursă nu s-a putut adăuga: '+(e.message||e),'err');}
+    }else{
+      toast('Dosar Research creat ✓');
+    }
   }catch(e){toast(e.message||'Eroare creare dosar','err');}
 }
 function renderResearchProjects(){
