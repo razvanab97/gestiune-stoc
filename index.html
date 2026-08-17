@@ -1711,6 +1711,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:68,text:'Profitul la Import comenzi nu mai e o formulă generică (TVA/comision fixe) — folosește acum același motor de calcul care a stabilit deja Prețul minim eMAG/Trendyol al produsului, cu costul real de achiziție și prețul real din comandă. Fiecare linie asociată arată acum Fără TVA / Cu TVA / Profit estimat, plus un avertisment dacă ai vândut sub prețul minim configurat pe produs pentru platforma respectivă',date:'2026-08-17'},
   {n:67,text:'Fix: importul de comenzi eșua integral („0 linii importate") dacă migrarea coloanei „tara" pe platforma_mapari nu era rulată — acum o eventuală eroare la memorarea asocierii PNK nu mai anulează restul liniei (comanda tot se salvează, stocul tot se scade). În plus, fiecare vânzare din import apare acum și în „Vânzări azi" și în „Jurnal vânzări" pe ziua curentă, exact ca o vânzare rapidă manuală — pe lângă evidența din Comenzi Platforme',date:'2026-08-17'},
   {n:66,text:'Ajustări la Import comenzi: titlul de pe eMAG e acum mic/discret (util doar ca reper de căutare), iar titlul pentru AWB e evidențiat, cu buton mare de copiat — layout mai curat, structurat pe secțiuni. De asemenea, „produs nou" nu se mai creează automat la aplicare — linia rămâne pe pagină cu un buton „+ Adaugă produs" care deschide formularul normal, ca să completezi corect categorie/preț/poză înainte să intre în stoc',date:'2026-08-17'},
   {n:65,text:'La Import comenzi, odată ce o linie e asociată cu un produs, apare imediat stocul intern (actual → după vânzare), ca să decizi pe loc dacă confirmi vânzarea sau amâni livrarea. Cantitatea de stoc scăzută e acum editabilă direct (− / +, lângă preț) — utilă când eMAG vinde ca set, dar stocul intern e ținut altfel. Apare și un titlu gata de pus pe AWB (cantitate + nume/SKU intern, nu titlul de pe eMAG), cu buton de copiere',date:'2026-08-17'},
@@ -2221,15 +2222,22 @@ function pcomToRon(price,currency){
   const rate=FX_TO_RON_PCOM[String(currency||'RON').toUpperCase()]||1;
   return Math.round(p*rate*100)/100;
 }
-// Profit estimat — formulă identică cu calcProfit() din api/research-projects.js (TVA 21%, comision 20%, costuri fixe 23 RON),
-// aplicată uniform pe eMAG/Trendyol; e o estimare, nu calculul detaliat din tab-ul Calculator (care cere setări per produs).
-function pcomEstimateProfit(acqGrossRon,saleGrossRon){
-  const buy=Number(acqGrossRon)||0,sale=Number(saleGrossRon)||0;
-  if(!buy||!sale)return{profit:0,margin:0};
-  const VAT=.21,COMMISSION=.20,FIXED=23;
-  const revenue=sale/(1+VAT),buyNet=buy/(1+VAT),commNet=sale*COMMISSION/(1+VAT);
-  const gross=revenue-buyNet-commNet-FIXED,tax=Math.max(0,gross)*.16,profit=gross-tax;
-  return{profit:Math.round(profit*100)/100,margin:revenue>0?Math.round((profit/revenue*100)*100)/100:0};
+// Vânzare fără TVA / cu TVA / profit — folosind ACELAȘI motor (pcDefaultState + pcCalculate) care a
+// calculat deja Preț minim eMAG/Trendyol al produsului (vezi pcAutomaticPricesFromGross), nu o formulă
+// generică separată: pornim de la costul real de achiziție și prețul real din comandă (fără TVA, per
+// bucată), cu setările implicite de comision/transport ale canalului. Compară și cu pragul minim
+// configurat pe produs (priceEmag/priceTrendyol) — dacă am vândut sub el, marchează vizual.
+function pcomChannelFor(platforma){return platforma==='trendyol'?'trendyol':platforma==='emag'?'emag':'direct';}
+function pcomSaleFinancials(p,it,platforma){
+  const ch=pcomChannelFor(platforma);
+  const tvaAcq=p.tvaAcq??0.21;
+  const acqNet=p.priceBuyTTC>0?(tvaAcq>0?p.priceBuyTTC/(1+tvaAcq):p.priceBuyTTC):0;
+  const sellNetRon=pcomToRon(it.pretFaraTva,it.moneda);
+  const v={...pcDefaultState(ch,acqNet),sell:sellNetRon};
+  const r=pcCalculate(ch,v);
+  const vanzareFaraTva=r.sell,vanzareCuTva=Math.round(r.sell*(1+r.vat)*100)/100,profit=r.net,marja=Math.round(r.margin*100)/100;
+  const minPret=ch==='emag'?(p.priceEmag||0):ch==='trendyol'?(p.priceTrendyol||0):(p.priceSell||0);
+  return{vanzareFaraTva,vanzareCuTva,profit,marja,minPret,subMinim:minPret>0&&vanzareCuTva<minPret};
 }
 function dbToPcom(r){
   return{id:r.id,platforma:r.platforma,data:r.data,comandaId:r.comanda_id||'',pnk:r.pnk||'',tara:r.tara||'',codProdus:r.cod_produs||'',
@@ -5916,6 +5924,20 @@ function copyPcomAwbTitle(idx){
   const title=pcomAwbTitle(idx);
   if(title)copyText(title);
 }
+// Fără TVA / cu TVA / profit — vezi pcomSaleFinancials mai sus. Dacă am vândut sub pragul minim
+// configurat pe produs pentru platforma respectivă (priceEmag/priceTrendyol), marchează vizual.
+function pcomFinancialsHtml(idx){
+  const it=pcImpParsed[idx];
+  if(!it.produsId)return'';
+  const p=P.find(x=>x.id===it.produsId);
+  if(!p)return'';
+  const platforma=it.platforma||pcImpPlatforma;
+  const fin=pcomSaleFinancials(p,it,platforma);
+  const totalProfit=Math.round(fin.profit*it.cantitate*100)/100;
+  const profitColor=totalProfit<0?'--rd':(fin.marja<10?'--or':'--gr');
+  const minLbl=fin.minPret>0?` · Preț minim configurat: ${fin.minPret.toFixed(2)} RON${fin.subMinim?' ⚠️ vândut sub minim':''}`:'';
+  return`<div style="font-size:11px;color:var(--t3);margin-top:4px">Fără TVA: ${fin.vanzareFaraTva.toFixed(2)} RON · Cu TVA: ${fin.vanzareCuTva.toFixed(2)} RON · Profit est.: <b style="color:var(${profitColor})">${totalProfit.toFixed(2)} RON</b> (${fin.marja.toFixed(1)}%)${minLbl?`<span style="color:${fin.subMinim?'var(--rd)':'var(--t3)'}">${esc(minLbl)}</span>`:''}</div>`;
+}
 function renderPcomImportPreview(){
   const prev=document.getElementById('pcmi-preview');
   const rows=pcImpParsed.map((it,idx)=>{
@@ -5930,7 +5952,7 @@ function renderPcomImportPreview(){
     const titluHtml=`<div class="pcom-platform-title">${esc(it.titluExtern)}${it.titluRo?` <span class="pcom-platform-title-ro">🌐 ${esc(it.titluRo)}</span>`:''} ${tag}</div>`;
     return`<div class="inv-prev-row pcom-prev-row${it.amanat?' pcom-row-amanat':''}">
       <input type="checkbox" ${it.include?'checked':''} onchange="pcImpParsed[${idx}].include=this.checked;updPcomImportInfo()">
-      <div class="inv-prev-nm pcom-prev-nm">${titluHtml}<div class="pcom-meta-line">${priceInfoHtml}${it.pnk?' · PNK '+esc(it.pnk)+(it.tara?' ('+esc(it.tara)+')':''):''}${it.comandaId?' · #'+esc(it.comandaId):''}</div>${it.newProduct?pcomNewProductPromptHtml(idx):(pcomAwbTitleHtml(idx)+pcomStockWarningHtml(idx))}</div>
+      <div class="inv-prev-nm pcom-prev-nm">${titluHtml}<div class="pcom-meta-line">${priceInfoHtml}${it.pnk?' · PNK '+esc(it.pnk)+(it.tara?' ('+esc(it.tara)+')':''):''}${it.comandaId?' · #'+esc(it.comandaId):''}</div>${it.newProduct?pcomNewProductPromptHtml(idx):(pcomAwbTitleHtml(idx)+pcomFinancialsHtml(idx)+pcomStockWarningHtml(idx))}</div>
       <div class="smi-pick" id="pcmi-pick-${idx}">${pcomPickBtnHtml(idx)}</div>
     </div>`;
   }).join('');
@@ -6076,8 +6098,8 @@ async function applyPcomImport(){
       if(!p){failed++;continue;}
       try{
         const totalRon=pcomToRon(it.pretTotalCuTva,it.moneda);
-        const acqGrossRon=(p.priceBuyTTC||0)*it.cantitate;
-        const{profit,margin}=pcomEstimateProfit(acqGrossRon,totalRon);
+        const fin=pcomSaleFinancials(p,it,platforma);
+        const profit=Math.round(fin.profit*it.cantitate*100)/100,margin=fin.marja;
         const row=pcomToDb({platforma,data:it.data,comandaId:it.comandaId,pnk:it.pnk,tara:it.tara,codProdus:it.codProdus,
           titluExtern:it.titluExtern,produsId:p.id,produsNume:p.name,cantitate:it.cantitate,
           pretFaraTva:it.pretFaraTva,pretTotalCuTva:it.pretTotalCuTva,moneda:it.moneda,pretTotalCuTvaRon:totalRon,
