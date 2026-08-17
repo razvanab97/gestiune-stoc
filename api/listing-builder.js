@@ -425,9 +425,17 @@ module.exports=async function handler(req,res){
     const mode=['analyze','synthesize'].includes(req.body?.mode)?req.body.mode:'build';
     const urls=[...new Set((req.body?.urls||[]).filter(u=>/^https?:\/\//i.test(String(u||''))).slice(0,MAX_LINKS))];
     const product=req.body?.product||{};
-    if(!urls.length&&!product.name)return res.status(400).json({error:'Lipsesc linkurile sau produsul'});
+    // Anunțuri citite din screenshot/PDF (Research, linkuri Jumbo/Maxy sau candidați fără URL fetch-abil) —
+    // nu pot fi refăcute prin fetch, dar textul deja extras de AI e valoros; îl trecem direct în "pages",
+    // fără imagini (calitate slabă din captură — pozele vin din altă sursă, ca la extracția din PDF).
+    const extraPages=(Array.isArray(req.body?.extraPages)?req.body.extraPages:[]).slice(0,MAX_LINKS).map(p=>({
+      url:String(p.url||''),host:String(p.platform||'sursă'),title:decode(String(p.title||'')).slice(0,240),
+      description:decode(String(p.description||'')).slice(0,900),text:decode(String(p.description||'')).slice(0,900),
+      images:[],price:Number(p.price)||0,currency:String(p.currency||'RON')
+    })).filter(p=>p.title);
+    if(!urls.length&&!extraPages.length&&!product.name)return res.status(400).json({error:'Lipsesc linkurile sau produsul'});
 
-    const pages=await Promise.all(urls.map(u=>fetchPage(u).catch(()=>({url:u,title:'',description:'',images:[],text:'',error:'fetch failed'}))));
+    const pages=[...await Promise.all(urls.map(u=>fetchPage(u).catch(()=>({url:u,title:'',description:'',images:[],text:'',error:'fetch failed'})))),...extraPages];
 
     // Colectăm TOATE imaginile din toate paginile, deduplicate
     const pageImages=[...new Set(pages.flatMap(p=>p.images||[]).filter(x=>x&&isLikelyProductImage(x)))];

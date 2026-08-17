@@ -30,6 +30,13 @@ function platformOf(url){
   return'altul';
 }
 function pnkOf(url){const m=String(url||'').match(/\/pd\/([A-Z0-9]+)\/?/i);return m?m[1].toUpperCase():'';}
+// Jumbo (403 la nivel de server) și Maxy (SPA, HTML gol) nu pot fi citite prin fetch automat —
+// confirmat prin testare directă repetată (vezi research-produse-emag-trendyol.md). Pentru ele,
+// linkul se salvează ca referință, dar datele vin dintr-un screenshot citit de AI (client-side).
+function needsScreenshot(url){
+  try{const h=new URL(url).hostname.replace(/^www\./,'').toLowerCase();return h.includes('jumbo.')||h.includes('maxy.');}
+  catch(e){return false;}
+}
 function normalizeUrl(raw){
   const u=new URL(String(raw||'').trim().startsWith('http')?String(raw).trim():'https://'+String(raw||'').trim());
   u.hash='';
@@ -42,21 +49,70 @@ function priceFrom(s){
   return Math.round((parseFloat(v)||0)*100)/100;
 }
 function uniq(arr){return[...new Set(arr.filter(Boolean))];}
+// Caută primul bloc JSON-LD de tip schema.org Product din pagină — Verk și i-want.pl (WooCommerce) îl au
+// standard, cu date mult mai de încredere decât regex pe HTML brut (nume/preț/descriere completă/EAN real).
+function extractJsonLdProduct(html){
+  for(const m of html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)){
+    let parsed;
+    try{parsed=JSON.parse(m[1]);}catch(e){continue;}
+    const candidates=Array.isArray(parsed)?parsed:(Array.isArray(parsed?.['@graph'])?parsed['@graph']:[parsed]);
+    for(const node of candidates){
+      const type=node?.['@type'];
+      const isProduct=type==='Product'||(Array.isArray(type)&&type.includes('Product'));
+      if(!isProduct)continue;
+      let offers=node.offers;
+      if(Array.isArray(offers))offers=offers.flat().find(o=>o&&typeof o==='object')||null;
+      const rating=node.aggregateRating||{};
+      const images=[].concat(node.image||[]).filter(x=>typeof x==='string');
+      return{
+        title:clean(node.name||'').slice(0,240),
+        description:clean(node.description||'').slice(0,2000),
+        price:offers?.price!=null?priceFrom(offers.price):0,
+        currency:offers?.priceCurrency||'',
+        rating:parseFloat(rating.ratingValue)||0,
+        review_count:parseInt(rating.reviewCount||rating.ratingCount)||0,
+        ean:node.gtin13||node.gtin||node.gtin12||node.gtin8||node.mpn||(typeof node.productID==='string'?node.productID.replace(/^mpn:/,''):'')||'',
+        images
+      };
+    }
+  }
+  return null;
+}
 function extract(html,url){
-  const data={url,normalized_url:normalizeUrl(url),platform:platformOf(url),pnk:pnkOf(url),title:'',price:0,currency:'RON',rating:0,review_count:0,images:[],specs:{},description:''};
-  const tm=html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)||html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)||html.match(/<title>([^<]+)/i);
-  if(tm)data.title=clean(tm[1]).slice(0,240);
-  const dm=html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)||html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i);
-  if(dm)data.description=clean(dm[1]).slice(0,900);
-  const pm=html.match(/"price"\s*:\s*"?([\d.,]+)"?/i)||html.match(/data-price-product=["']([\d.,]+)["']/i)||html.match(/([\d.,]+)\s*(?:RON|lei|zł|PLN|EUR)/i);
-  if(pm)data.price=priceFrom(pm[1]);
-  const cur=html.match(/"priceCurrency"\s*:\s*"([^"]+)"/i);
-  if(cur)data.currency=cur[1]||'RON';
-  const rm=html.match(/"ratingValue"\s*:\s*"?([\d.]+)"?/i);
-  if(rm)data.rating=parseFloat(rm[1])||0;
-  const rev=html.match(/"reviewCount"\s*:\s*"?(\d+)"?/i)||html.match(/(\d[\d., ]*)\s*(?:recenzii|recenzie|review|reviews)/i);
-  if(rev)data.review_count=parseInt(String(rev[1]).replace(/[^\d]/g,''))||0;
-  const imgs=[];
+  const data={url,normalized_url:normalizeUrl(url),platform:platformOf(url),pnk:pnkOf(url),title:'',price:0,currency:'RON',rating:0,review_count:0,images:[],specs:{},description:'',ean:''};
+  const ld=extractJsonLdProduct(html);
+  if(ld?.title)data.title=ld.title;
+  else{
+    const tm=html.match(/<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)["']/i)||html.match(/<h1[^>]*>([\s\S]*?)<\/h1>/i)||html.match(/<title>([^<]+)/i);
+    if(tm)data.title=clean(tm[1]).slice(0,240);
+  }
+  if(ld?.description)data.description=ld.description.slice(0,900);
+  else{
+    const dm=html.match(/<meta[^>]+property=["']og:description["'][^>]+content=["']([^"']+)["']/i)||html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i);
+    if(dm)data.description=clean(dm[1]).slice(0,900);
+  }
+  if(ld?.price){data.price=ld.price;}
+  else{
+    const pm=html.match(/"price"\s*:\s*"?([\d.,]+)"?/i)||html.match(/data-price-product=["']([\d.,]+)["']/i)||html.match(/([\d.,]+)\s*(?:RON|lei|zł|PLN|EUR)/i);
+    if(pm)data.price=priceFrom(pm[1]);
+  }
+  if(ld?.currency)data.currency=ld.currency;
+  else{
+    const cur=html.match(/"priceCurrency"\s*:\s*"([^"]+)"/i);
+    if(cur)data.currency=cur[1]||'RON';
+  }
+  if(ld?.rating)data.rating=ld.rating;
+  else{
+    const rm=html.match(/"ratingValue"\s*:\s*"?([\d.]+)"?/i);
+    if(rm)data.rating=parseFloat(rm[1])||0;
+  }
+  if(ld?.review_count)data.review_count=ld.review_count;
+  else{
+    const rev=html.match(/"reviewCount"\s*:\s*"?(\d+)"?/i)||html.match(/(\d[\d., ]*)\s*(?:recenzii|recenzie|review|reviews)/i);
+    if(rev)data.review_count=parseInt(String(rev[1]).replace(/[^\d]/g,''))||0;
+  }
+  if(ld?.ean)data.ean=String(ld.ean).trim();
+  const imgs=(ld?.images||[]).slice();
   for(const m of html.matchAll(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/gi))imgs.push(m[1]);
   for(const m of html.matchAll(/"(?:image|imageUrl|bigImage)"\s*:\s*"([^"]+)"/gi))imgs.push(m[1]);
   for(const m of html.matchAll(/<(?:img|source)[^>]+(?:src|data-src|data-zoom-image)=["']([^"']+)["']/gi))imgs.push(m[1]);
@@ -107,7 +163,8 @@ function projectVerdict(project,links){
   // Prețul de piață se calculează DOAR din linkuri competitor (eMAG/Trendyol/altul) — linkurile
   // de furnizor (Jumbo/Maxy/Verk etc., adăugate ca sursă de cost) nu trebuie să se amestece în
   // referința de preț de vânzare, altfel prețul de achiziție al furnizorului corupe verdictul.
-  const valid=links.filter(l=>l.platform!=='furnizor'&&Number(l.price)>0&&l.status!=='eroare');
+  // include_in_listing===false = candidat cu scor 50-79, neconfirmat încă manual — nu contează ca preț de piață.
+  const valid=links.filter(l=>l.platform!=='furnizor'&&Number(l.price)>0&&l.status!=='eroare'&&l.include_in_listing!==false);
   const prices=valid.map(l=>toRon(l.price,l.currency)).filter(Boolean);
   const convertedCount=valid.filter(l=>String(l.currency||'RON').toUpperCase()!=='RON'&&String(l.currency||'RON').toUpperCase()!=='LEI').length;
   const buy=Number(project.acquisition_price)||0,marketMin=prices.length?Math.min(...prices):0,marketMedian=median(prices);
@@ -185,11 +242,11 @@ module.exports=async function handler(req,res){
         if(queue.find(x=>x.norm===norm||(pnk&&x.pnk===pnk))){skipped.push({url:raw,reason:'duplicat în lista curentă'});continue;}
         queue.push({raw,norm,pnk});
       }
-      const analyzed=await Promise.all(queue.map(async x=>({...x,data:await analyzeUrl(x.norm)})));
+      const analyzed=await Promise.all(queue.map(async x=>({...x,data:needsScreenshot(x.norm)?{url:x.norm,normalized_url:x.norm,platform:platformOf(x.norm),pnk:x.pnk,title:'',price:0,currency:'RON',rating:0,review_count:0,images:[],specs:{},description:'',status:'aștept screenshot',error:null}:await analyzeUrl(x.norm)})));
       for(const item of analyzed){
         const{raw,norm,pnk,data}=item;
         const probable=existing.find(l=>data.title&&l.title&&similarity(data.title,l.title)>.72&&(!data.price||!l.price||Math.abs(Number(data.price)-Number(l.price))/Math.max(Number(l.price),1)<.12));
-        const row={project_id:projectId,url:String(raw).trim(),normalized_url:norm,platform:data.platform,pnk:data.pnk||pnk,title:data.title,price:data.price||0,currency:data.currency||'RON',rating:data.rating||0,review_count:data.review_count||0,images:data.images||[],specs:data.specs||{},description:data.description||'',duplicate_of:probable?.id||null,duplicate_type:probable?'probabil':'none',include_in_listing:true,status:data.error?'eroare':'analizat',error:data.error||null};
+        const row={project_id:projectId,url:String(raw).trim(),normalized_url:norm,platform:data.platform,pnk:data.pnk||pnk,title:data.title,price:data.price||0,currency:data.currency||'RON',rating:data.rating||0,review_count:data.review_count||0,images:data.images||[],specs:data.specs||{},description:data.description||'',duplicate_of:probable?.id||null,duplicate_type:probable?'probabil':'none',include_in_listing:true,source:needsScreenshot(norm)?'screenshot':'web',status:data.status||(data.error?'eroare':'analizat'),error:data.error||null};
         const ins=await supa('POST','research_links',row);
         const saved=ins?.[0]||row;existing.push(saved);added.push(saved);if(probable)flagged.push(saved);
       }
@@ -197,10 +254,54 @@ module.exports=async function handler(req,res){
       const verdict=await recalcProject(projectId);
       return res.status(200).json({added,skipped,flagged,verdict:verdict.project});
     }
+    if(body.action==='set_link_data'){
+      // Completează un link 'aștept screenshot' (Jumbo/Maxy) cu datele deja extrase de AI, client-side,
+      // dintr-o poză încărcată — serverul nu face fetch și nu apelează AI aici, doar salvează rezultatul.
+      const linkId=Number(body.link_id);
+      if(!linkId)return res.status(400).json({error:'Lipsește linkul'});
+      const title=clean(body.title).slice(0,240);
+      if(!title)return res.status(400).json({error:'Titlul extras din screenshot este gol'});
+      const patch={title,price:Number(body.price)||0,currency:clean(body.currency)||'RON',description:clean(body.description||'').slice(0,900),source:'screenshot',status:'analizat',error:null,updated_at:new Date().toISOString()};
+      const rows=await supa('PATCH',`research_links?id=eq.${linkId}`,patch);
+      const link=rows?.[0];
+      if(!link)return res.status(404).json({error:'Linkul nu a fost găsit'});
+      const verdict=await recalcProject(link.project_id);
+      return res.status(200).json({link,verdict:verdict.project});
+    }
+    if(body.action==='add_pdf_listings'){
+      // eMAG/Trendyol nu pot fi deschise/citite automat linkuri-cu-linkuri — utilizatorul strânge
+      // screenshot-uri ale rezultatelor căutării într-un PDF, AI-ul (client-side) citește fiecare
+      // anunț din pagini, iar aici doar salvăm rezultatele deja scorate (fără poze din PDF, Q72).
+      const projectId=Number(body.project_id),platform=body.platform==='trendyol'?'trendyol':'emag';
+      const listings=Array.isArray(body.listings)?body.listings.slice(0,30):[];
+      if(!projectId||!listings.length)return res.status(400).json({error:'Lipsesc dosarul sau anunțurile din PDF'});
+      const stamp=Date.now();
+      const rows=listings.map((l,i)=>{
+        const title=clean(l.title).slice(0,240),score=Math.max(0,Math.min(100,Number(l.score)||0));
+        const zone=score>=80?'ok':score>=50?'mid':'low';
+        return{project_id:projectId,url:`pdf-import://${platform}/${stamp}-${i}`,normalized_url:`pdf-import://${platform}/${stamp}-${i}`,platform,pnk:null,title,price:Number(l.price)||0,currency:clean(l.currency)||'RON',rating:0,review_count:0,images:[],specs:{},description:clean(l.description||'').slice(0,900),duplicate_of:null,duplicate_type:'none',include_in_listing:score>=80,source:'pdf',score,score_zone:zone,status:'analizat',error:null};
+      }).filter(r=>r.title);
+      if(!rows.length)return res.status(400).json({error:'Niciun anunț valid găsit în PDF'});
+      const ins=await supa('POST','research_links',rows);
+      await supa('PATCH',`research_projects?id=eq.${projectId}`,{updated_at:new Date().toISOString()});
+      const verdict=await recalcProject(projectId);
+      return res.status(200).json({added:ins||rows,verdict:verdict.project});
+    }
+    if(body.action==='toggle_link_include'){
+      const linkId=Number(body.link_id);
+      if(!linkId)return res.status(400).json({error:'Lipsește linkul'});
+      const rows=await supa('PATCH',`research_links?id=eq.${linkId}`,{include_in_listing:!!body.include,updated_at:new Date().toISOString()});
+      const link=rows?.[0];
+      if(!link)return res.status(404).json({error:'Linkul nu a fost găsit'});
+      const verdict=await recalcProject(link.project_id);
+      return res.status(200).json({link,verdict:verdict.project});
+    }
     if(body.action==='recheck_links'){
       const projectId=Number(body.project_id);
       if(!projectId)return res.status(400).json({error:'Lipsește dosarul'});
-      const existing=await supa('GET',`research_links?project_id=eq.${projectId}&select=*`);
+      const all=await supa('GET',`research_links?project_id=eq.${projectId}&select=*`);
+      // Linkurile cu date din screenshot (Jumbo/Maxy) nu pot fi re-verificate prin fetch — s-ar suprascrie cu eroare 403/gol.
+      const existing=all.filter(l=>l.source!=='screenshot');
       if(!existing.length)return res.status(200).json({checked:0,changed:0});
       const reanalyzed=await Promise.all(existing.map(async l=>({link:l,data:await analyzeUrl(l.url)})));
       let changed=0;
