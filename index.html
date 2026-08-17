@@ -386,6 +386,15 @@ tr:hover td{background:var(--surf2)}
 .tabcfg-row:last-child{border-bottom:none}
 .tabcfg-arrows{display:flex;gap:4px}
 .tabcfg-arrows button{width:24px;height:24px;padding:0;font-size:12px;line-height:1}
+.pcom-prev-row{align-items:flex-start;padding:12px 0}
+.pcom-prev-row.pcom-row-amanat{opacity:.65}
+.pcom-prev-nm{white-space:normal;overflow:visible;text-overflow:clip}
+.pcom-platform-title{font-size:11px;color:var(--t3);line-height:1.5}
+.pcom-platform-title-ro{color:var(--acc);font-style:italic}
+.pcom-meta-line{font-size:11px;color:var(--t3);font-family:var(--mono);margin-top:4px}
+.pcom-awb-box{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px;padding:8px 10px;background:var(--surf);border-radius:var(--r);border:1px solid var(--b1)}
+.pcom-awb-title{font-size:16px;font-weight:700;color:var(--t1)}
+.pcom-awb-copy{padding:7px 16px;font-size:13px;font-weight:700}
 .smi-pickdrop{position:fixed;display:none;background:var(--surf);border:1px solid var(--b2);border-radius:var(--r2);box-shadow:var(--sh2);z-index:200;width:300px;max-height:340px;overflow:hidden;flex-direction:column}
 .smi-pickdrop.on{display:flex}
 .smi-pickdrop input{margin:8px;width:calc(100% - 16px);font-size:13px;padding:7px 10px;border:1px solid var(--b2);border-radius:var(--r);background:var(--surf2)}
@@ -1702,6 +1711,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:66,text:'Ajustări la Import comenzi: titlul de pe eMAG e acum mic/discret (util doar ca reper de căutare), iar titlul pentru AWB e evidențiat, cu buton mare de copiat — layout mai curat, structurat pe secțiuni. De asemenea, „produs nou" nu se mai creează automat la aplicare — linia rămâne pe pagină cu un buton „+ Adaugă produs" care deschide formularul normal, ca să completezi corect categorie/preț/poză înainte să intre în stoc',date:'2026-08-17'},
   {n:65,text:'La Import comenzi, odată ce o linie e asociată cu un produs, apare imediat stocul intern (actual → după vânzare), ca să decizi pe loc dacă confirmi vânzarea sau amâni livrarea. Cantitatea de stoc scăzută e acum editabilă direct (− / +, lângă preț) — utilă când eMAG vinde ca set, dar stocul intern e ținut altfel. Apare și un titlu gata de pus pe AWB (cantitate + nume/SKU intern, nu titlul de pe eMAG), cu buton de copiere',date:'2026-08-17'},
   {n:64,text:'Trei completări la Import comenzi (Comenzi Platforme): (1) linie cu buton manual „⏳ Amână livrarea" când produsul asociat are stoc 0/negativ — dacă apeși, linia nu se importă acum (stocul nu se atinge), dacă nu apeși, se aplică normal și stocul poate intra pe minus; (2) traducere automată în previzualizare pentru titluri în bulgară/maghiară/greacă, ca să știi din prima la ce produs se referă; (3) în selectorul de produs, opțiune nouă „Nu există — trebuie adăugat ca produs nou", care creează automat produsul la aplicare (ca la importul de facturi)',date:'2026-08-17'},
   {n:63,text:'La import comenzi eMAG, PNK-ul apare acum și cu țara în paranteză — RO/HU/BG, dedusă din moneda comenzii (RON/HUF/EUR), pentru cele 3 piețe pe care operează eMAG. După asociere, în fișa produsului apare o secțiune „PNK-uri eMAG pe țară" cu o coloană separată pentru fiecare piață pe care produsul e listat. Necesită migration_platforma_mapari_tara.sql în Supabase',date:'2026-08-17'},
@@ -5833,7 +5843,7 @@ async function handlePcomImportFile(ev){
 }
 function pcomPickBtnHtml(idx){
   const it=pcImpParsed[idx];
-  if(it.newProduct)return`<button type="button" class="smi-pick-btn" style="border-color:var(--or);color:var(--or)" onclick="openPcomPick(event,${idx})"><div class="smi-pick-th-ph">🆕</div><span class="smi-pick-nm">Produs nou (va fi creat)</span><span class="smi-pick-car">▾</span></button>`;
+  if(it.newProduct)return`<button type="button" class="smi-pick-btn" style="border-color:var(--or);color:var(--or)" onclick="openPcomPick(event,${idx})"><div class="smi-pick-th-ph">🆕</div><span class="smi-pick-nm">Produs nou — de adăugat</span><span class="smi-pick-car">▾</span></button>`;
   const p=it.produsId?P.find(x=>x.id===it.produsId):null;
   const th=p?(p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'pick')}>`:`<div class="smi-pick-th-ph">📦</div>`):'';
   const nm=p?`${esc(p.name)}${p.sku?' · '+esc(p.sku):''}`:'— alege produs —';
@@ -5860,6 +5870,24 @@ function togglePcomAmanat(idx){
   pcImpParsed[idx].amanat=!pcImpParsed[idx].amanat;
   renderPcomImportPreview();
 }
+// Liniile marcate "produs nou" nu se creează automat la aplicare — omul le adaugă manual, cu categorie/
+// preț/poză complete, prin formularul normal de produs (deschis pre-completat cu numele din comandă).
+function pcomNewProductPromptHtml(idx){
+  const it=pcImpParsed[idx];
+  if(!it.newProduct)return'';
+  return`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:5px">
+    <span style="font-size:11px;color:var(--or);font-weight:700">🆕 Nu se importă până nu adaugi produsul în Inventar</span>
+    <button type="button" class="btn btn-sm" style="color:var(--gr);border-color:var(--gr)" onclick="pcomOpenAddProductForLine(${idx})">+ Adaugă produs</button>
+  </div>`;
+}
+function pcomOpenAddProductForLine(idx){
+  const it=pcImpParsed[idx];if(!it)return;
+  openModal();
+  setTimeout(()=>{
+    const n=document.getElementById('f-name');
+    if(n){n.value=it.titluRo||it.titluExtern;suggestCatFromName();}
+  },80);
+}
 function pcomAdjustQty(idx,delta){
   const it=pcImpParsed[idx];
   it.cantitate=Math.max(1,(Number(it.cantitate)||1)+delta);
@@ -5875,10 +5903,13 @@ function pcomAwbTitle(idx){
   if(!p)return'';
   return`${it.cantitate}x ${p.name}${p.sku?' | '+p.sku:''}`;
 }
+// Titlul AWB e rezultatul important odată ce s-a făcut asocierea — îl arătăm mult mai proeminent
+// decât titlul de marketing de pe eMAG (util doar în pasul 1, ca să găsim produsul), cu un buton
+// de copiere mare, ușor de apăsat, ca să-l poți lipi direct pe eticheta de expediere.
 function pcomAwbTitleHtml(idx){
   const title=pcomAwbTitle(idx);
   if(!title)return'';
-  return`<div style="display:flex;align-items:center;gap:6px;margin-top:5px;font-size:12px;color:var(--t1)"><span title="Titlu pentru AWB">📦 ${esc(title)}</span><button type="button" class="btn btn-sm" style="padding:2px 6px;font-size:11px" onclick="copyPcomAwbTitle(${idx})">Copy</button></div>`;
+  return`<div class="pcom-awb-box"><span class="pcom-awb-title" title="Titlu pentru AWB">📦 ${esc(title)}</span><button type="button" class="btn btn-acc pcom-awb-copy" onclick="copyPcomAwbTitle(${idx})">📋 Copiază</button></div>`;
 }
 function copyPcomAwbTitle(idx){
   const title=pcomAwbTitle(idx);
@@ -5894,10 +5925,11 @@ function renderPcomImportPreview(){
     else tag='<span class="inv-match new">? fără sugestie</span>';
     const qtyStepper=`<button type="button" onclick="pcomAdjustQty(${idx},-1)" style="width:16px;height:16px;padding:0;border:1px solid var(--b2);border-radius:3px;background:var(--surf);color:var(--t2);font-size:11px;line-height:1;cursor:pointer" title="Scade cantitatea de stoc">−</button> <b>${it.cantitate}×</b> <button type="button" onclick="pcomAdjustQty(${idx},1)" style="width:16px;height:16px;padding:0;border:1px solid var(--b2);border-radius:3px;background:var(--surf);color:var(--t2);font-size:11px;line-height:1;cursor:pointer" title="Crește cantitatea de stoc (ex: eMAG vinde ca set)">+</button>`;
     const priceInfoHtml=`${qtyStepper} · ${it.pretTotalCuTva.toFixed(2)} ${esc(it.moneda)}${it.moneda!=='RON'?' ('+pcomToRon(it.pretTotalCuTva,it.moneda).toFixed(2)+' RON)':''}`;
-    const titluHtml=it.titluRo?`${esc(it.titluExtern)}<div style="font-size:12px;color:var(--acc);font-style:italic;margin-top:2px">🌐 ${esc(it.titluRo)}</div>`:esc(it.titluExtern);
-    return`<div class="inv-prev-row" style="gap:10px${it.amanat?';opacity:.65':''}">
+    // titlul de pe eMAG contează doar ca reper de căutare (pasul 1) — îl arătăm mic, discret
+    const titluHtml=`<div class="pcom-platform-title">${esc(it.titluExtern)}${it.titluRo?` <span class="pcom-platform-title-ro">🌐 ${esc(it.titluRo)}</span>`:''} ${tag}</div>`;
+    return`<div class="inv-prev-row pcom-prev-row${it.amanat?' pcom-row-amanat':''}">
       <input type="checkbox" ${it.include?'checked':''} onchange="pcImpParsed[${idx}].include=this.checked;updPcomImportInfo()">
-      <div class="inv-prev-nm" style="flex:1">${titluHtml} ${tag}<div style="font-size:11px;color:var(--t3);font-family:var(--mono)">${priceInfoHtml}${it.pnk?' · PNK '+esc(it.pnk)+(it.tara?' ('+esc(it.tara)+')':''):''}${it.comandaId?' · #'+esc(it.comandaId):''}</div>${pcomAwbTitleHtml(idx)}${pcomStockWarningHtml(idx)}</div>
+      <div class="inv-prev-nm pcom-prev-nm">${titluHtml}<div class="pcom-meta-line">${priceInfoHtml}${it.pnk?' · PNK '+esc(it.pnk)+(it.tara?' ('+esc(it.tara)+')':''):''}${it.comandaId?' · #'+esc(it.comandaId):''}</div>${it.newProduct?pcomNewProductPromptHtml(idx):(pcomAwbTitleHtml(idx)+pcomStockWarningHtml(idx))}</div>
       <div class="smi-pick" id="pcmi-pick-${idx}">${pcomPickBtnHtml(idx)}</div>
     </div>`;
   }).join('');
@@ -5966,10 +5998,11 @@ document.addEventListener('click',ev=>{
   }
 });
 function updPcomImportInfo(){
-  const n=pcImpParsed.filter(x=>x.include&&(x.produsId||x.newProduct)&&!x.amanat).length;
-  const amanate=pcImpParsed.filter(x=>x.include&&(x.produsId||x.newProduct)&&x.amanat).length;
-  document.getElementById('pcmi-info').textContent=`${n} linii selectate pentru import${amanate?` · ${amanate} amânate`:''}`;
-  document.getElementById('pcmi-apply-btn').disabled=n===0;
+  const n=pcImpParsed.filter(x=>x.include&&x.produsId&&!x.amanat).length;
+  const amanate=pcImpParsed.filter(x=>x.include&&x.produsId&&x.amanat).length;
+  const newProd=pcImpParsed.filter(x=>x.include&&x.newProduct).length;
+  document.getElementById('pcmi-info').textContent=`${n} linii selectate pentru import${amanate?` · ${amanate} amânate`:''}${newProd?` · ${newProd} produse noi de adăugat`:''}`;
+  document.getElementById('pcmi-apply-btn').disabled=(n+amanate+newProd)===0;
 }
 // Trimite spre AI, în loturi de 20-25, doar liniile nepotrivite după PNK/fuzzy — traduce titlul dacă
 // e cazul și sugerează cel mai probabil produs din inventar, din lista de nume+id-uri trimisă în prompt.
@@ -6023,30 +6056,22 @@ Răspunde STRICT cu JSON, fără markdown: {"matches":[{"index":<indexul liniei>
 async function applyPcomImport(){
   if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
   const platforma=pcImpPlatforma;
-  const toApply=pcImpParsed.filter(x=>x.include&&(x.produsId||x.newProduct)&&!x.amanat);
-  const amanateCount=pcImpParsed.filter(x=>x.include&&(x.produsId||x.newProduct)&&x.amanat).length;
+  // liniile "produs nou" nu se aplică automat — omul le adaugă manual în Inventar (buton dedicat pe
+  // rând), ca să completeze corect categorie/preț/poză, nu doar un rând gol creat pe ascuns
+  const toApply=pcImpParsed.filter(x=>x.include&&x.produsId&&!x.amanat);
+  const amanateCount=pcImpParsed.filter(x=>x.include&&x.produsId&&x.amanat).length;
+  const newProductCount=pcImpParsed.filter(x=>x.include&&x.newProduct).length;
   if(!toApply.length){
-    if(amanateCount)toast(`${amanateCount} linii sunt amânate — nimic de aplicat acum`,'err');
+    if(amanateCount||newProductCount)toast(`Nimic de aplicat acum${amanateCount?` · ${amanateCount} amânate`:''}${newProductCount?` · ${newProductCount} produse noi de adăugat mai întâi`:''}`,'err');
     return;
   }
   const btn=document.getElementById('pcmi-apply-btn');
   btn.disabled=true;btn.textContent='Se aplică…';
   const batchId=Date.now().toString(36);
-  let ok=0,failed=0,createdCount=0;
+  let ok=0,failed=0;
   try{
     for(const it of toApply){
-      let p=it.produsId?P.find(x=>x.id===it.produsId):null;
-      if(!p&&it.newProduct){
-        // produsul chiar nu există în stoc — îl creăm acum, la fel ca la importul de facturi (fără cost
-        // de achiziție cunoscut, îl completezi ulterior în Inventar; stocul pornește de la 0, deci după
-        // scăderea cantității vândute va intra direct pe minus, ceea ce e corect: am vândut ceva ce nu aveam)
-        const newP={name:it.titluRo||it.titluExtern,sku:null,bought:0,sold:0,minQty:0,priceBuyTTC:0,tvaAcq:0.21,
-          priceSell:0,priceEmag:0,priceTrendyol:0,priceRec:0,category:'',supplier:'',img:''};
-        const okSave=await saveProdToDb(newP,null);
-        if(!okSave){failed++;continue;}
-        p=P[P.length-1];
-        createdCount++;
-      }
+      const p=P.find(x=>x.id===it.produsId);
       if(!p){failed++;continue;}
       try{
         const totalRon=pcomToRon(it.pretTotalCuTva,it.moneda);
@@ -6074,8 +6099,9 @@ async function applyPcomImport(){
         failed++;
       }
     }
-    // păstrează în previzualizare doar liniile amânate (fără stoc) — cele aplicate cu succes/eșuate dispar
-    pcImpParsed=pcImpParsed.filter(x=>x.include&&x.produsId&&x.amanat);
+    // păstrează în previzualizare liniile amânate (fără stoc) și cele "produs nou" (neadăugat încă) —
+    // cele aplicate cu succes/eșuate dispar
+    pcImpParsed=pcImpParsed.filter(x=>x.include&&((x.produsId&&x.amanat)||x.newProduct));
     if(pcImpParsed.length){renderPcomImportPreview();}
     else{
       document.getElementById('pcmi-preview').innerHTML='';
@@ -6083,7 +6109,7 @@ async function applyPcomImport(){
       document.getElementById('pcmi-ai-btn').style.display='none';
     }
     renderPcomImportHistory();renderTable();renderToday();renderDashboard();
-    toast(`${ok} linii importate ✓${createdCount?` · ${createdCount} produse noi create`:''}${failed?` · ${failed} au eșuat`:''}${amanateCount?` · ${amanateCount} amânate (fără stoc)`:''}`,failed&&!ok?'err':undefined);
+    toast(`${ok} linii importate ✓${failed?` · ${failed} au eșuat`:''}${amanateCount?` · ${amanateCount} amânate (fără stoc)`:''}${newProductCount?` · ${newProductCount} produse noi de adăugat`:''}`,failed&&!ok?'err':undefined);
   }finally{
     btn.disabled=false;btn.textContent='Aplică import';
   }
