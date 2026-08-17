@@ -1739,6 +1739,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:88,text:'Research: promptul AI pentru PDF-uri recunoaște acum și pagini de produs individual (nu doar pagini de căutare cu multe produse mici) — util când salvezi ca PDF o pagină de produs de pe Trendyol/eMAG cu scroll pe mai multe pagini. Fișierele PDF peste ~6MB sunt respinse cu un mesaj clar înainte de trimitere (limita reală e la request-ul AI, nu la citirea PDF-ului) — exportă la o rezoluție mai mică dacă apare acest mesaj',date:'2026-08-17'},
   {n:87,text:'Research: brand-ul și vânzătorul se extrag acum din toate sursele, nu doar de pe linkurile eMAG/Verk citite automat — și din screenshot-urile Jumbo/Maxy (AI vision) și din anunțurile citite dintr-un PDF cu rezultate de căutare, dacă apar vizibil pe pagină',date:'2026-08-17'},
   {n:86,text:'Fix: butoanele „📄 PDF rezultate eMAG/Trendyol" și „📷 Încarcă screenshot" nu deschideau uneori dialogul de fișiere — foloseau un mecanism JS (buton → click programatic pe input ascuns) care putea fi fragil. Înlocuit cu asocierea nativă HTML buton-etichetă↔input, garantată de browser',date:'2026-08-17'},
   {n:85,text:'Research: la „📄 PDF rezultate eMAG/Trendyol" poți selecta acum mai multe PDF-uri deodată (ex. pagina 1 și pagina 2 a rezultatelor căutării) — fiecare e citit separat de AI, iar toate anunțurile găsite se adaugă împreună în dosar, cu un singur toast de confirmare. Dacă un PDF nu poate fi citit, restul continuă normal, nu blochează tot importul',date:'2026-08-17'},
@@ -4117,11 +4118,18 @@ function researchProjectBase(p){
   const src=(p?.links||[]).find(l=>l.platform==='furnizor'&&l.title);
   return src?{title:src.title,description:src.description||'',ean:''}:{title:p?.title||'',description:'',ean:''};
 }
+// Corpul cererii /api/openai e limitat la 10MB — PDF-ul e trimis ca base64 (+~33% mărime) plus promptul,
+// deci un fișier RAW peste ~6MB riscă să depășească limita. Verificăm client-side ca eroarea să fie clară.
+const PDF_MAX_BYTES=6*1024*1024;
 async function extractPdfListings(file,platform,base){
+  if(file.size>PDF_MAX_BYTES)throw new Error(`${file.name}: ${(file.size/1024/1024).toFixed(1)} MB — prea mare (limită ~6 MB/fișier). Exportă la o rezoluție mai mică sau împarte în mai multe PDF-uri.`);
   const b64=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(String(e.target.result).split(',')[1]);r.onerror=reject;r.readAsDataURL(file);});
   if(!b64||b64.length<100)throw new Error(`${file.name}: PDF prea mic sau corupt`);
-  const systemPrompt='Ești expert în citirea rezultatelor de căutare din magazine online, dintr-un PDF format din screenshot-uri. Răspunde ÎNTOTDEAUNA cu JSON valid, fără markdown.';
-  const userPrompt=`Acest PDF conține screenshot-uri cu rezultate de căutare pentru un produs pe ${platform==='trendyol'?'Trendyol':'eMAG'}. Pentru FIECARE anunț de produs vizibil (nu bannere, nu filtre, nu reclame), extrage titlul exact, prețul afișat, o scurtă descriere/caracteristici dacă apar, brand-ul dacă e vizibil și vânzătorul/magazinul dacă e vizibil (ex. "Vândut de X" pe eMAG). NU descrie sau extrage poze.
+  const systemPrompt='Ești expert în citirea paginilor de produs din magazine online, dintr-un PDF format din screenshot-uri de browser. Răspunde ÎNTOTDEAUNA cu JSON valid, fără markdown.';
+  const userPrompt=`Acest PDF (poate avea mai multe pagini, dintr-un scroll de browser) arată produse de pe ${platform==='trendyol'?'Trendyol':'eMAG'}. Poate fi UNUL din două formate:
+(a) o pagină de căutare cu mai multe produse mici, în grilă — extrage FIECARE anunț vizibil ca listare separată (nu bannere, nu filtre, nu reclame);
+(b) o pagină de produs individual (posibil pe mai multe pagini PDF, de la scroll) — extrage UN SINGUR anunț, combinând informația găsită pe toate paginile (titlu, preț, vânzător, descriere pot fi pe pagini diferite ale aceluiași PDF).
+Pentru fiecare anunț găsit, extrage: titlul exact, prețul afișat (numărul, fără reduceri tăiate), descriere/caracteristici scurte dacă apar, brand-ul dacă e vizibil, și vânzătorul/magazinul (ex. "Vândut de Shop4all" pe Trendyol, "Vândut de X" pe eMAG — caută explicit acest text). NU descrie sau extrage poze.
 Răspunde STRICT în format JSON: {"listings":[{"title":"<titlu exact>","price":<număr>,"currency":"RON","description":"<scurt, sau gol>","brand":"<brand sau gol>","seller":"<vânzător sau gol>"}]}`;
   const resp=await callAI([{role:'user',content:[
     {type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},
