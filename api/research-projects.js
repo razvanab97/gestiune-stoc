@@ -325,8 +325,9 @@ module.exports=async function handler(req,res){
       const projectId=Number(body.project_id);
       if(!projectId)return res.status(400).json({error:'Lipsește dosarul'});
       const all=await supa('GET',`research_links?project_id=eq.${projectId}&select=*`);
-      // Linkurile cu date din screenshot (Jumbo/Maxy) nu pot fi re-verificate prin fetch — s-ar suprascrie cu eroare 403/gol.
-      const existing=all.filter(l=>l.source!=='screenshot');
+      // Linkurile din screenshot (Jumbo/Maxy) sau din PDF (fără URL real, doar pdf-import://...) nu pot
+      // fi re-verificate prin fetch — s-ar suprascrie greșit cu status "eroare" la un URL nefuncțional.
+      const existing=all.filter(l=>l.source!=='screenshot'&&l.source!=='pdf');
       if(!existing.length)return res.status(200).json({checked:0,changed:0});
       const reanalyzed=await Promise.all(existing.map(async l=>({link:l,data:await analyzeUrl(l.url)})));
       let changed=0;
