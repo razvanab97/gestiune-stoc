@@ -210,6 +210,20 @@ async function searchDDGImages(query){
   }catch(e){return[];}
 }
 
+// Plasă de siguranță deterministă pentru text lipit fără spațiu (ex: "ajustabile.Compartimente") —
+// AI-ul primește instrucțiuni explicite să nu facă asta, dar poate scăpa ocazional. Aplicăm DOAR pe
+// text simplu (titlu/descriere/bullets/specs) — NU pe description_html, unde ar strica URL-uri din
+// atribute (ex: ".jpg" într-un src ar deveni ". jpg").
+function fixPlainTextSpacing(s){
+  if(!s||typeof s!=='string')return s;
+  return s.replace(/([.!?,;:])([A-ZĂÂÎȘȚa-zăâîșț])/g,'$1 $2');
+}
+// Pentru HTML: doar spațiu după tag-uri de închidere lipite direct de cuvântul următor — sigur,
+// nu atinge URL-uri (care nu conțin secvența literală "</tag>").
+function fixHtmlTagSpacing(html){
+  if(!html||typeof html!=='string')return html;
+  return html.replace(/(<\/(?:strong|b|em|span|a)>)(\w)/gi,'$1 $2');
+}
 function outputText(data){
   if(typeof data?.output_text==='string')return data.output_text;
   return(data?.output||[]).flatMap(i=>i?.content||[]).filter(x=>x?.type==='output_text').map(x=>x.text||'').join('\n');
@@ -287,15 +301,25 @@ ${JSON.stringify(pages.map(p=>({url:p.url,host:p.host,title:p.title,description:
 ━━━ IMAGINI DISPONIBILE (presortate după calitate estimată) ━━━
 ${imgList}
 
-━━━ REGULI TITLU ━━━
+━━━ IMAGINI ATAȘATE VIZUAL ━━━
+Primele imagini din lista de mai sus cu scor ≥55 (până la 4) sunt atașate și ca fișiere imagine reale — le poți VEDEA, nu doar citi URL-ul. Folosește-le DOAR ca să confirmi detalii clar vizibile (culoare exactă, textură/finisaj, accesorii incluse, conținut pachet, formă) și să le adaugi în descriere/specificații dacă au impact comercial real. NU descrie ce nu e clar vizibil în poze, nu specula, nu inventa.
+
+━━━ REGULI TITLU (eficient și de impact) ━━━
 TITLU eMAG (title):
 - Format: [Tip produs] [Material/Stil] [Caracteristică 1] [Caracteristică 2] [Dimensiune] - [Beneficiu scurt], 80-150 caractere
 - Exemplu: "Coș depozitare pliabil bambus cu capac și mânere, 40L - organizator haine dormitor, maro natural"
+- Sintetizează din DOUĂ surse combinate — nu copia un singur titlu sursă cuvânt cu cuvânt:
+  1. Titlurile paginilor sursă (title) — termenii care apar recurent/distinctiv la mai multe surse sunt cuvinte-cheie reale, căutate de cumpărători
+  2. Detalii concrete NOI găsite în descrieri/text, care NU apar în niciun titlu sursă — dacă au impact comercial real, adaugă-le în titlu
 - NU începe cu "AB HOMES" la câmpul title
 - Cuvinte cheie cu volum mare pe eMAG în față
 
 TITLU Trendyol (title_trendyol):
-- Max 100 caractere, mai scurt, poate fi în engleză sau română
+- Max 100 caractere, mai scurt, poate fi în engleză sau română — câmp secundar, titlul eMAG e principal
+
+━━━ FORMATARE TEXT ━━━
+- Spații corecte între TOATE cuvintele și propozițiile — niciodată cuvinte lipite (ex: „ajustabile.Compartimente" e GREȘIT, corect „ajustabile. Compartimente")
+- În HTML, pune mereu un spațiu după tag-uri de tip </strong>/</b>/</em> dacă urmează text
 
 ━━━ REGULI DESCRIERE HTML ━━━
 description_html: HTML structurat cu imagini intercalate — OBLIGATORIU minim 3 tag-uri <img>:
@@ -358,9 +382,22 @@ ${JSON.stringify(pages.map(p=>({url:p.url,host:p.host,title:p.title,description:
 ━━━ IMAGINI DISPONIBILE (presortate după calitate) ━━━
 ${imgList}
 
-━━━ REGULI ━━━
-- Titlu eMAG: [Tip produs] [Material] [Caracteristici cheie] [Dimensiuni] - [Beneficiu], 80-150 caractere, SEO optim
+━━━ IMAGINI ATAȘATE VIZUAL ━━━
+Primele imagini din lista de mai sus cu scor ≥55 (până la 4) sunt atașate și ca fișiere imagine reale — le poți VEDEA, nu doar citi URL-ul. Folosește-le DOAR ca să confirmi detalii clar vizibile (culoare exactă, textură/finisaj, accesorii incluse, conținut pachet, formă) și să le adaugi în descriere/specificații dacă au impact comercial real. NU descrie ce nu e clar vizibil în poze, nu specula, nu inventa.
+
+━━━ REGULI TITLU (eficient și de impact) ━━━
+- Format: [Tip produs] [Brand/Model dacă există] [Material] [Caracteristici cheie] [Dimensiuni] - [Beneficiu], 80-150 caractere, SEO optim
+- Sintetizează titlul din DOUĂ surse combinate — nu copia un singur titlu sursă cuvânt cu cuvânt:
+  1. Titlurile paginilor sursă de mai sus (title) — identifică termenii care apar recurent/distinctiv la mai multe surse (sunt cuvinte-cheie reale, căutate de cumpărători)
+  2. Detalii concrete NOI găsite în descrieri/text (description/text), care NU apar în niciun titlu sursă — dacă un detaliu (capacitate, material, funcție, compatibilitate) apare doar în descriere și are impact comercial, adaugă-l în titlu
 - Titlu Trendyol: max 100 caractere, poate fi engleză
+- Titlul.eMAG e câmpul principal folosit — Titlul Trendyol e doar referință secundară
+
+━━━ FORMATARE TEXT ━━━
+- Spații corecte între TOATE cuvintele și propozițiile — niciodată cuvinte lipite (ex: „ajustabile.Compartimente" e GREȘIT, corect e „ajustabile. Compartimente")
+- În HTML, pune mereu un spațiu după tag-uri de tip </strong>/</b>/</em> dacă urmează text, ca să nu se lipească de cuvântul următor
+
+━━━ REGULI DESCRIERE ━━━
 - Descriere HTML: intro → img[impact] → beneficii → img[specificații] → detalii → img[lifestyle] → CTA
 - INDEX 0 din images[]: OBLIGATORIU impact/lifestyle (scor ≥60) — NU fundal alb
 - Selectează max 10 imagini ordonate calitativ: impact → specificații → detalii → lifestyle → pachet
@@ -457,10 +494,16 @@ module.exports=async function handler(req,res){
         ?buildAnalyzePrompt(product,pages,allImages)
         :buildBuildPrompt(product,pages,allImages);
 
+    // Atașăm și câteva poze REALE ca input vizual — înainte, prompt-ul trimitea doar o LISTĂ TEXTUALĂ
+    // de URL-uri, AI-ul nu "vedea" niciodată conținutul; risca să inventeze detalii "evidente din poze"
+    // fără să le fi văzut. Limităm la 4, doar cele cu scor ≥55, ca să nu umflăm costul/latența.
+    const visionImages=prepareImageListForAI(allImages).filter(x=>x.score>=55).slice(0,4);
+    const content=[{type:'input_text',text:prompt},...visionImages.map(img=>({type:'input_image',image_url:img.url}))];
+
     const ai=await fetch('https://api.openai.com/v1/responses',{
       method:'POST',
       headers:{'content-type':'application/json','authorization':'Bearer '+process.env.OPENAI_API_KEY},
-      body:JSON.stringify({model:process.env.OPENAI_MODEL||'gpt-4.1-mini',max_output_tokens:mode==='synthesize'?4200:2800,input:[{role:'user',content:[{type:'input_text',text:prompt}]}]})
+      body:JSON.stringify({model:process.env.OPENAI_MODEL||'gpt-4.1-mini',max_output_tokens:mode==='synthesize'?4200:2800,input:[{role:'user',content}]})
     });
     const data=await ai.json();
     if(!ai.ok)return res.status(ai.status).json(data);
@@ -470,6 +513,10 @@ module.exports=async function handler(req,res){
     const listing=mode==='analyze'?json.improved_listing:json;
     if(listing&&typeof listing==='object'){
       listing.specs={Brand:'AB HOMES',...(listing.specs||{})};
+      ['title','title_trendyol','short_title','description'].forEach(k=>{if(listing[k])listing[k]=fixPlainTextSpacing(listing[k]);});
+      if(Array.isArray(listing.bullets))listing.bullets=listing.bullets.map(fixPlainTextSpacing);
+      if(listing.specs)for(const k of Object.keys(listing.specs))listing.specs[k]=fixPlainTextSpacing(listing.specs[k]);
+      if(listing.description_html)listing.description_html=fixHtmlTagSpacing(listing.description_html);
       if(!listing.description&&listing.description_html){
         listing.description=listing.description_html.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim().slice(0,1800);
       }

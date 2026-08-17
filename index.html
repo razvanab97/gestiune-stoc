@@ -861,6 +861,7 @@ function buildRaportCats(){
 .rsx-head-title{font-size:19px;font-weight:800;color:var(--t1);line-height:1.28}
 .rsx-head-meta{font-size:13px;color:var(--t3);font-family:var(--mono);margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .rsx-head-chevron{color:var(--t3);font-size:12px;flex-shrink:0;margin-top:3px}
+.rsx-head-price{font-family:var(--mono);font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;background:var(--surf2);border:1px solid var(--b1);color:var(--t2)!important;white-space:nowrap}
 .rsx-head-r{display:flex;gap:8px;align-items:center;flex-shrink:0}
 .rsx-verdict{border-radius:999px;padding:7px 14px;font-size:13px;font-weight:800;white-space:nowrap;background:var(--surf2)}
 .rsx-del{background:var(--surf);border:1px solid var(--b1);color:var(--rd);border-radius:var(--r);cursor:pointer;padding:7px 10px;font-size:13px;line-height:1}
@@ -1901,6 +1902,9 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:105,text:'Research: reparat bug critic — cache-ul de încărcare instant nu se salva NICIODATĂ în producție, pentru că dosarele cu poze (copertă sau screenshot-uri Jumbo/Maxy) depășeau limita de stocare a browserului la fiecare încercare, eșec prins tăcut. Acum cache-ul salvează doar ce e nevoie pentru afișarea instant (fără pozele grele), deci chiar funcționează — testat cu un caz real de 18.8MB de poze, redus la 5KB',date:'2026-08-18'},
+  {n:104,text:'Research: pe linia fiecărui dosar (inclusiv restrâns) apar acum „Achiziție" și „Min. concurență" — cel mai mic preț găsit efectiv pe eMAG/Trendyol (nu costul de la furnizor) — pentru o comparație rapidă dintr-o privire, fără să deschizi fiecare dosar',date:'2026-08-18'},
+  {n:103,text:'Generator anunțuri: cardul de anunț generat e acum clar „Anunț eMAG" (nu mai amestecat cu Trendyol) — titlul Trendyol și categoria lui trec într-o secțiune secundară, restrânsă. Titlul se generează combinând termenii recurenți din titlurile surselor cu detalii noi găsite în descrieri, iar AI-ul primește acum și poze reale (nu doar text) ca să confirme vizual detalii, fără să inventeze. Adăugată și o plasă de siguranță care corectează automat cuvinte lipite fără spațiu în textul generat',date:'2026-08-18'},
   {n:102,text:'Research: reparat un bug real la extragerea pozelor de pe eMAG (găsit analizând o listare foarte bine făcută, dată ca exemplu) — pagina de produs conține des poze ale ALTUI produs (variantă vecină, recomandări), plus logo-uri/iconițe și aceeași poză duplicată la mai multe rezoluții. Acum se filtrează logo-urile, se elimină duplicatele de rezoluție, și pozele se limitează strict la produsul corect — pentru un exemplu real testat, numărul de poze corecte a urcat de la 1 (greșit) la 4 (corect), iar Completeness/Quality Score s-au corectat automat odată cu asta',date:'2026-08-18'},
   {n:101,text:'Generator anunțuri: sistem nou „eMAG — Listing Readiness" — Product Truth (fiecare atribut cu sursă/încredere/status VERIFIED·PROBABLE·CONFLICT·UNKNOWN, cu furnizorul mereu prioritar), categorie detectată automat, Gap Analysis față de competitorii eMAG din dosar, scor de Listing Readiness cu breakdown, blocking issues care blochează statusul READY indiferent de scor, și „ABOVE MARKET AVERAGE". Strict pe fluxul eMAG — Trendyol neatins',date:'2026-08-18'},
   {n:100,text:'Research: buton nou „💾 Salvează anunțul" pe anunțul generat cu Generatorul de sine stătător (fără dosar în spate) — dacă îți place, îl păstrezi într-un dosar minim, ca să-l regăsești oricând. Orice anunț generat (din dosar sau salvat) are acum și un buton „🔗 Vezi dosarul în Research" care te duce direct la dosarul lui, cu cardul evidențiat',date:'2026-08-18'},
@@ -4290,7 +4294,24 @@ function verdictColor(v){
 // fundal și înlocuiesc cache-ul când sunt gata. Fără cache (prima folosire vreodată), rămâne spinner-ul.
 const RESEARCH_PROJECTS_CACHE_KEY='sm6_research_projects_cache';
 function loadResearchProjectsCache(){try{const s=localStorage.getItem(RESEARCH_PROJECTS_CACHE_KEY);return s?JSON.parse(s):null;}catch(e){return null;}}
-function saveResearchProjectsCache(projects){try{safeLocalSet(RESEARCH_PROJECTS_CACHE_KEY,JSON.stringify(projects));}catch(e){}}
+// cover_image (poză dosar) și research_links.images (poze screenshot Jumbo/Maxy) se salvează ca
+// base64 direct în date — câteva dosare cu poze pot trece ușor de 5-10MB, peste limita localStorage.
+// setItem arunca eroare la FIECARE salvare (prinsă tăcut de safeLocalSet), deci cache-ul nu se scria
+// NICIODATĂ — motivul real pentru care „instant load” nu funcționa deloc în producție. Cache-ul e doar
+// pentru afișarea INSTANT a listei (titlu/verdict/KPI/tabel) — nu are nevoie de imaginile grele; ele
+// oricum vin la zi din reîmprospătarea de rețea care urmează imediat.
+function researchProjectsCacheStrip(projects){
+  return(projects||[]).map(p=>{
+    const isB64=s=>typeof s==='string'&&s.startsWith('data:');
+    const cover=isB64(p.cover_image)?'':p.cover_image;
+    const links=(p.links||[]).map(l=>{
+      if(!Array.isArray(l.images)||!l.images.some(isB64))return l;
+      return{...l,images:l.images.filter(x=>!isB64(x))};
+    });
+    return{...p,cover_image:cover,links};
+  });
+}
+function saveResearchProjectsCache(projects){try{safeLocalSet(RESEARCH_PROJECTS_CACHE_KEY,JSON.stringify(researchProjectsCacheStrip(projects)));}catch(e){}}
 async function loadResearchProjects(){
   const box=document.getElementById('research-projects-list');
   const cached=loadResearchProjectsCache();
@@ -4443,6 +4464,11 @@ function renderResearchProjects(){
   box.innerHTML=arr.map(p=>{
     const links=p.links||[],prices=links.map(l=>+l.price||0).filter(Boolean),reviews=Math.max(0,...links.map(l=>+l.review_count||0)),hasListing=!!(p.listing&&p.listing.title);
     const best=prices.length?Math.min(...prices):0,imgs=links.reduce((s,l)=>s+(Array.isArray(l.images)?l.images.length:0),0);
+    // Preț minim la CONCURENȚĂ (eMAG/Trendyol) — separat de „best" de mai sus, care include și
+    // furnizorul (costul nostru, aproape mereu cel mai mic, deci ar induce în eroare comparația).
+    const platStatsHead=researchPlatformStats(p);
+    const competitorMinPrices=[platStatsHead.emag?.min,platStatsHead.trendyol?.min].filter(x=>x>0);
+    const competitorMin=competitorMinPrices.length?Math.min(...competitorMinPrices):0;
     const rows=links.slice(0,MAX_RESEARCH_LINKS).map(l=>{
       const platformClass=['emag','trendyol','furnizor'].includes(l.platform)?l.platform:'altul';
       const del=`<button class="rsx-icon-btn danger" onclick="deleteResearchLink(${l.id})" title="Șterge acest link din dosar">🗑</button>`;
@@ -4531,7 +4557,10 @@ function renderResearchProjects(){
           ${headerImg}
           <div>
             <div class="rsx-head-title">${esc(p.title)}</div>
-            <div class="rsx-head-meta"><span class="rsx-head-chevron">${collapsed?'▸':'▾'}</span>#${p.id} · ${new Date(p.updated_at||p.created_at).toLocaleDateString('ro-RO')} ${p.supplier?'· '+esc(p.supplier):''}${collapsed?' · '+links.length+' linkuri':''}</div>
+            <div class="rsx-head-meta"><span class="rsx-head-chevron">${collapsed?'▸':'▾'}</span>#${p.id} · ${new Date(p.updated_at||p.created_at).toLocaleDateString('ro-RO')} ${p.supplier?'· '+esc(p.supplier):''}${collapsed?' · '+links.length+' linkuri':''}
+              ${p.acquisition_price?`<span class="rsx-head-price" title="Preț de achiziție (furnizor)">Achiziție ${Number(p.acquisition_price).toFixed(2)} RON</span>`:''}
+              ${competitorMin?`<span class="rsx-head-price" style="color:${verdictColor(p.verdict)};border-color:${verdictColor(p.verdict)}" title="Cel mai mic preț găsit la concurență pe eMAG/Trendyol">Min. concurență ${competitorMin.toFixed(2)} RON</span>`:''}
+            </div>
           </div>
         </div>
         <div class="rsx-head-r">
@@ -5545,16 +5574,25 @@ function renderListingFactoryResult(l,pages,allImages=[]){
   const specs=l?.specs||{};
   const imgRec=imageRecommendationMap(l||{});
   const hasHtml=!!(l?.description_html&&l.description_html.trim().length>20);
-  const categoryRow=(l?.category_emag||l?.category_trendyol)?`
+  // Anunțul principal e pentru eMAG — Trendyol rămâne disponibil, dar ca referință secundară,
+  // strânsă într-un singur <details>, ca să nu concureze vizual cu titlul/categoria eMAG.
+  const categoryRow=l?.category_emag?`
     <div class="listing-category-row">
-      ${l.category_emag?`<span class="listing-category-chip">📦 eMAG: ${esc(l.category_emag)}</span>`:''}
-      ${l.category_trendyol?`<span class="listing-category-chip">🛍 Trendyol: ${esc(l.category_trendyol)}</span>`:''}
+      <span class="listing-category-chip">📦 eMAG: ${esc(l.category_emag)}</span>
     </div>`:'';
+  const trendyolRefHtml=(l?.title_trendyol||l?.category_trendyol)?`
+    <details class="listing-trendyol-sec" style="margin-top:8px">
+      <summary style="cursor:pointer;font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.04em">🛍 Referință Trendyol (secundar)</summary>
+      <div style="margin-top:6px">
+        ${l.title_trendyol?`<div style="font-size:13px">${esc(l.title_trendyol)}<button class="btn btn-sm" style="margin-left:8px;font-size:11px" onclick="copyText(${esc(JSON.stringify(l.title_trendyol))})">Copiază</button></div>`:''}
+        ${l.category_trendyol?`<span class="listing-category-chip" style="margin-top:6px;display:inline-block">🛍 ${esc(l.category_trendyol)}</span>`:''}
+      </div>
+    </details>`:'';
   const projectLinkBtn=listingProjectId?`<button class="btn btn-sm" onclick="goToResearchProject(${listingProjectId})">🔗 Vezi dosarul în Research</button>`
     :`<button class="btn btn-sm" id="listing-save-btn" onclick="saveStandaloneListing()">💾 Salvează anunțul</button>`;
   out.innerHTML=`<div class="listing-card">
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:8px">
-      <div class="sec" style="margin:0;color:var(--acc)">✨ Anunț nou sintetizat</div>
+      <div class="sec" style="margin:0;color:var(--acc)">✨ Anunț eMAG</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
         <button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(l?.title||''))})">Copiază titlu</button>
         <button class="btn btn-sm btn-acc" onclick="applyListingToProduct()">Aplică în produs</button>
@@ -5564,8 +5602,8 @@ function renderListingFactoryResult(l,pages,allImages=[]){
     </div>
     <div class="listing-title">${esc(l?.title||'')}</div>
     ${l?.short_title?`<div style="font-size:12px;color:var(--t3);margin-bottom:4px">Titlu scurt: ${esc(l.short_title)}</div>`:''}
-    ${l?.title_trendyol?`<div class="listing-trendyol-sec"><span style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.04em">Titlu Trendyol</span><div style="font-size:13px;margin-top:4px">${esc(l.title_trendyol)}<button class="btn btn-sm" style="margin-left:8px;font-size:11px" onclick="copyText(${esc(JSON.stringify(l.title_trendyol))})">Copiază</button></div></div>`:''}
     ${categoryRow}
+    ${trendyolRefHtml}
     ${hasHtml?`<div style="margin:10px 0 4px"><div class="listing-preview-toggle">
       <button id="listing-html-btn-preview" class="listing-preview-btn on" onclick="toggleListingHtmlView('preview')">Preview</button>
       <button id="listing-html-btn-raw" class="listing-preview-btn" onclick="toggleListingHtmlView('raw')">HTML brut</button>
@@ -5578,7 +5616,7 @@ function renderListingFactoryResult(l,pages,allImages=[]){
     ${renderSpecTable(specs)}
     ${Array.isArray(l?.seo_keywords)&&l.seo_keywords.length?`<div style="font-size:11px;color:var(--t3);margin-top:8px">Keywords: ${esc(l.seo_keywords.join(', '))}</div>`:''}
     ${Array.isArray(l?.source_titles)&&l.source_titles.length?`<div style="margin-top:12px"><strong style="font-size:13px">Titluri folosite ca inspirație</strong><ul class="listing-bullets">${l.source_titles.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:''}
-    ${imgs.length?`<div style="margin-top:14px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><strong style="font-size:13px">Poze selectate (${imgs.length})</strong><button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(imgs.join('\n')))})">Copiază toate linkurile</button></div><div class="listing-imgs" style="align-items:stretch">${imgs.map((u,i)=>{const r=imgRec[u]||{};return`<div class="listing-image-pick"><img src="${esc(proxyImg(u))}" onerror="this.src='${esc(u)}'" onload="checkImgDims(this)" alt="" style="${i===0?'border:2px solid var(--acc)':''}"><div>${r.role?`<div class="listing-image-role">${esc(r.role)}</div>`:i===0?'<div class="listing-image-role">impact</div>':''}${r.reason?`<div style="font-size:12px;color:var(--t2);line-height:1.35;margin-bottom:5px">${esc(r.reason)}</div>`:''}<div class="listing-image-url">${esc(u)}</div><div style="display:flex;gap:5px;margin-top:6px"><button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(u))})">Copiază link</button><a class="btn btn-sm" href="${esc(downloadImg(u))}" target="_blank">↓ Salvează</a></div></div></div>`}).join('')}</div></div>`:''}
+    ${imgs.length?`<div style="margin-top:14px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><strong style="font-size:13px">Poze selectate (${imgs.length}) — gata de încărcat pe eMAG</strong><button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(imgs.join('\n')))})">Copiază toate linkurile</button></div><div style="font-size:11px;color:var(--t3);margin:2px 0 6px">Verde = rezoluție OK pentru eMAG (min. 600×800px, verificat pe imaginea reală) · roșu/galben = posibil sub prag</div><div class="listing-imgs" style="align-items:stretch">${imgs.map((u,i)=>{const r=imgRec[u]||{};return`<div class="listing-image-pick"><img src="${esc(proxyImg(u))}" onerror="this.src='${esc(u)}'" onload="checkImgDims(this)" alt="" style="${i===0?'border:2px solid var(--acc)':''}"><div>${r.role?`<div class="listing-image-role">${esc(r.role)}</div>`:i===0?'<div class="listing-image-role">impact</div>':''}${r.reason?`<div style="font-size:12px;color:var(--t2);line-height:1.35;margin-bottom:5px">${esc(r.reason)}</div>`:''}<div class="listing-image-url">${esc(u)}</div><div style="display:flex;gap:5px;margin-top:6px"><button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(u))})">Copiază link</button><a class="btn btn-sm" href="${esc(downloadImg(u))}" target="_blank">↓ Salvează</a></div></div></div>`}).join('')}</div></div>`:''}
     ${l?.source_notes?`<div style="font-size:11px;color:var(--t3);margin-top:8px">${esc(l.source_notes)}</div>`:''}
   </div>`;
   // ── eMAG Listing Readiness — strict adițional, nu atinge cardul de mai sus (Trendyol inclus).
