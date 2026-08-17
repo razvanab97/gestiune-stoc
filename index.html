@@ -1702,6 +1702,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:64,text:'Trei completări la Import comenzi (Comenzi Platforme): (1) linie cu buton manual „⏳ Amână livrarea" când produsul asociat are stoc 0/negativ — dacă apeși, linia nu se importă acum (stocul nu se atinge), dacă nu apeși, se aplică normal și stocul poate intra pe minus; (2) traducere automată în previzualizare pentru titluri în bulgară/maghiară/greacă, ca să știi din prima la ce produs se referă; (3) în selectorul de produs, opțiune nouă „Nu există — trebuie adăugat ca produs nou", care creează automat produsul la aplicare (ca la importul de facturi)',date:'2026-08-17'},
   {n:63,text:'La import comenzi eMAG, PNK-ul apare acum și cu țara în paranteză — RO/HU/BG, dedusă din moneda comenzii (RON/HUF/EUR), pentru cele 3 piețe pe care operează eMAG. După asociere, în fișa produsului apare o secțiune „PNK-uri eMAG pe țară" cu o coloană separată pentru fiecare piață pe care produsul e listat. Necesită migration_platforma_mapari_tara.sql în Supabase',date:'2026-08-17'},
   {n:62,text:'Două completări: (1) în „Comenzi Platforme" → Import comenzi, poți șterge acum un import greșit dintr-o zi — se elimină liniile din Profit/Total încasări și se readaugă automat stocul scăzut la import; (2) buton nou ⚙️ în header — personalizează ordinea paginilor din navigare (↑/↓, cu resetare la ordinea implicită), salvată pe acest browser',date:'2026-08-17'},
   {n:61,text:'Tab nou „📦 Comenzi Platforme" — încarci fișierul Excel cu comenzile zilei de pe eMAG/Trendyol, sistemul asociază fiecare linie cu un produs din stoc (întâi după PNK dacă a mai fost confirmat, apoi după titlu — automat sau cu AI, cu traducere dacă e cazul), tu confirmi în previzualizare, apoi se scade stocul și se ține evidența în „Profit vânzări" (pe zi/lună) și „Total încasări" (eMAG/Trendyol/combinat, cu conversie automată RON pentru EUR/HUF). Necesită rularea migration_platforma_comenzi.sql în Supabase',date:'2026-08-17'},
@@ -2235,9 +2236,21 @@ function pcomToDb(o){
 }
 // eMAG operează pe 3 piețe (RO/HU/BG) — fișierul de comenzi nu are o coloană explicită de țară,
 // dar moneda o dă indirect: RON→România, HUF→Ungaria, EUR→Bulgaria (care a adoptat euro în 2026).
-const PCOM_CURRENCY_COUNTRY={RON:'RO',HUF:'HU',EUR:'BG'};
-function pcomCountryFromCurrency(moneda){
-  return PCOM_CURRENCY_COUNTRY[String(moneda||'').toUpperCase()]||'';
+// EUR e ambiguă (Bulgaria și Grecia îl folosesc pe amândouă) — dezambiguizăm după scrierea titlului:
+// chirilică→Bulgaria (singura piață EUR observată până acum), greacă→lăsăm țara necunoscută.
+function pcomDetectScript(text){
+  const s=String(text||'');
+  if(/[\u0400-\u04FF]/.test(s))return'cyrillic';
+  if(/[\u0370-\u03FF]/.test(s))return'greek';
+  if(/[őűŐŰ]/.test(s))return'hungarian';
+  return'latin';
+}
+function pcomCountryFromCurrency(moneda,titlu){
+  const cur=String(moneda||'').toUpperCase();
+  if(cur==='RON')return'RO';
+  if(cur==='HUF')return'HU';
+  if(cur==='EUR')return pcomDetectScript(titlu)==='greek'?'':'BG';
+  return'';
 }
 function dbToStockOrder(r){
   return{id:r.id,createdAt:r.created_at||new Date().toISOString(),source:r.source||'Import stoc',
@@ -5724,6 +5737,39 @@ function pcomFindCol(hdrLower,keys){
   for(const k of keys){const i=hdrLower.indexOf(k);if(i>-1)return i;}
   return-1;
 }
+// Traduce automat titlurile scrise cu alt alfabet/limbă (bulgară/chirilică, maghiară, greacă), ca omul
+// care revizuiește previzualizarea să înțeleagă din prima la ce produs face referire, chiar înainte
+// de a se face vreo potrivire. Rulează în fundal (fără await la apel) — nu blochează previzualizarea inițială.
+async function pcomTranslateForeignTitles(){
+  const idxs=pcImpParsed.map((x,i)=>i).filter(i=>pcomDetectScript(pcImpParsed[i].titluExtern)!=='latin'&&!pcImpParsed[i].titluRo);
+  if(!idxs.length)return;
+  const batchSize=25;
+  try{
+    for(let b=0;b<idxs.length;b+=batchSize){
+      const batchIdxs=idxs.slice(b,b+batchSize);
+      const linesText=batchIdxs.map(i=>`${i}: ${pcImpParsed[i].titluExtern}`).join('\n');
+      const prompt=`Traduce în română titlurile de produse de mai jos (comenzi eMAG din Bulgaria/Ungaria/Grecia —
+bulgară, maghiară sau greacă). Traducere scurtă, ca să se înțeleagă imediat despre ce produs e vorba.
+
+TITLURI (index: titlu):
+${linesText}
+
+Răspunde STRICT cu JSON, fără markdown: {"translations":[{"index":<index>,"ro":"<traducere scurtă în română>"}]}`;
+      const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert bulgară/maghiară/greacă→română pentru titluri de produse. Răspunzi DOAR cu JSON valid.',2000);
+      const objMatch=resp.match(/\{[\s\S]*\}/);
+      if(!objMatch)continue;
+      let parsed;try{parsed=JSON.parse(objMatch[0]);}catch(e){continue;}
+      if(!Array.isArray(parsed.translations))continue;
+      parsed.translations.forEach(t=>{
+        const i=Number(t.index);
+        if(pcImpParsed[i]&&t.ro)pcImpParsed[i].titluRo=String(t.ro).trim();
+      });
+    }
+    renderPcomImportPreview();
+  }catch(err){
+    console.warn('Traducere titluri comenzi eșuată:',err);
+  }
+}
 async function handlePcomImportFile(ev){
   const file=ev.target.files[0];if(!file)return;
   const platforma=pcImpPlatforma=document.getElementById('pcmi-platforma').value;
@@ -5758,7 +5804,7 @@ async function handlePcomImportFile(ev){
       const pretFaraTva=col.pretFaraTva>-1?(Number(r[col.pretFaraTva])||0):0;
       const pretTotalCuTva=col.pretTotalCuTva>-1?(Number(r[col.pretTotalCuTva])||0):0;
       const moneda=col.moneda>-1?String(r[col.moneda]||'RON').trim().toUpperCase():'RON';
-      const tara=platforma==='emag'?pcomCountryFromCurrency(moneda):'';
+      const tara=platforma==='emag'?pcomCountryFromCurrency(moneda,titlu):'';
       let produsId=null,score=0,viaPnk=false;
       if(pnk){
         const m=SYNCM.find(s=>s.platforma===platforma&&s.confirmat&&s.idExtern===pnk);
@@ -5776,6 +5822,7 @@ async function handlePcomImportFile(ev){
     const noMatch=pcImpParsed.filter(x=>!x.produsId).length;
     document.getElementById('pcmi-ai-btn').style.display=noMatch?'':'none';
     toast(`${pcImpParsed.length} linii detectate · ${pcImpParsed.length-noMatch} cu produs asociat ✓`);
+    pcomTranslateForeignTitles();
   }catch(err){
     parsing.style.display='none';
     toast('Eroare la citirea fișierului: '+err.message,'err');
@@ -5785,22 +5832,45 @@ async function handlePcomImportFile(ev){
 }
 function pcomPickBtnHtml(idx){
   const it=pcImpParsed[idx];
+  if(it.newProduct)return`<button type="button" class="smi-pick-btn" style="border-color:var(--or);color:var(--or)" onclick="openPcomPick(event,${idx})"><div class="smi-pick-th-ph">🆕</div><span class="smi-pick-nm">Produs nou (va fi creat)</span><span class="smi-pick-car">▾</span></button>`;
   const p=it.produsId?P.find(x=>x.id===it.produsId):null;
   const th=p?(p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'pick')}>`:`<div class="smi-pick-th-ph">📦</div>`):'';
   const nm=p?`${esc(p.name)}${p.sku?' · '+esc(p.sku):''}`:'— alege produs —';
   return`<button type="button" class="smi-pick-btn" onclick="openPcomPick(event,${idx})">${th}<span class="smi-pick-nm">${nm}</span><span class="smi-pick-car">▾</span></button>`;
 }
+// Buton manual pentru liniile potrivite cu un produs care are stoc 0 sau negativ — omul decide dacă
+// amână livrarea (nu se scade stocul, linia rămâne deoparte pentru mai târziu) sau trimite oricum
+// (aplicarea continuă normal, iar stocul poate intra pe minus, ca la orice altă vânzare din aplicație).
+function pcomStockWarningHtml(idx){
+  const it=pcImpParsed[idx];
+  if(!it.produsId)return'';
+  const p=P.find(x=>x.id===it.produsId);
+  if(!p)return'';
+  const q=qty(p);
+  if(q>0&&!it.amanat)return'';
+  const btn=it.amanat
+    ?`<button type="button" class="btn btn-sm" style="color:var(--gr);border-color:var(--gr)" onclick="togglePcomAmanat(${idx})">↺ Anulează amânarea</button>`
+    :`<button type="button" class="btn btn-sm" style="color:var(--or);border-color:var(--or)" onclick="togglePcomAmanat(${idx})">⏳ Amână livrarea</button>`;
+  const warn=q<=0?`<span style="color:var(--rd);font-size:11px;font-weight:700">⚠️ Stoc ${fmtQty(q)}</span>`:'';
+  return`<div style="display:flex;gap:8px;align-items:center;margin-top:5px">${warn}${btn}${it.amanat?'<span style="font-size:11px;color:var(--or)">Amânat — nu se importă acum</span>':''}</div>`;
+}
+function togglePcomAmanat(idx){
+  pcImpParsed[idx].amanat=!pcImpParsed[idx].amanat;
+  renderPcomImportPreview();
+}
 function renderPcomImportPreview(){
   const prev=document.getElementById('pcmi-preview');
   const rows=pcImpParsed.map((it,idx)=>{
     let tag;
-    if(it.viaPnk)tag='<span class="inv-match upd" title="PNK deja asociat">✓ PNK cunoscut</span>';
+    if(it.newProduct)tag='<span class="inv-match new" title="Va fi creat un produs nou la aplicare">🆕 produs nou</span>';
+    else if(it.viaPnk)tag='<span class="inv-match upd" title="PNK deja asociat">✓ PNK cunoscut</span>';
     else if(it.produsId)tag=`<span class="inv-match upd" title="potrivire ${Math.round(it.score*100)}%">↑ ${Math.round(it.score*100)}%</span>`;
     else tag='<span class="inv-match new">? fără sugestie</span>';
     const priceInfo=`${it.cantitate}× · ${it.pretTotalCuTva.toFixed(2)} ${it.moneda}${it.moneda!=='RON'?' ('+pcomToRon(it.pretTotalCuTva,it.moneda).toFixed(2)+' RON)':''}`;
-    return`<div class="inv-prev-row" style="gap:10px">
+    const titluHtml=it.titluRo?`${esc(it.titluExtern)}<div style="font-size:12px;color:var(--acc);font-style:italic;margin-top:2px">🌐 ${esc(it.titluRo)}</div>`:esc(it.titluExtern);
+    return`<div class="inv-prev-row" style="gap:10px${it.amanat?';opacity:.65':''}">
       <input type="checkbox" ${it.include?'checked':''} onchange="pcImpParsed[${idx}].include=this.checked;updPcomImportInfo()">
-      <div class="inv-prev-nm" style="flex:1">${esc(it.titluExtern)} ${tag}<div style="font-size:11px;color:var(--t3);font-family:var(--mono)">${esc(priceInfo)}${it.pnk?' · PNK '+esc(it.pnk)+(it.tara?' ('+esc(it.tara)+')':''):''}${it.comandaId?' · #'+esc(it.comandaId):''}</div></div>
+      <div class="inv-prev-nm" style="flex:1">${titluHtml} ${tag}<div style="font-size:11px;color:var(--t3);font-family:var(--mono)">${esc(priceInfo)}${it.pnk?' · PNK '+esc(it.pnk)+(it.tara?' ('+esc(it.tara)+')':''):''}${it.comandaId?' · #'+esc(it.comandaId):''}</div>${pcomStockWarningHtml(idx)}</div>
       <div class="smi-pick" id="pcmi-pick-${idx}">${pcomPickBtnHtml(idx)}</div>
     </div>`;
   }).join('');
@@ -5829,24 +5899,38 @@ function filterPcomPick(){
   const q=document.getElementById('pcmi-pick-search').value.toLowerCase().trim();
   const list=document.getElementById('pcmi-pick-list');
   const cur=pcImpParsed[pcomPickIdx]?.produsId||null;
+  const curNew=!!pcImpParsed[pcomPickIdx]?.newProduct;
   const matches=(q?pcomPickProds.filter(p=>p.name.toLowerCase().includes(q)||(p.sku&&p.sku.toLowerCase().includes(q))):pcomPickProds).slice(0,80);
+  // Uneori produsul chiar nu există deloc încă în stoc — omul poate marca explicit linia ca „produs nou",
+  // ca la aplicare să fie creat automat (ca la importul de facturi), nu doar sărit peste.
+  const newRow=`<div class="smi-pick-item" onclick="pickPcomNewProduct()" style="border-bottom:1px solid var(--b1);${curNew?'background:var(--surf2)':''}"><div class="smi-pick-th-ph">🆕</div><span class="smi-pick-item-nm" style="color:var(--or)">Nu există — trebuie adăugat ca produs nou</span></div>`;
   const rows=matches.map(p=>{
     const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'pick')}>`:`<div class="smi-pick-th-ph">📦</div>`;
-    return`<div class="smi-pick-item" onclick="pickPcomProduct(${p.id})" style="${p.id===cur?'background:var(--surf2)':''}">${th}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</span></div>`;
+    return`<div class="smi-pick-item" onclick="pickPcomProduct(${p.id})" style="${p.id===cur&&!curNew?'background:var(--surf2)':''}">${th}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</span></div>`;
   }).join('');
-  list.innerHTML=rows||`<div class="smi-pick-item" style="color:var(--t3);cursor:default">Niciun produs găsit</div>`;
+  list.innerHTML=newRow+(rows||`<div class="smi-pick-item" style="color:var(--t3);cursor:default">Niciun produs găsit</div>`);
 }
 function pickPcomProduct(id){
   if(pcomPickIdx==null)return;
   pcImpParsed[pcomPickIdx].produsId=id||null;
+  pcImpParsed[pcomPickIdx].newProduct=false;
   pcImpParsed[pcomPickIdx].score=1;
   pcImpParsed[pcomPickIdx].viaPnk=false;
   pcImpParsed[pcomPickIdx].include=!!id;
-  const host=document.getElementById('pcmi-pick-'+pcomPickIdx);
-  if(host)host.innerHTML=pcomPickBtnHtml(pcomPickIdx);
   document.getElementById('pcmi-pickdrop').classList.remove('on');
   pcomPickIdx=null;
-  updPcomImportInfo();
+  renderPcomImportPreview();
+}
+function pickPcomNewProduct(){
+  if(pcomPickIdx==null)return;
+  pcImpParsed[pcomPickIdx].produsId=null;
+  pcImpParsed[pcomPickIdx].newProduct=true;
+  pcImpParsed[pcomPickIdx].score=0;
+  pcImpParsed[pcomPickIdx].viaPnk=false;
+  pcImpParsed[pcomPickIdx].include=true;
+  document.getElementById('pcmi-pickdrop').classList.remove('on');
+  pcomPickIdx=null;
+  renderPcomImportPreview();
 }
 document.addEventListener('click',ev=>{
   if(!ev.target.closest('#pcmi-pickdrop')&&!ev.target.closest('.smi-pick-btn')){
@@ -5855,14 +5939,15 @@ document.addEventListener('click',ev=>{
   }
 });
 function updPcomImportInfo(){
-  const n=pcImpParsed.filter(x=>x.include&&x.produsId).length;
-  document.getElementById('pcmi-info').textContent=`${n} linii selectate pentru import`;
+  const n=pcImpParsed.filter(x=>x.include&&(x.produsId||x.newProduct)&&!x.amanat).length;
+  const amanate=pcImpParsed.filter(x=>x.include&&(x.produsId||x.newProduct)&&x.amanat).length;
+  document.getElementById('pcmi-info').textContent=`${n} linii selectate pentru import${amanate?` · ${amanate} amânate`:''}`;
   document.getElementById('pcmi-apply-btn').disabled=n===0;
 }
 // Trimite spre AI, în loturi de 20-25, doar liniile nepotrivite după PNK/fuzzy — traduce titlul dacă
 // e cazul și sugerează cel mai probabil produs din inventar, din lista de nume+id-uri trimisă în prompt.
 async function pcomAiMatchUnmatched(){
-  const idxs=pcImpParsed.map((x,i)=>i).filter(i=>!pcImpParsed[i].produsId);
+  const idxs=pcImpParsed.map((x,i)=>i).filter(i=>!pcImpParsed[i].produsId&&!pcImpParsed[i].newProduct);
   if(!idxs.length){toast('Nu mai sunt linii nepotrivite','err');return;}
   const btn=document.getElementById('pcmi-ai-btn');
   btn.disabled=true;
@@ -5911,15 +5996,30 @@ Răspunde STRICT cu JSON, fără markdown: {"matches":[{"index":<indexul liniei>
 async function applyPcomImport(){
   if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
   const platforma=pcImpPlatforma;
-  const toApply=pcImpParsed.filter(x=>x.include&&x.produsId);
-  if(!toApply.length)return;
+  const toApply=pcImpParsed.filter(x=>x.include&&(x.produsId||x.newProduct)&&!x.amanat);
+  const amanateCount=pcImpParsed.filter(x=>x.include&&(x.produsId||x.newProduct)&&x.amanat).length;
+  if(!toApply.length){
+    if(amanateCount)toast(`${amanateCount} linii sunt amânate — nimic de aplicat acum`,'err');
+    return;
+  }
   const btn=document.getElementById('pcmi-apply-btn');
   btn.disabled=true;btn.textContent='Se aplică…';
   const batchId=Date.now().toString(36);
-  let ok=0,failed=0;
+  let ok=0,failed=0,createdCount=0;
   try{
     for(const it of toApply){
-      const p=P.find(x=>x.id===it.produsId);
+      let p=it.produsId?P.find(x=>x.id===it.produsId):null;
+      if(!p&&it.newProduct){
+        // produsul chiar nu există în stoc — îl creăm acum, la fel ca la importul de facturi (fără cost
+        // de achiziție cunoscut, îl completezi ulterior în Inventar; stocul pornește de la 0, deci după
+        // scăderea cantității vândute va intra direct pe minus, ceea ce e corect: am vândut ceva ce nu aveam)
+        const newP={name:it.titluRo||it.titluExtern,sku:null,bought:0,sold:0,minQty:0,priceBuyTTC:0,tvaAcq:0.21,
+          priceSell:0,priceEmag:0,priceTrendyol:0,priceRec:0,category:'',supplier:'',img:''};
+        const okSave=await saveProdToDb(newP,null);
+        if(!okSave){failed++;continue;}
+        p=P[P.length-1];
+        createdCount++;
+      }
       if(!p){failed++;continue;}
       try{
         const totalRon=pcomToRon(it.pretTotalCuTva,it.moneda);
@@ -5947,12 +6047,16 @@ async function applyPcomImport(){
         failed++;
       }
     }
-    pcImpParsed=[];
-    document.getElementById('pcmi-preview').innerHTML='';
-    document.getElementById('pcmi-foot').style.display='none';
-    document.getElementById('pcmi-ai-btn').style.display='none';
+    // păstrează în previzualizare doar liniile amânate (fără stoc) — cele aplicate cu succes/eșuate dispar
+    pcImpParsed=pcImpParsed.filter(x=>x.include&&x.produsId&&x.amanat);
+    if(pcImpParsed.length){renderPcomImportPreview();}
+    else{
+      document.getElementById('pcmi-preview').innerHTML='';
+      document.getElementById('pcmi-foot').style.display='none';
+      document.getElementById('pcmi-ai-btn').style.display='none';
+    }
     renderPcomImportHistory();renderTable();renderToday();renderDashboard();
-    toast(`${ok} linii importate ✓${failed?` · ${failed} au eșuat`:''}`,failed&&!ok?'err':undefined);
+    toast(`${ok} linii importate ✓${createdCount?` · ${createdCount} produse noi create`:''}${failed?` · ${failed} au eșuat`:''}${amanateCount?` · ${amanateCount} amânate (fără stoc)`:''}`,failed&&!ok?'err':undefined);
   }finally{
     btn.disabled=false;btn.textContent='Aplică import';
   }
