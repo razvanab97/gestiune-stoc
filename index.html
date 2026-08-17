@@ -966,6 +966,16 @@ function buildRaportCats(){
 .rsx-icon-btn.danger:hover{background:var(--rd-bg);border-color:var(--rd)}
 .rsx-status-warn{color:var(--am)!important;font-weight:700!important;font-size:12px!important;white-space:nowrap}
 @media(max-width:640px){.rsx-kpis{grid-template-columns:1fr 1fr}.rsx-head{flex-direction:column}.rsx-head-r{align-self:flex-end}}
+/* ── eMAG Listing Readiness (Product Truth / Gap Analysis) — strict pentru anunțul eMAG ── */
+.emg-truth-card{border-top:3px solid var(--acc)}
+.emg-truth-table{display:flex;flex-direction:column;gap:0}
+.emg-truth-row{display:grid;grid-template-columns:1fr 1.4fr auto;gap:10px;align-items:center;padding:6px 0;border-bottom:1px solid var(--b1);font-size:13px}
+.emg-truth-row:last-child{border-bottom:none}
+.emg-truth-k{color:var(--t2);font-weight:700}
+.emg-truth-v{color:var(--t1);font-family:var(--mono);word-break:break-word}
+.emg-truth-s{font-size:12px;white-space:nowrap;text-align:right}
+.emg-blocking{margin-top:10px;background:rgba(220,38,38,.08);border:1px solid var(--rd);border-radius:var(--r);padding:10px 12px;color:var(--rd)}
+.emg-blocking ul{margin:6px 0 0 18px;padding:0}
 /* ── COPY BUTTON ── */
 .copy-nm-btn{background:none;border:none;cursor:pointer;padding:0 4px;font-size:13px;opacity:.55;vertical-align:middle;line-height:1;transition:opacity .15s}
 .copy-nm-btn:hover{opacity:1}
@@ -1891,6 +1901,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:101,text:'Generator anunțuri: sistem nou „eMAG — Listing Readiness" — Product Truth (fiecare atribut cu sursă/încredere/status VERIFIED·PROBABLE·CONFLICT·UNKNOWN, cu furnizorul mereu prioritar), categorie detectată automat, Gap Analysis față de competitorii eMAG din dosar, scor de Listing Readiness cu breakdown, blocking issues care blochează statusul READY indiferent de scor, și „ABOVE MARKET AVERAGE". Strict pe fluxul eMAG — Trendyol neatins',date:'2026-08-18'},
   {n:100,text:'Research: buton nou „💾 Salvează anunțul" pe anunțul generat cu Generatorul de sine stătător (fără dosar în spate) — dacă îți place, îl păstrezi într-un dosar minim, ca să-l regăsești oricând. Orice anunț generat (din dosar sau salvat) are acum și un buton „🔗 Vezi dosarul în Research" care te duce direct la dosarul lui, cu cardul evidențiat',date:'2026-08-18'},
   {n:99,text:'Research: „📋 Clasament produse cercetate" (rămășiță din fluxul vechi, moartă de când s-a trecut pe Dosare) a devenit „🏆 Top produse cercetate" — un top 5 dosare după profit estimat, calculat DOAR din linkuri de piață verificate/confirmate (nu din candidați neconfirmați cu scor 50-79). Click pe un rând te duce direct la dosarul respectiv',date:'2026-08-18'},
   {n:98,text:'Research: pagina se încarcă instant, fără pauză — dosarele apar imediat dintr-o copie locală (cache), fără spinner, în timp ce datele proaspete se aduc tăcut în fundal și înlocuiesc cache-ul când sunt gata. Doar prima vizită vreodată (fără nicio copie locală încă) mai arată spinner-ul de încărcare',date:'2026-08-17'},
@@ -3697,7 +3708,7 @@ function researchMode(mode){
   }
   if(mode==='listing'){
     wrap.style.display=listingFactoryData?'block':'none';
-    if(listingFactoryData)renderListingFactoryResult(listingFactoryData.listing,listingFactoryData.pages);
+    if(listingFactoryData)renderListingFactoryResult(listingFactoryData.listing,listingFactoryData.pages,listingFactoryData.allImages);
   }else{
     wrap.style.display=researchData?'block':'none';
     if(researchData){renderResearchResult(researchData);if(listingData)renderListingResult(listingData,[]);}
@@ -4764,10 +4775,10 @@ function showSavedProjectListing(projectId){
   document.getElementById('decision-result')?.style.setProperty('display','none');
   if(wrap)wrap.style.display='block';
   if(out)out.style.display='';
-  listingFactoryData={listing:pr.listing,pages:[]};
+  listingFactoryData={listing:pr.listing,pages:[],allImages:[]};
   listingData=pr.listing;
   listingProjectId=projectId;
-  renderListingFactoryResult(pr.listing,[]);
+  renderListingFactoryResult(pr.listing,[],[]);
   toast('Anunț salvat încărcat ✓');
 }
 async function buildListingFromProject(projectId){
@@ -4790,10 +4801,10 @@ async function buildListingFromProject(projectId){
     const product={name:pr.title||'',priceBuy:Number(pr.acquisition_price)||0,supplier:pr.supplier||'AB HOMES'};
     const data=await apiJson('/api/listing-builder',{mode:'synthesize',product,urls,extraPages},180000);
     const l=data.listing||{};
-    listingFactoryData={listing:l,pages:data.pages||[]};
+    listingFactoryData={listing:l,pages:data.pages||[],allImages:data.allImages||[]};
     listingData=l;
     listingProjectId=projectId;
-    renderListingFactoryResult(l,data.pages||[]);
+    renderListingFactoryResult(l,data.pages||[],data.allImages||[]);
     try{
       await apiJson('/api/research-projects',{action:'save_listing',project_id:projectId,status:'generat',listing:l},30000);
       const local=researchProjects.find(p=>Number(p.id)===Number(projectId));if(local){local.listing_status='generat';local.listing=l;}
@@ -4883,10 +4894,10 @@ async function buildListingFactory(){
   try{
     const data=await apiJson('/api/listing-builder',{mode:'synthesize',product:{},urls},180000);
     const l=data.listing||{};
-    listingFactoryData={listing:l,pages:data.pages||[]};
+    listingFactoryData={listing:l,pages:data.pages||[],allImages:data.allImages||[]};
     listingData=l;
     listingProjectId=null;
-    renderListingFactoryResult(l,data.pages||[]);
+    renderListingFactoryResult(l,data.pages||[],data.allImages||[]);
     toast('Anunț nou generat ✓');
   }catch(e){
     if(out)out.innerHTML=`<div class="listing-card" style="border-color:var(--rd);color:var(--rd)">⚠️ ${esc(e.message||'Eroare generator')}</div>`;
@@ -4911,7 +4922,7 @@ async function saveStandaloneListing(){
     researchProjects.unshift(project);
     listingProjectId=project.id;
     renderResearchProjects();
-    renderListingFactoryResult(l,listingFactoryData?.pages||[]);
+    renderListingFactoryResult(l,listingFactoryData?.pages||[],listingFactoryData?.allImages||[]);
     toast('Anunț salvat — îl găsești în Dosare ✓');
   }catch(e){
     toast(e.message||'Eroare salvare anunț','err');
@@ -5168,7 +5179,365 @@ function renderSpecTable(specs){
 function imageRecommendationMap(l){
   return Object.fromEntries((l?.image_recommendations||[]).filter(x=>x?.url).map(x=>[x.url,x]));
 }
-function renderListingFactoryResult(l,pages){
+/* ══════════════════════════════════════════════════════════════════════════════════════
+   eMAG LISTING READINESS — Product Truth + Gap Analysis + Validation
+   Strict pentru fluxul de generare eMAG (renderListingFactoryResult, mai jos). Nu atinge
+   generarea propriu-zisă (api/listing-builder.js, comună cu Trendyol) — rulează DOAR ca un
+   strat de analiză/validare peste anunțul deja generat + datele deja salvate în Research
+   (research_links ale dosarului), fără AI, 100% determinist. Nu se persistă nicăieri —
+   se recalculează live la fiecare randare, ca și scorurile rsx* de mai sus (pe care le și
+   reutilizează ca bloc de bază, ca să nu reinventăm formule deja calibrate).
+   ══════════════════════════════════════════════════════════════════════════════════════ */
+
+// ── Registru de categorii — extensibil: fiecare profil definește atributele relevante
+// pentru acea categorie (Product Truth + Attribute Coverage se calculează pe baza lui).
+const EMG_CATEGORY_PROFILES={
+  jucarii:{label:'Jucării',keywords:['jucarie','jucărie','ghiozdan','papusa','păpușă','masinuta','mașinuță','plus','pluș','puzzle','lego','trotineta','trotinetă','bicicleta pentru copii','bicicletă pentru copii','joc de societate','joc educativ','set constructie','set construcție'],attributes:[
+    {key:'model',label:'Model',aliases:['model'],critical:false},
+    {key:'personaj',label:'Personaj/licență',aliases:['personaj','licenta','licență','erou','caracter'],critical:false},
+    {key:'culoare',label:'Culoare',aliases:['culoare','color'],critical:true},
+    {key:'material',label:'Material',aliases:['material'],critical:false},
+    {key:'dimensiuni_produs',label:'Dimensiuni produs',aliases:['dimensiuni produs','dimensiuni'],critical:true},
+    {key:'dimensiuni_ambalaj',label:'Dimensiuni ambalaj',aliases:['dimensiuni ambalaj','dimensiuni cutie','dimensiuni pachet'],critical:false},
+    {key:'varsta',label:'Vârstă recomandată',aliases:['varsta','vârstă','age','varsta recomandata'],critical:false},
+    {key:'greutate',label:'Greutate',aliases:['greutate','weight'],critical:false}
+  ]},
+  electronice:{label:'Electronice',keywords:['incarcator','încărcător','cablu','casti','căști','boxa','boxă','difuzor','powerbank','power bank','laptop','telefon','tableta','tabletă','router','camera video','cameră video','ceas smart','smartwatch','adaptor','hub usb'],attributes:[
+    {key:'model',label:'Model',aliases:['model'],critical:true},
+    {key:'culoare',label:'Culoare',aliases:['culoare','color'],critical:false},
+    {key:'material',label:'Material/Carcasă',aliases:['material','carcasa','carcasă'],critical:false},
+    {key:'dimensiuni_produs',label:'Dimensiuni produs',aliases:['dimensiuni produs','dimensiuni'],critical:false},
+    {key:'putere',label:'Putere/Capacitate baterie',aliases:['putere','capacitate baterie','wattaj','mah'],critical:false},
+    {key:'conectivitate',label:'Conectivitate',aliases:['conectivitate','tip conexiune','port','interfata','interfață'],critical:false},
+    {key:'alimentare',label:'Alimentare',aliases:['alimentare','tensiune','voltaj'],critical:false},
+    {key:'greutate',label:'Greutate',aliases:['greutate','weight'],critical:false}
+  ]},
+  casa:{label:'Casă & Grădină',keywords:['organizator','depozitare','covor','perna','pernă','pled','vaza','vază','decoratiune','decorațiune','suport','cos','coș','recipient','ustensile bucatarie','ustensile bucătărie','set curatenie','set curățenie'],attributes:[
+    {key:'culoare',label:'Culoare',aliases:['culoare','color'],critical:true},
+    {key:'material',label:'Material',aliases:['material'],critical:true},
+    {key:'dimensiuni_produs',label:'Dimensiuni produs',aliases:['dimensiuni produs','dimensiuni'],critical:true},
+    {key:'capacitate',label:'Capacitate/Volum',aliases:['capacitate','volum'],critical:false},
+    {key:'destinatie',label:'Destinație/Utilizare',aliases:['destinatie','destinație','utilizare'],critical:false},
+    {key:'greutate',label:'Greutate',aliases:['greutate','weight'],critical:false}
+  ]},
+  auto:{label:'Auto & Moto',keywords:['auto','masina','mașină','far','anvelopa','anvelopă','ulei motor','husa auto','husă auto','suport telefon auto','covorase auto','covorașe auto','janta','jantă'],attributes:[
+    {key:'model',label:'Model/Compatibilitate',aliases:['model','compatibilitate','compatibil cu'],critical:true},
+    {key:'culoare',label:'Culoare',aliases:['culoare','color'],critical:false},
+    {key:'material',label:'Material',aliases:['material'],critical:false},
+    {key:'dimensiuni_produs',label:'Dimensiuni produs',aliases:['dimensiuni produs','dimensiuni'],critical:false},
+    {key:'greutate',label:'Greutate',aliases:['greutate','weight'],critical:false}
+  ]},
+  fashion:{label:'Modă',keywords:['tricou','pantaloni','rochie','geaca','geacă','pantofi','incaltaminte','încălțăminte','esarfa','eșarfă','caciula','căciulă','manusi','mănuși','tinuta','ținută','fusta','fustă','camasa','cămașă'],attributes:[
+    {key:'marime',label:'Mărime',aliases:['marime','mărime','size'],critical:true},
+    {key:'culoare',label:'Culoare',aliases:['culoare','color'],critical:true},
+    {key:'material',label:'Material/Compoziție',aliases:['material','compozitie','compoziție'],critical:true},
+    {key:'sezon',label:'Sezon',aliases:['sezon','season'],critical:false},
+    {key:'gen',label:'Gen',aliases:['gen','sex','pentru'],critical:false}
+  ]},
+  pet:{label:'Pet / Animale de companie',keywords:['caine','câine','pisica','pisică','hrana caini','hrana pisici','hrană câini','hrană pisici','zgarda','zgardă','lesa','lesă','cusca','cușcă','litiera','litieră'],attributes:[
+    {key:'specie',label:'Specie compatibilă',aliases:['specie','pentru','recomandat pentru'],critical:true},
+    {key:'marime',label:'Mărime/Talie',aliases:['marime','mărime','talie','size'],critical:false},
+    {key:'material',label:'Material',aliases:['material'],critical:false},
+    {key:'dimensiuni_produs',label:'Dimensiuni produs',aliases:['dimensiuni produs','dimensiuni'],critical:false},
+    {key:'greutate',label:'Greutate',aliases:['greutate','weight'],critical:false}
+  ]},
+  beauty:{label:'Frumusețe & Îngrijire',keywords:['crema','cremă','ser facial','sampon','șampon','parfum','ruj','masca de fata','mască de față','gel de dus','gel de duș','balsam'],attributes:[
+    {key:'volum',label:'Volum/Cantitate',aliases:['volum','cantitate','ml','gr'],critical:true},
+    {key:'tip_ten',label:'Tip ten/păr',aliases:['tip ten','tip par','tip păr'],critical:false},
+    {key:'ingrediente',label:'Ingrediente active',aliases:['ingrediente','ingredient activ'],critical:false},
+    {key:'destinatie',label:'Destinație/Utilizare',aliases:['destinatie','destinație','utilizare'],critical:false}
+  ]},
+  mobilier:{label:'Mobilier',keywords:['scaun','masa','masă','birou','dulap','raft','canapea','fotoliu','pat','noptiera','noptieră','comoda','comodă'],attributes:[
+    {key:'culoare',label:'Culoare',aliases:['culoare','color'],critical:true},
+    {key:'material',label:'Material',aliases:['material'],critical:true},
+    {key:'dimensiuni_produs',label:'Dimensiuni produs',aliases:['dimensiuni produs','dimensiuni'],critical:true},
+    {key:'greutate_maxima',label:'Greutate maximă suportată',aliases:['greutate maxima','greutate maximă','capacitate maxima','sarcina maxima'],critical:false},
+    {key:'montaj',label:'Montaj',aliases:['montaj','asamblare','tip montaj'],critical:false}
+  ]},
+  generic:{label:'General',keywords:[],attributes:[
+    {key:'model',label:'Model',aliases:['model'],critical:false},
+    {key:'culoare',label:'Culoare',aliases:['culoare','color'],critical:false},
+    {key:'material',label:'Material',aliases:['material'],critical:false},
+    {key:'dimensiuni_produs',label:'Dimensiuni produs',aliases:['dimensiuni produs','dimensiuni'],critical:true},
+    {key:'dimensiuni_ambalaj',label:'Dimensiuni ambalaj',aliases:['dimensiuni ambalaj','dimensiuni cutie'],critical:false},
+    {key:'greutate',label:'Greutate',aliases:['greutate','weight'],critical:false}
+  ]}
+};
+const EMG_CORE_ATTRS=[{key:'brand',label:'Brand',critical:true},{key:'ean',label:'EAN/GTIN',critical:false}];
+function emgDetectCategory(project,l){
+  const text=(String(project?.title||'')+' '+String(l?.category_emag||'')+' '+String(l?.specs?.['Tip produs']||'')).toLowerCase();
+  for(const key of Object.keys(EMG_CATEGORY_PROFILES)){
+    if(key==='generic')continue;
+    if(EMG_CATEGORY_PROFILES[key].keywords.some(kw=>text.includes(kw)))return key;
+  }
+  return'generic';
+}
+function emgFindSpec(specs,aliases){
+  if(!specs||!aliases||!aliases.length)return null;
+  const keys=Object.keys(specs);
+  for(const alias of aliases){
+    const hit=keys.find(k=>k.toLowerCase().trim()===alias.toLowerCase().trim());
+    if(hit&&String(specs[hit]||'').trim())return specs[hit];
+  }
+  for(const alias of aliases){
+    const hit=keys.find(k=>k.toLowerCase().includes(alias.toLowerCase()));
+    if(hit&&String(specs[hit]||'').trim())return specs[hit];
+  }
+  return null;
+}
+// Elimină TOT spațiul intern la comparație — „31 x 18 x 41 cm" și „31x18x41cm" trebuie să fie
+// EGALE (aceeași valoare, doar formatate diferit de surse diferite), nu un fals conflict.
+function emgNormalizeValue(v){
+  return String(v||'').toLowerCase().trim().replace(/,/g,'.').replace(/\s+/g,'');
+}
+// ── Prioritatea surselor (secțiunea 2): furnizor > eMAG cu date structurate (fetch, nu
+// screenshot/PDF) > eMAG neconfirmat automat > alte marketplace-uri (Trendyol) > deducții.
+// Competitorii NU sunt sursă de adevăr automată — pot completa UNKNOWN, dar nu pot suprascrie
+// furnizorul; dacă îl contrazic, marcăm CONFLICT și păstrăm valoarea furnizorului.
+function emgSourceTier(link){
+  if(link.platform==='furnizor')return 1;
+  if(link.platform==='emag')return link.source==='web'?3:4;
+  return 5;
+}
+function emgCollectCandidates(project,attrDef){
+  const candidates=[];
+  for(const link of project?.links||[]){
+    if(link.status==='eroare')continue;
+    let raw=null;
+    if(attrDef.key==='brand')raw=link.brand||null;
+    else if(attrDef.key==='ean')raw=link.ean||null;
+    else raw=emgFindSpec(link.specs,attrDef.aliases);
+    if(!raw)continue;
+    candidates.push({value:String(raw).trim(),source:link.platform,tier:emgSourceTier(link),linkId:link.id});
+  }
+  return candidates;
+}
+function emgResolveAttribute(candidates){
+  if(!candidates.length)return{value:null,source:null,confidence:0,status:'UNKNOWN'};
+  const groups={};
+  candidates.forEach(c=>{const k=emgNormalizeValue(c.value);(groups[k]=groups[k]||[]).push(c);});
+  const distinct=Object.keys(groups).filter(k=>k);
+  const furnizorC=candidates.find(c=>c.tier===1);
+  if(distinct.length<=1){
+    const best=candidates.reduce((a,b)=>a.tier<b.tier?a:b);
+    const status=furnizorC?'VERIFIED':'PROBABLE';
+    const confidence=furnizorC?0.95:Math.min(0.8,0.4+candidates.length*0.12);
+    return{value:best.value,source:best.source,confidence:Math.round(confidence*100)/100,status};
+  }
+  // surse contradictorii — dacă avem furnizor, valoarea lui rămâne (nu se suprascrie), dar marcăm conflict
+  if(furnizorC)return{value:furnizorC.value,source:furnizorC.source,confidence:0.5,status:'CONFLICT'};
+  const best=candidates.reduce((a,b)=>a.tier<b.tier?a:b);
+  return{value:best.value,source:best.source,confidence:0.3,status:'CONFLICT'};
+}
+function emgBuildProductTruth(project,categoryProfile){
+  const truth={};
+  const attrs=[...EMG_CORE_ATTRS.filter(c=>!categoryProfile.attributes.some(a=>a.key===c.key)),...categoryProfile.attributes];
+  attrs.forEach(a=>{
+    truth[a.key]=Object.assign({key:a.key,label:a.label,critical:!!a.critical},emgResolveAttribute(emgCollectCandidates(project,a)));
+  });
+  return truth;
+}
+function emgMedian(arr){
+  if(!arr.length)return 0;
+  const s=[...arr].sort((a,b)=>a-b),mid=Math.floor(s.length/2);
+  return s.length%2?s[mid]:Math.round((s[mid-1]+s[mid])/2);
+}
+// ── Gap Analysis (secțiunea 10) — DOAR competitori eMAG analizați cu succes din dosar.
+function emgCompetitorBenchmark(project){
+  const emagLinks=(project?.links||[]).filter(l=>l.platform==='emag'&&l.status==='analizat');
+  const analyzed=emagLinks.map(l=>rsxAnalyzeListing(l));
+  return{
+    count:emagLinks.length,
+    completenessMedian:emgMedian(analyzed.map(a=>a.completeness.score)),
+    qualityMedian:emgMedian(analyzed.map(a=>a.quality.score))
+  };
+}
+// ── Missing opportunities (secțiunea 11) — atribute frecvente la competitorii eMAG, dar
+// UNKNOWN/CONFLICT la noi. Marcate explicit "needs verification" — nu copiem valori automat.
+function emgMissingOpportunities(project,truth){
+  const emagLinks=(project?.links||[]).filter(l=>l.platform==='emag'&&l.status==='analizat'&&l.specs&&Object.keys(l.specs).length);
+  if(!emagLinks.length)return[];
+  const freq={};
+  emagLinks.forEach(l=>Object.keys(l.specs).forEach(k=>{const nk=k.trim();if(nk)freq[nk]=(freq[nk]||0)+1;}));
+  const threshold=Math.ceil(emagLinks.length*0.5);
+  const frequent=Object.entries(freq).filter(([,c])=>c>=threshold).map(([k])=>k);
+  const ourGaps=Object.values(truth).filter(v=>v.status==='UNKNOWN'||v.status==='CONFLICT').map(v=>v.label);
+  return frequent.filter(f=>ourGaps.some(m=>f.toLowerCase().includes(m.toLowerCase())||m.toLowerCase().includes(f.toLowerCase()))).slice(0,6);
+}
+// Adaptează anunțul generat la forma unei „listări" din Research, ca să refolosim EXACT
+// rsxCompletenessScore/rsxQualityScore — aceleași formule, comparabilitate directă cu competitorii.
+function emgListingAsLinkShape(l,truth,images){
+  const descText=l?.description||String(l?.description_html||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+  return{
+    title:l?.title||'',description:descText,specs:l?.specs||{},images:images||[],
+    brand:truth?.brand?.value||l?.specs?.Brand||'',seller:'AB HOMES',rating:0,review_count:0,source:'web'
+  };
+}
+function emgContentCompleteness(l,images,descText){
+  const specsCount=Object.keys(l?.specs||{}).length;
+  return rsxAggregate([
+    {key:'title',weight:1,available:true,value:rsxTitleCompletenessScore(l?.title)},
+    {key:'desc',weight:1,available:true,value:rsxDescLengthScore(descText.length)},
+    {key:'specs',weight:1,available:true,value:rsxSpecsCoverageScore(specsCount)},
+    {key:'images',weight:1,available:true,value:rsxImageCoverageScore(images.length)}
+  ]).score;
+}
+// Accuracy & confidence (secțiunea 12) — media încrederii pe Product Truth; CONFLICT penalizat
+// puternic (nu 0, ca să nu domine singur scorul), UNKNOWN nu aduce puncte.
+function emgAccuracyScore(truth){
+  const attrs=Object.values(truth);
+  if(!attrs.length)return 50;
+  const sum=attrs.reduce((s,a)=>{
+    if(a.status==='VERIFIED')return s+100;
+    if(a.status==='PROBABLE')return s+Math.round(a.confidence*100);
+    if(a.status==='CONFLICT')return s+15;
+    return s;
+  },0);
+  return Math.round(sum/attrs.length);
+}
+function emgAttributeCoverage(truth,categoryProfile){
+  const keys=categoryProfile.attributes.map(a=>a.key);
+  const filled=keys.filter(k=>{const t=truth[k];return t&&(t.status==='VERIFIED'||t.status==='PROBABLE');}).length;
+  return{filled,relevant:keys.length,pct:keys.length?Math.round(filled/keys.length*100):100};
+}
+function emgImageQualityCount(scoredImages,images){
+  if(Array.isArray(scoredImages)&&scoredImages.length)return scoredImages.filter(x=>x.score>=50).length;
+  return images.length;
+}
+// ── Listing Readiness Score (secțiunea 12) — formulă proprie, distinctă de Completeness/Quality
+// Score-ul din Research (acela evaluează listări concurente; acesta evaluează ANUNȚUL nostru).
+function emgReadinessScore(l,truth,categoryProfile,images,descText){
+  const contentCompleteness=emgContentCompleteness(l,images,descText);
+  const accuracy=emgAccuracyScore(truth);
+  const titleQ=rsxTitleQualityScore(l?.title);
+  const descQ=rsxDescQualityScore(descText);
+  const attrCov=emgAttributeCoverage(truth,categoryProfile);
+  const imgCov=rsxImageCoverageScore(images.length);
+  const components=[
+    {key:'content',label:'Content completeness',weight:30,available:true,value:contentCompleteness},
+    {key:'accuracy',label:'Accuracy & confidence',weight:25,available:true,value:accuracy},
+    {key:'title',label:'Title quality',weight:10,available:true,value:titleQ},
+    {key:'description',label:'Description quality',weight:10,available:true,value:descQ},
+    {key:'attributes',label:'Attribute coverage',weight:15,available:true,value:attrCov.pct},
+    {key:'images',label:'Image coverage',weight:10,available:true,value:imgCov}
+  ];
+  return{...rsxAggregate(components),attrCoverage:attrCov,raw:{contentCompleteness,accuracy,titleQ,descQ,imgCov}};
+}
+// ── Blocking issues (secțiunea 13) — scorul singur NU decide READY; conflictele pe câmpuri
+// critice sau lipsa imaginii principale blochează statusul indiferent de scor.
+function emgBlockingIssues(truth,l,images,categoryKey,hasEmagCategory){
+  const issues=[];
+  Object.entries(truth).forEach(([key,a])=>{
+    if(!a.critical||a.status!=='CONFLICT')return;
+    if(key==='brand')issues.push('Brand neconfirmat — surse contradictorii');
+    else if(key==='ean')issues.push('EAN contradictoriu între surse');
+    else issues.push(`Conflict ${a.label.toLowerCase()} — surse contradictorii`);
+  });
+  if(!images.length)issues.push('Lipsește imaginea principală');
+  if(!hasEmagCategory&&categoryKey==='generic')issues.push('Categorie eMAG neclară — verifică manual încadrarea');
+  const dims=truth.dimensiuni_produs;
+  if(dims&&dims.status==='CONFLICT'&&/\d{1,4}\s*[x×]\s*\d{1,4}/i.test(String(l?.title||'')))issues.push('Titlul conține dimensiuni neconfirmate (conflict de surse)');
+  return[...new Set(issues)];
+}
+function emgInsights(truth,readiness,blocking,benchmark,ourScores){
+  const insights=[];
+  if(readiness.attrCoverage.filled>=readiness.attrCoverage.relevant*0.8)insights.push(['ok',`${readiness.attrCoverage.filled}/${readiness.attrCoverage.relevant} atribute relevante completate`]);
+  else insights.push(['warn',`Doar ${readiness.attrCoverage.filled}/${readiness.attrCoverage.relevant} atribute relevante completate`]);
+  Object.values(truth).filter(a=>a.status==='CONFLICT').forEach(a=>insights.push(['bad',`Conflict ${a.label.toLowerCase()} — surse contradictorii`]));
+  Object.values(truth).filter(a=>a.status==='UNKNOWN'&&a.critical).forEach(a=>insights.push(['warn',`${a.label} necunoscut(ă) — nicio sursă nu o confirmă`]));
+  if(!blocking.length)insights.push(['ok','Fără conflicte pe date critice']);
+  if(benchmark.count>0){
+    if(ourScores.completeness>=benchmark.completenessMedian)insights.push(['ok',`Completeness peste mediana competitorilor eMAG (${benchmark.completenessMedian}%)`]);
+    else insights.push(['warn',`Completeness sub mediana competitorilor eMAG (${benchmark.completenessMedian}%)`]);
+  }else insights.push(['unknown','Fără competitori eMAG analizați în dosar — comparația nu este disponibilă']);
+  return insights;
+}
+// ── „Peste medie" (secțiunea 19) — gate strict, nu doar scor mai mare.
+function emgAboveAverage(ourScores,benchmark,blocking,truth){
+  if(benchmark.count===0)return{above:false,reason:'Fără competitori eMAG în dosar pentru comparație'};
+  if(blocking.length)return{above:false,reason:'Există probleme blocante nerezolvate'};
+  const criticalOk=Object.values(truth).every(a=>!a.critical||a.status==='VERIFIED'||a.status==='PROBABLE');
+  if(!criticalOk)return{above:false,reason:'Date critice neconfirmate sau în conflict'};
+  if(ourScores.completeness<benchmark.completenessMedian)return{above:false,reason:'Completeness sub mediana competitorilor'};
+  if(ourScores.quality<benchmark.qualityMedian)return{above:false,reason:'Quality sub mediana competitorilor'};
+  return{above:true};
+}
+// ── Punct de intrare — orchestrează tot fluxul din secțiunea 18: TRUTH → CATEGORY → GAP →
+// VALIDATE → COMPARE → READINESS → READY/NOT READY. Rulează pe anunțul deja generat de
+// /api/listing-builder (neschimbat) + linkurile deja salvate în dosarul Research (neschimbate).
+function emgAnalyzeListing(project,l,pages,allImages){
+  const images=factoryImages(l||{},pages||[]);
+  const descText=l?.description||String(l?.description_html||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+  const categoryKey=emgDetectCategory(project,l);
+  const categoryProfile=EMG_CATEGORY_PROFILES[categoryKey];
+  const truth=emgBuildProductTruth(project,categoryProfile);
+  const benchmark=emgCompetitorBenchmark(project);
+  const ourAnalysis=rsxAnalyzeListing(emgListingAsLinkShape(l,truth,images));
+  const ourScores={completeness:ourAnalysis.completeness.score,quality:ourAnalysis.quality.score};
+  const missingOpportunities=emgMissingOpportunities(project,truth);
+  const readiness=emgReadinessScore(l,truth,categoryProfile,images,descText);
+  const blocking=emgBlockingIssues(truth,l,images,categoryKey,!!l?.category_emag);
+  const status=blocking.length?'NOT READY':'READY TO PUBLISH';
+  const insights=emgInsights(truth,readiness,blocking,benchmark,ourScores);
+  const aboveAverage=emgAboveAverage(ourScores,benchmark,blocking,truth);
+  const imgStats={total:Array.isArray(allImages)&&allImages.length?allImages.length:null,selected:images.length,quality:emgImageQualityCount(l?._scoredImages,images)};
+  return{categoryKey,categoryLabel:categoryProfile.label,truth,benchmark,ourScores,missingOpportunities,readiness,blocking,status,insights,aboveAverage,imgStats};
+}
+// ── Randare ──
+function emgTruthStatusBadge(status){
+  const map={VERIFIED:['✓','var(--gr)','Verificat'],PROBABLE:['~','var(--am)','Probabil'],CONFLICT:['⚠','var(--rd)','Conflict'],UNKNOWN:['?','var(--t3)','Necunoscut']};
+  const[icon,color,label]=map[status]||map.UNKNOWN;
+  return`<span style="color:${color};font-weight:700" title="${label}">${icon} ${label}</span>`;
+}
+function emgRenderTruthTable(truth){
+  const rows=Object.values(truth).map(a=>{
+    const val=a.value?esc(a.value):'<span style="color:var(--t3)">indisponibil</span>';
+    return`<div class="emg-truth-row"><div class="emg-truth-k">${esc(a.label)}${a.critical?' <span style="color:var(--rd)" title="Câmp critic">●</span>':''}</div><div class="emg-truth-v">${val}</div><div class="emg-truth-s">${emgTruthStatusBadge(a.status)}</div></div>`;
+  }).join('');
+  return`<div class="emg-truth-table">${rows}</div>`;
+}
+function emgRenderBreakdown(components){
+  return components.map(c=>`<div class="rsx-bd-row"><span>${esc(c.label)}</span><strong>${Math.round(c.value/100*c.weight)}/${c.weight}</strong></div>`).join('');
+}
+function emgRenderPanel(result){
+  const{categoryLabel,truth,benchmark,ourScores,missingOpportunities,readiness,blocking,status,insights,aboveAverage,imgStats}=result;
+  const statusColor=status==='READY TO PUBLISH'?'var(--gr)':'var(--rd)';
+  const blockingHtml=blocking.length?`<div class="emg-blocking"><strong>Blocking issues:</strong><ul>${blocking.map(b=>`<li>${esc(b)}</li>`).join('')}</ul></div>`:'';
+  const gapHtml=benchmark.count?`
+    <div class="rsx-kpis" style="margin-top:4px">
+      <div class="rsx-kpi"><div class="rsx-kpi-label">Completeness (noi)</div><div class="rsx-kpi-val">${ourScores.completeness}%</div></div>
+      <div class="rsx-kpi"><div class="rsx-kpi-label">Mediana ${benchmark.count} competitori eMAG</div><div class="rsx-kpi-val">${benchmark.completenessMedian}%</div></div>
+      <div class="rsx-kpi"><div class="rsx-kpi-label">Quality (noi)</div><div class="rsx-kpi-val">${ourScores.quality}%</div></div>
+      <div class="rsx-kpi"><div class="rsx-kpi-label">Mediana quality competitori</div><div class="rsx-kpi-val">${benchmark.qualityMedian}%</div></div>
+    </div>
+    <div style="font-size:12px;color:var(--t3);margin-top:4px">Delta completeness: ${ourScores.completeness-benchmark.completenessMedian>=0?'+':''}${ourScores.completeness-benchmark.completenessMedian} pp · Delta quality: ${ourScores.quality-benchmark.qualityMedian>=0?'+':''}${ourScores.quality-benchmark.qualityMedian} pp</div>`
+    :'<div style="font-size:13px;color:var(--t3);margin-top:8px">Fără competitori eMAG analizați în acest dosar — comparația nu este disponibilă.</div>';
+  const missingHtml=missingOpportunities.length?`<div style="margin-top:8px;font-size:13px"><strong>Missing opportunities</strong> <span style="color:var(--t3)">(frecvente la competitori, needs verification):</span><ul style="margin:6px 0 0 18px">${missingOpportunities.map(m=>`<li>${esc(m)}</li>`).join('')}</ul></div>`:'';
+  const aboveHtml=aboveAverage.above?`<span style="color:var(--gr);font-weight:800">ABOVE MARKET AVERAGE ✓</span>`:`<span style="color:var(--or);font-weight:800">BELOW TARGET</span> <span style="font-size:12px;color:var(--t3)">— ${esc(aboveAverage.reason||'')}</span>`;
+  const insightsHtml=insights.map(([type,text])=>`<div class="rsx-insight ${type}">${rsxInsightIcon(type)} ${esc(text)}</div>`).join('');
+  return`<div class="listing-card emg-truth-card">
+    <div class="sec" style="margin:0 0 4px;color:var(--acc)">📋 eMAG — Listing Readiness <span style="font-size:12px;font-weight:400;color:var(--t3)">· categorie detectată: ${esc(categoryLabel)}</span></div>
+    <div class="rsx-kpis" style="margin-top:8px">
+      <div class="rsx-kpi"><div class="rsx-kpi-label">Listing Readiness</div><div class="rsx-kpi-val">${readiness.score}%</div></div>
+      <div class="rsx-kpi"><div class="rsx-kpi-label">Accuracy</div><div class="rsx-kpi-val">${readiness.raw.accuracy}%</div></div>
+      <div class="rsx-kpi"><div class="rsx-kpi-label">Attribute Coverage</div><div class="rsx-kpi-val">${readiness.attrCoverage.filled}/${readiness.attrCoverage.relevant}</div></div>
+      <div class="rsx-kpi"><div class="rsx-kpi-label">Images</div><div class="rsx-kpi-val">${imgStats.quality} quality${imgStats.total?` / ${imgStats.total} extrase`:''}</div></div>
+      <div class="rsx-kpi"><div class="rsx-kpi-label">Status</div><div class="rsx-kpi-val" style="color:${statusColor}">${status}</div></div>
+    </div>
+    ${blockingHtml}
+    <div style="margin-top:10px">${aboveHtml}</div>
+    ${gapHtml}
+    ${missingHtml}
+    <details style="margin-top:10px"><summary style="cursor:pointer;font-weight:700;font-size:13px">🔍 Breakdown Listing Readiness</summary>
+      <div style="margin-top:8px">${emgRenderBreakdown(readiness.breakdown)}</div>
+    </details>
+    <details style="margin-top:8px" open><summary style="cursor:pointer;font-weight:700;font-size:13px">🧾 Product Truth (per atribut)</summary>
+      <div style="margin-top:8px">${emgRenderTruthTable(truth)}</div>
+    </details>
+    <div style="margin-top:10px">${insightsHtml}</div>
+  </div>`;
+}
+function renderListingFactoryResult(l,pages,allImages=[]){
   const out=document.getElementById('listing-result');if(!out)return;
   saveListingDraft(l);
   const imgs=factoryImages(l||{},pages||[]);
@@ -5211,6 +5580,16 @@ function renderListingFactoryResult(l,pages){
     ${imgs.length?`<div style="margin-top:14px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><strong style="font-size:13px">Poze selectate (${imgs.length})</strong><button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(imgs.join('\n')))})">Copiază toate linkurile</button></div><div class="listing-imgs" style="align-items:stretch">${imgs.map((u,i)=>{const r=imgRec[u]||{};return`<div class="listing-image-pick"><img src="${esc(proxyImg(u))}" onerror="this.src='${esc(u)}'" onload="checkImgDims(this)" alt="" style="${i===0?'border:2px solid var(--acc)':''}"><div>${r.role?`<div class="listing-image-role">${esc(r.role)}</div>`:i===0?'<div class="listing-image-role">impact</div>':''}${r.reason?`<div style="font-size:12px;color:var(--t2);line-height:1.35;margin-bottom:5px">${esc(r.reason)}</div>`:''}<div class="listing-image-url">${esc(u)}</div><div style="display:flex;gap:5px;margin-top:6px"><button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(u))})">Copiază link</button><a class="btn btn-sm" href="${esc(downloadImg(u))}" target="_blank">↓ Salvează</a></div></div></div>`}).join('')}</div></div>`:''}
     ${l?.source_notes?`<div style="font-size:11px;color:var(--t3);margin-top:8px">${esc(l.source_notes)}</div>`:''}
   </div>`;
+  // ── eMAG Listing Readiness — strict adițional, nu atinge cardul de mai sus (Trendyol inclus).
+  // Necesită date reale din Research (dosar salvat) — fără dosar, nu inventăm Product Truth.
+  const emgProj=listingProjectId?researchProjects.find(p=>Number(p.id)===Number(listingProjectId)):null;
+  if(emgProj){
+    try{
+      out.innerHTML+=emgRenderPanel(emgAnalyzeListing(emgProj,l,pages,allImages));
+    }catch(e){
+      console.error('eMAG readiness analysis failed',e);
+    }
+  }
 }
 function applyListingToProduct(){
   const l=listingData||researchData?.listing;if(!l){toast('Nu există anunț generat');return;}
