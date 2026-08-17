@@ -376,6 +376,13 @@ tr:hover td{background:var(--surf2)}
 .pcom-table th{text-align:left;padding:6px 8px;color:var(--t3);font-weight:600;border-bottom:1px solid var(--b1)}
 .pcom-table td{padding:6px 8px;border-bottom:1px solid var(--b1);font-family:var(--mono)}
 .pcom-table tr:last-child td{border-bottom:none}
+.pcom-batch-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--b1);font-size:12px}
+.pcom-batch-row:last-child{border-bottom:none}
+.pcom-batch-info{color:var(--t2)}
+.tabcfg-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 4px;border-bottom:1px solid var(--b1);font-size:13px}
+.tabcfg-row:last-child{border-bottom:none}
+.tabcfg-arrows{display:flex;gap:4px}
+.tabcfg-arrows button{width:24px;height:24px;padding:0;font-size:12px;line-height:1}
 .smi-pickdrop{position:fixed;display:none;background:var(--surf);border:1px solid var(--b2);border-radius:var(--r2);box-shadow:var(--sh2);z-index:200;width:300px;max-height:340px;overflow:hidden;flex-direction:column}
 .smi-pickdrop.on{display:flex}
 .smi-pickdrop input{margin:8px;width:calc(100% - 16px);font-size:13px;padding:7px 10px;border:1px solid var(--b2);border-radius:var(--r);background:var(--surf2)}
@@ -888,6 +895,14 @@ th{font-weight:800!important;color:var(--t3)!important}
   </div>
   <span class="h-right" id="saved"></span>
   <div class="notif-wrap">
+    <button class="notif-bell" id="tabcfg-btn" onclick="toggleTabCfgPanel(event)" title="Personalizează ordinea paginilor">⚙️</button>
+    <div class="notif-panel" id="tabcfg-panel">
+      <div class="notif-head"><span>Ordinea paginilor</span></div>
+      <div class="notif-list" id="tabcfg-list"></div>
+      <div style="padding:10px 14px;border-top:1px solid var(--b1)"><button type="button" class="btn btn-sm" onclick="resetTabOrder()">↻ Resetează la ordinea implicită</button></div>
+    </div>
+  </div>
+  <div class="notif-wrap">
     <button class="notif-bell" id="notif-bell" onclick="toggleNotifPanel(event)" title="Mișcări de stoc">🔔<span class="notif-badge" id="notif-badge"></span></button>
     <div class="notif-panel" id="notif-panel">
       <div class="notif-head"><span>Mișcări de stoc</span></div>
@@ -1250,6 +1265,11 @@ th{font-weight:800!important;color:var(--t3)!important}
             <button class="btn btn-sm btn-acc" id="pcmi-apply-btn" onclick="applyPcomImport()" disabled>Aplică import</button>
           </div>
         </div>
+      </div>
+      <div class="card" style="padding:1rem 1.25rem">
+        <div class="sec" style="margin-top:0">Istoric importuri</div>
+        <div style="font-size:12px;color:var(--t3);margin-bottom:8px">Dacă un import a fost greșit (fișier greșit, dată greșită), îl poți șterge — liniile din „Profit"/„Total încasări" dispar și stocul scăzut la import e readăugat automat.</div>
+        <div id="pcom-import-history" style="font-size:13px;color:var(--t3)">Se încarcă…</div>
       </div>
     </div>
 
@@ -1678,6 +1698,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:62,text:'Două completări: (1) în „Comenzi Platforme" → Import comenzi, poți șterge acum un import greșit dintr-o zi — se elimină liniile din Profit/Total încasări și se readaugă automat stocul scăzut la import; (2) buton nou ⚙️ în header — personalizează ordinea paginilor din navigare (↑/↓, cu resetare la ordinea implicită), salvată pe acest browser',date:'2026-08-17'},
   {n:61,text:'Tab nou „📦 Comenzi Platforme" — încarci fișierul Excel cu comenzile zilei de pe eMAG/Trendyol, sistemul asociază fiecare linie cu un produs din stoc (întâi după PNK dacă a mai fost confirmat, apoi după titlu — automat sau cu AI, cu traducere dacă e cazul), tu confirmi în previzualizare, apoi se scade stocul și se ține evidența în „Profit vânzări" (pe zi/lună) și „Total încasări" (eMAG/Trendyol/combinat, cu conversie automată RON pentru EUR/HUF). Necesită rularea migration_platforma_comenzi.sql în Supabase',date:'2026-08-17'},
   {n:60,text:'Salvările (produs, vânzări, jurnal, comenzi de stoc) nu mai scriu deloc în browser (localStorage) atunci când Supabase reușește — merg direct și doar în Supabase. Cache-ul local rămâne doar ca plasă de siguranță pentru mod offline, când Supabase chiar nu răspunde',date:'2026-08-14'},
   {n:59,text:'Fix real: eroarea „The quota has been exceeded" la salvare produs — cache-ul local (localStorage) era plin, dar produsul CHIAR se salva corect în Supabase; doar mesajul era greșit și te făcea să crezi că a picat salvarea. Aplicat peste tot în aplicație (nu doar la produse), ca aceeași confuzie să nu mai apară nicăieri',date:'2026-08-14'},
@@ -2026,6 +2047,64 @@ document.addEventListener('click',ev=>{
   const panel=document.getElementById('notif-panel');
   if(panel&&panel.classList.contains('on')&&!ev.target.closest('.notif-wrap'))panel.classList.remove('on');
 });
+
+// ── PERSONALIZARE ORDINE PAGINI ── preferință pur vizuală, per-browser, nu are legătură cu datele din Supabase
+const TAB_ORDER_KEY='sm6_tab_order';
+function applyTabOrder(){
+  const nav=document.querySelector('.h-tabs');if(!nav)return;
+  let order=[];
+  try{order=JSON.parse(localStorage.getItem(TAB_ORDER_KEY)||'[]');}catch(e){}
+  if(!Array.isArray(order)||!order.length)return;
+  const btns=[...nav.querySelectorAll('.h-tab')];
+  const byId={};btns.forEach(b=>byId[b.dataset.page]=b);
+  order.forEach(id=>{if(byId[id])nav.appendChild(byId[id]);});
+  // orice tab nou, apărut ulterior și neinclus în ordinea salvată, rămâne la final
+  btns.forEach(b=>{if(!order.includes(b.dataset.page))nav.appendChild(b);});
+}
+function toggleTabCfgPanel(ev){
+  ev.stopPropagation();
+  const panel=document.getElementById('tabcfg-panel');if(!panel)return;
+  const willOpen=!panel.classList.contains('on');
+  panel.classList.toggle('on');
+  if(willOpen)renderTabCfgList();
+}
+document.addEventListener('click',ev=>{
+  const panel=document.getElementById('tabcfg-panel');
+  if(panel&&panel.classList.contains('on')&&!ev.target.closest('#tabcfg-panel')&&!ev.target.closest('#tabcfg-btn'))panel.classList.remove('on');
+});
+function renderTabCfgList(){
+  const nav=document.querySelector('.h-tabs');
+  const list=document.getElementById('tabcfg-list');if(!nav||!list)return;
+  const btns=[...nav.querySelectorAll('.h-tab')];
+  list.innerHTML=btns.map((b,i)=>`<div class="tabcfg-row" data-id="${esc(b.dataset.page)}">
+    <span>${esc(b.textContent.trim())}</span>
+    <div class="tabcfg-arrows">
+      <button type="button" class="btn btn-sm" ${i===0?'disabled':''} onclick="moveTabOrder('${b.dataset.page}',-1)" title="Mută mai sus">↑</button>
+      <button type="button" class="btn btn-sm" ${i===btns.length-1?'disabled':''} onclick="moveTabOrder('${b.dataset.page}',1)" title="Mută mai jos">↓</button>
+    </div>
+  </div>`).join('');
+}
+function moveTabOrder(id,dir){
+  const nav=document.querySelector('.h-tabs');if(!nav)return;
+  const btns=[...nav.querySelectorAll('.h-tab')];
+  const idx=btns.findIndex(b=>b.dataset.page===id);
+  const swapIdx=idx+dir;
+  if(idx<0||swapIdx<0||swapIdx>=btns.length)return;
+  if(dir<0)nav.insertBefore(btns[idx],btns[swapIdx]);
+  else nav.insertBefore(btns[swapIdx],btns[idx]);
+  saveTabOrder();
+  renderTabCfgList();
+}
+function saveTabOrder(){
+  const nav=document.querySelector('.h-tabs');if(!nav)return;
+  const order=[...nav.querySelectorAll('.h-tab')].map(b=>b.dataset.page);
+  safeLocalSet(TAB_ORDER_KEY,JSON.stringify(order));
+}
+function resetTabOrder(){
+  localStorage.removeItem(TAB_ORDER_KEY);
+  toast('Ordinea implicită restaurată ✓');
+  location.reload();
+}
 
 // ── COPY FUNCTIONS ──
 function copyText(text){
@@ -2622,7 +2701,7 @@ function goPage(id,btn){
     const tryPc=async(n)=>{
       if(P.length>0){
         if(!syncMapsLoaded)await loadSyncMappings();
-        renderPcomProfit();renderPcomTotals();
+        renderPcomImportHistory();renderPcomProfit();renderPcomTotals();
       }else if(n>0)setTimeout(()=>tryPc(n-1),300);
     };
     setTimeout(()=>tryPc(20),100);
@@ -5536,8 +5615,56 @@ function pcomMode(mode){
     document.getElementById('pcom-tab-'+m)?.classList.toggle('on',m===mode);
     document.getElementById('pcom-mode-'+m)?.classList.toggle('on',m===mode);
   });
+  if(mode==='import')renderPcomImportHistory();
   if(mode==='profit')renderPcomProfit();
   if(mode==='totals')renderPcomTotals();
+}
+// Grupează liniile importate după import_batch_id (un upload = un batch), ca să poți șterge dintr-o
+// singură acțiune tot ce a intrat greșit dintr-un fișier, cu readăugarea stocului scăzut la import.
+function renderPcomImportHistory(){
+  const host=document.getElementById('pcom-import-history');if(!host)return;
+  if(!pcomLoaded&&!PCOM.length){host.textContent='Se încarcă…';return;}
+  const batches={};
+  PCOM.forEach(o=>{
+    const key=o.importBatchId||('legacy-'+o.id);
+    if(!batches[key])batches[key]={batchId:o.importBatchId,platforma:o.platforma,dates:new Set(),count:0,total:0,createdAt:''};
+    const b=batches[key];
+    b.dates.add(o.data);b.count++;b.total+=o.pretTotalCuTvaRon;
+    if(o.createdAt&&o.createdAt>b.createdAt)b.createdAt=o.createdAt;
+  });
+  const list=Object.values(batches).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+  if(!list.length){host.textContent='Niciun import încă.';return;}
+  host.innerHTML=list.map(b=>{
+    const dates=[...b.dates].sort();
+    const dateLabel=dates.length===1?dates[0]:`${dates[0]} → ${dates[dates.length-1]}`;
+    const plLabel=b.platforma==='emag'?'eMAG':'Trendyol';
+    return`<div class="pcom-batch-row">
+      <div class="pcom-batch-info"><b>${esc(plLabel)}</b> · ${esc(dateLabel)} · ${b.count} linii · ${b.total.toFixed(2)} RON</div>
+      ${b.batchId?`<button type="button" class="btn btn-sm" style="color:var(--rd);border-color:var(--rd)" onclick="deletePcomBatch('${esc(b.batchId)}')">🗑️ Șterge</button>`:'<span style="font-size:11px;color:var(--t3)">import vechi, fără grupare</span>'}
+    </div>`;
+  }).join('');
+}
+async function deletePcomBatch(batchId){
+  if(!confirm('Ștergi acest import? Liniile de comenzi vor fi șterse din Profit/Total încasări, iar stocul scăzut la import va fi readăugat. Asocierile PNK↔produs deja confirmate rămân neatinse.'))return;
+  if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
+  const rows=PCOM.filter(o=>o.importBatchId===batchId);
+  if(!rows.length)return;
+  try{
+    await dbDelete(`platforma_comenzi?import_batch_id=eq.${encodeURIComponent(batchId)}`);
+    for(const o of rows){
+      const p=P.find(x=>x.id===o.produsId);
+      if(p){
+        p.sold=Math.max(0,(p.sold||0)-o.cantitate);
+        try{await dbPatch(`produse?id=eq.${p.id}`,{sold:p.sold});}catch(e){console.warn('Nu am putut readăuga stocul pentru',p.name,e);}
+        await logMove('in',p.name,o.cantitate,`Anulare import ${o.platforma==='emag'?'eMAG':'Trendyol'} (comandă ${o.comandaId||'—'})`,p.id);
+      }
+    }
+    PCOM=PCOM.filter(o=>o.importBatchId!==batchId);
+    renderPcomImportHistory();renderPcomProfit();renderPcomTotals();renderTable();renderToday();renderDashboard();
+    toast(`Import șters — ${rows.length} linii eliminate, stoc corectat ✓`);
+  }catch(err){
+    toast('Eroare la ștergere: '+err.message,'err');
+  }
 }
 function pcomParseDate(v){
   if(!v)return'';
@@ -5793,7 +5920,7 @@ async function applyPcomImport(){
     document.getElementById('pcmi-preview').innerHTML='';
     document.getElementById('pcmi-foot').style.display='none';
     document.getElementById('pcmi-ai-btn').style.display='none';
-    renderTable();renderToday();renderDashboard();
+    renderPcomImportHistory();renderTable();renderToday();renderDashboard();
     toast(`${ok} linii importate ✓${failed?` · ${failed} au eșuat`:''}`,failed&&!ok?'err':undefined);
   }finally{
     btn.disabled=false;btn.textContent='Aplică import';
@@ -7103,6 +7230,7 @@ window.addEventListener('hashchange',()=>{
   const h=(location.hash||'').replace('#','');
   if(h&&document.getElementById('page-'+h))goPage(h);
 });
+applyTabOrder();
 load();
 </script>
 </body>
