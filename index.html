@@ -1739,6 +1739,8 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:87,text:'Research: brand-ul și vânzătorul se extrag acum din toate sursele, nu doar de pe linkurile eMAG/Verk citite automat — și din screenshot-urile Jumbo/Maxy (AI vision) și din anunțurile citite dintr-un PDF cu rezultate de căutare, dacă apar vizibil pe pagină',date:'2026-08-17'},
+  {n:86,text:'Fix: butoanele „📄 PDF rezultate eMAG/Trendyol" și „📷 Încarcă screenshot" nu deschideau uneori dialogul de fișiere — foloseau un mecanism JS (buton → click programatic pe input ascuns) care putea fi fragil. Înlocuit cu asocierea nativă HTML buton-etichetă↔input, garantată de browser',date:'2026-08-17'},
   {n:85,text:'Research: la „📄 PDF rezultate eMAG/Trendyol" poți selecta acum mai multe PDF-uri deodată (ex. pagina 1 și pagina 2 a rezultatelor căutării) — fiecare e citit separat de AI, iar toate anunțurile găsite se adaugă împreună în dosar, cu un singur toast de confirmare. Dacă un PDF nu poate fi citit, restul continuă normal, nu blochează tot importul',date:'2026-08-17'},
   {n:84,text:'Research: fiecare link dintr-un dosar are acum buton 🗑 de ștergere (util mai ales la linkuri duplicate sau care au dat eroare la analiză — duplicatele apar acum cu avertisment ⚠ mai vizibil). Linkurile eMAG/Verk arată acum și brand-ul produsului și vânzătorul (marketplace seller) extrase automat din pagină, ca să vezi rapid cine și ce vinde la fiecare preț găsit',date:'2026-08-17'},
   {n:83,text:'Research: dosarele din listă se pot restrânge acum la un singur rând (titlu + verdict), fie individual (click pe titlu), fie toate deodată („▸ Restrânge tot" / „▾ Extinde tot") — util când sunt multe dosare. Fix: vechiul panou „Research produs" (căutare pe un singur produs, dinainte de dosare) rămânea uneori vizibil sub lista de dosare — acum se ascunde mereu automat',date:'2026-08-17'},
@@ -4059,15 +4061,17 @@ async function handleLinkScreenshotFile(linkId,inputEl){
 2. Prețul afișat (doar numărul, cu punct zecimal)
 3. Moneda (RON, EUR, PLN etc. — după cum apare pe pagină)
 4. O descriere scurtă (caracteristici vizibile, dimensiuni, material, dacă apar)
+5. Brand-ul/producătorul, dacă e vizibil pe pagină (altfel gol)
+6. Vânzătorul/magazinul care vinde produsul, dacă e vizibil (ex. "Vândut de X", altfel gol)
 
-Răspunde STRICT în format JSON: {"title":"<titlu>","price":<număr>,"currency":"<monedă>","description":"<descriere scurtă sau gol>"}`;
+Răspunde STRICT în format JSON: {"title":"<titlu>","price":<număr>,"currency":"<monedă>","description":"<descriere scurtă sau gol>","brand":"<brand sau gol>","seller":"<vânzător sau gol>"}`;
     const resp=await callAI([{role:'user',content:[imgContent,{type:'text',text:userPrompt}]}],systemPrompt,500);
     const match=resp.trim().match(/\{[\s\S]*\}/);
     if(!match)throw new Error('Răspuns invalid de la AI');
     const info=JSON.parse(match[0]);
     if(!info.title)throw new Error('AI nu a putut citi titlul din screenshot — încearcă o poză mai clară');
     // Poza rămâne salvată — refolosită mai jos ca "poză principală" la generarea AI a căutării eMAG/Trendyol.
-    await apiJson('/api/research-projects',{action:'set_link_data',link_id:linkId,title:info.title,price:info.price||0,currency:info.currency||'RON',description:info.description||'',images:[dataUrl]},45000);
+    await apiJson('/api/research-projects',{action:'set_link_data',link_id:linkId,title:info.title,price:info.price||0,currency:info.currency||'RON',description:info.description||'',brand:info.brand||'',seller:info.seller||'',images:[dataUrl]},45000);
     toast('Screenshot analizat ✓');
     await loadResearchProjects();
   }catch(e){
@@ -4117,8 +4121,8 @@ async function extractPdfListings(file,platform,base){
   const b64=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(String(e.target.result).split(',')[1]);r.onerror=reject;r.readAsDataURL(file);});
   if(!b64||b64.length<100)throw new Error(`${file.name}: PDF prea mic sau corupt`);
   const systemPrompt='Ești expert în citirea rezultatelor de căutare din magazine online, dintr-un PDF format din screenshot-uri. Răspunde ÎNTOTDEAUNA cu JSON valid, fără markdown.';
-  const userPrompt=`Acest PDF conține screenshot-uri cu rezultate de căutare pentru un produs pe ${platform==='trendyol'?'Trendyol':'eMAG'}. Pentru FIECARE anunț de produs vizibil (nu bannere, nu filtre, nu reclame), extrage titlul exact, prețul afișat și o scurtă descriere/caracteristici dacă apar. NU descrie sau extrage poze.
-Răspunde STRICT în format JSON: {"listings":[{"title":"<titlu exact>","price":<număr>,"currency":"RON","description":"<scurt, sau gol>"}]}`;
+  const userPrompt=`Acest PDF conține screenshot-uri cu rezultate de căutare pentru un produs pe ${platform==='trendyol'?'Trendyol':'eMAG'}. Pentru FIECARE anunț de produs vizibil (nu bannere, nu filtre, nu reclame), extrage titlul exact, prețul afișat, o scurtă descriere/caracteristici dacă apar, brand-ul dacă e vizibil și vânzătorul/magazinul dacă e vizibil (ex. "Vândut de X" pe eMAG). NU descrie sau extrage poze.
+Răspunde STRICT în format JSON: {"listings":[{"title":"<titlu exact>","price":<număr>,"currency":"RON","description":"<scurt, sau gol>","brand":"<brand sau gol>","seller":"<vânzător sau gol>"}]}`;
   const resp=await callAI([{role:'user',content:[
     {type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},
     {type:'text',text:userPrompt}
