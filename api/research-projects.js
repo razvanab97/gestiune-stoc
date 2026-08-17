@@ -277,7 +277,7 @@ module.exports=async function handler(req,res){
       // Poza din screenshot rămâne salvată — folosită ulterior ca "poză principală" la generarea AI
       // a căutării eMAG/Trendyol (produsul e vizibil în captură chiar dacă nu are o poză separată de site).
       const patch={title,price:Number(body.price)||0,currency:clean(body.currency)||'RON',description:clean(body.description||'').slice(0,900),brand:clean(body.brand||'').slice(0,120),seller:clean(body.seller||'').slice(0,120),source:'screenshot',status:'analizat',error:null,updated_at:new Date().toISOString()};
-      if(Array.isArray(body.images)&&body.images.length)patch.images=body.images.slice(0,1);
+      if(Array.isArray(body.images)&&body.images.length)patch.images=body.images.slice(0,5);
       const rows=await supa('PATCH',`research_links?id=eq.${linkId}`,patch);
       const link=rows?.[0];
       if(!link)return res.status(404).json({error:'Linkul nu a fost găsit'});
