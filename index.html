@@ -1402,6 +1402,8 @@ th{font-weight:800!important;color:var(--t3)!important}
               <option value="margin">Sortare: marjă estimată ↓</option>
             </select>
             <button class="btn btn-sm" id="rp-recalc-all-btn" onclick="recalcAllResearchProjects()">↻ Recalculează toate</button>
+            <button class="btn btn-sm" onclick="collapseAllResearchProjects()">▸ Restrânge tot</button>
+            <button class="btn btn-sm" onclick="expandAllResearchProjects()">▾ Extinde tot</button>
           </div>
           <div class="research-hint" style="margin:10px 0 0">Adaugă linkul furnizorului (cost) și linkuri eMAG/Trendyol (preț de piață) în dosar — verdictul și profitul se calculează automat.</div>
         </div>
@@ -1734,6 +1736,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:83,text:'Research: dosarele din listă se pot restrânge acum la un singur rând (titlu + verdict), fie individual (click pe titlu), fie toate deodată („▸ Restrânge tot" / „▾ Extinde tot") — util când sunt multe dosare. Fix: vechiul panou „Research produs" (căutare pe un singur produs, dinainte de dosare) rămânea uneori vizibil sub lista de dosare — acum se ascunde mereu automat',date:'2026-08-17'},
   {n:82,text:'Research: lângă linkurile de furnizor a apărut buton „✦ AI" — generează căutări eMAG/Trendyol mult mai precise decât linkul simplu din titlu, folosind AI care traduce titlul și ȘI analizează poza principală a produsului (inclusiv screenshot-ul de la Jumbo/Maxy) ca să prindă detalii (culoare, material, formă) care nu apar în titlu. E vechiul mecanism de generare inteligentă a căutării, reactivat și îmbunătățit cu analiză de poză, care nu exista înainte',date:'2026-08-17'},
   {n:81,text:'Research: la crearea unui dosar nou, câmpul „Furnizor" acceptă acum direct un link (Jumbo/Maxy/Verk/i-want) — recunoaște automat furnizorul după domeniu, completează numele în câmp și salvează linkul ca sursă a dosarului, fără să mai fie nevoie să-l lipești separat în caseta de linkuri de mai jos',date:'2026-08-17'},
   {n:80,text:'Research: buton nou „🚀 Analizează tot dosarul" — recalculează verdictul ȘI regenerează draftul de anunț dintr-un singur click, din toate sursele disponibile (linkuri normale + date citite din screenshot Jumbo/Maxy + candidați din PDF), fără să blocheze dacă mai lipsește ceva. Generatorul de anunț folosește acum și textul deja extras din screenshot/PDF, nu doar linkurile care se pot deschide automat',date:'2026-08-17'},
@@ -3949,8 +3952,24 @@ async function createResearchProject(){
     }
   }catch(e){toast(e.message||'Eroare creare dosar','err');}
 }
+const researchCollapsed=new Set();
+function toggleResearchProjectCard(id){
+  if(researchCollapsed.has(id))researchCollapsed.delete(id);else researchCollapsed.add(id);
+  renderResearchProjects();
+}
+function collapseAllResearchProjects(){
+  researchProjects.forEach(p=>researchCollapsed.add(p.id));
+  renderResearchProjects();
+}
+function expandAllResearchProjects(){
+  researchCollapsed.clear();
+  renderResearchProjects();
+}
 function renderResearchProjects(){
   const box=document.getElementById('research-projects-list');if(!box)return;
+  // Panoul vechi de research pe un singur produs (research-result-wrap) nu trebuie să rămână vizibil
+  // sub lista de dosare, indiferent cum a fost afișat ultima dată — dosarele sunt fluxul principal acum.
+  const oldWrap=document.getElementById('research-result-wrap');if(oldWrap)oldWrap.style.display='none';
   const arr=researchProjects.filter(p=>researchProjectFilter==='all'||String(p.verdict||'').includes(researchProjectFilter));
   const sortMode=document.getElementById('rp-sort')?.value||'recent';
   if(sortMode==='profit')arr.sort((a,b)=>(Number(b.profit_estimated)||0)-(Number(a.profit_estimated)||0));
@@ -3973,11 +3992,8 @@ function renderResearchProjects(){
       const titleUrl=l.source==='pdf'?'javascript:void(0)':esc(l.url);
       return`<div class="research-link-row"><div class="research-link-platform">${esc(l.platform||'altul')}</div><div class="research-link-title"><a href="${titleUrl}" target="_blank" style="color:inherit;text-decoration:none">${esc(l.title||l.url)}</a></div><div class="research-link-meta">${l.price?Number(l.price).toFixed(2)+' '+esc(l.currency||'RON'):'—'}</div>${revOrScore}${search}${tail}</div>`;
     }).join('');
-    return`<div class="research-project-card">
-      <div class="research-project-head">
-        <div><div class="research-project-title">${esc(p.title)}</div><div class="research-project-meta">#${p.id} · ${new Date(p.updated_at||p.created_at).toLocaleDateString('ro-RO')} ${p.supplier?'· '+esc(p.supplier):''}</div></div>
-        <div class="research-verdict" style="color:${verdictColor(p.verdict)}">${esc(p.verdict||'Date insuficiente')}</div>
-      </div>
+    const collapsed=researchCollapsed.has(p.id);
+    const body=`
       <div class="research-project-stats">
         <div class="research-project-stat"><span>Achiziție</span><strong>${p.acquisition_price?Number(p.acquisition_price).toFixed(2)+' RON':'—'}</strong></div>
         <div class="research-project-stat"><span>Linkuri</span><strong>${links.length}</strong></div>
@@ -4006,7 +4022,13 @@ function renderResearchProjects(){
         <input type="file" accept="application/pdf" id="rppdf-trendyol-${p.id}" style="display:none" onchange="uploadResearchPdfFile(${p.id},'trendyol',this)">
         <button class="btn btn-sm" onclick="document.getElementById('rppdf-trendyol-${p.id}').click()">📄 PDF rezultate Trendyol</button>
       </div>
-      ${rows?`<div class="research-link-box">${rows}</div>`:'<div style="font-size:13px;color:var(--t3);margin-top:10px">Nu ai linkuri încă în acest dosar.</div>'}
+      ${rows?`<div class="research-link-box">${rows}</div>`:'<div style="font-size:13px;color:var(--t3);margin-top:10px">Nu ai linkuri încă în acest dosar.</div>'}`;
+    return`<div class="research-project-card">
+      <div class="research-project-head" style="cursor:pointer" onclick="toggleResearchProjectCard(${p.id})">
+        <div><span style="display:inline-block;width:14px">${collapsed?'▸':'▾'}</span><div class="research-project-title" style="display:inline">${esc(p.title)}</div><div class="research-project-meta">#${p.id} · ${new Date(p.updated_at||p.created_at).toLocaleDateString('ro-RO')} ${p.supplier?'· '+esc(p.supplier):''}${collapsed?' · '+links.length+' linkuri':''}</div></div>
+        <div class="research-verdict" style="color:${verdictColor(p.verdict)}">${esc(p.verdict||'Date insuficiente')}</div>
+      </div>
+      ${collapsed?'':body}
     </div>`;
   }).join('');
 }
