@@ -1904,6 +1904,8 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const UPDATES=[
   {n:105,text:'Research: reparat bug critic — cache-ul de încărcare instant nu se salva NICIODATĂ în producție, pentru că dosarele cu poze (copertă sau screenshot-uri Jumbo/Maxy) depășeau limita de stocare a browserului la fiecare încercare, eșec prins tăcut. Acum cache-ul salvează doar ce e nevoie pentru afișarea instant (fără pozele grele), deci chiar funcționează — testat cu un caz real de 18.8MB de poze, redus la 5KB',date:'2026-08-18'},
   {n:104,text:'Research: pe linia fiecărui dosar (inclusiv restrâns) apar acum „Achiziție" și „Min. concurență" — cel mai mic preț găsit efectiv pe eMAG/Trendyol (nu costul de la furnizor) — pentru o comparație rapidă dintr-o privire, fără să deschizi fiecare dosar',date:'2026-08-18'},
+  {n:107,text:'Research: dosarele pornesc acum RESTRÂNSE la fiecare deschidere a paginii — deschizi manual doar pe cele la care lucrezi. Ce deschizi în timpul vizitei rămâne deschis (nu se re-închide singur la reîmprospătarea din fundal), dar la următoarea vizită pornește iar totul restrâns',date:'2026-08-18'},
+  {n:106,text:'Research: nu mai apare NICIODATĂ eroarea tehnică brută de la baza de date (ex. „canceling statement due to statement timeout") — query-ul de încărcare a dosarelor a fost împărțit în loturi mai mici (mai puțin probabil să depășească limita de timp), se reîncearcă automat o dată la eșec, iar dacă tot nu merge, apare un mesaj prietenos cu buton de reîncercare, nu un ecran mort',date:'2026-08-18'},
   {n:103,text:'Generator anunțuri: cardul de anunț generat e acum clar „Anunț eMAG" (nu mai amestecat cu Trendyol) — titlul Trendyol și categoria lui trec într-o secțiune secundară, restrânsă. Titlul se generează combinând termenii recurenți din titlurile surselor cu detalii noi găsite în descrieri, iar AI-ul primește acum și poze reale (nu doar text) ca să confirme vizual detalii, fără să inventeze. Adăugată și o plasă de siguranță care corectează automat cuvinte lipite fără spațiu în textul generat',date:'2026-08-18'},
   {n:102,text:'Research: reparat un bug real la extragerea pozelor de pe eMAG (găsit analizând o listare foarte bine făcută, dată ca exemplu) — pagina de produs conține des poze ale ALTUI produs (variantă vecină, recomandări), plus logo-uri/iconițe și aceeași poză duplicată la mai multe rezoluții. Acum se filtrează logo-urile, se elimină duplicatele de rezoluție, și pozele se limitează strict la produsul corect — pentru un exemplu real testat, numărul de poze corecte a urcat de la 1 (greșit) la 4 (corect), iar Completeness/Quality Score s-au corectat automat odată cu asta',date:'2026-08-18'},
   {n:101,text:'Generator anunțuri: sistem nou „eMAG — Listing Readiness" — Product Truth (fiecare atribut cu sursă/încredere/status VERIFIED·PROBABLE·CONFLICT·UNKNOWN, cu furnizorul mereu prioritar), categorie detectată automat, Gap Analysis față de competitorii eMAG din dosar, scor de Listing Readiness cu breakdown, blocking issues care blochează statusul READY indiferent de scor, și „ABOVE MARKET AVERAGE". Strict pe fluxul eMAG — Trendyol neatins',date:'2026-08-18'},
@@ -4411,12 +4413,17 @@ async function createResearchProject(){
     }
   }catch(e){toast(e.message||'Eroare creare dosar','err');}
 }
-// Stare restrânsă persistată (nu doar în memorie) — un dosar rămâne restrâns pe reload/navigare între
-// pagini, până apeși explicit pe el ca să-l redeschizi, nu doar în sesiunea curentă.
+// Stare restrânsă persistată (nu doar în memorie) — dar la fiecare deschidere de pagină TOATE
+// dosarele pornesc restrânse (vezi researchCollapsedInitDone mai jos); ce deschizi manual în
+// sesiunea curentă rămâne deschis până navighezi/reîncarci pagina din nou.
 const RESEARCH_COLLAPSED_KEY='sm6_research_collapsed';
 function loadResearchCollapsed(){try{return new Set(JSON.parse(localStorage.getItem(RESEARCH_COLLAPSED_KEY)||'[]'));}catch(e){return new Set();}}
 function saveResearchCollapsed(){try{safeLocalSet(RESEARCH_COLLAPSED_KEY,JSON.stringify([...researchCollapsed]));}catch(e){}}
 const researchCollapsed=loadResearchCollapsed();
+// Se aplică o singură dată, la prima randare cu date reale dintr-o vizită de pagină — apoi rămâne
+// true, ca reîmprospătarea din fundal (cache -> date proaspete) să nu re-închidă un card pe care
+// utilizatorul tocmai l-a deschis manual în aceleași câteva secunde.
+let researchCollapsedInitDone=false;
 function toggleResearchProjectCard(id){
   if(researchCollapsed.has(id))researchCollapsed.delete(id);else researchCollapsed.add(id);
   saveResearchCollapsed();
@@ -4470,6 +4477,11 @@ function renderResearchProjects(){
   // Ține cache-ul local la zi cu orice modificare (nu doar la reîncărcarea de la server), ca după un
   // refresh de pagină să nu se vadă o versiune veche pentru o clipă înainte de răspunsul serverului.
   if(researchProjectsLoaded)saveResearchProjectsCache(researchProjects);
+  if(!researchCollapsedInitDone&&researchProjects.length){
+    researchProjects.forEach(p=>researchCollapsed.add(p.id));
+    saveResearchCollapsed();
+    researchCollapsedInitDone=true;
+  }
   renderResearchTopProducts();
   const arr=researchProjects.filter(p=>researchProjectFilter==='all'||String(p.verdict||'').includes(researchProjectFilter));
   const sortMode=document.getElementById('rp-sort')?.value||'recent';
