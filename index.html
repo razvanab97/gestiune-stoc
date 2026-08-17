@@ -1871,6 +1871,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:95,text:'Research: 4 reparații la „Generează anunț din dosar" → „Aplică în produs". Fix major: anunțul generat dintr-un dosar dispărea imediat din ecran (bug introdus de fix-ul anterior pentru panoul vechi). Bug real reparat: „Aplică în produs" prelua preț de achiziție/furnizor din date vechi/goale în loc de dosarul curent — acum ia corect din dosar. Nou: la aplicare, se completează automat și prețurile de vânzare eMAG/Trendyol cu „Preț recomandat" deja calculat (nu doar costul). Draft-ul local reține acum și din ce dosar vine, ca să nu se piardă legătura după un reload',date:'2026-08-17'},
   {n:94,text:'Research: zona „Adaugă linkuri noi" dintr-un dosar e acum evidențiată vizual (fundal mov deschis, border, titlu) — era anterior o simplă casetă albă care se pierdea în restul paginii, deși e acțiunea principală prin care completezi un dosar',date:'2026-08-17'},
   {n:93,text:'Research: poza din header-ul unui dosar (cutia 📦 când nu există încă o poză) e acum clicabilă separat — apasă pe ea ca să încarci manual o poză, fără să restrângi/extinzi dosarul (înainte, tot header-ul era o singură zonă de click). Poza încărcată manual are prioritate față de cea extrasă automat din linkuri',date:'2026-08-17'},
   {n:92,text:'Research: fix pe tabelul nou de rezultate — rândurile cu „posibil duplicat" sau cu sursă screenshot/PDF săreau pe 2 linii, dând un aspect inegal, cu goluri vizuale. Acum indicii (📄/📷 lângă platformă, ⚠ înainte de titlu) stau pe aceeași linie — toate rândurile au înălțime uniformă, tabelul e mult mai compact și scanabil cu multe rezultate',date:'2026-08-17'},
@@ -2951,7 +2952,7 @@ function goPage(id,btn){
     // Restaurează draft listing dacă există
     if(!listingData){
       const draft=loadListingDraft();
-      if(draft&&draft.title){listingData=draft;if(researchData||true){const out=document.getElementById('listing-result');if(out&&!out.innerHTML.trim())renderListingResult(draft,[]);}}
+      if(draft?.listing?.title){listingData=draft.listing;listingProjectId=draft.projectId||null;if(researchData||true){const out=document.getElementById('listing-result');if(out&&!out.innerHTML.trim())renderListingResult(draft.listing,[]);}}
     }
   }
 }
@@ -3620,6 +3621,10 @@ function setEmagTransport(roi){
 const RESEARCH_HK='sm6_research_history';
 let researchData=null;
 let listingData=null;
+// Dosarul (research_projects) din care a fost generat anunțul curent afișat — null când anunțul
+// vine din vechiul flux "Research produs" (researchData) sau din Generatorul de anunțuri de sine stătător.
+// Folosit de applyListingToProduct() ca să știe din ce sursă să preia preț de achiziție/furnizor.
+let listingProjectId=null;
 let listingFactoryData=null,competitionLabData=null;
 let researchProjects=[],researchProjectFilter='all',researchProjectsLoaded=false;
 const MAX_RESEARCH_LINKS=20;
@@ -3713,7 +3718,7 @@ async function doResearch(){
   btn.disabled=true;btn.textContent='⏳ Se caută…';
   document.getElementById('research-result-wrap').style.display='none';
   const lr=document.getElementById('listing-result');if(lr)lr.innerHTML='';
-  listingData=null;
+  listingData=null;listingProjectId=null;
   document.getElementById('research-ai-btn').style.display='none';
   try{
     setResearchStep('1/3 · Extrag datele produsului din sursă…');
@@ -4154,8 +4159,10 @@ async function handleProjectImageFile(projectId,inputEl){
 function renderResearchProjects(){
   const box=document.getElementById('research-projects-list');if(!box)return;
   // Panoul vechi de research pe un singur produs (research-result-wrap) nu trebuie să rămână vizibil
-  // sub lista de dosare, indiferent cum a fost afișat ultima dată — dosarele sunt fluxul principal acum.
-  const oldWrap=document.getElementById('research-result-wrap');if(oldWrap)oldWrap.style.display='none';
+  // sub lista de dosare — DAR același panou e folosit și pentru anunțul tocmai generat dintr-un dosar
+  // (buildListingFromProject apelează renderResearchProjects() imediat după ce îl arată!). Îl ascundem
+  // doar când NU arată un anunț legat de un dosar cunoscut (listingProjectId), ca să nu se autoascundă.
+  const oldWrap=document.getElementById('research-result-wrap');if(oldWrap&&!listingProjectId)oldWrap.style.display='none';
   const arr=researchProjects.filter(p=>researchProjectFilter==='all'||String(p.verdict||'').includes(researchProjectFilter));
   const sortMode=document.getElementById('rp-sort')?.value||'recent';
   if(sortMode==='profit')arr.sort((a,b)=>(Number(b.profit_estimated)||0)-(Number(a.profit_estimated)||0));
@@ -4436,7 +4443,7 @@ function addResearchProjectToInventar(projectId){
   const links=p.links||[];
   const withImg=links.find(l=>l.platform==='furnizor'&&Array.isArray(l.images)&&l.images.length)
     ||links.find(l=>Array.isArray(l.images)&&l.images.length);
-  const img=withImg?.images?.[0]||'';
+  const img=p.cover_image||withImg?.images?.[0]||'';
   openModal();
   setTimeout(()=>{
     const n=document.getElementById('f-name');if(n)n.value=p.title||'';
@@ -4460,6 +4467,7 @@ function showSavedProjectListing(projectId){
   if(out)out.style.display='';
   listingFactoryData={listing:pr.listing,pages:[]};
   listingData=pr.listing;
+  listingProjectId=projectId;
   renderListingFactoryResult(pr.listing,[]);
   toast('Anunț salvat încărcat ✓');
 }
@@ -4485,6 +4493,7 @@ async function buildListingFromProject(projectId){
     const l=data.listing||{};
     listingFactoryData={listing:l,pages:data.pages||[]};
     listingData=l;
+    listingProjectId=projectId;
     renderListingFactoryResult(l,data.pages||[]);
     try{
       await apiJson('/api/research-projects',{action:'save_listing',project_id:projectId,status:'generat',listing:l},30000);
@@ -4530,6 +4539,7 @@ async function buildListingFromResearch(){
     const payload={product:researchProductPayload(),urls:researchListingUrls()};
     const data=await apiJson('/api/listing-builder',payload,180000);
     listingData=data.listing||{};
+    listingProjectId=null;
     researchData.listing=listingData;
     renderListingResult(listingData,data.pages||[]);
     toast('Anunț generat ✓');
@@ -4551,6 +4561,7 @@ async function analyzeExternalListings(){
     const data=await apiJson('/api/listing-builder',{mode:'analyze',product:researchProductPayload(),urls},180000);
     const a=data.analysis||{};
     listingData=a.improved_listing||null;
+    listingProjectId=null;
     if(researchData)researchData.listing=listingData;
     await saveListingPriceObservations(a,data.pages||[]);
     renderListingAnalysis(a,data.pages||[]);
@@ -4575,6 +4586,7 @@ async function buildListingFactory(){
     const l=data.listing||{};
     listingFactoryData={listing:l,pages:data.pages||[]};
     listingData=l;
+    listingProjectId=null;
     renderListingFactoryResult(l,data.pages||[]);
     toast('Anunț nou generat ✓');
   }catch(e){
@@ -4759,8 +4771,16 @@ function checkImgDims(img){
   if(!ok)img.style.opacity='0.6';
 }
 const LISTING_DRAFT_KEY='sm6_listing_draft';
-function saveListingDraft(l){try{safeLocalSet(LISTING_DRAFT_KEY,JSON.stringify(l));}catch(e){}}
-function loadListingDraft(){try{const s=localStorage.getItem(LISTING_DRAFT_KEY);return s?JSON.parse(s):null;}catch(e){return null;}}
+// Reține și dosarul (listingProjectId) din care vine draft-ul, nu doar conținutul lui — altfel, după un
+// reload, "Aplică în produs" nu mai știe din ce dosar să preia preț de achiziție/furnizor (vezi fix aplicat).
+function saveListingDraft(l){try{safeLocalSet(LISTING_DRAFT_KEY,JSON.stringify({listing:l,projectId:listingProjectId}));}catch(e){}}
+function loadListingDraft(){
+  try{
+    const s=localStorage.getItem(LISTING_DRAFT_KEY);if(!s)return null;
+    const d=JSON.parse(s);
+    return d&&d.listing?d:{listing:d,projectId:null};// compat cu draft-uri vechi, salvate fără wrapper
+  }catch(e){return null;}
+}
 function toggleListingHtmlView(mode){
   ['preview','raw'].forEach(m=>{
     document.getElementById('listing-html-'+m)?.classList.toggle('on',m===mode);
@@ -4868,19 +4888,38 @@ function renderListingFactoryResult(l,pages){
 }
 function applyListingToProduct(){
   const l=listingData||researchData?.listing;if(!l){toast('Nu există anunț generat');return;}
+  // Anunțul poate veni din Dosare (listingProjectId setat) sau din vechiul flux "Research produs"
+  // (researchData) — preiau preț de achiziție/furnizor din sursa CORECTĂ, nu mereu din researchData
+  // (bug găsit: înainte, un anunț generat dintr-un dosar prelua mereu date vechi/goale de aici).
+  const proj=listingProjectId?researchProjects.find(p=>Number(p.id)===Number(listingProjectId)):null;
   openModal();
   setTimeout(()=>{
     if(l.title)document.getElementById('f-name').value=l.title;
-    const img=l.main_image||(l.images||[])[0]||researchData?.img;
+    const projImg=proj?(proj.cover_image||(proj.links||[]).find(x=>Array.isArray(x.images)&&x.images.length)?.images?.[0]):null;
+    const img=l.main_image||(l.images||[])[0]||projImg||researchData?.img;
     if(img){document.getElementById('f-imgurl').value=img;onImgUrl();}
     if(l.description)document.getElementById('f-notes').value=l.description;
     const specs=l.specs||{};
     if(specs.Material)document.getElementById('f-material').value=specs.Material;
     if(specs.Dimensiuni)document.getElementById('f-dims').value=specs.Dimensiuni;
     if(specs.Culoare)document.getElementById('f-colors').value=specs.Culoare;
-    if(researchData?.priceBuy>0){document.getElementById('f-pbuy-ttc').value=researchData.priceBuy.toFixed(2);syncAcqFields('ttc');}
-    if(researchData?.ean)document.getElementById('f-sku').value=researchData.ean;
-    if(researchData?.url){try{document.getElementById('f-sup').value=new URL(researchData.url).hostname.replace(/^www\./,'');}catch(e){}}
+    if(proj){
+      if(proj.acquisition_price>0){document.getElementById('f-pbuy-ttc').value=Number(proj.acquisition_price).toFixed(2);syncAcqFields('ttc');}
+      if(proj.supplier)document.getElementById('f-sup').value=proj.supplier;
+      // Completează și prețurile de vânzare eMAG/Trendyol cu "Preț recomandat" deja calculat în dosar
+      // (Calculator + poziționare față de concurență) — altfel doar costul se transfera, nu și prețul.
+      if(proj.acquisition_price>0){
+        const prc=researchCalcPrices(proj,researchPlatformStats(proj));
+        if(prc){
+          const pe=document.getElementById('f-pemag');if(pe){pe.value=prc.rec.emag.toFixed(2);markOfferPriceManual('emag');}
+          const pt=document.getElementById('f-ptrendyol');if(pt){pt.value=prc.rec.trendyol.toFixed(2);markOfferPriceManual('trendyol');}
+        }
+      }
+    }else{
+      if(researchData?.priceBuy>0){document.getElementById('f-pbuy-ttc').value=researchData.priceBuy.toFixed(2);syncAcqFields('ttc');}
+      if(researchData?.ean)document.getElementById('f-sku').value=researchData.ean;
+      if(researchData?.url){try{document.getElementById('f-sup').value=new URL(researchData.url).hostname.replace(/^www\./,'');}catch(e){}}
+    }
     suggestCatFromName();
   },80);
 }
