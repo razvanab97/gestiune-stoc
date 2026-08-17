@@ -923,7 +923,7 @@ function buildRaportCats(){
 .rsx-src.trendyol{color:#E8590C;background:#FFF1E7}
 .rsx-src.furnizor{color:var(--t2);background:var(--surf2)}
 .rsx-src.altul{color:var(--t2);background:var(--surf2)}
-.rsx-prod-title{font-weight:700;color:var(--t1);max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+.rsx-prod-title{font-weight:700;color:var(--t1);max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:middle}
 .rsx-cell-sub{font-size:11px;color:var(--t3)!important;font-weight:600!important}
 .rsx-price{font-family:var(--mono);font-weight:800;color:var(--t1);white-space:nowrap}
 .rsx-score-pill{font-family:var(--mono);font-weight:800;font-size:12px;padding:2px 9px;border-radius:999px;white-space:nowrap}
@@ -1865,6 +1865,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:92,text:'Research: fix pe tabelul nou de rezultate — rândurile cu „posibil duplicat" sau cu sursă screenshot/PDF săreau pe 2 linii, dând un aspect inegal, cu goluri vizuale. Acum indicii (📄/📷 lângă platformă, ⚠ înainte de titlu) stau pe aceeași linie — toate rândurile au înălțime uniformă, tabelul e mult mai compact și scanabil cu multe rezultate',date:'2026-08-17'},
   {n:91,text:'Research: redesign vizual complet al paginii — temă light/SaaS (alb + gri deschis + accent mov), header de produs cu poză, KPI-uri într-un rând aerisit, bandă de interpretare, eMAG/Trendyol side-by-side cu „Preț recomandat" evidențiat, tabel modern pentru rezultate (Sursă/Produs/Brand/Vândut de/Preț/Scor/PNK/Confirmă/Acțiuni) în loc de listă de carduri. Restul aplicației (Inventar, Calculator, Jurnal, Dashboard etc.) rămâne exact neschimbat — nicio funcție sau logică de calcul nu a fost atinsă, doar prezentarea vizuală a paginii Research',date:'2026-08-17'},
   {n:90,text:'Research: fiecare dosar are acum buton 🗑 (lângă verdict) pentru ștergerea lui completă, cu toate linkurile din el — nu doar linkurile individuale se puteau șterge până acum. Fix: un dosar restrâns rămâne restrâns și după reîncărcarea paginii sau schimbarea de tab, nu doar în sesiunea curentă — se redeschide doar când apeși explicit pe el',date:'2026-08-17'},
   {n:89,text:'Research: orice link care nu se poate deschide automat (eMAG/Trendyol când AI-ul e blocat, nu doar Jumbo/Maxy) arată acum „📷 Adaugă poze (max 5)" direct pe acel link — poți încărca până la 5 poze ale listării dintr-o dată, combinate de AI într-un singur rezultat (titlu, preț, brand, vânzător). Peste 5 poze, sistemul te îndrumă spre PDF (mai jos, per dosar) — mai practic pentru multe capturi',date:'2026-08-17'},
@@ -4151,8 +4152,8 @@ function renderResearchProjects(){
         return`<tr><td><span class="rsx-src ${platformClass}">${esc(l.platform||'altul')}</span></td><td colspan="7"><a href="${esc(l.url)}" target="_blank" style="color:var(--t1);text-decoration:none;font-weight:700">${esc(l.url)}</a> <span class="rsx-status-warn" id="rlss-status-${l.id}">${waitLabel}</span> <input type="file" accept="image/*" multiple id="rlss-${l.id}" style="display:none" onchange="handleLinkScreenshotFile(${l.id},this)"><label for="rlss-${l.id}" class="rsx-icon-btn" style="cursor:pointer" title="Poze cu listarea de pe platformă — până la 5; pentru mai multe, folosește PDF mai jos">📷 Adaugă poze (max 5)</label></td><td class="rsx-row-actions">${del}</td></tr>`;
       }
       const dupFlag=l.duplicate_type&&l.duplicate_type!=='none';
-      const sourceTag=l.source==='screenshot'?'📷 din screenshot':l.source==='pdf'?'📄 din PDF':'';
-      const prodSub=dupFlag?`<span class="rsx-cell-sub" style="color:#B54708!important">⚠ ${l.duplicate_type==='probabil'?'posibil duplicat':'duplicat'}</span>`:(sourceTag?`<span class="rsx-cell-sub">${sourceTag}</span>`:'');
+      const sourceIcon=l.source==='screenshot'?' 📷':l.source==='pdf'?' 📄':'';
+      const sourceTitle=l.source==='screenshot'?'Date citite dintr-un screenshot':l.source==='pdf'?'Date citite dintr-un PDF':'';
       const searchLinks=l.platform==='furnizor'&&l.title?researchSearchLinks(l.title):null;
       const searchHtml=searchLinks?`<span id="rlsearch-${l.id}"><a href="${esc(searchLinks.emag)}" target="_blank" class="rsx-icon-btn" style="text-decoration:none;display:inline-block;margin-right:4px">🔍 eMAG</a><a href="${esc(searchLinks.trendyol)}" target="_blank" class="rsx-icon-btn" style="text-decoration:none;display:inline-block;margin-right:4px">🔍 Trendyol</a><button class="rsx-icon-btn" id="rlai-${l.id}" onclick="generateAiSearchLinks(${l.id})" title="Generează căutare mai precisă cu AI — folosește și poza principală dacă există">✦ AI</button></span>`:'';
       const scoreHtml=l.score!=null?`<span class="rsx-score-pill ${l.score_zone==='ok'?'ok':'mid'}">${l.score}</span>`:(l.review_count?`<span class="rsx-cell-sub">${l.review_count} rev.</span>`:'<span class="rsx-cell-sub">—</span>');
@@ -4162,8 +4163,8 @@ function renderResearchProjects(){
         :(l.include_in_listing!==false?'<span style="color:var(--gr)">✓</span>':'<span class="rsx-cell-sub">—</span>');
       const titleUrl=l.source==='pdf'?'javascript:void(0)':esc(l.url);
       return`<tr>
-        <td><span class="rsx-src ${platformClass}">${esc(l.platform||'altul')}</span></td>
-        <td><a href="${titleUrl}" target="_blank" class="rsx-prod-title" style="text-decoration:none" title="${esc(l.title||l.url)}">${esc(l.title||l.url)}</a>${prodSub?'<br>'+prodSub:''}</td>
+        <td><span class="rsx-src ${platformClass}" title="${esc(sourceTitle)}">${esc(l.platform||'altul')}${sourceIcon}</span></td>
+        <td>${dupFlag?`<span title="${l.duplicate_type==='probabil'?'Posibil duplicat — verifică':'Duplicat'}" style="color:#B54708">⚠ </span>`:''}<a href="${titleUrl}" target="_blank" class="rsx-prod-title" style="text-decoration:none" title="${esc(l.title||l.url)}">${esc(l.title||l.url)}</a></td>
         <td>${l.brand?esc(l.brand):'<span class="rsx-cell-sub">—</span>'}</td>
         <td>${l.seller?esc(l.seller):'<span class="rsx-cell-sub">—</span>'}</td>
         <td class="rsx-price">${l.price?Number(l.price).toFixed(2)+' '+esc(l.currency||'RON'):'—'}</td>
