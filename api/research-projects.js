@@ -263,9 +263,21 @@ async function analyzeUrl(url){
 module.exports=async function handler(req,res){
   try{
     if(req.method==='GET'){
-      const projects=await supa('GET','research_projects?select=*&order=updated_at.desc&limit=80');
+      const projects=await supa('GET','research_projects?select=*&order=updated_at.desc&limit=50');
       const ids=projects.map(p=>p.id);
-      const links=ids.length?await supa('GET',`research_links?project_id=in.(${ids.join(',')})&select=*&order=created_at.desc`):[];
+      // research_links poate avea imagini base64 grele (screenshot-uri Jumbo/Maxy) — un singur
+      // query "in.(id1,id2,...id50)" peste toate deodată poate depăși statement_timeout pe Supabase
+      // ("canceling statement due to statement timeout"), lăsând tot ecranul blocat/eroare brută.
+      // Împărțim în loturi mici, în paralel — fiecare query e mult mai rapid, iar dacă UN lot
+      // eșuează, restul dosarelor tot se încarcă (degradare parțială, nu blocaj total).
+      const CHUNK=10;
+      const chunks=[];
+      for(let i=0;i<ids.length;i+=CHUNK)chunks.push(ids.slice(i,i+CHUNK));
+      const linkResults=await Promise.all(chunks.map(async chunk=>{
+        try{return await supa('GET',`research_links?project_id=in.(${chunk.join(',')})&select=*&order=created_at.desc`);}
+        catch(e){console.error('research_links chunk failed',e.message);return[];}
+      }));
+      const links=linkResults.flat();
       return res.status(200).json({projects:projects.map(p=>({...p,links:links.filter(l=>l.project_id===p.id)}))});
     }
     if(req.method!=='POST')return res.status(405).json({error:'Metodă nepermisă'});

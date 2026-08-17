@@ -4312,7 +4312,8 @@ function researchProjectsCacheStrip(projects){
   });
 }
 function saveResearchProjectsCache(projects){try{safeLocalSet(RESEARCH_PROJECTS_CACHE_KEY,JSON.stringify(researchProjectsCacheStrip(projects)));}catch(e){}}
-async function loadResearchProjects(){
+async function loadResearchProjects(retryCount){
+  retryCount=retryCount||0;
   const box=document.getElementById('research-projects-list');
   const cached=loadResearchProjectsCache();
   if(cached&&Array.isArray(cached)){
@@ -4320,11 +4321,15 @@ async function loadResearchProjects(){
     researchProjects=cached;
     researchProjectsLoaded=true;
     renderResearchProjects();
-  }else if(box){
+  }else if(box&&!retryCount){
     box.innerHTML='<div class="listing-card"><span class="spin"></span> Încarc dosarele Research…</div>';
   }
+  // Timeout pe client (20s) — altfel, dacă serverul/Supabase răspunde greu, spinner-ul rămâne
+  // agățat la nesfârșit, fără nicio ieșire vizibilă pentru utilizator.
+  const ctrl=new AbortController(),t=setTimeout(()=>ctrl.abort(),20000);
   try{
-    const r=await fetch('/api/research-projects');
+    const r=await fetch('/api/research-projects',{signal:ctrl.signal});
+    clearTimeout(t);
     const data=await r.json();
     if(!r.ok)throw new Error(data.error||'Eroare încărcare dosare');
     researchProjects=data.projects||[];
@@ -4332,10 +4337,21 @@ async function loadResearchProjects(){
     saveResearchProjectsCache(researchProjects);
     renderResearchProjects();
   }catch(e){
-    // Dacă avem deja cache afișat, îl păstrăm pe ecran (nu-l ștergem pentru o eroare de rețea trecătoare)
-    // — doar avertizăm discret. Fără cache, arătăm eroarea așa cum se întâmpla și înainte.
-    if(cached)toast('Nu s-au putut reîmprospăta dosarele de la server — arăt ultima versiune cunoscută','err');
-    else if(box)box.innerHTML=`<div class="listing-card" style="border-color:var(--rd);color:var(--rd)">⚠️ ${esc(e.message||e)}</div>`;
+    clearTimeout(t);
+    // Nu mai arătăm NICIODATĂ eroarea tehnică brută (ex. „canceling statement due to statement
+    // timeout") — cu cache existent, păstrăm tăcut ultima versiune cunoscută; fără cache, mai
+    // încercăm automat o dată (query-ul de server e acum împărțit în loturi mici, mai rapide,
+    // deci o reîncercare are șanse reale să reușească), iar dacă tot eșuează, arătăm un mesaj
+    // prietenos cu buton de reîncercare — niciodată un ecran mort sau text tehnic brut.
+    if(cached){
+      toast('Nu s-au putut reîmprospăta dosarele de la server — arăt ultima versiune cunoscută','err');
+      return;
+    }
+    if(retryCount<1){
+      setTimeout(()=>loadResearchProjects(retryCount+1),1500);
+      return;
+    }
+    if(box)box.innerHTML='<div class="listing-card" style="border-color:var(--rd);color:var(--rd)">⚠️ Nu am putut încărca dosarele chiar acum — serverul răspunde mai greu decât normal. <button class="btn btn-sm" onclick="loadResearchProjects()" style="margin-left:8px">↻ Reîncearcă</button></div>';
   }
 }
 function setResearchProjectFilter(f,btn){
