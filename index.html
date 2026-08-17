@@ -801,11 +801,14 @@ function buildRaportCats(){
 .research-project-stat span{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);font-weight:900;margin-bottom:3px}
 .research-project-stat strong{font-family:var(--mono);font-size:15px;color:var(--t1)}
 .research-link-box{display:grid;gap:6px;margin-top:10px}
-.research-link-row{display:grid;grid-template-columns:90px 1fr auto auto auto auto;gap:8px;align-items:center;background:var(--surf2);border:1px solid var(--b1);border-radius:var(--r);padding:8px;font-size:12px}
+.research-link-row{display:grid;grid-template-columns:90px 1fr auto auto auto auto auto;gap:8px;align-items:center;background:var(--surf2);border:1px solid var(--b1);border-radius:var(--r);padding:8px;font-size:12px}
 .research-link-platform{text-transform:uppercase;font-weight:900;color:var(--acc);font-size:11px}
 .research-link-title{font-weight:800;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .research-link-meta{font-family:var(--mono);color:var(--t3);white-space:nowrap}
 .research-link-dup{color:#f59e0b;font-weight:900}
+.research-link-sub{grid-column:1/-1;font-size:11px;color:var(--t3);margin-top:-4px}
+.research-link-del{background:none;border:1px solid var(--b2);color:var(--rd);border-radius:var(--r);cursor:pointer;padding:4px 8px;font-size:12px}
+.research-link-del:hover{background:var(--rd);color:#fff}
 .research-project-add{display:grid;grid-template-columns:1fr auto;gap:8px;margin-top:10px}
 .research-project-add textarea{min-height:70px;font-family:var(--mono)}
 .research-plat-agg-head{font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);margin:10px 0 6px}
@@ -1736,6 +1739,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:84,text:'Research: fiecare link dintr-un dosar are acum buton 🗑 de ștergere (util mai ales la linkuri duplicate sau care au dat eroare la analiză — duplicatele apar acum cu avertisment ⚠ mai vizibil). Linkurile eMAG/Verk arată acum și brand-ul produsului și vânzătorul (marketplace seller) extrase automat din pagină, ca să vezi rapid cine și ce vinde la fiecare preț găsit',date:'2026-08-17'},
   {n:83,text:'Research: dosarele din listă se pot restrânge acum la un singur rând (titlu + verdict), fie individual (click pe titlu), fie toate deodată („▸ Restrânge tot" / „▾ Extinde tot") — util când sunt multe dosare. Fix: vechiul panou „Research produs" (căutare pe un singur produs, dinainte de dosare) rămânea uneori vizibil sub lista de dosare — acum se ascunde mereu automat',date:'2026-08-17'},
   {n:82,text:'Research: lângă linkurile de furnizor a apărut buton „✦ AI" — generează căutări eMAG/Trendyol mult mai precise decât linkul simplu din titlu, folosind AI care traduce titlul și ȘI analizează poza principală a produsului (inclusiv screenshot-ul de la Jumbo/Maxy) ca să prindă detalii (culoare, material, formă) care nu apar în titlu. E vechiul mecanism de generare inteligentă a căutării, reactivat și îmbunătățit cu analiză de poză, care nu exista înainte',date:'2026-08-17'},
   {n:81,text:'Research: la crearea unui dosar nou, câmpul „Furnizor" acceptă acum direct un link (Jumbo/Maxy/Verk/i-want) — recunoaște automat furnizorul după domeniu, completează numele în câmp și salvează linkul ca sursă a dosarului, fără să mai fie nevoie să-l lipești separat în caseta de linkuri de mai jos',date:'2026-08-17'},
@@ -3980,17 +3984,20 @@ function renderResearchProjects(){
     const links=p.links||[],prices=links.map(l=>+l.price||0).filter(Boolean),reviews=Math.max(0,...links.map(l=>+l.review_count||0)),hasListing=!!(p.listing&&p.listing.title);
     const best=prices.length?Math.min(...prices):0,imgs=links.reduce((s,l)=>s+(Array.isArray(l.images)?l.images.length:0),0);
     const rows=links.slice(0,MAX_RESEARCH_LINKS).map(l=>{
+      const del=`<button class="research-link-del" onclick="deleteResearchLink(${l.id})" title="Șterge acest link din dosar">🗑</button>`;
       if(l.status==='aștept screenshot'){
-        return`<div class="research-link-row"><div class="research-link-platform">${esc(l.platform||'altul')}</div><div class="research-link-title"><a href="${esc(l.url)}" target="_blank" style="color:inherit;text-decoration:none">${esc(l.url)}</a></div><div class="research-link-meta" id="rlss-status-${l.id}" style="color:#f59e0b">📷 Aștept screenshot</div><div></div><div></div><div><input type="file" accept="image/*" id="rlss-${l.id}" style="display:none" onchange="handleLinkScreenshotFile(${l.id},this)"><button class="btn btn-sm" onclick="document.getElementById('rlss-${l.id}').click()">📷 Încarcă screenshot</button></div></div>`;
+        return`<div class="research-link-row"><div class="research-link-platform">${esc(l.platform||'altul')}</div><div class="research-link-title"><a href="${esc(l.url)}" target="_blank" style="color:inherit;text-decoration:none">${esc(l.url)}</a></div><div class="research-link-meta" id="rlss-status-${l.id}" style="color:#f59e0b">📷 Aștept screenshot</div><div></div><div></div><div><input type="file" accept="image/*" id="rlss-${l.id}" style="display:none" onchange="handleLinkScreenshotFile(${l.id},this)"><button class="btn btn-sm" onclick="document.getElementById('rlss-${l.id}').click()">📷 Încarcă screenshot</button></div>${del}</div>`;
       }
       const pnk=l.pnk?`<span class="pnk-copy"><span>PNK ${esc(l.pnk)}</span><button onclick="copyText('${esc(l.pnk)}')">Copy</button></span>`:'<span class="research-link-meta">PNK —</span>';
-      const dup=l.duplicate_type&&l.duplicate_type!=='none'?`<span class="research-link-dup">${l.duplicate_type==='probabil'?'posibil duplicat':'duplicat'}</span>`:`<span class="research-link-meta">${l.source==='screenshot'?'📷 din screenshot':l.source==='pdf'?'📄 din PDF':esc(l.status||'analizat')}</span>`;
+      const dupFlag=l.duplicate_type&&l.duplicate_type!=='none';
+      const dup=dupFlag?`<span class="research-link-dup" title="Verifică — poate fi același anunț adăugat de două ori">⚠ ${l.duplicate_type==='probabil'?'posibil duplicat':'duplicat'}</span>`:`<span class="research-link-meta">${l.source==='screenshot'?'📷 din screenshot':l.source==='pdf'?'📄 din PDF':esc(l.status||'analizat')}</span>`;
       const searchLinks=l.platform==='furnizor'&&l.title?researchSearchLinks(l.title):null;
       const search=searchLinks?`<span id="rlsearch-${l.id}" class="research-link-meta"><a href="${esc(searchLinks.emag)}" target="_blank" style="color:var(--acc)">🔍 eMAG</a> · <a href="${esc(searchLinks.trendyol)}" target="_blank" style="color:var(--acc)">🔍 Trendyol</a></span> <button class="btn btn-sm" id="rlai-${l.id}" onclick="generateAiSearchLinks(${l.id})" title="Generează căutare mai precisă cu AI — folosește și poza principală dacă există">✦ AI</button>`:pnk;
       const revOrScore=l.score!=null?`<span class="research-link-meta" style="color:${l.score_zone==='ok'?'var(--gr)':l.score_zone==='mid'?'#f59e0b':'var(--t3)'}">scor ${l.score}</span>`:`<span class="research-link-meta">${l.review_count?l.review_count+' rev.':'0 rev.'}</span>`;
       const tail=l.source==='pdf'&&l.score_zone==='mid'?`<label class="research-link-meta" style="cursor:pointer;white-space:nowrap"><input type="checkbox" ${l.include_in_listing?'checked':''} onchange="toggleLinkInclude(${l.id},this.checked)"> confirmă</label>`:dup;
       const titleUrl=l.source==='pdf'?'javascript:void(0)':esc(l.url);
-      return`<div class="research-link-row"><div class="research-link-platform">${esc(l.platform||'altul')}</div><div class="research-link-title"><a href="${titleUrl}" target="_blank" style="color:inherit;text-decoration:none">${esc(l.title||l.url)}</a></div><div class="research-link-meta">${l.price?Number(l.price).toFixed(2)+' '+esc(l.currency||'RON'):'—'}</div>${revOrScore}${search}${tail}</div>`;
+      const sub=(l.brand||l.seller)?`<div class="research-link-sub">${l.brand?'🏷 Brand: '+esc(l.brand):''}${l.brand&&l.seller?' · ':''}${l.seller?'🏪 Vândut de: '+esc(l.seller):''}</div>`:'';
+      return`<div class="research-link-row"><div class="research-link-platform">${esc(l.platform||'altul')}</div><div class="research-link-title"><a href="${titleUrl}" target="_blank" style="color:inherit;text-decoration:none">${esc(l.title||l.url)}</a></div><div class="research-link-meta">${l.price?Number(l.price).toFixed(2)+' '+esc(l.currency||'RON'):'—'}</div>${revOrScore}${search}${tail}${del}${sub}</div>`;
     }).join('');
     const collapsed=researchCollapsed.has(p.id);
     const body=`
@@ -4016,11 +4023,11 @@ function renderResearchProjects(){
         <button class="btn btn-sm" style="color:var(--gr);border-color:var(--gr)" onclick="addResearchProjectToInventar(${p.id})" title="Creează produsul în Inventar, cu numele/poza/costul din dosar">📦 Adaugă în Inventar</button>
       </div>
       <div class="research-project-add"><textarea id="rp-links-${p.id}" placeholder="Lipește până la 20 linkuri pentru acest dosar, câte unul pe linie"></textarea><button class="btn btn-sm btn-acc" onclick="addResearchProjectLinks(${p.id})">+ Adaugă & analizează</button></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px" title="Dacă nu găsești nimic automat pe eMAG/Trendyol: strânge screenshot-uri ale rezultatelor căutării într-un singur PDF și încarcă-l aici — AI extrage fiecare anunț găsit (fără poze)">
-        <input type="file" accept="application/pdf" id="rppdf-emag-${p.id}" style="display:none" onchange="uploadResearchPdfFile(${p.id},'emag',this)">
-        <button class="btn btn-sm" onclick="document.getElementById('rppdf-emag-${p.id}').click()">📄 PDF rezultate eMAG</button>
-        <input type="file" accept="application/pdf" id="rppdf-trendyol-${p.id}" style="display:none" onchange="uploadResearchPdfFile(${p.id},'trendyol',this)">
-        <button class="btn btn-sm" onclick="document.getElementById('rppdf-trendyol-${p.id}').click()">📄 PDF rezultate Trendyol</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px" title="Dacă nu găsești nimic automat pe eMAG/Trendyol: strânge screenshot-uri ale rezultatelor căutării în PDF-uri (poți selecta mai multe deodată) și încarcă-le aici — AI extrage fiecare anunț găsit (fără poze)">
+        <input type="file" accept="application/pdf" multiple id="rppdf-emag-${p.id}" style="display:none" onchange="uploadResearchPdfFile(${p.id},'emag',this)">
+        <button class="btn btn-sm" onclick="document.getElementById('rppdf-emag-${p.id}').click()">📄 PDF rezultate eMAG (poți selecta mai multe)</button>
+        <input type="file" accept="application/pdf" multiple id="rppdf-trendyol-${p.id}" style="display:none" onchange="uploadResearchPdfFile(${p.id},'trendyol',this)">
+        <button class="btn btn-sm" onclick="document.getElementById('rppdf-trendyol-${p.id}').click()">📄 PDF rezultate Trendyol (poți selecta mai multe)</button>
       </div>
       ${rows?`<div class="research-link-box">${rows}</div>`:'<div style="font-size:13px;color:var(--t3);margin-top:10px">Nu ai linkuri încă în acest dosar.</div>'}`;
     return`<div class="research-project-card">
@@ -4067,6 +4074,14 @@ Răspunde STRICT în format JSON: {"title":"<titlu>","price":<număr>,"currency"
     toast(e.message||'Eroare la analiza screenshot-ului','err');
   }
 }
+async function deleteResearchLink(linkId){
+  if(!confirm('Ștergi acest link din dosar? Nu afectează produsul din Inventar, doar referința din Research.'))return;
+  try{
+    await apiJson('/api/research-projects',{action:'delete_link',link_id:linkId},20000);
+    await loadResearchProjects();
+    toast('Link șters ✓');
+  }catch(e){toast(e.message||'Eroare la ștergerea linkului','err');}
+}
 async function toggleLinkInclude(linkId,include){
   try{
     await apiJson('/api/research-projects',{action:'toggle_link_include',link_id:linkId,include},20000);
@@ -4097,33 +4112,42 @@ function researchProjectBase(p){
   const src=(p?.links||[]).find(l=>l.platform==='furnizor'&&l.title);
   return src?{title:src.title,description:src.description||'',ean:''}:{title:p?.title||'',description:'',ean:''};
 }
-async function uploadResearchPdfFile(projectId,platform,inputEl){
-  const file=inputEl?.files?.[0];if(!file)return;
-  try{
-    toast('Citesc PDF-ul…');
-    const b64=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(String(e.target.result).split(',')[1]);r.onerror=reject;r.readAsDataURL(file);});
-    if(!b64||b64.length<100)throw new Error('PDF prea mic sau corupt');
-    const systemPrompt='Ești expert în citirea rezultatelor de căutare din magazine online, dintr-un PDF format din screenshot-uri. Răspunde ÎNTOTDEAUNA cu JSON valid, fără markdown.';
-    const userPrompt=`Acest PDF conține screenshot-uri cu rezultate de căutare pentru un produs pe ${platform==='trendyol'?'Trendyol':'eMAG'}. Pentru FIECARE anunț de produs vizibil (nu bannere, nu filtre, nu reclame), extrage titlul exact, prețul afișat și o scurtă descriere/caracteristici dacă apar. NU descrie sau extrage poze.
+async function extractPdfListings(file,platform,base){
+  const b64=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(String(e.target.result).split(',')[1]);r.onerror=reject;r.readAsDataURL(file);});
+  if(!b64||b64.length<100)throw new Error(`${file.name}: PDF prea mic sau corupt`);
+  const systemPrompt='Ești expert în citirea rezultatelor de căutare din magazine online, dintr-un PDF format din screenshot-uri. Răspunde ÎNTOTDEAUNA cu JSON valid, fără markdown.';
+  const userPrompt=`Acest PDF conține screenshot-uri cu rezultate de căutare pentru un produs pe ${platform==='trendyol'?'Trendyol':'eMAG'}. Pentru FIECARE anunț de produs vizibil (nu bannere, nu filtre, nu reclame), extrage titlul exact, prețul afișat și o scurtă descriere/caracteristici dacă apar. NU descrie sau extrage poze.
 Răspunde STRICT în format JSON: {"listings":[{"title":"<titlu exact>","price":<număr>,"currency":"RON","description":"<scurt, sau gol>"}]}`;
-    const resp=await callAI([{role:'user',content:[
-      {type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},
-      {type:'text',text:userPrompt}
-    ]}],systemPrompt,3000);
-    const match=resp.trim().match(/\{[\s\S]*\}/);
-    if(!match)throw new Error('Răspuns invalid de la AI');
-    const parsed=JSON.parse(match[0]);
-    const listingsRaw=Array.isArray(parsed.listings)?parsed.listings:[];
-    if(!listingsRaw.length)throw new Error('Niciun anunț găsit în PDF');
+  const resp=await callAI([{role:'user',content:[
+    {type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},
+    {type:'text',text:userPrompt}
+  ]}],systemPrompt,3000);
+  const match=resp.trim().match(/\{[\s\S]*\}/);
+  if(!match)throw new Error(`${file.name}: răspuns invalid de la AI`);
+  const parsed=JSON.parse(match[0]);
+  const listingsRaw=Array.isArray(parsed.listings)?parsed.listings:[];
+  if(!listingsRaw.length)throw new Error(`${file.name}: niciun anunț găsit`);
+  return listingsRaw.map(l=>scorePdfCandidate(l,base)).filter(l=>l.zone!=='low'&&l.title);
+}
+// Acceptă mai multe PDF-uri deodată (ex. pagina 1 și pagina 2 a rezultatelor căutării) — le procesează
+// pe fiecare separat cu AI, apoi trimite toate anunțurile găsite într-un singur apel de salvare.
+async function uploadResearchPdfFile(projectId,platform,inputEl){
+  const files=[...(inputEl?.files||[])].slice(0,MAX_RESEARCH_LINKS);if(!files.length)return;
+  try{
+    toast(files.length>1?`Citesc ${files.length} PDF-uri…`:'Citesc PDF-ul…');
     const proj=researchProjects.find(x=>x.id===projectId);
     const base=researchProjectBase(proj);
-    const scored=listingsRaw.map(l=>scorePdfCandidate(l,base)).filter(l=>l.zone!=='low'&&l.title);
-    if(!scored.length)throw new Error('Anunțurile găsite au potrivire prea slabă (sub 50%) cu produsul din dosar');
-    await apiJson('/api/research-projects',{action:'add_pdf_listings',project_id:projectId,platform,listings:scored},60000);
+    const results=await Promise.allSettled(files.map(f=>extractPdfListings(f,platform,base)));
+    const scored=results.filter(r=>r.status==='fulfilled').flatMap(r=>r.value);
+    const failed=results.filter(r=>r.status==='rejected').map(r=>r.reason?.message||'eroare necunoscută');
+    if(!scored.length)throw new Error(failed.length?failed.join(' · '):'Niciun anunț valid găsit în PDF-uri');
+    await apiJson('/api/research-projects',{action:'add_pdf_listings',project_id:projectId,platform,listings:scored},90000);
     const okCount=scored.filter(s=>s.zone==='ok').length,midCount=scored.length-okCount;
-    toast(`${scored.length} anunțuri din PDF · ${okCount} confirmate automat${midCount?', '+midCount+' de reconfirmat manual':''} ✓`);
+    let msg=`${scored.length} anunțuri din ${files.length>1?files.length+' PDF-uri':'PDF'} · ${okCount} confirmate automat${midCount?', '+midCount+' de reconfirmat manual':''}`;
+    if(failed.length)msg+=` · ${failed.length} PDF-uri fără rezultat`;
+    toast(msg+' ✓');
     await loadResearchProjects();
-  }catch(e){toast(e.message||'Eroare la procesarea PDF-ului','err');}
+  }catch(e){toast(e.message||'Eroare la procesarea PDF-urilor','err');}
   finally{if(inputEl)inputEl.value='';}
 }
 async function addResearchProjectLinks(projectId){

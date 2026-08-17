@@ -64,6 +64,10 @@ function extractJsonLdProduct(html){
       if(Array.isArray(offers))offers=offers.flat().find(o=>o&&typeof o==='object')||null;
       const rating=node.aggregateRating||{};
       const images=[].concat(node.image||[]).filter(x=>typeof x==='string');
+      // brand = producătorul produsului; seller = cine vinde efectiv (offers.seller pe marketplace-uri ca
+      // eMAG poate fi diferit de brand — un magazin marketplace poate vinde produse de orice brand).
+      const brandName=typeof node.brand==='string'?node.brand:node.brand?.name;
+      const sellerName=offers?.seller?.name||(typeof offers?.seller==='string'?offers.seller:'')||node.manufacturer?.name;
       return{
         title:clean(node.name||'').slice(0,240),
         description:clean(node.description||'').slice(0,2000),
@@ -72,6 +76,8 @@ function extractJsonLdProduct(html){
         rating:parseFloat(rating.ratingValue)||0,
         review_count:parseInt(rating.reviewCount||rating.ratingCount)||0,
         ean:node.gtin13||node.gtin||node.gtin12||node.gtin8||node.mpn||(typeof node.productID==='string'?node.productID.replace(/^mpn:/,''):'')||'',
+        brand:clean(brandName||'').slice(0,120),
+        seller:clean(sellerName||'').slice(0,120),
         images
       };
     }
@@ -79,7 +85,7 @@ function extractJsonLdProduct(html){
   return null;
 }
 function extract(html,url){
-  const data={url,normalized_url:normalizeUrl(url),platform:platformOf(url),pnk:pnkOf(url),title:'',price:0,currency:'RON',rating:0,review_count:0,images:[],specs:{},description:'',ean:''};
+  const data={url,normalized_url:normalizeUrl(url),platform:platformOf(url),pnk:pnkOf(url),title:'',price:0,currency:'RON',rating:0,review_count:0,images:[],specs:{},description:'',ean:'',brand:'',seller:''};
   const ld=extractJsonLdProduct(html);
   if(ld?.title)data.title=ld.title;
   else{
@@ -112,6 +118,13 @@ function extract(html,url){
     if(rev)data.review_count=parseInt(String(rev[1]).replace(/[^\d]/g,''))||0;
   }
   if(ld?.ean)data.ean=String(ld.ean).trim();
+  if(ld?.brand)data.brand=ld.brand;
+  if(ld?.seller)data.seller=ld.seller;
+  else{
+    // Fallback pentru pagini fără JSON-LD Product complet — pattern generic "seller":"..." / "vânzător".
+    const sm=html.match(/"seller"\s*:\s*\{[^}]*"name"\s*:\s*"([^"]+)"/i)||html.match(/[Vv][âa]ndut de[:\s]+<[^>]*>([^<]{2,80})</i);
+    if(sm)data.seller=clean(sm[1]).slice(0,120);
+  }
   const imgs=(ld?.images||[]).slice();
   for(const m of html.matchAll(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/gi))imgs.push(m[1]);
   for(const m of html.matchAll(/"(?:image|imageUrl|bigImage)"\s*:\s*"([^"]+)"/gi))imgs.push(m[1]);
@@ -246,7 +259,7 @@ module.exports=async function handler(req,res){
       for(const item of analyzed){
         const{raw,norm,pnk,data}=item;
         const probable=existing.find(l=>data.title&&l.title&&similarity(data.title,l.title)>.72&&(!data.price||!l.price||Math.abs(Number(data.price)-Number(l.price))/Math.max(Number(l.price),1)<.12));
-        const row={project_id:projectId,url:String(raw).trim(),normalized_url:norm,platform:data.platform,pnk:data.pnk||pnk,title:data.title,price:data.price||0,currency:data.currency||'RON',rating:data.rating||0,review_count:data.review_count||0,images:data.images||[],specs:data.specs||{},description:data.description||'',duplicate_of:probable?.id||null,duplicate_type:probable?'probabil':'none',include_in_listing:true,source:needsScreenshot(norm)?'screenshot':'web',status:data.status||(data.error?'eroare':'analizat'),error:data.error||null};
+        const row={project_id:projectId,url:String(raw).trim(),normalized_url:norm,platform:data.platform,pnk:data.pnk||pnk,title:data.title,price:data.price||0,currency:data.currency||'RON',rating:data.rating||0,review_count:data.review_count||0,images:data.images||[],specs:data.specs||{},description:data.description||'',brand:data.brand||'',seller:data.seller||'',duplicate_of:probable?.id||null,duplicate_type:probable?'probabil':'none',include_in_listing:true,source:needsScreenshot(norm)?'screenshot':'web',status:data.status||(data.error?'eroare':'analizat'),error:data.error||null};
         const ins=await supa('POST','research_links',row);
         const saved=ins?.[0]||row;existing.push(saved);added.push(saved);if(probable)flagged.push(saved);
       }
@@ -290,6 +303,15 @@ module.exports=async function handler(req,res){
       const verdict=await recalcProject(projectId);
       return res.status(200).json({added:ins||rows,verdict:verdict.project});
     }
+    if(body.action==='delete_link'){
+      const linkId=Number(body.link_id);
+      if(!linkId)return res.status(400).json({error:'Lipsește linkul'});
+      const existing=(await supa('GET',`research_links?id=eq.${linkId}&select=project_id`))?.[0];
+      if(!existing)return res.status(404).json({error:'Linkul nu a fost găsit'});
+      await supa('DELETE',`research_links?id=eq.${linkId}`);
+      const verdict=await recalcProject(existing.project_id);
+      return res.status(200).json({deleted:linkId,verdict:verdict.project});
+    }
     if(body.action==='toggle_link_include'){
       const linkId=Number(body.link_id);
       if(!linkId)return res.status(400).json({error:'Lipsește linkul'});
@@ -316,7 +338,7 @@ module.exports=async function handler(req,res){
           changed++;
           history.push({link_id:link.id,project_id:projectId,url:link.url,old_price:oldPrice,new_price:newPrice,currency:data.currency||link.currency||'RON'});
         }
-        await supa('PATCH',`research_links?id=eq.${link.id}`,{title:data.title||link.title,price:data.price||0,currency:data.currency||link.currency||'RON',rating:data.rating||link.rating||0,review_count:data.review_count||link.review_count||0,images:data.images||link.images||[],description:data.description||link.description||'',status:data.error?'eroare':'analizat',error:data.error||null,updated_at:new Date().toISOString()});
+        await supa('PATCH',`research_links?id=eq.${link.id}`,{title:data.title||link.title,price:data.price||0,currency:data.currency||link.currency||'RON',rating:data.rating||link.rating||0,review_count:data.review_count||link.review_count||0,images:data.images||link.images||[],description:data.description||link.description||'',brand:data.brand||link.brand||'',seller:data.seller||link.seller||'',status:data.error?'eroare':'analizat',error:data.error||null,updated_at:new Date().toISOString()});
       }
       if(history.length){try{await supa('POST','research_price_history',history);}catch(e){/* tabela poate lipsi dacă migrarea nu a fost rulată — reverificarea tot funcționează, doar fără istoric */}}
       await supa('PATCH',`research_projects?id=eq.${projectId}`,{updated_at:new Date().toISOString()});
