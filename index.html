@@ -379,6 +379,9 @@ tr:hover td{background:var(--surf2)}
 .pcom-batch-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--b1);font-size:12px}
 .pcom-batch-row:last-child{border-bottom:none}
 .pcom-batch-info{color:var(--t2)}
+.pcom-country-grid{display:flex;gap:18px;flex-wrap:wrap;margin-top:8px}
+.pcom-country-col{display:flex;flex-direction:column;gap:6px}
+.pcom-country-lbl{font-size:11px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.03em}
 .tabcfg-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 4px;border-bottom:1px solid var(--b1);font-size:13px}
 .tabcfg-row:last-child{border-bottom:none}
 .tabcfg-arrows{display:flex;gap:4px}
@@ -1644,6 +1647,7 @@ th{font-weight:800!important;color:var(--t3)!important}
       <input type="text" id="cat-s" class="cat-s" placeholder="Filtrează categorii…" oninput="buildCats(this.value)">
       <div class="cat-g" id="cat-g"></div>
     </div>
+    <div class="m-stock-history" id="m-emag-countries"></div>
     <div class="m-sales-history" id="m-sales-history"></div>
     <div class="m-stock-history" id="m-stock-history"></div>
     <div class="m-stock-history" id="m-manual-history"></div>
@@ -1698,6 +1702,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:63,text:'La import comenzi eMAG, PNK-ul apare acum și cu țara în paranteză — RO/HU/BG, dedusă din moneda comenzii (RON/HUF/EUR), pentru cele 3 piețe pe care operează eMAG. După asociere, în fișa produsului apare o secțiune „PNK-uri eMAG pe țară" cu o coloană separată pentru fiecare piață pe care produsul e listat. Necesită migration_platforma_mapari_tara.sql în Supabase',date:'2026-08-17'},
   {n:62,text:'Două completări: (1) în „Comenzi Platforme" → Import comenzi, poți șterge acum un import greșit dintr-o zi — se elimină liniile din Profit/Total încasări și se readaugă automat stocul scăzut la import; (2) buton nou ⚙️ în header — personalizează ordinea paginilor din navigare (↑/↓, cu resetare la ordinea implicită), salvată pe acest browser',date:'2026-08-17'},
   {n:61,text:'Tab nou „📦 Comenzi Platforme" — încarci fișierul Excel cu comenzile zilei de pe eMAG/Trendyol, sistemul asociază fiecare linie cu un produs din stoc (întâi după PNK dacă a mai fost confirmat, apoi după titlu — automat sau cu AI, cu traducere dacă e cazul), tu confirmi în previzualizare, apoi se scade stocul și se ține evidența în „Profit vânzări" (pe zi/lună) și „Total încasări" (eMAG/Trendyol/combinat, cu conversie automată RON pentru EUR/HUF). Necesită rularea migration_platforma_comenzi.sql în Supabase',date:'2026-08-17'},
   {n:60,text:'Salvările (produs, vânzări, jurnal, comenzi de stoc) nu mai scriu deloc în browser (localStorage) atunci când Supabase reușește — merg direct și doar în Supabase. Cache-ul local rămâne doar ca plasă de siguranță pentru mod offline, când Supabase chiar nu răspunde',date:'2026-08-14'},
@@ -2189,10 +2194,10 @@ async function saveProductRequest(method,path,data){
 }
 
 function dbToSyncMap(r){
-  return{id:r.id,platforma:r.platforma,idExtern:r.id_extern||'',titluExtern:r.titlu_extern||'',produsId:r.produs_id,confirmat:r.confirmat!==false};
+  return{id:r.id,platforma:r.platforma,idExtern:r.id_extern||'',titluExtern:r.titlu_extern||'',produsId:r.produs_id,confirmat:r.confirmat!==false,tara:r.tara||''};
 }
 function syncMapToDb(m){
-  return{platforma:m.platforma,id_extern:m.idExtern||null,titlu_extern:m.titluExtern,produs_id:m.produsId,confirmat:m.confirmat!==false};
+  return{platforma:m.platforma,id_extern:m.idExtern||null,titlu_extern:m.titluExtern,produs_id:m.produsId,confirmat:m.confirmat!==false,tara:m.tara||null};
 }
 // ── COMENZI PLATFORME (import comenzi eMAG/Trendyol) ──
 // Curs aproximativ de conversie în RON — aceeași abordare ca FX_TO_RON din api/research-projects.js
@@ -2214,7 +2219,7 @@ function pcomEstimateProfit(acqGrossRon,saleGrossRon){
   return{profit:Math.round(profit*100)/100,margin:revenue>0?Math.round((profit/revenue*100)*100)/100:0};
 }
 function dbToPcom(r){
-  return{id:r.id,platforma:r.platforma,data:r.data,comandaId:r.comanda_id||'',pnk:r.pnk||'',codProdus:r.cod_produs||'',
+  return{id:r.id,platforma:r.platforma,data:r.data,comandaId:r.comanda_id||'',pnk:r.pnk||'',tara:r.tara||'',codProdus:r.cod_produs||'',
     titluExtern:r.titlu_extern||'',produsId:r.produs_id,produsNume:r.produs_nume||'',
     cantitate:Number(r.cantitate)||0,pretFaraTva:Number(r.pret_fara_tva)||0,pretTotalCuTva:Number(r.pret_total_cu_tva)||0,
     moneda:r.moneda||'RON',pretTotalCuTvaRon:Number(r.pret_total_cu_tva_ron)||0,
@@ -2222,11 +2227,17 @@ function dbToPcom(r){
     importBatchId:r.import_batch_id||'',createdAt:r.created_at};
 }
 function pcomToDb(o){
-  return{platforma:o.platforma,data:o.data,comanda_id:o.comandaId||null,pnk:o.pnk||null,cod_produs:o.codProdus||null,
+  return{platforma:o.platforma,data:o.data,comanda_id:o.comandaId||null,pnk:o.pnk||null,tara:o.tara||null,cod_produs:o.codProdus||null,
     titlu_extern:o.titluExtern,produs_id:o.produsId||null,produs_nume:o.produsNume||null,
     cantitate:o.cantitate||0,pret_fara_tva:o.pretFaraTva||0,pret_total_cu_tva:o.pretTotalCuTva||0,
     moneda:o.moneda||'RON',pret_total_cu_tva_ron:o.pretTotalCuTvaRon||0,
     profit_estimat:o.profitEstimat||0,marja_estimata:o.marjaEstimata||0,import_batch_id:o.importBatchId||null};
+}
+// eMAG operează pe 3 piețe (RO/HU/BG) — fișierul de comenzi nu are o coloană explicită de țară,
+// dar moneda o dă indirect: RON→România, HUF→Ungaria, EUR→Bulgaria (care a adoptat euro în 2026).
+const PCOM_CURRENCY_COUNTRY={RON:'RO',HUF:'HU',EUR:'BG'};
+function pcomCountryFromCurrency(moneda){
+  return PCOM_CURRENCY_COUNTRY[String(moneda||'').toUpperCase()]||'';
 }
 function dbToStockOrder(r){
   return{id:r.id,createdAt:r.created_at||new Date().toISOString(),source:r.source||'Import stoc',
@@ -4699,6 +4710,23 @@ function productManualStockHistory(productId){
   return ACT.filter(a=>(a.sursa||'').includes('manuală')&&(Number(a.productId)===Number(productId)||(!a.productId&&p&&a.name===p.name)))
     .sort((a,b)=>String(b.ts).localeCompare(String(a.ts)));
 }
+const PCOM_COUNTRY_LABEL={RO:'🇷🇴 România',HU:'🇭🇺 Ungaria',BG:'🇧🇬 Bulgaria'};
+// eMAG operează pe 3 piețe separate (RO/HU/BG), fiecare cu propriul PNK pentru același produs —
+// odată ce un import de comenzi asociază un PNK cu produsul, apare aici o coloană pentru țara lui.
+function renderProductEmagCountries(productId){
+  const box=document.getElementById('m-emag-countries');if(!box)return;
+  if(!productId){box.innerHTML='';return;}
+  const maps=SYNCM.filter(s=>s.platforma==='emag'&&s.confirmat&&s.produsId===productId&&s.idExtern);
+  if(!maps.length){box.innerHTML='';return;}
+  const byCountry={};
+  maps.forEach(m=>{const c=m.tara||'Altă piață';(byCountry[c]=byCountry[c]||[]).push(m);});
+  const cols=Object.keys(byCountry).sort((a,b)=>(['RO','HU','BG'].indexOf(a)+1||9)-(['RO','HU','BG'].indexOf(b)+1||9)).map(c=>{
+    const label=PCOM_COUNTRY_LABEL[c]||c;
+    const pnks=byCountry[c].map(m=>`<div class="pnk-copy"><span>${esc(m.idExtern)}</span><button type="button" onclick="copyText('${esc(m.idExtern)}')" title="Copiază PNK">Copy</button></div>`).join('');
+    return`<div class="pcom-country-col"><div class="pcom-country-lbl">${esc(label)}</div>${pnks}</div>`;
+  }).join('');
+  box.innerHTML=`<div class="m-sales-head"><div class="m-sales-title">PNK-uri eMAG pe țară</div></div><div class="pcom-country-grid">${cols}</div>`;
+}
 function renderProductManualStockHistory(productId){
   const box=document.getElementById('m-manual-history');if(!box)return;
   if(!productId){box.innerHTML='<div class="m-sales-head"><div class="m-sales-title">Istoric modificări manuale de stoc</div></div><div class="m-sales-empty">Produs nou — istoricul apare după prima modificare manuală de stoc.</div>';return;}
@@ -5176,6 +5204,7 @@ function openModal(id){
   renderProductSalesHistory(p?.id||null);
   renderProductStockIntakeHistory(p?.id||null);
   renderProductManualStockHistory(p?.id||null);
+  renderProductEmagCountries(p?.id||null);
   renderProductPriceHistory(p?.id||null);
   renderSupplierOOSBox(p||null);
   document.getElementById('add-stock-order-btn').disabled=!p?.id;
@@ -5729,6 +5758,7 @@ async function handlePcomImportFile(ev){
       const pretFaraTva=col.pretFaraTva>-1?(Number(r[col.pretFaraTva])||0):0;
       const pretTotalCuTva=col.pretTotalCuTva>-1?(Number(r[col.pretTotalCuTva])||0):0;
       const moneda=col.moneda>-1?String(r[col.moneda]||'RON').trim().toUpperCase():'RON';
+      const tara=platforma==='emag'?pcomCountryFromCurrency(moneda):'';
       let produsId=null,score=0,viaPnk=false;
       if(pnk){
         const m=SYNCM.find(s=>s.platforma===platforma&&s.confirmat&&s.idExtern===pnk);
@@ -5738,7 +5768,7 @@ async function handlePcomImportFile(ev){
         const match=findExistingProduct({name:titlu});
         if(match){produsId=match.product.id;score=match.score;}
       }
-      pcImpParsed.push({comandaId,data,pnk,codProdus,titluExtern:titlu,cantitate,pretFaraTva,pretTotalCuTva,moneda,produsId,score,viaPnk,include:!!produsId});
+      pcImpParsed.push({comandaId,data,pnk,tara,codProdus,titluExtern:titlu,cantitate,pretFaraTva,pretTotalCuTva,moneda,produsId,score,viaPnk,include:!!produsId});
     }
     parsing.style.display='none';
     if(!pcImpParsed.length){toast('Nicio linie nouă de importat (toate există deja sau fișierul e gol)','err');return;}
@@ -5770,7 +5800,7 @@ function renderPcomImportPreview(){
     const priceInfo=`${it.cantitate}× · ${it.pretTotalCuTva.toFixed(2)} ${it.moneda}${it.moneda!=='RON'?' ('+pcomToRon(it.pretTotalCuTva,it.moneda).toFixed(2)+' RON)':''}`;
     return`<div class="inv-prev-row" style="gap:10px">
       <input type="checkbox" ${it.include?'checked':''} onchange="pcImpParsed[${idx}].include=this.checked;updPcomImportInfo()">
-      <div class="inv-prev-nm" style="flex:1">${esc(it.titluExtern)} ${tag}<div style="font-size:11px;color:var(--t3);font-family:var(--mono)">${esc(priceInfo)}${it.pnk?' · PNK '+esc(it.pnk):''}${it.comandaId?' · #'+esc(it.comandaId):''}</div></div>
+      <div class="inv-prev-nm" style="flex:1">${esc(it.titluExtern)} ${tag}<div style="font-size:11px;color:var(--t3);font-family:var(--mono)">${esc(priceInfo)}${it.pnk?' · PNK '+esc(it.pnk)+(it.tara?' ('+esc(it.tara)+')':''):''}${it.comandaId?' · #'+esc(it.comandaId):''}</div></div>
       <div class="smi-pick" id="pcmi-pick-${idx}">${pcomPickBtnHtml(idx)}</div>
     </div>`;
   }).join('');
@@ -5895,15 +5925,16 @@ async function applyPcomImport(){
         const totalRon=pcomToRon(it.pretTotalCuTva,it.moneda);
         const acqGrossRon=(p.priceBuyTTC||0)*it.cantitate;
         const{profit,margin}=pcomEstimateProfit(acqGrossRon,totalRon);
-        const row=pcomToDb({platforma,data:it.data,comandaId:it.comandaId,pnk:it.pnk,codProdus:it.codProdus,
+        const row=pcomToDb({platforma,data:it.data,comandaId:it.comandaId,pnk:it.pnk,tara:it.tara,codProdus:it.codProdus,
           titluExtern:it.titluExtern,produsId:p.id,produsNume:p.name,cantitate:it.cantitate,
           pretFaraTva:it.pretFaraTva,pretTotalCuTva:it.pretTotalCuTva,moneda:it.moneda,pretTotalCuTvaRon:totalRon,
           profitEstimat:profit,marjaEstimata:margin,importBatchId:batchId});
         const inserted=await dbPost('platforma_comenzi',row);
         if(inserted?.[0])PCOM.unshift(dbToPcom(inserted[0]));
-        // memorează asocierea PNK→produs, ca viitoarele importuri să treacă direct pe calea rapidă
+        // memorează asocierea PNK→produs (cu țara aferentă), ca viitoarele importuri să treacă direct pe calea rapidă
+        // și ca fișa produsului să poată arăta o coloană separată per țară
         if(it.pnk&&!SYNCM.some(s=>s.platforma===platforma&&s.idExtern===it.pnk)){
-          const mRows=await dbPost('platforma_mapari',syncMapToDb({platforma,idExtern:it.pnk,titluExtern:it.titluExtern,produsId:p.id,confirmat:true}));
+          const mRows=await dbPost('platforma_mapari',syncMapToDb({platforma,idExtern:it.pnk,titluExtern:it.titluExtern,produsId:p.id,confirmat:true,tara:it.tara}));
           if(mRows?.[0])SYNCM.unshift(dbToSyncMap(mRows[0]));
         }
         // scade stocul — o vânzare reală s-a produs

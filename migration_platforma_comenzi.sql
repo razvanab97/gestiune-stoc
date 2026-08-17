@@ -9,6 +9,7 @@ create table if not exists platforma_comenzi (
   data date not null,               -- data reală a comenzii (din fișier), nu data importului
   comanda_id text,                  -- Nr. comandă
   pnk text,                         -- PNK eMAG — identificator stabil al listării, cheie de asociere pe termen lung
+  tara text,                        -- 'RO' | 'HU' | 'BG' — dedusă din moneda comenzii (RON/HUF/EUR), doar pentru eMAG
   cod_produs text,                  -- "Cod produs" din fișierul eMAG (codul propriu al vânzătorului), păstrat pentru referință
   titlu_extern text not null,       -- titlul exact de pe listare (ultima denumire văzută pentru acest PNK)
   produs_id bigint references produse(id) on delete set null,
