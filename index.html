@@ -372,6 +372,10 @@ tr:hover td{background:var(--surf2)}
 .smi-pick-th-ph{width:26px;height:26px;border-radius:5px;background:var(--surf2);border:1px dashed var(--b2);display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
 .smi-pick-nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;text-align:left}
 .smi-pick-car{color:var(--t3);font-size:10px;flex-shrink:0}
+.pcom-table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px}
+.pcom-table th{text-align:left;padding:6px 8px;color:var(--t3);font-weight:600;border-bottom:1px solid var(--b1)}
+.pcom-table td{padding:6px 8px;border-bottom:1px solid var(--b1);font-family:var(--mono)}
+.pcom-table tr:last-child td{border-bottom:none}
 .smi-pickdrop{position:fixed;display:none;background:var(--surf);border:1px solid var(--b2);border-radius:var(--r2);box-shadow:var(--sh2);z-index:200;width:300px;max-height:340px;overflow:hidden;flex-direction:column}
 .smi-pickdrop.on{display:flex}
 .smi-pickdrop input{margin:8px;width:calc(100% - 16px);font-size:13px;padding:7px 10px;border:1px solid var(--b2);border-radius:var(--r);background:var(--surf2)}
@@ -878,6 +882,7 @@ th{font-weight:800!important;color:var(--t3)!important}
     <button class="h-tab" data-page="jurnal" onclick="goPage('jurnal',this)">Jurnal vânzări</button>
     <button class="h-tab" data-page="raport" onclick="goPage('raport',this)">📋 Raport stoc</button>
     <button class="h-tab" data-page="sync" onclick="goPage('sync',this)">🔗 Sincronizare</button>
+    <button class="h-tab" data-page="pcom" onclick="goPage('pcom',this)">📦 Comenzi Platforme</button>
     <button class="h-tab" data-page="research" onclick="goPage('research',this)">🔍 Research</button>
     <button class="h-tab" data-page="archive" onclick="goPage('archive',this)">🗄️ Arhivă</button>
   </div>
@@ -1198,6 +1203,103 @@ th{font-weight:800!important;color:var(--t3)!important}
   <div class="card" style="padding:1rem 1.25rem">
     <div class="sec" style="margin-top:0">Mapări existente</div>
     <div id="sync-map-list" style="font-size:13px;color:var(--t3)">Se încarcă…</div>
+  </div>
+</div></div>
+
+<!-- PAGE COMENZI PLATFORME -->
+<div id="page-pcom" class="page"><div class="wrap">
+  <div class="tb">
+    <div class="tb-head">
+      <div class="tb-title">📦 Comenzi Platforme — eMAG &amp; Trendyol</div>
+    </div>
+    <div class="research-tabs">
+      <button class="research-tab on" id="pcom-tab-import" onclick="pcomMode('import')">Import comenzi</button>
+      <button class="research-tab" id="pcom-tab-profit" onclick="pcomMode('profit')">Profit vânzări</button>
+      <button class="research-tab" id="pcom-tab-totals" onclick="pcomMode('totals')">Total încasări</button>
+    </div>
+
+    <div class="research-mode on" id="pcom-mode-import">
+      <div class="card" style="padding:1rem 1.25rem;margin-bottom:1rem">
+        <div class="sec" style="margin-top:0">Încarcă fișierul de comenzi din ziua respectivă</div>
+        <div style="font-size:12px;color:var(--t3);margin-bottom:10px">
+          Exportă din Seller Center comenzile zilei (.xlsx) și încarcă-l aici. Sistemul asociază
+          fiecare linie cu un produs din stoc — întâi după <b>PNK</b> (dacă a mai fost confirmat
+          o dată), apoi după titlu (potrivire automată sau AI, cu traducere dacă e cazul). Nimic
+          nu se scrie până nu apeși „Aplică import" — poți corecta orice sugestie greșită înainte.
+        </div>
+        <div class="frow">
+          <div class="fld">
+            <label>Platformă fișier</label>
+            <select id="pcmi-platforma" onchange="pcImpPlatforma=this.value">
+              <option value="emag">eMAG</option>
+              <option value="trendyol">Trendyol</option>
+            </select>
+          </div>
+          <div class="fld">
+            <label>Fișier comenzi (.xlsx / .xls / .csv)</label>
+            <input type="file" id="pcmi-file" accept=".xlsx,.xls,.csv" onchange="handlePcomImportFile(event)">
+          </div>
+        </div>
+        <div id="pcmi-parsing" style="display:none;font-size:12px;color:var(--t3);margin:8px 0"><span class="spin"></span> Se procesează fișierul…</div>
+        <div id="pcmi-preview"></div>
+        <div class="smi-pickdrop" id="pcmi-pickdrop"><input type="text" id="pcmi-pick-search" placeholder="Caută produs după nume sau SKU…" oninput="filterPcomPick()"><div class="smi-pick-list" id="pcmi-pick-list"></div></div>
+        <div id="pcmi-foot" style="display:none;justify-content:space-between;align-items:center;margin-top:12px">
+          <span id="pcmi-info" style="font-size:12px;color:var(--t3)"></span>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-sm" id="pcmi-ai-btn" onclick="pcomAiMatchUnmatched()" style="display:none">🤖 Potrivește restul cu AI</button>
+            <button class="btn btn-sm btn-acc" id="pcmi-apply-btn" onclick="applyPcomImport()" disabled>Aplică import</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="research-mode" id="pcom-mode-profit">
+      <div class="card" style="padding:1rem 1.25rem;margin-bottom:1rem">
+        <div class="frow">
+          <div class="fld">
+            <label>Platformă</label>
+            <select id="pcp-platforma" onchange="renderPcomProfit()">
+              <option value="all">Toate</option>
+              <option value="emag">eMAG</option>
+              <option value="trendyol">Trendyol</option>
+            </select>
+          </div>
+          <div class="fld">
+            <label>Perioadă</label>
+            <select id="pcp-period" onchange="renderPcomProfit()">
+              <option value="30">Ultimele 30 zile</option>
+              <option value="90">Ultimele 90 zile</option>
+              <option value="365">Ultimul an</option>
+              <option value="all">Tot istoricul</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div id="pcom-profit-summary" class="dash-totals" style="margin-bottom:1rem"></div>
+      <div class="card" style="padding:1rem 1.25rem">
+        <div class="sec" style="margin-top:0">Pe lună</div>
+        <div id="pcom-profit-months"></div>
+        <div class="sec">Pe zi</div>
+        <div id="pcom-profit-days"></div>
+      </div>
+    </div>
+
+    <div class="research-mode" id="pcom-mode-totals">
+      <div class="card" style="padding:1rem 1.25rem;margin-bottom:1rem">
+        <div class="frow">
+          <div class="fld">
+            <label>Perioadă</label>
+            <select id="pct-period" onchange="renderPcomTotals()">
+              <option value="30">Ultimele 30 zile</option>
+              <option value="90">Ultimele 90 zile</option>
+              <option value="365">Ultimul an</option>
+              <option value="all" selected>Tot istoricul</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="dash-plat-grid" id="pcom-totals-grid"></div>
+    </div>
   </div>
 </div></div>
 
@@ -1576,6 +1678,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:61,text:'Tab nou „📦 Comenzi Platforme" — încarci fișierul Excel cu comenzile zilei de pe eMAG/Trendyol, sistemul asociază fiecare linie cu un produs din stoc (întâi după PNK dacă a mai fost confirmat, apoi după titlu — automat sau cu AI, cu traducere dacă e cazul), tu confirmi în previzualizare, apoi se scade stocul și se ține evidența în „Profit vânzări" (pe zi/lună) și „Total încasări" (eMAG/Trendyol/combinat, cu conversie automată RON pentru EUR/HUF). Necesită rularea migration_platforma_comenzi.sql în Supabase',date:'2026-08-17'},
   {n:60,text:'Salvările (produs, vânzări, jurnal, comenzi de stoc) nu mai scriu deloc în browser (localStorage) atunci când Supabase reușește — merg direct și doar în Supabase. Cache-ul local rămâne doar ca plasă de siguranță pentru mod offline, când Supabase chiar nu răspunde',date:'2026-08-14'},
   {n:59,text:'Fix real: eroarea „The quota has been exceeded" la salvare produs — cache-ul local (localStorage) era plin, dar produsul CHIAR se salva corect în Supabase; doar mesajul era greșit și te făcea să crezi că a picat salvarea. Aplicat peste tot în aplicație (nu doar la produse), ca aceeași confuzie să nu mai apară nicăieri',date:'2026-08-14'},
   {n:58,text:'Buton nou „✏️ Corectează" lângă Stoc actual, în fișa produsului — introduci direct stocul corect (bucăți), fără să calculezi manual cumpărat/vândut. Nu se salvează pe loc — completează doar formularul, ca să confirmi cu Salvează și să eviți o greșeală din greșeală',date:'2026-08-13'},
@@ -2012,6 +2115,40 @@ function dbToSyncMap(r){
 function syncMapToDb(m){
   return{platforma:m.platforma,id_extern:m.idExtern||null,titlu_extern:m.titluExtern,produs_id:m.produsId,confirmat:m.confirmat!==false};
 }
+// ── COMENZI PLATFORME (import comenzi eMAG/Trendyol) ──
+// Curs aproximativ de conversie în RON — aceeași abordare ca FX_TO_RON din api/research-projects.js
+// (rate statice, nu live), extinsă cu HUF/BGN pentru comenzile eMAG din alte țări din UE.
+const FX_TO_RON_PCOM={RON:1,LEI:1,EUR:5.07,HUF:.0128,USD:4.65,GBP:5.9,BGN:2.59,PLN:1.15};
+function pcomToRon(price,currency){
+  const p=Number(price)||0;if(!p)return 0;
+  const rate=FX_TO_RON_PCOM[String(currency||'RON').toUpperCase()]||1;
+  return Math.round(p*rate*100)/100;
+}
+// Profit estimat — formulă identică cu calcProfit() din api/research-projects.js (TVA 21%, comision 20%, costuri fixe 23 RON),
+// aplicată uniform pe eMAG/Trendyol; e o estimare, nu calculul detaliat din tab-ul Calculator (care cere setări per produs).
+function pcomEstimateProfit(acqGrossRon,saleGrossRon){
+  const buy=Number(acqGrossRon)||0,sale=Number(saleGrossRon)||0;
+  if(!buy||!sale)return{profit:0,margin:0};
+  const VAT=.21,COMMISSION=.20,FIXED=23;
+  const revenue=sale/(1+VAT),buyNet=buy/(1+VAT),commNet=sale*COMMISSION/(1+VAT);
+  const gross=revenue-buyNet-commNet-FIXED,tax=Math.max(0,gross)*.16,profit=gross-tax;
+  return{profit:Math.round(profit*100)/100,margin:revenue>0?Math.round((profit/revenue*100)*100)/100:0};
+}
+function dbToPcom(r){
+  return{id:r.id,platforma:r.platforma,data:r.data,comandaId:r.comanda_id||'',pnk:r.pnk||'',codProdus:r.cod_produs||'',
+    titluExtern:r.titlu_extern||'',produsId:r.produs_id,produsNume:r.produs_nume||'',
+    cantitate:Number(r.cantitate)||0,pretFaraTva:Number(r.pret_fara_tva)||0,pretTotalCuTva:Number(r.pret_total_cu_tva)||0,
+    moneda:r.moneda||'RON',pretTotalCuTvaRon:Number(r.pret_total_cu_tva_ron)||0,
+    profitEstimat:Number(r.profit_estimat)||0,marjaEstimata:Number(r.marja_estimata)||0,
+    importBatchId:r.import_batch_id||'',createdAt:r.created_at};
+}
+function pcomToDb(o){
+  return{platforma:o.platforma,data:o.data,comanda_id:o.comandaId||null,pnk:o.pnk||null,cod_produs:o.codProdus||null,
+    titlu_extern:o.titluExtern,produs_id:o.produsId||null,produs_nume:o.produsNume||null,
+    cantitate:o.cantitate||0,pret_fara_tva:o.pretFaraTva||0,pret_total_cu_tva:o.pretTotalCuTva||0,
+    moneda:o.moneda||'RON',pret_total_cu_tva_ron:o.pretTotalCuTvaRon||0,
+    profit_estimat:o.profitEstimat||0,marja_estimata:o.marjaEstimata||0,import_batch_id:o.importBatchId||null};
+}
 function dbToStockOrder(r){
   return{id:r.id,createdAt:r.created_at||new Date().toISOString(),source:r.source||'Import stoc',
     invoiceNumber:r.invoice_number||'',
@@ -2076,6 +2213,7 @@ function safeLocalSet(key,value){
 let P=[],TS={},JL=[],OI=[],editId=null,sCol='name',sDir=1,jMode='sales',curImg='',selProd=new Set(),selSuppliers=new Set(),savingProduct=false,invSourceName='';
 let compState={};
 let SYNCM=[],syncMapsLoaded=false,syncImpParsed=[];
+let PCOM=[],pcomLoaded=false,pcImpParsed=[],pcImpPlatforma='emag';
 let invLines=[],invParsed=[],catSuggestTimer=null,lastNameForCat='';
 let sbReady=false;
 let eFacturaEmagDate=localStorage.getItem(EFK)||'';
@@ -2196,6 +2334,16 @@ async function load(){
     }catch(e){
       PCT=loadLocalPriceHist();
       console.warn('istoric_preturi unavailable (rulează migration_price_history.sql):',e);
+    }
+
+    // comenzi platforme (eMAG/Trendyol) importate
+    try{
+      const pcRows=await dbGet('platforma_comenzi?select=*&order=data.desc');
+      PCOM=pcRows.map(dbToPcom);
+      pcomLoaded=true;
+    }catch(e){
+      PCOM=[];
+      console.warn('platforma_comenzi unavailable (rulează migration_platforma_comenzi.sql):',e);
     }
 
     // fallback to sample if empty
@@ -2469,6 +2617,15 @@ function goPage(id,btn){
     const tryC=(n)=>{if(P.length>0)buildCalcProductSelector();else if(n>0)setTimeout(()=>tryC(n-1),300);};
     setTimeout(()=>tryC(20),100);
     pcRender();
+  }
+  if(id==='pcom'){
+    const tryPc=async(n)=>{
+      if(P.length>0){
+        if(!syncMapsLoaded)await loadSyncMappings();
+        renderPcomProfit();renderPcomTotals();
+      }else if(n>0)setTimeout(()=>tryPc(n-1),300);
+    };
+    setTimeout(()=>tryPc(20),100);
   }
   if(id==='archive'){
     const tryA=(n)=>{if(P.length>0)renderArchivePage();else if(n>0)setTimeout(()=>tryA(n-1),300);};
@@ -5372,6 +5529,329 @@ async function applySyncImport(){
   }finally{
     btn.disabled=false;btn.textContent='Adaugă mapările selectate';
   }
+}
+/* COMENZI PLATFORME (import comenzi eMAG/Trendyol) */
+function pcomMode(mode){
+  ['import','profit','totals'].forEach(m=>{
+    document.getElementById('pcom-tab-'+m)?.classList.toggle('on',m===mode);
+    document.getElementById('pcom-mode-'+m)?.classList.toggle('on',m===mode);
+  });
+  if(mode==='profit')renderPcomProfit();
+  if(mode==='totals')renderPcomTotals();
+}
+function pcomParseDate(v){
+  if(!v)return'';
+  if(v instanceof Date)return v.toISOString().slice(0,10);
+  const s=String(v).trim();
+  let m=s.match(/^(\d{4}-\d{2}-\d{2})/);
+  if(m)return m[1];
+  m=s.match(/^(\d{2})[./-](\d{2})[./-](\d{4})/);
+  if(m)return`${m[3]}-${m[2]}-${m[1]}`;
+  const d=new Date(s);
+  return isNaN(d.getTime())?'':d.toISOString().slice(0,10);
+}
+// Alias-uri de coloane cunoscute — verificate pe un export real eMAG (Nr. comanda / Data comenzii / Nume produs /
+// Cod produs / PNK / Cantitate / Pret fara TVA/buc / Pret total cu TVA / Moneda). Pentru Trendyol, header-ele
+// exacte nu au fost încă verificate pe un fișier real — aliasurile de mai jos sunt cea mai bună estimare.
+const PCOM_HDR_ALIASES={
+  comanda:['nr. comanda','nr comanda','order number','order id','sipariş no','siparis no'],
+  data:['data comenzii','order date','sipariş tarihi','siparis tarihi'],
+  titlu:['nume produs','denumire produs','product name','ürün adı','urun adi'],
+  codProdus:['cod produs','product code','stok kodu'],
+  pnk:['pnk','part number key','part number key (pnk)'],
+  cantitate:['cantitate','quantity','qty','miktar'],
+  pretFaraTva:['pret fara tva/buc','pret fara tva','price without vat','unit price','birim fiyat'],
+  pretTotalCuTva:['pret total cu tva','total price','price with vat','toplam tutar'],
+  moneda:['moneda','currency','para birimi']
+};
+function pcomFindCol(hdrLower,keys){
+  for(const k of keys){const i=hdrLower.indexOf(k);if(i>-1)return i;}
+  return-1;
+}
+async function handlePcomImportFile(ev){
+  const file=ev.target.files[0];if(!file)return;
+  const platforma=pcImpPlatforma=document.getElementById('pcmi-platforma').value;
+  const parsing=document.getElementById('pcmi-parsing');
+  parsing.style.display='block';
+  document.getElementById('pcmi-preview').innerHTML='';
+  document.getElementById('pcmi-foot').style.display='none';
+  document.getElementById('pcmi-ai-btn').style.display='none';
+  pcImpParsed=[];
+  try{
+    await ensureXLSX();
+    const buf=await file.arrayBuffer();
+    const wb=window.XLSX.read(buf,{type:'array'});
+    const rows=window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
+    if(!rows.length){toast('Fișier gol','err');parsing.style.display='none';return;}
+    const hdrLower=rows[0].map(h=>String(h).trim().toLowerCase());
+    const col={};
+    for(const key in PCOM_HDR_ALIASES)col[key]=pcomFindCol(hdrLower,PCOM_HDR_ALIASES[key]);
+    if(col.titlu<0){toast('Nu am găsit coloana cu numele produsului în fișier','err');parsing.style.display='none';return;}
+    const existingKeys=new Set(PCOM.filter(o=>o.platforma===platforma).map(o=>o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern)));
+    for(let i=1;i<rows.length;i++){
+      const r=rows[i];
+      const titlu=String(r[col.titlu]||'').trim();
+      if(!titlu)continue;
+      const comandaId=col.comanda>-1?String(r[col.comanda]||'').trim():'';
+      const pnk=col.pnk>-1?String(r[col.pnk]||'').trim():'';
+      const codProdus=col.codProdus>-1?String(r[col.codProdus]||'').trim():'';
+      const key=comandaId+'|'+(pnk||codProdus||titlu);
+      if(existingKeys.has(key))continue;
+      const data=pcomParseDate(col.data>-1?r[col.data]:'')||td();
+      const cantitate=col.cantitate>-1?(Number(r[col.cantitate])||1):1;
+      const pretFaraTva=col.pretFaraTva>-1?(Number(r[col.pretFaraTva])||0):0;
+      const pretTotalCuTva=col.pretTotalCuTva>-1?(Number(r[col.pretTotalCuTva])||0):0;
+      const moneda=col.moneda>-1?String(r[col.moneda]||'RON').trim().toUpperCase():'RON';
+      let produsId=null,score=0,viaPnk=false;
+      if(pnk){
+        const m=SYNCM.find(s=>s.platforma===platforma&&s.confirmat&&s.idExtern===pnk);
+        if(m){produsId=m.produsId;score=1;viaPnk=true;}
+      }
+      if(!produsId){
+        const match=findExistingProduct({name:titlu});
+        if(match){produsId=match.product.id;score=match.score;}
+      }
+      pcImpParsed.push({comandaId,data,pnk,codProdus,titluExtern:titlu,cantitate,pretFaraTva,pretTotalCuTva,moneda,produsId,score,viaPnk,include:!!produsId});
+    }
+    parsing.style.display='none';
+    if(!pcImpParsed.length){toast('Nicio linie nouă de importat (toate există deja sau fișierul e gol)','err');return;}
+    renderPcomImportPreview();
+    const noMatch=pcImpParsed.filter(x=>!x.produsId).length;
+    document.getElementById('pcmi-ai-btn').style.display=noMatch?'':'none';
+    toast(`${pcImpParsed.length} linii detectate · ${pcImpParsed.length-noMatch} cu produs asociat ✓`);
+  }catch(err){
+    parsing.style.display='none';
+    toast('Eroare la citirea fișierului: '+err.message,'err');
+  }finally{
+    ev.target.value='';
+  }
+}
+function pcomPickBtnHtml(idx){
+  const it=pcImpParsed[idx];
+  const p=it.produsId?P.find(x=>x.id===it.produsId):null;
+  const th=p?(p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'pick')}>`:`<div class="smi-pick-th-ph">📦</div>`):'';
+  const nm=p?`${esc(p.name)}${p.sku?' · '+esc(p.sku):''}`:'— alege produs —';
+  return`<button type="button" class="smi-pick-btn" onclick="openPcomPick(event,${idx})">${th}<span class="smi-pick-nm">${nm}</span><span class="smi-pick-car">▾</span></button>`;
+}
+function renderPcomImportPreview(){
+  const prev=document.getElementById('pcmi-preview');
+  const rows=pcImpParsed.map((it,idx)=>{
+    let tag;
+    if(it.viaPnk)tag='<span class="inv-match upd" title="PNK deja asociat">✓ PNK cunoscut</span>';
+    else if(it.produsId)tag=`<span class="inv-match upd" title="potrivire ${Math.round(it.score*100)}%">↑ ${Math.round(it.score*100)}%</span>`;
+    else tag='<span class="inv-match new">? fără sugestie</span>';
+    const priceInfo=`${it.cantitate}× · ${it.pretTotalCuTva.toFixed(2)} ${it.moneda}${it.moneda!=='RON'?' ('+pcomToRon(it.pretTotalCuTva,it.moneda).toFixed(2)+' RON)':''}`;
+    return`<div class="inv-prev-row" style="gap:10px">
+      <input type="checkbox" ${it.include?'checked':''} onchange="pcImpParsed[${idx}].include=this.checked;updPcomImportInfo()">
+      <div class="inv-prev-nm" style="flex:1">${esc(it.titluExtern)} ${tag}<div style="font-size:11px;color:var(--t3);font-family:var(--mono)">${esc(priceInfo)}${it.pnk?' · PNK '+esc(it.pnk):''}${it.comandaId?' · #'+esc(it.comandaId):''}</div></div>
+      <div class="smi-pick" id="pcmi-pick-${idx}">${pcomPickBtnHtml(idx)}</div>
+    </div>`;
+  }).join('');
+  prev.innerHTML=`<div class="inv-preview"><div class="inv-prev-title">Previzualizare (${pcImpParsed.length} linii)</div>${rows}</div>`;
+  document.getElementById('pcmi-foot').style.display='flex';
+  updPcomImportInfo();
+}
+let pcomPickIdx=null,pcomPickProds=null;
+function openPcomPick(ev,idx){
+  ev.stopPropagation();
+  pcomPickIdx=idx;
+  if(!pcomPickProds)pcomPickProds=P.slice().sort((a,b)=>a.name.localeCompare(b.name));
+  const drop=document.getElementById('pcmi-pickdrop');
+  const btn=ev.currentTarget.getBoundingClientRect();
+  let left=btn.left,top=btn.bottom+4;
+  if(left+300>window.innerWidth)left=window.innerWidth-310;
+  if(top+340>window.innerHeight)top=Math.max(8,btn.top-344);
+  drop.style.left=left+'px';drop.style.top=top+'px';
+  drop.classList.add('on');
+  const search=document.getElementById('pcmi-pick-search');
+  search.value='';
+  filterPcomPick();
+  search.focus();
+}
+function filterPcomPick(){
+  const q=document.getElementById('pcmi-pick-search').value.toLowerCase().trim();
+  const list=document.getElementById('pcmi-pick-list');
+  const cur=pcImpParsed[pcomPickIdx]?.produsId||null;
+  const matches=(q?pcomPickProds.filter(p=>p.name.toLowerCase().includes(q)||(p.sku&&p.sku.toLowerCase().includes(q))):pcomPickProds).slice(0,80);
+  const rows=matches.map(p=>{
+    const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'pick')}>`:`<div class="smi-pick-th-ph">📦</div>`;
+    return`<div class="smi-pick-item" onclick="pickPcomProduct(${p.id})" style="${p.id===cur?'background:var(--surf2)':''}">${th}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</span></div>`;
+  }).join('');
+  list.innerHTML=rows||`<div class="smi-pick-item" style="color:var(--t3);cursor:default">Niciun produs găsit</div>`;
+}
+function pickPcomProduct(id){
+  if(pcomPickIdx==null)return;
+  pcImpParsed[pcomPickIdx].produsId=id||null;
+  pcImpParsed[pcomPickIdx].score=1;
+  pcImpParsed[pcomPickIdx].viaPnk=false;
+  pcImpParsed[pcomPickIdx].include=!!id;
+  const host=document.getElementById('pcmi-pick-'+pcomPickIdx);
+  if(host)host.innerHTML=pcomPickBtnHtml(pcomPickIdx);
+  document.getElementById('pcmi-pickdrop').classList.remove('on');
+  pcomPickIdx=null;
+  updPcomImportInfo();
+}
+document.addEventListener('click',ev=>{
+  if(!ev.target.closest('#pcmi-pickdrop')&&!ev.target.closest('.smi-pick-btn')){
+    const d=document.getElementById('pcmi-pickdrop');
+    if(d)d.classList.remove('on');
+  }
+});
+function updPcomImportInfo(){
+  const n=pcImpParsed.filter(x=>x.include&&x.produsId).length;
+  document.getElementById('pcmi-info').textContent=`${n} linii selectate pentru import`;
+  document.getElementById('pcmi-apply-btn').disabled=n===0;
+}
+// Trimite spre AI, în loturi de 20-25, doar liniile nepotrivite după PNK/fuzzy — traduce titlul dacă
+// e cazul și sugerează cel mai probabil produs din inventar, din lista de nume+id-uri trimisă în prompt.
+async function pcomAiMatchUnmatched(){
+  const idxs=pcImpParsed.map((x,i)=>i).filter(i=>!pcImpParsed[i].produsId);
+  if(!idxs.length){toast('Nu mai sunt linii nepotrivite','err');return;}
+  const btn=document.getElementById('pcmi-ai-btn');
+  btn.disabled=true;
+  const prodList=P.filter(p=>!p.archived).map(p=>`${p.id}: ${p.name}`).join('\n');
+  const batchSize=25;
+  let matched=0;
+  try{
+    for(let b=0;b<idxs.length;b+=batchSize){
+      const batchIdxs=idxs.slice(b,b+batchSize);
+      btn.textContent=`🤖 Se potrivesc ${b+1}-${Math.min(b+batchSize,idxs.length)} din ${idxs.length}…`;
+      const linesText=batchIdxs.map(i=>`${i}: ${pcImpParsed[i].titluExtern}`).join('\n');
+      const prompt=`Ai o listă de produse din inventar (id: nume) și o listă de titluri de comenzi de pe eMAG/Trendyol
+(unele pot fi în altă limbă — tradu-le mental în română ca să le poți compara). Pentru fiecare titlu,
+găsește cel mai probabil produs corespunzător din inventar, sau null dacă nu există nimic asemănător.
+
+PRODUSE INVENTAR:
+${prodList}
+
+TITLURI COMENZI (index: titlu):
+${linesText}
+
+Răspunde STRICT cu JSON, fără markdown: {"matches":[{"index":<indexul liniei>,"produsId":<id din inventar sau null>}]}`;
+      const resp=await callAI([{role:'user',content:prompt}],'Ești expert în potrivirea denumirilor de produse multilingve. Răspunzi DOAR cu JSON valid.',2500);
+      const objMatch=resp.match(/\{[\s\S]*\}/);
+      if(!objMatch)continue;
+      let parsed;try{parsed=JSON.parse(objMatch[0]);}catch(e){continue;}
+      if(!Array.isArray(parsed.matches))continue;
+      parsed.matches.forEach(m=>{
+        const i=Number(m.index);
+        if(!pcImpParsed[i]||m.produsId==null)return;
+        const pid=Number(m.produsId);
+        if(!P.some(p=>p.id===pid))return;
+        pcImpParsed[i].produsId=pid;pcImpParsed[i].score=.6;pcImpParsed[i].include=true;
+        matched++;
+      });
+    }
+    renderPcomImportPreview();
+    btn.style.display='none';
+    toast(`AI a găsit sugestii pentru ${matched} din ${idxs.length} linii — verifică-le înainte de aplicare`);
+  }catch(err){
+    toast('Eroare AI: '+err.message,'err');
+  }finally{
+    btn.disabled=false;btn.textContent='🤖 Potrivește restul cu AI';
+  }
+}
+async function applyPcomImport(){
+  if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
+  const platforma=pcImpPlatforma;
+  const toApply=pcImpParsed.filter(x=>x.include&&x.produsId);
+  if(!toApply.length)return;
+  const btn=document.getElementById('pcmi-apply-btn');
+  btn.disabled=true;btn.textContent='Se aplică…';
+  const batchId=Date.now().toString(36);
+  let ok=0,failed=0;
+  try{
+    for(const it of toApply){
+      const p=P.find(x=>x.id===it.produsId);
+      if(!p){failed++;continue;}
+      try{
+        const totalRon=pcomToRon(it.pretTotalCuTva,it.moneda);
+        const acqGrossRon=(p.priceBuyTTC||0)*it.cantitate;
+        const{profit,margin}=pcomEstimateProfit(acqGrossRon,totalRon);
+        const row=pcomToDb({platforma,data:it.data,comandaId:it.comandaId,pnk:it.pnk,codProdus:it.codProdus,
+          titluExtern:it.titluExtern,produsId:p.id,produsNume:p.name,cantitate:it.cantitate,
+          pretFaraTva:it.pretFaraTva,pretTotalCuTva:it.pretTotalCuTva,moneda:it.moneda,pretTotalCuTvaRon:totalRon,
+          profitEstimat:profit,marjaEstimata:margin,importBatchId:batchId});
+        const inserted=await dbPost('platforma_comenzi',row);
+        if(inserted?.[0])PCOM.unshift(dbToPcom(inserted[0]));
+        // memorează asocierea PNK→produs, ca viitoarele importuri să treacă direct pe calea rapidă
+        if(it.pnk&&!SYNCM.some(s=>s.platforma===platforma&&s.idExtern===it.pnk)){
+          const mRows=await dbPost('platforma_mapari',syncMapToDb({platforma,idExtern:it.pnk,titluExtern:it.titluExtern,produsId:p.id,confirmat:true}));
+          if(mRows?.[0])SYNCM.unshift(dbToSyncMap(mRows[0]));
+        }
+        // scade stocul — o vânzare reală s-a produs
+        p.sold=(p.sold||0)+it.cantitate;
+        await dbPatch(`produse?id=eq.${p.id}`,{sold:p.sold});
+        await logMove('out',p.name,it.cantitate,`Vânzare ${platforma==='emag'?'eMAG':'Trendyol'} (comandă ${it.comandaId||'—'})`,p.id);
+        ok++;
+      }catch(errLine){
+        console.warn('Linie import comenzi eșuată:',it,errLine);
+        failed++;
+      }
+    }
+    pcImpParsed=[];
+    document.getElementById('pcmi-preview').innerHTML='';
+    document.getElementById('pcmi-foot').style.display='none';
+    document.getElementById('pcmi-ai-btn').style.display='none';
+    renderTable();renderToday();renderDashboard();
+    toast(`${ok} linii importate ✓${failed?` · ${failed} au eșuat`:''}`,failed&&!ok?'err':undefined);
+  }finally{
+    btn.disabled=false;btn.textContent='Aplică import';
+  }
+}
+/* PROFIT VÂNZĂRI / TOTAL ÎNCASĂRI (agregări peste platforma_comenzi) */
+function pcomFilteredRows(platforma,periodDays){
+  let rows=PCOM;
+  if(platforma&&platforma!=='all')rows=rows.filter(o=>o.platforma===platforma);
+  if(periodDays&&periodDays!=='all'){
+    const cutoff=new Date();cutoff.setDate(cutoff.getDate()-Number(periodDays));
+    const cutoffStr=cutoff.toISOString().slice(0,10);
+    rows=rows.filter(o=>o.data>=cutoffStr);
+  }
+  return rows;
+}
+function renderPcomProfit(){
+  const summaryEl=document.getElementById('pcom-profit-summary');
+  const monthsEl=document.getElementById('pcom-profit-months');
+  const daysEl=document.getElementById('pcom-profit-days');
+  if(!summaryEl||!monthsEl||!daysEl)return;
+  const platforma=document.getElementById('pcp-platforma')?.value||'all';
+  const period=document.getElementById('pcp-period')?.value||'30';
+  const rows=pcomFilteredRows(platforma,period);
+  if(!pcomLoaded&&!rows.length){summaryEl.innerHTML='';monthsEl.innerHTML='<div class="empty-row">Se încarcă…</div>';daysEl.innerHTML='';return;}
+  const totalVanzari=rows.reduce((a,o)=>a+o.pretTotalCuTvaRon,0);
+  const totalProfit=rows.reduce((a,o)=>a+o.profitEstimat,0);
+  const totalQty=rows.reduce((a,o)=>a+o.cantitate,0);
+  const margin=totalVanzari>0?(totalProfit/totalVanzari*100):0;
+  summaryEl.innerHTML=`
+    <div class="dash-total-card"><div class="dash-total-lbl">Vânzări</div><div class="dash-total-val">${totalVanzari.toFixed(2)} RON</div></div>
+    <div class="dash-total-card"><div class="dash-total-lbl">Profit estimat</div><div class="dash-total-val">${totalProfit.toFixed(2)} RON</div></div>
+    <div class="dash-total-card"><div class="dash-total-lbl">Marjă medie</div><div class="dash-total-val">${margin.toFixed(1)}%</div></div>
+    <div class="dash-total-card"><div class="dash-total-lbl">Bucăți vândute</div><div class="dash-total-val">${totalQty}</div></div>`;
+  const byMonth={};
+  rows.forEach(o=>{const k=o.data.slice(0,7);if(!byMonth[k])byMonth[k]={qty:0,vanzari:0,profit:0};byMonth[k].qty+=o.cantitate;byMonth[k].vanzari+=o.pretTotalCuTvaRon;byMonth[k].profit+=o.profitEstimat;});
+  const monthKeys=Object.keys(byMonth).sort().reverse();
+  monthsEl.innerHTML=monthKeys.length?`<table class="pcom-table"><thead><tr><th>Lună</th><th>Bucăți</th><th>Vânzări</th><th>Profit estimat</th></tr></thead><tbody>${
+    monthKeys.map(k=>`<tr><td>${esc(k)}</td><td>${byMonth[k].qty}</td><td>${byMonth[k].vanzari.toFixed(2)} RON</td><td>${byMonth[k].profit.toFixed(2)} RON</td></tr>`).join('')
+  }</tbody></table>`:'<div class="empty-row">Nicio comandă importată încă</div>';
+  const byDay={};
+  rows.forEach(o=>{if(!byDay[o.data])byDay[o.data]={qty:0,vanzari:0,profit:0};byDay[o.data].qty+=o.cantitate;byDay[o.data].vanzari+=o.pretTotalCuTvaRon;byDay[o.data].profit+=o.profitEstimat;});
+  const dayKeys=Object.keys(byDay).sort().reverse().slice(0,60);
+  daysEl.innerHTML=dayKeys.length?`<table class="pcom-table"><thead><tr><th>Zi</th><th>Bucăți</th><th>Vânzări</th><th>Profit estimat</th></tr></thead><tbody>${
+    dayKeys.map(k=>`<tr><td>${esc(k)}</td><td>${byDay[k].qty}</td><td>${byDay[k].vanzari.toFixed(2)} RON</td><td>${byDay[k].profit.toFixed(2)} RON</td></tr>`).join('')
+  }</tbody></table>`:'<div class="empty-row">Nicio comandă importată încă</div>';
+}
+function renderPcomTotals(){
+  const grid=document.getElementById('pcom-totals-grid');
+  if(!grid)return;
+  const period=document.getElementById('pct-period')?.value||'all';
+  const emagRows=pcomFilteredRows('emag',period),trendyolRows=pcomFilteredRows('trendyol',period);
+  const emagTotal=emagRows.reduce((a,o)=>a+o.pretTotalCuTvaRon,0);
+  const trendyolTotal=trendyolRows.reduce((a,o)=>a+o.pretTotalCuTvaRon,0);
+  grid.innerHTML=`
+    <div class="dash-plat-card"><div class="dash-plat-ic">🛒</div><div class="dash-plat-name">eMAG</div><div class="dash-plat-val">${emagTotal.toFixed(2)} RON</div><div class="dash-plat-note">${emagRows.length} comenzi</div></div>
+    <div class="dash-plat-card"><div class="dash-plat-ic">🛍️</div><div class="dash-plat-name">Trendyol</div><div class="dash-plat-val">${trendyolTotal.toFixed(2)} RON</div><div class="dash-plat-note">${trendyolRows.length} comenzi</div></div>
+    <div class="dash-plat-card"><div class="dash-plat-ic">Σ</div><div class="dash-plat-name">Combinat</div><div class="dash-plat-val">${(emagTotal+trendyolTotal).toFixed(2)} RON</div><div class="dash-plat-note">${emagRows.length+trendyolRows.length} comenzi</div></div>`;
 }
 function fillSyncProdSelect(){
   const sel=document.getElementById('sm-produs');if(!sel)return;
