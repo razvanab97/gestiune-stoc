@@ -1711,6 +1711,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:67,text:'Fix: importul de comenzi eșua integral („0 linii importate") dacă migrarea coloanei „tara" pe platforma_mapari nu era rulată — acum o eventuală eroare la memorarea asocierii PNK nu mai anulează restul liniei (comanda tot se salvează, stocul tot se scade). În plus, fiecare vânzare din import apare acum și în „Vânzări azi" și în „Jurnal vânzări" pe ziua curentă, exact ca o vânzare rapidă manuală — pe lângă evidența din Comenzi Platforme',date:'2026-08-17'},
   {n:66,text:'Ajustări la Import comenzi: titlul de pe eMAG e acum mic/discret (util doar ca reper de căutare), iar titlul pentru AWB e evidențiat, cu buton mare de copiat — layout mai curat, structurat pe secțiuni. De asemenea, „produs nou" nu se mai creează automat la aplicare — linia rămâne pe pagină cu un buton „+ Adaugă produs" care deschide formularul normal, ca să completezi corect categorie/preț/poză înainte să intre în stoc',date:'2026-08-17'},
   {n:65,text:'La Import comenzi, odată ce o linie e asociată cu un produs, apare imediat stocul intern (actual → după vânzare), ca să decizi pe loc dacă confirmi vânzarea sau amâni livrarea. Cantitatea de stoc scăzută e acum editabilă direct (− / +, lângă preț) — utilă când eMAG vinde ca set, dar stocul intern e ținut altfel. Apare și un titlu gata de pus pe AWB (cantitate + nume/SKU intern, nu titlul de pe eMAG), cu buton de copiere',date:'2026-08-17'},
   {n:64,text:'Trei completări la Import comenzi (Comenzi Platforme): (1) linie cu buton manual „⏳ Amână livrarea" când produsul asociat are stoc 0/negativ — dacă apeși, linia nu se importă acum (stocul nu se atinge), dacă nu apeși, se aplică normal și stocul poate intra pe minus; (2) traducere automată în previzualizare pentru titluri în bulgară/maghiară/greacă, ca să știi din prima la ce produs se referă; (3) în selectorul de produs, opțiune nouă „Nu există — trebuie adăugat ca produs nou", care creează automat produsul la aplicare (ca la importul de facturi)',date:'2026-08-17'},
@@ -6081,18 +6082,34 @@ async function applyPcomImport(){
           titluExtern:it.titluExtern,produsId:p.id,produsNume:p.name,cantitate:it.cantitate,
           pretFaraTva:it.pretFaraTva,pretTotalCuTva:it.pretTotalCuTva,moneda:it.moneda,pretTotalCuTvaRon:totalRon,
           profitEstimat:profit,marjaEstimata:margin,importBatchId:batchId});
-        const inserted=await dbPost('platforma_comenzi',row);
+        let inserted;
+        try{
+          inserted=await dbPost('platforma_comenzi',row);
+        }catch(errInsert){
+          // linia a mai fost scrisă într-o încercare anterioară (index unic platformă+comandă+PNK) —
+          // nu e o eroare reală, doar reimportare a aceleiași comenzi; o tratăm ca reușită, nu eșuată
+          if(/duplicate key|already exists|23505/i.test(String(errInsert.message||errInsert))){ok++;continue;}
+          throw errInsert;
+        }
         if(inserted?.[0])PCOM.unshift(dbToPcom(inserted[0]));
-        // memorează asocierea PNK→produs (cu țara aferentă), ca viitoarele importuri să treacă direct pe calea rapidă
-        // și ca fișa produsului să poată arăta o coloană separată per țară
+        // memorează asocierea PNK→produs (cu țara aferentă) — într-un try separat: dacă tabela platforma_mapari
+        // nu are încă rulată migrarea coloanei "tara", nu trebuie ca asta să anuleze restul liniei (comandă+stoc)
         if(it.pnk&&!SYNCM.some(s=>s.platforma===platforma&&s.idExtern===it.pnk)){
-          const mRows=await dbPost('platforma_mapari',syncMapToDb({platforma,idExtern:it.pnk,titluExtern:it.titluExtern,produsId:p.id,confirmat:true,tara:it.tara}));
-          if(mRows?.[0])SYNCM.unshift(dbToSyncMap(mRows[0]));
+          try{
+            const mRows=await dbPost('platforma_mapari',syncMapToDb({platforma,idExtern:it.pnk,titluExtern:it.titluExtern,produsId:p.id,confirmat:true,tara:it.tara}));
+            if(mRows?.[0])SYNCM.unshift(dbToSyncMap(mRows[0]));
+          }catch(errMap){
+            console.warn('Nu s-a putut salva asocierea PNK→produs (verifică migration_platforma_mapari_tara.sql):',errMap);
+          }
         }
         // scade stocul — o vânzare reală s-a produs
         p.sold=(p.sold||0)+it.cantitate;
         await dbPatch(`produse?id=eq.${p.id}`,{sold:p.sold});
         await logMove('out',p.name,it.cantitate,`Vânzare ${platforma==='emag'?'eMAG':'Trendyol'} (comandă ${it.comandaId||'—'})`,p.id);
+        // apare și în "Vânzări azi" și în "Jurnal vânzări" pe ziua curentă, la fel ca o vânzare rapidă manuală
+        TS[p.id]=(TS[p.id]||0)+it.cantitate;
+        await saveTodaySale(p.id,TS[p.id]);
+        await saveJurnalEntry(p,it.cantitate);
         ok++;
       }catch(errLine){
         console.warn('Linie import comenzi eșuată:',it,errLine);
