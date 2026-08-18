@@ -1559,7 +1559,7 @@ th{font-weight:800!important;color:var(--t3)!important}
           </div>
           <input id="rp-supplier" type="text" placeholder="Furnizor principal — sau lipește linkul sursă (Jumbo/Maxy/Verk/i-want)" style="width:100%;margin-bottom:8px" onchange="detectResearchSupplierLink(this)">
           <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <button class="btn btn-sm btn-acc" onclick="createResearchProject()">+ Creează dosar</button>
+            <button class="btn btn-sm btn-acc" id="rp-create-btn" onclick="createResearchProject()">+ Creează dosar</button>
             <button class="btn btn-sm" onclick="loadResearchProjects()">↻ Reîncarcă</button>
           </div>
         </div>
@@ -1913,6 +1913,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:123,text:'Research: titlul dosarului se traduce acum automat în română chiar la creare, dacă îl scrii/lipești în altă limbă (ex. copiat de pe Maxy în engleză) — se întâmplă înainte ca dosarul să apară, deci nu mai „sare" din engleză în română după câteva secunde, ca la titlurile de linkuri. Dacă e deja română, rămâne neschimbat',date:'2026-08-18'},
   {n:122,text:'Research: pagina Research ocupă acum mult mai mult din lățimea ecranului (1800px în loc de 1440px) — anunțul generat, dosarele și restul secțiunilor nu mai lasă atâta spațiu gol pe ecrane late',date:'2026-08-18'},
   {n:121,text:'Generator anunțuri: buton nou „📄 Preset eMAG (produs nou)" — export XLSX pe structura REALĂ a template-ului oficial eMAG (EXT_ro_new_products_translation), pentru produse care nu există încă în catalogul eMAG (nu ai PNK de potrivit): nume, brand, descriere, poze, preț, stoc, caracteristici, tot completat automat din anunțul generat + dosar. Reparat și un bug real la presetul vechi „📄 Preset eMAG ERP" — pentru orice anunț generat din Dosare (fluxul curent), presetul ieșea aproape gol (fără preț, brand, categorie, stoc reale), pentru că citea date doar din vechiul flux „Research produs" (întotdeauna gol în fluxul cu dosare); acum preia corect din dosarul curent',date:'2026-08-18'},
   {n:120,text:'Generator anunțuri: găsită și reparată cauza REALĂ a textului complet lipit, fără spații, din anunțurile generate (nu doar spațiere lângă punctuație, cum s-a reparat anterior) — la citirea răspunsului AI, o linie de cod ștergea absolut TOATE spațiile din tot textul, inclusiv din interiorul titlului/descrierii/bulletpoint-urilor, înainte să fie salvat. Eliminată complet — textul generat de acum înainte păstrează spațiile normale',date:'2026-08-18'},
@@ -4429,8 +4430,33 @@ function detectResearchSupplierLink(el){
   el.value=name;
   toast('Furnizor detectat: '+name+' — linkul se salvează la crearea dosarului');
 }
+// Traduce titlul dosarului dacă nu e deja română — rulează chiar la creare (înainte de salvare), ca
+// dosarul să apară direct cu titlul corect, fără să „sară" de la engleză la română după câteva secunde.
+// Diferit de researchTranslateLinkTitles (care rulează în fundal, după salvare): titlul dosarului e
+// eticheta principală, afișată peste tot (card, „Vezi dosarul", anunț generat) — merită mica întârziere
+// (un singur apel AI, ~1-2s) ca să fie corect din prima, în loc să apară mai întâi în engleză.
+async function researchTranslateTitle(title){
+  const t=(title||'').trim();
+  if(!t)return t;
+  try{
+    const prompt=`Verifică dacă titlul de produs de mai jos e deja în limba română. Dacă NU e deja română
+(ex. engleză, poloneză, turcă, alte limbi), tradu-l în română — păstrează exact cifrele, dimensiunile,
+codurile și numele de brand, tradu doar cuvintele descriptive. Dacă titlul e DEJA în română, întoarce-l
+identic, neschimbat.
+
+TITLU: ${t}
+
+Răspunde STRICT cu JSON, fără markdown: {"ro":"<titlu în română>"}`;
+    const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert engleză/poloneză/turcă/alte limbi → română, pentru titluri scurte de produse. Răspunzi DOAR cu JSON valid.',600);
+    const match=resp.match(/\{[\s\S]*\}/);
+    if(!match)return t;
+    const parsed=JSON.parse(match[0]);
+    const ro=String(parsed.ro||'').trim();
+    return ro||t;
+  }catch(e){console.warn('Traducerea titlului dosarului a eșuat, păstrez originalul:',e);return t;}
+}
 async function createResearchProject(){
-  const title=(document.getElementById('rp-title')?.value||'').trim();
+  const titleRaw=(document.getElementById('rp-title')?.value||'').trim();
   const buyRaw=parseFloat(document.getElementById('rp-buy')?.value)||0;
   const buyCurrency=document.getElementById('rp-buy-currency')?.value||'RON';
   // acquisition_price se ține mereu în RON (așa e folosit peste tot în calculul verdictului/profitului)
@@ -4440,8 +4466,13 @@ async function createResearchProject(){
   const rawSupplier=(supplierEl?.value||'').trim();
   const supplierUrl=supplierEl?.dataset.url||(/^https?:\/\//i.test(rawSupplier)?rawSupplier:'');
   const supplier=supplierUrl?researchSupplierNameFromUrl(supplierUrl)||rawSupplier:rawSupplier;
-  if(!title){toast('Completează titlul dosarului','err');return;}
+  if(!titleRaw){toast('Completează titlul dosarului','err');return;}
+  const btn=document.getElementById('rp-create-btn');
+  const btnLabel=btn?.textContent;
+  if(btn){btn.disabled=true;btn.textContent='⏳ Traduc titlul…';}
   try{
+    const title=await researchTranslateTitle(titleRaw);
+    if(btn)btn.textContent='⏳ Creez dosarul…';
     const data=await apiJson('/api/research-projects',{action:'create_project',title,acquisition_price,supplier},30000);
     const project={...data.project,links:[]};
     researchProjects.unshift(project);
@@ -4462,6 +4493,7 @@ async function createResearchProject(){
       toast('Dosar Research creat ✓');
     }
   }catch(e){toast(e.message||'Eroare creare dosar','err');}
+  finally{if(btn){btn.disabled=false;btn.textContent=btnLabel;}}
 }
 // Stare restrânsă persistată (nu doar în memorie) — dar la fiecare deschidere de pagină TOATE
 // dosarele pornesc restrânse (vezi researchCollapsedInitDone mai jos); ce deschizi manual în
