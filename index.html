@@ -1915,6 +1915,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:125,text:'Research: linkurile „🔍 eMAG" / „🔍 Trendyol" de lângă furnizor caută acum mult mai precis — dacă a fost găsit un EAN (cod de bare) pe pagina furnizorului, căutarea folosește direct EAN-ul (potrivire exactă, nu aproximativă), care găsește produsul corect dacă există pe platformă. Fără EAN, cade pe cuvintele cu conținut real din titlu (nu mai pierde sloturi pe „pentru", „de", „cu" etc.) plus brandul, dacă nu era deja inclus — mult mai apropiat de cum sunt titrate produsele pe eMAG/Trendyol decât primele cuvinte brute din titlul (des tradus) al furnizorului',date:'2026-08-18'},
   {n:124,text:'Research: titlul unui dosar deja salvat se poate edita acum oricând — buton ✏️ lângă titlu, în header-ul cardului. Util dacă traducerea automată de la creare nu a ieșit perfect sau vrei pur și simplu alt titlu',date:'2026-08-18'},
   {n:123,text:'Research: titlul dosarului se traduce acum automat în română chiar la creare, dacă îl scrii/lipești în altă limbă (ex. copiat de pe Maxy în engleză) — se întâmplă înainte ca dosarul să apară, deci nu mai „sare" din engleză în română după câteva secunde, ca la titlurile de linkuri. Dacă e deja română, rămâne neschimbat',date:'2026-08-18'},
   {n:122,text:'Research: pagina Research ocupă acum mult mai mult din lățimea ecranului (1800px în loc de 1440px) — anunțul generat, dosarele și restul secțiunilor nu mai lasă atâta spațiu gol pe ecrane late',date:'2026-08-18'},
@@ -4025,10 +4026,34 @@ async function apiJson(path,payload,timeoutMs=45000){
 // ca să existe minim/maxim/medie reale — vezi research-produse-emag-trendyol.md, redesign 2026-08-17.
 // Odată ce avem un titlu de la furnizor (Jumbo/Maxy prin screenshot, Verk/i-want prin JSON-LD), generăm
 // direct linkul de căutare pe eMAG/Trendyol — utilizatorul nu mai caută el manual textul de căutare (Q72).
-function researchSearchLinks(title){
-  const q=(title||'').split(' ').slice(0,5).join(' ');
-  if(!q)return null;
-  return{emag:`https://www.emag.ro/search/${encodeURIComponent(q)}`,trendyol:`https://www.trendyol.com/sr?q=${encodeURIComponent(q)}&culture=ro-RO&currency=RON`};
+// Cuvinte fără conținut real pentru căutare (articole/prepoziții) — un titlu tradus gen "Cutie pentru
+// litieră de pisici" pierde 2 din primele 5 cuvinte pe umplutură ("pentru","de") dacă tăiem naiv primele
+// N cuvinte, rămânând cu o interogare prea vagă/scurtă. Le sărim, păstrând doar cuvinte cu conținut.
+const RESEARCH_STOPWORDS_RO=new Set(['pentru','de','cu','la','în','in','si','și','pe','un','o','din','a','al','ale','ai','pt','către','catre','fără','fara','ca','ce']);
+// Interogare de căutare pentru eMAG/Trendyol — EAN-ul (dacă a fost extras din pagina furnizorului) e
+// prioritar față de orice titlu: e un cod exact, nu o potrivire aproximativă de text, deci găsește DIRECT
+// produsul corect (dacă există pe platformă) — spre deosebire de o căutare pe cuvinte din titlu, care
+// poate scoate orice altceva din aceeași categorie. Fără EAN, cădem pe cuvintele cu conținut real din
+// titlu (nu umplutură), cu brandul adăugat în față dacă nu e deja inclus — mai apropiat de cum sunt
+// titrate produsele pe eMAG/Trendyol decât primele N cuvinte brute dintr-un titlu de furnizor (des tradus).
+function researchSearchQuery(link){
+  const ean=String(link?.ean||'').replace(/\D/g,'');
+  if(ean.length>=8&&ean.length<=13)return{emag:ean,trendyol:ean};
+  const title=String(link?.title||'').trim();
+  if(!title)return null;
+  const words=title.split(/\s+/).filter(Boolean);
+  const meaningful=words.filter(w=>!RESEARCH_STOPWORDS_RO.has(w.toLowerCase()));
+  const core=meaningful.length?meaningful:words;
+  const brand=String(link?.brand||'').trim();
+  const emagCore=core.slice(0,6).join(' ')||words.slice(0,5).join(' ');
+  const emagQ=brand&&!emagCore.toLowerCase().includes(brand.toLowerCase())?`${brand} ${emagCore}`:emagCore;
+  const trendyolQ=core.slice(0,4).join(' ')||words.slice(0,4).join(' ');
+  return{emag:emagQ,trendyol:trendyolQ};
+}
+function researchSearchLinks(link){
+  const q=researchSearchQuery(link);
+  if(!q?.emag&&!q?.trendyol)return null;
+  return{emag:`https://www.emag.ro/search/${encodeURIComponent(q.emag)}`,trendyol:`https://www.trendyol.com/sr?q=${encodeURIComponent(q.trendyol)}&culture=ro-RO&currency=RON`};
 }
 // Versiunea AI a căutării: reface generateAIQueries (vechiul api/research-scrape.js) — traduce titlul,
 // generează query-uri progresive (specific → general), dar AICI trimite ȘI poza principală la AI vision,
@@ -4070,10 +4095,10 @@ Răspunde STRICT cu JSON: {"emag":["q1","q2","q3","q4"],"trendyol":["q1","q2"]}`
     const emagUrl=`https://www.emag.ro/search/${encodeURIComponent(queries.emag[0])}`;
     // AI-ul e validat STRICT doar pentru emag (throw dacă lipsește) — trendyol era doar "best effort",
     // fără fallback: dacă AI-ul omitea sau golea array-ul trendyol (se întâmplă, nu e un câmp forțat),
-    // linkul Trendyol dispărea complet din UI, fără nicio explicație. Acum cade pe query-ul simplu
-    // (primele 5 cuvinte din titlu, ca la researchSearchLinks) dacă AI-ul nu a generat unul —
-    // link-ul Trendyol există mereu.
-    const trendyolQuery=queries.trendyol?.[0]||(link.title||'').split(' ').slice(0,5).join(' ');
+    // linkul Trendyol dispărea complet din UI, fără nicio explicație. Acum cade pe researchSearchQuery
+    // (EAN dacă există, altfel cuvinte cu conținut din titlu) dacă AI-ul nu a generat unul — link-ul
+    // Trendyol există mereu.
+    const trendyolQuery=queries.trendyol?.[0]||researchSearchQuery(link)?.trendyol||'';
     const trendyolUrl=trendyolQuery?`https://www.trendyol.com/sr?q=${encodeURIComponent(trendyolQuery)}&culture=ro-RO&currency=RON`:null;
     if(out)out.innerHTML=`<span class="research-link-meta">✦ <a href="${esc(emagUrl)}" target="_blank" style="color:var(--acc)">eMAG: ${esc(queries.emag[0])}</a>${trendyolUrl?` · <a href="${esc(trendyolUrl)}" target="_blank" style="color:var(--acc)">Trendyol: ${esc(trendyolQuery)}</a>`:''}</span>`;
     if(btn)btn.remove();
@@ -4678,7 +4703,7 @@ function renderResearchProjects(){
       const dupFlag=l.duplicate_type&&l.duplicate_type!=='none';
       const sourceIcon=l.source==='screenshot'?' 📷':l.source==='pdf'?' 📄':'';
       const sourceTitle=l.source==='screenshot'?'Date citite dintr-un screenshot':l.source==='pdf'?'Date citite dintr-un PDF':'';
-      const searchLinks=l.platform==='furnizor'&&l.title?researchSearchLinks(l.title):null;
+      const searchLinks=l.platform==='furnizor'&&l.title?researchSearchLinks(l):null;
       const searchHtml=searchLinks?`<span id="rlsearch-${l.id}"><a href="${esc(searchLinks.emag)}" target="_blank" class="rsx-icon-btn" style="text-decoration:none;display:inline-block;margin-right:4px">🔍 eMAG</a><a href="${esc(searchLinks.trendyol)}" target="_blank" class="rsx-icon-btn" style="text-decoration:none;display:inline-block;margin-right:4px">🔍 Trendyol</a><button class="rsx-icon-btn" id="rlai-${l.id}" onclick="generateAiSearchLinks(${l.id})" title="Generează căutare mai precisă cu AI — folosește și poza principală dacă există">✦ AI</button></span>`:'';
       const scoreHtml=l.score!=null?`<span class="rsx-score-pill ${l.score_zone==='ok'?'ok':'mid'}">${l.score}</span>`:(l.review_count?`<span class="rsx-cell-sub">${l.review_count} rev.</span>`:'<span class="rsx-cell-sub">—</span>');
       const pnkHtml=l.pnk?`<span class="rsx-pnk">PNK ${esc(l.pnk)}<button onclick="copyText('${esc(l.pnk)}')">⧉</button></span>`:'<span class="rsx-cell-sub">—</span>';
