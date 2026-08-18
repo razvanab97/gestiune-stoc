@@ -30,13 +30,10 @@ function platformOf(url){
   return'altul';
 }
 function pnkOf(url){const m=String(url||'').match(/\/pd\/([A-Z0-9]+)\/?/i);return m?m[1].toUpperCase():'';}
-// Jumbo (403 la nivel de server) și Maxy (SPA, HTML gol) nu pot fi citite prin fetch automat —
-// confirmat prin testare directă repetată (vezi research-produse-emag-trendyol.md). Pentru ele,
-// linkul se salvează ca referință, dar datele vin dintr-un screenshot citit de AI (client-side).
-function needsScreenshot(url){
-  try{const h=new URL(url).hostname.replace(/^www\./,'').toLowerCase();return h.includes('jumbo.')||h.includes('maxy.');}
-  catch(e){return false;}
-}
+// Jumbo (403 la nivel de server) și unele pagini Maxy (SPA, HTML gol) nu pot fi citite prin fetch
+// automat — dar NU toate: old.maxy.eu, de exemplu, se randează server-side și are date reale. În loc
+// de o listă fixă de domenii (fragilă, ratează cazuri ca old.maxy.eu), decizia se ia acum pe baza
+// rezultatului REAL al fetch-ului (are titlu găsit sau nu) — vezi add_links mai jos.
 function normalizeUrl(raw){
   const u=new URL(String(raw||'').trim().startsWith('http')?String(raw).trim():'https://'+String(raw||'').trim());
   u.hash='';
@@ -63,7 +60,13 @@ function imageWidthHint(u){const m=String(u||'').match(/[?&]width=(\d+)/i);retur
 function extractJsonLdProduct(html){
   for(const m of html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)){
     let parsed;
-    try{parsed=JSON.parse(m[1]);}catch(e){continue;}
+    try{parsed=JSON.parse(m[1]);}
+    catch(e){
+      // Bug real confirmat pe o pagină verk.store reală: template-ul lor lasă uneori o valoare goală
+      // înainte de virgulă/acoladă (ex. `"returnDays": ,`) — JSON invalid strict, dar reparabil simplu.
+      try{parsed=JSON.parse(m[1].replace(/:(\s*)(,|\})/g,':null$2'));}
+      catch(e2){continue;}
+    }
     const candidates=Array.isArray(parsed)?parsed:(Array.isArray(parsed?.['@graph'])?parsed['@graph']:[parsed]);
     for(const node of candidates){
       const type=node?.['@type'];
@@ -265,13 +268,15 @@ module.exports=async function handler(req,res){
     if(req.method==='GET'){
       // IMPORTANT: research_links.images și research_projects.cover_image sunt poze base64 stocate
       // direct în coloane text/jsonb — pe un cont real, asta a ajuns la 29.5MB pentru doar 13 dosare
-      // (verificat direct în producție). Un răspuns de 30MB explică ȘI încărcarea de 12+ secunde, ȘI
+      // (verificat direct în producție). Un răspuns de 30MB explica ȘI încărcarea de 12+ secunde, ȘI
       // dosarele care "și-au pierdut" linkurile: loturile din chunk-ul de mai jos depășeau limita și
       // erau prinse tăcut de catch-ul de eșec parțial, întorcând listă goală — arăta ca dispariție de
-      // date, deși erau intacte în baza de date. Fix real: NU mai cerem imagini în lista generală (rapidă,
-      // mică, fiabilă) — se aduc separat, o singură dată per dosar, când chiar îl deschizi (vezi acțiunea
-      // "hydrate_project" mai jos).
-      const projects=await supa('GET','research_projects?select=id,title,acquisition_price,supplier,verdict,profit_estimated,margin_estimated,max_buy_price,notes,listing_status,listing,created_at,updated_at&order=updated_at.desc&limit=50');
+      // date, deși erau intacte în baza de date. Fix: pozele noi se comprimă la încărcare (vezi
+      // resizeImageDataUrl în index.html), iar cele deja existente au fost comprimate o dată, manual
+      // (55.9MB → 6MB) — cover_image e acum mic (câteva zeci de KB), sigur de inclus în lista generală.
+      // research_links.images rămâne EXCLUS din lista generală (mai multe poze per link, tot ar aduna
+      // câțiva MB) — se aduce separat, o singură dată per dosar, când chiar îl deschizi (hydrate_project).
+      const projects=await supa('GET','research_projects?select=id,title,acquisition_price,supplier,verdict,profit_estimated,margin_estimated,max_buy_price,notes,listing_status,listing,cover_image,created_at,updated_at&order=updated_at.desc&limit=50');
       const ids=projects.map(p=>p.id);
       const LINK_LIST_COLUMNS='id,project_id,url,normalized_url,platform,pnk,title,price,currency,rating,review_count,specs,description,duplicate_of,duplicate_type,include_in_listing,status,error,created_at,updated_at,source,score,score_zone,brand,seller,ean';
       const CHUNK=10;
@@ -282,7 +287,7 @@ module.exports=async function handler(req,res){
         catch(e){console.error('research_links chunk failed',e.message);return[];}
       }));
       const links=linkResults.flat().map(l=>({...l,images:[]}));
-      return res.status(200).json({projects:projects.map(p=>({...p,cover_image:null,links:links.filter(l=>l.project_id===p.id)}))});
+      return res.status(200).json({projects:projects.map(p=>({...p,links:links.filter(l=>l.project_id===p.id)}))});
     }
     if(req.method!=='POST')return res.status(405).json({error:'Metodă nepermisă'});
     const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{});
@@ -318,11 +323,21 @@ module.exports=async function handler(req,res){
         if(queue.find(x=>x.norm===norm||(pnk&&x.pnk===pnk))){skipped.push({url:raw,reason:'duplicat în lista curentă'});continue;}
         queue.push({raw,norm,pnk});
       }
-      const analyzed=await Promise.all(queue.map(async x=>({...x,data:needsScreenshot(x.norm)?{url:x.norm,normalized_url:x.norm,platform:platformOf(x.norm),pnk:x.pnk,title:'',price:0,currency:'RON',rating:0,review_count:0,images:[],specs:{},description:'',status:'aștept screenshot',error:null}:await analyzeUrl(x.norm)})));
+      // Fost: predicție statică pe hostname ("jumbo."/"maxy." = mereu needsScreenshot, fără să încercăm
+      // fetch-ul deloc). Confirmat pe o pagină reală old.maxy.eu: unele subdomenii/pagini Maxy CHIAR se
+      // randează server-side, cu titlu/poze/EAN/brand reale — doar prețul lipsește des din HTML brut
+      // (încărcat separat, prin JS, după randare, nu vizibil unui fetch simplu). O listă fixă de domenii
+      // ratează asta. Acum încercăm ÎNTOTDEAUNA fetch-ul întâi și decidem "are nevoie de screenshot" pe
+      // baza rezultatului REAL — găsit titlu sau nu — nu pe o presupunere dinainte.
+      const analyzed=await Promise.all(queue.map(async x=>{
+        const data=await analyzeUrl(x.norm);
+        if(!data.title)return{...x,data:{...data,status:data.error?'eroare':'aștept screenshot'}};
+        return{...x,data};
+      }));
       for(const item of analyzed){
         const{raw,norm,pnk,data}=item;
         const probable=existing.find(l=>data.title&&l.title&&similarity(data.title,l.title)>.72&&(!data.price||!l.price||Math.abs(Number(data.price)-Number(l.price))/Math.max(Number(l.price),1)<.12));
-        const row={project_id:projectId,url:String(raw).trim(),normalized_url:norm,platform:data.platform,pnk:data.pnk||pnk,title:data.title,price:data.price||0,currency:data.currency||'RON',rating:data.rating||0,review_count:data.review_count||0,images:data.images||[],specs:data.specs||{},description:data.description||'',brand:data.brand||'',seller:data.seller||'',ean:data.ean||'',duplicate_of:probable?.id||null,duplicate_type:probable?'probabil':'none',include_in_listing:true,source:needsScreenshot(norm)?'screenshot':'web',status:data.status||(data.error?'eroare':'analizat'),error:data.error||null};
+        const row={project_id:projectId,url:String(raw).trim(),normalized_url:norm,platform:data.platform,pnk:data.pnk||pnk,title:data.title,price:data.price||0,currency:data.currency||'RON',rating:data.rating||0,review_count:data.review_count||0,images:data.images||[],specs:data.specs||{},description:data.description||'',brand:data.brand||'',seller:data.seller||'',ean:data.ean||'',duplicate_of:probable?.id||null,duplicate_type:probable?'probabil':'none',include_in_listing:true,source:data.title?'web':'screenshot',status:data.status||(data.error?'eroare':'analizat'),error:data.error||null};
         const ins=await supa('POST','research_links',row);
         const saved=ins?.[0]||row;existing.push(saved);added.push(saved);if(probable)flagged.push(saved);
       }

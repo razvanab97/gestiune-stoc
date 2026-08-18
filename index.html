@@ -672,6 +672,8 @@ function buildRaportCats(){
 .comp-lab-panel{background:var(--surf);border:1px solid var(--b1);border-radius:var(--r2);padding:1rem;box-shadow:var(--sh)}
 .comp-lab-panel textarea{width:100%;min-height:170px;resize:vertical;font-family:var(--mono);font-size:13px;line-height:1.45}
 .comp-lab-fields{display:grid;grid-template-columns:1fr 150px;gap:8px;margin-bottom:10px}
+.rp-buy-fields{display:grid;grid-template-columns:1fr 110px 80px;gap:8px;margin-bottom:10px}
+@media(max-width:640px){.rp-buy-fields{grid-template-columns:1fr 1fr;grid-template-areas:"title title" "buy currency"}.rp-buy-fields input#rp-title{grid-area:title}.rp-buy-fields input#rp-buy{grid-area:buy}.rp-buy-fields select#rp-buy-currency{grid-area:currency}}
 .scorecard-hero{background:linear-gradient(135deg,rgba(167,139,250,.16),rgba(34,197,94,.08));border:1px solid var(--acc);border-radius:var(--r2);padding:1rem;margin-bottom:12px}
 .scorecard-verdict{font-size:20px;font-weight:900;color:var(--t1);line-height:1.25;margin-bottom:5px}
 .scorecard-summary{font-size:13px;color:var(--t2);line-height:1.55}
@@ -1547,9 +1549,13 @@ th{font-weight:800!important;color:var(--t3)!important}
       <div class="comp-lab-grid">
         <div class="comp-lab-panel">
           <div class="sec" style="margin:0 0 8px">📁 Dosar produs nou</div>
-          <div class="comp-lab-fields">
+          <div class="rp-buy-fields">
             <input id="rp-title" type="text" placeholder="Titlu / idee produs">
-            <input id="rp-buy" type="number" min="0" step="0.01" placeholder="Achiziție RON">
+            <input id="rp-buy" type="number" min="0" step="0.01" placeholder="Achiziție" title="Preț de achiziție — în moneda aleasă alături">
+            <select id="rp-buy-currency" title="Moneda prețului de achiziție — EUR se convertește automat în RON la salvare">
+              <option value="RON">RON</option>
+              <option value="EUR">EUR</option>
+            </select>
           </div>
           <input id="rp-supplier" type="text" placeholder="Furnizor principal — sau lipește linkul sursă (Jumbo/Maxy/Verk/i-want)" style="width:100%;margin-bottom:8px" onchange="detectResearchSupplierLink(this)">
           <div style="display:flex;gap:8px;flex-wrap:wrap">
@@ -1909,7 +1915,11 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const UPDATES=[
   {n:105,text:'Research: reparat bug critic — cache-ul de încărcare instant nu se salva NICIODATĂ în producție, pentru că dosarele cu poze (copertă sau screenshot-uri Jumbo/Maxy) depășeau limita de stocare a browserului la fiecare încercare, eșec prins tăcut. Acum cache-ul salvează doar ce e nevoie pentru afișarea instant (fără pozele grele), deci chiar funcționează — testat cu un caz real de 18.8MB de poze, redus la 5KB',date:'2026-08-18'},
   {n:104,text:'Research: pe linia fiecărui dosar (inclusiv restrâns) apar acum „Achiziție" și „Min. concurență" — cel mai mic preț găsit efectiv pe eMAG/Trendyol (nu costul de la furnizor) — pentru o comparație rapidă dintr-o privire, fără să deschizi fiecare dosar',date:'2026-08-18'},
-  {n:113,text:'Research: găsită și reparată cauza reală a lentorii ȘI a dosarelor care „își pierdeau" linkurile — pozele (cover_image, screenshot-uri) erau stocate ca text base64 direct în baza de date, iar lista generală de dosare le încărca pe toate deodată (29.5MB pentru doar 13 dosare, verificat direct în producție). Peste limita asta, unele loturi de linkuri eșuau tăcut și arătau 0 linkuri, deși erau intacte în baza de date. Acum lista generală nu mai aduce poze deloc (46KB în loc de 29.5MB) — pozele se aduc separat, doar pentru dosarul pe care chiar îl deschizi',date:'2026-08-18'},
+  {n:118,text:'Research: Maxy și Verk — testat direct pe pagini reale trimise de tine. Găsite și reparate 2 bugs: (1) linkurile Maxy nu mai sunt presupuse „mereu needsScreenshot" după domeniu — se încearcă mereu citirea automată întâi, iar dacă pagina chiar are date (ex. old.maxy.eu — titlu, 13 poze, brand, EAN găsite reale), le folosește direct, fără screenshot; (2) JSON-ul de produs de pe verk.store avea o eroare de sintaxă pe pagina lor (valoare lipsă înainte de virgulă) care bloca toată extragerea — acum se repară automat, iar brand+EAN care lipseau complet acum se citesc corect. Prețul rămâne totuși gol pe ambele pagini de test — verificat direct în HTML brut, nu e un bug de-al nostru, prețul lor chiar lipsește din pagina servită (probabil încărcat separat prin JavaScript)',date:'2026-08-18'},
+  {n:117,text:'Research: comprimate toate pozele deja existente în producție (13 coperte de dosar + 36 linkuri cu poze) — 55.9MB → 6MB, fără nicio pierdere vizibilă de calitate. Copertele dosarelor (acum mici) au revenit în lista generală, deci pozele apar din nou instant, fără să deschizi dosarul — restul pozelor (din linkuri) tot se aduc separat, la deschidere',date:'2026-08-18'},
+  {n:116,text:'Research: reparat un bug real de conversie valutară — „Preț minim găsit" compara prețuri brute, fără conversie (un link Maxy în EUR putea „câștiga" fals în fața unui preț mai mare în RON). Acum toate prețurile se convertesc în RON înainte de comparație. Adăugat și EUR ca opțiune la achiziția unui dosar nou — se convertește automat în RON la salvare, cu cursul afișat',date:'2026-08-18'},
+  {n:115,text:'Research: pozele noi (copertă dosar, screenshot-uri linkuri) se comprimă acum automat la încărcare — o poză de telefon needitată era 3-5MB brută; acum 30-300KB, fără pierdere vizibilă de calitate, text tot lizibil pentru AI. Reduce direct riscul de reapariție a problemei de lentoare/dosare „goale" de mai devreme',date:'2026-08-18'},
+  {n:114,text:'Research: găsită și reparată cauza reală a lentorii ȘI a dosarelor care „își pierdeau" linkurile — pozele (cover_image, screenshot-uri) erau stocate ca text base64 direct în baza de date, iar lista generală de dosare le încărca pe toate deodată (29.5MB pentru doar 13 dosare, verificat direct în producție). Peste limita asta, unele loturi de linkuri eșuau tăcut și arătau 0 linkuri, deși erau intacte în baza de date. Acum lista generală nu mai aduce poze deloc (46KB în loc de 29.5MB) — pozele se aduc separat, doar pentru dosarul pe care chiar îl deschizi',date:'2026-08-18'},
   {n:112,text:'Research: dosarele se preîncarcă acum tăcut, în fundal, chiar din momentul în care deschizi aplicația — nu doar la prima vizită a tab-ului. Până ajungi să apeși pe „Research", fetch-ul e de obicei deja terminat, deci spinner-ul „Încarc dosarele…" aproape că nu se mai vede niciodată',date:'2026-08-18'},
   {n:111,text:'Comenzi Platforme: reparat un bug real (confirmat direct în producție) — liniile dintr-un import care nu aveau nicio potrivire automată de produs (titlu eMAG/Trendyol prea diferit de numele intern) dispăreau tăcut la „Aplică import", fără să fie salvate nicăieri și fără nicio menționare. Acum rămân vizibile în previzualizare, marcate clar „⚠ fără produs", iar mesajul final spune exact câte linii mai au nevoie de alegere manuală',date:'2026-08-18'},
   {n:110,text:'Comenzi Platforme: la importul comenzilor eMAG/Trendyol apare acum și numele clientului (dacă fișierul are o coloană cu el), atât în previzualizare cât și în lista de comenzi din „Profit vânzări" — mai ușor de asociat/regăsit o comandă. Necesită migration_platforma_comenzi_client.sql în Supabase; până rulezi migrarea, importul funcționează normal, doar fără nume de client afișat',date:'2026-08-18'},
@@ -4417,7 +4427,11 @@ function detectResearchSupplierLink(el){
 }
 async function createResearchProject(){
   const title=(document.getElementById('rp-title')?.value||'').trim();
-  const acquisition_price=parseFloat(document.getElementById('rp-buy')?.value)||0;
+  const buyRaw=parseFloat(document.getElementById('rp-buy')?.value)||0;
+  const buyCurrency=document.getElementById('rp-buy-currency')?.value||'RON';
+  // acquisition_price se ține mereu în RON (așa e folosit peste tot în calculul verdictului/profitului)
+  // — dacă utilizatorul alege EUR, convertim automat aici, o singură dată, la salvare.
+  const acquisition_price=buyCurrency==='EUR'?Math.round(buyRaw*EUR_RON*100)/100:buyRaw;
   const supplierEl=document.getElementById('rp-supplier');
   const rawSupplier=(supplierEl?.value||'').trim();
   const supplierUrl=supplierEl?.dataset.url||(/^https?:\/\//i.test(rawSupplier)?rawSupplier:'');
@@ -4427,7 +4441,9 @@ async function createResearchProject(){
     const data=await apiJson('/api/research-projects',{action:'create_project',title,acquisition_price,supplier},30000);
     const project={...data.project,links:[]};
     researchProjects.unshift(project);
+    if(buyCurrency==='EUR'&&buyRaw>0)toast(`Achiziție convertită: ${buyRaw.toFixed(2)} € → ${acquisition_price.toFixed(2)} RON (curs ${EUR_RON})`);
     ['rp-title','rp-buy','rp-supplier'].forEach(id=>{const el=document.getElementById(id);if(el){el.value='';delete el.dataset.url;}});
+    const curEl=document.getElementById('rp-buy-currency');if(curEl)curEl.value='RON';
     renderResearchProjects();
     if(supplierUrl){
       try{
@@ -4511,13 +4527,38 @@ async function deleteResearchProject(projectId,ev){
     toast('Dosar șters ✓');
   }catch(e){toast(e.message||'Eroare la ștergerea dosarului','err');}
 }
+// Poze salvate direct ca base64 în Postgres — o poză de telefon needitată e ușor 3-5MB; înmulțit cu
+// câteva zeci de dosare/linkuri, umflă catastrofal răspunsul listei generale (verificat: 29.5MB pentru
+// doar 13 dosare, cauza reală a lentorii ȘI a loturilor de linkuri care eșuau tăcut). Comprimăm ACUM,
+// la încărcare, înainte să ajungă în baza de date — nu costă nimic vizual (poza tot arată bine), dar
+// reduce dimensiunea cu ~90%+.
+function resizeImageDataUrl(dataUrl,maxDim,quality){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    img.onload=()=>{
+      let w=img.naturalWidth,h=img.naturalHeight;
+      if(!w||!h){reject(new Error('Imagine invalidă'));return;}
+      if(w<=maxDim&&h<=maxDim){resolve(dataUrl);return;}
+      const scale=maxDim/Math.max(w,h);
+      w=Math.max(1,Math.round(w*scale));h=Math.max(1,Math.round(h*scale));
+      const canvas=document.createElement('canvas');
+      canvas.width=w;canvas.height=h;
+      canvas.getContext('2d').drawImage(img,0,0,w,h);
+      resolve(canvas.toDataURL('image/jpeg',quality));
+    };
+    img.onerror=()=>reject(new Error('Imagine invalidă sau coruptă'));
+    img.src=dataUrl;
+  });
+}
 // Poză de copertă setată manual pe dosar — utilă când niciun link nu are încă o poză extrasă automat
 // (JSON-LD/screenshot); click pe poză/cutia-placeholder din header, separat de restrângerea cardului.
 async function handleProjectImageFile(projectId,inputEl){
   const file=inputEl?.files?.[0];if(!file)return;
   try{
-    const dataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(file);});
-    if(!dataUrl||!dataUrl.startsWith('data:image'))throw new Error('Fișier imagine invalid');
+    const rawDataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(file);});
+    if(!rawDataUrl||!rawDataUrl.startsWith('data:image'))throw new Error('Fișier imagine invalid');
+    // Copertă = doar o iconiță mică (64×64px în UI) — 400px e generos, sub 30-40KB de obicei.
+    const dataUrl=await resizeImageDataUrl(rawDataUrl,400,0.7);
     await apiJson('/api/research-projects',{action:'set_project_image',project_id:projectId,image:dataUrl},30000);
     const proj=researchProjects.find(p=>Number(p.id)===Number(projectId));
     if(proj)proj.cover_image=dataUrl;
@@ -4549,7 +4590,10 @@ function renderResearchProjects(){
   else arr.sort((a,b)=>String(b.updated_at||b.created_at||'').localeCompare(String(a.updated_at||a.created_at||'')));
   if(!arr.length){box.innerHTML='<div class="listing-card" style="color:var(--t3)">Nu există dosare pentru filtrul ales.</div>';return;}
   box.innerHTML=arr.map(p=>{
-    const links=p.links||[],prices=links.map(l=>+l.price||0).filter(Boolean),reviews=Math.max(0,...links.map(l=>+l.review_count||0)),hasListing=!!(p.listing&&p.listing.title);
+    // pcomToRon() e obligatoriu aici — un link Maxy/furnizor extern e des în EUR/PLN, nu RON; luând
+    // Math.min direct pe l.price brut (fără conversie), un preț de 15.99 EUR "câștiga" fals în fața
+    // unui preț de 150 RON, deși 15.99 EUR ≈ 81 RON, mai mare. Bug real, raportat direct de utilizator.
+    const links=p.links||[],prices=links.map(l=>pcomToRon(l.price,l.currency)).filter(Boolean),reviews=Math.max(0,...links.map(l=>+l.review_count||0)),hasListing=!!(p.listing&&p.listing.title);
     const best=prices.length?Math.min(...prices):0,imgs=links.reduce((s,l)=>s+(Array.isArray(l.images)?l.images.length:0),0);
     // Preț minim la CONCURENȚĂ (eMAG/Trendyol) — separat de „best" de mai sus, care include și
     // furnizorul (costul nostru, aproape mereu cel mai mic, deci ar induce în eroare comparația).
@@ -4673,7 +4717,10 @@ async function handleLinkScreenshotFile(linkId,inputEl){
   }
   if(statusEl){statusEl.style.color='';statusEl.innerHTML=`<span class="spin"></span> Analizez ${files.length>1?files.length+' poze':'poza'}…`;}
   try{
-    const dataUrls=await Promise.all(files.map(f=>new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(f);})));
+    const rawDataUrls=await Promise.all(files.map(f=>new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(f);})));
+    // 1400px păstrează textul lizibil pentru AI (titlu/preț/descriere) — doar reduce rezoluția de telefon
+    // needitată (deseori 3000px+), care oricum nu ajută AI-ul, dar umflă baza de date degeaba.
+    const dataUrls=await Promise.all(rawDataUrls.map(u=>resizeImageDataUrl(u,1400,.8)));
     const imgContents=[];
     for(const dataUrl of dataUrls){
       const mt=dataUrl.match(/data:(image\/\w+);/)?.[1]||'image/jpeg';
