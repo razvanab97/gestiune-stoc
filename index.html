@@ -947,6 +947,10 @@ function buildRaportCats(){
 .rsx-score-pill{font-family:var(--mono);font-weight:800;font-size:12px;padding:2px 9px;border-radius:999px;white-space:nowrap}
 .rsx-score-pill.ok{color:var(--gr);background:var(--gr-bg)}
 .rsx-score-pill.mid{color:var(--am);background:var(--am-bg)}
+.rsx-ai-match{font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;white-space:nowrap;margin-top:4px;display:inline-block}
+.rsx-ai-match.ok{color:var(--gr);background:var(--gr-bg)}
+.rsx-ai-match.mid{color:var(--am);background:var(--am-bg)}
+.rsx-ai-match.bad{color:var(--rd);background:var(--rd-bg)}
 /* Completeness/Quality — badge-uri discrete, 5 trepte de culoare, click pentru breakdown */
 .rsx-cscore{font-family:var(--mono);font-weight:800;font-size:12px;padding:2px 9px;border-radius:999px;white-space:nowrap;border:none;cursor:pointer}
 .rsx-cscore.sc90{color:#067647;background:#ECFDF3}
@@ -1932,6 +1936,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:128,text:'Research: matching mai la obiect, 2 schimbări. (1) Buton nou „🎯 Verifică AI" pe fiecare candidat eMAG/Trendyol — compară efectiv poza + titlul + specificațiile cu produsul nostru de referință și dă un verdict real (Potrivire / Nu e același / Incert, cu motiv), spre deosebire de scorul existent (Match), care e doar suprapunere de cuvinte din titlu și ratează sinonime („cutie litieră" vs „toaletă pisică"). (2) Promptul de căutare AI („✦ Recunoaștere AI") primește acum și specificațiile deja confirmate ale produsului (Material/Culoare/Dimensiuni etc.) plus o categorie eMAG detectată automat — fapte sigure, nu ghicite din titlu, deci query-uri mai precise. Necesită migration_research_links_ai_match.sql în Supabase',date:'2026-08-18'},
   {n:127,text:'Research: bancă de coduri EAN nouă — pentru produse noi fără cod de bare real. Lipești coduri deja cumpărate/rezervate (secțiunea „🔢 Bancă de coduri EAN" din Generator anunțuri), iar fiecare anunț generat primește automat unul, o singură dată, la „Copiază EAN" din cardul de anunț sau la descărcarea presetului eMAG „produs nou" (dacă produsul chiar are un EAN real din dosar, acela e mereu prioritar, nu se irosește un cod din bancă). Codul se ȘTERGE din bancă imediat ce e alocat; când rămâi fără coduri, primești o notificare clară, cu îndemn să adaugi mai multe. Necesită migration_ean_pool.sql în Supabase',date:'2026-08-18'},
   {n:126,text:'Research: căutarea eMAG/Trendyol de lângă furnizor — 3 schimbări. (1) Scos EAN-ul din căutare (folosit de la #125) — testat direct, produsele de la furnizori (mărci de import ca Purlov) aproape niciodată nu au ACEL EAN exact înregistrat pe eMAG/Trendyol, deci căutarea ieșea goală, nefuncțională. (2) Butonul „✦ AI" (acum „✦ Recunoaștere AI") are un prompt mult mai bun — reparat un bug real (căuta pe Trendyol în TURCĂ, nu română — platforma e turcească la origine, dar folosim trendyol.com/ro) — și acum recunoaște TIPUL de produs ca un vânzător român, nu traduce cuvânt-cu-cuvânt, plus generează mereu și o variantă generică FĂRĂ brand (marca furnizorului rareori e listată pe eMAG). (3) Arată acum TOATE variantele de căutare generate de AI (nu doar prima), și au propriul rând, pe toată lățimea tabelului, nu mai stau înghesuite lângă butonul de ștergere unde textul se rupea pe 2-3 linii ilizibil',date:'2026-08-18'},
   {n:125,text:'Research: linkurile „🔍 eMAG" / „🔍 Trendyol" de lângă furnizor caută acum mult mai precis — dacă a fost găsit un EAN (cod de bare) pe pagina furnizorului, căutarea folosește direct EAN-ul (potrivire exactă, nu aproximativă), care găsește produsul corect dacă există pe platformă. Fără EAN, cade pe cuvintele cu conținut real din titlu (nu mai pierde sloturi pe „pentru", „de", „cu" etc.) plus brandul, dacă nu era deja inclus — mult mai apropiat de cum sunt titrate produsele pe eMAG/Trendyol decât primele cuvinte brute din titlul (des tradus) al furnizorului',date:'2026-08-18'},
@@ -4081,6 +4086,9 @@ function findResearchLink(linkId){
   for(const p of researchProjects){const l=(p.links||[]).find(x=>Number(x.id)===Number(linkId));if(l)return l;}
   return null;
 }
+function findResearchLinkProject(linkId){
+  return researchProjects.find(p=>(p.links||[]).some(x=>Number(x.id)===Number(linkId)))||null;
+}
 async function generateAiSearchLinks(linkId){
   const link=findResearchLink(linkId);
   if(!link){toast('Linkul nu a fost găsit','err');return;}
@@ -4100,13 +4108,23 @@ async function generateAiSearchLinks(linkId){
       // mai bine să recunoască produsul". Ultimul query (cel mai general) e mereu fără brand — mărcile de
       // import ale furnizorilor (Purlov, Ruhhy etc.) aproape niciodată nu sunt listate ca atare pe
       // eMAG/Trendyol, deci un query care depinde de ele riscă să iasă gol.
+      // Context suplimentar, ca AI-ul să nu ghicească din titlu ce poate afla deja sigur din date reale:
+      // specificațiile deja extrase (Material/Culoare/Dimensiuni etc., dacă linkul vine de pe o pagină
+      // citită automat) și o categorie eMAG detectată determinist (același registru de categorii folosit
+      // la Listing Readiness) — o ancoră de vocabular, nu o restricție strictă.
+      const proj=findResearchLinkProject(linkId);
+      const specsText=Object.entries(link.specs||{}).filter(([k,v])=>k&&v&&k!=='Brand').map(([k,v])=>`${k}: ${v}`).join(', ');
+      const categoryKey=emgDetectCategory(proj,link);
+      const categoryLabel=categoryKey!=='generic'?EMG_CATEGORY_PROFILES[categoryKey]?.label:'';
       const content=[{type:'text',text:`Ești expert în marketplace-uri ROMÂNEȘTI: eMAG.ro și Trendyol.com — varianta ROMÂNĂ (trendyol.com/ro), NU cea turcească.
-Produs sursă — titlu: "${link.title||''}"${link.description?`, descriere: "${String(link.description).slice(0,300)}"`:''}.${img?' Am atașat și poza principală a produsului — folosește-o ca să identifici detalii vizuale (culoare, material, formă, tip) care NU apar în titlu, ca să faci query-urile mai precise.':''}
+Produs sursă — titlu: "${link.title||''}"${link.brand?`, brand: "${link.brand}"`:''}${link.description?`, descriere: "${String(link.description).slice(0,300)}"`:''}${specsText?`, specificații confirmate: ${specsText}`:''}${categoryLabel?`, categorie probabilă eMAG: ${categoryLabel}`:''}.${img?' Am atașat și poza principală a produsului — folosește-o ca să identifici detalii vizuale (culoare, material, formă, tip) care NU apar în titlu, ca să faci query-urile mai precise.':''}
 
 Sarcina ta: recunoaște ce TIP de produs e — așa cum l-ar căuta sau titra un cumpărător/vânzător ROMÂN pe
 eMAG/Trendyol (nu o traducere cuvânt-cu-cuvânt a titlului original, care poate suna nefiresc și să nu se
-potrivească cu ce a indexat platforma). Generează interogări de căutare, TOATE ÎN ROMÂNĂ (inclusiv cele
-pentru Trendyol — e magazinul românesc, deci NU în turcă sau altă limbă):
+potrivească cu ce a indexat platforma). Folosește specificațiile confirmate mai sus ca fapte SIGURE (nu
+le inventa, nu le contrazice) — completează-le cu ce vezi în poză doar pentru ce NU e deja confirmat prin
+text. Generează interogări de căutare, TOATE ÎN ROMÂNĂ (inclusiv cele pentru Trendyol — e magazinul
+românesc, deci NU în turcă sau altă limbă):
 - 4 query-uri pentru eMAG.ro, progresiv de la specific (toate caracteristicile distinctive: tip, culoare,
   material, dimensiuni) la general (2-3 cuvinte, doar tipul de produs). ULTIMUL query trebuie să fie FĂRĂ
   brand, doar termeni generici de categorie — variantă sigură, pentru cazul în care marca furnizorului nu
@@ -4143,6 +4161,80 @@ Răspunde STRICT cu JSON: {"emag":["q1","q2","q3","q4"],"trendyol":["q1","q2"]}`
   }catch(e){
     toast(e.message||'Eroare generare căutare AI','err');
     if(btn){btn.disabled=false;btn.textContent='✦ Recunoaștere AI';}
+  }
+}
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// VERIFICARE AI — "e chiar același produs?" pentru un candidat eMAG/Trendyol găsit în dosar.
+// Completează scorul determinist existent (score/score_zone — suprapunere de cuvinte + dimensiuni
+// + EAN găsit în text), care ratează sinonime ("cutie litieră" vs "toaletă pisică") și poate scora
+// fals-pozitiv titluri cu cuvinte generice comune. Aici AI-ul compară efectiv poza + titlul +
+// specificațiile candidatului cu ale produsului nostru de referință — rulează la cerere (cost/
+// latență per apel), nu automat pe fiecare link adăugat.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+function researchAiMatchBadgeHtml(l){
+  if(l.ai_match_verdict==='match')return`<div class="rsx-ai-match ok" title="${esc(l.ai_match_reason||'')}">🎯 Potrivire AI</div>`;
+  if(l.ai_match_verdict==='no_match')return`<div class="rsx-ai-match bad" title="${esc(l.ai_match_reason||'')}">🎯 Nu e același (AI)</div>`;
+  if(l.ai_match_verdict==='uncertain')return`<div class="rsx-ai-match mid" title="${esc(l.ai_match_reason||'')}">🎯 Incert (AI)</div>`;
+  return`<button class="rsx-icon-btn" id="rlmatch-${l.id}" onclick="verifyLinkMatchWithAI(${l.id})" title="Verifică cu AI dacă e chiar același produs — compară poza, titlul și specificațiile cu ale produsului nostru" style="margin-top:4px">🎯 Verifică AI</button>`;
+}
+async function verifyLinkMatchWithAI(linkId){
+  const link=findResearchLink(linkId);
+  if(!link){toast('Linkul nu a fost găsit','err');return;}
+  const proj=findResearchLinkProject(linkId);
+  if(!proj){toast('Dosarul nu a fost găsit','err');return;}
+  const btn=document.getElementById('rlmatch-'+linkId);
+  if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span>';}
+  try{
+    // Produsul de referință = linkul de furnizor cu date reale (sursa costului nostru); dacă nu există
+    // încă niciunul, titlul liber al dosarului e tot ce avem.
+    const ref=(proj.links||[]).find(x=>x.platform==='furnizor'&&x.title)||{title:proj.title,description:'',specs:{},images:[]};
+    const refImg=ref.images?.[0]||proj.cover_image||'';
+    const candImg=link.images?.[0]||'';
+    const specsText=obj=>Object.entries(obj||{}).filter(([k,v])=>k&&v&&k!=='Brand').map(([k,v])=>`${k}: ${v}`).join(', ');
+    const refSpecs=specsText(ref.specs),candSpecs=specsText(link.specs);
+    const imgNote=refImg&&candImg?'Am atașat două poze — PRIMA e produsul nostru de referință, A DOUA e candidatul. Folosește-le ca dovadă vizuală decisivă.'
+      :(refImg||candImg)?'Am atașat o singură poză disponibilă (nu ambele) — pentru partea fără poză, judecă doar pe baza textului.'
+      :'Nu am nicio poză disponibilă — judecă doar pe baza textului.';
+    const content=[{type:'text',text:`Ești expert în identificarea produselor pe marketplace-uri românești. Ai DOUĂ produse — decide dacă sunt EXACT ACELAȘI produs (nu doar din aceeași categorie sau un model similar).
+
+PRODUS DE REFERINȚĂ (al nostru, de la furnizor):
+Titlu: "${ref.title||''}"
+${ref.description?`Descriere: ${String(ref.description).slice(0,300)}`:''}
+${refSpecs?`Specificații: ${refSpecs}`:''}
+
+PRODUS CANDIDAT (găsit pe ${link.platform==='emag'?'eMAG':link.platform==='trendyol'?'Trendyol':esc(link.platform||'altă platformă')}):
+Titlu: "${link.title||''}"
+${link.brand?`Brand: ${link.brand}`:''}
+${candSpecs?`Specificații: ${candSpecs}`:''}
+${link.price?`Preț: ${link.price} ${link.currency||'RON'}`:''}
+
+${imgNote}
+
+Fii STRICT — un "no_match" clar e mai util decât un "match" optimist greșit (duce la anunț cu preț de
+referință greșit). Folosește "uncertain" doar dacă informația disponibilă chiar nu e suficientă.
+Răspunde STRICT cu JSON: {"verdict":"match"|"no_match"|"uncertain","reason":"<motiv scurt, o propoziție, în română>"}`}];
+    [refImg,candImg].forEach(img=>{
+      if(!img)return;
+      if(img.startsWith('data:image')){
+        const mt=img.match(/data:(image\/\w+);/)?.[1]||'image/jpeg',b64=img.split(',')[1];
+        if(b64&&b64.length>=100)content.push({type:'image',source:{type:'base64',media_type:mt,data:b64}});
+      }else if(/^https?:\/\//i.test(img)){
+        content.push({type:'image',source:{type:'url',url:img}});
+      }
+    });
+    const resp=await callAI([{role:'user',content}],'Ești expert în identificarea produselor identice pe marketplace-uri românești. Răspunzi DOAR cu JSON valid, fără markdown.',300);
+    const match=resp.trim().match(/\{[\s\S]*\}/);
+    if(!match)throw new Error('Răspuns invalid de la AI');
+    const parsed=JSON.parse(match[0]);
+    const verdict=['match','no_match','uncertain'].includes(parsed.verdict)?parsed.verdict:'uncertain';
+    const reason=String(parsed.reason||'').slice(0,500);
+    const data=await apiJson('/api/research-projects',{action:'update_link_match_verdict',link_id:linkId,verdict,reason},20000);
+    if(data.link){link.ai_match_verdict=data.link.ai_match_verdict;link.ai_match_reason=data.link.ai_match_reason;}
+    renderResearchProjects();
+    toast(verdict==='match'?'✓ AI confirmă: același produs':verdict==='no_match'?'✗ AI: NU e același produs':'AI: incert, verifică manual');
+  }catch(e){
+    toast(e.message||'Eroare verificare AI','err');
+    if(btn){btn.disabled=false;btn.textContent='🎯 Verifică AI';}
   }
 }
 function researchPlatformStats(p){
@@ -4751,6 +4843,7 @@ function renderResearchProjects(){
       // Completeness/Quality — doar pentru candidați eMAG/Trendyol (nu pentru linkul de furnizor, care
       // e sursa de cost, nu o listare de evaluat). Recalculat live, nu persistat — vezi rsxAnalyzeListing.
       const isMarketplace=l.platform==='emag'||l.platform==='trendyol';
+      const aiMatchHtml=isMarketplace?researchAiMatchBadgeHtml(l):'';
       const analysis=isMarketplace?rsxAnalyzeListing(l):null;
       const detailOpen=rsxDetailOpen.has(l.id);
       const cqCells=analysis?`
@@ -4764,7 +4857,7 @@ function renderResearchProjects(){
         <td>${l.brand?esc(l.brand):'<span class="rsx-cell-sub">—</span>'}</td>
         <td>${l.seller?esc(l.seller):'<span class="rsx-cell-sub">—</span>'}</td>
         <td class="rsx-price">${l.price?Number(l.price).toFixed(2)+' '+esc(l.currency||'RON'):'—'}</td>
-        <td>${scoreHtml}</td>${cqCells}
+        <td>${scoreHtml}${aiMatchHtml}</td>${cqCells}
         <td>${pnkHtml}</td>
         <td>${confirmHtml}</td>
         <td class="rsx-row-actions">${del}</td>

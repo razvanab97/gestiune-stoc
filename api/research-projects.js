@@ -278,7 +278,7 @@ module.exports=async function handler(req,res){
       // câțiva MB) — se aduce separat, o singură dată per dosar, când chiar îl deschizi (hydrate_project).
       const projects=await supa('GET','research_projects?select=id,title,acquisition_price,supplier,verdict,profit_estimated,margin_estimated,max_buy_price,notes,listing_status,listing,cover_image,created_at,updated_at&order=updated_at.desc&limit=50');
       const ids=projects.map(p=>p.id);
-      const LINK_LIST_COLUMNS='id,project_id,url,normalized_url,platform,pnk,title,price,currency,rating,review_count,specs,description,duplicate_of,duplicate_type,include_in_listing,status,error,created_at,updated_at,source,score,score_zone,brand,seller,ean';
+      const LINK_LIST_COLUMNS='id,project_id,url,normalized_url,platform,pnk,title,price,currency,rating,review_count,specs,description,duplicate_of,duplicate_type,include_in_listing,status,error,created_at,updated_at,source,score,score_zone,brand,seller,ean,ai_match_verdict,ai_match_reason';
       const CHUNK=10;
       const chunks=[];
       for(let i=0;i<ids.length;i+=CHUNK)chunks.push(ids.slice(i,i+CHUNK));
@@ -391,6 +391,19 @@ module.exports=async function handler(req,res){
       const title=clean(body.title).slice(0,240);
       if(!linkId||!title)return res.status(400).json({error:'Lipsesc datele'});
       const rows=await supa('PATCH',`research_links?id=eq.${linkId}`,{title,updated_at:new Date().toISOString()});
+      const link=rows?.[0];
+      if(!link)return res.status(404).json({error:'Linkul nu a fost găsit'});
+      return res.status(200).json({link});
+    }
+    if(body.action==='update_link_match_verdict'){
+      // Verdict "e chiar același produs?" calculat de AI, client-side (vezi verifyLinkMatchWithAI din
+      // index.html, compară poză+titlu+specificații) — serverul doar salvează rezultatul, nu apelează
+      // AI aici. Completează scorul determinist existent (score/score_zone), nu îl înlocuiește.
+      const linkId=Number(body.link_id);
+      const verdict=['match','no_match','uncertain'].includes(body.verdict)?body.verdict:'';
+      const reason=clean(body.reason).slice(0,500);
+      if(!linkId||!verdict)return res.status(400).json({error:'Lipsesc datele'});
+      const rows=await supa('PATCH',`research_links?id=eq.${linkId}`,{ai_match_verdict:verdict,ai_match_reason:reason});
       const link=rows?.[0];
       if(!link)return res.status(404).json({error:'Linkul nu a fost găsit'});
       return res.status(200).json({link});
