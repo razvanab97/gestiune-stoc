@@ -1909,6 +1909,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const UPDATES=[
   {n:105,text:'Research: reparat bug critic — cache-ul de încărcare instant nu se salva NICIODATĂ în producție, pentru că dosarele cu poze (copertă sau screenshot-uri Jumbo/Maxy) depășeau limita de stocare a browserului la fiecare încercare, eșec prins tăcut. Acum cache-ul salvează doar ce e nevoie pentru afișarea instant (fără pozele grele), deci chiar funcționează — testat cu un caz real de 18.8MB de poze, redus la 5KB',date:'2026-08-18'},
   {n:104,text:'Research: pe linia fiecărui dosar (inclusiv restrâns) apar acum „Achiziție" și „Min. concurență" — cel mai mic preț găsit efectiv pe eMAG/Trendyol (nu costul de la furnizor) — pentru o comparație rapidă dintr-o privire, fără să deschizi fiecare dosar',date:'2026-08-18'},
+  {n:112,text:'Research: dosarele se preîncarcă acum tăcut, în fundal, chiar din momentul în care deschizi aplicația — nu doar la prima vizită a tab-ului. Până ajungi să apeși pe „Research", fetch-ul e de obicei deja terminat, deci spinner-ul „Încarc dosarele…" aproape că nu se mai vede niciodată',date:'2026-08-18'},
   {n:111,text:'Comenzi Platforme: reparat un bug real (confirmat direct în producție) — liniile dintr-un import care nu aveau nicio potrivire automată de produs (titlu eMAG/Trendyol prea diferit de numele intern) dispăreau tăcut la „Aplică import", fără să fie salvate nicăieri și fără nicio menționare. Acum rămân vizibile în previzualizare, marcate clar „⚠ fără produs", iar mesajul final spune exact câte linii mai au nevoie de alegere manuală',date:'2026-08-18'},
   {n:110,text:'Comenzi Platforme: la importul comenzilor eMAG/Trendyol apare acum și numele clientului (dacă fișierul are o coloană cu el), atât în previzualizare cât și în lista de comenzi din „Profit vânzări" — mai ușor de asociat/regăsit o comandă. Necesită migration_platforma_comenzi_client.sql în Supabase; până rulezi migrarea, importul funcționează normal, doar fără nume de client afișat',date:'2026-08-18'},
   {n:109,text:'Design nou pe toată aplicația — fundal alb/deschis (același stil folosit deja pe Research), aplicat pe Dashboard, Vânzări, Calculator, Jurnal, Raport stoc, Sincronizare, Comenzi Platforme și Arhivă, fără să se atingă vreo funcție. Reparat și un bug de contrast pe Research (tab-ul activ „Dosare" avea text alb pe fundal alb, ilizibil)',date:'2026-08-18'},
@@ -3679,7 +3680,7 @@ let listingData=null;
 // Folosit de applyListingToProduct() ca să știe din ce sursă să preia preț de achiziție/furnizor.
 let listingProjectId=null;
 let listingFactoryData=null,competitionLabData=null;
-let researchProjects=[],researchProjectFilter='all',researchProjectsLoaded=false;
+let researchProjects=[],researchProjectFilter='all',researchProjectsLoaded=false,researchProjectsLoading=false;
 const MAX_RESEARCH_LINKS=20;
 async function ensureXLSX(){
   if(window.XLSX)return window.XLSX;
@@ -4333,6 +4334,11 @@ function researchProjectsCacheStrip(projects){
 function saveResearchProjectsCache(projects){try{safeLocalSet(RESEARCH_PROJECTS_CACHE_KEY,JSON.stringify(researchProjectsCacheStrip(projects)));}catch(e){}}
 async function loadResearchProjects(retryCount){
   retryCount=retryCount||0;
+  // Dosarele se preîncarcă acum tăcut, în fundal, chiar la pornirea aplicației (vezi apelul de la
+  // final de fișier) — dacă e deja o cerere în curs (ex. omul apasă pe tab-ul Research chiar în
+  // acele câteva secunde), n-are rost să pornim un al doilea fetch în paralel, degeaba.
+  if(researchProjectsLoading&&!retryCount)return;
+  researchProjectsLoading=true;
   const box=document.getElementById('research-projects-list');
   const cached=loadResearchProjectsCache();
   if(cached&&Array.isArray(cached)){
@@ -4367,10 +4373,14 @@ async function loadResearchProjects(retryCount){
       return;
     }
     if(retryCount<1){
+      // retryCount+1 e truthy, deci apelul de reîncercare sare peste garda researchProjectsLoading
+      // de mai sus — nu mai resetăm flag-ul aici, doar la final (success sau eșec definitiv).
       setTimeout(()=>loadResearchProjects(retryCount+1),1500);
       return;
     }
     if(box)box.innerHTML='<div class="listing-card" style="border-color:var(--rd);color:var(--rd)">⚠️ Nu am putut încărca dosarele chiar acum — serverul răspunde mai greu decât normal. <button class="btn btn-sm" onclick="loadResearchProjects()" style="margin-left:8px">↻ Reîncearcă</button></div>';
+  }finally{
+    researchProjectsLoading=false;
   }
 }
 function setResearchProjectFilter(f,btn){
@@ -9043,6 +9053,11 @@ window.addEventListener('hashchange',()=>{
 });
 applyTabOrder();
 load();
+// Preîncarcă dosarele Research tăcut, în fundal, chiar de la pornirea aplicației — nu doar la prima
+// vizită a tab-ului. Până apeși pe „Research" (de obicei la câteva secunde după ce ai deschis
+// aplicația), fetch-ul e deja terminat, deci NU mai vezi spinner-ul „Încarc dosarele…" aproape
+// niciodată — doar în cazul rar în care apeși pe tab chiar în prima secundă, înainte să se termine.
+loadResearchProjects();
 </script>
 </body>
 </html>
