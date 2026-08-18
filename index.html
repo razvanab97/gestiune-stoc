@@ -1625,6 +1625,20 @@ th{font-weight:800!important;color:var(--t3)!important}
           <span style="font-size:12px;color:var(--t3)">Acceptă până la 20 linkuri; recomandat 3-5 linkuri foarte bune pentru o sinteză mai curată.</span>
         </div>
       </div>
+      <details class="listing-card" style="margin-top:14px" ontoggle="if(this.open)refreshEanPoolCount()">
+        <summary style="cursor:pointer;font-weight:900">🔢 Bancă de coduri EAN — <span id="ean-pool-count">—</span> disponibile</summary>
+        <div style="margin-top:10px;font-size:13px;color:var(--t3);line-height:1.5">
+          Pentru produsele noi, fără cod de bare real. Lipește aici codurile EAN pe care le ai deja
+          cumpărate/rezervate (câte unul pe linie) — la fiecare anunț fără EAN real, se alocă automat
+          UNUL din bancă (la „Copiază EAN" din cardul de anunț, sau la descărcarea presetului eMAG
+          „produs nou") și se șterge din listă. Când rămâi fără coduri, primești o notificare aici.
+        </div>
+        <textarea id="ean-pool-input" style="margin-top:8px;min-height:70px" placeholder="Un cod EAN pe linie, ex:&#10;5901234123457&#10;5901234123464"></textarea>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center">
+          <button class="btn btn-sm btn-acc" id="ean-pool-add-btn" onclick="addEanCodes()">+ Adaugă coduri</button>
+          <button class="btn btn-sm" onclick="refreshEanPoolCount()">↻ Reîmprospătează</button>
+        </div>
+      </details>
     </div>
     <div class="research-mode" id="research-mode-competition">
       <div class="comp-lab-grid">
@@ -1918,6 +1932,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:127,text:'Research: bancă de coduri EAN nouă — pentru produse noi fără cod de bare real. Lipești coduri deja cumpărate/rezervate (secțiunea „🔢 Bancă de coduri EAN" din Generator anunțuri), iar fiecare anunț generat primește automat unul, o singură dată, la „Copiază EAN" din cardul de anunț sau la descărcarea presetului eMAG „produs nou" (dacă produsul chiar are un EAN real din dosar, acela e mereu prioritar, nu se irosește un cod din bancă). Codul se ȘTERGE din bancă imediat ce e alocat; când rămâi fără coduri, primești o notificare clară, cu îndemn să adaugi mai multe. Necesită migration_ean_pool.sql în Supabase',date:'2026-08-18'},
   {n:126,text:'Research: căutarea eMAG/Trendyol de lângă furnizor — 3 schimbări. (1) Scos EAN-ul din căutare (folosit de la #125) — testat direct, produsele de la furnizori (mărci de import ca Purlov) aproape niciodată nu au ACEL EAN exact înregistrat pe eMAG/Trendyol, deci căutarea ieșea goală, nefuncțională. (2) Butonul „✦ AI" (acum „✦ Recunoaștere AI") are un prompt mult mai bun — reparat un bug real (căuta pe Trendyol în TURCĂ, nu română — platforma e turcească la origine, dar folosim trendyol.com/ro) — și acum recunoaște TIPUL de produs ca un vânzător român, nu traduce cuvânt-cu-cuvânt, plus generează mereu și o variantă generică FĂRĂ brand (marca furnizorului rareori e listată pe eMAG). (3) Arată acum TOATE variantele de căutare generate de AI (nu doar prima), și au propriul rând, pe toată lățimea tabelului, nu mai stau înghesuite lângă butonul de ștergere unde textul se rupea pe 2-3 linii ilizibil',date:'2026-08-18'},
   {n:125,text:'Research: linkurile „🔍 eMAG" / „🔍 Trendyol" de lângă furnizor caută acum mult mai precis — dacă a fost găsit un EAN (cod de bare) pe pagina furnizorului, căutarea folosește direct EAN-ul (potrivire exactă, nu aproximativă), care găsește produsul corect dacă există pe platformă. Fără EAN, cade pe cuvintele cu conținut real din titlu (nu mai pierde sloturi pe „pentru", „de", „cu" etc.) plus brandul, dacă nu era deja inclus — mult mai apropiat de cum sunt titrate produsele pe eMAG/Trendyol decât primele cuvinte brute din titlul (des tradus) al furnizorului',date:'2026-08-18'},
   {n:124,text:'Research: titlul unui dosar deja salvat se poate edita acum oricând — buton ✏️ lângă titlu, în header-ul cardului. Util dacă traducerea automată de la creare nu a ieșit perfect sau vrei pur și simplu alt titlu',date:'2026-08-18'},
@@ -5285,6 +5300,85 @@ function safeFileName(s){return String(s||'produs').normalize('NFD').replace(/[\
 function hashInt(s){let h=0;String(s||'').split('').forEach(ch=>{h=((h<<5)-h+ch.charCodeAt(0))|0;});return Math.abs(h)||Date.now()%1000000000;}
 function num4(n){return Number(n)>0?Math.round(Number(n)*10000)/10000:'';}
 function emagNetPriceFromGross(gross){return Number(gross)>0?gross/1.21:'';}
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// BANCĂ DE CODURI EAN — pentru produse noi care nu au un cod de bare real (necesar la
+// încărcarea pe eMAG). Utilizatorul lipește coduri deja cumpărate/rezervate în bancă (mai jos,
+// în tab-ul Generator anunțuri); fiecare cod se alocă UNEI SINGURE listări (real EAN din dosar,
+// dacă există, are mereu prioritate — nu risipim un cod din bancă dacă produsul chiar are unul)
+// și se ȘTERGE din tabelă imediat ce a fost alocat (server-side, api/research-projects.js,
+// acțiunea consume_ean) — cerință explicită: lista arată mereu doar ce a mai rămas disponibil.
+// ═══════════════════════════════════════════════════════════════════════════════════════
+let eanPoolCount=null;
+function renderEanPoolCount(){
+  const el=document.getElementById('ean-pool-count');
+  if(!el)return;
+  el.textContent=eanPoolCount==null?'—':eanPoolCount;
+  el.style.color=eanPoolCount===0?'var(--rd)':'';
+}
+async function refreshEanPoolCount(){
+  try{eanPoolCount=(await apiJson('/api/research-projects',{action:'ean_pool_count'},15000)).count;}
+  catch(e){eanPoolCount=null;}
+  renderEanPoolCount();
+}
+async function addEanCodes(){
+  const ta=document.getElementById('ean-pool-input');
+  const codes=(ta?.value||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  if(!codes.length){toast('Lipește cel puțin un cod EAN','err');return;}
+  const btn=document.getElementById('ean-pool-add-btn');
+  if(btn){btn.disabled=true;btn.textContent='⏳ Adaug…';}
+  try{
+    const data=await apiJson('/api/research-projects',{action:'add_ean_codes',codes},20000);
+    eanPoolCount=data.count;
+    renderEanPoolCount();
+    if(ta)ta.value='';
+    toast(`${data.added} coduri EAN adăugate în bancă${data.duplicates?` · ${data.duplicates} erau deja acolo`:''} ✓`);
+  }catch(e){
+    toast(e.message||'Eroare salvare coduri EAN — rulează migration_ean_pool.sql în Supabase','err');
+  }
+  finally{if(btn){btn.disabled=false;btn.textContent='+ Adaugă coduri';}}
+}
+// Randare pentru rândul de EAN din cardul de anunț — reutilizată la randarea inițială ȘI la
+// actualizarea DOM directă după alocare (fără să re-randeze tot cardul, ca să nu piardă alte
+// stări deschise ale lui — preview HTML, secțiuni extinse etc.).
+function listingEanRowHtml(l){
+  if(l?.ean)return`<span style="font-size:12px;color:var(--t3)">EAN</span> <strong style="font-family:var(--mono)">${esc(l.ean)}</strong> <button class="btn btn-sm" onclick="allocateAndCopyEan()">Copiază EAN</button>`;
+  return`<button class="btn btn-sm" onclick="allocateAndCopyEan()">🔢 Alocă &amp; copiază EAN</button> <span style="font-size:11px;color:var(--t3)">— din banca de coduri, dacă produsul nu are unul real</span>`;
+}
+// Se asigură că listarea are un EAN — un cod real din dosar (dacă un link concurent/furnizor l-a
+// extras) are mereu prioritate față de banca de coduri. Dacă nu există niciunul, alocă UNUL din
+// bancă și îl reține pe listare (l.ean) — apelurile ulterioare, pentru ACEEAȘI listare, refolosesc
+// aceeași valoare, nu mai consumă un cod nou (nici la un al doilea click, nici la un al doilea export).
+async function ensureListingEan(l,proj){
+  if(l.ean)return l.ean;
+  const realEan=String((proj?.links||[]).find(x=>x.ean)?.ean||'').replace(/\D/g,'');
+  if(realEan.length>=8&&realEan.length<=13){l.ean=realEan;return realEan;}
+  try{
+    const data=await apiJson('/api/research-projects',{action:'consume_ean'},15000);
+    refreshEanPoolCount();
+    if(!data.ean){
+      toast('⚠ Nu mai ai coduri EAN disponibile — adaugă mai multe în „🔢 Bancă de coduri EAN"','err');
+      return'';
+    }
+    l.ean=data.ean;
+    if(data.remaining===0)toast('⚠ Ai folosit ultimul cod EAN disponibil — adaugă mai multe în „🔢 Bancă de coduri EAN"','err');
+    return data.ean;
+  }catch(e){
+    toast(e.message||'Eroare alocare cod EAN — rulează migration_ean_pool.sql în Supabase','err');
+    return'';
+  }
+}
+async function allocateAndCopyEan(){
+  const l=listingData;
+  if(!l){toast('Nu există anunț generat');return;}
+  const proj=listingProjectId?researchProjects.find(p=>Number(p.id)===Number(listingProjectId)):null;
+  const hadEan=!!l.ean;
+  const ean=await ensureListingEan(l,proj);
+  const row=document.getElementById('listing-ean-row');
+  if(row)row.innerHTML=listingEanRowHtml(l);
+  if(!ean)return;// mesajul de eroare a fost deja arătat în ensureListingEan
+  copyText(ean);
+  if(!hadEan)toast('Cod EAN alocat și copiat ✓');
+}
 // proj = dosarul Research (research_projects) din care vine anunțul curent, dacă există (vezi
 // listingProjectId) — flux NOU (Dosare). researchData rămâne fallback-ul pentru fluxul VECHI
 // "Research produs", care nu are niciodată un dosar asociat. Bug găsit: funcția citea DOAR
@@ -5375,7 +5469,10 @@ async function downloadEmagOfferPreset(){
 function emagNewProductRow(l,proj){
   const name=(l?.title||'').slice(0,250);
   const brand=(l?.specs||{}).Brand&&l.specs.Brand!=='AB HOMES'?l.specs.Brand:(proj?.supplier||'AB HOMES');
-  const eanRaw=String((proj?.links||[]).find(x=>x.ean)?.ean||'').replace(/\D/g,'');
+  // l.ean = deja alocat pentru ACEASTĂ listare (real din dosar, sau din banca de coduri EAN — vezi
+  // ensureListingEan, apelat înainte de export) — prioritar. Fallback direct pe linkurile dosarului,
+  // pentru robustețe dacă funcția e apelată fără ensureListingEan în față.
+  const eanRaw=String(l?.ean||(proj?.links||[]).find(x=>x.ean)?.ean||'').replace(/\D/g,'');
   const ean=eanRaw.length>=8&&eanRaw.length<=13?eanRaw:'';
   // eMAG acceptă DOAR br/td/ul/li în descriere (nu p/strong/img) — folosim varianta text simplu,
   // sau descărcăm HTML-ul de tag-uri dacă text simplu nu există.
@@ -5406,6 +5503,10 @@ async function downloadEmagNewProductPreset(){
     const l=listingData||researchData?.listing||{};
     if(!l.title){toast('Generează întâi un anunț');return;}
     const proj=listingProjectId?researchProjects.find(p=>Number(p.id)===Number(listingProjectId)):null;
+    // Produsul e nou pe eMAG — are nevoie de un EAN valid. Dacă nu are deja unul (real din dosar sau
+    // alocat anterior), alocă acum unul din banca de coduri EAN, o singură dată pentru această listare.
+    await ensureListingEan(l,proj);
+    const eanRow=document.getElementById('listing-ean-row');if(eanRow)eanRow.innerHTML=listingEanRowHtml(l);
     const XLSX=await ensureXLSX();
     const groups=['Identificare produs','','','','','Oferta - Pret','','','','Moneda','Oferta - Disponibilitate stoc','Oferta - Verificare pret','','Descriere produs','','','Imagini','','','','','','Detalii suplimentare','','Avertizari de siguranta','Detalii producator','','','Detalii persoana responsabila UE','',''];
     const hdr2=new Array(31).fill('');
@@ -5570,6 +5671,7 @@ function renderListingResult(l,pages){
     </div>
     <div class="listing-title">${esc(l.title||researchData?.name||'')}</div>
     ${l.short_title?`<div style="font-size:12px;color:var(--t3);margin-bottom:4px">Titlu scurt: ${esc(l.short_title)}</div>`:''}
+    <div id="listing-ean-row" style="margin-bottom:6px">${listingEanRowHtml(l)}</div>
     ${l.title_trendyol?`<div class="listing-trendyol-sec"><span style="font-size:11px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.04em">Titlu Trendyol</span><div style="font-size:13px;margin-top:4px">${esc(l.title_trendyol)}<button class="btn btn-sm" style="margin-left:8px;font-size:11px" onclick="copyText(${esc(JSON.stringify(l.title_trendyol))})">Copiază</button></div></div>`:''}
     ${categoryRow}
     ${imgs.length?`<div class="listing-imgs">${imgs.slice(0,10).map((u,i)=>`<div class="listing-img-thumb"><img src="${esc(proxyImg(u))}" onerror="this.src='${esc(u)}'" onload="checkImgDims(this)" alt="" title="${i===0?'Prima imagine (impact)':'Imagine '+(i+1)}" style="${i===0?'border:2px solid var(--acc);width:74px;height:74px;object-fit:contain;border-radius:8px;background:var(--surf2)':'width:74px;height:74px;object-fit:contain;border:1px solid var(--b1);border-radius:8px;background:var(--surf2)'}"><a class="dl-btn" href="${esc(downloadImg(u))}" target="_blank" title="Descarcă imagine">↓ Salvează</a></div>`).join('')}</div>`:''}
@@ -6000,6 +6102,7 @@ function renderListingFactoryResult(l,pages,allImages=[]){
     </div>
     <div class="listing-title">${esc(l?.title||'')}</div>
     ${l?.short_title?`<div style="font-size:12px;color:var(--t3);margin-bottom:4px">Titlu scurt: ${esc(l.short_title)}</div>`:''}
+    <div id="listing-ean-row" style="margin-bottom:6px">${listingEanRowHtml(l||{})}</div>
     ${categoryRow}
     ${trendyolRefHtml}
     ${hasHtml?`<div style="margin:10px 0 4px"><div class="listing-preview-toggle">

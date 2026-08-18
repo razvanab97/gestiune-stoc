@@ -321,6 +321,32 @@ module.exports=async function handler(req,res){
       if(!project)return res.status(404).json({error:'Dosarul nu a fost găsit'});
       return res.status(200).json({project});
     }
+    // ── Bancă de coduri EAN — pentru produse noi fără cod de bare real. Alocate unul câte unul (cel
+    // mai vechi introdus, primul folosit), ȘTERSE din tabelă imediat ce sunt alocate (nu doar marcate
+    // folosite) — cerință explicită: lista trebuie să arate mereu doar ce a mai rămas disponibil.
+    if(body.action==='add_ean_codes'){
+      const raw=Array.isArray(body.codes)?body.codes:[];
+      const codes=[...new Set(raw.map(c=>String(c||'').replace(/\D/g,'')).filter(c=>c.length>=8&&c.length<=13))];
+      if(!codes.length)return res.status(400).json({error:'Niciun cod EAN valid (8-13 cifre) găsit'});
+      const existing=await supa('GET','ean_pool?select=ean');
+      const existingSet=new Set((existing||[]).map(r=>r.ean));
+      const newCodes=codes.filter(c=>!existingSet.has(c));
+      if(newCodes.length)await supa('POST','ean_pool',newCodes.map(ean=>({ean})));
+      const countRows=await supa('GET','ean_pool?select=id');
+      return res.status(200).json({added:newCodes.length,duplicates:codes.length-newCodes.length,count:countRows.length});
+    }
+    if(body.action==='ean_pool_count'){
+      const rows=await supa('GET','ean_pool?select=id');
+      return res.status(200).json({count:rows.length});
+    }
+    if(body.action==='consume_ean'){
+      const rows=await supa('GET','ean_pool?select=id,ean&order=id.asc&limit=1');
+      const row=rows?.[0];
+      if(!row)return res.status(200).json({ean:null,remaining:0});
+      await supa('DELETE',`ean_pool?id=eq.${row.id}`);
+      const remainingRows=await supa('GET','ean_pool?select=id');
+      return res.status(200).json({ean:row.ean,remaining:remainingRows.length});
+    }
     if(body.action==='add_links'){
       const projectId=Number(body.project_id),urls=Array.isArray(body.urls)?body.urls.slice(0,MAX_LINKS):[];
       if(!projectId||!urls.length)return res.status(400).json({error:'Lipsesc dosarul sau linkurile'});
