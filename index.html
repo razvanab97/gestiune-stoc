@@ -806,7 +806,7 @@ function buildRaportCats(){
 .research-link-row{display:grid;grid-template-columns:90px 1fr auto auto auto auto auto;gap:8px;align-items:center;background:var(--surf2);border:1px solid var(--b1);border-radius:var(--r);padding:8px;font-size:12px}
 .research-link-platform{text-transform:uppercase;font-weight:900;color:var(--acc);font-size:11px}
 .research-link-title{font-weight:800;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.research-link-meta{font-family:var(--mono);color:var(--t3);white-space:nowrap}
+.research-link-meta{font-family:var(--mono);color:var(--t3);white-space:normal;word-break:break-word;display:inline-block;max-width:320px}
 .research-link-dup{color:#f59e0b;font-weight:900}
 .research-link-sub{grid-column:1/-1;font-size:11px;color:var(--t3);margin-top:-4px}
 .research-link-del{background:none;border:1px solid var(--b2);color:var(--rd);border-radius:var(--r);cursor:pointer;padding:4px 8px;font-size:12px}
@@ -1575,13 +1575,13 @@ th{font-weight:800!important;color:var(--t3)!important}
           <div class="research-hint" style="margin:10px 0 0">Adaugă linkul furnizorului (cost) și linkuri eMAG/Trendyol (preț de piață) în dosar — verdictul și profitul se calculează automat.</div>
         </div>
       </div>
-      <div class="tb" id="research-top-wrap" style="display:none">
+      <div id="research-projects-list" class="research-projects-list"></div>
+      <div class="tb" id="research-top-wrap" style="display:none;margin-top:16px">
         <div class="tb-head">
-          <div class="tb-title">🏆 Top produse cercetate <span style="font-size:12px;font-weight:400;color:var(--t3)">— după profit estimat, doar dosare cu preț de piață confirmat</span></div>
+          <div class="tb-title">🏆 Top 3 produse cercetate <span style="font-size:12px;font-weight:400;color:var(--t3)">— după profit estimat, doar dosare cu preț de piață confirmat</span></div>
         </div>
         <div id="research-top-list"></div>
       </div>
-      <div id="research-projects-list" class="research-projects-list"></div>
     </div>
     <div class="research-mode" id="research-mode-product">
       <div class="research-url-bar">
@@ -1904,6 +1904,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const UPDATES=[
   {n:105,text:'Research: reparat bug critic — cache-ul de încărcare instant nu se salva NICIODATĂ în producție, pentru că dosarele cu poze (copertă sau screenshot-uri Jumbo/Maxy) depășeau limita de stocare a browserului la fiecare încercare, eșec prins tăcut. Acum cache-ul salvează doar ce e nevoie pentru afișarea instant (fără pozele grele), deci chiar funcționează — testat cu un caz real de 18.8MB de poze, redus la 5KB',date:'2026-08-18'},
   {n:104,text:'Research: pe linia fiecărui dosar (inclusiv restrâns) apar acum „Achiziție" și „Min. concurență" — cel mai mic preț găsit efectiv pe eMAG/Trendyol (nu costul de la furnizor) — pentru o comparație rapidă dintr-o privire, fără să deschizi fiecare dosar',date:'2026-08-18'},
+  {n:108,text:'Research: reparat linkul Trendyol care dispărea după „✦ AI" (AI-ul genera uneori doar query-ul eMAG, fără fallback pentru Trendyol) — acum linkul Trendyol apare mereu. Reparat și textul care ieșea din cadrul tabelului la query-uri AI lungi. Mutat „Top produse cercetate" la finalul listei de dosare și redus la Top 3, cum ai cerut',date:'2026-08-18'},
   {n:107,text:'Research: dosarele pornesc acum RESTRÂNSE la fiecare deschidere a paginii — deschizi manual doar pe cele la care lucrezi. Ce deschizi în timpul vizitei rămâne deschis (nu se re-închide singur la reîmprospătarea din fundal), dar la următoarea vizită pornește iar totul restrâns',date:'2026-08-18'},
   {n:106,text:'Research: nu mai apare NICIODATĂ eroarea tehnică brută de la baza de date (ex. „canceling statement due to statement timeout") — query-ul de încărcare a dosarelor a fost împărțit în loturi mai mici (mai puțin probabil să depășească limita de timp), se reîncearcă automat o dată la eșec, iar dacă tot nu merge, apare un mesaj prietenos cu buton de reîncercare, nu un ecran mort',date:'2026-08-18'},
   {n:103,text:'Generator anunțuri: cardul de anunț generat e acum clar „Anunț eMAG" (nu mai amestecat cu Trendyol) — titlul Trendyol și categoria lui trec într-o secțiune secundară, restrânsă. Titlul se generează combinând termenii recurenți din titlurile surselor cu detalii noi găsite în descrieri, iar AI-ul primește acum și poze reale (nu doar text) ca să confirme vizual detalii, fără să inventeze. Adăugată și o plasă de siguranță care corectează automat cuvinte lipite fără spațiu în textul generat',date:'2026-08-18'},
@@ -3731,7 +3732,7 @@ function researchVerifiedProfit(p){
 function renderResearchTopProducts(){
   const wrap=document.getElementById('research-top-wrap'),body=document.getElementById('research-top-list');
   if(!wrap||!body)return;
-  const ranked=researchProjects.map(p=>({p,profit:researchVerifiedProfit(p)})).filter(x=>x.profit!=null&&x.profit>0).sort((a,b)=>b.profit-a.profit).slice(0,5);
+  const ranked=researchProjects.map(p=>({p,profit:researchVerifiedProfit(p)})).filter(x=>x.profit!=null&&x.profit>0).sort((a,b)=>b.profit-a.profit).slice(0,3);
   if(!ranked.length){wrap.style.display='none';return;}
   wrap.style.display='';
   body.innerHTML=ranked.map(({p,profit},i)=>{
@@ -4036,8 +4037,14 @@ Răspunde STRICT cu JSON: {"emag":["q1","q2","q3","q4"],"trendyol":["q1","q2"]}`
       researchAiQueryCache[linkId]=queries;
     }
     const emagUrl=`https://www.emag.ro/search/${encodeURIComponent(queries.emag[0])}`;
-    const trendyolUrl=queries.trendyol?.[0]?`https://www.trendyol.com/sr?q=${encodeURIComponent(queries.trendyol[0])}&culture=ro-RO&currency=RON`:null;
-    if(out)out.innerHTML=`<span class="research-link-meta">✦ <a href="${esc(emagUrl)}" target="_blank" style="color:var(--acc)">eMAG: ${esc(queries.emag[0])}</a>${trendyolUrl?` · <a href="${esc(trendyolUrl)}" target="_blank" style="color:var(--acc)">Trendyol: ${esc(queries.trendyol[0])}</a>`:''}</span>`;
+    // AI-ul e validat STRICT doar pentru emag (throw dacă lipsește) — trendyol era doar "best effort",
+    // fără fallback: dacă AI-ul omitea sau golea array-ul trendyol (se întâmplă, nu e un câmp forțat),
+    // linkul Trendyol dispărea complet din UI, fără nicio explicație. Acum cade pe query-ul simplu
+    // (primele 5 cuvinte din titlu, ca la researchSearchLinks) dacă AI-ul nu a generat unul —
+    // link-ul Trendyol există mereu.
+    const trendyolQuery=queries.trendyol?.[0]||(link.title||'').split(' ').slice(0,5).join(' ');
+    const trendyolUrl=trendyolQuery?`https://www.trendyol.com/sr?q=${encodeURIComponent(trendyolQuery)}&culture=ro-RO&currency=RON`:null;
+    if(out)out.innerHTML=`<span class="research-link-meta">✦ <a href="${esc(emagUrl)}" target="_blank" style="color:var(--acc)">eMAG: ${esc(queries.emag[0])}</a>${trendyolUrl?` · <a href="${esc(trendyolUrl)}" target="_blank" style="color:var(--acc)">Trendyol: ${esc(trendyolQuery)}</a>`:''}</span>`;
     if(btn)btn.remove();
     toast('Căutare AI generată — dă click pe link ✓');
   }catch(e){
