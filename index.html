@@ -1909,6 +1909,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const UPDATES=[
   {n:105,text:'Research: reparat bug critic — cache-ul de încărcare instant nu se salva NICIODATĂ în producție, pentru că dosarele cu poze (copertă sau screenshot-uri Jumbo/Maxy) depășeau limita de stocare a browserului la fiecare încercare, eșec prins tăcut. Acum cache-ul salvează doar ce e nevoie pentru afișarea instant (fără pozele grele), deci chiar funcționează — testat cu un caz real de 18.8MB de poze, redus la 5KB',date:'2026-08-18'},
   {n:104,text:'Research: pe linia fiecărui dosar (inclusiv restrâns) apar acum „Achiziție" și „Min. concurență" — cel mai mic preț găsit efectiv pe eMAG/Trendyol (nu costul de la furnizor) — pentru o comparație rapidă dintr-o privire, fără să deschizi fiecare dosar',date:'2026-08-18'},
+  {n:113,text:'Research: găsită și reparată cauza reală a lentorii ȘI a dosarelor care „își pierdeau" linkurile — pozele (cover_image, screenshot-uri) erau stocate ca text base64 direct în baza de date, iar lista generală de dosare le încărca pe toate deodată (29.5MB pentru doar 13 dosare, verificat direct în producție). Peste limita asta, unele loturi de linkuri eșuau tăcut și arătau 0 linkuri, deși erau intacte în baza de date. Acum lista generală nu mai aduce poze deloc (46KB în loc de 29.5MB) — pozele se aduc separat, doar pentru dosarul pe care chiar îl deschizi',date:'2026-08-18'},
   {n:112,text:'Research: dosarele se preîncarcă acum tăcut, în fundal, chiar din momentul în care deschizi aplicația — nu doar la prima vizită a tab-ului. Până ajungi să apeși pe „Research", fetch-ul e de obicei deja terminat, deci spinner-ul „Încarc dosarele…" aproape că nu se mai vede niciodată',date:'2026-08-18'},
   {n:111,text:'Comenzi Platforme: reparat un bug real (confirmat direct în producție) — liniile dintr-un import care nu aveau nicio potrivire automată de produs (titlu eMAG/Trendyol prea diferit de numele intern) dispăreau tăcut la „Aplică import", fără să fie salvate nicăieri și fără nicio menționare. Acum rămân vizibile în previzualizare, marcate clar „⚠ fără produs", iar mesajul final spune exact câte linii mai au nevoie de alegere manuală',date:'2026-08-18'},
   {n:110,text:'Comenzi Platforme: la importul comenzilor eMAG/Trendyol apare acum și numele clientului (dacă fișierul are o coloană cu el), atât în previzualizare cât și în lista de comenzi din „Profit vânzări" — mai ușor de asociat/regăsit o comandă. Necesită migration_platforma_comenzi_client.sql în Supabase; până rulezi migrarea, importul funcționează normal, doar fără nume de client afișat',date:'2026-08-18'},
@@ -3765,6 +3766,7 @@ function goToResearchProject(id){
   researchCollapsed.delete(id);
   saveResearchCollapsed();
   renderResearchProjects();
+  hydrateResearchProjectImages(id);
   setTimeout(()=>{
     const card=document.getElementById('rp-card-'+id);
     if(!card)return;
@@ -4451,10 +4453,39 @@ const researchCollapsed=loadResearchCollapsed();
 // true, ca reîmprospătarea din fundal (cache -> date proaspete) să nu re-închidă un card pe care
 // utilizatorul tocmai l-a deschis manual în aceleași câteva secunde.
 let researchCollapsedInitDone=false;
+// Lista generală de dosare NU mai aduce poze (cover_image / research_links.images) — erau text
+// base64 direct în coloane, ajungeau la zeci de MB pe un cont real, ceea ce cauza și încărcare de
+// 12+ secunde, ȘI eșecul tăcut al loturilor de linkuri (arăta ca dosare care și-au pierdut datele,
+// deși erau intacte în baza de date — vezi api/research-projects.js). Pozele se aduc separat, o
+// singură dată per dosar, chiar când îl deschizi — researchHydratedProjects ține minte ce s-a adus deja.
+const researchHydratedProjects=new Set();
+async function hydrateResearchProjectImages(id){
+  if(researchHydratedProjects.has(id))return;
+  const proj=researchProjects.find(p=>Number(p.id)===Number(id));
+  if(!proj)return;
+  researchHydratedProjects.add(id);
+  try{
+    const data=await apiJson('/api/research-projects',{action:'hydrate_project',project_id:id},30000);
+    const imgMap=new Map((data.links||[]).map(l=>[Number(l.id),l.images||[]]));
+    (proj.links||[]).forEach(l=>{const imgs=imgMap.get(Number(l.id));if(imgs)l.images=imgs;});
+    if(data.coverImage!=null)proj.cover_image=data.coverImage;
+    renderResearchProjects();
+  }catch(e){
+    researchHydratedProjects.delete(id);// permite o reîncercare la următoarea deschidere
+    console.warn('Nu am putut încărca pozele dosarului '+id+':',e);
+  }
+}
 function toggleResearchProjectCard(id){
-  if(researchCollapsed.has(id))researchCollapsed.delete(id);else researchCollapsed.add(id);
-  saveResearchCollapsed();
-  renderResearchProjects();
+  if(researchCollapsed.has(id)){
+    researchCollapsed.delete(id);
+    saveResearchCollapsed();
+    renderResearchProjects();
+    hydrateResearchProjectImages(id);
+  }else{
+    researchCollapsed.add(id);
+    saveResearchCollapsed();
+    renderResearchProjects();
+  }
 }
 function collapseAllResearchProjects(){
   researchProjects.forEach(p=>researchCollapsed.add(p.id));
@@ -4465,6 +4496,7 @@ function expandAllResearchProjects(){
   researchCollapsed.clear();
   saveResearchCollapsed();
   renderResearchProjects();
+  researchProjects.forEach(p=>hydrateResearchProjectImages(p.id));
 }
 async function deleteResearchProject(projectId,ev){
   ev?.stopPropagation();
@@ -4869,6 +4901,9 @@ function showSavedProjectListing(projectId){
 async function buildListingFromProject(projectId){
   const pr=researchProjects.find(p=>Number(p.id)===Number(projectId));
   if(!pr){toast('Dosarul nu există în listă','err');return;}
+  // Asigură pozele reale (nu doar [] din lista generală) înainte de eMAG Listing Readiness — de obicei
+  // deja s-au încărcat cât timp dosarul a fost deschis, dar așteptăm explicit, ca să nu depindem de timing.
+  await hydrateResearchProjectImages(projectId);
   const tracked=(pr.links||[]).filter(l=>l.include_in_listing!==false&&l.status!=='eroare'&&l.status!=='aștept screenshot');
   // Linkurile din screenshot/PDF nu au un URL fetch-abil — textul deja extras de AI se trimite direct
   // ca extraPages, în loc să încerce serverul un fetch care oricum ar eșua (Jumbo 403, pdf-import:// fals).

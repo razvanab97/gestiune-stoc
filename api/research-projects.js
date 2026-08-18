@@ -263,25 +263,41 @@ async function analyzeUrl(url){
 module.exports=async function handler(req,res){
   try{
     if(req.method==='GET'){
-      const projects=await supa('GET','research_projects?select=*&order=updated_at.desc&limit=50');
+      // IMPORTANT: research_links.images și research_projects.cover_image sunt poze base64 stocate
+      // direct în coloane text/jsonb — pe un cont real, asta a ajuns la 29.5MB pentru doar 13 dosare
+      // (verificat direct în producție). Un răspuns de 30MB explică ȘI încărcarea de 12+ secunde, ȘI
+      // dosarele care "și-au pierdut" linkurile: loturile din chunk-ul de mai jos depășeau limita și
+      // erau prinse tăcut de catch-ul de eșec parțial, întorcând listă goală — arăta ca dispariție de
+      // date, deși erau intacte în baza de date. Fix real: NU mai cerem imagini în lista generală (rapidă,
+      // mică, fiabilă) — se aduc separat, o singură dată per dosar, când chiar îl deschizi (vezi acțiunea
+      // "hydrate_project" mai jos).
+      const projects=await supa('GET','research_projects?select=id,title,acquisition_price,supplier,verdict,profit_estimated,margin_estimated,max_buy_price,notes,listing_status,listing,created_at,updated_at&order=updated_at.desc&limit=50');
       const ids=projects.map(p=>p.id);
-      // research_links poate avea imagini base64 grele (screenshot-uri Jumbo/Maxy) — un singur
-      // query "in.(id1,id2,...id50)" peste toate deodată poate depăși statement_timeout pe Supabase
-      // ("canceling statement due to statement timeout"), lăsând tot ecranul blocat/eroare brută.
-      // Împărțim în loturi mici, în paralel — fiecare query e mult mai rapid, iar dacă UN lot
-      // eșuează, restul dosarelor tot se încarcă (degradare parțială, nu blocaj total).
+      const LINK_LIST_COLUMNS='id,project_id,url,normalized_url,platform,pnk,title,price,currency,rating,review_count,specs,description,duplicate_of,duplicate_type,include_in_listing,status,error,created_at,updated_at,source,score,score_zone,brand,seller,ean';
       const CHUNK=10;
       const chunks=[];
       for(let i=0;i<ids.length;i+=CHUNK)chunks.push(ids.slice(i,i+CHUNK));
       const linkResults=await Promise.all(chunks.map(async chunk=>{
-        try{return await supa('GET',`research_links?project_id=in.(${chunk.join(',')})&select=*&order=created_at.desc`);}
+        try{return await supa('GET',`research_links?project_id=in.(${chunk.join(',')})&select=${LINK_LIST_COLUMNS}&order=created_at.desc`);}
         catch(e){console.error('research_links chunk failed',e.message);return[];}
       }));
-      const links=linkResults.flat();
-      return res.status(200).json({projects:projects.map(p=>({...p,links:links.filter(l=>l.project_id===p.id)}))});
+      const links=linkResults.flat().map(l=>({...l,images:[]}));
+      return res.status(200).json({projects:projects.map(p=>({...p,cover_image:null,links:links.filter(l=>l.project_id===p.id)}))});
     }
     if(req.method!=='POST')return res.status(405).json({error:'Metodă nepermisă'});
     const body=typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{});
+    if(body.action==='hydrate_project'){
+      // Aduce imaginile (cover_image + research_links.images) pentru UN singur dosar — apelat doar
+      // când utilizatorul chiar deschide/expandează acel dosar, nu pentru toată lista deodată.
+      // Un singur dosar = query mic, rapid, fără risc de timeout, indiferent câte poze are.
+      const projectId=Number(body.project_id);
+      if(!projectId)return res.status(400).json({error:'Lipsește dosarul'});
+      const[projRows,links]=await Promise.all([
+        supa('GET',`research_projects?id=eq.${projectId}&select=cover_image`),
+        supa('GET',`research_links?project_id=eq.${projectId}&select=id,images`)
+      ]);
+      return res.status(200).json({coverImage:projRows?.[0]?.cover_image||null,links});
+    }
     if(body.action==='create_project'){
       const title=clean(body.title);
       if(!title)return res.status(400).json({error:'Titlul dosarului este obligatoriu'});
