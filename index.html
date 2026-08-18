@@ -847,7 +847,7 @@ function buildRaportCats(){
 /* text/link-uri fără culoare proprie moștenesc alb de la body (temă dark) — redefinirea variabilelor de mai
    sus NU retroactivează color-ul deja moștenit; trebuie fixat explicit aici, o singură dată, la rădăcină. */
 #page-research a{color:inherit}
-#page-research .wrap{padding-top:1.5rem;padding-bottom:2.5rem}
+#page-research .wrap{padding-top:1.5rem;padding-bottom:2.5rem;width:min(100%,1800px);max-width:1800px}
 /* Tab strip + filtre — pastile mai discrete pe fundal alb. :not(.on) e obligatoriu — altfel
    selectorul cu #page-research (specificitate mai mare ca .on) suprascria fundalul PESTE culoarea
    de accent a stării active, lăsând text alb pe fundal alb (buton activ ilizibil). */
@@ -1913,6 +1913,9 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:122,text:'Research: pagina Research ocupă acum mult mai mult din lățimea ecranului (1800px în loc de 1440px) — anunțul generat, dosarele și restul secțiunilor nu mai lasă atâta spațiu gol pe ecrane late',date:'2026-08-18'},
+  {n:121,text:'Generator anunțuri: buton nou „📄 Preset eMAG (produs nou)" — export XLSX pe structura REALĂ a template-ului oficial eMAG (EXT_ro_new_products_translation), pentru produse care nu există încă în catalogul eMAG (nu ai PNK de potrivit): nume, brand, descriere, poze, preț, stoc, caracteristici, tot completat automat din anunțul generat + dosar. Reparat și un bug real la presetul vechi „📄 Preset eMAG ERP" — pentru orice anunț generat din Dosare (fluxul curent), presetul ieșea aproape gol (fără preț, brand, categorie, stoc reale), pentru că citea date doar din vechiul flux „Research produs" (întotdeauna gol în fluxul cu dosare); acum preia corect din dosarul curent',date:'2026-08-18'},
+  {n:120,text:'Generator anunțuri: găsită și reparată cauza REALĂ a textului complet lipit, fără spații, din anunțurile generate (nu doar spațiere lângă punctuație, cum s-a reparat anterior) — la citirea răspunsului AI, o linie de cod ștergea absolut TOATE spațiile din tot textul, inclusiv din interiorul titlului/descrierii/bulletpoint-urilor, înainte să fie salvat. Eliminată complet — textul generat de acum înainte păstrează spațiile normale',date:'2026-08-18'},
   {n:105,text:'Research: reparat bug critic — cache-ul de încărcare instant nu se salva NICIODATĂ în producție, pentru că dosarele cu poze (copertă sau screenshot-uri Jumbo/Maxy) depășeau limita de stocare a browserului la fiecare încercare, eșec prins tăcut. Acum cache-ul salvează doar ce e nevoie pentru afișarea instant (fără pozele grele), deci chiar funcționează — testat cu un caz real de 18.8MB de poze, redus la 5KB',date:'2026-08-18'},
   {n:104,text:'Research: pe linia fiecărui dosar (inclusiv restrâns) apar acum „Achiziție" și „Min. concurență" — cel mai mic preț găsit efectiv pe eMAG/Trendyol (nu costul de la furnizor) — pentru o comparație rapidă dintr-o privire, fără să deschizi fiecare dosar',date:'2026-08-18'},
   {n:119,text:'Research: titlurile linkurilor (furnizor/eMAG/Trendyol) se traduc acum automat în română, dacă vin în altă limbă (ex. Maxy în engleză/poloneză, Trendyol în turcă) — rulează în fundal, imediat după ce adaugi linkuri, fără să blocheze adăugarea. Un titlu deja în română rămâne neschimbat, AI-ul nu-l atinge',date:'2026-08-18'},
@@ -5160,17 +5163,25 @@ function safeFileName(s){return String(s||'produs').normalize('NFD').replace(/[\
 function hashInt(s){let h=0;String(s||'').split('').forEach(ch=>{h=((h<<5)-h+ch.charCodeAt(0))|0;});return Math.abs(h)||Date.now()%1000000000;}
 function num4(n){return Number(n)>0?Math.round(Number(n)*10000)/10000:'';}
 function emagNetPriceFromGross(gross){return Number(gross)>0?gross/1.21:'';}
-function emagOfferRow(l){
+// proj = dosarul Research (research_projects) din care vine anunțul curent, dacă există (vezi
+// listingProjectId) — flux NOU (Dosare). researchData rămâne fallback-ul pentru fluxul VECHI
+// "Research produs", care nu are niciodată un dosar asociat. Bug găsit: funcția citea DOAR
+// researchData, deci pentru orice anunț generat din Dosare (fluxul curent), presetul ieșea
+// aproape gol (fără preț, brand, categorie, stoc reale) — researchData e mereu null acolo.
+function emagOfferRow(l,proj){
   const title=(l?.title||researchData?.name||'').slice(0,250);
-  const ean=String(researchData?.ean||'').replace(/\D/g,'');
-  const sku=String(researchData?.sku||ean||safeFileName(title).toUpperCase()).slice(0,60);
-  const category=researchData?.category||researchData?.categoryName||'';
-  let brand=researchData?.brand||researchData?.supplier||'Generic';
-  try{if(!researchData?.brand&&researchData?.url)brand=new URL(researchData.url).hostname.replace(/^www\./,'').split('.')[0]||brand;}catch(e){}
+  const eanSrc=(proj?.links||[]).find(x=>x.ean)?.ean||researchData?.ean||'';
+  const ean=String(eanSrc).replace(/\D/g,'');
+  const sku=String((!proj&&researchData?.sku)||ean||safeFileName(title).toUpperCase()).slice(0,60);
+  const category=l?.category_emag||(proj?'':researchData?.category||researchData?.categoryName)||'';
+  let brand=proj?.supplier||researchData?.brand||researchData?.supplier||'Generic';
+  try{if(brand==='Generic'&&researchData?.url)brand=new URL(researchData.url).hostname.replace(/^www\./,'').split('.')[0]||brand;}catch(e){}
   const stock=Math.max(1,Number(researchData?.stock||researchData?.qty||1)||1);
-  const p=P.find(x=>(ean&&String(x.sku||'').replace(/\D/g,'')===ean)||researchNorm(x.name)===researchNorm(researchData?.name));
-  const minGross=p?.priceEmag||pcAutomaticPricesFromGross(Number(researchData?.priceBuy)||0,.21).emag||0;
-  const refGross=Number(researchData?.emagPrice||researchData?.emag?.activeMatch?.price||0);
+  const p=P.find(x=>(ean&&String(x.sku||'').replace(/\D/g,'')===ean)||researchNorm(x.name)===researchNorm(proj?.title||researchData?.name||title));
+  const acq=Number(proj?.acquisition_price)||Number(researchData?.priceBuy)||0;
+  const prc=proj&&acq?researchCalcPrices(proj,researchPlatformStats(proj)):null;
+  const minGross=p?.priceEmag||prc?.zero.emag||pcAutomaticPricesFromGross(acq,.21).emag||0;
+  const refGross=Number(prc?.rec.emag||researchData?.emagPrice||researchData?.emag?.activeMatch?.price||0);
   const saleGross=minGross||refGross||0;
   const maxGross=Math.max(saleGross,refGross,minGross)*1.35;
   return[
@@ -5198,13 +5209,14 @@ async function downloadEmagOfferPreset(){
   try{
     const l=listingData||researchData?.listing||{};
     if(!researchData&&!l.title){toast('Fă întâi research sau generează un anunț');return;}
+    const proj=listingProjectId?researchProjects.find(p=>Number(p.id)===Number(listingProjectId)):null;
     const XLSX=await ensureXLSX();
     const hdr1=['Produs - read only','','','Product identification','','','ID oferta','Status','Pret oferta','','','Moneda','Stoc & disponibilitate oferta','','','Detalii oferta','Validare preturi',''];
     const hdr2=new Array(18).fill('');
     const hdr3=['name','category_name','brand_name','part_number_key','part_number','ean','vendor_ext_id','status','sale_price','retail_recommended_price','vat_rate','offer_currency','stock','handling_time','lead_time','start_date','min_sale_price','max_sale_price'];
     const hdr4=['Info','Info','Info','Obligatoriu','Obligatoriu','Optional/Obligatoriu','Obligatoriu','Obligatoriu','Obligatoriu','Optional','Obligatoriu','Obligatoriu','Obligatoriu','Optional','Optional','Optional','Obligatoriu','Obligatoriu'];
     const hdr5=['Validare nume produs','Nume categorie','Brand','Part number key (PNK)','Product code','EAN produs','ID produs','Status','Pret vanzare','PRP','TVA','Moneda','Stoc','In cate zile predai comanda curierului','In cate zile poti reaproviziona','Programare modificari','Pret minim','Pret maxim'];
-    const row=emagOfferRow(l);
+    const row=emagOfferRow(l,proj);
     const wb=XLSX.utils.book_new();
     const ws=XLSX.utils.aoa_to_sheet([hdr1,hdr2,hdr3,hdr4,hdr5,row]);
     ws['!merges']=[
@@ -5230,6 +5242,83 @@ async function downloadEmagOfferPreset(){
     XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Produs - read only'],['Fișier generat din AB HOMES Stoc Manager pentru pregătire ofertă eMAG. Verifică PNK/categoria/brandul în ERP înainte de import.']]),'Instructiuni');
     XLSX.writeFile(wb,`emag-preset-oferta-${safeFileName(row[0])}.xlsx`);
     toast('Preset eMAG descărcat ✓');
+  }catch(e){toast('Eroare export preset eMAG: '+(e.message||e),'err');}
+}
+// ── Preset eMAG "produs nou" — pe structura REALĂ a template-ului oficial eMAG
+// EXT_ro_new_products_translation.xlsx (creare produs NOU, cu traducere), diferit de
+// downloadEmagOfferPreset (care presupune un produs deja existent în catalogul eMAG,
+// identificat prin PNK — part_number_key). Îl folosim când AB HOMES e primul/singurul
+// seller pe eMAG pentru acel produs, deci nu există niciun PNK de potrivit și trebuie
+// trimise toate detaliile complete (nume, brand, descriere, poze, caracteristici).
+function emagNewProductRow(l,proj){
+  const name=(l?.title||'').slice(0,250);
+  const brand=(l?.specs||{}).Brand&&l.specs.Brand!=='AB HOMES'?l.specs.Brand:(proj?.supplier||'AB HOMES');
+  const eanRaw=String((proj?.links||[]).find(x=>x.ean)?.ean||'').replace(/\D/g,'');
+  const ean=eanRaw.length>=8&&eanRaw.length<=13?eanRaw:'';
+  // eMAG acceptă DOAR br/td/ul/li în descriere (nu p/strong/img) — folosim varianta text simplu,
+  // sau descărcăm HTML-ul de tag-uri dacă text simplu nu există.
+  const descPlain=(l?.description||String(l?.description_html||'').replace(/<[^>]+>/g,' ')).replace(/\s+/g,' ').trim();
+  const imgs=factoryImages(l||{},[]);
+  const acq=Number(proj?.acquisition_price)||0;
+  const prc=proj&&acq?researchCalcPrices(proj,researchPlatformStats(proj)):null;
+  const zero=acq?pcAutomaticPricesFromGross(acq,.21):null;
+  const saleGross=prc?.rec.emag||zero?.emag||0;
+  const minGross=zero?.emag||saleGross;
+  const maxGross=saleGross?Math.round(saleGross*1.35*100)/100:0;
+  const partNumber=(safeFileName(proj?.title||name).slice(0,20).toUpperCase())||('AB'+Date.now().toString(36).toUpperCase());
+  const p=P.find(x=>(ean&&String(x.sku||'').replace(/\D/g,'')===ean)||researchNorm(x.name)===researchNorm(proj?.title||name));
+  const stock=p?Math.max(0,qty(p)):1;
+  const characteristics=Object.entries(l?.specs||{}).filter(([k,v])=>k&&v&&k!=='Brand').map(([k,v])=>({name:String(k).slice(0,60),value:String(v).slice(0,200)}));
+  const extraDetails=characteristics.length?JSON.stringify({characteristics}):'';
+  return[
+    partNumber,proj?.id||p?.id||hashInt(partNumber),'',l?.category_emag||'',ean,
+    num4(emagNetPriceFromGross(saleGross)),'',0.21,1,'RON',stock,
+    num4(emagNetPriceFromGross(minGross||saleGross)),num4(emagNetPriceFromGross(maxGross||saleGross)),
+    name,brand,descPlain.slice(0,4000),
+    imgs[0]||'',imgs[1]||'',imgs[2]||'',imgs[3]||'',imgs[4]||'',imgs[5]||'',
+    extraDetails,'ro_RO','','','','','','',''
+  ];
+}
+async function downloadEmagNewProductPreset(){
+  try{
+    const l=listingData||researchData?.listing||{};
+    if(!l.title){toast('Generează întâi un anunț');return;}
+    const proj=listingProjectId?researchProjects.find(p=>Number(p.id)===Number(listingProjectId)):null;
+    const XLSX=await ensureXLSX();
+    const groups=['Identificare produs','','','','','Oferta - Pret','','','','Moneda','Oferta - Disponibilitate stoc','Oferta - Verificare pret','','Descriere produs','','','Imagini','','','','','','Detalii suplimentare','','Avertizari de siguranta','Detalii producator','','','Detalii persoana responsabila UE','',''];
+    const hdr2=new Array(31).fill('');
+    const codes=['part_number','ext_id','category_id','category_name','ean','sale_price','original_sale_price','vat_rate','status','offer_currency','stock','min_sale_price','max_sale_price','name','brand','description','main_image_url','other_image_url1','other_image_url2','other_image_url3','other_image_url4','other_image_url5','extra_details','translation_locale','safety_information','manufacturer_name','manufacturer_address','manufacturer_email','responsible_name','responsible_address','responsible_email'];
+    // Valorile de mai jos (coduri/obligativitate/etichete) sunt copiate EXACT din template-ul oficial
+    // eMAG EXT_ro_new_products_translation.xlsx (rândurile 3-5, sheet "Template"), ca fișierul nostru
+    // să fie 1:1 compatibil dacă utilizatorul copiază rândurile direct în template-ul original eMAG.
+    const oblig=['Obligatoriu','Obligatoriu','Optional/Obligatoriu','Optional/Obligatoriu','Optional/Obligatoriu','Obligatoriu','Optional','Obligatoriu','Obligatoriu','Obligatoriu','Obligatoriu','Obligatoriu','Obligatoriu','Obligatoriu','Obligatoriu','Obligatoriu','Obligatoriu','Optional','Optional','Optional','Optional','Optional','Optional','Obligatoriu','Legal','Legal','Legal','Legal','Legal','Legal','Legal'];
+    const labels=['Cod produs','Product ID','ID Categorie','Nume categorie','EAN produs','Pret vanzare','Pret de baza','TVA','Status','Moneda','Stoc','Pret minim','Pret maxim','Nume','Brand','Descriere','URL imagine principala','URL imagine secundara 1','URL imagine secundara 2','URL imagine secundara 3','URL imagine secundara 4','URL imagine secundara 5','Detalii produs','Limba originala a produsului','Avertizari de siguranta','Nume producator','Adresa producator','Adresa email producator','Nume persoana responsabila UE','Adresa persoana responsabila UE','Adresa email persoana responsabila UE'];
+    const row=emagNewProductRow(l,proj);
+    const wb=XLSX.utils.book_new();
+    const ws=XLSX.utils.aoa_to_sheet([groups,hdr2,codes,oblig,labels,row]);
+    ws['!merges']=[
+      {s:{r:0,c:0},e:{r:0,c:4}},{s:{r:0,c:5},e:{r:0,c:8}},{s:{r:0,c:11},e:{r:0,c:12}},
+      {s:{r:0,c:13},e:{r:0,c:15}},{s:{r:0,c:16},e:{r:0,c:21}},{s:{r:0,c:22},e:{r:0,c:23}},
+      {s:{r:0,c:25},e:{r:0,c:27}},{s:{r:0,c:28},e:{r:0,c:30}}
+    ];
+    ws['!cols']=new Array(31).fill({wch:16});
+    XLSX.utils.book_append_sheet(wb,ws,'Template');
+    const def=[
+      ['Câmp','Denumire','Descriere','Obligativitate'],
+      ['part_number','Cod produs','Codul propriu al produsului (nu PNK — produsul nu există încă în catalogul eMAG)','Obligatoriu'],
+      ['ean','EAN','Codul de bare, 8-13 cifre','Optional'],
+      ['name','Nume produs','Tip produs, brand, model, atribute — fără limbaj promoțional, fără CAPS LOCK, fără preț/livrare/date de contact','Obligatoriu'],
+      ['brand','Brand','Brand valid — poate diferi de producător','Obligatoriu'],
+      ['description','Descriere','Doar text/tag-uri br,td,ul,li — fără p/strong/img, fără promoții/date de contact','Obligatoriu'],
+      ['sale_price / min_sale_price / max_sale_price','Prețuri','Toate fără TVA (net), max. 4 zecimale','Obligatoriu'],
+      ['main_image_url / other_image_url1-5','Imagini','URL-uri publice, minim 600×800px','Optional, recomandat'],
+      ['extra_details','Caracteristici','JSON: {"characteristics":[{"name":"...","value":"..."}]}','Optional'],
+      ['translation_locale','Limba originală','ro_RO implicit (AB HOMES scrie direct în română)','Obligatoriu']
+    ];
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(def),'Definitia datelor');
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([['Preset produs nou eMAG'],['Fișier generat din AB HOMES Stoc Manager, pe structura template-ului oficial eMAG EXT (creare produs nou + traducere). Verifică prețurile, categoria și imaginile înainte de import — completează manual detaliile producătorului/persoanei responsabile UE dacă sunt cerute de categorie.']]),'Instructiuni');
+    XLSX.writeFile(wb,`emag-produs-nou-${safeFileName(row[13]||'produs')}.xlsx`);
+    toast('Preset eMAG (produs nou) descărcat ✓');
   }catch(e){toast('Eroare export preset eMAG: '+(e.message||e),'err');}
 }
 async function saveListingPriceObservations(a,pages){
@@ -5353,7 +5442,8 @@ function renderListingResult(l,pages){
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
         <button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(l.title||''))})">Copiază titlu</button>
         <button class="btn btn-sm btn-acc" onclick="applyListingToProduct()">Aplică în produs</button>
-        <button class="btn btn-sm" onclick="downloadEmagOfferPreset()">📄 Preset eMAG ERP</button>
+        <button class="btn btn-sm" onclick="downloadEmagOfferPreset()" title="Produs deja existent în catalogul eMAG (ai un PNK de potrivit)">📄 Preset eMAG ERP</button>
+        <button class="btn btn-sm" onclick="downloadEmagNewProductPreset()" title="Produs NOU pe eMAG — nu există încă în catalog, trimiți toate detaliile">📄 Preset eMAG (produs nou)</button>
       </div>
     </div>
     <div class="listing-title">${esc(l.title||researchData?.name||'')}</div>
@@ -5781,7 +5871,8 @@ function renderListingFactoryResult(l,pages,allImages=[]){
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
         <button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(l?.title||''))})">Copiază titlu</button>
         <button class="btn btn-sm btn-acc" onclick="applyListingToProduct()">Aplică în produs</button>
-        <button class="btn btn-sm" onclick="downloadEmagOfferPreset()">📄 Preset eMAG ERP</button>
+        <button class="btn btn-sm" onclick="downloadEmagOfferPreset()" title="Produs deja existent în catalogul eMAG (ai un PNK de potrivit)">📄 Preset eMAG ERP</button>
+        <button class="btn btn-sm" onclick="downloadEmagNewProductPreset()" title="Produs NOU pe eMAG — nu există încă în catalog, trimiți toate detaliile">📄 Preset eMAG (produs nou)</button>
         ${projectLinkBtn}
       </div>
     </div>

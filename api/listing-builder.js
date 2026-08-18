@@ -251,8 +251,12 @@ function jsonBlock(text=''){
   return end>=start?cleaned.slice(start,end+1):cleaned.slice(start,cleaned.lastIndexOf('}')+1);
 }
 function parseLooseJson(text){
+  // BUG GRAV găsit: .replace(/ /g,'') ștergea ABSOLUT TOATE spațiile din tot JSON-ul, inclusiv din
+  // INTERIORUL valorilor de tip string ("Ghiozdan Negru Verde" → "GhiozdanNegruVerde") — nu doar
+  // spațiile structurale (nesemnificative) dintre chei/paranteze. JSON.parse acceptă oricum spații
+  // structurale fără nicio problemă — linia nu avea niciun rol legitim, doar distrugea tot textul
+  // generat (titlu/descriere/bullets/specificații) la FIECARE anunț generat, din tot proiectul.
   const raw=jsonBlock(text)
-    .replace(/ /g,'')
     .replace(/,\s*([}\]])/g,'$1')
     .replace(/[""]/g,'"')
     .replace(/['']/g,"'");
