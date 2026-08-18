@@ -19,15 +19,20 @@ async function supa(method,path,body){
   return data;
 }
 const clean=s=>String(s||'').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+// BUG REAL găsit — orice link care nu era pe lista fixă de 4 furnizori cunoscuți (jumbo/maxy/verk/
+// i-want) ieșea clasificat 'altul', ceea ce (a) ascundea butonul de căutare eMAG/Trendyol și
+// verificarea AI (ambele cer strict platform==='furnizor'), ȘI mult mai grav (b) — recalcProject
+// exclude explicit din statisticile de preț de piață DOAR 'furnizor', nu și 'altul', deci prețul
+// nostru de achiziție (de la un furnizor "necunoscut") intra GREȘIT în calculul prețului minim de
+// concurență, umflând fals verdictul/marja. Fluxul aplicației presupune mereu UN singur link de cost
+// (furnizorul) + linkuri de piață STRICT de pe eMAG/Trendyol (singurele generate/citite ca
+// "concurență" — vezi add_pdf_listings, generateAiSearchLinks) — nu există un caz legitim de "altă
+// platformă" în workflow-ul curent, deci orice non-eMAG/non-Trendyol e tratat direct ca furnizor.
 function platformOf(url){
   const h=new URL(url).hostname.replace(/^www\./,'').toLowerCase();
   if(h.includes('emag.'))return'emag';
   if(h.includes('trendyol.'))return'trendyol';
-  if(h.includes('jumbo.'))return'furnizor';
-  if(h.includes('maxy.'))return'furnizor';
-  if(h.includes('verk.'))return'furnizor';
-  if(h.includes('i-want.'))return'furnizor';
-  return'altul';
+  return'furnizor';
 }
 function pnkOf(url){const m=String(url||'').match(/\/pd\/([A-Z0-9]+)\/?/i);return m?m[1].toUpperCase():'';}
 // Jumbo (403 la nivel de server) și unele pagini Maxy (SPA, HTML gol) nu pot fi citite prin fetch
@@ -175,6 +180,37 @@ function similarity(a,b){
   if(!aw.size||!bw.size)return 0;
   let hit=0;aw.forEach(x=>{if(bw.has(x))hit++;});
   return hit/Math.max(aw.size,bw.size);
+}
+// Port fidel al researchNorm/researchTokens/researchDims + scorePdfCandidate (index.html) — server-side,
+// ca să putem scora candidați eMAG/Trendyol la add_links (BUG găsit: linkurile adăugate normal, lipind
+// un URL — fluxul principal, nu doar cel de PDF — nu primeau NICIODATĂ un scor de potrivire; coloana
+// "Match" din UI cădea pe numărul de recenzii, complet irelevant pentru "e chiar același produs?").
+function researchNormServer(s){
+  return String(s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^\p{L}\p{N}\s]/giu,' ').replace(/\s+/g,' ').trim();
+}
+const RESEARCH_STOPWORDS_SERVER=new Set('de cu si și pentru in în din la pe ca un o ale al the and for with sau plus pat'.split(' '));
+function researchTokensServer(s){
+  return researchNormServer(s).split(' ').filter(w=>w.length>2&&!RESEARCH_STOPWORDS_SERVER.has(w));
+}
+function researchDimsServer(s){
+  return[...String(s||'').matchAll(/\d+(?:[.,]\d+)?\s*(?:x|×)\s*\d+(?:[.,]\d+)?(?:\s*(?:x|×)\s*\d+(?:[.,]\d+)?)?\s*(?:cm|mm|m)?|\d+(?:[.,]\d+)?\s*(?:cm|mm|m|l|ml|kg|g)/gi)].map(m=>researchNormServer(m[0]));
+}
+// Scoring 55/30/15 (nume/caracteristici/EAN) — identic cu scorePdfCandidate din index.html.
+function scoreEmagTrendyolCandidate(base,cand){
+  const bName=base.title||'',cName=cand.title||'';
+  const bt=researchTokensServer(bName),ct=researchTokensServer(cName);
+  const overlap=bt.length?bt.filter(t=>ct.includes(t)).length/bt.length:0;
+  const nameScore=Math.round(Math.min(55,overlap*55));
+  const bd=researchDimsServer([bName,base.description].join(' '));
+  const cd=researchDimsServer([cName,cand.description].join(' '));
+  const dimHit=bd.length&&cd.length?bd.some(d=>cd.includes(d)):false;
+  const charScore=dimHit?30:Math.round(Math.min(30,overlap*18));
+  const hay=researchNormServer([cName,cand.description].join(' '));
+  const ean=String(base.ean||'').replace(/\D/g,'');
+  const eanScore=ean&&hay.includes(ean)?15:0;
+  const score=Math.max(0,Math.min(100,nameScore+charScore+eanScore));
+  const zone=score>=80?'ok':score>=50?'mid':'low';
+  return{score,zone};
 }
 function calcProfit(acqGross,saleGross){
   const buy=Number(acqGross)||0,sale=Number(saleGross)||0;
@@ -372,10 +408,31 @@ module.exports=async function handler(req,res){
         if(!data.title)return{...x,data:{...data,status:data.error?'eroare':'aștept screenshot'}};
         return{...x,data};
       }));
+      // Titlul dosarului, ca ultim fallback de referință pentru scoring — dacă niciun link de furnizor
+      // nu are încă un titlu (dosar nou, adaugi totul dintr-o dată), tot avem CEVA de comparat.
+      let projectTitle='';
+      try{const projRows=await supa('GET',`research_projects?id=eq.${projectId}&select=title`);projectTitle=projRows?.[0]?.title||'';}catch(e){}
       for(const item of analyzed){
         const{raw,norm,pnk,data}=item;
         const probable=existing.find(l=>data.title&&l.title&&similarity(data.title,l.title)>.72&&(!data.price||!l.price||Math.abs(Number(data.price)-Number(l.price))/Math.max(Number(l.price),1)<.12));
         const row={project_id:projectId,url:String(raw).trim(),normalized_url:norm,platform:data.platform,pnk:data.pnk||pnk,title:data.title,price:data.price||0,currency:data.currency||'RON',rating:data.rating||0,review_count:data.review_count||0,images:data.images||[],specs:data.specs||{},description:data.description||'',brand:data.brand||'',seller:data.seller||'',ean:data.ean||'',duplicate_of:probable?.id||null,duplicate_type:probable?'probabil':'none',include_in_listing:true,source:data.title?'web':'screenshot',status:data.status||(data.error?'eroare':'analizat'),error:data.error||null};
+        // BUG găsit: linkurile eMAG/Trendyol adăugate normal (lipind un URL — fluxul PRINCIPAL de
+        // adăugare, nu doar cel de import PDF) nu primeau NICIODATĂ un scor de potrivire — coloana
+        // "Match" din UI cădea pe numărul de recenzii, complet irelevant pentru "e chiar același
+        // produs?". Acum se scorează la fel ca la import PDF (scoreEmagTrendyolCandidate, 55/30/15
+        // nume/caracteristici/EAN), față de linkul de furnizor deja din dosar (dacă e deja în listă,
+        // inclusiv unul adăugat chiar în acest apel, mai devreme în buclă).
+        if((data.platform==='emag'||data.platform==='trendyol')&&data.title){
+          const baseRef=existing.find(l=>l.platform==='furnizor'&&l.title)||(projectTitle?{title:projectTitle,description:'',ean:''}:null);
+          if(baseRef){
+            const sc=scoreEmagTrendyolCandidate(baseRef,{title:data.title,description:data.description});
+            row.score=sc.score;row.score_zone=sc.zone;
+            // Aceeași politică ca la import PDF: sub 80 nu se include automat în calculul verdictului/
+            // prețurilor de piață — o potrivire slabă nu trebuie să denatureze prețul minim de
+            // concurență. Zona 50-79 rămâne editabilă din UI (checkbox "confirmă"); sub 50 rămâne exclusă.
+            row.include_in_listing=sc.score>=80;
+          }
+        }
         const ins=await supa('POST','research_links',row);
         const saved=ins?.[0]||row;existing.push(saved);added.push(saved);if(probable)flagged.push(saved);
       }

@@ -1936,6 +1936,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:129,text:'Research: 2 bug-uri reale găsite, direct legate de „nu apare ✦ Recunoaștere AI" și de potrivirea slabă în dosare. (1) Orice link de la un furnizor care nu era pe o listă fixă de 4 domenii cunoscute (jumbo/maxy/verk/i-want) ieșea clasificat „altul" — ceea ce ascundea butonul de căutare eMAG/Trendyol ȘI, mai grav, intra GREȘIT în calculul prețului minim de concurență (recalcProject exclude explicit doar „furnizor", nu și „altul"), umflând fals verdictul/marja. Acum orice link non-eMAG/non-Trendyol e tratat direct ca furnizor. (2) Linkurile eMAG/Trendyol adăugate normal (lipind un URL — fluxul principal) nu primeau NICIODATĂ un scor de potrivire (doar cele din import PDF); coloana Match cădea pe numărul de recenzii, irelevant. Acum primesc automat același scor 55/30/15 (nume/dimensiuni/EAN) ca la PDF, iar sub 80% nu mai intră automat în calculul verdictului/prețului de piață (50-79% rămâne editabil manual, ca înainte doar la PDF)',date:'2026-08-19'},
   {n:128,text:'Research: matching mai la obiect, 2 schimbări. (1) Buton nou „🎯 Verifică AI" pe fiecare candidat eMAG/Trendyol — compară efectiv poza + titlul + specificațiile cu produsul nostru de referință și dă un verdict real (Potrivire / Nu e același / Incert, cu motiv), spre deosebire de scorul existent (Match), care e doar suprapunere de cuvinte din titlu și ratează sinonime („cutie litieră" vs „toaletă pisică"). (2) Promptul de căutare AI („✦ Recunoaștere AI") primește acum și specificațiile deja confirmate ale produsului (Material/Culoare/Dimensiuni etc.) plus o categorie eMAG detectată automat — fapte sigure, nu ghicite din titlu, deci query-uri mai precise. Necesită migration_research_links_ai_match.sql în Supabase',date:'2026-08-18'},
   {n:127,text:'Research: bancă de coduri EAN nouă — pentru produse noi fără cod de bare real. Lipești coduri deja cumpărate/rezervate (secțiunea „🔢 Bancă de coduri EAN" din Generator anunțuri), iar fiecare anunț generat primește automat unul, o singură dată, la „Copiază EAN" din cardul de anunț sau la descărcarea presetului eMAG „produs nou" (dacă produsul chiar are un EAN real din dosar, acela e mereu prioritar, nu se irosește un cod din bancă). Codul se ȘTERGE din bancă imediat ce e alocat; când rămâi fără coduri, primești o notificare clară, cu îndemn să adaugi mai multe. Necesită migration_ean_pool.sql în Supabase',date:'2026-08-18'},
   {n:126,text:'Research: căutarea eMAG/Trendyol de lângă furnizor — 3 schimbări. (1) Scos EAN-ul din căutare (folosit de la #125) — testat direct, produsele de la furnizori (mărci de import ca Purlov) aproape niciodată nu au ACEL EAN exact înregistrat pe eMAG/Trendyol, deci căutarea ieșea goală, nefuncțională. (2) Butonul „✦ AI" (acum „✦ Recunoaștere AI") are un prompt mult mai bun — reparat un bug real (căuta pe Trendyol în TURCĂ, nu română — platforma e turcească la origine, dar folosim trendyol.com/ro) — și acum recunoaște TIPUL de produs ca un vânzător român, nu traduce cuvânt-cu-cuvânt, plus generează mereu și o variantă generică FĂRĂ brand (marca furnizorului rareori e listată pe eMAG). (3) Arată acum TOATE variantele de căutare generate de AI (nu doar prima), și au propriul rând, pe toată lățimea tabelului, nu mai stau înghesuite lângă butonul de ștergere unde textul se rupea pe 2-3 linii ilizibil',date:'2026-08-18'},
@@ -4834,15 +4835,18 @@ function renderResearchProjects(){
       const sourceTitle=l.source==='screenshot'?'Date citite dintr-un screenshot':l.source==='pdf'?'Date citite dintr-un PDF':'';
       const searchQ=l.platform==='furnizor'&&l.title?researchSearchQuery(l):null;
       const searchLinks=l.platform==='furnizor'&&l.title?researchSearchLinks(l):null;
-      const scoreHtml=l.score!=null?`<span class="rsx-score-pill ${l.score_zone==='ok'?'ok':'mid'}">${l.score}</span>`:(l.review_count?`<span class="rsx-cell-sub">${l.review_count} rev.</span>`:'<span class="rsx-cell-sub">—</span>');
-      const pnkHtml=l.pnk?`<span class="rsx-pnk">PNK ${esc(l.pnk)}<button onclick="copyText('${esc(l.pnk)}')">⧉</button></span>`:'<span class="rsx-cell-sub">—</span>';
-      const confirmHtml=l.source==='pdf'&&l.score_zone==='mid'
-        ?`<label class="rsx-confirm"><input type="checkbox" ${l.include_in_listing?'checked':''} onchange="toggleLinkInclude(${l.id},this.checked)"> confirmă</label>`
-        :(l.include_in_listing!==false?'<span style="color:var(--gr)">✓</span>':'<span class="rsx-cell-sub">—</span>');
-      const titleUrl=l.source==='pdf'?'javascript:void(0)':esc(l.url);
       // Completeness/Quality — doar pentru candidați eMAG/Trendyol (nu pentru linkul de furnizor, care
       // e sursa de cost, nu o listare de evaluat). Recalculat live, nu persistat — vezi rsxAnalyzeListing.
       const isMarketplace=l.platform==='emag'||l.platform==='trendyol';
+      const scoreHtml=l.score!=null?`<span class="rsx-score-pill ${l.score_zone==='ok'?'ok':'mid'}">${l.score}</span>`:(l.review_count?`<span class="rsx-cell-sub">${l.review_count} rev.</span>`:'<span class="rsx-cell-sub">—</span>');
+      const pnkHtml=l.pnk?`<span class="rsx-pnk">PNK ${esc(l.pnk)}<button onclick="copyText('${esc(l.pnk)}')">⧉</button></span>`:'<span class="rsx-cell-sub">—</span>';
+      // Extins de la strict "source==='pdf'" — de acum linkurile eMAG/Trendyol adăugate normal (lipind
+      // un URL) primesc și ele un scor (vezi add_links, api/research-projects.js), deci merită aceeași
+      // șansă de confirmare manuală pentru zona ambiguă (50-79%), nu doar cele importate din PDF.
+      const confirmHtml=isMarketplace&&l.score_zone==='mid'
+        ?`<label class="rsx-confirm"><input type="checkbox" ${l.include_in_listing?'checked':''} onchange="toggleLinkInclude(${l.id},this.checked)"> confirmă</label>`
+        :(l.include_in_listing!==false?'<span style="color:var(--gr)">✓</span>':'<span class="rsx-cell-sub">—</span>');
+      const titleUrl=l.source==='pdf'?'javascript:void(0)':esc(l.url);
       const aiMatchHtml=isMarketplace?researchAiMatchBadgeHtml(l):'';
       const analysis=isMarketplace?rsxAnalyzeListing(l):null;
       const detailOpen=rsxDetailOpen.has(l.id);
