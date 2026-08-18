@@ -309,6 +309,18 @@ module.exports=async function handler(req,res){
       const rows=await supa('POST','research_projects',{title,acquisition_price:Number(body.acquisition_price)||0,supplier:clean(body.supplier),verdict:'Date insuficiente',listing_status:'negenerat'});
       return res.status(200).json({project:rows?.[0]});
     }
+    if(body.action==='update_project_title'){
+      // Editare manuală a titlului dosarului (ex. traducerea automată de la creare nu a ieșit perfect,
+      // sau utilizatorul vrea pur și simplu alt titlu) — acțiune minimă, ca update_link_title, nu atinge
+      // preț/furnizor/verdict/alte câmpuri deja salvate ale dosarului.
+      const projectId=Number(body.project_id);
+      const title=clean(body.title).slice(0,240);
+      if(!projectId||!title)return res.status(400).json({error:'Lipsesc datele'});
+      const rows=await supa('PATCH',`research_projects?id=eq.${projectId}`,{title,updated_at:new Date().toISOString()});
+      const project=rows?.[0];
+      if(!project)return res.status(404).json({error:'Dosarul nu a fost găsit'});
+      return res.status(200).json({project});
+    }
     if(body.action==='add_links'){
       const projectId=Number(body.project_id),urls=Array.isArray(body.urls)?body.urls.slice(0,MAX_LINKS):[];
       if(!projectId||!urls.length)return res.status(400).json({error:'Lipsesc dosarul sau linkurile'});

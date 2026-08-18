@@ -866,6 +866,8 @@ function buildRaportCats(){
 .rsx-head-img-wrap:hover .rsx-head-img-hint{opacity:1}
 .rsx-head-img-ph{display:flex;align-items:center;justify-content:center;font-size:26px}
 .rsx-head-title{font-size:19px;font-weight:800;color:var(--t1);line-height:1.28}
+.rsx-title-edit{background:transparent;border:none;cursor:pointer;font-size:14px;opacity:.5;padding:2px 4px;line-height:1;flex-shrink:0}
+.rsx-title-edit:hover{opacity:1}
 .rsx-head-meta{font-size:13px;color:var(--t3);font-family:var(--mono);margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .rsx-head-chevron{color:var(--t3);font-size:12px;flex-shrink:0;margin-top:3px}
 .rsx-head-price{font-family:var(--mono);font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;background:var(--surf2);border:1px solid var(--b1);color:var(--t2)!important;white-space:nowrap}
@@ -1913,6 +1915,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:124,text:'Research: titlul unui dosar deja salvat se poate edita acum oricând — buton ✏️ lângă titlu, în header-ul cardului. Util dacă traducerea automată de la creare nu a ieșit perfect sau vrei pur și simplu alt titlu',date:'2026-08-18'},
   {n:123,text:'Research: titlul dosarului se traduce acum automat în română chiar la creare, dacă îl scrii/lipești în altă limbă (ex. copiat de pe Maxy în engleză) — se întâmplă înainte ca dosarul să apară, deci nu mai „sare" din engleză în română după câteva secunde, ca la titlurile de linkuri. Dacă e deja română, rămâne neschimbat',date:'2026-08-18'},
   {n:122,text:'Research: pagina Research ocupă acum mult mai mult din lățimea ecranului (1800px în loc de 1440px) — anunțul generat, dosarele și restul secțiunilor nu mai lasă atâta spațiu gol pe ecrane late',date:'2026-08-18'},
   {n:121,text:'Generator anunțuri: buton nou „📄 Preset eMAG (produs nou)" — export XLSX pe structura REALĂ a template-ului oficial eMAG (EXT_ro_new_products_translation), pentru produse care nu există încă în catalogul eMAG (nu ai PNK de potrivit): nume, brand, descriere, poze, preț, stoc, caracteristici, tot completat automat din anunțul generat + dosar. Reparat și un bug real la presetul vechi „📄 Preset eMAG ERP" — pentru orice anunț generat din Dosare (fluxul curent), presetul ieșea aproape gol (fără preț, brand, categorie, stoc reale), pentru că citea date doar din vechiul flux „Research produs" (întotdeauna gol în fluxul cu dosare); acum preia corect din dosarul curent',date:'2026-08-18'},
@@ -4495,6 +4498,32 @@ async function createResearchProject(){
   }catch(e){toast(e.message||'Eroare creare dosar','err');}
   finally{if(btn){btn.disabled=false;btn.textContent=btnLabel;}}
 }
+// Editare manuală a titlului dosarului DUPĂ ce a fost salvat — util când traducerea automată de la
+// creare (researchTranslateTitle) nu iese perfect, sau utilizatorul vrea pur și simplu alt titlu.
+// event.stopPropagation() e obligatoriu — butonul stă în header-ul cardului, care are propriul
+// onclick de restrângere/extindere (toggleResearchProjectCard); fără el, editarea ar mai și
+// restrânge/extinde cardul din greșeală la fiecare click pe ✏️.
+async function editResearchProjectTitle(id,event){
+  event?.stopPropagation();
+  const proj=researchProjects.find(p=>Number(p.id)===Number(id));
+  if(!proj)return;
+  const next=prompt('Titlu dosar:',proj.title||'');
+  if(next==null)return;
+  const title=next.trim();
+  if(!title||title===proj.title)return;
+  const prevTitle=proj.title;
+  proj.title=title;// optimist — feedback instant, fără să aștepți răspunsul serverului
+  renderResearchProjects();
+  try{
+    const data=await apiJson('/api/research-projects',{action:'update_project_title',project_id:id,title},20000);
+    if(data.project?.title)proj.title=data.project.title;
+    toast('Titlu dosar actualizat ✓');
+  }catch(e){
+    proj.title=prevTitle;// revert — salvarea reală a eșuat, nu lăsăm starea locală să mintă
+    toast(e.message||'Eroare salvare titlu','err');
+  }
+  renderResearchProjects();
+}
 // Stare restrânsă persistată (nu doar în memorie) — dar la fiecare deschidere de pagină TOATE
 // dosarele pornesc restrânse (vezi researchCollapsedInitDone mai jos); ce deschizi manual în
 // sesiunea curentă rămâne deschis până navighezi/reîncarci pagina din nou.
@@ -4724,7 +4753,10 @@ function renderResearchProjects(){
         <div class="rsx-head-l">
           ${headerImg}
           <div>
-            <div class="rsx-head-title">${esc(p.title)}</div>
+            <div style="display:flex;align-items:center;gap:6px">
+              <div class="rsx-head-title">${esc(p.title)}</div>
+              <button class="rsx-title-edit" onclick="editResearchProjectTitle(${p.id},event)" title="Editează titlul dosarului">✏️</button>
+            </div>
             <div class="rsx-head-meta"><span class="rsx-head-chevron">${collapsed?'▸':'▾'}</span>#${p.id} · ${new Date(p.updated_at||p.created_at).toLocaleDateString('ro-RO')} ${p.supplier?'· '+esc(p.supplier):''}${collapsed?' · '+links.length+' linkuri':''}
               ${p.acquisition_price?`<span class="rsx-head-price" title="Preț de achiziție (furnizor)">Achiziție ${Number(p.acquisition_price).toFixed(2)} RON</span>`:''}
               ${competitorMin?`<span class="rsx-head-price" style="color:${verdictColor(p.verdict)};border-color:${verdictColor(p.verdict)}" title="Cel mai mic preț găsit la concurență pe eMAG/Trendyol">Min. concurență ${competitorMin.toFixed(2)} RON</span>`:''}
