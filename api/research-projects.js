@@ -345,6 +345,18 @@ module.exports=async function handler(req,res){
       const verdict=await recalcProject(projectId);
       return res.status(200).json({added,skipped,flagged,verdict:verdict.project});
     }
+    if(body.action==='update_link_title'){
+      // Titlu retradus în română de AI, client-side (vezi researchTranslateLinkTitles din index.html) —
+      // serverul doar salvează rezultatul, nu apelează AI aici. Acțiune minimă, separată de set_link_data,
+      // ca să nu rescrie/atingă preț/poze/alte câmpuri deja salvate ale linkului.
+      const linkId=Number(body.link_id);
+      const title=clean(body.title).slice(0,240);
+      if(!linkId||!title)return res.status(400).json({error:'Lipsesc datele'});
+      const rows=await supa('PATCH',`research_links?id=eq.${linkId}`,{title,updated_at:new Date().toISOString()});
+      const link=rows?.[0];
+      if(!link)return res.status(404).json({error:'Linkul nu a fost găsit'});
+      return res.status(200).json({link});
+    }
     if(body.action==='set_link_data'){
       // Completează un link 'aștept screenshot' (Jumbo/Maxy) cu datele deja extrase de AI, client-side,
       // dintr-o poză încărcată — serverul nu face fetch și nu apelează AI aici, doar salvează rezultatul.

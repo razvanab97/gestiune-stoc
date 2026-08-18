@@ -1915,6 +1915,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 const UPDATES=[
   {n:105,text:'Research: reparat bug critic — cache-ul de încărcare instant nu se salva NICIODATĂ în producție, pentru că dosarele cu poze (copertă sau screenshot-uri Jumbo/Maxy) depășeau limita de stocare a browserului la fiecare încercare, eșec prins tăcut. Acum cache-ul salvează doar ce e nevoie pentru afișarea instant (fără pozele grele), deci chiar funcționează — testat cu un caz real de 18.8MB de poze, redus la 5KB',date:'2026-08-18'},
   {n:104,text:'Research: pe linia fiecărui dosar (inclusiv restrâns) apar acum „Achiziție" și „Min. concurență" — cel mai mic preț găsit efectiv pe eMAG/Trendyol (nu costul de la furnizor) — pentru o comparație rapidă dintr-o privire, fără să deschizi fiecare dosar',date:'2026-08-18'},
+  {n:119,text:'Research: titlurile linkurilor (furnizor/eMAG/Trendyol) se traduc acum automat în română, dacă vin în altă limbă (ex. Maxy în engleză/poloneză, Trendyol în turcă) — rulează în fundal, imediat după ce adaugi linkuri, fără să blocheze adăugarea. Un titlu deja în română rămâne neschimbat, AI-ul nu-l atinge',date:'2026-08-18'},
   {n:118,text:'Research: Maxy și Verk — testat direct pe pagini reale trimise de tine. Găsite și reparate 2 bugs: (1) linkurile Maxy nu mai sunt presupuse „mereu needsScreenshot" după domeniu — se încearcă mereu citirea automată întâi, iar dacă pagina chiar are date (ex. old.maxy.eu — titlu, 13 poze, brand, EAN găsite reale), le folosește direct, fără screenshot; (2) JSON-ul de produs de pe verk.store avea o eroare de sintaxă pe pagina lor (valoare lipsă înainte de virgulă) care bloca toată extragerea — acum se repară automat, iar brand+EAN care lipseau complet acum se citesc corect. Prețul rămâne totuși gol pe ambele pagini de test — verificat direct în HTML brut, nu e un bug de-al nostru, prețul lor chiar lipsește din pagina servită (probabil încărcat separat prin JavaScript)',date:'2026-08-18'},
   {n:117,text:'Research: comprimate toate pozele deja existente în producție (13 coperte de dosar + 36 linkuri cu poze) — 55.9MB → 6MB, fără nicio pierdere vizibilă de calitate. Copertele dosarelor (acum mici) au revenit în lista generală, deci pozele apar din nou instant, fără să deschizi dosarul — restul pozelor (din linkuri) tot se aduc separat, la deschidere',date:'2026-08-18'},
   {n:116,text:'Research: reparat un bug real de conversie valutară — „Preț minim găsit" compara prețuri brute, fără conversie (un link Maxy în EUR putea „câștiga" fals în fața unui preț mai mare în RON). Acum toate prețurile se convertesc în RON înainte de comparație. Adăugat și EUR ca opțiune la achiziția unui dosar nou — se convertește automat în RON la salvare, cu cursul afișat',date:'2026-08-18'},
@@ -4452,6 +4453,7 @@ async function createResearchProject(){
         if(linkData.verdict)Object.assign(project,linkData.verdict);
         renderResearchProjects();
         toast('Dosar creat și link sursă adăugat ✓');
+        researchTranslateLinkTitles(linkData.added||[]);
       }catch(e){toast('Dosar creat, dar linkul sursă nu s-a putut adăuga: '+(e.message||e),'err');}
     }else{
       toast('Dosar Research creat ✓');
@@ -4866,7 +4868,53 @@ async function addResearchProjectLinks(projectId){
     renderResearchProjects();
     const s=(data.skipped||[]).length,f=(data.flagged||[]).length,a=(data.added||[]).length;
     toast(`Linkuri adăugate: ${a}${s?' · duplicate/skip: '+s:''}${f?' · posibile duplicate: '+f:''} ✓`);
+    researchTranslateLinkTitles(data.added||[]);
   }catch(e){toast(e.message||'Eroare adăugare linkuri','err');}
+}
+// Titlurile linkurilor (furnizor/eMAG/Trendyol) vin uneori într-o altă limbă decât română — ex. Maxy
+// (engleză sau poloneză), Trendyol (turcă) — greu de urmărit rapid într-un tabel. Rulează în fundal,
+// după ce linkurile sunt deja salvate (nu blochează adăugarea) — dacă un titlu NU e deja română,
+// îl retraduce și îl suprascrie; dacă e deja română, AI-ul îl întoarce neschimbat, nu se face nimic.
+async function researchTranslateLinkTitles(links){
+  const candidates=links.filter(l=>l.id&&l.title&&l.title.trim());
+  if(!candidates.length)return;
+  const batchSize=25;
+  try{
+    for(let b=0;b<candidates.length;b+=batchSize){
+      const batch=candidates.slice(b,b+batchSize);
+      const linesText=batch.map(l=>`${l.id}: ${l.title}`).join('\n');
+      const prompt=`Pentru fiecare titlu de produs de mai jos, verifică dacă e deja în limba română. Dacă NU e
+deja română (ex. engleză, poloneză, turcă, alte limbi), tradu-l în română — păstrează exact cifrele,
+dimensiunile, codurile și numele de brand, tradu doar cuvintele descriptive. Dacă titlul e DEJA în
+română, întoarce-l identic, neschimbat.
+
+TITLURI (id: titlu):
+${linesText}
+
+Răspunde STRICT cu JSON, fără markdown: {"titles":[{"id":<id>,"ro":"<titlu în română>"}]}`;
+      const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert engleză/poloneză/turcă/alte limbi → română, pentru titluri scurte de produse. Răspunzi DOAR cu JSON valid.',2500);
+      const match=resp.match(/\{[\s\S]*\}/);
+      if(!match)continue;
+      let parsed;try{parsed=JSON.parse(match[0]);}catch(e){continue;}
+      if(!Array.isArray(parsed.titles))continue;
+      for(const t of parsed.titles){
+        const linkId=Number(t.id);
+        const orig=batch.find(l=>Number(l.id)===linkId);
+        if(!orig||!t.ro)continue;
+        const ro=String(t.ro).trim();
+        if(!ro||ro===orig.title.trim())continue;// deja română, AI a întors neschimbat — nimic de făcut
+        try{
+          const res=await apiJson('/api/research-projects',{action:'update_link_title',link_id:linkId,title:ro},20000);
+          if(res.link){
+            const proj=researchProjects.find(p=>(p.links||[]).some(x=>Number(x.id)===linkId));
+            const localLink=proj?.links?.find(x=>Number(x.id)===linkId);
+            if(localLink)localLink.title=res.link.title;
+          }
+        }catch(e){console.warn('Nu am putut salva titlul tradus pentru linkul '+linkId+':',e);}
+      }
+    }
+    renderResearchProjects();
+  }catch(e){console.warn('Traducere titluri linkuri Research eșuată:',e);}
 }
 async function recalcResearchProject(projectId){
   try{
