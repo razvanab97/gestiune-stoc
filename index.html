@@ -979,6 +979,7 @@ function buildRaportCats(){
 .rsx-icon-btn.danger{color:var(--rd)}
 .rsx-icon-btn.danger:hover{background:var(--rd-bg);border-color:var(--rd)}
 .rsx-status-warn{color:var(--am)!important;font-weight:700!important;font-size:12px!important;white-space:nowrap}
+.rsx-pending-num{font-family:var(--mono);font-size:11px;font-weight:800;padding:2px 8px;border-radius:999px;background:var(--surf2);border:1px solid var(--b1);color:var(--t2)!important;white-space:nowrap;flex-shrink:0}
 .rsx-search-row td{background:var(--surf2);border-bottom:1px solid var(--b1);padding:8px 12px}
 .rsx-search-box{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
 .rsx-search-label{font-size:11px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.03em;margin-right:2px;white-space:nowrap}
@@ -1940,6 +1941,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:132,text:'Research: linkurile „📷 Aștept screenshot" (Jumbo/Maxy/Trendyol blocate) arătau doar URL-ul brut — cu mai multe deodată într-un dosar, era ușor să încurci „ce poză merge la ce link" (raportat direct). Acum fiecare arată „Link #2 din 4" (poziția printre cele în așteptare) + un titlu orientativ, extras automat din URL (ex. „Litiera pentru pisici cu capac tava extensibilă... 54x43x38cm gri"), înainte să încarci vreo poză — reper vizual instant, fără să mai ții minte separat',date:'2026-08-19'},
   {n:131,text:'Research: 2 reparații. (1) Link-ul de căutare Trendyol era greșit de la bun început — folosea trendyol.com/sr cu parametri culture=ro-RO&currency=RON, dar site-ul real folosește calea trendyol.com/ro/sr (confirmat pe un URL real, indexat), nu parametri de query — de-asta căutarea AI nu găsea niciodată rezultate pe Trendyol. Reparat în toate cele 3 locuri unde se construia linkul. (2) Promptul AI (căutare + verificare potrivire) folosea titlul brut de pe pagina furnizorului ca identitate a produsului — care poate fi încă netradus (engleză/altă limbă) dacă traducerea automată n-a apucat să ruleze — în loc de titlul dosarului, cel pe care chiar l-ai scris/verificat/editat manual. Acum titlul dosarului e sursa de încredere pentru identitate; titlul furnizorului rămâne doar detaliu tehnic suplimentar',date:'2026-08-19'},
   {n:130,text:'Research: avertismentul de „posibil duplicat" (titlu+preț similare cu alt link deja din dosar) era doar un ⚠ mic pe titlu, cu tooltip vag — nu spunea CU CE anume e duplicat. Acum apare un rând dedicat, sub linkul respectiv, care arată exact titlul/prețul linkului cu care se suprapune (+ link direct spre el), și 2 butoane: „🗑 Șterge acest duplicat" (dacă chiar e) sau „✓ Nu e duplicat" (dacă alarma e falsă — rămâne în dosar, doar dispare avertismentul). Duplicatele SIGURE (URL sau PNK identic) tot se resping automat, fără să mai apară deloc — asta rămâne neschimbat, doar zona ambiguă („probabil") a devenit acționabilă',date:'2026-08-19'},
   {n:129,text:'Research: 2 bug-uri reale găsite, direct legate de „nu apare ✦ Recunoaștere AI" și de potrivirea slabă în dosare. (1) Orice link de la un furnizor care nu era pe o listă fixă de 4 domenii cunoscute (jumbo/maxy/verk/i-want) ieșea clasificat „altul" — ceea ce ascundea butonul de căutare eMAG/Trendyol ȘI, mai grav, intra GREȘIT în calculul prețului minim de concurență (recalcProject exclude explicit doar „furnizor", nu și „altul"), umflând fals verdictul/marja. Acum orice link non-eMAG/non-Trendyol e tratat direct ca furnizor. (2) Linkurile eMAG/Trendyol adăugate normal (lipind un URL — fluxul principal) nu primeau NICIODATĂ un scor de potrivire (doar cele din import PDF); coloana Match cădea pe numărul de recenzii, irelevant. Acum primesc automat același scor 55/30/15 (nume/dimensiuni/EAN) ca la PDF, iar sub 80% nu mai intră automat în calculul verdictului/prețului de piață (50-79% rămâne editabil manual, ca înainte doar la PDF)',date:'2026-08-19'},
@@ -4085,6 +4087,26 @@ function researchSearchLinks(link){
   if(!q?.emag&&!q?.trendyol)return null;
   return{emag:`https://www.emag.ro/search/${encodeURIComponent(q.emag)}`,trendyol:`https://www.trendyol.com/ro/sr?q=${encodeURIComponent(q.trendyol)}`};
 }
+// Un link "aștept screenshot" (Jumbo/Maxy/Trendyol blocat) n-are încă titlu — până la upload, rândul
+// arăta doar URL-ul brut, greu de distins dintr-o privire când ai 3-4 linkuri de genul într-un dosar
+// și trebuie să potrivești manual "ce poză merge la ce link" (raportat direct de utilizator). Extragem
+// un indiciu lizibil din slug-ul URL-ului (funcționează bine pe toate cele 3 platforme — au slug-uri
+// descriptive) — nu e titlul real, doar un reper vizual instant, ca omul să nu mai țină minte separat.
+function urlSlugHint(url){
+  try{
+    const u=new URL(url);
+    const segs=u.pathname.split('/').filter(Boolean).map(s=>s.replace(/\.\w+$/,''));
+    if(!segs.length)return'';
+    const slug=segs.reduce((best,s)=>s.length>best.length?s:best,'');
+    const clean=slug
+      .replace(/^product-eng-\d+-/i,'')  // Maxy: "product-eng-19007-Cat-litter-box..."
+      .replace(/-p-\d+$/i,'')            // Trendyol: "...-gri-p-970784967"
+      .replace(/_\d+$/,'')               // Jumbo: "...41cm_1749636"
+      .replace(/[-_]+/g,' ')
+      .trim();
+    return clean?clean.charAt(0).toUpperCase()+clean.slice(1):'';
+  }catch(e){return'';}
+}
 // Versiunea AI a căutării: reface generateAIQueries (vechiul api/research-scrape.js) — traduce titlul,
 // generează query-uri progresive (specific → general), dar AICI trimite ȘI poza principală la AI vision,
 // ca să identifice detalii vizuale (culoare/material/formă) care nu apar în titlu — nu exista înainte.
@@ -4839,6 +4861,10 @@ function renderResearchProjects(){
     const platStatsHead=researchPlatformStats(p);
     const competitorMinPrices=[platStatsHead.emag?.min,platStatsHead.trendyol?.min].filter(x=>x>0);
     const competitorMin=competitorMinPrices.length?Math.min(...competitorMinPrices):0;
+    // Numerotare doar pentru linkurile ÎN AȘTEPTARE de screenshot — util exact când sunt mai multe deodată
+    // (raportat direct: "fiind 4, nu știu care screenshot pentru ce link e"), ca reper rapid de potrivire
+    // ("Link #2 din 4"), pe lângă indiciul de titlu extras din URL (vezi urlSlugHint mai jos).
+    const pendingLinks=links.filter(l=>l.status==='aștept screenshot'||l.status==='eroare');
     const rows=links.slice(0,MAX_RESEARCH_LINKS).map(l=>{
       const platformClass=['emag','trendyol','furnizor'].includes(l.platform)?l.platform:'altul';
       const del=`<button class="rsx-icon-btn danger" onclick="deleteResearchLink(${l.id})" title="Șterge acest link din dosar">🗑</button>`;
@@ -4846,7 +4872,14 @@ function renderResearchProjects(){
         // AI-ul nu a putut deschide linkul automat (Jumbo/Maxy mereu; eMAG/Trendyol uneori) — până la 5 poze
         // ale listării se pot adăuga direct aici; pentru mai multe, e mai practic un PDF (mai jos, per dosar).
         const waitLabel=l.status==='eroare'?'⚠ Nu s-a putut deschide automat':'📷 Aștept screenshot';
-        return`<tr><td><span class="rsx-src ${platformClass}">${esc(l.platform||'altul')}</span></td><td colspan="9"><a href="${esc(l.url)}" target="_blank" style="color:var(--t1);text-decoration:none;font-weight:700">${esc(l.url)}</a> <span class="rsx-status-warn" id="rlss-status-${l.id}">${waitLabel}</span> <input type="file" accept="image/*" multiple id="rlss-${l.id}" style="display:none" onchange="handleLinkScreenshotFile(${l.id},this)"><label for="rlss-${l.id}" class="rsx-icon-btn" style="cursor:pointer" title="Poze cu listarea de pe platformă — până la 5; pentru mai multe, folosește PDF mai jos">📷 Adaugă poze (max 5)</label></td><td class="rsx-row-actions">${del}</td></tr>`;
+        const pendingIdx=pendingLinks.findIndex(x=>Number(x.id)===Number(l.id))+1;
+        const hint=urlSlugHint(l.url);
+        return`<tr><td><span class="rsx-src ${platformClass}">${esc(l.platform||'altul')}</span></td><td colspan="9">
+          <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+            <span class="rsx-pending-num" title="Poziția printre linkurile în așteptare de screenshot din acest dosar">Link #${pendingIdx} din ${pendingLinks.length}</span>
+            <strong style="color:var(--t1)">${esc(hint||'Produs fără titlu încă')}</strong>
+          </div>
+          <a href="${esc(l.url)}" target="_blank" style="color:var(--t3);font-size:11px;text-decoration:none;word-break:break-all">${esc(l.url)}</a> <span class="rsx-status-warn" id="rlss-status-${l.id}">${waitLabel}</span> <input type="file" accept="image/*" multiple id="rlss-${l.id}" style="display:none" onchange="handleLinkScreenshotFile(${l.id},this)"><label for="rlss-${l.id}" class="rsx-icon-btn" style="cursor:pointer" title="Poze cu listarea de pe platformă — până la 5; pentru mai multe, folosește PDF mai jos">📷 Adaugă poze (max 5)</label></td><td class="rsx-row-actions">${del}</td></tr>`;
       }
       const dupFlag=l.duplicate_type&&l.duplicate_type!=='none';
       const sourceIcon=l.source==='screenshot'?' 📷':l.source==='pdf'?' 📄':'';
