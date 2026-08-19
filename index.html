@@ -1981,6 +1981,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:145,text:'Research: opțiune nouă „🔗 Link public produs" lângă butoanele eMAG (Preset ERP / Preset produs nou / Ghid completare) — generează o pagină publică (/produs/{id dosar}) cu titlu, imagini, descriere, EAN, brand și caracteristici, plus etichete Open Graph și JSON-LD schema.org/Product, gata de lipit direct în eMAG Seller Center la „Adaugă produs cu URL", ca eMAG să extragă singur datele fără completare manuală câmp cu câmp. Disponibilă doar pentru anunțuri generate dintr-un dosar Research salvat (butonul dispare dacă lipsește dosarul); apăsarea salvează automat ultima variantă a anunțului și copiază link-ul în clipboard. Pagina nu expune date interne (furnizor, preț de achiziție, marjă/verdict) — doar ce ar apărea oricum pe un anunț public. Verificat și reparat înainte de lansare: escapare lipsă la blocul JSON-LD care permitea injectare de HTML/script dacă titlul sau descrierea (extrase prin AI din poze/PDF-uri externe) conțineau secvența de închidere a tag-ului script',date:'2026-08-19'},
   {n:144,text:'Generator anunțuri: bug real reparat la „eMAG — Listing Readiness" — Product Truth arăta aproape mereu 0/5 atribute completate și „indisponibil" la Material/Dimensiuni/Specie/etc., chiar și pentru dosare cu date reale. Cauza: linkurile analizate prin poză (Trendyol/Maxy/Jumbo/eMAG blocat — calea principală în practică, fetch-ul direct e blocat des) extrăgeau doar titlu/preț/descriere/brand, NICIODATĂ un tabel de caracteristici structurate (specs) sau EAN, deși AI-ul le vede clar în poză — doar linkurile eMAG cu fetch direct (mai rare) aveau specs. Acum atât analiza dintr-o poză (link individual), cât și cea din PDF (mai multe anunțuri deodată) extrag și specificațiile structurate + codul EAN, salvate și folosite corect de Product Truth. Verificat: un dosar cu specs reale pe linkul de furnizor trece de la 0/5 la atribute completate cu status VERIFIED',date:'2026-08-19'},
   {n:143,text:'Research: butoanele de acțiune dintr-un dosar deschis („↻ Recalculează verdict", „🔄 Reverifică prețurile", „✨ Generează anunț din dosar", „📦 Adaugă în Inventar") au acum un aspect de sticlă mată (liquid glass — translucid, cu blur și un luciu subtil), nu alb plin cu contur dur — se integrează vizual cu fundalul dosarului în loc să contrasteze dur cu el. Butonul principal „🚀 Analizează tot dosarul" rămâne mov plin, neschimbat',date:'2026-08-19'},
   {n:142,text:'Research: dosarul deschis (expandat) dintr-o listă cu mai multe dosare acum se colorează vizibil (fundal gri mai închis) cât timp e deschis — până acum toate dosarele arătau identic (alb), pe fond aproape alb al paginii, greu de reperat rapid care e cel activ când ai multe dosare într-o listă. Cele închise/restrânse rămân albe, ca înainte. (Prima variantă folosea un mov-deschis — schimbată în gri la cererea explicită, contrastul mov nu plăcea)',date:'2026-08-19'},
@@ -5996,6 +5997,27 @@ async function downloadEmagNewProductPreset(){
     toast('Preset eMAG (produs nou) descărcat ✓');
   }catch(e){toast('Eroare export preset eMAG: '+(e.message||e),'err');}
 }
+// Link public de produs — pagină servită de api/product-page.js la /produs/{id_dosar}, cu
+// meta og: + JSON-LD schema.org/Product, gata de lipit în eMAG Seller Center la „Adaugă produs
+// cu URL", ca eMAG să extragă singur nume/imagini/descriere/EAN/brand. Are nevoie de un dosar
+// Research salvat (listingProjectId) — pagina publică citește research_projects.listing după id,
+// deci un anunț din Generatorul de sine stătător (fără dosar) nu poate avea link public.
+function emagPublicLinkButtonHtml(){
+  return listingProjectId?`<button class="btn btn-sm" onclick="openPublicProductLink()" title="Link public — îl lipești în eMAG, la „Adaugă produs cu URL", ca eMAG să extragă automat datele produsului">🔗 Link public produs</button>`:'';
+}
+async function openPublicProductLink(){
+  const l=listingData||researchData?.listing;
+  if(!listingProjectId||!l?.title){toast('Anunțul trebuie generat dintr-un dosar Research salvat, ca să aibă link public','err');return;}
+  try{
+    // salvăm anunțul curent înainte de link, ca pagina publică să reflecte mereu ultima variantă
+    await apiJson('/api/research-projects',{action:'save_listing',project_id:listingProjectId,status:'generat',listing:l},30000);
+    const url=`${location.origin}/produs/${listingProjectId}`;
+    copyText(url);
+    toast('Link public copiat ✓ — lipește-l în eMAG, la „Adaugă produs cu URL"');
+  }catch(e){
+    toast('Eroare la generarea linkului public: '+(e.message||e),'err');
+  }
+}
 async function saveListingPriceObservations(a,pages){
   if(!sbReady||!Array.isArray(a.listings)||!a.listings.length)return;
   const pageMap=Object.fromEntries((pages||[]).map(p=>[p.url,p]));
@@ -6120,6 +6142,7 @@ function renderListingResult(l,pages){
         <button class="btn btn-sm" onclick="downloadEmagOfferPreset()" title="Produs deja existent în catalogul eMAG (ai un PNK de potrivit)">📄 Preset eMAG ERP</button>
         <button class="btn btn-sm" onclick="downloadEmagNewProductPreset()" title="Produs NOU pe eMAG — nu există încă în catalog, trimiți toate detaliile">📄 Preset eMAG (produs nou)</button>
         <button class="btn btn-sm" onclick="openEmagManualGuide()" title="Toate câmpurile, în ordinea din formularul de creare produs eMAG, cu buton de copiere la fiecare">📋 Ghid completare eMAG</button>
+        ${emagPublicLinkButtonHtml()}
       </div>
     </div>
     <div class="listing-title">${esc(l.title||researchData?.name||'')}</div>
@@ -6551,6 +6574,7 @@ function renderListingFactoryResult(l,pages,allImages=[]){
         <button class="btn btn-sm" onclick="downloadEmagOfferPreset()" title="Produs deja existent în catalogul eMAG (ai un PNK de potrivit)">📄 Preset eMAG ERP</button>
         <button class="btn btn-sm" onclick="downloadEmagNewProductPreset()" title="Produs NOU pe eMAG — nu există încă în catalog, trimiți toate detaliile">📄 Preset eMAG (produs nou)</button>
         <button class="btn btn-sm" onclick="openEmagManualGuide()" title="Toate câmpurile, în ordinea din formularul de creare produs eMAG, cu buton de copiere la fiecare">📋 Ghid completare eMAG</button>
+        ${emagPublicLinkButtonHtml()}
         ${projectLinkBtn}
       </div>
     </div>
