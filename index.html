@@ -1659,6 +1659,20 @@ th{font-weight:800!important;color:var(--t3)!important}
           <button class="btn btn-sm" onclick="refreshEanPoolCount()">↻ Reîmprospătează</button>
         </div>
       </details>
+      <details class="listing-card" style="margin-top:14px" ontoggle="if(this.open)refreshEmagTemplateStatus()">
+        <summary style="cursor:pointer;font-weight:900">📄 Template oficial eMAG (produs nou)</summary>
+        <div style="margin-top:10px;font-size:23px;color:var(--t3);line-height:1.5">
+          Încarcă aici fișierul oficial eMAG (ex. EXT_ro_new_products_translation.xlsx, foaia
+          „Template"). O dată încărcat, rămâne salvat și e reutilizat la orice export „Preset eMAG
+          (produs nou)" — completăm doar rândul cu datele produsului, direct în fișierul tău, fără
+          să recreăm structura de la zero.
+        </div>
+        <div id="emag-template-status" style="margin-top:8px;font-size:22px">Se verifică…</div>
+        <div style="margin-top:8px">
+          <input type="file" accept=".xlsx" id="emag-template-file" style="display:none" onchange="handleEmagTemplateUpload(event)">
+          <label for="emag-template-file" class="btn btn-sm btn-acc" style="cursor:pointer">📥 Încarcă template (.xlsx)</label>
+        </div>
+      </details>
     </div>
     <div class="research-mode" id="research-mode-competition">
       <div class="comp-lab-grid">
@@ -5543,6 +5557,119 @@ async function addEanCodes(){
   }
   finally{if(btn){btn.disabled=false;btn.textContent='+ Adaugă coduri';}}
 }
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// TEMPLATE OFICIAL eMAG (produs nou) — "punte" pentru fișierul EXT_ro_new_products_translation.xlsx
+// furnizat de eMAG. Nu poate fi servit ca fișier static separat (vercel.json rescrie orice rută
+// necunoscută spre index.html, deci un fetch la un .xlsx din repo ar întoarce greșit index.html) —
+// se încarcă din browser, o singură dată, se salvează în setari_app (cheie=emag_template_produs_nou,
+// valoare=JSON cu numele fișierului + conținutul în base64) și devine disponibil la orice export
+// viitor, de pe orice dispozitiv. La export, dacă template-ul există, îl deschidem cu SheetJS și
+// scriem DOAR rândul de date pe foaia „Template" — restul foilor/formatării rămân neatinse. Dacă
+// nu există niciun template încărcat, exportul cade pe generarea din structura hard-codată
+// (emagNewProductRow/downloadEmagNewProductPreset), ca înainte.
+const EMAG_TEMPLATE_KEY='emag_template_produs_nou';
+let emagTemplateMeta=null;// {filename,uploadedAt} — null = nimic încărcat încă (sau nu s-a verificat)
+let emagTemplateB64Cache=null;
+function renderEmagTemplateStatus(){
+  const el=document.getElementById('emag-template-status');
+  if(!el)return;
+  if(emagTemplateMeta){
+    el.innerHTML=`✓ <strong>${esc(emagTemplateMeta.filename||'template.xlsx')}</strong> · încărcat ${esc(new Date(emagTemplateMeta.uploadedAt).toLocaleDateString('ro-RO'))} <button class="btn btn-sm" style="margin-left:8px;color:var(--rd);border-color:var(--rd)" onclick="removeEmagTemplate()">🗑 Șterge</button>`;
+  }else{
+    el.innerHTML=`<span style="color:var(--t3)">Niciun template încărcat — exportul folosește structura standard (recreată, nu fișierul oficial).</span>`;
+  }
+}
+async function refreshEmagTemplateStatus(){
+  try{
+    const r=await fetch('/api/settings?key='+encodeURIComponent(EMAG_TEMPLATE_KEY));
+    const data=await r.json();
+    if(data?.value){
+      const parsed=JSON.parse(data.value);
+      emagTemplateMeta={filename:parsed.filename,uploadedAt:parsed.uploadedAt};
+      emagTemplateB64Cache=parsed.b64||null;
+    }else{
+      emagTemplateMeta=null;emagTemplateB64Cache=null;
+    }
+  }catch(e){emagTemplateMeta=null;emagTemplateB64Cache=null;}
+  renderEmagTemplateStatus();
+}
+async function handleEmagTemplateUpload(ev){
+  const file=ev?.target?.files?.[0];if(!file)return;
+  if(!/\.xlsx$/i.test(file.name)){toast('Fișierul trebuie să fie .xlsx','err');ev.target.value='';return;}
+  const statusEl=document.getElementById('emag-template-status');
+  if(statusEl)statusEl.innerHTML='<span class="spin"></span> Încarc și verific fișierul…';
+  try{
+    const dataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(file);});
+    const b64=String(dataUrl).split(',')[1]||'';
+    if(!b64)throw new Error('Fișier gol sau necitibil');
+    // validare: trebuie să fie un workbook Excel valid, deschidem o dată cu SheetJS ca test
+    const XLSX=await ensureXLSX();
+    const bytes=Uint8Array.from(atob(b64),c=>c.charCodeAt(0));
+    const wb=XLSX.read(bytes,{type:"array",cellStyles:true});
+    if(!wb.SheetNames?.length)throw new Error('Nu am găsit nicio foaie în fișier');
+    const hasTemplateSheet=wb.SheetNames.some(n=>/template/i.test(n));
+    if(!hasTemplateSheet)toast('⚠ Nu am găsit o foaie numită „Template" — verifică manual că fișierul e cel corect','err');
+    const payload={filename:file.name,uploadedAt:new Date().toISOString(),b64};
+    const r=await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:EMAG_TEMPLATE_KEY,value:JSON.stringify(payload)})});
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok)throw new Error(data.error||'Endpoint setări indisponibil');
+    emagTemplateMeta={filename:payload.filename,uploadedAt:payload.uploadedAt};
+    emagTemplateB64Cache=b64;
+    renderEmagTemplateStatus();
+    toast(`Template eMAG „${file.name}" încărcat ✓ — foi găsite: ${wb.SheetNames.join(', ')}`);
+  }catch(e){
+    toast('Eroare la încărcarea template-ului: '+(e.message||e),'err');
+    renderEmagTemplateStatus();
+  }finally{if(ev?.target)ev.target.value='';}
+}
+async function removeEmagTemplate(){
+  if(!confirm('Ștergi template-ul oficial eMAG încărcat? Exporturile viitoare vor folosi din nou structura recreată.'))return;
+  try{
+    await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:EMAG_TEMPLATE_KEY,value:''})});
+  }catch(e){}
+  emagTemplateMeta=null;emagTemplateB64Cache=null;
+  renderEmagTemplateStatus();
+  toast('Template eMAG șters ✓');
+}
+// Deschide o COPIE proaspătă a template-ului oficial (dacă unul e încărcat) — un parse nou de
+// fiecare dată, ca să nu riscăm să mutăm accidental un workbook cache-uit între exporturi succesive.
+async function getEmagTemplateWorkbook(){
+  if(emagTemplateB64Cache==null)await refreshEmagTemplateStatus();
+  if(!emagTemplateB64Cache)return null;
+  const XLSX=await ensureXLSX();
+  const bytes=Uint8Array.from(atob(emagTemplateB64Cache),c=>c.charCodeAt(0));
+  return XLSX.read(bytes,{type:"array",cellStyles:true});
+}
+// Scrie rândul de date în foaia „Template" a workbook-ului real, potrivind coloanele DUPĂ NUMELE
+// TEHNIC din rândul 3 al foii (nu după poziție) — robust chiar dacă template-ul oficial are coloanele
+// într-o altă ordine decât presupunem noi. Nu atinge nicio altă foaie/formatare din fișier.
+function emagWriteRowToTemplate(XLSX,wb,codes,row){
+  const sheetName=wb.SheetNames.find(n=>/template/i.test(n))||wb.SheetNames[0];
+  const ws=wb.Sheets[sheetName];
+  const range=XLSX.utils.decode_range(ws['!ref']||'A1:A1');
+  const codeRow=2;// rândul 3 (0-based) — coduri tehnice, conform structurii oficiale eMAG
+  const colMap={};
+  for(let c=range.s.c;c<=range.e.c;c++){
+    const cell=ws[XLSX.utils.encode_cell({r:codeRow,c})];
+    const code=cell&&cell.v?String(cell.v).trim():'';
+    if(code)colMap[code]=c;
+  }
+  // primul rând liber de sub header-e (rândul 6 = index 5), verificat pe coloana part_number
+  let targetRow=5;
+  const anchorCol=colMap['part_number']??range.s.c;
+  while(ws[XLSX.utils.encode_cell({r:targetRow,c:anchorCol})]?.v)targetRow++;
+  let wroteAny=false;
+  codes.forEach((code,i)=>{
+    if(!(code in colMap))return;
+    const val=row[i];
+    if(val===''||val===null||val===undefined)return;
+    const ref=XLSX.utils.encode_cell({r:targetRow,c:colMap[code]});
+    ws[ref]={t:typeof val==='number'?'n':'s',v:val};
+    wroteAny=true;
+  });
+  if(targetRow>range.e.r){range.e.r=targetRow;ws['!ref']=XLSX.utils.encode_range(range);}
+  return{sheetName,targetRow,wroteAny,matchedCols:Object.keys(colMap).length};
+}
 // Randare pentru rândul de EAN din cardul de anunț — reutilizată la randarea inițială ȘI la
 // actualizarea DOM directă după alocare (fără să re-randeze tot cardul, ca să nu piardă alte
 // stări deschise ale lui — preview HTML, secțiuni extinse etc.).
@@ -5723,6 +5850,23 @@ async function downloadEmagNewProductPreset(){
     const oblig=['Obligatoriu','Obligatoriu','Optional/Obligatoriu','Optional/Obligatoriu','Optional/Obligatoriu','Obligatoriu','Optional','Obligatoriu','Obligatoriu','Obligatoriu','Obligatoriu','Obligatoriu','Obligatoriu','Obligatoriu','Obligatoriu','Obligatoriu','Obligatoriu','Optional','Optional','Optional','Optional','Optional','Optional','Obligatoriu','Legal','Legal','Legal','Legal','Legal','Legal','Legal'];
     const labels=['Cod produs','Product ID','ID Categorie','Nume categorie','EAN produs','Pret vanzare','Pret de baza','TVA','Status','Moneda','Stoc','Pret minim','Pret maxim','Nume','Brand','Descriere','URL imagine principala','URL imagine secundara 1','URL imagine secundara 2','URL imagine secundara 3','URL imagine secundara 4','URL imagine secundara 5','Detalii produs','Limba originala a produsului','Avertizari de siguranta','Nume producator','Adresa producator','Adresa email producator','Nume persoana responsabila UE','Adresa persoana responsabila UE','Adresa email persoana responsabila UE'];
     const row=emagNewProductRow(l,proj);
+    // Dacă există un template oficial eMAG încărcat (vezi Generator anunțuri → „Template oficial
+    // eMAG"), completăm rândul DIRECT în fișierul acela — nu mai recreăm structura de la zero.
+    // Restul foilor/formatării/validărilor rămân exact cum erau în fișierul urcat de utilizator.
+    try{
+      const tmplWb=await getEmagTemplateWorkbook();
+      if(tmplWb){
+        const info=emagWriteRowToTemplate(XLSX,tmplWb,codes,row);
+        if(info.wroteAny){
+          XLSX.writeFile(tmplWb,`emag-produs-nou-${safeFileName(row[13]||'produs')}.xlsx`,{cellStyles:true});
+          toast(`Preset eMAG (produs nou) descărcat pe template-ul oficial ✓ — ${info.matchedCols}/${codes.length} coloane potrivite, rând ${info.targetRow+1}`);
+          return;
+        }
+        toast('Template-ul încărcat nu are nicio coloană recunoscută — folosesc structura standard','err');
+      }
+    }catch(e){
+      toast('Template-ul oficial nu a putut fi folosit ('+(e.message||e)+') — folosesc structura standard','err');
+    }
     const wb=XLSX.utils.book_new();
     const ws=XLSX.utils.aoa_to_sheet([groups,hdr2,codes,oblig,labels,row]);
     ws['!merges']=[
