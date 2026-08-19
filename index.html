@@ -1685,6 +1685,19 @@ th{font-weight:800!important;color:var(--t3)!important}
         </div>
         <div id="ean-pool-list" class="ean-pool-list"></div>
       </details>
+      <details class="listing-card" style="margin-top:14px">
+        <summary style="cursor:pointer;font-weight:900">🏷 Bancă de coduri produs</summary>
+        <div style="margin-top:10px;font-size:23px;color:var(--t3);line-height:1.5">
+          Coduri generate automat, după schema AB HOMES: contor zilnic + ziua + luna + anul (ex. al 2-lea
+          produs generat azi → cod produs „AB2200826", ID produs „2200826"). Apeși „+ Generează cod nou"
+          de câte ori ai nevoie — util dacă pregătești mai multe produse deodată, înainte să generezi
+          anunțurile complete. Fiecare cod e unic, din același contor folosit și la generarea automată.
+        </div>
+        <div style="margin-top:8px">
+          <button class="btn btn-sm btn-acc" onclick="generateProductCode()">+ Generează cod nou</button>
+        </div>
+        <div id="product-code-list" class="ean-pool-list"></div>
+      </details>
       <details class="listing-card" style="margin-top:14px" ontoggle="if(this.open)refreshEmagTemplateStatus()">
         <summary style="cursor:pointer;font-weight:900">📄 Template oficial eMAG (produs nou)</summary>
         <div style="margin-top:10px;font-size:23px;color:var(--t3);line-height:1.5">
@@ -2017,6 +2030,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:156,text:'Generator anunțuri: panou nou „🏷 Bancă de coduri produs", lângă banca de coduri EAN — generează la cerere coduri după schema AB HOMES (contor zilnic + zi+lună+an), util când pregătești mai multe produse deodată, înainte de anunțul complet. Fiecare cod are „📋 Copiază tot" (AB+cifre, pentru câmpul „Cod produs") și „📋 Doar cifrele" (fără AB, pentru câmpul „ID produs"). Trage din exact ACELAȘI contor ca alocarea automată de la generarea anunțului — niciun risc de coduri duplicate între cele două',date:'2026-08-20'},
   {n:155,text:'Generator anunțuri — trei îmbunătățiri pentru anunțuri mai complete, mai rapid. (1) Încercare de reparat viteza: modelele gpt-5.6 fac raționament intern (poți seta nivele none→max) — generarea anunțului nu seta niciun nivel explicit, riscând un raționament implicit mare și deci lent pentru o simplă redactare; setat acum explicit la „low". Nu am putut testa live efectul (necesită cheia OpenAI, disponibilă doar în Vercel) — spune-mi dacă simți diferența. (2) Descrierea e acum editabilă direct — „✏️ Editează HTML" deschide un câmp de scris peste care poți interveni oricând, plus „🖼 Inserează poză" (adaugă un URL de imagine exact unde ai cursorul) și „💾 Salvează descrierea" (persistă imediat în dosar). (3) Secțiunea „Poze selectate" nu mai dispare când anunțul nu are nicio poză — rămâne vizibilă, cu un buton „+ Adaugă poză externă" (orice URL http/https), ca lista să nu rămână niciodată complet goală',date:'2026-08-20'},
   {n:154,text:'Research: coloană nouă „Performanță eMAG" în tabelul dosarului, între PNK/Cod și Confirmă — doar pe linkurile eMAG (conceptul nu există pe Trendyol/furnizor). Selector manual cu 5 nivele (Supercold/Cold/Standard/Hot/Superhot, colorate ca o scală de temperatură), pentru aprecierea ta pe baza analizei/căutărilor proprii — nu se calculează automat de sistem. Necesită migration_link_emag_performance.sql în Supabase (fără migrare, restul funcționează normal, doar selecția nu se salvează încă)',date:'2026-08-20'},
   {n:153,text:'Două bug-uri reale reparate — anunțuri generate din dosar (Generează anunț din dosar) puteau ieși FĂRĂ nicio poză, deși dosarul avea zeci deja capturate. Cauza: la generare, serverul încerca un AL DOILEA fetch live al fiecărui link, ca să scoată poze — dacă fetch-ul ăsta eșua (blocaje eMAG etc.), ieșeau 0 poze, deși linkurile aveau deja imagini reale salvate de la adăugare. Acum trimitem acele poze deja capturate direct, ca plasă de siguranță — nu mai depinde de reușita unui al doilea fetch. (2) Pagina publică de produs (/produs/ID) arăta doar descrierea simplă, ignorând complet descrierea bogată cu structură (beneficii ca listă, poze intercalate) generată de AI — acum o arată, curățată de orice tag nesigur (verificat cu payload-uri XSS reale: script/onerror/onclick/javascript: — toate eliminate, conținutul normal păstrat intact)',date:'2026-08-20'},
@@ -5715,6 +5729,36 @@ async function addEanCodes(){
   }
   finally{if(btn){btn.disabled=false;btn.textContent='+ Adaugă coduri';}}
 }
+// Bancă de coduri produs — generare la cerere (nu un pool extern de „consumat", ca la EAN; codurile
+// se generează determinist din contorul zilnic — vezi allocateProductCode). Istoricul e doar per
+// sesiune de browser (nimic de persistat: codurile nu se „epuizează", oricând poți genera altul nou).
+let productCodeHistory=[];
+function productCodeRowHtml(code){
+  return`<div class="ean-pool-row" style="justify-content:space-between;gap:8px">
+    <span style="font-family:var(--mono)"><strong>AB${esc(code)}</strong> <span style="color:var(--t3);font-size:19px">— cod produs · ID produs ${esc(code)}</span></span>
+    <span style="display:flex;gap:6px;flex-shrink:0">
+      <button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify('AB'+code))})" title="Copiază codul complet (pentru câmpul „Cod produs”)">📋 Copiază tot</button>
+      <button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(code))})" title="Copiază doar cifrele (pentru câmpul „ID produs”)">📋 Doar cifrele</button>
+    </span>
+  </div>`;
+}
+function renderProductCodeList(){
+  const el=document.getElementById('product-code-list');
+  if(!el)return;
+  if(!productCodeHistory.length){el.innerHTML='<div style="font-size:21px;color:var(--t3);padding:8px 4px">Niciun cod generat încă în această sesiune.</div>';return;}
+  el.innerHTML=productCodeHistory.map(productCodeRowHtml).join('');
+}
+async function generateProductCode(){
+  try{
+    const code=await allocateProductCode();
+    productCodeHistory.unshift(code);
+    renderProductCodeList();
+    copyText('AB'+code);
+    toast(`Cod generat: AB${code} — copiat ✓`);
+  }catch(e){
+    toast('Eroare la generarea codului: '+(e.message||e),'err');
+  }
+}
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // TEMPLATE OFICIAL eMAG (produs nou) — "punte" pentru fișierul EXT_ro_new_products_translation.xlsx
 // furnizat de eMAG. Nu poate fi servit ca fișier static separat (vercel.json rescrie orice rută
@@ -5936,10 +5980,12 @@ async function ensureListingEan(l,proj){
 // ID produs eMAG — schemă cerută explicit: contor zilnic (1, 2, 3...) + ziua + luna + anul (2 cifre),
 // ex. al 2-lea produs generat pe 19.08.2026 → "2190826". Cod produs = "AB"+ID (ex. "AB2190826").
 // Contorul se ține în setari_app, cu cheie scopată pe ZIUA curentă (emag_id_counter_20260819) — se
-// resetează natural de la o zi la alta, fără nicio curățare manuală. Alocat O SINGURĂ DATĂ per listare
-// (ca la ensureListingEan) — reapelurile ulterioare, pentru ACEEAȘI listare, refolosesc l.emag_id.
-async function ensureListingEmagId(l){
-  if(l.emag_id)return l.emag_id;
+// resetează natural de la o zi la alta, fără nicio curățare manuală.
+// Funcție de bază — alocă următorul cod DIN SCHEMĂ, fără să-l lege de nicio listare. Reutilizată atât
+// de „🏷 Bancă de coduri produs" (generare la cerere, independent de un anunț), cât și de
+// ensureListingEmagId (alocare automată legată de o listare specifică), ca ambele să tragă din
+// ACELAȘI contor — niciun risc de coliziune între un cod generat manual și unul automat.
+async function allocateProductCode(){
   const now=new Date();
   const dd=String(now.getDate()).padStart(2,'0'),mm=String(now.getMonth()+1).padStart(2,'0'),yy=String(now.getFullYear()).slice(-2);
   const key=`emag_id_counter_${now.getFullYear()}${mm}${dd}`;
@@ -5948,12 +5994,18 @@ async function ensureListingEmagId(l){
     const data=await r.json();
     const next=(parseInt(data?.value,10)||0)+1;
     await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key,value:String(next)})});
-    l.emag_id=`${next}${dd}${mm}${yy}`;
+    return`${next}${dd}${mm}${yy}`;
   }catch(e){
     // Fallback dacă /api/settings e indisponibil — păstrează formatul (zi/lună/an), doar partea de
     // contor devine ultimele 3 cifre ale unui timestamp, ca exportul să nu blocheze din cauza rețelei.
-    l.emag_id=`${Date.now()%1000}${dd}${mm}${yy}`;
+    return`${Date.now()%1000}${dd}${mm}${yy}`;
   }
+}
+// Alocat O SINGURĂ DATĂ per listare (ca la ensureListingEan) — reapelurile ulterioare, pentru ACEEAȘI
+// listare, refolosesc l.emag_id.
+async function ensureListingEmagId(l){
+  if(l.emag_id)return l.emag_id;
+  l.emag_id=await allocateProductCode();
   return l.emag_id;
 }
 async function allocateAndCopyEan(){
