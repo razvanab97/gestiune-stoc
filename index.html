@@ -2010,6 +2010,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:152,text:'Model AI pe 3 niveluri, cu lanț de fallback — OPENAI_MODEL (gpt-5.6-luna: traduceri, clasificări, task-uri simple), OPENAI_MODEL_ANALYSIS (gpt-5.6-terra: citire poze, PDF-uri, research, potriviri complexe), OPENAI_MODEL_LISTING (gpt-5.6-sol: generarea finală a anunțului — titlu SEO, descriere). Toate cele 14 apeluri AI din aplicație verificate și repartizate pe categoria corectă. Dacă un nivel superior nu e setat în Vercel, cade automat pe cel de dedesubt (listing→analysis→simple), niciodată eroare din lipsă de configurare',date:'2026-08-20'},
   {n:151,text:'Bug real reparat — crash „u.includes is not a function" la anunțuri generate din mai multe surse (Generează anunț din dosar). Cauza: AI-ul întoarce best_images ca listă de OBIECTE {url,role,reason}, nu de linkuri simple, dar factoryImages() le amesteca direct în lista de poze ca și cum ar fi text, spărgând orice cod care presupunea un URL (afișare poze, „Recreează cu AI" etc.). Reparat atât în anunțul din aplicație, cât și pe pagina publică de produs (api/product-page.js). Bonus găsit pe drum: etichetele „impact"/„specificații" de pe pozele selectate nu se arătau NICIODATĂ real (citeau dintr-un câmp gol, image_recommendations, în loc de best_images cel corect) — acum apar corect',date:'2026-08-20'},
   {n:150,text:'Modelul AI folosit peste tot (traduceri, citire poze, generare anunțuri) a trecut de la gpt-4.1-mini la gpt-5.6-terra — implicit mai capabil, la un cost intermediar. Adăugată și o variabilă separată, opțională, OPENAI_MODEL_LISTING — dacă e setată în Vercel, generarea anunțului (task-ul cel mai greu: titlu SEO + descriere) poate folosi un model diferit (ex. mai puternic) față de restul apelurilor AI (traduceri, citire poze), care rămân pe OPENAI_MODEL — schimbabil oricând direct din Environment Variables, fără nicio modificare de cod',date:'2026-08-20'},
   {n:149,text:'Infrastructură — reparat deploy-ul blocat de câteva zile: contul rulează pe planul Vercel Hobby (limită 12 Serverless Functions/deployment), iar proiectul ajunsese la 13 fișiere în api/, exact motivul pentru care actualizările din ultimele zile nu ajungeau live deși erau pe GitHub. Șterse 4 fișiere API confirmate 100% moarte (research-source.js, research-scrape.js, research-ai.js, competitor-analyze.js) — foloseau exclusiv taburile „Research produs"/„Scorecard competitori"/„Decizie produs", ascunse din navigare de multă vreme (style="display:none", fără nicio cale de reactivare) — nicio funcție folosită de tine nu a fost atinsă. Unite api/image-generate.js + api/ai-image.js într-un singur fișier (POST=generează, GET=servește), fără nicio schimbare vizibilă. Total: 13 → 8 fișiere API, cu rezervă pentru viitor. Actualizat și vercel.json la configurația modernă Vercel (fără „builds", care declanșa un warning la fiecare deploy)',date:'2026-08-20'},
@@ -3157,8 +3158,11 @@ function goPage(id,btn){
 }
 
 /* OPENAI API */
-async function callAI(messages,system,maxTokens=400){
-  const body={max_tokens:maxTokens,messages};
+// tier: 'simple' (implicit — traduceri, reformulări, clasificări) sau 'analysis' (imagini, PDF-uri,
+// research, extrageri complexe) — vezi modelForTier în api/openai.js. Al 3-lea nivel, „listing", nu
+// trece prin acest wrapper — generarea anunțului are propriul apel direct în api/listing-builder.js.
+async function callAI(messages,system,maxTokens=400,tier='simple'){
+  const body={max_tokens:maxTokens,messages,tier};
   if(system)body.system=system;
   const r=await fetch('/api/openai',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
   const d=await r.json();
@@ -3178,7 +3182,7 @@ async function doSuggestCat(name){
   const el=document.getElementById('cat-suggest');
   el.innerHTML='<span class="cat-chip-loading"><span class="spin"></span> Se analizează…</span>';
   try{
-    const resp=await callAI([{role:'user',content:`Ești asistent stoc. Produsul: "${name}". Categorii: ${CATS.join(', ')}. Răspunde DOAR cu JSON array cu 1-3 categorii exacte ex: ["Cafea și ceai"]. Fără explicații.`}],null,100);
+    const resp=await callAI([{role:'user',content:`Ești asistent stoc. Produsul: "${name}". Categorii: ${CATS.join(', ')}. Răspunde DOAR cu JSON array cu 1-3 categorii exacte ex: ["Cafea și ceai"]. Fără explicații.`}],null,100,'simple');
     const arr=JSON.parse(resp.replace(/```json|```/g,'').trim());
     el.innerHTML=arr.map(c=>`<span class="cat-chip" onclick="selectCat('${esc(c)}')">✦ ${esc(c)}</span>`).join('');
   }catch(e){el.innerHTML='<span class="cat-chip-loading" style="color:var(--t3)">—</span>';}
@@ -3226,7 +3230,8 @@ Răspunde STRICT în formatul JSON:
     const resp=await callAI(
       [{role:'user',content:[imgContent,{type:'text',text:userPrompt}]}],
       systemPrompt,
-      400
+      400,
+      'analysis'
     );
 
     // Robust JSON parse — handle markdown code blocks
@@ -3337,7 +3342,7 @@ Răspunde STRICT cu JSON:
       ?[{type:'image',source:{type:'url',url:pageImgCandidate}},{type:'text',text:importPrompt}]
       :importPrompt;
 
-    const responseText=await callAI([{role:'user',content:importContent}],null,3000);
+    const responseText=await callAI([{role:'user',content:importContent}],null,3000,'analysis');
     if(!responseText)throw new Error('Nu am primit răspuns de la AI');
     
     // Parse JSON from response
@@ -4268,7 +4273,7 @@ Răspunde STRICT cu JSON: {"emag":["q1","q2","q3","q4"],"trendyol":["q1","q2"]}`
           content.unshift({type:'image',source:{type:'url',url:img}});
         }
       }
-      const resp=await callAI([{role:'user',content}],'Ești expert în marketplace-uri românești. Răspunzi DOAR cu JSON valid, fără markdown.',400);
+      const resp=await callAI([{role:'user',content}],'Ești expert în marketplace-uri românești. Răspunzi DOAR cu JSON valid, fără markdown.',400,'analysis');
       const match=resp.trim().match(/\{[\s\S]*\}/);
       if(!match)throw new Error('Răspuns invalid de la AI');
       queries=JSON.parse(match[0]);
@@ -4355,7 +4360,7 @@ Răspunde STRICT cu JSON: {"verdict":"match"|"no_match"|"uncertain","reason":"<m
         content.push({type:'image',source:{type:'url',url:img}});
       }
     });
-    const resp=await callAI([{role:'user',content}],'Ești expert în identificarea produselor identice pe marketplace-uri românești. Răspunzi DOAR cu JSON valid, fără markdown.',300);
+    const resp=await callAI([{role:'user',content}],'Ești expert în identificarea produselor identice pe marketplace-uri românești. Răspunzi DOAR cu JSON valid, fără markdown.',300,'analysis');
     const match=resp.trim().match(/\{[\s\S]*\}/);
     if(!match)throw new Error('Răspuns invalid de la AI');
     const parsed=JSON.parse(match[0]);
@@ -4752,7 +4757,7 @@ identic, neschimbat.
 TITLU: ${t}
 
 Răspunde STRICT cu JSON, fără markdown: {"ro":"<titlu în română>"}`;
-    const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert engleză/poloneză/turcă/alte limbi → română, pentru titluri scurte de produse. Răspunzi DOAR cu JSON valid.',600);
+    const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert engleză/poloneză/turcă/alte limbi → română, pentru titluri scurte de produse. Răspunzi DOAR cu JSON valid.',600,'simple');
     const match=resp.match(/\{[\s\S]*\}/);
     if(!match)return t;
     const parsed=JSON.parse(match[0]);
@@ -5164,7 +5169,7 @@ async function handleLinkScreenshotFile(linkId,inputEl){
 
 Nu inventa rating, recenzii, EAN, cod produs sau specificații care nu apar clar pe pagină — lasă gol/0.
 Răspunde STRICT în format JSON: {"title":"<titlu>","price":<număr>,"currency":"<monedă>","description":"<descriere scurtă sau gol>","brand":"<brand sau gol>","seller":"<vânzător sau gol>","rating":<număr sau 0>,"reviewCount":<număr sau 0>,"ean":"<cod EAN/GTIN sau gol>","specs":{"<etichetă>":"<valoare>"},"productCode":"<cod produs sursă sau gol>"}`;
-    const resp=await callAI([{role:'user',content:[...imgContents,{type:'text',text:userPrompt}]}],systemPrompt,700);
+    const resp=await callAI([{role:'user',content:[...imgContents,{type:'text',text:userPrompt}]}],systemPrompt,700,'analysis');
     const match=resp.trim().match(/\{[\s\S]*\}/);
     if(!match)throw new Error('Răspuns invalid de la AI');
     const info=JSON.parse(match[0]);
@@ -5261,7 +5266,7 @@ Răspunde STRICT în format JSON: {"listings":[{"title":"<titlu exact>","price":
   const resp=await callAI([{role:'user',content:[
     {type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},
     {type:'text',text:userPrompt}
-  ]}],systemPrompt,3600);
+  ]}],systemPrompt,3600,'analysis');
   const match=resp.trim().match(/\{[\s\S]*\}/);
   if(!match)throw new Error(`${file.name}: răspuns invalid de la AI`);
   const parsed=JSON.parse(match[0]);
@@ -5327,7 +5332,7 @@ TITLURI (id: titlu):
 ${linesText}
 
 Răspunde STRICT cu JSON, fără markdown: {"titles":[{"id":<id>,"ro":"<titlu în română>"}]}`;
-      const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert engleză/poloneză/turcă/alte limbi → română, pentru titluri scurte de produse. Răspunzi DOAR cu JSON valid.',2500);
+      const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert engleză/poloneză/turcă/alte limbi → română, pentru titluri scurte de produse. Răspunzi DOAR cu JSON valid.',2500,'simple');
       const match=resp.match(/\{[\s\S]*\}/);
       if(!match)continue;
       let parsed;try{parsed=JSON.parse(match[0]);}catch(e){continue;}
@@ -8380,7 +8385,7 @@ TITLURI (index: titlu):
 ${linesText}
 
 Răspunde STRICT cu JSON, fără markdown: {"translations":[{"index":<index>,"ro":"<traducere scurtă în română>"}]}`;
-      const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert bulgară/maghiară/greacă→română pentru titluri de produse. Răspunzi DOAR cu JSON valid.',2000);
+      const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert bulgară/maghiară/greacă→română pentru titluri de produse. Răspunzi DOAR cu JSON valid.',2000,'simple');
       const objMatch=resp.match(/\{[\s\S]*\}/);
       if(!objMatch)continue;
       let parsed;try{parsed=JSON.parse(objMatch[0]);}catch(e){continue;}
@@ -8789,7 +8794,7 @@ TITLURI COMENZI (index: titlu):
 ${linesText}
 
 Răspunde STRICT cu JSON, fără markdown: {"matches":[{"index":<indexul liniei>,"produsId":<id din inventar sau null>}]}`;
-      const resp=await callAI([{role:'user',content:prompt}],'Ești expert în potrivirea denumirilor de produse multilingve. Răspunzi DOAR cu JSON valid.',2500);
+      const resp=await callAI([{role:'user',content:prompt}],'Ești expert în potrivirea denumirilor de produse multilingve. Răspunzi DOAR cu JSON valid.',2500,'analysis');
       const objMatch=resp.match(/\{[\s\S]*\}/);
       if(!objMatch)continue;
       let parsed;try{parsed=JSON.parse(objMatch[0]);}catch(e){continue;}
@@ -9335,7 +9340,7 @@ Reguli: ignoră total/TVA/transport, consolidează duplicate, qty>0 obligatoriu`
 
       resp=await callAI([{role:'user',content:prompt}],
         'Ești expert procesare facturi. Răspunzi DOAR cu JSON valid, niciodată altceva.',
-        3000);
+        3000,'analysis');
     } else {
       // Fallback: send PDF as base64 document
       const b64=await new Promise(res=>{
@@ -9346,7 +9351,7 @@ Reguli: ignoră total/TVA/transport, consolidează duplicate, qty>0 obligatoriu`
       resp=await callAI([{role:'user',content:[
           {type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},
           {type:'text',text:'Extrage produsele din această factură și, dacă apare, numărul facturii/comenzii. Răspunde STRICT cu JSON: {"invoiceNumber":"<număr factură/comandă sau null>","items":[{"sku":"...","name":"...","qty":N,"priceBuy":N,"currency":"EUR sau RON"}]}. Fără altceva.'}
-        ]}],'Ești expert procesare facturi. Răspunzi DOAR cu JSON valid, niciodată altceva.',2000);
+        ]}],'Ești expert procesare facturi. Răspunzi DOAR cu JSON valid, niciodată altceva.',2000,'analysis');
     }
 
     // Robust JSON parse — preferă formatul nou {invoiceNumber, items}, cu fallback pe array simplu
@@ -9411,7 +9416,7 @@ Răspunde STRICT cu JSON (fără markdown, fără explicații):
       const b64=u.split(',')[1];
       if(b64&&b64.length>=100)content.push({type:'image',source:{type:'base64',media_type:mt,data:b64}});
     });
-    const resp=await callAI([{role:'user',content}],'Ești expert procesare comenzi de la distribuitori en-gros. Răspunzi DOAR cu JSON valid, niciodată altceva.',3000);
+    const resp=await callAI([{role:'user',content}],'Ești expert procesare comenzi de la distribuitori en-gros. Răspunzi DOAR cu JSON valid, niciodată altceva.',3000,'analysis');
     let invoiceNumberDetected='';
     invParsed=[];
     const objMatch=resp.match(/\{[\s\S]*\}/);

@@ -1,5 +1,17 @@
 const MAX_HTML=900000,MAX_LINKS=20;
 
+// Selectare model pe 3 niveluri — vezi Environment Variables în Vercel:
+//   OPENAI_MODEL          -> gpt-5.6-luna  (nefolosit direct aici, doar ca ultimă treaptă de fallback)
+//   OPENAI_MODEL_ANALYSIS -> gpt-5.6-terra (mode:'analyze' — analiză/scoring listări externe, research)
+//   OPENAI_MODEL_LISTING  -> gpt-5.6-sol   (mode:'build'/'synthesize' — generarea finală a anunțului)
+// Lanț de fallback: listing -> OPENAI_MODEL_LISTING, apoi OPENAI_MODEL_ANALYSIS, apoi OPENAI_MODEL.
+function simpleModel(){return process.env.OPENAI_MODEL||'gpt-5.6-luna';}
+function analysisModel(){return process.env.OPENAI_MODEL_ANALYSIS||simpleModel();}
+function listingModel(){return process.env.OPENAI_MODEL_LISTING||analysisModel();}
+// mode:'analyze' compară/scorează listări EXISTENTE (research) — nivel analysis, nu generarea
+// finală a unui anunț nou (asta e doar build/synthesize).
+function modelForMode(mode){return mode==='analyze'?analysisModel():listingModel();}
+
 const HDRS={
   'user-agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
   'accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
@@ -267,7 +279,7 @@ async function repairJsonWithAI(raw,mode){
   const ai=await fetch('https://api.openai.com/v1/responses',{
     method:'POST',
     headers:{'content-type':'application/json','authorization':'Bearer '+process.env.OPENAI_API_KEY},
-    body:JSON.stringify({model:process.env.OPENAI_MODEL||'gpt-5.6-terra',max_output_tokens:2200,input:[{role:'user',content:[{type:'input_text',text:prompt}]}]})
+    body:JSON.stringify({model:modelForMode(mode),max_output_tokens:2200,input:[{role:'user',content:[{type:'input_text',text:prompt}]}]})
   });
   const data=await ai.json();
   if(!ai.ok)throw new Error('Repararea JSON a eșuat');
@@ -511,13 +523,13 @@ module.exports=async function handler(req,res){
     const visionImages=prepareImageListForAI(allImages).filter(x=>x.score>=55).slice(0,4);
     const content=[{type:'input_text',text:prompt},...visionImages.map(img=>({type:'input_image',image_url:img.url}))];
 
-    // Generarea propriu-zisă a anunțului (titlu SEO, descriere, specs) — task-ul cel mai greu din
-    // aplicație, singurul cu model dedicat (OPENAI_MODEL_LISTING), separat de restul apelurilor AI
-    // (traduceri, citire poze etc.), care rămân pe modelul general OPENAI_MODEL — vezi api/openai.js.
+    // mode:'build'/'synthesize' = generarea propriu-zisă a anunțului (titlu SEO, descriere, specs) —
+    // task-ul cel mai greu, pe OPENAI_MODEL_LISTING. mode:'analyze' = analiză/scoring listări externe
+    // (research), pe OPENAI_MODEL_ANALYSIS — vezi modelForMode() de la începutul fișierului.
     const ai=await fetch('https://api.openai.com/v1/responses',{
       method:'POST',
       headers:{'content-type':'application/json','authorization':'Bearer '+process.env.OPENAI_API_KEY},
-      body:JSON.stringify({model:process.env.OPENAI_MODEL_LISTING||process.env.OPENAI_MODEL||'gpt-5.6-terra',max_output_tokens:mode==='synthesize'?4200:2800,input:[{role:'user',content}]})
+      body:JSON.stringify({model:modelForMode(mode),max_output_tokens:mode==='synthesize'?4200:2800,input:[{role:'user',content}]})
     });
     const data=await ai.json();
     if(!ai.ok)return res.status(ai.status).json(data);

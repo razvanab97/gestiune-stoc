@@ -1,5 +1,12 @@
 const MAX_BODY_BYTES=10*1024*1024;
-const DEFAULT_MODEL='gpt-5.6-terra';
+// Selectare model pe 2 niveluri (al 3-lea, "listing", trăiește separat în api/listing-builder.js,
+// care nu trece prin acest proxy) — vezi Environment Variables în Vercel:
+//   OPENAI_MODEL          -> gpt-5.6-luna  (implicit: traduceri, reformulări, clasificări simple)
+//   OPENAI_MODEL_ANALYSIS -> gpt-5.6-terra (analiză imagini, PDF-uri, research, extrageri complexe)
+// Fallback în lanț: analysis -> OPENAI_MODEL_ANALYSIS, apoi OPENAI_MODEL, apoi implicitul din cod.
+function simpleModel(){return process.env.OPENAI_MODEL||'gpt-5.6-luna';}
+function analysisModel(){return process.env.OPENAI_MODEL_ANALYSIS||simpleModel();}
+function modelForTier(tier){return tier==='analysis'?analysisModel():simpleModel();}
 
 function contentParts(content){
   if(typeof content==='string')return[{type:'input_text',text:content}];
@@ -32,7 +39,7 @@ module.exports=async function handler(req,res){
     const input=typeof req.body==='string'?JSON.parse(req.body):req.body;
     if(!Array.isArray(input?.messages)||!input.messages.length)return res.status(400).json({error:{message:'Lipsesc mesajele pentru OpenAI'}});
     const body={
-      model:process.env.OPENAI_MODEL||DEFAULT_MODEL,
+      model:modelForTier(input.tier),
       max_output_tokens:Math.min(Math.max(Number(input.max_tokens)||400,1),4000),
       input:input.messages.map(m=>({role:m.role==='assistant'?'assistant':'user',content:contentParts(m.content)}))
     };
