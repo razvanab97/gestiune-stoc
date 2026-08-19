@@ -1908,7 +1908,7 @@ th{font-weight:800!important;color:var(--t3)!important}
     <div class="inv-drop">
       <input type="file" id="inv-file" accept=".csv,.txt,.pdf,.numbers" onchange="handleInvFile(event)" onclick="event.stopPropagation()">
       <div class="inv-drop-ic">📄</div>
-      <div class="inv-drop-t">Trage un fișier PDF sau CSV aici<br><small style="opacity:.6">PDF factură · CSV comandă Jumbo · CSV comandă Maxy/Verk (Denumire, Symbol, Cantitate, Preț EUR) · CSV platformă (Produs, SKU, Categorie, Cump., ...) · orice alt CSV cu o coloană de cod (SKU/Symbol/Cod) și una de cantitate — recunoscut automat · TXT<br>Fișier Numbers? Export din Numbers ca CSV (File → Export To → CSV), apoi încarcă CSV-ul</small></div>
+      <div class="inv-drop-t">Trage un fișier PDF sau CSV aici<br><small style="opacity:.6">PDF factură · CSV comandă Jumbo · CSV comandă Maxy/Verk (Denumire, Symbol, Cantitate, Preț EUR) · CSV platformă (Produs, SKU, Categorie, Cump., ...) · orice alt CSV cu o coloană de cod (SKU/Symbol/Cod) și una de cantitate — recunoscut automat · CSV fără cod, doar denumire de produs + cantitate (ex. confirmări de comandă) — asociat automat după nume · TXT<br>Fișier Numbers? Export din Numbers ca CSV (File → Export To → CSV), apoi încarcă CSV-ul</small></div>
     </div>
     <div class="inv-parsing" id="inv-parsing"><span class="spin"></span> Se procesează cu AI…</div>
     <div class="fld" style="margin-top:.75rem"><label>Număr factură / cod comandă (opțional)</label><input type="text" id="inv-number" placeholder="ex: FAC-2026-00123"></div>
@@ -1917,6 +1917,7 @@ th{font-weight:800!important;color:var(--t3)!important}
     <div id="inv-lines"></div>
     <button class="btn btn-sm" style="margin-top:4px" onclick="addInvLine()">+ Linie nouă</button>
     <div id="inv-preview"></div>
+    <div class="smi-pickdrop" id="invmi-pickdrop"><input type="text" id="invmi-pick-search" placeholder="Caută produs după nume sau SKU…" oninput="filterInvPick()"><div class="smi-pick-list" id="invmi-pick-list"></div></div>
   </div>
   <div class="inv-foot">
     <span class="inv-foot-info" id="inv-info">Adaugă produse pentru previzualizare</span>
@@ -1941,6 +1942,8 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:134,text:'Inventar: „Adaugă factură" nu mai creează produse duplicate pe ghicite. Înainte, orice linie fără o potrivire de încredere (scor sub 70%) devenea automat „produs nou" — des greșit, pentru că produsul chiar EXISTA deja, doar cu titlu ușor diferit în factură/CSV (raportat direct). Acum o linie nesigură rămâne „⚠ alege produs" până confirmi manual, din același selector cu poză+căutare folosit la Comenzi Platforme/Sincronizare: fie alegi produsul existent corect din listă, fie apeși explicit „🆕 Nu există — adaugă ca produs nou". Nimic nu se aplică automat pentru liniile nerezolvate — rămân vizibile în previzualizare până le rezolvi',date:'2026-08-19'},
+  {n:133,text:'Inventar: bug real reparat la „Adaugă factură" — un CSV de comandă cu DOAR o coloană de denumire produs (fără SKU/cod, ex. export „Produs,Cantitate,Preț unitar,Total,Vândut de" de pe marketplace) nu era citit deloc. Toate presetele existente (Jumbo, reaprovizionare, platformă, Maxy/Verk, generic) cer strict o coloană de cod — fără ea, fișierul cădea în fallback-ul vechi, care așteaptă un format total diferit (4 rânduri separate per produs, nu tabel CSV normal), deci părea „necitit". Acum, dacă găsește denumire + cantitate dar niciun cod, asociază produsele după NUME (fuzzy match, ca la import PDF) — funcționează pe orice CSV de comandă cu denumiri reale de produs',date:'2026-08-19'},
   {n:132,text:'Research: linkurile „📷 Aștept screenshot" (Jumbo/Maxy/Trendyol blocate) arătau doar URL-ul brut — cu mai multe deodată într-un dosar, era ușor să încurci „ce poză merge la ce link" (raportat direct). Acum fiecare arată „Link #2 din 4" (poziția printre cele în așteptare) + un titlu orientativ, extras automat din URL (ex. „Litiera pentru pisici cu capac tava extensibilă... 54x43x38cm gri"), înainte să încarci vreo poză — reper vizual instant, fără să mai ții minte separat',date:'2026-08-19'},
   {n:131,text:'Research: 2 reparații. (1) Link-ul de căutare Trendyol era greșit de la bun început — folosea trendyol.com/sr cu parametri culture=ro-RO&currency=RON, dar site-ul real folosește calea trendyol.com/ro/sr (confirmat pe un URL real, indexat), nu parametri de query — de-asta căutarea AI nu găsea niciodată rezultate pe Trendyol. Reparat în toate cele 3 locuri unde se construia linkul. (2) Promptul AI (căutare + verificare potrivire) folosea titlul brut de pe pagina furnizorului ca identitate a produsului — care poate fi încă netradus (engleză/altă limbă) dacă traducerea automată n-a apucat să ruleze — în loc de titlul dosarului, cel pe care chiar l-ai scris/verificat/editat manual. Acum titlul dosarului e sursa de încredere pentru identitate; titlul furnizorului rămâne doar detaliu tehnic suplimentar',date:'2026-08-19'},
   {n:130,text:'Research: avertismentul de „posibil duplicat" (titlu+preț similare cu alt link deja din dosar) era doar un ⚠ mic pe titlu, cu tooltip vag — nu spunea CU CE anume e duplicat. Acum apare un rând dedicat, sub linkul respectiv, care arată exact titlul/prețul linkului cu care se suprapune (+ link direct spre el), și 2 butoane: „🗑 Șterge acest duplicat" (dacă chiar e) sau „✓ Nu e duplicat" (dacă alarma e falsă — rămâne în dosar, doar dispare avertismentul). Duplicatele SIGURE (URL sau PNK identic) tot se resping automat, fără să mai apară deloc — asta rămâne neschimbat, doar zona ambiguă („probabil") a devenit acționabilă',date:'2026-08-19'},
@@ -8560,7 +8563,7 @@ function updCats(){document.querySelectorAll('.cat-g label').forEach(l=>l.classL
 
 /* INVOICE */
 function openInvoice(){
-  invLines=[];invParsed=[];invSourceName='Manual';
+  invLines=[];invParsed=[];invSourceName='Manual';invPickProds=null;invPickIdx=null;
   document.getElementById('inv-lines').innerHTML='';
   document.getElementById('inv-preview').innerHTML='';
   document.getElementById('inv-file').value='';
@@ -8593,11 +8596,18 @@ function routeInvFile(f){
     const t=e.target.result;
     const hasCode=/\b(symbol|sku|cod_jumbo|cod_produs|cod_extern|product_code|item_code|barcode|\bean\b|\bcod\b|reference|\bref\b)\b/i.test(t);
     const hasQty=/\b(cantitate|quantity|\bcant\b|\bqty\b|\bbuc\b)\b/i.test(t);
+    // BUG găsit: CSV-uri reale de comandă (ex. confirmări de pe marketplace) au des DOAR o coloană de
+    // denumire produs, fără niciun cod/SKU — cădeau prin toate presetele de mai jos (toate cer strict
+    // un cod) direct în parseCSV(), care așteaptă un format total diferit (4 rânduri separate per produs,
+    // nu tabel CSV normal) — deci fișierul părea "necitit". Acum, dacă nu găsim cod dar găsim denumire +
+    // cantitate, folosim parseNamedCSV (asociază după nume, ca la import PDF).
+    const hasName=/\b(produs|denumire|nume|titlu|product_name|name|title|descriere|description)\b/i.test(t);
     if(/symbol/i.test(t)&&/quantity/i.test(t)&&/priceperpiece_ron/i.test(t))parseSupplierRonCSV(f);
     else if(/cod_jumbo/i.test(t)||(/(^|[\n\r])\s*cod\s*;/i.test(t)&&/cantitate/i.test(t)&&/pretperbucata/i.test(t)))parseJumboCSV(f);
     else if(/sku/i.test(t)&&/cump/i.test(t)&&/recomandat/i.test(t))parsePlatformCSV(f);
     else if(/denumire/i.test(t)&&/symbol/i.test(t)&&/cantitate/i.test(t))parseMaxyOrderCSV(f);
     else if(hasCode&&hasQty)parseGenericCSV(f);
+    else if(hasName&&hasQty)parseNamedCSV(f);
     else parseCSV(f);
   };
   peek.readAsText(f.slice(0,1000),'UTF-8');
@@ -9038,6 +9048,54 @@ function parseGenericCSV(file){
   };
   r.readAsText(file,'UTF-8');
 }
+/* ── CSV DUPĂ NUME: fallback pentru CSV-uri fără nicio coloană de cod (SKU/EAN/Symbol) — comun la
+   confirmări de comandă de pe marketplace-uri (ex. export eMAG/eBay cu doar "Produs,Cantitate,Preț").
+   BUG găsit: parseGenericCSV cere strict o coloană de cod și eșuează fără ea, iar fallback-ul final
+   (parseCSV) așteaptă un format complet diferit (4 rânduri separate per produs, nu tabel CSV normal) —
+   deci orice CSV real, cu doar denumire de produs, ieșea negăsit/necitit. Aici asociem după NUME
+   (sku:'' — findExistingProduct() deja știe să cadă pe fuzzy match după nume când SKU lipsește, exact
+   ca la import PDF), nu după cod. ── */
+function parseNamedCSV(file){
+  const r=new FileReader();
+  r.onload=e2=>{
+    const text=e2.target.result,delim=detectCsvDelimiter(text);
+    const rows=parseCSVRows(text,delim);
+    if(rows.length<2){toast('CSV gol sau nerecunoscut','err');return;}
+    const hdr=rows[0].map(h=>h.trim().toLowerCase());
+    const norm=s=>s.replace(/[_\s.-]/g,'');
+    const nhdr=hdr.map(norm);
+    const find=(names,exclude)=>{for(const n of names){const i=nhdr.findIndex((h,idx)=>!(exclude&&exclude.has(idx))&&(h===n||h.includes(n)));if(i>-1)return i;}return -1;};
+    const iName=find(['produs','denumire','nume','titlu','productname','name','title','descriere','description']);
+    const iQty=find(['cantitate','quantity','cant','qty','buc']);
+    const iTotal=find(['prettotal','totalprice','valoaretotala','valoare','total']);
+    const iUnit=find(['pretunitar','pretbucata','pretbuc','priceperpiece','unitprice','pretachizitie','price'],iTotal>-1?new Set([iTotal]):null);
+    const iCurr=find(['moneda','currency','valuta']);
+    if(iName<0||iQty<0){toast('CSV nerecunoscut: nu am găsit o coloană de produs și una de cantitate','err');return;}
+    const agg={};
+    for(let i=1;i<rows.length;i++){
+      const row=rows[i];
+      const name=(row[iName]||'').trim().replace(/\s+/g,' ');
+      const qty=parseQtyVal(row[iQty]);
+      if(!name||qty<=0)continue;
+      const unit=iUnit>-1?parseFloat((row[iUnit]||'').replace(',','.').replace(/[^\d.]/g,''))||0:0;
+      const total=iTotal>-1&&iTotal!==iUnit?parseFloat((row[iTotal]||'').replace(',','.').replace(/[^\d.]/g,''))||0:0;
+      const price=unit>0?unit:(total>0&&qty>0?Math.round(total/qty*100)/100:0);
+      const currency=(iCurr>-1?(row[iCurr]||'').trim().toUpperCase():'')||'RON';
+      // agregare după numele normalizat — mai multe linii cu exact același nume se adună la cantitate
+      const key=name.toLowerCase();
+      if(!agg[key])agg[key]={name,qty:0,price:0,currency};
+      const a=agg[key];
+      a.qty+=qty;
+      if(price>0)a.price=price;
+      if(currency)a.currency=currency;
+    }
+    invParsed=Object.values(agg).map(g=>({sku:'',name:g.name,qty:g.qty,priceBuy:g.price,currency:g.currency||'RON'}));
+    if(!invParsed.length){toast('Nicio linie validă (produs + cantitate > 0) găsită în CSV','err');return;}
+    renderInvPreview();
+    toast(`CSV recunoscut după denumire · ${invParsed.length} produse (asociate după nume) ✓`);
+  };
+  r.readAsText(file,'UTF-8');
+}
 function previewInv(){
   invParsed=[];
   invLines.forEach(id=>{
@@ -9047,65 +9105,143 @@ function previewInv(){
   });
   renderInvPreview();
 }
+/* ── ASOCIERE MANUALĂ produs pentru import factură — picker reutilizat (aceeași componentă smi-pick
+   ca la Comenzi Platforme/Sincronizare). BUG real reparat: înainte, orice linie fără potrivire de
+   încredere (scor<0.7) devenea automat "produs nou" — des greșit, pentru că produsul chiar EXISTA
+   deja, doar cu titlu ușor diferit în factură/CSV, ducând la duplicate create din greșeală. Acum o
+   asemenea linie rămâne "nerezolvată" (nici produsId, nici newProduct) până utilizatorul alege manual
+   produsul corect sau confirmă explicit "produs nou" — nu se mai creează nimic automat pe ghicite. ── */
+let invPickIdx=null,invPickProds=null;
+function invPickBtnHtml(idx){
+  const it=invParsed[idx];
+  if(it.newProduct)return`<button type="button" class="smi-pick-btn" style="border-color:var(--or);color:var(--or)" onclick="openInvPick(event,${idx})"><div class="smi-pick-th-ph">🆕</div><span class="smi-pick-nm">Produs nou — de adăugat</span><span class="smi-pick-car">▾</span></button>`;
+  const p=it.produsId?P.find(x=>x.id===it.produsId):null;
+  const th=p?(p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'pick')}>`:`<div class="smi-pick-th-ph">📦</div>`):'';
+  const nm=p?`${esc(p.name)}${p.sku?' · '+esc(p.sku):''}`:'— alege produs —';
+  return`<button type="button" class="smi-pick-btn"${p?'':' style="border-color:var(--rd);color:var(--rd)"'} onclick="openInvPick(event,${idx})">${th}<span class="smi-pick-nm">${nm}</span><span class="smi-pick-car">▾</span></button>`;
+}
+function openInvPick(ev,idx){
+  ev.stopPropagation();
+  invPickIdx=idx;
+  if(!invPickProds)invPickProds=P.slice().sort((a,b)=>a.name.localeCompare(b.name));
+  const drop=document.getElementById('invmi-pickdrop');
+  const btn=ev.currentTarget.getBoundingClientRect();
+  let left=btn.left,top=btn.bottom+4;
+  if(left+300>window.innerWidth)left=window.innerWidth-310;
+  if(top+340>window.innerHeight)top=Math.max(8,btn.top-344);
+  drop.style.left=left+'px';drop.style.top=top+'px';
+  drop.classList.add('on');
+  const search=document.getElementById('invmi-pick-search');
+  search.value='';
+  filterInvPick();
+  search.focus();
+}
+function filterInvPick(){
+  const q=document.getElementById('invmi-pick-search').value.toLowerCase().trim();
+  const list=document.getElementById('invmi-pick-list');
+  const cur=invParsed[invPickIdx]?.produsId||null;
+  const curNew=!!invParsed[invPickIdx]?.newProduct;
+  const matches=(q?invPickProds.filter(p=>p.name.toLowerCase().includes(q)||(p.sku&&p.sku.toLowerCase().includes(q))):invPickProds).slice(0,80);
+  const newRow=`<div class="smi-pick-item" onclick="pickInvNewProduct()" style="border-bottom:1px solid var(--b1);${curNew?'background:var(--surf2)':''}"><div class="smi-pick-th-ph">🆕</div><span class="smi-pick-item-nm" style="color:var(--or)">Nu există — adaugă ca produs nou</span></div>`;
+  const rows=matches.map(p=>{
+    const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'pick')}>`:`<div class="smi-pick-th-ph">📦</div>`;
+    return`<div class="smi-pick-item" onclick="pickInvProduct(${p.id})" style="${p.id===cur&&!curNew?'background:var(--surf2)':''}">${th}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</span></div>`;
+  }).join('');
+  list.innerHTML=newRow+(rows||`<div class="smi-pick-item" style="color:var(--t3);cursor:default">Niciun produs găsit</div>`);
+}
+function pickInvProduct(id){
+  if(invPickIdx==null)return;
+  invParsed[invPickIdx].produsId=id||null;
+  invParsed[invPickIdx].newProduct=false;
+  document.getElementById('invmi-pickdrop').classList.remove('on');
+  invPickIdx=null;
+  renderInvPreview();
+}
+function pickInvNewProduct(){
+  if(invPickIdx==null)return;
+  invParsed[invPickIdx].produsId=null;
+  invParsed[invPickIdx].newProduct=true;
+  document.getElementById('invmi-pickdrop').classList.remove('on');
+  invPickIdx=null;
+  renderInvPreview();
+}
+document.addEventListener('click',ev=>{
+  if(!ev.target.closest('#invmi-pickdrop')&&!ev.target.closest('.smi-pick-btn')){
+    const d=document.getElementById('invmi-pickdrop');
+    if(d)d.classList.remove('on');
+  }
+});
 function renderInvPreview(){
   const prev=document.getElementById('inv-preview');
   if(!invParsed.length){prev.innerHTML='';document.getElementById('inv-info').textContent='Adaugă produse';document.getElementById('inv-apply-btn').disabled=true;return;}
-  // Calculează prețuri RON și asociere pentru fiecare item
+  // Calculează prețuri RON + sugestie automată de asociere (scor). NU decide singură "produs nou"
+  // când scorul e sub prag (0.7) — bug real reparat: se creau des produse duplicate pentru produse
+  // care EXISTAU deja, doar cu titlu ușor diferit în factură/CSV. produsId/newProduct se inițializează
+  // o SINGURĂ dată (prima randare) din sugestia automată; după aceea, doar picker-ul manual le schimbă.
   invParsed.forEach(item=>{
     if(!item.costRon){
       item.costRon=item.currency==='EUR'?Math.round(item.priceBuy*EUR_RON*100)/100:(item.priceBuy||0);
     }
     const match=findExistingProduct(item);
     item._match=match;
+    if(item.produsId===undefined&&item.newProduct===undefined){
+      item.produsId=match?match.product.id:null;
+    }
     const prices=calcPrices(item.costRon);
     item._sell=prices.sell;
     item._rec=prices.rec;
   });
-  const rows=invParsed.map(item=>{
-    const match=item._match;
+  const rows=invParsed.map((item,idx)=>{
+    const p=item.produsId?P.find(x=>x.id===item.produsId):null;
     let tag,nm;
-    if(match){
-      const conf=match.confidence==='sku'?'SKU exact':`nume ${Math.round(match.score*100)}%`;
-      const receipt=invoiceReceiptPlan(match.product,item.qty);
+    if(p){
+      const isAuto=item._match&&item._match.product.id===p.id;
+      const conf=isAuto?(item._match.confidence==='sku'?'SKU exact':`sugestie automată, nume ${Math.round(item._match.score*100)}%`):'ales manual';
+      const receipt=invoiceReceiptPlan(p,item.qty);
       tag=receipt.fromIncoming>0
         ?`<span class="inv-match upd" title="${conf}">✓ recepționează ${fmtQty(receipt.fromIncoming)} din pe drum${receipt.incomingAfter>0?' · rămân '+fmtQty(receipt.incomingAfter):''}${receipt.extra>0?' + '+fmtQty(receipt.extra)+' extra':''}</span>`
         :`<span class="inv-match upd" title="${conf}">↑ actualizează stoc</span>`;
-      nm=match.product.name;
+      nm=p.name;
+    } else if(item.newProduct){
+      tag=`<span class="inv-match new" title="Va fi creat un produs nou la aplicare">🆕 produs nou${item.sku?' · SKU '+esc(item.sku):''}</span>`;
+      nm=item.name||item.sku||'Produs necunoscut';
     } else if(item.onlyExisting){
-      tag=`<span class="inv-match miss">cod negăsit</span>`;
+      tag=`<span class="inv-match miss">⚠ cod negăsit — alege manual</span>`;
       nm=item.name||item.sku||'Produs necunoscut';
     } else {
-      tag=`<span class="inv-match new">+ nou${item.sku?' · SKU '+esc(item.sku):''}</span>`;
+      tag=`<span class="inv-match miss" title="Nicio potrivire sigură — alege manual un produs sau marchează „produs nou" din meniul de alături, altfel linia NU se aplică la Importă în stoc">⚠ alege produs</span>`;
       nm=item.name||item.sku||'Produs necunoscut';
     }
     const priceStr=item.costRon>0?`${item.costRon.toFixed(2)} RON${item.currency==='EUR'?` (${item.priceBuy.toFixed(2)}€)`:''}`:'' ;
-    const oldPrice=match?.product?.priceBuyTTC||0;
-    const delta=match&&item.costRon>0?priceDeltaHtml(oldPrice,item.costRon):'';
-    const stockPlan=match?stockImportPlan(match.product,item.qty):null;
+    const oldPrice=p?.priceBuyTTC||0;
+    const delta=p&&item.costRon>0?priceDeltaHtml(oldPrice,item.costRon):'';
+    const stockPlan=p?stockImportPlan(p,item.qty):null;
     const stockInfo=stockPlan?`<div class="jp-meta">Stoc: ${fmtQty(stockPlan.before)} + ${fmtQty(stockPlan.add)} = ${fmtQty(stockPlan.after)}${stockPlan.compensated>0?' · compensează minus '+fmtQty(stockPlan.compensated):''}</div>`:'';
-    return`<div class="inv-prev-row"><div class="inv-prev-nm">${esc(nm)} ${tag}${stockInfo}</div><div class="inv-prev-q">+${fmtQty(item.qty)}</div><div style="font-family:var(--mono);font-size:11px;color:var(--t3);text-align:right;min-width:120px">${priceStr}${delta}</div></div>`;
+    return`<div class="inv-prev-row"><div class="inv-prev-nm">${esc(nm)} ${tag}${stockInfo}</div><div class="smi-pick" id="invpick-${idx}">${invPickBtnHtml(idx)}</div><div class="inv-prev-q">+${fmtQty(item.qty)}</div><div style="font-family:var(--mono);font-size:11px;color:var(--t3);text-align:right;min-width:120px">${priceStr}${delta}</div></div>`;
   }).join('');
-  const newC=invParsed.filter(i=>!i._match).length;
-  const updC=invParsed.length-newC;
-  const receiptC=invParsed.filter(i=>i._match&&invoiceReceiptPlan(i._match.product,i.qty).fromIncoming>0).length;
-  const receiptQty=invParsed.reduce((n,i)=>n+(i._match?invoiceReceiptPlan(i._match.product,i.qty).fromIncoming:0),0);
+  const newC=invParsed.filter(i=>!i.produsId&&i.newProduct).length;
+  const updC=invParsed.filter(i=>i.produsId).length;
+  const unresolvedC=invParsed.filter(i=>!i.produsId&&!i.newProduct&&!i.onlyExisting).length;
+  const missC=invParsed.filter(i=>!i.produsId&&!i.newProduct&&i.onlyExisting).length;
+  const receiptC=invParsed.filter(i=>i.produsId&&invoiceReceiptPlan(P.find(x=>x.id===i.produsId),i.qty).fromIncoming>0).length;
+  const receiptQty=invParsed.reduce((n,i)=>{const p=i.produsId?P.find(x=>x.id===i.produsId):null;return n+(p?invoiceReceiptPlan(p,i.qty).fromIncoming:0);},0);
   prev.innerHTML=`<div class="inv-preview"><div class="inv-prev-title">Previzualizare (${invParsed.length} produse)</div>${rows}</div>`;
-  const missC=invParsed.filter(i=>!i._match&&i.onlyExisting).length;
-  const createC=invParsed.filter(i=>!i._match&&!i.onlyExisting).length;
-  document.getElementById('inv-info').textContent=`${createC} produse noi · ${updC} actualizări stoc${missC?' · '+missC+' coduri negăsite':''}${receiptC?' · '+fmtQty(receiptQty)+' buc. recepționate din pe drum':''}`;
+  document.getElementById('inv-info').textContent=`${newC} produse noi · ${updC} actualizări stoc${missC?' · '+missC+' coduri negăsite':''}${unresolvedC?' · ⚠ '+unresolvedC+' linii fără produs ales':''}${receiptC?' · '+fmtQty(receiptQty)+' buc. recepționate din pe drum':''}`;
   document.getElementById('inv-apply-btn').disabled=false;
 }
 async function applyInvoice(){
   showLoading('Se importă factura…');
-  let updated=0,created=0,skipped=0,receivedLines=0,receivedQty=0,extraQty=0;
+  let updated=0,created=0,skipped=0,receivedLines=0,receivedQty=0,extraQty=0,unresolved=0;
   const stockStamp=new Date().toISOString();
   const orderDetails=[];
   for(const item of invParsed){
     const costRon=item.costRon||0;
     const prices=calcPrices(costRon);
-    const match=item._match||findExistingProduct(item);
-    if(match){
-      const p=match.product;
+    // Sursa de adevăr e alegerea din picker (produsId/newProduct, vezi renderInvPreview) — NU se
+    // recalculează findExistingProduct aici, ca să nu suprascrie o corecție manuală a utilizatorului.
+    const p0=item.produsId?P.find(x=>x.id===item.produsId):null;
+    if(p0){
+      const p=p0;
       const idx=P.findIndex(x=>x.id===p.id);
       if(idx>=0){
         const oldCostBefore=Number(P[idx].priceBuyTTC)||0;
@@ -9129,11 +9265,7 @@ async function applyInvoice(){
         orderDetails.push({status:'actualizat',sku:item.sku||P[idx].sku||'',productId:P[idx].id,name:P[idx].name,qty:item.qty,price:costRon,value:Math.round((item.qty||0)*costRon*100)/100,oldPrice:oldCostBefore,stockBefore:stockPlan.before,stockAfter:stockPlan.after,negativeCompensated:stockPlan.compensated});
         updated++;
       }
-    } else if(item.onlyExisting){
-      orderDetails.push({status:'cod negăsit',sku:item.sku||'',productId:null,name:item.name||item.sku||'Produs negăsit',qty:item.qty,price:costRon,value:Math.round((item.qty||0)*costRon*100)/100});
-      skipped++;
-      continue;
-    } else {
+    } else if(item.newProduct){
       const newP={
         name:item.name||item.sku||'Produs nou',
         sku:item.sku||null,
@@ -9148,6 +9280,14 @@ async function applyInvoice(){
       await logMove('in',newP.name,item.qty,invSourceName||'Import factură · produs nou',newId);
       orderDetails.push({status:'produs nou',sku:item.sku||'',productId:newId,name:newP.name,qty:item.qty,price:costRon,value:Math.round((item.qty||0)*costRon*100)/100});
       created++;
+    } else {
+      // Nici produs ales, nici "produs nou" confirmat — linie nerezolvată, se SARE la aplicare (nu se
+      // creează nimic pe ghicite). item.onlyExisting distinge doar mesajul ("cod negăsit" la
+      // reaprovizionare) de cazul general ("alege manual"), comportamentul (sărire) e identic.
+      orderDetails.push({status:item.onlyExisting?'cod negăsit':'nerezolvat — alege manual',sku:item.sku||'',productId:null,name:item.name||item.sku||'Produs necunoscut',qty:item.qty,price:costRon,value:Math.round((item.qty||0)*costRon*100)/100});
+      skipped++;
+      if(!item.onlyExisting)unresolved++;
+      continue;
     }
   }
   if(orderDetails.length){
@@ -9163,6 +9303,9 @@ async function applyInvoice(){
   }
   hideLoading();
   renderToday();renderTable();buildJMonths();if(jMode==='orders')renderJurnal();
+  // Liniile nerezolvate (fără produs ales, fără "produs nou" confirmat) NU s-au aplicat — rămân în
+  // previzualizare, ca să nu dispară pur și simplu din vedere (nu s-a importat nimic pentru ele).
+  invParsed=invParsed.filter(item=>!item.produsId&&!item.newProduct);
   const newWithSku=orderDetails.filter(d=>d.status==='produs nou'&&d.sku);
   if(newWithSku.length){
     document.getElementById('inv-preview').innerHTML=`<div class="inv-preview"><div class="inv-prev-title">✓ Import finalizat — ${created} produse noi, ${updated} actualizate${skipped?', '+skipped+' sărite':''}</div>
@@ -9172,10 +9315,14 @@ async function applyInvoice(){
     document.getElementById('inv-info').textContent=`${newWithSku.length} produse noi de completat manual`;
     document.getElementById('inv-apply-btn').style.display='none';
     document.getElementById('inv-cancel-btn').textContent='Închide';
+  }else if(invParsed.length){
+    // Au mai rămas linii nerezolvate — nu închidem modalul, le arătăm în continuare pentru alegere manuală.
+    invPickProds=null;// invalidăm cache-ul de produse al picker-ului — pot exista produse noi create chiar acum
+    renderInvPreview();
   }else{
     closeInvoice();
   }
-  toast(`✓ ${created} produse noi · ${updated} actualizate${skipped?' · '+skipped+' coduri sărite':''}${receivedLines?' · '+fmtQty(receivedQty)+' buc. recepționate':''}${extraQty?' · '+fmtQty(extraQty)+' buc. extra':''}`);
+  toast(`✓ ${created} produse noi · ${updated} actualizate${skipped?' · '+skipped+' coduri sărite':''}${receivedLines?' · '+fmtQty(receivedQty)+' buc. recepționate':''}${extraQty?' · '+fmtQty(extraQty)+' buc. extra':''}${unresolved?` · ⚠ ${unresolved} linii mai au nevoie de produs ales manual`:''}`);
 }
 
 /* RAPORT STOC */
