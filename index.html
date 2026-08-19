@@ -402,6 +402,8 @@ tr:hover td{background:var(--surf2)}
 .pcom-awb-box{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:8px;padding:8px 10px;background:var(--surf);border-radius:var(--r);border:1px solid var(--b1)}
 .pcom-awb-title{font-size:16px;font-weight:700;color:var(--t1)}
 .pcom-awb-copy{padding:7px 16px;font-size:13px;font-weight:700}
+.pcom-awb-box.pcom-awb-copied{background:var(--gr-bg);border-color:var(--gr)}
+.pcom-awb-box.pcom-awb-copied .pcom-awb-copy{color:var(--gr);border-color:var(--gr);background:transparent}
 .smi-pickdrop{position:fixed;display:none;background:var(--surf);border:1px solid var(--b2);border-radius:var(--r2);box-shadow:var(--sh2);z-index:200;width:300px;max-height:340px;overflow:hidden;flex-direction:column}
 .smi-pickdrop.on{display:flex}
 .smi-pickdrop input{margin:8px;width:calc(100% - 16px);font-size:13px;padding:7px 10px;border:1px solid var(--b2);border-radius:var(--r);background:var(--surf2)}
@@ -1942,6 +1944,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:137,text:'Comenzi Platforme: 2 îmbunătățiri la previzualizarea de import. (1) Buton nou 🗑 pe fiecare linie — elimină definitiv o comandă din import (nu doar bifa „include", care o lasă tot vizibilă). (2) Butonul „📋 Copiază" (AWB) se marchează acum vizual „✓ Copiat" (verde) după ce l-ai apăsat, atât pe linii individuale cât și pe pachete grupate (Trendyol) — util cu multe comenzi deodată, ca să nu te mai încurci care AWB l-ai luat deja. Rămâne bifat și după reîncărcarea paginii',date:'2026-08-19'},
   {n:136,text:'Comenzi Platforme: revenit la comportamentul dinainte de #135, la cerere explicită — vânzarea trebuie să apară în Jurnal și în „Vânzări azi" exact în ziua în care se face importul, indiferent de data reală a comenzii pe eMAG/Trendyol, ca să urmărești evoluția stocului pe zilele tale de lucru, nu pe datele originale ale comenzilor',date:'2026-08-19'},
   {n:135,text:'Comenzi Platforme: bug real reparat — importul de comenzi scria mereu în Jurnal vânzări pe data de AZI, indiferent de data reală a comenzii din fișier. O comandă de acum câteva zile ajungea înghesuită sub ziua curentă; verificând ziua reală a comenzii în Jurnal, informația „nu apărea" — era de fapt salvată, dar sub altă dată. Acum jurnalul respectă data reală a comenzii. „Vânzări azi" (widget-ul de pe Dashboard) rămâne strict pentru azi — nu se mai umflă cu comenzi vechi importate, se actualizează doar dacă data comenzii chiar e azi',date:'2026-08-19'},
   {n:134,text:'Inventar: „Adaugă factură" nu mai creează produse duplicate pe ghicite. Înainte, orice linie fără o potrivire de încredere (scor sub 70%) devenea automat „produs nou" — des greșit, pentru că produsul chiar EXISTA deja, doar cu titlu ușor diferit în factură/CSV (raportat direct). Acum o linie nesigură rămâne „⚠ alege produs" până confirmi manual, din același selector cu poză+căutare folosit la Comenzi Platforme/Sincronizare: fie alegi produsul existent corect din listă, fie apeși explicit „🆕 Nu există — adaugă ca produs nou". Nimic nu se aplică automat pentru liniile nerezolvate — rămân vizibile în previzualizare până le rezolvi',date:'2026-08-19'},
@@ -8006,14 +8009,21 @@ function pcomAwbTitle(idx){
 // Titlul AWB e rezultatul important odată ce s-a făcut asocierea — îl arătăm mult mai proeminent
 // decât titlul de marketing de pe eMAG (util doar în pasul 1, ca să găsim produsul), cu un buton
 // de copiere mare, ușor de apăsat, ca să-l poți lipi direct pe eticheta de expediere.
+// it.awbCopied marchează vizual "deja preluat" după apăsarea Copiază — cerere explicită: cu multe
+// comenzi într-un import, e ușor să te încurci care AWB l-ai copiat deja și care mai trebuie. Rămâne
+// bifat și după reîncărcarea paginii (pcImpParsed se salvează oricum în localStorage la fiecare randare).
 function pcomAwbTitleHtml(idx){
   const title=pcomAwbTitle(idx);
   if(!title)return'';
-  return`<div class="pcom-awb-box"><span class="pcom-awb-title" title="Titlu pentru AWB">📦 ${esc(title)}</span><button type="button" class="btn btn-acc pcom-awb-copy" onclick="copyPcomAwbTitle(${idx})">📋 Copiază</button></div>`;
+  const copied=!!pcImpParsed[idx]?.awbCopied;
+  return`<div class="pcom-awb-box${copied?' pcom-awb-copied':''}"><span class="pcom-awb-title" title="Titlu pentru AWB">📦 ${esc(title)}</span><button type="button" class="btn ${copied?'':'btn-acc'} pcom-awb-copy" onclick="copyPcomAwbTitle(${idx})">${copied?'✓ Copiat':'📋 Copiază'}</button></div>`;
 }
 function copyPcomAwbTitle(idx){
   const title=pcomAwbTitle(idx);
-  if(title)copyText(title);
+  if(!title)return;
+  copyText(title);
+  if(pcImpParsed[idx])pcImpParsed[idx].awbCopied=true;
+  renderPcomImportPreview();
 }
 // Fără TVA / cu TVA / profit — vezi pcomSaleFinancials mai sus. Dacă am vândut sub pragul minim
 // configurat pe produs pentru platforma respectivă (priceEmag/priceTrendyol), marchează vizual.
@@ -8051,7 +8061,26 @@ function pcomGroupAwbTitle(gIdx){
 }
 function copyPcomGroupAwbTitle(gIdx){
   const title=pcomGroupAwbTitle(gIdx);
-  if(title)copyText(title);
+  if(!title)return;
+  copyText(title);
+  (pcomGroups[gIdx]||[]).forEach(i=>{if(pcImpParsed[i])pcImpParsed[i].awbCopied=true;});
+  renderPcomImportPreview();
+}
+// Elimină definitiv o linie din import — cerere explicită: să putem șterge o comandă selectată,
+// nu doar s-o excludem cu checkbox-ul (rămâne oricum vizibilă/încurcă printre celelalte). Diferit de
+// deletePcomOrder (care șterge o comandă DEJA aplicată, cu stoc de readăugat) — aici nimic nu a fost
+// încă salvat, deci pur și simplu dispare din previzualizare.
+function removePcomLine(idx){
+  const it=pcImpParsed[idx];if(!it)return;
+  if(!confirm(`Elimini linia „${it.titluExtern}" din import? Nu se va aplica, nu se salvează nimic pentru ea.`))return;
+  pcImpParsed.splice(idx,1);
+  if(pcImpParsed.length){renderPcomImportPreview();}
+  else{
+    document.getElementById('pcmi-preview').innerHTML='';
+    document.getElementById('pcmi-foot').style.display='none';
+    document.getElementById('pcmi-ai-btn').style.display='none';
+    localStorage.removeItem(PCIK);
+  }
 }
 function pcomRowHtml(idx,showOwnAwb){
   const it=pcImpParsed[idx];
@@ -8071,6 +8100,7 @@ function pcomRowHtml(idx,showOwnAwb){
     <input type="checkbox" ${it.include?'checked':''} onchange="pcImpParsed[${idx}].include=this.checked;updPcomImportInfo()">
     <div class="inv-prev-nm pcom-prev-nm">${titluHtml}<div class="pcom-meta-line">${priceInfoHtml}${it.pnk?' · PNK '+esc(it.pnk)+(it.tara?' ('+esc(it.tara)+')':''):''}${it.comandaId?' · #'+esc(it.comandaId):''}${it.clientNume?' · 👤 '+esc(it.clientNume):''}</div>${it.newProduct?pcomNewProductPromptHtml(idx):(awbHtml+pcomFinancialsHtml(idx)+pcomStockWarningHtml(idx))}</div>
     <div class="smi-pick" id="pcmi-pick-${idx}">${pcomPickBtnHtml(idx)}</div>
+    <button type="button" class="rsx-icon-btn danger" onclick="removePcomLine(${idx})" title="Elimină definitiv această linie din import">🗑</button>
   </div>`;
 }
 function renderPcomImportPreview(){
@@ -8080,8 +8110,9 @@ function renderPcomImportPreview(){
     if(idxs.length<=1)return pcomRowHtml(idxs[0],true);
     const linesHtml=idxs.map(i=>pcomRowHtml(i,false)).join('');
     const groupAwb=pcomGroupAwbTitle(gIdx);
+    const groupCopied=idxs.every(i=>pcImpParsed[i]?.awbCopied);
     const pachetLabel=pcImpParsed[idxs[0]].pachetId||pcImpParsed[idxs[0]].comandaId;
-    const groupAwbHtml=groupAwb?`<div class="pcom-awb-box" style="margin:2px 14px 10px"><span class="pcom-awb-title" title="Titlu combinat pentru AWB">📦 ${esc(groupAwb)}</span><button type="button" class="btn btn-acc pcom-awb-copy" onclick="copyPcomGroupAwbTitle(${gIdx})">📋 Copiază tot pachetul</button></div>`:'';
+    const groupAwbHtml=groupAwb?`<div class="pcom-awb-box${groupCopied?' pcom-awb-copied':''}" style="margin:2px 14px 10px"><span class="pcom-awb-title" title="Titlu combinat pentru AWB">📦 ${esc(groupAwb)}</span><button type="button" class="btn ${groupCopied?'':'btn-acc'} pcom-awb-copy" onclick="copyPcomGroupAwbTitle(${gIdx})">${groupCopied?'✓ Copiat':'📋 Copiază tot pachetul'}</button></div>`:'';
     return`<div class="pcom-group"><div class="pcom-group-hd">📦 Comandă${pachetLabel?' #'+esc(pachetLabel):''} · ${idxs.length} produse — se expediază împreună</div>${linesHtml}${groupAwbHtml}</div>`;
   }).join('');
   prev.innerHTML=`<div class="inv-preview"><div class="inv-prev-title">Previzualizare (${pcImpParsed.length} linii)</div>${groupsHtml}</div>`;
