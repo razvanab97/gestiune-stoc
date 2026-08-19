@@ -803,9 +803,10 @@ function buildRaportCats(){
 .research-project-filters{display:flex;gap:6px;flex-wrap:wrap}
 .research-project-filters button{border:1px solid var(--b2);background:var(--surf2);color:var(--t2);border-radius:999px;padding:6px 11px;font-size:22px;font-weight:800;cursor:pointer}
 .research-project-filters button.on{background:var(--acc);border-color:var(--acc);color:var(--acc-fg)}
-.research-projects-list{display:grid;gap:12px;margin-top:12px}
-.research-project-card{background:var(--surf);border:1px solid var(--b1);border-radius:var(--r2);padding:1rem;box-shadow:var(--sh);transition:background .15s,box-shadow .3s,border-color .15s}
-.research-project-card.rp-open{background:#E7E9EE;border-color:var(--b3)}
+.research-projects-list{display:grid;gap:12px;margin-top:32px}
+.research-project-card{background:var(--surf);border:1px solid var(--b1);border-radius:var(--r2);padding:1rem;box-shadow:var(--sh);transition:background .15s,box-shadow .3s,border-color .15s,margin .15s,opacity .15s}
+.research-project-card.rp-open{background:#E7E9EE;border-color:var(--b3);margin:16px 0}
+.research-project-card.rp-final{opacity:.8;box-shadow:var(--sh),inset 4px 0 0 var(--gr)}
 .research-project-card.rsx-flash{animation:rsxFlash 1.6s ease-out}
 @keyframes rsxFlash{0%{box-shadow:0 0 0 3px var(--acc)}100%{box-shadow:var(--sh)}}
 .research-project-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:10px}
@@ -884,6 +885,12 @@ function buildRaportCats(){
 .rsx-verdict{border-radius:999px;padding:7px 14px;font-size:23px;font-weight:800;white-space:nowrap;background:var(--surf2)}
 .rsx-del{background:var(--surf);border:1px solid var(--b1);color:var(--rd);border-radius:var(--r);cursor:pointer;padding:7px 10px;font-size:23px;line-height:1}
 .rsx-del:hover{background:var(--rd-bg);border-color:var(--rd)}
+.rsx-final-toggle{display:flex;align-items:center;gap:5px;font-size:19px;font-weight:700;color:var(--t2);cursor:pointer;white-space:nowrap;background:var(--surf);border:1px solid var(--b1);border-radius:999px;padding:6px 12px}
+.rsx-final-toggle input{cursor:pointer;accent-color:var(--gr)}
+.ean-pool-list{max-height:340px;overflow-y:auto;margin-top:8px;border-top:1px solid var(--b1)}
+.ean-pool-row{display:flex;align-items:center;padding:7px 4px;border-bottom:1px solid var(--b1);font-size:22px}
+.ean-pool-row label{display:flex;align-items:center;gap:9px;cursor:pointer;width:100%}
+.ean-pool-row input{cursor:pointer;accent-color:var(--gr)}
 
 /* ── 2. KPI summary ── */
 .rsx-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:8px;margin-bottom:14px}
@@ -1612,6 +1619,9 @@ th{font-weight:800!important;color:var(--t3)!important}
             <button class="btn btn-sm" onclick="collapseAllResearchProjects()">▸ Restrânge tot</button>
             <button class="btn btn-sm" onclick="expandAllResearchProjects()">▾ Extinde tot</button>
           </div>
+          <label class="rsx-final-toggle" style="margin-top:10px;width:fit-content" title="Dosarele finalizate sunt ascunse implicit din listă, ca să rămână curată — le poți arăta oricând de aici">
+            <input type="checkbox" id="rp-show-finalized" onchange="toggleShowFinalized(this)"> Arată dosarele finalizate (<span id="rp-finalized-count">0</span>)
+          </label>
           <div class="research-hint" style="margin:10px 0 0">Adaugă linkul furnizorului (cost) și linkuri eMAG/Trendyol (preț de piață) în dosar — verdictul și profitul se calculează automat.</div>
         </div>
       </div>
@@ -1662,6 +1672,7 @@ th{font-weight:800!important;color:var(--t3)!important}
           <button class="btn btn-sm btn-acc" id="ean-pool-add-btn" onclick="addEanCodes()">+ Adaugă coduri</button>
           <button class="btn btn-sm" onclick="refreshEanPoolCount()">↻ Reîmprospătează</button>
         </div>
+        <div id="ean-pool-list" class="ean-pool-list"></div>
       </details>
       <details class="listing-card" style="margin-top:14px" ontoggle="if(this.open)refreshEmagTemplateStatus()">
         <summary style="cursor:pointer;font-weight:900">📄 Template oficial eMAG (produs nou)</summary>
@@ -1981,6 +1992,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:146,text:'Research: trei îmbunătățiri la cerere. (1) Banca de coduri EAN arată acum lista completă de coduri disponibile (derulabilă), nu doar un număr — bifezi „folosit" lângă un cod și dispare imediat din bancă. (2) Spațiere — cadranul „Dosar produs nou"/„Filtre verdict" stă acum mai departe de primul dosar din listă, iar dosarul deschis (expandat) are spațiu în plus față de cele închise din jur, ca pagina să fie mai curată la lucru. (3) Un dosar poate fi bifat „Finalizat" (checkbox în antetul lui) — dispare automat din lista activă (fără să fie șters!) și primește un accent verde discret când e arătat; comutatorul „Arată dosarele finalizate" din „Filtre verdict" le aduce înapoi oricând. Necesită migration_research_finalizat.sql în Supabase pentru bifa de finalizat (fără migrare, restul paginii merge normal, doar bifa dă eroare la salvare)',date:'2026-08-19'},
   {n:145,text:'Research: opțiune nouă „🔗 Link public produs" lângă butoanele eMAG (Preset ERP / Preset produs nou / Ghid completare) — generează o pagină publică (/produs/{id dosar}) cu titlu, imagini, descriere, EAN, brand și caracteristici, plus etichete Open Graph și JSON-LD schema.org/Product, gata de lipit direct în eMAG Seller Center la „Adaugă produs cu URL", ca eMAG să extragă singur datele fără completare manuală câmp cu câmp. Disponibilă doar pentru anunțuri generate dintr-un dosar Research salvat (butonul dispare dacă lipsește dosarul); apăsarea salvează automat ultima variantă a anunțului și copiază link-ul în clipboard. Pagina nu expune date interne (furnizor, preț de achiziție, marjă/verdict) — doar ce ar apărea oricum pe un anunț public. Verificat și reparat înainte de lansare: escapare lipsă la blocul JSON-LD care permitea injectare de HTML/script dacă titlul sau descrierea (extrase prin AI din poze/PDF-uri externe) conțineau secvența de închidere a tag-ului script',date:'2026-08-19'},
   {n:144,text:'Generator anunțuri: bug real reparat la „eMAG — Listing Readiness" — Product Truth arăta aproape mereu 0/5 atribute completate și „indisponibil" la Material/Dimensiuni/Specie/etc., chiar și pentru dosare cu date reale. Cauza: linkurile analizate prin poză (Trendyol/Maxy/Jumbo/eMAG blocat — calea principală în practică, fetch-ul direct e blocat des) extrăgeau doar titlu/preț/descriere/brand, NICIODATĂ un tabel de caracteristici structurate (specs) sau EAN, deși AI-ul le vede clar în poză — doar linkurile eMAG cu fetch direct (mai rare) aveau specs. Acum atât analiza dintr-o poză (link individual), cât și cea din PDF (mai multe anunțuri deodată) extrag și specificațiile structurate + codul EAN, salvate și folosite corect de Product Truth. Verificat: un dosar cu specs reale pe linkul de furnizor trece de la 0/5 la atribute completate cu status VERIFIED',date:'2026-08-19'},
   {n:143,text:'Research: butoanele de acțiune dintr-un dosar deschis („↻ Recalculează verdict", „🔄 Reverifică prețurile", „✨ Generează anunț din dosar", „📦 Adaugă în Inventar") au acum un aspect de sticlă mată (liquid glass — translucid, cu blur și un luciu subtil), nu alb plin cu contur dur — se integrează vizual cu fundalul dosarului în loc să contrasteze dur cu el. Butonul principal „🚀 Analizează tot dosarul" rămâne mov plin, neschimbat',date:'2026-08-19'},
@@ -3790,7 +3802,7 @@ let listingData=null;
 // Folosit de applyListingToProduct() ca să știe din ce sursă să preia preț de achiziție/furnizor.
 let listingProjectId=null;
 let listingFactoryData=null,competitionLabData=null;
-let researchProjects=[],researchProjectFilter='all',researchProjectsLoaded=false,researchProjectsLoading=false;
+let researchProjects=[],researchProjectFilter='all',researchProjectsLoaded=false,researchProjectsLoading=false,researchShowFinalized=false;
 const MAX_RESEARCH_LINKS=20;
 async function ensureXLSX(){
   if(window.XLSX)return window.XLSX;
@@ -4661,6 +4673,21 @@ function setResearchProjectFilter(f,btn){
   btn?.classList.add('on');
   renderResearchProjects();
 }
+function toggleShowFinalized(el){
+  researchShowFinalized=!!el.checked;
+  renderResearchProjects();
+}
+async function toggleProjectFinalized(id,checked){
+  try{
+    await apiJson('/api/research-projects',{action:'set_project_finalized',project_id:id,finalizat:checked},15000);
+    const p=researchProjects.find(x=>Number(x.id)===Number(id));
+    if(p)p.finalizat=checked;
+    toast(checked?'Dosar marcat ca finalizat ✓':'Dosar redeschis ✓');
+  }catch(e){
+    toast(e.message||'Eroare la actualizarea dosarului — rulează migration_research_finalizat.sql în Supabase','err');
+  }
+  renderResearchProjects();
+}
 // Numele furnizorului din domeniul link-ului — Jumbo/Maxy/Verk/i-want au nume dedicate,
 // orice alt domeniu primește un nume generic derivat (ex. exemplu.ro → "Exemplu").
 function researchSupplierNameFromUrl(url){
@@ -4901,7 +4928,9 @@ function renderResearchProjects(){
     researchCollapsedInitDone=true;
   }
   renderResearchTopProducts();
-  const arr=researchProjects.filter(p=>researchProjectFilter==='all'||String(p.verdict||'').includes(researchProjectFilter));
+  const finalizedCountEl=document.getElementById('rp-finalized-count');
+  if(finalizedCountEl)finalizedCountEl.textContent=researchProjects.filter(p=>p.finalizat).length;
+  const arr=researchProjects.filter(p=>(researchProjectFilter==='all'||String(p.verdict||'').includes(researchProjectFilter))&&(researchShowFinalized||!p.finalizat));
   const sortMode=document.getElementById('rp-sort')?.value||'recent';
   if(sortMode==='profit')arr.sort((a,b)=>(Number(b.profit_estimated)||0)-(Number(a.profit_estimated)||0));
   else if(sortMode==='margin')arr.sort((a,b)=>(Number(b.margin_estimated)||0)-(Number(a.margin_estimated)||0));
@@ -5040,7 +5069,7 @@ function renderResearchProjects(){
         <label for="rppdf-trendyol-${p.id}" class="rsx-btn rsx-btn-secondary" style="cursor:pointer">📄 PDF rezultate Trendyol (poți selecta mai multe)</label>
       </div>
       ${table}`;
-    return`<div class="research-project-card${collapsed?'':' rp-open'}" id="rp-card-${p.id}">
+    return`<div class="research-project-card${collapsed?'':' rp-open'}${p.finalizat?' rp-final':''}" id="rp-card-${p.id}">
       <div class="rsx-head" onclick="toggleResearchProjectCard(${p.id})">
         <div class="rsx-head-l">
           ${headerImg}
@@ -5057,6 +5086,9 @@ function renderResearchProjects(){
         </div>
         <div class="rsx-head-r">
           <div class="rsx-verdict" style="color:${verdictColor(p.verdict)}">${esc(p.verdict||'Date insuficiente')}</div>
+          <label class="rsx-final-toggle" onclick="event.stopPropagation()" title="Marchează dosarul ca finalizat — dispare din lista activă, dar rămâne salvat (îl poți arăta din nou din „Arată dosarele finalizate")">
+            <input type="checkbox" ${p.finalizat?'checked':''} onchange="toggleProjectFinalized(${p.id},this.checked)" onclick="event.stopPropagation()"> Finalizat
+          </label>
           <button class="rsx-del" onclick="deleteResearchProject(${p.id},event)" title="Șterge tot dosarul, inclusiv linkurile lui">🗑</button>
         </div>
       </div>
@@ -5543,17 +5575,48 @@ function emagNetPriceFromGross(gross){return Number(gross)>0?gross/1.21:'';}
 // și se ȘTERGE din tabelă imediat ce a fost alocat (server-side, api/research-projects.js,
 // acțiunea consume_ean) — cerință explicită: lista arată mereu doar ce a mai rămas disponibil.
 // ═══════════════════════════════════════════════════════════════════════════════════════
-let eanPoolCount=null;
+let eanPoolCount=null,eanPoolCodes=null;
 function renderEanPoolCount(){
   const el=document.getElementById('ean-pool-count');
   if(!el)return;
   el.textContent=eanPoolCount==null?'—':eanPoolCount;
   el.style.color=eanPoolCount===0?'var(--rd)':'';
 }
+// Randează lista completă de coduri (nu doar numărul) — fiecare cu o bifă „folosit" care șterge
+// codul imediat din bancă (aceeași acțiune ca alocarea automată, dar la alegerea utilizatorului,
+// nu neapărat cel mai vechi). Listă derulabilă (max-height în CSS), ca să nu umfle pagina la zeci
+// de coduri.
+function renderEanPoolList(){
+  const el=document.getElementById('ean-pool-list');
+  if(!el)return;
+  if(!Array.isArray(eanPoolCodes)){el.innerHTML='';return;}
+  if(!eanPoolCodes.length){el.innerHTML='<div style="font-size:21px;color:var(--t3);padding:8px 4px">Nu mai ai coduri EAN disponibile.</div>';return;}
+  el.innerHTML=eanPoolCodes.map(c=>`<div class="ean-pool-row" id="ean-pool-row-${c.id}">
+    <label><input type="checkbox" onchange="markEanCodeUsed(${c.id},this)"> <span style="font-family:var(--mono)">${esc(c.ean)}</span></label>
+  </div>`).join('');
+}
 async function refreshEanPoolCount(){
-  try{eanPoolCount=(await apiJson('/api/research-projects',{action:'ean_pool_count'},15000)).count;}
-  catch(e){eanPoolCount=null;}
+  try{
+    const data=await apiJson('/api/research-projects',{action:'ean_pool_list'},15000);
+    eanPoolCodes=Array.isArray(data.codes)?data.codes:[];
+    eanPoolCount=eanPoolCodes.length;
+  }catch(e){eanPoolCount=null;eanPoolCodes=null;}
   renderEanPoolCount();
+  renderEanPoolList();
+}
+async function markEanCodeUsed(id,checkboxEl){
+  if(checkboxEl)checkboxEl.disabled=true;
+  try{
+    const data=await apiJson('/api/research-projects',{action:'remove_ean_code',id},15000);
+    eanPoolCodes=(eanPoolCodes||[]).filter(c=>c.id!==id);
+    eanPoolCount=data.count;
+    renderEanPoolCount();
+    renderEanPoolList();
+    toast('Cod EAN marcat ca folosit — șters din bancă ✓');
+  }catch(e){
+    toast(e.message||'Eroare la ștergerea codului EAN','err');
+    if(checkboxEl){checkboxEl.checked=false;checkboxEl.disabled=false;}
+  }
 }
 async function addEanCodes(){
   const ta=document.getElementById('ean-pool-input');
@@ -5563,8 +5626,7 @@ async function addEanCodes(){
   if(btn){btn.disabled=true;btn.textContent='⏳ Adaug…';}
   try{
     const data=await apiJson('/api/research-projects',{action:'add_ean_codes',codes},20000);
-    eanPoolCount=data.count;
-    renderEanPoolCount();
+    await refreshEanPoolCount();
     if(ta)ta.value='';
     toast(`${data.added} coduri EAN adăugate în bancă${data.duplicates?` · ${data.duplicates} erau deja acolo`:''} ✓`);
   }catch(e){

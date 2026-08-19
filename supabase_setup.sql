@@ -164,6 +164,7 @@ create table if not exists research_projects (
   margin_estimated numeric(6,2) default 0,
   max_buy_price numeric(10,2) default 0,
   notes text,
+  finalizat boolean default false,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
@@ -208,6 +209,7 @@ create index if not exists idx_research_links_pnk on research_links(project_id, 
 create index if not exists idx_comenzi_stoc_created on comenzi_stoc(created_at desc);
 
 alter table research_projects add column if not exists listing jsonb default '{}'::jsonb;
+alter table research_projects add column if not exists finalizat boolean default false;
 
 -- Auto-update updated_at pe produse
 create or replace function update_updated_at()

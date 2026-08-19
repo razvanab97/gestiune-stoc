@@ -313,6 +313,16 @@ module.exports=async function handler(req,res){
       // research_links.images rămâne EXCLUS din lista generală (mai multe poze per link, tot ar aduna
       // câțiva MB) — se aduce separat, o singură dată per dosar, când chiar îl deschizi (hydrate_project).
       const projects=await supa('GET','research_projects?select=id,title,acquisition_price,supplier,verdict,profit_estimated,margin_estimated,max_buy_price,notes,listing_status,listing,cover_image,created_at,updated_at&order=updated_at.desc&limit=50');
+      // finalizat e o coloană nouă (migration_research_finalizat.sql) — cerută separat, cu fallback la
+      // false pentru toate dacă migrarea nu a fost încă rulată, ca lista principală de dosare să NU se
+      // rupă din cauza unei coloane lipsă (același tipar de reziliență ca la comenzi_stoc/activitate_stoc).
+      if(projects.length){
+        try{
+          const finalRows=await supa('GET',`research_projects?select=id,finalizat&id=in.(${projects.map(p=>p.id).join(',')})`);
+          const finalMap=new Map((finalRows||[]).map(r=>[r.id,!!r.finalizat]));
+          projects.forEach(p=>{p.finalizat=finalMap.get(p.id)||false;});
+        }catch(e){projects.forEach(p=>{p.finalizat=false;});}
+      }
       const ids=projects.map(p=>p.id);
       const LINK_LIST_COLUMNS='id,project_id,url,normalized_url,platform,pnk,title,price,currency,rating,review_count,specs,description,duplicate_of,duplicate_type,include_in_listing,status,error,created_at,updated_at,source,score,score_zone,brand,seller,ean,ai_match_verdict,ai_match_reason';
       const CHUNK=10;
@@ -357,6 +367,17 @@ module.exports=async function handler(req,res){
       if(!project)return res.status(404).json({error:'Dosarul nu a fost găsit'});
       return res.status(200).json({project});
     }
+    // Marchează/demarchează un dosar ca finalizat — nu șterge/mută nimic, doar un flag care ascunde
+    // dosarul din lista activă implicit (vezi researchShowFinalized în index.html), ca pagina să rămână
+    // curată fără să piardă istoricul dosarelor deja încheiate.
+    if(body.action==='set_project_finalized'){
+      const projectId=Number(body.project_id);
+      if(!projectId)return res.status(400).json({error:'Lipsește dosarul'});
+      const rows=await supa('PATCH',`research_projects?id=eq.${projectId}`,{finalizat:!!body.finalizat,updated_at:new Date().toISOString()});
+      const project=rows?.[0];
+      if(!project)return res.status(404).json({error:'Dosarul nu a fost găsit'});
+      return res.status(200).json({project});
+    }
     // ── Bancă de coduri EAN — pentru produse noi fără cod de bare real. Alocate unul câte unul (cel
     // mai vechi introdus, primul folosit), ȘTERSE din tabelă imediat ce sunt alocate (nu doar marcate
     // folosite) — cerință explicită: lista trebuie să arate mereu doar ce a mai rămas disponibil.
@@ -371,9 +392,21 @@ module.exports=async function handler(req,res){
       const countRows=await supa('GET','ean_pool?select=id');
       return res.status(200).json({added:newCodes.length,duplicates:codes.length-newCodes.length,count:countRows.length});
     }
-    if(body.action==='ean_pool_count'){
-      const rows=await supa('GET','ean_pool?select=id');
-      return res.status(200).json({count:rows.length});
+    // Lista completă (nu doar numărul) — utilizatorul trebuie să poată vedea și alege manual ce cod
+    // să marcheze folosit, nu doar să afle câte mai sunt. Limitată la 500, suficient pentru o bancă
+    // de coduri lucrată manual; ordonată ca la consume_ean (cel mai vechi întâi).
+    if(body.action==='ean_pool_list'){
+      const rows=await supa('GET','ean_pool?select=id,ean,created_at&order=id.asc&limit=500');
+      return res.status(200).json({codes:rows||[]});
+    }
+    // Șterge un cod ALES de utilizator (bifat ca „folosit"), spre deosebire de consume_ean care ia
+    // mereu cel mai vechi — aceeași operație de fond (dispare din bancă), doar altă sursă a alegerii.
+    if(body.action==='remove_ean_code'){
+      const id=Number(body.id);
+      if(!id)return res.status(400).json({error:'Lipsește id-ul codului'});
+      await supa('DELETE',`ean_pool?id=eq.${id}`);
+      const countRows=await supa('GET','ean_pool?select=id');
+      return res.status(200).json({count:countRows.length});
     }
     if(body.action==='consume_ean'){
       const rows=await supa('GET','ean_pool?select=id,ean&order=id.asc&limit=1');
