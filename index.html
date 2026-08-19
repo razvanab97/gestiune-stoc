@@ -2030,6 +2030,8 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:159,text:'Generator anunțuri — poze în descriere, mai sigure și mai flexibile. (1) Buton nou „📁 Din calculator" — alegi o poză direct de pe telefon/laptop (fișier personal), fără niciun link extern; se redimensionează automat și se inserează. (2) Bug real reparat: linkuri de tip https://ibb.co/XXXXX (pagina care AFIȘEAZĂ poza, nu fișierul propriu-zis) treceau de validare dar nu se afișau niciodată — acum orice link extern (la inserare în descriere sau la „+ Adaugă poză externă") se verifică înainte să fie acceptat, cu mesaj clar dacă nu e link direct către imagine. (3) Bug de infrastructură găsit: poza reală/uploadată nu se poate salva încă — RLS activ pe tabela ai_images blochează inserarea (aceeași problemă ca la ean_pool). Necesită rulare manuală în Supabase (vezi mesajul din chat)',date:'2026-08-20'},
+  {n:158,text:'Research: buton „📋 Copiază" adăugat la fiecare cod din „🔢 Bancă de coduri EAN" (lista de coduri disponibile) — până acum aveai doar bifa „folosit", trebuia să selectezi manual textul ca să-l copiezi',date:'2026-08-20'},
   {n:157,text:'Generator anunțuri — control mai bun peste poze. (1) Buton nou „➕ În descriere" pe fiecare poză din „Poze selectate" — o adaugă direct în descriere, fără să mai cauți/copiezi URL-ul manual. (2) Sub editorul de descriere apare acum „Poze folosite în descriere", cu fiecare poză din HTML arătată separat — utile mai ales pentru poze stock irelevante apărute din căutarea automată de rezervă. (3) Buton nou „🚫 Blochează" pe orice poză (din pool sau din descriere) — o elimină din anunțul curent ȘI o exclude definitiv din TOATE generările viitoare, pentru orice produs (util exact pentru poza stock nepotrivită care tot reapărea la mai multe listări)',date:'2026-08-20'},
   {n:156,text:'Generator anunțuri: panou nou „🏷 Bancă de coduri produs", lângă banca de coduri EAN — generează la cerere coduri după schema AB HOMES (contor zilnic + zi+lună+an), util când pregătești mai multe produse deodată, înainte de anunțul complet. Fiecare cod are „📋 Copiază tot" (AB+cifre, pentru câmpul „Cod produs") și „📋 Doar cifrele" (fără AB, pentru câmpul „ID produs"). Trage din exact ACELAȘI contor ca alocarea automată de la generarea anunțului — niciun risc de coduri duplicate între cele două',date:'2026-08-20'},
   {n:155,text:'Generator anunțuri — trei îmbunătățiri pentru anunțuri mai complete, mai rapid. (1) Încercare de reparat viteza: modelele gpt-5.6 fac raționament intern (poți seta nivele none→max) — generarea anunțului nu seta niciun nivel explicit, riscând un raționament implicit mare și deci lent pentru o simplă redactare; setat acum explicit la „low". Nu am putut testa live efectul (necesită cheia OpenAI, disponibilă doar în Vercel) — spune-mi dacă simți diferența. (2) Descrierea e acum editabilă direct — „✏️ Editează HTML" deschide un câmp de scris peste care poți interveni oricând, plus „🖼 Inserează poză" (adaugă un URL de imagine exact unde ai cursorul) și „💾 Salvează descrierea" (persistă imediat în dosar). (3) Secțiunea „Poze selectate" nu mai dispare când anunțul nu are nicio poză — rămâne vizibilă, cu un buton „+ Adaugă poză externă" (orice URL http/https), ca lista să nu rămână niciodată complet goală',date:'2026-08-20'},
@@ -5687,8 +5689,9 @@ function renderEanPoolList(){
   if(!el)return;
   if(!Array.isArray(eanPoolCodes)){el.innerHTML='';return;}
   if(!eanPoolCodes.length){el.innerHTML='<div style="font-size:21px;color:var(--t3);padding:8px 4px">Nu mai ai coduri EAN disponibile.</div>';return;}
-  el.innerHTML=eanPoolCodes.map(c=>`<div class="ean-pool-row" id="ean-pool-row-${c.id}">
-    <label><input type="checkbox" onchange="markEanCodeUsed(${c.id},this)"> <span style="font-family:var(--mono)">${esc(c.ean)}</span></label>
+  el.innerHTML=eanPoolCodes.map(c=>`<div class="ean-pool-row" id="ean-pool-row-${c.id}" style="justify-content:space-between;gap:8px">
+    <label style="width:auto;flex:1;min-width:0"><input type="checkbox" onchange="markEanCodeUsed(${c.id},this)"> <span style="font-family:var(--mono)">${esc(c.ean)}</span></label>
+    <button class="btn btn-sm" style="flex-shrink:0" onclick="copyText(${esc(JSON.stringify(c.ean))})" title="Copiază codul EAN">📋 Copiază</button>
   </div>`).join('');
 }
 async function refreshEanPoolCount(){
@@ -6446,18 +6449,62 @@ function toggleListingHtmlView(mode){
 // Inserează un <img> la poziția cursorului din editorul de HTML brut — utilizatorul alege orice
 // poză (poate fi și una din „Poze selectate" de mai jos, sau orice URL extern), fără să fie nevoie
 // să scrie tag-ul de mână.
-function insertImageInDescription(){
+// Verifică dacă un URL chiar se încarcă ca imagine (nu doar că "arată" ca un link) — bug real
+// raportat: linkuri de tip https://ibb.co/XXXXX (pagina de VIZUALIZARE ImgBB, cu HTML în jurul
+// pozei) treceau de validarea simplă (începe cu http/https) dar nu se afișau niciodată, pentru că
+// serverul întoarce o pagină HTML la acel URL, nu fișierul imagine — imaginea reală e la un URL
+// DIFERIT (subdomeniul i.ibb.co, nu ibb.co). Testăm prin proxy (img-proxy), ca un site cu protecție
+// la hotlink să nu dea fals-negativ.
+function validateImageUrl(url){
+  return new Promise(resolve=>{
+    const img=new Image();
+    const timer=setTimeout(()=>resolve(false),8000);
+    img.onload=()=>{clearTimeout(timer);resolve(true);};
+    img.onerror=()=>{clearTimeout(timer);resolve(false);};
+    img.src=proxyImg(url);
+  });
+}
+const BAD_IMAGE_LINK_HINT='Acest link nu se poate încărca ca imagine — de obicei pentru că e pagina care AFIȘEAZĂ poza, nu fișierul propriu-zis (ex. https://ibb.co/XXXXX e pagina ImgBB, nu poza — click-dreapta pe poză → „Copiază adresa imaginii” ca să iei link-ul DIRECT, de obicei se termină în .jpg/.png/.webp).';
+async function insertImageInDescription(){
   const ta=document.getElementById('listing-html-raw');
   if(!ta){toast('Deschide întâi „✏️ Editează HTML"','err');return;}
-  const url=(prompt('URL-ul imaginii de inserat (http:// sau https://):')||'').trim();
+  const url=(prompt('URL-ul DIRECT al imaginii de inserat (de obicei se termină în .jpg/.png/.webp) — nu pagina care o afișează:')||'').trim();
   if(!url)return;
   if(!/^https?:\/\//i.test(url)){toast('URL invalid — trebuie să înceapă cu http:// sau https://','err');return;}
+  toast('Verific imaginea…');
+  const ok=await validateImageUrl(url);
+  if(!ok){toast(BAD_IMAGE_LINK_HINT,'err');return;}
   const tag=`<img src="${url}">`;
   const start=ta.selectionStart??ta.value.length,end=ta.selectionEnd??ta.value.length;
   ta.value=ta.value.slice(0,start)+tag+ta.value.slice(end);
   ta.selectionStart=ta.selectionEnd=start+tag.length;
   ta.focus();
   toggleListingHtmlView('raw');
+  toast('Poză inserată ✓');
+}
+// Upload direct de pe calculator (fișier personal) — nu are nevoie de niciun link extern. Redimensionăm
+// client-side (ca la screenshot-urile din Research), trimitem base64-ul la api/ai-image.js (fără AI,
+// doar stocare) și primim înapoi un URL public stabil, inserat la fel ca un link extern validat.
+async function uploadImageIntoDescription(ev){
+  const file=ev?.target?.files?.[0];if(!file)return;
+  const ta=document.getElementById('listing-html-raw');
+  if(!ta){toast('Deschide întâi „✏️ Editează HTML"','err');if(ev.target)ev.target.value='';return;}
+  if(!file.type.startsWith('image/')){toast('Fișierul trebuie să fie o imagine','err');if(ev.target)ev.target.value='';return;}
+  toast('Încarc poza…');
+  try{
+    const rawDataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(file);});
+    const dataUrl=await resizeImageDataUrl(rawDataUrl,1600,.85);
+    const data=await apiJson('/api/ai-image',{imageData:dataUrl},60000);
+    const absoluteUrl=location.origin+data.url;
+    const tag=`<img src="${absoluteUrl}">`;
+    const start=ta.selectionStart??ta.value.length,end=ta.selectionEnd??ta.value.length;
+    ta.value=ta.value.slice(0,start)+tag+ta.value.slice(end);
+    ta.selectionStart=ta.selectionEnd=start+tag.length;
+    toggleListingHtmlView('raw');
+    toast('Poză încărcată și inserată ✓');
+  }catch(e){
+    toast('Eroare la încărcarea pozei: '+(e.message||e),'err');
+  }finally{if(ev?.target)ev.target.value='';}
 }
 // Salvează editarea manuală a descrierii — description_html devine sursa de adevăr, description
 // (text simplu, folosit de eMAG XLSX/ghid) se re-derivă din el prin eliminarea tag-urilor. Dacă
@@ -6950,7 +6997,9 @@ function renderListingFactoryResult(l,pages,allImages=[]){
     <div style="margin:10px 0 4px"><div class="listing-preview-toggle" style="flex-wrap:wrap">
       <button id="listing-html-btn-preview" class="listing-preview-btn on" onclick="toggleListingHtmlView('preview')">Preview</button>
       <button id="listing-html-btn-raw" class="listing-preview-btn" onclick="toggleListingHtmlView('raw')">✏️ Editează HTML</button>
-      <button class="btn btn-sm" onclick="insertImageInDescription()" title="Inserează un tag &lt;img&gt; la poziția cursorului din editor">🖼 Inserează poză</button>
+      <button class="btn btn-sm" onclick="insertImageInDescription()" title="Inserează un tag &lt;img&gt; la poziția cursorului din editor, dintr-un URL extern">🔗 Inserează din URL</button>
+      <input type="file" accept="image/*" id="desc-img-upload" style="display:none" onchange="uploadImageIntoDescription(event)">
+      <label for="desc-img-upload" class="btn btn-sm" style="cursor:pointer" title="Alege o poză direct de pe calculator (fișier personal), fără link extern">📁 Din calculator</label>
       <button class="btn btn-sm btn-acc" onclick="saveDescriptionEdit()">💾 Salvează descrierea</button>
       <button class="btn btn-sm" style="margin-left:auto" onclick="copyText(${esc(JSON.stringify(l?.description_html||''))})">Copiază HTML</button>
     </div>
@@ -7016,12 +7065,15 @@ function removeAiImage(url){
 }
 // Adaugă manual o poză externă (orice URL http/https) în „Poze selectate" — util mai ales când
 // AI-ul nu a reușit să găsească/selecteze nicio poză, ca lista să nu rămână niciodată complet goală.
-function addExternalImage(){
+async function addExternalImage(){
   const l=listingData||listingFactoryData?.listing;
   if(!l){toast('Nu există anunț generat');return;}
-  const url=(prompt('URL-ul imaginii externe (http:// sau https://):')||'').trim();
+  const url=(prompt('URL-ul DIRECT al imaginii externe (de obicei se termină în .jpg/.png/.webp) — nu pagina care o afișează:')||'').trim();
   if(!url)return;
   if(!/^https?:\/\//i.test(url)){toast('URL invalid — trebuie să înceapă cu http:// sau https://','err');return;}
+  toast('Verific imaginea…');
+  const ok=await validateImageUrl(url);
+  if(!ok){toast(BAD_IMAGE_LINK_HINT,'err');return;}
   l.images=[...(l.images||[]),url];
   renderListingFactoryResult(l,listingFactoryData?.pages||[],listingFactoryData?.allImages||[]);
   toast('Poză externă adăugată ✓');
