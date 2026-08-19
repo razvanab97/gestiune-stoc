@@ -1,4 +1,22 @@
 const MAX_HTML=900000,MAX_LINKS=20;
+const SUPA_URL=process.env.SUPABASE_URL||'https://nuvgwytanlgvcffxeahs.supabase.co';
+const SUPA_KEY=process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.SUPABASE_ANON_KEY||'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51dmd3eXRhbmxndmNmZnhlYWhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MDI0OTAsImV4cCI6MjA5NTI3ODQ5MH0.lSy1CUJA9xlVv1isAyfTIxGUAbGMUIS7c3TXQ-5pcEg';
+const BLOCKED_IMAGES_KEY='emag_blocked_images';
+// Poze definitiv blocate (ex. poze stock irelevante găsite recurent prin DDG, ca fallback) — utilizatorul
+// le blochează din UI (vezi blockImage în index.html); stocate ca JSON într-o cheie generică setari_app,
+// fără nicio migrare nouă. Best-effort: dacă /api/settings e indisponibil, generarea continuă normal,
+// doar fără filtrare (nu blocăm anunțul din cauza asta).
+async function getBlockedImages(){
+  try{
+    const r=await fetch(`${SUPA_URL}/rest/v1/setari_app?key=eq.${BLOCKED_IMAGES_KEY}&select=value`,{headers:{'apikey':SUPA_KEY,'authorization':'Bearer '+SUPA_KEY}});
+    if(!r.ok)return new Set();
+    const rows=await r.json();
+    const raw=rows?.[0]?.value;
+    if(!raw)return new Set();
+    const arr=JSON.parse(raw);
+    return new Set(Array.isArray(arr)?arr:[]);
+  }catch(e){return new Set();}
+}
 
 // Selectare model pe 3 niveluri — vezi Environment Variables în Vercel:
 //   OPENAI_MODEL          -> gpt-5.6-luna  (nefolosit direct aici, doar ca ultimă treaptă de fallback)
@@ -507,15 +525,20 @@ module.exports=async function handler(req,res){
     // care nu depinde de reușita fetch-ului live.
     const knownImages=(Array.isArray(req.body?.knownImages)?req.body.knownImages:[]).filter(u=>typeof u==='string'&&/^https?:\/\//i.test(u)).slice(0,60);
 
+    // Poze blocate definitiv de utilizator (ex. stock photo irelevant, recurent din DDG) — filtrate
+    // ÎNAINTE de orice altă decizie (inclusiv pragul care declanșează fallback-ul DDG), ca să nu
+    // rămână blocate doar "pe hârtie" fără efect real asupra listei finale de candidați.
+    const blockedImages=await getBlockedImages();
+
     // Colectăm TOATE imaginile din toate paginile, deduplicate
-    const pageImages=[...new Set([...pages.flatMap(p=>p.images||[]),...knownImages].filter(x=>x&&isLikelyProductImage(x)))];
+    const pageImages=[...new Set([...pages.flatMap(p=>p.images||[]),...knownImages].filter(x=>x&&isLikelyProductImage(x)&&!blockedImages.has(x)))];
 
     // DDG Images ca supliment dacă avem mai puțin de 10 imagini de calitate
     let ddgImages=[];
     const productName=product.name||(pages.find(p=>p.title)?.title)||'';
     const qualityCount=pageImages.filter(u=>scoreImageUrl(u)>=50).length;
     if(productName&&qualityCount<8){
-      ddgImages=await searchDDGImages(productName+' produs');
+      ddgImages=(await searchDDGImages(productName+' produs')).filter(x=>!blockedImages.has(x));
     }
 
     // Combină: imaginile din pagini primele (mai de încredere), DDG suplimentar

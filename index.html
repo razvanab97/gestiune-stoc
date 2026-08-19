@@ -2030,6 +2030,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:157,text:'Generator anunțuri — control mai bun peste poze. (1) Buton nou „➕ În descriere" pe fiecare poză din „Poze selectate" — o adaugă direct în descriere, fără să mai cauți/copiezi URL-ul manual. (2) Sub editorul de descriere apare acum „Poze folosite în descriere", cu fiecare poză din HTML arătată separat — utile mai ales pentru poze stock irelevante apărute din căutarea automată de rezervă. (3) Buton nou „🚫 Blochează" pe orice poză (din pool sau din descriere) — o elimină din anunțul curent ȘI o exclude definitiv din TOATE generările viitoare, pentru orice produs (util exact pentru poza stock nepotrivită care tot reapărea la mai multe listări)',date:'2026-08-20'},
   {n:156,text:'Generator anunțuri: panou nou „🏷 Bancă de coduri produs", lângă banca de coduri EAN — generează la cerere coduri după schema AB HOMES (contor zilnic + zi+lună+an), util când pregătești mai multe produse deodată, înainte de anunțul complet. Fiecare cod are „📋 Copiază tot" (AB+cifre, pentru câmpul „Cod produs") și „📋 Doar cifrele" (fără AB, pentru câmpul „ID produs"). Trage din exact ACELAȘI contor ca alocarea automată de la generarea anunțului — niciun risc de coduri duplicate între cele două',date:'2026-08-20'},
   {n:155,text:'Generator anunțuri — trei îmbunătățiri pentru anunțuri mai complete, mai rapid. (1) Încercare de reparat viteza: modelele gpt-5.6 fac raționament intern (poți seta nivele none→max) — generarea anunțului nu seta niciun nivel explicit, riscând un raționament implicit mare și deci lent pentru o simplă redactare; setat acum explicit la „low". Nu am putut testa live efectul (necesită cheia OpenAI, disponibilă doar în Vercel) — spune-mi dacă simți diferența. (2) Descrierea e acum editabilă direct — „✏️ Editează HTML" deschide un câmp de scris peste care poți interveni oricând, plus „🖼 Inserează poză" (adaugă un URL de imagine exact unde ai cursorul) și „💾 Salvează descrierea" (persistă imediat în dosar). (3) Secțiunea „Poze selectate" nu mai dispare când anunțul nu are nicio poză — rămâne vizibilă, cu un buton „+ Adaugă poză externă" (orice URL http/https), ca lista să nu rămână niciodată complet goală',date:'2026-08-20'},
   {n:154,text:'Research: coloană nouă „Performanță eMAG" în tabelul dosarului, între PNK/Cod și Confirmă — doar pe linkurile eMAG (conceptul nu există pe Trendyol/furnizor). Selector manual cu 5 nivele (Supercold/Cold/Standard/Hot/Superhot, colorate ca o scală de temperatură), pentru aprecierea ta pe baza analizei/căutărilor proprii — nu se calculează automat de sistem. Necesită migration_link_emag_performance.sql în Supabase (fără migrare, restul funcționează normal, doar selecția nu se salvează încă)',date:'2026-08-20'},
@@ -6911,6 +6912,7 @@ function renderListingFactoryResult(l,pages,allImages=[]){
   const imgs=factoryImages(l||{},pages||[]);
   const specs=l?.specs||{};
   const imgRec=imageRecommendationMap(l||{});
+  const descImages=[...new Set(extractImagesFromHtml(l?.description_html))];
   // Anunțul principal e pentru eMAG — Trendyol rămâne disponibil, dar ca referință secundară,
   // strânsă într-un singur <details>, ca să nu concureze vizual cu titlul/categoria eMAG.
   const categoryRow=l?.category_emag?`
@@ -6953,7 +6955,9 @@ function renderListingFactoryResult(l,pages,allImages=[]){
       <button class="btn btn-sm" style="margin-left:auto" onclick="copyText(${esc(JSON.stringify(l?.description_html||''))})">Copiază HTML</button>
     </div>
     <div id="listing-html-preview" class="listing-html-preview on">${l?.description_html?proxyHtmlImgs(l.description_html):l?.description?esc(l.description):'<span style="color:var(--t3)">Nicio descriere încă — scrie una în „Editează HTML" și salvează</span>'}</div>
-    <textarea id="listing-html-raw" class="listing-html-raw">${esc(l?.description_html||l?.description||'')}</textarea></div>
+    <textarea id="listing-html-raw" class="listing-html-raw">${esc(l?.description_html||l?.description||'')}</textarea>
+    ${descImages.length?`<div style="margin-top:8px"><div style="font-size:19px;color:var(--t3);margin-bottom:4px">Poze folosite în descriere (${descImages.length}) — dacă una e greșită/irelevantă (ex. o poză stock nepotrivită), o scoți sau o blochezi definitiv de aici:</div><div class="listing-imgs">${descImages.map(u=>`<div class="listing-image-pick" style="grid-template-columns:70px 1fr"><img src="${esc(proxyImg(u))}" onerror="this.src='${esc(u)}'" alt="" style="width:70px;height:70px"><div><div style="display:flex;gap:5px;flex-wrap:wrap"><button class="btn btn-sm" onclick="removeImageFromDescription(${esc(JSON.stringify(u))})" title="O scoate doar din această descriere">🗑 Scoate</button><button class="btn btn-sm" style="color:var(--rd);border-color:var(--rd)" onclick="blockImage(${esc(JSON.stringify(u))})" title="Nu o mai arăta niciodată, la niciun anunț">🚫 Blochează</button></div></div></div>`).join('')}</div></div>`:''}
+    </div>
     ${Array.isArray(l?.bullets)&&l.bullets.length?`<ul class="listing-bullets">${l.bullets.map(b=>`<li>${esc(b)}</li>`).join('')}</ul>`:''}
     ${renderSpecTable(specs)}
     ${Array.isArray(l?.seo_keywords)&&l.seo_keywords.length?`<div style="font-size:19px;color:var(--t3);margin-top:8px">Keywords: ${esc(l.seo_keywords.join(', '))}</div>`:''}
@@ -6967,7 +6971,7 @@ function renderListingFactoryResult(l,pages,allImages=[]){
         </div>
       </div>
       <div style="font-size:19px;color:var(--t3);margin:2px 0 6px">Verde = rezoluție OK pentru eMAG (min. 600×800px, verificat pe imaginea reală) · roșu/galben = posibil sub prag · „🎨 Recreează cu AI" curăță/îmbunătățește fotografia, pornind de la poza reală — verifică vizual rezultatul înainte să-l folosești, AI-ul poate greși detalii</div>
-      ${imgs.length?`<div class="listing-imgs" style="align-items:stretch">${imgs.map((u,i)=>{const r=imgRec[u]||{};const isAi=u.includes('/api/ai-image?');return`<div class="listing-image-pick"><img src="${esc(proxyImg(u))}" onerror="this.src='${esc(u)}'" onload="checkImgDims(this)" alt="" style="${i===0?'border:2px solid var(--acc)':''}"><div>${isAi?'<div class="listing-image-role" style="background:var(--acc-light);color:var(--acc)">✨ recreat cu AI</div>':r.role?`<div class="listing-image-role">${esc(r.role)}</div>`:i===0?'<div class="listing-image-role">impact</div>':''}${r.reason?`<div style="font-size:22px;color:var(--t2);line-height:1.35;margin-bottom:5px">${esc(r.reason)}</div>`:''}<div class="listing-image-url">${esc(u)}</div><div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap"><button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(u))})">Copiază link</button><a class="btn btn-sm" href="${esc(downloadImg(u))}" target="_blank">↓ Salvează</a>${isAi?`<button class="btn btn-sm" style="color:var(--rd);border-color:var(--rd)" onclick="removeAiImage(${esc(JSON.stringify(u))})">🗑 Elimină</button>`:`<button class="btn btn-sm" onclick="recreateImageWithAI(${esc(JSON.stringify(u))},this)">🎨 Recreează cu AI</button>`}</div></div></div>`}).join('')}</div>`
+      ${imgs.length?`<div class="listing-imgs" style="align-items:stretch">${imgs.map((u,i)=>{const r=imgRec[u]||{};const isAi=u.includes('/api/ai-image?');return`<div class="listing-image-pick"><img src="${esc(proxyImg(u))}" onerror="this.src='${esc(u)}'" onload="checkImgDims(this)" alt="" style="${i===0?'border:2px solid var(--acc)':''}"><div>${isAi?'<div class="listing-image-role" style="background:var(--acc-light);color:var(--acc)">✨ recreat cu AI</div>':r.role?`<div class="listing-image-role">${esc(r.role)}</div>`:i===0?'<div class="listing-image-role">impact</div>':''}${r.reason?`<div style="font-size:22px;color:var(--t2);line-height:1.35;margin-bottom:5px">${esc(r.reason)}</div>`:''}<div class="listing-image-url">${esc(u)}</div><div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap"><button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(u))})">Copiază link</button><a class="btn btn-sm" href="${esc(downloadImg(u))}" target="_blank">↓ Salvează</a><button class="btn btn-sm" onclick="insertImageIntoDescriptionFromPool(${esc(JSON.stringify(u))})" title="Adaugă direct în descriere, la final">➕ În descriere</button>${isAi?`<button class="btn btn-sm" style="color:var(--rd);border-color:var(--rd)" onclick="removeAiImage(${esc(JSON.stringify(u))})">🗑 Elimină</button>`:`<button class="btn btn-sm" onclick="recreateImageWithAI(${esc(JSON.stringify(u))},this)">🎨 Recreează cu AI</button>`}<button class="btn btn-sm" style="color:var(--rd);border-color:var(--rd)" onclick="blockImage(${esc(JSON.stringify(u))})" title="Nu o mai arăta niciodată, la niciun anunț">🚫 Blochează</button></div></div></div>`}).join('')}</div>`
         :`<div style="font-size:22px;color:var(--t3);padding:10px 0">Nicio poză încă — adaugă una externă mai sus (buton „+ Adaugă poză externă").</div>`}
     </div>
     ${l?.source_notes?`<div style="font-size:19px;color:var(--t3);margin-top:8px">${esc(l.source_notes)}</div>`:''}
@@ -7021,6 +7025,74 @@ function addExternalImage(){
   l.images=[...(l.images||[]),url];
   renderListingFactoryResult(l,listingFactoryData?.pages||[],listingFactoryData?.allImages||[]);
   toast('Poză externă adăugată ✓');
+}
+// Inserează direct o poză din „Poze selectate" în descriere — fără prompt, fără să caute manual
+// URL-ul, un click pe „➕ În descriere" e suficient (vezi butonul de pe fiecare poză din pool).
+function insertImageIntoDescriptionFromPool(url){
+  const l=listingData||listingFactoryData?.listing;
+  if(!l){toast('Nu există anunț generat');return;}
+  l.description_html=(l.description_html||'')+`<img src="${url}">`;
+  l.description=String(l.description_html).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+  if(listingProjectId){
+    apiJson('/api/research-projects',{action:'save_listing',project_id:listingProjectId,status:'generat',listing:l},30000)
+      .then(()=>{const local=researchProjects.find(p=>Number(p.id)===Number(listingProjectId));if(local){local.listing_status='generat';local.listing=l;}})
+      .catch(e=>toast('Poza s-a adăugat, dar nu s-a salvat în dosar: '+(e.message||e),'err'));
+  }
+  renderListingFactoryResult(l,listingFactoryData?.pages||[],listingFactoryData?.allImages||[]);
+  toast('Poză adăugată în descriere ✓');
+}
+// Extrage URL-urile de poze deja folosite ÎN descrierea HTML (nu doar din „Poze selectate") — ca să
+// le poți vedea/scoate/bloca direct de-acolo, exact ca poza stock irelevantă apărută în captura ta.
+function extractImagesFromHtml(html){
+  return[...String(html||'').matchAll(/<img\b[^>]*\bsrc=["']([^"']+)["']/gi)].map(m=>m[1]).filter(u=>/^https?:\/\//i.test(u));
+}
+// Strip pur — scoate O SINGURĂ apariție a unui <img src="url"> din HTML, fără efecte secundare
+// (fără render/toast), reutilizat atât de removeImageFromDescription cât și de blockImage.
+function stripImageTag(html,url){
+  const esc_=s=>s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+  return String(html||'').replace(new RegExp(`<img\\b[^>]*\\bsrc=["']${esc_(url)}["'][^>]*>`,'i'),'');
+}
+// Scoate O SINGURĂ apariție a unei poze din descriere (rămâne disponibilă în rest — doar nu se mai
+// arată AICI). Pentru „nu o mai arăta niciodată, nicăieri" vezi blockImage.
+function removeImageFromDescription(url){
+  const l=listingData||listingFactoryData?.listing;
+  if(!l)return;
+  l.description_html=stripImageTag(l.description_html,url);
+  l.description=String(l.description_html).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+  renderListingFactoryResult(l,listingFactoryData?.pages||[],listingFactoryData?.allImages||[]);
+  toast('Poză scoasă din descriere ✓');
+}
+// Poze blocate DEFINITIV — utilizatorul le respinge o dată (ex. o poză stock irelevantă, recurentă
+// din căutarea DDG de rezervă), rămân excluse din TOATE generările viitoare de anunțuri, pentru orice
+// produs (vezi getBlockedImages în api/listing-builder.js). Stocate în setari_app, ca template-ul eMAG.
+const BLOCKED_IMAGES_KEY='emag_blocked_images';
+let blockedImagesCache=null;
+async function ensureBlockedImages(){
+  if(blockedImagesCache)return blockedImagesCache;
+  try{
+    const r=await fetch('/api/settings?key='+encodeURIComponent(BLOCKED_IMAGES_KEY));
+    const data=await r.json();
+    blockedImagesCache=new Set(data?.value?JSON.parse(data.value):[]);
+  }catch(e){blockedImagesCache=new Set();}
+  return blockedImagesCache;
+}
+async function blockImage(url){
+  if(!confirm('Blochezi definitiv această poză? Nu va mai apărea la NICIUN anunț viitor, pentru niciun produs.'))return;
+  const set=await ensureBlockedImages();
+  set.add(url);
+  try{
+    await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:BLOCKED_IMAGES_KEY,value:JSON.stringify([...set])})});
+  }catch(e){toast('Nu s-a putut salva blocarea: '+(e.message||e),'err');return;}
+  // O scoatem și din anunțul curent (imagini + descriere), ca efectul să fie vizibil imediat, nu
+  // doar la generările viitoare.
+  const l=listingData||listingFactoryData?.listing;
+  if(l){
+    l.images=(l.images||[]).filter(u=>u!==url);
+    l.description_html=stripImageTag(l.description_html,url);
+    l.description=String(l.description_html).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+    renderListingFactoryResult(l,listingFactoryData?.pages||[],listingFactoryData?.allImages||[]);
+  }
+  toast('Poză blocată definitiv ✓ — nu va mai apărea la niciun anunț viitor');
 }
 function applyListingToProduct(){
   const l=listingData||researchData?.listing;if(!l){toast('Nu există anunț generat');return;}
