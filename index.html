@@ -982,6 +982,10 @@ function buildRaportCats(){
 .rsx-search-row td{background:var(--surf2);border-bottom:1px solid var(--b1);padding:8px 12px}
 .rsx-search-box{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
 .rsx-search-label{font-size:11px;font-weight:800;color:var(--t3);text-transform:uppercase;letter-spacing:.03em;margin-right:2px;white-space:nowrap}
+.rsx-dup-row td{background:var(--am-bg);border-bottom:1px solid var(--b1);padding:8px 12px}
+.rsx-dup-box{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+.rsx-dup-other{font-size:13px;color:var(--t1);font-weight:700}
+.rsx-dup-other a{color:var(--acc);font-weight:600;margin-left:4px}
 @media(max-width:640px){.rsx-kpis{grid-template-columns:1fr 1fr}.rsx-head{flex-direction:column}.rsx-head-r{align-self:flex-end}}
 /* ── eMAG Listing Readiness (Product Truth / Gap Analysis) — strict pentru anunțul eMAG ── */
 .emg-truth-card{border-top:3px solid var(--acc)}
@@ -1936,6 +1940,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:130,text:'Research: avertismentul de „posibil duplicat" (titlu+preț similare cu alt link deja din dosar) era doar un ⚠ mic pe titlu, cu tooltip vag — nu spunea CU CE anume e duplicat. Acum apare un rând dedicat, sub linkul respectiv, care arată exact titlul/prețul linkului cu care se suprapune (+ link direct spre el), și 2 butoane: „🗑 Șterge acest duplicat" (dacă chiar e) sau „✓ Nu e duplicat" (dacă alarma e falsă — rămâne în dosar, doar dispare avertismentul). Duplicatele SIGURE (URL sau PNK identic) tot se resping automat, fără să mai apară deloc — asta rămâne neschimbat, doar zona ambiguă („probabil") a devenit acționabilă',date:'2026-08-19'},
   {n:129,text:'Research: 2 bug-uri reale găsite, direct legate de „nu apare ✦ Recunoaștere AI" și de potrivirea slabă în dosare. (1) Orice link de la un furnizor care nu era pe o listă fixă de 4 domenii cunoscute (jumbo/maxy/verk/i-want) ieșea clasificat „altul" — ceea ce ascundea butonul de căutare eMAG/Trendyol ȘI, mai grav, intra GREȘIT în calculul prețului minim de concurență (recalcProject exclude explicit doar „furnizor", nu și „altul"), umflând fals verdictul/marja. Acum orice link non-eMAG/non-Trendyol e tratat direct ca furnizor. (2) Linkurile eMAG/Trendyol adăugate normal (lipind un URL — fluxul principal) nu primeau NICIODATĂ un scor de potrivire (doar cele din import PDF); coloana Match cădea pe numărul de recenzii, irelevant. Acum primesc automat același scor 55/30/15 (nume/dimensiuni/EAN) ca la PDF, iar sub 80% nu mai intră automat în calculul verdictului/prețului de piață (50-79% rămâne editabil manual, ca înainte doar la PDF)',date:'2026-08-19'},
   {n:128,text:'Research: matching mai la obiect, 2 schimbări. (1) Buton nou „🎯 Verifică AI" pe fiecare candidat eMAG/Trendyol — compară efectiv poza + titlul + specificațiile cu produsul nostru de referință și dă un verdict real (Potrivire / Nu e același / Incert, cu motiv), spre deosebire de scorul existent (Match), care e doar suprapunere de cuvinte din titlu și ratează sinonime („cutie litieră" vs „toaletă pisică"). (2) Promptul de căutare AI („✦ Recunoaștere AI") primește acum și specificațiile deja confirmate ale produsului (Material/Culoare/Dimensiuni etc.) plus o categorie eMAG detectată automat — fapte sigure, nu ghicite din titlu, deci query-uri mai precise. Necesită migration_research_links_ai_match.sql în Supabase',date:'2026-08-18'},
   {n:127,text:'Research: bancă de coduri EAN nouă — pentru produse noi fără cod de bare real. Lipești coduri deja cumpărate/rezervate (secțiunea „🔢 Bancă de coduri EAN" din Generator anunțuri), iar fiecare anunț generat primește automat unul, o singură dată, la „Copiază EAN" din cardul de anunț sau la descărcarea presetului eMAG „produs nou" (dacă produsul chiar are un EAN real din dosar, acela e mereu prioritar, nu se irosește un cod din bancă). Codul se ȘTERGE din bancă imediat ce e alocat; când rămâi fără coduri, primești o notificare clară, cu îndemn să adaugi mai multe. Necesită migration_ean_pool.sql în Supabase',date:'2026-08-18'},
@@ -4877,7 +4882,21 @@ function renderResearchProjects(){
           <button class="rsx-icon-btn" id="rlai-${l.id}" onclick="generateAiSearchLinks(${l.id})" title="AI recunoaște mai bine produsul — folosește și poza principală dacă există, generează mai multe variante de căutare, de la specific la general">✦ Recunoaștere AI</button>
         </div>
       </td></tr>`:'';
-      return mainRow+searchRow+(analysis&&detailOpen?rsxDetailRowHtml(l.id,analysis):'');
+      // Rând de rezolvare pentru duplicate „probabile" (titlu+preț similare, nu neapărat același URL/PNK
+      // — „duplicat sigur", cu URL/PNK identic, e deja respins automat la adăugare, fără să mai apară în
+      // listă). Înainte era doar un ⚠ mic pe titlu, cu tooltip vag — acum arată clar CU CE anume e
+      // duplicat (titlu/preț), pentru decizie rapidă: șterge dacă chiar e duplicat, sau respinge alarma.
+      const dupOther=dupFlag?links.find(x=>Number(x.id)===Number(l.duplicate_of)):null;
+      const dupRow=dupFlag?`<tr class="rsx-dup-row"><td colspan="11">
+        <div class="rsx-dup-box" id="rldup-${l.id}">
+          <span class="rsx-search-label" style="color:#B54708">⚠ ${l.duplicate_type==='probabil'?'Posibil duplicat':'Duplicat'} cu</span>
+          ${dupOther?`<span class="rsx-dup-other">${esc(dupOther.title||dupOther.url)}${dupOther.price?' · '+Number(dupOther.price).toFixed(2)+' '+esc(dupOther.currency||'RON'):''}${dupOther.url?` · <a href="${esc(dupOther.url)}" target="_blank">deschide</a>`:''}</span>`
+            :'<span style="color:var(--t3)">(linkul original a fost șters între timp)</span>'}
+          <button class="rsx-icon-btn danger" onclick="deleteResearchLink(${l.id})">🗑 Șterge acest duplicat</button>
+          <button class="rsx-icon-btn" onclick="dismissDuplicateFlag(${l.id})">✓ Nu e duplicat</button>
+        </div>
+      </td></tr>`:'';
+      return mainRow+dupRow+searchRow+(analysis&&detailOpen?rsxDetailRowHtml(l.id,analysis):'');
     }).join('');
     const table=rows?`<div class="rsx-table-wrap"><table class="rsx-table"><thead><tr><th>Sursă</th><th>Produs</th><th>Brand</th><th>Vândut de</th><th>Preț</th><th title="Scor de potrivire cu produsul din dosar — cât de probabil e SAME PRODUCT, nu calitatea listării">Match</th><th title="Completeness Score — cât de completă e listarea informațional (0-100%)">Complet</th><th title="Quality Score — cât de bine e făcută listarea, fără să țină cont de preț (0-100%)">Quality</th><th>PNK</th><th>Confirmă</th><th>Acțiuni</th></tr></thead><tbody>${rows}</tbody></table></div>`:'<div style="font-size:13px;color:var(--t3)">Nu ai linkuri încă în acest dosar.</div>';
     const collapsed=researchCollapsed.has(p.id);
@@ -5015,6 +5034,20 @@ async function deleteResearchLink(linkId){
     renderResearchProjects();
     toast('Link șters ✓');
   }catch(e){toast(e.message||'Eroare la ștergerea linkului','err');}
+}
+// Om spune "nu e duplicat" — la add_links, detecția „probabil duplicat" e doar suprapunere de
+// titlu+preț (nu identitate de URL/PNK, care e deja respinsă strict, automat), deci poate greși
+// (două listări diferite, întâmplător cu titlu/preț apropiate). Curăță flag-ul permanent, fără să
+// șteargă linkul — rămâne în dosar, doar fără avertismentul de duplicat.
+async function dismissDuplicateFlag(linkId){
+  const link=findResearchLink(linkId);
+  if(!link)return;
+  try{
+    const data=await apiJson('/api/research-projects',{action:'dismiss_link_duplicate',link_id:linkId},15000);
+    if(data.link){link.duplicate_of=data.link.duplicate_of;link.duplicate_type=data.link.duplicate_type;}
+    renderResearchProjects();
+    toast('Marcat „nu e duplicat" ✓');
+  }catch(e){toast(e.message||'Eroare','err');}
 }
 async function toggleLinkInclude(linkId,include){
   try{

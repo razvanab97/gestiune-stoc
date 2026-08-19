@@ -529,6 +529,16 @@ module.exports=async function handler(req,res){
       const verdict=await recalcProject(existing.project_id);
       return res.status(200).json({deleted:linkId,verdict:verdict.project});
     }
+    if(body.action==='dismiss_link_duplicate'){
+      // Utilizatorul confirmă manual că NU e duplicat (detecția "probabil" e doar suprapunere de
+      // titlu+preț, poate greși) — curăță flag-ul permanent, fără să șteargă linkul.
+      const linkId=Number(body.link_id);
+      if(!linkId)return res.status(400).json({error:'Lipsește linkul'});
+      const rows=await supa('PATCH',`research_links?id=eq.${linkId}`,{duplicate_of:null,duplicate_type:'none'});
+      const link=rows?.[0];
+      if(!link)return res.status(404).json({error:'Linkul nu a fost găsit'});
+      return res.status(200).json({link});
+    }
     if(body.action==='toggle_link_include'){
       const linkId=Number(body.link_id);
       if(!linkId)return res.status(400).json({error:'Lipsește linkul'});
