@@ -1942,6 +1942,8 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:136,text:'Comenzi Platforme: revenit la comportamentul dinainte de #135, la cerere explicită — vânzarea trebuie să apară în Jurnal și în „Vânzări azi" exact în ziua în care se face importul, indiferent de data reală a comenzii pe eMAG/Trendyol, ca să urmărești evoluția stocului pe zilele tale de lucru, nu pe datele originale ale comenzilor',date:'2026-08-19'},
+  {n:135,text:'Comenzi Platforme: bug real reparat — importul de comenzi scria mereu în Jurnal vânzări pe data de AZI, indiferent de data reală a comenzii din fișier. O comandă de acum câteva zile ajungea înghesuită sub ziua curentă; verificând ziua reală a comenzii în Jurnal, informația „nu apărea" — era de fapt salvată, dar sub altă dată. Acum jurnalul respectă data reală a comenzii. „Vânzări azi" (widget-ul de pe Dashboard) rămâne strict pentru azi — nu se mai umflă cu comenzi vechi importate, se actualizează doar dacă data comenzii chiar e azi',date:'2026-08-19'},
   {n:134,text:'Inventar: „Adaugă factură" nu mai creează produse duplicate pe ghicite. Înainte, orice linie fără o potrivire de încredere (scor sub 70%) devenea automat „produs nou" — des greșit, pentru că produsul chiar EXISTA deja, doar cu titlu ușor diferit în factură/CSV (raportat direct). Acum o linie nesigură rămâne „⚠ alege produs" până confirmi manual, din același selector cu poză+căutare folosit la Comenzi Platforme/Sincronizare: fie alegi produsul existent corect din listă, fie apeși explicit „🆕 Nu există — adaugă ca produs nou". Nimic nu se aplică automat pentru liniile nerezolvate — rămân vizibile în previzualizare până le rezolvi',date:'2026-08-19'},
   {n:133,text:'Inventar: bug real reparat la „Adaugă factură" — un CSV de comandă cu DOAR o coloană de denumire produs (fără SKU/cod, ex. export „Produs,Cantitate,Preț unitar,Total,Vândut de" de pe marketplace) nu era citit deloc. Toate presetele existente (Jumbo, reaprovizionare, platformă, Maxy/Verk, generic) cer strict o coloană de cod — fără ea, fișierul cădea în fallback-ul vechi, care așteaptă un format total diferit (4 rânduri separate per produs, nu tabel CSV normal), deci părea „necitit". Acum, dacă găsește denumire + cantitate dar niciun cod, asociază produsele după NUME (fuzzy match, ca la import PDF) — funcționează pe orice CSV de comandă cu denumiri reale de produs',date:'2026-08-19'},
   {n:132,text:'Research: linkurile „📷 Aștept screenshot" (Jumbo/Maxy/Trendyol blocate) arătau doar URL-ul brut — cu mai multe deodată într-un dosar, era ușor să încurci „ce poză merge la ce link" (raportat direct). Acum fiecare arată „Link #2 din 4" (poziția printre cele în așteptare) + un titlu orientativ, extras automat din URL (ex. „Litiera pentru pisici cu capac tava extensibilă... 54x43x38cm gri"), înainte să încarci vreo poză — reper vizual instant, fără să mai ții minte separat',date:'2026-08-19'},
@@ -2963,6 +2965,10 @@ function applyJurnalEntryLocal(ds,p,q){
   const ex=day.entries.find(en=>en.id===p.id);
   if(ex)ex.qty+=q;else day.entries.push({id:p.id,name:p.name,category:p.category||'',priceSell:p.priceSell||0,img:p.img||'',qty:q});
 }
+// Data e mereu AZI (nu data reală a comenzii de pe platformă) — cerință explicită: importul unei
+// comenzi (indiferent din ce zi e comanda pe eMAG/Trendyol) trebuie să se vadă în Jurnal/Vânzări azi
+// exact în ziua în care CHIAR încarci fișierul, ca să urmărești evoluția stocului pe zilele tale de
+// lucru, nu pe datele originale ale comenzilor.
 async function saveJurnalEntry(p, q){
   const ds=td();
   if(!sbReady){
@@ -8306,7 +8312,9 @@ async function applyPcomImport(){
         p.sold=(p.sold||0)+it.cantitate;
         await dbPatch(`produse?id=eq.${p.id}`,{sold:p.sold});
         await logMove('out',p.name,it.cantitate,`Vânzare ${platforma==='emag'?'eMAG':'Trendyol'} (comandă ${it.comandaId||'—'})`,p.id);
-        // apare și în "Vânzări azi" și în "Jurnal vânzări" pe ziua curentă, la fel ca o vânzare rapidă manuală
+        // Cerință explicită: vânzarea trebuie să apară în Jurnal ȘI în "Vânzări azi" exact în ziua în
+        // care se face importul (indiferent de data reală a comenzii pe eMAG/Trendyol) — ca omul să
+        // urmărească evoluția stocului pe zilele lui de lucru, nu pe datele originale ale comenzilor.
         TS[p.id]=(TS[p.id]||0)+it.cantitate;
         await saveTodaySale(p.id,TS[p.id]);
         await saveJurnalEntry(p,it.cantitate);
