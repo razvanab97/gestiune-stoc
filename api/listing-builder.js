@@ -536,10 +536,14 @@ module.exports=async function handler(req,res){
     // mode:'build'/'synthesize' = generarea propriu-zisă a anunțului (titlu SEO, descriere, specs) —
     // task-ul cel mai greu, pe OPENAI_MODEL_LISTING. mode:'analyze' = analiză/scoring listări externe
     // (research), pe OPENAI_MODEL_ANALYSIS — vezi modelForMode() de la începutul fișierului.
+    // reasoning:effort 'low' — modelele gpt-5.6-* sunt modele de raționament (au niveluri none/low/
+    // medium/high/xhigh/max); scrierea unui anunț dintr-un format fix e o sarcină de redactare, nu de
+    // logică multi-pas — un raționament implicit mai mare (medium/high) adaugă latență semnificativă
+    // fără beneficiu real aici, și poate fi cauza reclamată a generării lente/cu întârziere.
     const ai=await fetch('https://api.openai.com/v1/responses',{
       method:'POST',
       headers:{'content-type':'application/json','authorization':'Bearer '+process.env.OPENAI_API_KEY},
-      body:JSON.stringify({model:modelForMode(mode),max_output_tokens:mode==='synthesize'?4200:2800,input:[{role:'user',content}]})
+      body:JSON.stringify({model:modelForMode(mode),reasoning:{effort:'low'},max_output_tokens:mode==='synthesize'?4200:2800,input:[{role:'user',content}]})
     });
     const data=await ai.json();
     if(!ai.ok)return res.status(ai.status).json(data);

@@ -365,6 +365,15 @@ module.exports=async function handler(req,res){
           links.forEach(l=>{l.product_code=codeMap.get(l.id)||'';});
         }catch(e){links.forEach(l=>{l.product_code='';});}
       }
+      // emag_performance — la fel, coloană nouă (migration_link_emag_performance.sql), cu fallback
+      // silențios pe gol dacă migrarea nu a fost încă rulată.
+      if(links.length){
+        try{
+          const perfRows=await supa('GET',`research_links?select=id,emag_performance&id=in.(${links.map(l=>l.id).join(',')})`);
+          const perfMap=new Map((perfRows||[]).map(r=>[r.id,r.emag_performance||'']));
+          links.forEach(l=>{l.emag_performance=perfMap.get(l.id)||'';});
+        }catch(e){links.forEach(l=>{l.emag_performance='';});}
+      }
       return res.status(200).json({projects:projects.map(p=>({...p,links:links.filter(l=>l.project_id===p.id)}))});
     }
     if(req.method!=='POST')return res.status(405).json({error:'Metodă nepermisă'});
@@ -651,6 +660,19 @@ module.exports=async function handler(req,res){
       if(!link)return res.status(404).json({error:'Linkul nu a fost găsit'});
       const verdict=await recalcProject(link.project_id);
       return res.status(200).json({link,verdict:verdict.project});
+    }
+    // Performanță eMAG (Target Zone) — apreciere manuală, pe baza analizei/căutărilor proprii, nu
+    // calculată automat de sistem. Doar pentru linkuri eMAG, dar nu forțăm asta aici — coloana e
+    // generică, câmpul rămâne pur informativ oricum.
+    if(body.action==='set_link_performance'){
+      const linkId=Number(body.link_id);
+      const allowed=['','supercold','cold','standard','hot','superhot'];
+      const performance=allowed.includes(body.performance)?body.performance:'';
+      if(!linkId)return res.status(400).json({error:'Lipsește linkul'});
+      const rows=await supa('PATCH',`research_links?id=eq.${linkId}`,{emag_performance:performance,updated_at:new Date().toISOString()});
+      const link=rows?.[0];
+      if(!link)return res.status(404).json({error:'Linkul nu a fost găsit'});
+      return res.status(200).json({link});
     }
     if(body.action==='recheck_links'){
       const projectId=Number(body.project_id);
