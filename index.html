@@ -1908,9 +1908,9 @@ th{font-weight:800!important;color:var(--t3)!important}
   <div class="inv-head"><h2>Importă factură</h2><button class="m-close" onclick="closeInvoice()">×</button></div>
   <div class="inv-body">
     <div class="inv-drop">
-      <input type="file" id="inv-file" accept=".csv,.txt,.pdf,.numbers" onchange="handleInvFile(event)" onclick="event.stopPropagation()">
+      <input type="file" id="inv-file" accept=".csv,.txt,.pdf,.numbers,image/*" multiple onchange="handleInvFile(event)" onclick="event.stopPropagation()">
       <div class="inv-drop-ic">📄</div>
-      <div class="inv-drop-t">Trage un fișier PDF sau CSV aici<br><small style="opacity:.6">PDF factură · CSV comandă Jumbo · CSV comandă Maxy/Verk (Denumire, Symbol, Cantitate, Preț EUR) · CSV platformă (Produs, SKU, Categorie, Cump., ...) · orice alt CSV cu o coloană de cod (SKU/Symbol/Cod) și una de cantitate — recunoscut automat · CSV fără cod, doar denumire de produs + cantitate (ex. confirmări de comandă) — asociat automat după nume · TXT<br>Fișier Numbers? Export din Numbers ca CSV (File → Export To → CSV), apoi încarcă CSV-ul</small></div>
+      <div class="inv-drop-t">Trage un fișier PDF, CSV sau o poză aici<br><small style="opacity:.6">PDF factură · <strong>poză/screenshot al paginii de comandă Maxy/Verk</strong> (poți selecta mai multe poze deodată, pentru comenzi lungi cu scroll) — AI citește direct din imagine, la fel ca la PDF · CSV comandă Jumbo · CSV comandă Maxy/Verk (Denumire, Symbol, Cantitate, Preț EUR) · CSV platformă (Produs, SKU, Categorie, Cump., ...) · orice alt CSV cu o coloană de cod (SKU/Symbol/Cod) și una de cantitate — recunoscut automat · CSV fără cod, doar denumire de produs + cantitate (ex. confirmări de comandă) — asociat automat după nume · TXT<br>Fișier Numbers? Export din Numbers ca CSV (File → Export To → CSV), apoi încarcă CSV-ul</small></div>
     </div>
     <div class="inv-parsing" id="inv-parsing"><span class="spin"></span> Se procesează cu AI…</div>
     <div class="fld" style="margin-top:.75rem"><label>Număr factură / cod comandă (opțional)</label><input type="text" id="inv-number" placeholder="ex: FAC-2026-00123"></div>
@@ -1944,6 +1944,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:138,text:'Inventar: „Adaugă factură" acceptă acum și poze/screenshot-uri ale paginii de comandă Maxy/Verk (secțiunea „Produse comandate"/„Ordered items"), nu doar PDF/CSV — utilă când nu ai un export la îndemână. AI-ul citește direct din imagine — titlu, cod (Symbol), cantitate (scrisă în titlu, ex. „5 szt."/„10 pcs") și preț — exact ca la PDF. Poți selecta mai multe poze deodată pentru o comandă lungă, cu scroll (capturi succesive ale aceleiași comenzi)',date:'2026-08-19'},
   {n:137,text:'Comenzi Platforme: 2 îmbunătățiri la previzualizarea de import. (1) Buton nou 🗑 pe fiecare linie — elimină definitiv o comandă din import (nu doar bifa „include", care o lasă tot vizibilă). (2) Butonul „📋 Copiază" (AWB) se marchează acum vizual „✓ Copiat" (verde) după ce l-ai apăsat, atât pe linii individuale cât și pe pachete grupate (Trendyol) — util cu multe comenzi deodată, ca să nu te mai încurci care AWB l-ai luat deja. Rămâne bifat și după reîncărcarea paginii',date:'2026-08-19'},
   {n:136,text:'Comenzi Platforme: revenit la comportamentul dinainte de #135, la cerere explicită — vânzarea trebuie să apară în Jurnal și în „Vânzări azi" exact în ziua în care se face importul, indiferent de data reală a comenzii pe eMAG/Trendyol, ca să urmărești evoluția stocului pe zilele tale de lucru, nu pe datele originale ale comenzilor',date:'2026-08-19'},
   {n:135,text:'Comenzi Platforme: bug real reparat — importul de comenzi scria mereu în Jurnal vânzări pe data de AZI, indiferent de data reală a comenzii din fișier. O comandă de acum câteva zile ajungea înghesuită sub ziua curentă; verificând ziua reală a comenzii în Jurnal, informația „nu apărea" — era de fapt salvată, dar sub altă dată. Acum jurnalul respectă data reală a comenzii. „Vânzări azi" (widget-ul de pe Dashboard) rămâne strict pentru azi — nu se mai umflă cu comenzi vechi importate, se actualizează doar dacă data comenzii chiar e azi',date:'2026-08-19'},
@@ -8623,9 +8624,23 @@ function addInvLine(){
   document.getElementById('inv-lines').appendChild(d);
 }
 function removeInvLine(id){document.getElementById(id)?.remove();invLines=invLines.filter(x=>x!==id);previewInv();}
-function handleInvFile(ev){const f=ev.target.files[0];if(!f)return;invSourceName=f.name||'Fișier import';routeInvFile(f);}
-// Detectează formatul fișierului (PDF / CSV preset Jumbo / CSV generic) și rutează spre parserul potrivit
+function handleInvFile(ev){
+  const files=[...(ev.target.files||[])];if(!files.length)return;
+  // Mai multe poze deodată = capturi succesive ale ACELEIAȘI comenzi (comandă lungă, cu scroll) —
+  // singurul caz din tot input-ul ăsta care acceptă multi-select real. PDF/CSV/Numbers rămân un
+  // singur fișier per import, ca înainte.
+  if(files.length>1&&files.every(f=>f.type.startsWith('image/'))){
+    invSourceName=files.length+' poze comandă';
+    parseOrderScreenshots(files);
+    return;
+  }
+  const f=files[0];
+  invSourceName=f.name||'Fișier import';
+  routeInvFile(f);
+}
+// Detectează formatul fișierului (PDF / poză comandă / CSV preset Jumbo / CSV generic) și rutează spre parserul potrivit
 function routeInvFile(f){
+  if(f.type&&f.type.startsWith('image/')){parseOrderScreenshots([f]);return;}
   const ext=f.name.split('.').pop().toLowerCase();
   if(ext==='pdf'){parsePDFWithAI(f);return;}
   if(ext==='numbers'){parseNumbersFile(f);return;}
@@ -8817,6 +8832,67 @@ Reguli: ignoră total/TVA/transport, consolidează duplicate, qty>0 obligatoriu`
   }catch(err){
     console.error('parsePDF error:',err);
     toast('Eroare PDF: '+err.message+'. Încearcă CSV sau introdu manual.','err');
+  }
+  parsing.style.display='none';
+}
+// Comenzi Maxy/Verk citite direct din poze/screenshot-uri ale paginii "Produse comandate"/"Ordered
+// items" — util când nu ai un export CSV/PDF la îndemână, doar poza paginii de confirmare comandă.
+// Reutilizează exact aceeași logică de extragere ca la parsePDFWithAI (Symbol = cod, cantitatea e
+// scrisă în titlu ca "N szt."/"N pcs", prețul afișat e TOTALUL liniei, nu prețul pe bucată), dar prin
+// AI vision în loc de text extras din PDF. Acceptă mai multe poze deodată — o comandă lungă, cu multe
+// produse, are des nevoie de 2-3 capturi succesive (scroll pe pagină).
+async function parseOrderScreenshots(files){
+  const parsing=document.getElementById('inv-parsing');
+  parsing.style.display='block';
+  parsing.innerHTML=`<span class="spin"></span> Se analizează ${files.length>1?files.length+' poze':'poza'} cu AI…`;
+  try{
+    const rawDataUrls=await Promise.all(files.map(f=>new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(f);})));
+    // 1400px păstrează textul lizibil pentru AI (titluri, coduri, prețuri) — doar reduce rezoluția
+    // de telefon needitată, care oricum nu ajută AI-ul, dar umflă degeaba cererea către server.
+    const dataUrls=await Promise.all(rawDataUrls.map(u=>resizeImageDataUrl(u,1400,.85)));
+    const content=[{type:'text',text:`Ești expert în citirea paginilor de confirmare comandă de la distribuitori en-gros (Maxy.eu, Verk.store). Extrage TOATE produsele din ${dataUrls.length>1?'aceste poze — sunt capturi succesive ale ACELEIAȘI comenzi (scroll pe aceeași pagină)':'această poză'}.
+
+Format tipic Maxy/Verk: fiecare linie are o poză, un titlu (care conține cantitatea la final, ex.
+"..., 5 szt." sau "..., 10 pcs" — extrage cantitatea de acolo, apoi elimină acea parte din titlul
+returnat), "Symbol: XXXXX" (codul produsului), "Mărime/Size: universal" (ignoră acest câmp), și un
+preț în EUR în dreapta. Prețul afișat e TOTALUL pentru acea linie (cantitatea inclusă), NU prețul pe
+bucată — împarte la cantitate ca să obții prețul unitar (priceBuy).
+
+Caută și numărul comenzii, dacă apare undeva pe pagină (ex. "Comandă nr.", "Order no.").
+
+Răspunde STRICT cu JSON (fără markdown, fără explicații):
+{"invoiceNumber":"<numărul comenzii găsit sau null>","items":[{"sku":"<Symbol>","name":"<denumire în română, FĂRĂ cantitatea din titlu>","qty":<întreg pozitiv>,"priceBuy":<preț unitar = total/cantitate>,"currency":"EUR"}]}`}];
+    dataUrls.forEach(u=>{
+      const mt=u.match(/data:(image\/\w+);/)?.[1]||'image/jpeg';
+      const b64=u.split(',')[1];
+      if(b64&&b64.length>=100)content.push({type:'image',source:{type:'base64',media_type:mt,data:b64}});
+    });
+    const resp=await callAI([{role:'user',content}],'Ești expert procesare comenzi de la distribuitori en-gros. Răspunzi DOAR cu JSON valid, niciodată altceva.',3000);
+    let invoiceNumberDetected='';
+    invParsed=[];
+    const objMatch=resp.match(/\{[\s\S]*\}/);
+    if(objMatch){
+      try{
+        const parsed=JSON.parse(objMatch[0]);
+        if(Array.isArray(parsed.items)){invParsed=parsed.items;invoiceNumberDetected=String(parsed.invoiceNumber||'').trim();}
+      }catch(e){}
+    }
+    if(!invParsed.length){
+      const arrMatch=resp.match(/\[[\s\S]*\]/);
+      if(!arrMatch)throw new Error('Nu am găsit produse în poză');
+      invParsed=JSON.parse(arrMatch[0]);
+    }
+    if(!Array.isArray(invParsed))invParsed=[];
+    invParsed=invParsed.filter(i=>i.name&&i.qty>0);
+    if(invoiceNumberDetected&&invoiceNumberDetected!=='null'){
+      const numInput=document.getElementById('inv-number');
+      if(numInput&&!numInput.value.trim())numInput.value=invoiceNumberDetected;
+    }
+    renderInvPreview();
+    toast(`${invParsed.length} produse extrase din poză ✓`);
+  }catch(err){
+    console.error('parseOrderScreenshots error:',err);
+    toast('Eroare citire poză: '+err.message+'. Încearcă o poză mai clară, sau CSV/PDF.','err');
   }
   parsing.style.display='none';
 }
