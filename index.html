@@ -1953,6 +1953,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:144,text:'Generator anunțuri: bug real reparat la „eMAG — Listing Readiness" — Product Truth arăta aproape mereu 0/5 atribute completate și „indisponibil" la Material/Dimensiuni/Specie/etc., chiar și pentru dosare cu date reale. Cauza: linkurile analizate prin poză (Trendyol/Maxy/Jumbo/eMAG blocat — calea principală în practică, fetch-ul direct e blocat des) extrăgeau doar titlu/preț/descriere/brand, NICIODATĂ un tabel de caracteristici structurate (specs) sau EAN, deși AI-ul le vede clar în poză — doar linkurile eMAG cu fetch direct (mai rare) aveau specs. Acum atât analiza dintr-o poză (link individual), cât și cea din PDF (mai multe anunțuri deodată) extrag și specificațiile structurate + codul EAN, salvate și folosite corect de Product Truth. Verificat: un dosar cu specs reale pe linkul de furnizor trece de la 0/5 la atribute completate cu status VERIFIED',date:'2026-08-19'},
   {n:143,text:'Research: butoanele de acțiune dintr-un dosar deschis („↻ Recalculează verdict", „🔄 Reverifică prețurile", „✨ Generează anunț din dosar", „📦 Adaugă în Inventar") au acum un aspect de sticlă mată (liquid glass — translucid, cu blur și un luciu subtil), nu alb plin cu contur dur — se integrează vizual cu fundalul dosarului în loc să contrasteze dur cu el. Butonul principal „🚀 Analizează tot dosarul" rămâne mov plin, neschimbat',date:'2026-08-19'},
   {n:142,text:'Research: dosarul deschis (expandat) dintr-o listă cu mai multe dosare acum se colorează vizibil (fundal gri mai închis) cât timp e deschis — până acum toate dosarele arătau identic (alb), pe fond aproape alb al paginii, greu de reperat rapid care e cel activ când ai multe dosare într-o listă. Cele închise/restrânse rămân albe, ca înainte. (Prima variantă folosea un mov-deschis — schimbată în gri la cererea explicită, contrastul mov nu plăcea)',date:'2026-08-19'},
   {n:141,text:'Layout global — o a treia rundă de mărire, tot cu ~20%, la cerere explicită, de data asta incluzând și pozele/iconițele/cardurile, nu doar textul: poze de produs (inventar, modal, dosare Research), poze din carduri (Vânzări azi, Raport stoc), iconița din header, butoane-iconiță, bife, insigne — toate ~20% mai mari. Verificare ulterioară a mai găsit și reparat: coloana „Categ." din tabelul de inventar trunchia titlul; câmpurile „Achiziție"/„RON" din Research au trebuit lărgite din nou (fontul crescuse peste lărgirea din #140)',date:'2026-08-19'},
@@ -5069,16 +5070,18 @@ async function handleLinkScreenshotFile(linkId,inputEl){
 6. Vânzătorul/magazinul care vinde produsul, dacă e vizibil (ex. "Vândut de X", altfel gol)
 7. Rating-ul produsului (numărul de stele, ex. 4.7), dacă e vizibil (altfel 0)
 8. Numărul de review-uri/recenzii, dacă e vizibil (altfel 0)
+9. Codul EAN/GTIN al produsului, dacă e vizibil pe pagină (altfel gol)
+10. Caracteristicile structurate din tabelul/lista de specificații ale produsului, dacă există (ex. Culoare, Material, Dimensiuni, Greutate, Mărime, Specie compatibilă, Capacitate etc.) — ca perechi etichetă:valoare, EXACT cum apar pe pagină, nu traduse/reformulate
 
-Nu inventa rating sau număr de recenzii dacă nu apar clar pe pagină — pune 0.
-Răspunde STRICT în format JSON: {"title":"<titlu>","price":<număr>,"currency":"<monedă>","description":"<descriere scurtă sau gol>","brand":"<brand sau gol>","seller":"<vânzător sau gol>","rating":<număr sau 0>,"reviewCount":<număr sau 0>}`;
-    const resp=await callAI([{role:'user',content:[...imgContents,{type:'text',text:userPrompt}]}],systemPrompt,500);
+Nu inventa rating, recenzii, EAN sau specificații care nu apar clar pe pagină — lasă gol/0.
+Răspunde STRICT în format JSON: {"title":"<titlu>","price":<număr>,"currency":"<monedă>","description":"<descriere scurtă sau gol>","brand":"<brand sau gol>","seller":"<vânzător sau gol>","rating":<număr sau 0>,"reviewCount":<număr sau 0>,"ean":"<cod EAN/GTIN sau gol>","specs":{"<etichetă>":"<valoare>"}}`;
+    const resp=await callAI([{role:'user',content:[...imgContents,{type:'text',text:userPrompt}]}],systemPrompt,700);
     const match=resp.trim().match(/\{[\s\S]*\}/);
     if(!match)throw new Error('Răspuns invalid de la AI');
     const info=JSON.parse(match[0]);
     if(!info.title)throw new Error('AI nu a putut citi titlul din poze — încearcă poze mai clare');
     // Pozele rămân salvate — refolosite mai jos ca "poză principală" la generarea AI a căutării eMAG/Trendyol.
-    const saveResp=await apiJson('/api/research-projects',{action:'set_link_data',link_id:linkId,title:info.title,price:info.price||0,currency:info.currency||'RON',description:info.description||'',brand:info.brand||'',seller:info.seller||'',rating:info.rating||0,reviewCount:info.reviewCount||0,images:dataUrls.slice(0,LINK_PHOTO_MAX)},45000);
+    const saveResp=await apiJson('/api/research-projects',{action:'set_link_data',link_id:linkId,title:info.title,price:info.price||0,currency:info.currency||'RON',description:info.description||'',brand:info.brand||'',seller:info.seller||'',rating:info.rating||0,reviewCount:info.reviewCount||0,ean:info.ean||'',specs:info.specs&&typeof info.specs==='object'?info.specs:{},images:dataUrls.slice(0,LINK_PHOTO_MAX)},45000);
     toast(`${dataUrls.length>1?dataUrls.length+' poze analizate':'Poză analizată'} ✓`);
     patchResearchLink(saveResp.link,saveResp.verdict);
     renderResearchProjects();
@@ -5151,7 +5154,7 @@ function scorePdfCandidate(c,base){
 // (Jumbo/Maxy prin screenshot, Verk/i-want prin JSON-LD) — altfel titlul liber al dosarului.
 function researchProjectBase(p){
   const src=(p?.links||[]).find(l=>l.platform==='furnizor'&&l.title);
-  return src?{title:src.title,description:src.description||'',ean:''}:{title:p?.title||'',description:'',ean:''};
+  return src?{title:src.title,description:src.description||'',ean:src.ean||''}:{title:p?.title||'',description:'',ean:''};
 }
 // Corpul cererii /api/openai e limitat la 10MB — PDF-ul e trimis ca base64 (+~33% mărime) plus promptul,
 // deci un fișier RAW peste ~6MB riscă să depășească limita. Verificăm client-side ca eroarea să fie clară.
@@ -5164,12 +5167,12 @@ async function extractPdfListings(file,platform,base){
   const userPrompt=`Acest PDF (poate avea mai multe pagini, dintr-un scroll de browser) arată produse de pe ${platform==='trendyol'?'Trendyol':'eMAG'}. Poate fi UNUL din două formate:
 (a) o pagină de căutare cu mai multe produse mici, în grilă — extrage FIECARE anunț vizibil ca listare separată (nu bannere, nu filtre, nu reclame);
 (b) o pagină de produs individual (posibil pe mai multe pagini PDF, de la scroll) — extrage UN SINGUR anunț, combinând informația găsită pe toate paginile (titlu, preț, vânzător, descriere pot fi pe pagini diferite ale aceluiași PDF).
-Pentru fiecare anunț găsit, extrage: titlul exact, prețul afișat (numărul, fără reduceri tăiate), descriere/caracteristici scurte dacă apar, brand-ul dacă e vizibil, vânzătorul/magazinul (ex. "Vândut de Shop4all" pe Trendyol, "Vândut de X" pe eMAG — caută explicit acest text), rating-ul (numărul de stele, ex. 4.7) dacă e vizibil, și numărul de review-uri/recenzii dacă e vizibil. NU descrie sau extrage poze. Nu inventa rating/recenzii dacă nu apar clar — pune 0.
-Răspunde STRICT în format JSON: {"listings":[{"title":"<titlu exact>","price":<număr>,"currency":"RON","description":"<scurt, sau gol>","brand":"<brand sau gol>","seller":"<vânzător sau gol>","rating":<număr sau 0>,"reviewCount":<număr sau 0>}]}`;
+Pentru fiecare anunț găsit, extrage: titlul exact, prețul afișat (numărul, fără reduceri tăiate), descriere/caracteristici scurte dacă apar, brand-ul dacă e vizibil, vânzătorul/magazinul (ex. "Vândut de Shop4all" pe Trendyol, "Vândut de X" pe eMAG — caută explicit acest text), rating-ul (numărul de stele, ex. 4.7) dacă e vizibil, numărul de review-uri/recenzii dacă e vizibil, codul EAN/GTIN dacă e vizibil, și caracteristicile structurate din tabelul/lista de specificații (Culoare, Material, Dimensiuni, Greutate, Mărime etc.) dacă apar — ca perechi etichetă:valoare (de obicei doar la formatul (b), pagină de produs individual; la grila de căutare (a) lasă gol, de regulă nu apar). NU descrie sau extrage poze. Nu inventa rating/recenzii/EAN/specificații care nu apar clar — lasă gol/0.
+Răspunde STRICT în format JSON: {"listings":[{"title":"<titlu exact>","price":<număr>,"currency":"RON","description":"<scurt, sau gol>","brand":"<brand sau gol>","seller":"<vânzător sau gol>","rating":<număr sau 0>,"reviewCount":<număr sau 0>,"ean":"<cod EAN/GTIN sau gol>","specs":{"<etichetă>":"<valoare>"}}]}`;
   const resp=await callAI([{role:'user',content:[
     {type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},
     {type:'text',text:userPrompt}
-  ]}],systemPrompt,3000);
+  ]}],systemPrompt,3600);
   const match=resp.trim().match(/\{[\s\S]*\}/);
   if(!match)throw new Error(`${file.name}: răspuns invalid de la AI`);
   const parsed=JSON.parse(match[0]);

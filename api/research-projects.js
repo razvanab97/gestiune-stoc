@@ -476,6 +476,18 @@ module.exports=async function handler(req,res){
       // a căutării eMAG/Trendyol (produsul e vizibil în captură chiar dacă nu are o poză separată de site).
       const patch={title,price:Number(body.price)||0,currency:clean(body.currency)||'RON',description:clean(body.description||'').slice(0,900),brand:clean(body.brand||'').slice(0,120),seller:clean(body.seller||'').slice(0,120),rating:Number(body.rating)||0,review_count:Number(body.reviewCount)||0,source:'screenshot',status:'analizat',error:null,updated_at:new Date().toISOString()};
       if(Array.isArray(body.images)&&body.images.length)patch.images=body.images.slice(0,5);
+      if(body.ean)patch.ean=clean(body.ean).slice(0,60);
+      // Product Truth (eMAG Listing Readiness) citește specs — fără asta, orice link analizat din
+      // poză (Trendyol/Maxy/Jumbo/eMAG blocat, calea principală în practică) rămânea complet orb la
+      // atribute (Material, Dimensiuni etc.), deși userul le vede clar în captura de ecran.
+      if(body.specs&&typeof body.specs==='object'){
+        const specs={};
+        for(const k of Object.keys(body.specs)){
+          const kk=clean(k).slice(0,60),vv=clean(String(body.specs[k]??'')).slice(0,200);
+          if(kk&&vv)specs[kk]=vv;
+        }
+        if(Object.keys(specs).length)patch.specs=specs;
+      }
       const rows=await supa('PATCH',`research_links?id=eq.${linkId}`,patch);
       const link=rows?.[0];
       if(!link)return res.status(404).json({error:'Linkul nu a fost găsit'});
@@ -493,7 +505,16 @@ module.exports=async function handler(req,res){
       const rows=listings.map((l,i)=>{
         const title=clean(l.title).slice(0,240),score=Math.max(0,Math.min(100,Number(l.score)||0));
         const zone=score>=80?'ok':score>=50?'mid':'low';
-        return{project_id:projectId,url:`pdf-import://${platform}/${stamp}-${i}`,normalized_url:`pdf-import://${platform}/${stamp}-${i}`,platform,pnk:null,title,price:Number(l.price)||0,currency:clean(l.currency)||'RON',rating:Number(l.rating)||0,review_count:Number(l.reviewCount)||0,images:[],specs:{},description:clean(l.description||'').slice(0,900),brand:clean(l.brand||'').slice(0,120),seller:clean(l.seller||'').slice(0,120),duplicate_of:null,duplicate_type:'none',include_in_listing:score>=80,source:'pdf',score,score_zone:zone,status:'analizat',error:null};
+        // Product Truth (eMAG Listing Readiness) citește specs/ean — fără ele, candidații din PDF
+        // rămâneau mereu orbi la atribute, chiar dacă AI-ul le vedea clar pe pagina de produs (Q83).
+        const specs={};
+        if(l.specs&&typeof l.specs==='object'){
+          for(const k of Object.keys(l.specs)){
+            const kk=clean(k).slice(0,60),vv=clean(String(l.specs[k]??'')).slice(0,200);
+            if(kk&&vv)specs[kk]=vv;
+          }
+        }
+        return{project_id:projectId,url:`pdf-import://${platform}/${stamp}-${i}`,normalized_url:`pdf-import://${platform}/${stamp}-${i}`,platform,pnk:null,title,price:Number(l.price)||0,currency:clean(l.currency)||'RON',rating:Number(l.rating)||0,review_count:Number(l.reviewCount)||0,images:[],specs,ean:clean(l.ean||'').slice(0,60),description:clean(l.description||'').slice(0,900),brand:clean(l.brand||'').slice(0,120),seller:clean(l.seller||'').slice(0,120),duplicate_of:null,duplicate_type:'none',include_in_listing:score>=80,source:'pdf',score,score_zone:zone,status:'analizat',error:null};
       }).filter(r=>r.title);
       if(!rows.length)return res.status(400).json({error:'Niciun anunț valid găsit în PDF'});
       const ins=await supa('POST','research_links',rows);
