@@ -891,6 +891,10 @@ function buildRaportCats(){
 .ean-pool-row{display:flex;align-items:center;padding:7px 4px;border-bottom:1px solid var(--b1);font-size:22px}
 .ean-pool-row label{display:flex;align-items:center;gap:9px;cursor:pointer;width:100%}
 .ean-pool-row input{cursor:pointer;accent-color:var(--gr)}
+.emg-party-block{margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--b1)}
+.emg-party-block:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0}
+.emg-party-fields{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:8px}
+@media(max-width:640px){.emg-party-fields{grid-template-columns:1fr}}
 
 /* ── 2. KPI summary ── */
 .rsx-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(112px,1fr));gap:8px;margin-bottom:14px}
@@ -1688,6 +1692,20 @@ th{font-weight:800!important;color:var(--t3)!important}
           <label for="emag-template-file" class="btn btn-sm btn-acc" style="cursor:pointer">📥 Încarcă template (.xlsx)</label>
         </div>
       </details>
+      <details class="listing-card" style="margin-top:14px" ontoggle="if(this.open)refreshSupplierPartyDetails()">
+        <summary style="cursor:pointer;font-weight:900">🏭 Detalii producător / persoană responsabilă UE (per furnizor)</summary>
+        <div style="margin-top:10px;font-size:23px;color:var(--t3);line-height:1.5">
+          Completează o singură dată datele reale ale fiecărui furnizor cunoscut (nume, adresă, email —
+          separat pentru producător și pentru persoana responsabilă din UE, conform Regulamentului (UE)
+          2019/1020). La „Ghid completare eMAG"/„Preset eMAG (produs nou)", aceste date se completează
+          automat, după furnizorul dosarului (detectat din câmpul „Furnizor"). Nu inventăm noi aceste date —
+          rămân goale până le completezi tu aici.
+        </div>
+        <div id="emg-party-content" style="margin-top:10px">Se încarcă…</div>
+        <div style="margin-top:10px">
+          <button class="btn btn-sm btn-acc" onclick="saveSupplierPartyDetails()">💾 Salvează detaliile</button>
+        </div>
+      </details>
     </div>
     <div class="research-mode" id="research-mode-competition">
       <div class="comp-lab-grid">
@@ -1992,6 +2010,8 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:148,text:'Generator anunțuri eMAG — actualizare mare pentru listări mai eficiente: (1) Brandul e acum ÎNTOTDEAUNA „AB HOMES" pe produse noi, indiferent de furnizor. (2) Titlul generat de AI e acum vast/complet, dens în cuvinte-cheie SEO, și include obligatoriu „AB HOMES" în interior (nu la început); descrierea e mai dezvoltată (1500-2400 caractere, mai multe paragrafe). (3) ID produs/Cod produs au acum o schemă reală, unică: contor zilnic + zi+lună+an (ex. al 2-lea produs generat azi → „2190826", cod „AB2190826") — alocat o singură dată per anunț, nu se schimbă la re-export. (4) Volumetria (Lungime/Lățime/Înălțime) se completează automat din titlu/specificații (ex. „33x45x22 cm") când produsul nu are dimensiunile EasyBox setate — înainte rămânea goală des. (5) Panou nou „🏭 Detalii producător / persoană responsabilă UE" (Generator anunțuri) — introduci o singură dată datele reale per furnizor cunoscut (Jumbo/Maxy/Verk); de atunci se completează automat în ghid și XLSX, după furnizorul dosarului — rămân goale dacă furnizorul nu e cunoscut, nu inventăm date legale. (6) Poze — buton nou „🎨 Recreează cu AI" pe fiecare poză selectată: generează o variantă curățată/profesională (fundal neutru, calitate e-commerce), PORNIND de la poza reală a produsului, nu inventată — verifică vizual rezultatul înainte de folosire; poze AI au buton „🗑 Elimină". Necesită migration_ai_images.sql în Supabase pentru pozele AI (restul update-ului funcționează fără nicio migrare nouă)',date:'2026-08-19'},
+  {n:147,text:'Research: la adăugarea unui link de furnizor (Jumbo/Maxy/Verk/i-want — fetch direct SAU poză, când site-ul e blocat), sistemul extrage acum și codul PROPRIU de produs al furnizorului (etichetat de obicei „Cod produs", „Cod Jumbo", SKU, Model), distinct de EAN. Titlul era deja tradus automat în română dacă venea în altă limbă (funcționa și înainte). Codul apare în tabelul dosarului (coloana „PNK / Cod") și precompletează automat câmpul „SKU / Cod extern" la „📦 Adaugă în Inventar" — nu mai trebuie căutat manual din nou pe pagina furnizorului. Necesită migration_link_product_code.sql în Supabase (fără migrare, restul funcționează normal, doar codul nu se salvează încă)',date:'2026-08-19'},
   {n:146,text:'Research: trei îmbunătățiri la cerere. (1) Banca de coduri EAN arată acum lista completă de coduri disponibile (derulabilă), nu doar un număr — bifezi „folosit" lângă un cod și dispare imediat din bancă. (2) Spațiere — cadranul „Dosar produs nou"/„Filtre verdict" stă acum mai departe de primul dosar din listă, iar dosarul deschis (expandat) are spațiu în plus față de cele închise din jur, ca pagina să fie mai curată la lucru. (3) Un dosar poate fi bifat „Finalizat" (checkbox în antetul lui) — dispare automat din lista activă (fără să fie șters!) și primește un accent verde discret când e arătat; comutatorul „Arată dosarele finalizate" din „Filtre verdict" le aduce înapoi oricând. Necesită migration_research_finalizat.sql în Supabase pentru bifa de finalizat (fără migrare, restul paginii merge normal, doar bifa dă eroare la salvare)',date:'2026-08-19'},
   {n:145,text:'Research: opțiune nouă „🔗 Link public produs" lângă butoanele eMAG (Preset ERP / Preset produs nou / Ghid completare) — generează o pagină publică (/produs/{id dosar}) cu titlu, imagini, descriere, EAN, brand și caracteristici, plus etichete Open Graph și JSON-LD schema.org/Product, gata de lipit direct în eMAG Seller Center la „Adaugă produs cu URL", ca eMAG să extragă singur datele fără completare manuală câmp cu câmp. Disponibilă doar pentru anunțuri generate dintr-un dosar Research salvat (butonul dispare dacă lipsește dosarul); apăsarea salvează automat ultima variantă a anunțului și copiază link-ul în clipboard. Pagina nu expune date interne (furnizor, preț de achiziție, marjă/verdict) — doar ce ar apărea oricum pe un anunț public. Verificat și reparat înainte de lansare: escapare lipsă la blocul JSON-LD care permitea injectare de HTML/script dacă titlul sau descrierea (extrase prin AI din poze/PDF-uri externe) conțineau secvența de închidere a tag-ului script',date:'2026-08-19'},
   {n:144,text:'Generator anunțuri: bug real reparat la „eMAG — Listing Readiness" — Product Truth arăta aproape mereu 0/5 atribute completate și „indisponibil" la Material/Dimensiuni/Specie/etc., chiar și pentru dosare cu date reale. Cauza: linkurile analizate prin poză (Trendyol/Maxy/Jumbo/eMAG blocat — calea principală în practică, fetch-ul direct e blocat des) extrăgeau doar titlu/preț/descriere/brand, NICIODATĂ un tabel de caracteristici structurate (specs) sau EAN, deși AI-ul le vede clar în poză — doar linkurile eMAG cu fetch direct (mai rare) aveau specs. Acum atât analiza dintr-o poză (link individual), cât și cea din PDF (mai multe anunțuri deodată) extrag și specificațiile structurate + codul EAN, salvate și folosite corect de Product Truth. Verificat: un dosar cu specs reale pe linkul de furnizor trece de la 0/5 la atribute completate cu status VERIFIED',date:'2026-08-19'},
@@ -4976,7 +4996,11 @@ function renderResearchProjects(){
       // e sursa de cost, nu o listare de evaluat). Recalculat live, nu persistat — vezi rsxAnalyzeListing.
       const isMarketplace=l.platform==='emag'||l.platform==='trendyol';
       const scoreHtml=l.score!=null?`<span class="rsx-score-pill ${l.score_zone==='ok'?'ok':'mid'}">${l.score}</span>`:(l.review_count?`<span class="rsx-cell-sub">${l.review_count} rev.</span>`:'<span class="rsx-cell-sub">—</span>');
-      const pnkHtml=l.pnk?`<span class="rsx-pnk">PNK ${esc(l.pnk)}<button onclick="copyText('${esc(l.pnk)}')">⧉</button></span>`:'<span class="rsx-cell-sub">—</span>';
+      // Furnizorul nu are niciodată PNK (specific doar eMAG) — aceeași coloană arată în schimb codul
+      // propriu de produs al furnizorului (product_code), dacă a fost extras la adăugarea linkului.
+      const pnkHtml=l.platform==='furnizor'
+        ?(l.product_code?`<span class="rsx-pnk" title="Cod produs la furnizor">${esc(l.product_code)}<button onclick="copyText(${esc(JSON.stringify(String(l.product_code)))})">⧉</button></span>`:'<span class="rsx-cell-sub">—</span>')
+        :(l.pnk?`<span class="rsx-pnk">PNK ${esc(l.pnk)}<button onclick="copyText('${esc(l.pnk)}')">⧉</button></span>`:'<span class="rsx-cell-sub">—</span>');
       // Extins de la strict "source==='pdf'" — de acum linkurile eMAG/Trendyol adăugate normal (lipind
       // un URL) primesc și ele un scor (vezi add_links, api/research-projects.js), deci merită aceeași
       // șansă de confirmare manuală pentru zona ambiguă (50-79%), nu doar cele importate din PDF.
@@ -5030,7 +5054,7 @@ function renderResearchProjects(){
       </td></tr>`:'';
       return mainRow+dupRow+searchRow+(analysis&&detailOpen?rsxDetailRowHtml(l.id,analysis):'');
     }).join('');
-    const table=rows?`<div class="rsx-table-wrap"><table class="rsx-table"><thead><tr><th>Sursă</th><th>Produs</th><th>Brand</th><th>Vândut de</th><th>Preț</th><th title="Scor de potrivire cu produsul din dosar — cât de probabil e SAME PRODUCT, nu calitatea listării">Match</th><th title="Completeness Score — cât de completă e listarea informațional (0-100%)">Complet</th><th title="Quality Score — cât de bine e făcută listarea, fără să țină cont de preț (0-100%)">Quality</th><th>PNK</th><th>Confirmă</th><th>Acțiuni</th></tr></thead><tbody>${rows}</tbody></table></div>`:'<div style="font-size:23px;color:var(--t3)">Nu ai linkuri încă în acest dosar.</div>';
+    const table=rows?`<div class="rsx-table-wrap"><table class="rsx-table"><thead><tr><th>Sursă</th><th>Produs</th><th>Brand</th><th>Vândut de</th><th>Preț</th><th title="Scor de potrivire cu produsul din dosar — cât de probabil e SAME PRODUCT, nu calitatea listării">Match</th><th title="Completeness Score — cât de completă e listarea informațional (0-100%)">Complet</th><th title="Quality Score — cât de bine e făcută listarea, fără să țină cont de preț (0-100%)">Quality</th><th title="PNK pentru eMAG · Cod produs propriu pentru linkurile de furnizor">PNK / Cod</th><th>Confirmă</th><th>Acțiuni</th></tr></thead><tbody>${rows}</tbody></table></div>`:'<div style="font-size:23px;color:var(--t3)">Nu ai linkuri încă în acest dosar.</div>';
     const collapsed=researchCollapsed.has(p.id);
     const imgSrc=p.cover_image||(links.find(l=>l.platform==='furnizor'&&Array.isArray(l.images)&&l.images.length)||links.find(l=>Array.isArray(l.images)&&l.images.length))?.images?.[0]||'';
     const headerImgInner=imgSrc?`<img class="rsx-head-img" src="${esc(imgSrc)}" alt="">`:`<div class="rsx-head-img-ph">📦</div>`;
@@ -5133,16 +5157,17 @@ async function handleLinkScreenshotFile(linkId,inputEl){
 8. Numărul de review-uri/recenzii, dacă e vizibil (altfel 0)
 9. Codul EAN/GTIN al produsului, dacă e vizibil pe pagină (altfel gol)
 10. Caracteristicile structurate din tabelul/lista de specificații ale produsului, dacă există (ex. Culoare, Material, Dimensiuni, Greutate, Mărime, Specie compatibilă, Capacitate etc.) — ca perechi etichetă:valoare, EXACT cum apar pe pagină, nu traduse/reformulate
+11. Codul PROPRIU de produs al site-ului sursă (etichetat de obicei „Cod produs", „Cod Jumbo", „SKU", „Model", „Art. no." — NU codul EAN de mai sus), dacă e vizibil pe pagină (altfel gol)
 
-Nu inventa rating, recenzii, EAN sau specificații care nu apar clar pe pagină — lasă gol/0.
-Răspunde STRICT în format JSON: {"title":"<titlu>","price":<număr>,"currency":"<monedă>","description":"<descriere scurtă sau gol>","brand":"<brand sau gol>","seller":"<vânzător sau gol>","rating":<număr sau 0>,"reviewCount":<număr sau 0>,"ean":"<cod EAN/GTIN sau gol>","specs":{"<etichetă>":"<valoare>"}}`;
+Nu inventa rating, recenzii, EAN, cod produs sau specificații care nu apar clar pe pagină — lasă gol/0.
+Răspunde STRICT în format JSON: {"title":"<titlu>","price":<număr>,"currency":"<monedă>","description":"<descriere scurtă sau gol>","brand":"<brand sau gol>","seller":"<vânzător sau gol>","rating":<număr sau 0>,"reviewCount":<număr sau 0>,"ean":"<cod EAN/GTIN sau gol>","specs":{"<etichetă>":"<valoare>"},"productCode":"<cod produs sursă sau gol>"}`;
     const resp=await callAI([{role:'user',content:[...imgContents,{type:'text',text:userPrompt}]}],systemPrompt,700);
     const match=resp.trim().match(/\{[\s\S]*\}/);
     if(!match)throw new Error('Răspuns invalid de la AI');
     const info=JSON.parse(match[0]);
     if(!info.title)throw new Error('AI nu a putut citi titlul din poze — încearcă poze mai clare');
     // Pozele rămân salvate — refolosite mai jos ca "poză principală" la generarea AI a căutării eMAG/Trendyol.
-    const saveResp=await apiJson('/api/research-projects',{action:'set_link_data',link_id:linkId,title:info.title,price:info.price||0,currency:info.currency||'RON',description:info.description||'',brand:info.brand||'',seller:info.seller||'',rating:info.rating||0,reviewCount:info.reviewCount||0,ean:info.ean||'',specs:info.specs&&typeof info.specs==='object'?info.specs:{},images:dataUrls.slice(0,LINK_PHOTO_MAX)},45000);
+    const saveResp=await apiJson('/api/research-projects',{action:'set_link_data',link_id:linkId,title:info.title,price:info.price||0,currency:info.currency||'RON',description:info.description||'',brand:info.brand||'',seller:info.seller||'',rating:info.rating||0,reviewCount:info.reviewCount||0,ean:info.ean||'',specs:info.specs&&typeof info.specs==='object'?info.specs:{},productCode:info.productCode||'',images:dataUrls.slice(0,LINK_PHOTO_MAX)},45000);
     toast(`${dataUrls.length>1?dataUrls.length+' poze analizate':'Poză analizată'} ✓`);
     patchResearchLink(saveResp.link,saveResp.verdict);
     renderResearchProjects();
@@ -5373,10 +5398,15 @@ function addResearchProjectToInventar(projectId){
   const withImg=links.find(l=>l.platform==='furnizor'&&Array.isArray(l.images)&&l.images.length)
     ||links.find(l=>Array.isArray(l.images)&&l.images.length);
   const img=p.cover_image||withImg?.images?.[0]||'';
+  // Cod propriu al furnizorului pentru produsul-sursă (extras la adăugarea linkului — vezi product_code
+  // în api/research-projects.js) — precompletează „SKU / Cod extern", ca reper rapid la comandă/reper
+  // la furnizor, în loc să-l cauți manual din nou pe pagina lor la crearea produsului în Inventar.
+  const supplierCode=links.find(l=>l.platform==='furnizor'&&l.product_code)?.product_code||'';
   openModal();
   setTimeout(()=>{
     const n=document.getElementById('f-name');if(n)n.value=p.title||'';
     const s=document.getElementById('f-sup');if(s&&p.supplier)s.value=p.supplier;
+    if(supplierCode){const skuEl=document.getElementById('f-sku');if(skuEl&&!skuEl.value)skuEl.value=supplierCode;}
     if(img){showPrev(img);curImg=img;document.getElementById('f-imgurl').value=img.startsWith('data:')?'':img;document.getElementById('ai-img-btn').disabled=false;}
     if(p.acquisition_price>0){
       document.getElementById('f-pbuy-ttc').value=Number(p.acquisition_price).toFixed(2);
@@ -5747,6 +5777,81 @@ function emagWriteRowToTemplate(XLSX,wb,codes,row){
   if(targetRow>range.e.r){range.e.r=targetRow;ws['!ref']=XLSX.utils.encode_range(range);}
   return{sheetName,targetRow,wroteAny,matchedCols:Object.keys(colMap).length};
 }
+// Detalii producător / persoană responsabilă UE, per furnizor cunoscut — date reale, introduse O
+// SINGURĂ DATĂ de utilizator (nu le inventăm niciodată), stocate în setari_app și reutilizate automat
+// la fiecare export/ghid eMAG, în funcție de furnizorul dosarului curent (proj.supplier).
+const EMG_SUPPLIER_PARTY_KEY='emag_supplier_party_details';
+const EMG_KNOWN_SUPPLIERS=['jumbo','maxy','verk'];
+let emgSupplierPartyData=null;
+function emgPartyFieldId(supplier,role,field){return`emg-party-${supplier}-${role}-${field}`;}
+function renderSupplierPartyContent(){
+  const el=document.getElementById('emg-party-content');if(!el)return;
+  const data=emgSupplierPartyData||{};
+  el.innerHTML=EMG_KNOWN_SUPPLIERS.map(s=>{
+    const label=s.charAt(0).toUpperCase()+s.slice(1);
+    const mfr=data[s]?.manufacturer||{},resp=data[s]?.responsible||{};
+    return`<div class="emg-party-block">
+      <div style="font-weight:800;margin-bottom:6px">${esc(label)}</div>
+      <div style="font-size:19px;color:var(--t3);margin-bottom:4px">Producător</div>
+      <div class="emg-party-fields">
+        <input id="${emgPartyFieldId(s,'mfr','name')}" type="text" placeholder="Nume producător" value="${esc(mfr.name||'')}">
+        <input id="${emgPartyFieldId(s,'mfr','email')}" type="text" placeholder="Email producător" value="${esc(mfr.email||'')}">
+        <input id="${emgPartyFieldId(s,'mfr','address')}" type="text" placeholder="Adresă producător" value="${esc(mfr.address||'')}">
+      </div>
+      <div style="font-size:19px;color:var(--t3);margin-bottom:4px">Persoană responsabilă UE</div>
+      <div class="emg-party-fields" style="margin-bottom:0">
+        <input id="${emgPartyFieldId(s,'resp','name')}" type="text" placeholder="Nume persoană responsabilă" value="${esc(resp.name||'')}">
+        <input id="${emgPartyFieldId(s,'resp','email')}" type="text" placeholder="Email persoană responsabilă" value="${esc(resp.email||'')}">
+        <input id="${emgPartyFieldId(s,'resp','address')}" type="text" placeholder="Adresă persoană responsabilă" value="${esc(resp.address||'')}">
+      </div>
+    </div>`;
+  }).join('');
+}
+async function refreshSupplierPartyDetails(){
+  const el=document.getElementById('emg-party-content');
+  if(el)el.innerHTML='<span class="spin"></span> Se încarcă…';
+  try{
+    const r=await fetch('/api/settings?key='+encodeURIComponent(EMG_SUPPLIER_PARTY_KEY));
+    const data=await r.json();
+    emgSupplierPartyData=data?.value?JSON.parse(data.value):{};
+  }catch(e){emgSupplierPartyData={};}
+  renderSupplierPartyContent();
+}
+// Încarcă datele o singură dată (lazy), pentru folosire în ghid/XLSX — la fel ca getEmagTemplateWorkbook.
+async function ensureSupplierPartyData(){
+  if(emgSupplierPartyData==null)await refreshSupplierPartyDetails();
+  return emgSupplierPartyData;
+}
+async function saveSupplierPartyDetails(){
+  const data={};
+  EMG_KNOWN_SUPPLIERS.forEach(s=>{
+    data[s]={
+      manufacturer:{
+        name:(document.getElementById(emgPartyFieldId(s,'mfr','name'))?.value||'').trim(),
+        email:(document.getElementById(emgPartyFieldId(s,'mfr','email'))?.value||'').trim(),
+        address:(document.getElementById(emgPartyFieldId(s,'mfr','address'))?.value||'').trim()
+      },
+      responsible:{
+        name:(document.getElementById(emgPartyFieldId(s,'resp','name'))?.value||'').trim(),
+        email:(document.getElementById(emgPartyFieldId(s,'resp','email'))?.value||'').trim(),
+        address:(document.getElementById(emgPartyFieldId(s,'resp','address'))?.value||'').trim()
+      }
+    };
+  });
+  try{
+    await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:EMG_SUPPLIER_PARTY_KEY,value:JSON.stringify(data)})});
+    emgSupplierPartyData=data;
+    toast('Detalii producător/persoană responsabilă salvate ✓');
+  }catch(e){toast('Eroare la salvare: '+(e.message||e),'err');}
+}
+// Găsește setările furnizorului dosarului curent, după numele lui (proj.supplier, ex. "Jumbo") —
+// potrivire pe substring, insensibilă la majuscule, ca să prindă și variații ("Jumbo.ro" etc.).
+function supplierPartyDetailsFor(proj){
+  const supplierName=String(proj?.supplier||'').toLowerCase();
+  if(!supplierName)return null;
+  const key=EMG_KNOWN_SUPPLIERS.find(s=>supplierName.includes(s));
+  return key&&emgSupplierPartyData?emgSupplierPartyData[key]:null;
+}
 // Randare pentru rândul de EAN din cardul de anunț — reutilizată la randarea inițială ȘI la
 // actualizarea DOM directă după alocare (fără să re-randeze tot cardul, ca să nu piardă alte
 // stări deschise ale lui — preview HTML, secțiuni extinse etc.).
@@ -5776,6 +5881,29 @@ async function ensureListingEan(l,proj){
     toast(e.message||'Eroare alocare cod EAN — rulează migration_ean_pool.sql în Supabase','err');
     return'';
   }
+}
+// ID produs eMAG — schemă cerută explicit: contor zilnic (1, 2, 3...) + ziua + luna + anul (2 cifre),
+// ex. al 2-lea produs generat pe 19.08.2026 → "2190826". Cod produs = "AB"+ID (ex. "AB2190826").
+// Contorul se ține în setari_app, cu cheie scopată pe ZIUA curentă (emag_id_counter_20260819) — se
+// resetează natural de la o zi la alta, fără nicio curățare manuală. Alocat O SINGURĂ DATĂ per listare
+// (ca la ensureListingEan) — reapelurile ulterioare, pentru ACEEAȘI listare, refolosesc l.emag_id.
+async function ensureListingEmagId(l){
+  if(l.emag_id)return l.emag_id;
+  const now=new Date();
+  const dd=String(now.getDate()).padStart(2,'0'),mm=String(now.getMonth()+1).padStart(2,'0'),yy=String(now.getFullYear()).slice(-2);
+  const key=`emag_id_counter_${now.getFullYear()}${mm}${dd}`;
+  try{
+    const r=await fetch('/api/settings?key='+encodeURIComponent(key));
+    const data=await r.json();
+    const next=(parseInt(data?.value,10)||0)+1;
+    await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key,value:String(next)})});
+    l.emag_id=`${next}${dd}${mm}${yy}`;
+  }catch(e){
+    // Fallback dacă /api/settings e indisponibil — păstrează formatul (zi/lună/an), doar partea de
+    // contor devine ultimele 3 cifre ale unui timestamp, ca exportul să nu blocheze din cauza rețelei.
+    l.emag_id=`${Date.now()%1000}${dd}${mm}${yy}`;
+  }
+  return l.emag_id;
 }
 async function allocateAndCopyEan(){
   const l=listingData;
@@ -5882,7 +6010,9 @@ async function downloadEmagOfferPreset(){
 const EMAG_NEW_PRODUCT_CODES=['part_number','ext_id','category_id','category_name','ean','sale_price','original_sale_price','vat_rate','status','offer_currency','stock','min_sale_price','max_sale_price','name','brand','description','main_image_url','other_image_url1','other_image_url2','other_image_url3','other_image_url4','other_image_url5','extra_details','translation_locale','safety_information','manufacturer_name','manufacturer_address','manufacturer_email','responsible_name','responsible_address','responsible_email'];
 function emagNewProductRow(l,proj){
   const name=(l?.title||'').slice(0,250);
-  const brand=(l?.specs||{}).Brand&&l.specs.Brand!=='AB HOMES'?l.specs.Brand:(proj?.supplier||'AB HOMES');
+  // Brandul e mereu AB HOMES pe produse noi — cerință explicită, nu mai depinde de furnizor/specs (produsul
+  // e listat sub brandul propriu AB HOMES, indiferent de la ce furnizor vine marfa fizic).
+  const brand='AB HOMES';
   // l.ean = deja alocat pentru ACEASTĂ listare (real din dosar, sau din banca de coduri EAN — vezi
   // ensureListingEan, apelat înainte de export) — prioritar. Fallback direct pe linkurile dosarului,
   // pentru robustețe dacă funcția e apelată fără ensureListingEan în față.
@@ -5898,18 +6028,27 @@ function emagNewProductRow(l,proj){
   const saleGross=prc?.rec.emag||zero?.emag||0;
   const minGross=zero?.emag||saleGross;
   const maxGross=saleGross?Math.round(saleGross*1.35*100)/100:0;
-  const partNumber=(safeFileName(proj?.title||name).slice(0,20).toUpperCase())||('AB'+Date.now().toString(36).toUpperCase());
+  // ID/Cod produs — vezi ensureListingEmagId (apelat ÎNAINTE de emagNewProductRow, la fel ca EAN-ul).
+  // Fallback pe vechea schemă (titlu slugified / timestamp) doar dacă funcția e apelată fără el în față.
+  const emagId=l?.emag_id||'';
+  const partNumber=emagId?('AB'+emagId):((safeFileName(proj?.title||name).slice(0,20).toUpperCase())||('AB'+Date.now().toString(36).toUpperCase()));
   const p=P.find(x=>(ean&&String(x.sku||'').replace(/\D/g,'')===ean)||researchNorm(x.name)===researchNorm(proj?.title||name));
   const stock=p?Math.max(0,qty(p)):1;
   const characteristics=Object.entries(l?.specs||{}).filter(([k,v])=>k&&v&&k!=='Brand').map(([k,v])=>({name:String(k).slice(0,60),value:String(v).slice(0,200)}));
   const extraDetails=characteristics.length?JSON.stringify({characteristics}):'';
+  // Detalii producător/persoană responsabilă UE — completate automat DOAR dacă furnizorul dosarului
+  // e unul cunoscut (Jumbo/Maxy/Verk) ȘI utilizatorul a salvat deja datele reale pentru el (vezi
+  // panoul „🏭 Detalii producător..."). Altfel rămân goale, ca înainte — nu inventăm.
+  const party=supplierPartyDetailsFor(proj);
   return[
-    partNumber,proj?.id||p?.id||hashInt(partNumber),'',l?.category_emag||'',ean,
+    partNumber,emagId||proj?.id||p?.id||hashInt(partNumber),'',l?.category_emag||'',ean,
     num4(emagNetPriceFromGross(saleGross)),'',0.21,1,'RON',stock,
     num4(emagNetPriceFromGross(minGross||saleGross)),num4(emagNetPriceFromGross(maxGross||saleGross)),
     name,brand,descPlain.slice(0,4000),
     imgs[0]||'',imgs[1]||'',imgs[2]||'',imgs[3]||'',imgs[4]||'',imgs[5]||'',
-    extraDetails,'ro_RO','','','','','','',''
+    extraDetails,'ro_RO','',
+    party?.manufacturer?.name||'',party?.manufacturer?.address||'',party?.manufacturer?.email||'',
+    party?.responsible?.name||'',party?.responsible?.address||'',party?.responsible?.email||''
   ];
 }
 // ═══════════════════════════════════════════════════════════════════════════════════════
@@ -5921,12 +6060,24 @@ function emagNewProductRow(l,proj){
 // reutilizează calculele deja făcute în emagNewProductRow, ca cele două fluxuri (XLSX + ghid
 // manual) să arate mereu aceleași numere, nu două logici separate care pot diverge.
 const EMAG_DEFAULT_SAFETY_TEXT='A se utiliza conform instrucțiunilor din manual sau de pe ambalaj, pentru a evita accidentele sau deteriorarea echipamentului.';
+// Volumetrie din text (titlu sau specs.Dimensiuni), ex. "33x45x22 cm" — fallback când produsul nu are
+// dimensiunile EasyBox completate, ca să nu rămână gol câmpul din ghid/XLSX ("Nu rata Volumetria").
+function parseDimsMM(text){
+  const m=String(text||'').match(/(\d+(?:[.,]\d+)?)\s*[x×]\s*(\d+(?:[.,]\d+)?)\s*[x×]\s*(\d+(?:[.,]\d+)?)\s*cm/i);
+  if(!m)return null;
+  const num=s=>Math.round(parseFloat(s.replace(',','.'))*10);
+  return{l:num(m[1]),w:num(m[2]),h:num(m[3])};
+}
 function emagManualGuideData(l,proj){
   const row=emagNewProductRow(l,proj);
   const f=Object.fromEntries(EMAG_NEW_PRODUCT_CODES.map((c,i)=>[c,row[i]]));
   const p=P.find(x=>(f.ean&&String(x.sku||'').replace(/\D/g,'')===f.ean)||researchNorm(x.name)===researchNorm(proj?.title||f.name));
   const mm=v=>v?Math.round(v*10):'';
-  const volume={l:mm(p?.easyboxL),w:mm(p?.easyboxW),h:mm(p?.easyboxT)};
+  let volume={l:mm(p?.easyboxL),w:mm(p?.easyboxW),h:mm(p?.easyboxT)};
+  if(!volume.l&&!volume.w&&!volume.h){
+    const specs=l?.specs||{};
+    volume=parseDimsMM(specs.Dimensiuni||specs['Dimensiuni produs'])||parseDimsMM(l?.title)||volume;
+  }
   // Greutate — căutăm un număr urmat de kg/g în specificațiile deja extrase (research AI), nu inventăm.
   let weightG='';
   const gTxt=String((l?.specs||{}).Greutate||(l?.specs||{})['Greutate/Dimensiuni']||'');
@@ -5944,10 +6095,12 @@ function emgGuideRow(label,value,opts){
   return`<div class="emg-guide-row"><div class="emg-guide-k">${esc(label)}${opts.hint?`<div style="font-size:19px;color:var(--t3);font-weight:400">${esc(opts.hint)}</div>`:''}</div><div class="emg-guide-v">${display}</div><div>${copyBtn}</div></div>`;
 }
 function emgGuideSec(title){return`<div class="sec" style="margin-top:18px">${esc(title)}</div>`;}
-function openEmagManualGuide(){
+async function openEmagManualGuide(){
   const l=listingData||researchData?.listing||{};
   if(!l.title){toast('Generează întâi un anunț');return;}
   const proj=listingProjectId?researchProjects.find(p=>Number(p.id)===Number(listingProjectId)):null;
+  await ensureListingEmagId(l);
+  await ensureSupplierPartyData();
   const d=emagManualGuideData(l,proj);
   const html=`
     ${emgGuideSec('1. Date generale (Draft)')}
@@ -5979,18 +6132,18 @@ function openEmagManualGuide(){
     ${emgGuideSec('Proprietăți ofertă')}
     ${emgGuideRow('Garanție (luni)',null,{hint:'Completează manual'})}
     ${emgGuideSec('Volumetrie')}
-    ${emgGuideRow('Lungime (mm)',d.volume.l,{hint:d.volume.l?'':'Completează Lungime/Lățime/Grosime în fișa produsului (secțiunea EasyBox) ca să apară aici'})}
+    ${emgGuideRow('Lungime (mm)',d.volume.l,{hint:d.volume.l?'':'Completează Lungime/Lățime/Grosime în fișa produsului (secțiunea EasyBox), sau pune dimensiunile în titlu/specificații (ex. „33x45x22 cm") ca să fie preluate automat de aici'})}
     ${emgGuideRow('Lățime (mm)',d.volume.w)}
     ${emgGuideRow('Înălțime (mm)',d.volume.h)}
     ${emgGuideRow('Greutate (g)',d.weightG,{hint:d.weightG?'':'Nu am găsit o greutate în specificațiile extrase — completează manual'})}
     ${emgGuideSec('5. Detalii producător (max. 10)')}
-    ${emgGuideRow('Nume producător',null)}
-    ${emgGuideRow('Email producător',null)}
-    ${emgGuideRow('Adresă producător',null)}
+    ${emgGuideRow('Nume producător',d.f.manufacturer_name,{hint:d.f.manufacturer_name?'':'Completează furnizorul în panoul „🏭 Detalii producător / persoană responsabilă UE" din Generator anunțuri, ca să se preia automat aici data viitoare'})}
+    ${emgGuideRow('Email producător',d.f.manufacturer_email)}
+    ${emgGuideRow('Adresă producător',d.f.manufacturer_address)}
     ${emgGuideSec('6. Detalii persoană responsabilă UE (max. 10)')}
-    ${emgGuideRow('Nume persoană responsabilă',null)}
-    ${emgGuideRow('Email persoană responsabilă',null)}
-    ${emgGuideRow('Adresă persoană responsabilă',null)}
+    ${emgGuideRow('Nume persoană responsabilă',d.f.responsible_name)}
+    ${emgGuideRow('Email persoană responsabilă',d.f.responsible_email)}
+    ${emgGuideRow('Adresă persoană responsabilă',d.f.responsible_address)}
   `;
   document.getElementById('emag-guide-content').innerHTML=html;
   document.getElementById('ov-emag-guide').classList.add('on');
@@ -6004,6 +6157,8 @@ async function downloadEmagNewProductPreset(){
     // Produsul e nou pe eMAG — are nevoie de un EAN valid. Dacă nu are deja unul (real din dosar sau
     // alocat anterior), alocă acum unul din banca de coduri EAN, o singură dată pentru această listare.
     await ensureListingEan(l,proj);
+    await ensureListingEmagId(l);
+    await ensureSupplierPartyData();
     const eanRow=document.getElementById('listing-ean-row');if(eanRow)eanRow.innerHTML=listingEanRowHtml(l);
     const XLSX=await ensureXLSX();
     const groups=['Identificare produs','','','','','Oferta - Pret','','','','Moneda','Oferta - Disponibilitate stoc','Oferta - Verificare pret','','Descriere produs','','','Imagini','','','','','','Detalii suplimentare','','Avertizari de siguranta','Detalii producator','','','Detalii persoana responsabila UE','',''];
@@ -6657,7 +6812,7 @@ function renderListingFactoryResult(l,pages,allImages=[]){
     ${renderSpecTable(specs)}
     ${Array.isArray(l?.seo_keywords)&&l.seo_keywords.length?`<div style="font-size:19px;color:var(--t3);margin-top:8px">Keywords: ${esc(l.seo_keywords.join(', '))}</div>`:''}
     ${Array.isArray(l?.source_titles)&&l.source_titles.length?`<div style="margin-top:12px"><strong style="font-size:23px">Titluri folosite ca inspirație</strong><ul class="listing-bullets">${l.source_titles.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div>`:''}
-    ${imgs.length?`<div style="margin-top:14px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><strong style="font-size:23px">Poze selectate (${imgs.length}) — gata de încărcat pe eMAG</strong><button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(imgs.join('\n')))})">Copiază toate linkurile</button></div><div style="font-size:19px;color:var(--t3);margin:2px 0 6px">Verde = rezoluție OK pentru eMAG (min. 600×800px, verificat pe imaginea reală) · roșu/galben = posibil sub prag</div><div class="listing-imgs" style="align-items:stretch">${imgs.map((u,i)=>{const r=imgRec[u]||{};return`<div class="listing-image-pick"><img src="${esc(proxyImg(u))}" onerror="this.src='${esc(u)}'" onload="checkImgDims(this)" alt="" style="${i===0?'border:2px solid var(--acc)':''}"><div>${r.role?`<div class="listing-image-role">${esc(r.role)}</div>`:i===0?'<div class="listing-image-role">impact</div>':''}${r.reason?`<div style="font-size:22px;color:var(--t2);line-height:1.35;margin-bottom:5px">${esc(r.reason)}</div>`:''}<div class="listing-image-url">${esc(u)}</div><div style="display:flex;gap:5px;margin-top:6px"><button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(u))})">Copiază link</button><a class="btn btn-sm" href="${esc(downloadImg(u))}" target="_blank">↓ Salvează</a></div></div></div>`}).join('')}</div></div>`:''}
+    ${imgs.length?`<div style="margin-top:14px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><strong style="font-size:23px">Poze selectate (${imgs.length}) — gata de încărcat pe eMAG</strong><button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(imgs.join('\n')))})">Copiază toate linkurile</button></div><div style="font-size:19px;color:var(--t3);margin:2px 0 6px">Verde = rezoluție OK pentru eMAG (min. 600×800px, verificat pe imaginea reală) · roșu/galben = posibil sub prag · „🎨 Recreează cu AI" curăță/îmbunătățește fotografia, pornind de la poza reală — verifică vizual rezultatul înainte să-l folosești, AI-ul poate greși detalii</div><div class="listing-imgs" style="align-items:stretch">${imgs.map((u,i)=>{const r=imgRec[u]||{};const isAi=u.includes('/api/ai-image?');return`<div class="listing-image-pick"><img src="${esc(proxyImg(u))}" onerror="this.src='${esc(u)}'" onload="checkImgDims(this)" alt="" style="${i===0?'border:2px solid var(--acc)':''}"><div>${isAi?'<div class="listing-image-role" style="background:var(--acc-light);color:var(--acc)">✨ recreat cu AI</div>':r.role?`<div class="listing-image-role">${esc(r.role)}</div>`:i===0?'<div class="listing-image-role">impact</div>':''}${r.reason?`<div style="font-size:22px;color:var(--t2);line-height:1.35;margin-bottom:5px">${esc(r.reason)}</div>`:''}<div class="listing-image-url">${esc(u)}</div><div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap"><button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(u))})">Copiază link</button><a class="btn btn-sm" href="${esc(downloadImg(u))}" target="_blank">↓ Salvează</a>${isAi?`<button class="btn btn-sm" style="color:var(--rd);border-color:var(--rd)" onclick="removeAiImage(${esc(JSON.stringify(u))})">🗑 Elimină</button>`:`<button class="btn btn-sm" onclick="recreateImageWithAI(${esc(JSON.stringify(u))},this)">🎨 Recreează cu AI</button>`}</div></div></div>`}).join('')}</div></div>`:''}
     ${l?.source_notes?`<div style="font-size:19px;color:var(--t3);margin-top:8px">${esc(l.source_notes)}</div>`:''}
   </div>`;
   // ── eMAG Listing Readiness — strict adițional, nu atinge cardul de mai sus (Trendyol inclus).
@@ -6670,6 +6825,33 @@ function renderListingFactoryResult(l,pages,allImages=[]){
       console.error('eMAG readiness analysis failed',e);
     }
   }
+}
+// Recreează o poză reală a produsului cu AI (fundal curat, prezentare profesională de tip e-commerce) —
+// PORNIND de la poza existentă (image edit), nu generată din imaginație, ca produsul afișat să rămână
+// fidel realității. Rezultatul se adaugă în l.images (nu înlocuiește originalul), cu un URL public
+// stabil (api/ai-image.js) — utilizabil direct în XLSX/ghid eMAG, nu doar vizual în pagină.
+async function recreateImageWithAI(sourceUrl,btnEl){
+  const l=listingData||listingFactoryData?.listing;
+  if(!l){toast('Nu există anunț generat');return;}
+  const originalLabel=btnEl?.textContent;
+  if(btnEl){btnEl.disabled=true;btnEl.textContent='⏳ Generez…';}
+  try{
+    const prompt=`Fotografie de produs profesională, stil e-commerce: fundal neutru curat (alb sau gri deschis), lumină uniformă, focus clar pe produs, aspect premium. Păstrează EXACT același produs din poza originală — aceeași formă, culoare, materiale, proporții și detalii. Nu adăuga, nu elimina și nu schimba nicio caracteristică a produsului. Produs: ${String(l.title||'').slice(0,200)}`;
+    const data=await apiJson('/api/image-generate',{sourceImageUrl:sourceUrl,prompt},90000);
+    const absoluteUrl=location.origin+data.url;
+    l.images=[...(l.images||[]),absoluteUrl];
+    toast('Poză recreată cu AI ✓ — verifică vizual că reprezintă corect produsul înainte s-o folosești pe eMAG');
+    renderListingFactoryResult(l,listingFactoryData?.pages||[],listingFactoryData?.allImages||[]);
+  }catch(e){
+    toast(e.message||'Eroare la generarea imaginii cu AI','err');
+    if(btnEl){btnEl.disabled=false;btnEl.textContent=originalLabel||'🎨 Recreează cu AI';}
+  }
+}
+function removeAiImage(url){
+  const l=listingData||listingFactoryData?.listing;
+  if(!l)return;
+  l.images=(l.images||[]).filter(u=>u!==url);
+  renderListingFactoryResult(l,listingFactoryData?.pages||[],listingFactoryData?.allImages||[]);
 }
 function applyListingToProduct(){
   const l=listingData||researchData?.listing;if(!l){toast('Nu există anunț generat');return;}

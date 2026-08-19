@@ -184,6 +184,7 @@ create table if not exists research_links (
   images jsonb default '[]'::jsonb,
   specs jsonb default '{}'::jsonb,
   description text,
+  product_code text,
   duplicate_of bigint references research_links(id) on delete set null,
   duplicate_type text default 'none',
   include_in_listing boolean default true,
@@ -210,6 +211,7 @@ create index if not exists idx_comenzi_stoc_created on comenzi_stoc(created_at d
 
 alter table research_projects add column if not exists listing jsonb default '{}'::jsonb;
 alter table research_projects add column if not exists finalizat boolean default false;
+alter table research_links add column if not exists product_code text;
 
 -- Auto-update updated_at pe produse
 create or replace function update_updated_at()

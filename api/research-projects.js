@@ -105,6 +105,10 @@ function extractJsonLdProduct(html){
         ean:node.gtin13||node.gtin||node.gtin12||node.gtin8||node.mpn||(typeof node.productID==='string'?node.productID.replace(/^mpn:/,''):'')||'',
         brand:clean(brandName||'').slice(0,120),
         seller:clean(sellerName||'').slice(0,120),
+        // sku = codul PROPRIU al furnizorului pentru acest produs (referință internă lui, nu EAN/cod de
+        // bare) — util la crearea produsului în Inventar, ca reper rapid de recomandă/identificare la
+        // furnizor. Complet distinct de `ean` de mai sus, deliberat, chiar dacă unele site-uri le confundă.
+        sku:clean(node.sku||'').slice(0,60),
         specs,
         images
       };
@@ -112,8 +116,20 @@ function extractJsonLdProduct(html){
   }
   return null;
 }
+// Codul propriu al furnizorului pentru produs — de obicei etichetat vizibil pe pagină ("Cod produs:",
+// "Cod Jumbo:", "SKU:", "Model:" etc.), NU un EAN/cod de bare. Căutat pe text curățat de tag-uri (nu pe
+// HTML brut), altfel prinde des potriviri false din scripturi/atribute inline.
+function findLabeledProductCode(text){
+  const jumbo=text.match(/\bCod\s+Jumbo\s*:?\s*(\d{4,})/i);
+  if(jumbo)return jumbo[1];
+  const m=text.match(/\b(?:Cod\s+produs|Cod\s+intern|Product\s*code|Item\s*code|Art\.?\s*no\.?|SKU|Model)\s*:?\s*([A-Za-z0-9][A-Za-z0-9._-]{2,})/i);
+  // Fără trim, un punct de sfârșit de propoziție imediat după cod (ex. "Cod produs: ABC-123. Stoc: da")
+  // rămânea lipit de cod ("ABC-123."), pentru că punctul e caracter valid ÎN interiorul multor coduri —
+  // îl scoatem doar dacă apare chiar la finalul potrivirii.
+  return m?m[1].replace(/[.,;]+$/,''):'';
+}
 function extract(html,url){
-  const data={url,normalized_url:normalizeUrl(url),platform:platformOf(url),pnk:pnkOf(url),title:'',price:0,currency:'RON',rating:0,review_count:0,images:[],specs:{},description:'',ean:'',brand:'',seller:''};
+  const data={url,normalized_url:normalizeUrl(url),platform:platformOf(url),pnk:pnkOf(url),title:'',price:0,currency:'RON',rating:0,review_count:0,images:[],specs:{},description:'',ean:'',brand:'',seller:'',product_code:''};
   const ld=extractJsonLdProduct(html);
   if(ld?.title)data.title=ld.title;
   else{
@@ -153,6 +169,12 @@ function extract(html,url){
     // Fallback pentru pagini fără JSON-LD Product complet — pattern generic "seller":"..." / "vânzător".
     const sm=html.match(/"seller"\s*:\s*\{[^}]*"name"\s*:\s*"([^"]+)"/i)||html.match(/[Vv][âa]ndut de[:\s]+<[^>]*>([^<]{2,80})</i);
     if(sm)data.seller=clean(sm[1]).slice(0,120);
+  }
+  if(ld?.sku)data.product_code=ld.sku;
+  else{
+    const textOnly=html.replace(/<script[\s\S]*?<\/script>/gi,' ').replace(/<style[\s\S]*?<\/style>/gi,' ').replace(/<[^>]+>/g,' ').replace(/\s+/g,' ');
+    const code=findLabeledProductCode(textOnly);
+    if(code)data.product_code=code.slice(0,60);
   }
   const imgs=(ld?.images||[]).slice();
   for(const m of html.matchAll(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/gi))imgs.push(m[1]);
@@ -333,6 +355,16 @@ module.exports=async function handler(req,res){
         catch(e){console.error('research_links chunk failed',e.message);return[];}
       }));
       const links=linkResults.flat().map(l=>({...l,images:[]}));
+      // product_code e o coloană nouă (migration_link_product_code.sql) — cerută separat, cu fallback
+      // silențios dacă migrarea nu a fost încă rulată, ca lista principală (linkurile din fiecare dosar)
+      // să NU dispară din cauza unei coloane lipsă (același tipar de reziliență ca la finalizat mai sus).
+      if(links.length){
+        try{
+          const codeRows=await supa('GET',`research_links?select=id,product_code&id=in.(${links.map(l=>l.id).join(',')})`);
+          const codeMap=new Map((codeRows||[]).map(r=>[r.id,r.product_code||'']));
+          links.forEach(l=>{l.product_code=codeMap.get(l.id)||'';});
+        }catch(e){links.forEach(l=>{l.product_code='';});}
+      }
       return res.status(200).json({projects:projects.map(p=>({...p,links:links.filter(l=>l.project_id===p.id)}))});
     }
     if(req.method!=='POST')return res.status(405).json({error:'Metodă nepermisă'});
@@ -467,7 +499,17 @@ module.exports=async function handler(req,res){
           }
         }
         const ins=await supa('POST','research_links',row);
-        const saved=ins?.[0]||row;existing.push(saved);added.push(saved);if(probable)flagged.push(saved);
+        const saved=ins?.[0]||row;
+        // product_code e o coloană nouă (migration_link_product_code.sql) — scrisă separat, best-effort,
+        // NU în insertul de mai sus: dacă am pune-o direct în `row` și migrarea n-a fost încă rulată,
+        // Supabase ar respinge TOT insertul (nu doar coloana lipsă), blocând complet adăugarea de linkuri.
+        if(data.product_code){
+          try{
+            const codeRows=await supa('PATCH',`research_links?id=eq.${saved.id}`,{product_code:data.product_code});
+            if(codeRows?.[0])saved.product_code=codeRows[0].product_code;
+          }catch(e){/* coloana lipsă — ignorăm silențios până se rulează migrarea */}
+        }
+        existing.push(saved);added.push(saved);if(probable)flagged.push(saved);
       }
       await supa('PATCH',`research_projects?id=eq.${projectId}`,{updated_at:new Date().toISOString()});
       const verdict=await recalcProject(projectId);
@@ -524,6 +566,14 @@ module.exports=async function handler(req,res){
       const rows=await supa('PATCH',`research_links?id=eq.${linkId}`,patch);
       const link=rows?.[0];
       if(!link)return res.status(404).json({error:'Linkul nu a fost găsit'});
+      // product_code separat, best-effort — vezi explicația din add_links (migrare nouă, nu trebuie
+      // să poată bloca restul datelor din screenshot dacă migrarea nu a fost încă rulată).
+      if(body.productCode){
+        try{
+          const codeRows=await supa('PATCH',`research_links?id=eq.${linkId}`,{product_code:clean(body.productCode).slice(0,60)});
+          if(codeRows?.[0])link.product_code=codeRows[0].product_code;
+        }catch(e){/* coloana lipsă — ignorăm silențios până se rulează migrarea */}
+      }
       const verdict=await recalcProject(link.project_id);
       return res.status(200).json({link,verdict:verdict.project});
     }

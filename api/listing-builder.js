@@ -308,14 +308,15 @@ ${imgList}
 ━━━ IMAGINI ATAȘATE VIZUAL ━━━
 Primele imagini din lista de mai sus cu scor ≥55 (până la 4) sunt atașate și ca fișiere imagine reale — le poți VEDEA, nu doar citi URL-ul. Folosește-le DOAR ca să confirmi detalii clar vizibile (culoare exactă, textură/finisaj, accesorii incluse, conținut pachet, formă) și să le adaugi în descriere/specificații dacă au impact comercial real. NU descrie ce nu e clar vizibil în poze, nu specula, nu inventa.
 
-━━━ REGULI TITLU (eficient și de impact) ━━━
+━━━ REGULI TITLU (vast, complex, vandabil, SEO) ━━━
 TITLU eMAG (title):
-- Format: [Tip produs] [Material/Stil] [Caracteristică 1] [Caracteristică 2] [Dimensiune] - [Beneficiu scurt], 80-150 caractere
-- Exemplu: "Coș depozitare pliabil bambus cu capac și mânere, 40L - organizator haine dormitor, maro natural"
+- Format: [Tip produs] [Brand AB HOMES] [Material/Stil] [Caracteristică 1] [Caracteristică 2] [Dimensiune] - [Beneficiu scurt], 100-180 caractere
+- Exemplu: "Ghiozdan cu roți AB HOMES Minecraft, Poliester, 33x45x22 cm, Capacitate 22 L, Compartimente multiple, Mâner reglabil - Practic și rezistent pentru școală"
+- OBLIGATORIU: "AB HOMES" apare undeva ÎN INTERIORUL titlului (NU ca prim cuvânt — vine imediat după tipul de produs)
 - Sintetizează din DOUĂ surse combinate — nu copia un singur titlu sursă cuvânt cu cuvânt:
   1. Titlurile paginilor sursă (title) — termenii care apar recurent/distinctiv la mai multe surse sunt cuvinte-cheie reale, căutate de cumpărători
   2. Detalii concrete NOI găsite în descrieri/text, care NU apar în niciun titlu sursă — dacă au impact comercial real, adaugă-le în titlu
-- NU începe cu "AB HOMES" la câmpul title
+- Include cât mai multe atribute concrete (material, culoare, dimensiuni, capacitate, caracteristici) — titlu vast, nu minimalist
 - Cuvinte cheie cu volum mare pe eMAG în față
 
 TITLU Trendyol (title_trendyol):
@@ -338,7 +339,7 @@ Structură EXACTĂ (nu omite imaginile!):
 <img src="[URL imagine 3 — lifestyle sau unghi diferit]">
 <p>[CTA scurt: "Comandă acum..." sau "Disponibil la..."]</p>
 
-- Folosește <p>, <ul>, <li>, <strong>; 1200-1800 caractere text (fără taguri HTML)
+- Folosește <p>, <ul>, <li>, <strong>; 1500-2400 caractere text (fără taguri HTML) — descriere dezvoltată, cu paragrafe multiple (intro, beneficii, detalii tehnice, utilizare/întreținere, CTA), nu doar 2-3 fraze scurte
 - IMPORTANT: dacă lista de imagini are cel puțin 3 URL-uri, toate 3 <img> sunt OBLIGATORII
 - Alege URL-uri din lista de imagini disponibile (prioritar cele cu scor mare)
 
@@ -389,11 +390,15 @@ ${imgList}
 ━━━ IMAGINI ATAȘATE VIZUAL ━━━
 Primele imagini din lista de mai sus cu scor ≥55 (până la 4) sunt atașate și ca fișiere imagine reale — le poți VEDEA, nu doar citi URL-ul. Folosește-le DOAR ca să confirmi detalii clar vizibile (culoare exactă, textură/finisaj, accesorii incluse, conținut pachet, formă) și să le adaugi în descriere/specificații dacă au impact comercial real. NU descrie ce nu e clar vizibil în poze, nu specula, nu inventa.
 
-━━━ REGULI TITLU (eficient și de impact) ━━━
-- Format: [Tip produs] [Brand/Model dacă există] [Material] [Caracteristici cheie] [Dimensiuni] - [Beneficiu], 80-150 caractere, SEO optim
+━━━ REGULI TITLU (vast, complex, vandabil, SEO) ━━━
+- Format: [Tip produs] [Brand AB HOMES] [Model/Temă dacă există] [Material] [Caracteristici cheie] [Dimensiuni/Capacitate] - [Beneficiu], 100-180 caractere, dens în cuvinte-cheie SEO
+- Exemplu de structură reală: "Ghiozdan cu roți AB HOMES Minecraft, Poliester, 33x45x22 cm, Capacitate 22 L, Compartimente multiple, Mâner reglabil - Practic și rezistent pentru școală"
+- OBLIGATORIU: cuvântul "AB HOMES" apare undeva ÎN INTERIORUL titlului (NU ca prim cuvânt — vine imediat după tipul de produs, ca în exemplu)
 - Sintetizează titlul din DOUĂ surse combinate — nu copia un singur titlu sursă cuvânt cu cuvânt:
   1. Titlurile paginilor sursă de mai sus (title) — identifică termenii care apar recurent/distinctiv la mai multe surse (sunt cuvinte-cheie reale, căutate de cumpărători)
-  2. Detalii concrete NOI găsite în descrieri/text (description/text), care NU apar în niciun titlu sursă — dacă un detaliu (capacitate, material, funcție, compatibilitate) apare doar în descriere și are impact comercial, adaugă-l în titlu
+  2. Detalii concrete NOI găsite în descrieri/text (description/text), care NU apar în niciun titlu sursă — dacă un detaliu (capacitate, material, funcție, compatibilitate, dimensiuni) apare doar în descriere și are impact comercial, adaugă-l în titlu
+- Include cât mai multe atribute concrete (material, culoare, dimensiuni, capacitate, caracteristici) — un titlu vast, complet, nu unul minimalist — fiecare atribut e un cuvânt-cheie căutat separat
+- Populează și seo_keywords cu 5-10 termeni de căutare reali (din titlurile surselor + termeni generici de categorie), folosiți efectiv în titlu/descriere, nu doar listați decorativ
 - Titlu Trendyol: max 100 caractere, poate fi engleză
 - Titlul.eMAG e câmpul principal folosit — Titlul Trendyol e doar referință secundară
 
@@ -401,12 +406,14 @@ Primele imagini din lista de mai sus cu scor ≥55 (până la 4) sunt atașate �
 - Spații corecte între TOATE cuvintele și propozițiile — niciodată cuvinte lipite (ex: „ajustabile.Compartimente" e GREȘIT, corect e „ajustabile. Compartimente")
 - În HTML, pune mereu un spațiu după tag-uri de tip </strong>/</b>/</em> dacă urmează text, ca să nu se lipească de cuvântul următor
 
-━━━ REGULI DESCRIERE ━━━
+━━━ REGULI DESCRIERE (mai vastă, dezvoltată) ━━━
 - Descriere HTML: intro → img[impact] → beneficii → img[specificații] → detalii → img[lifestyle] → CTA
+- text (fără taguri HTML): 1500-2400 caractere — dezvoltată, cu paragrafe multiple (intro, beneficii, detalii tehnice/materiale/dimensiuni, întreținere/utilizare, CTA), nu doar 2-3 fraze scurte
+- Acoperă explicit: ce este produsul, pentru cine/ce ocazie e potrivit, materiale și dimensiuni, caracteristici cheie (fiecare cu beneficiul ei, nu doar enumerate), conținut pachet dacă e cazul
 - INDEX 0 din images[]: OBLIGATORIU impact/lifestyle (scor ≥60) — NU fundal alb
 - Selectează max 10 imagini ordonate calitativ: impact → specificații → detalii → lifestyle → pachet
 - Exclude imagini cu scor sub 35
-- Nu copia descrieri integral; rescrie mai bun; nu inventa specificații
+- Nu copia descrieri integral; rescrie mai bun, mai complet; nu inventa specificații
 - Returnează STRICT JSON valid
 
 {
