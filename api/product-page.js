@@ -59,7 +59,10 @@ module.exports=async function handler(req,res){
     const name=String(l.title||'').slice(0,250);
     const descPlain=String(l.description||String(l.description_html||'').replace(/<[^>]+>/g,' ')).replace(/\s+/g,' ').trim().slice(0,4000);
     const metaDesc=descPlain.slice(0,300);
-    const rawImages=[l.main_image,...(Array.isArray(l.images)?l.images:[]),...(Array.isArray(l.best_images)?l.best_images:[]),...(Array.isArray(l.image_urls)?l.image_urls:[])].filter(Boolean);
+    // best_images vine din AI ca array de obiecte {url,role,reason}, nu de string-uri — vezi
+    // aceeași reparație în factoryImages() din index.html.
+    const bestUrls=(Array.isArray(l.best_images)?l.best_images:[]).map(x=>typeof x==='string'?x:x?.url).filter(Boolean);
+    const rawImages=[l.main_image,...(Array.isArray(l.images)?l.images:[]),...bestUrls,...(Array.isArray(l.image_urls)?l.image_urls:[])].filter(Boolean);
     const images=[...new Set(rawImages)].slice(0,10).map(proxyImg);
     const specs=l.specs&&typeof l.specs==='object'?l.specs:{};
     const brand=(specs.Brand&&specs.Brand!=='AB HOMES')?String(specs.Brand):'AB HOMES';

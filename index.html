@@ -2010,6 +2010,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:151,text:'Bug real reparat — crash „u.includes is not a function" la anunțuri generate din mai multe surse (Generează anunț din dosar). Cauza: AI-ul întoarce best_images ca listă de OBIECTE {url,role,reason}, nu de linkuri simple, dar factoryImages() le amesteca direct în lista de poze ca și cum ar fi text, spărgând orice cod care presupunea un URL (afișare poze, „Recreează cu AI" etc.). Reparat atât în anunțul din aplicație, cât și pe pagina publică de produs (api/product-page.js). Bonus găsit pe drum: etichetele „impact"/„specificații" de pe pozele selectate nu se arătau NICIODATĂ real (citeau dintr-un câmp gol, image_recommendations, în loc de best_images cel corect) — acum apar corect',date:'2026-08-20'},
   {n:150,text:'Modelul AI folosit peste tot (traduceri, citire poze, generare anunțuri) a trecut de la gpt-4.1-mini la gpt-5.6-terra — implicit mai capabil, la un cost intermediar. Adăugată și o variabilă separată, opțională, OPENAI_MODEL_LISTING — dacă e setată în Vercel, generarea anunțului (task-ul cel mai greu: titlu SEO + descriere) poate folosi un model diferit (ex. mai puternic) față de restul apelurilor AI (traduceri, citire poze), care rămân pe OPENAI_MODEL — schimbabil oricând direct din Environment Variables, fără nicio modificare de cod',date:'2026-08-20'},
   {n:149,text:'Infrastructură — reparat deploy-ul blocat de câteva zile: contul rulează pe planul Vercel Hobby (limită 12 Serverless Functions/deployment), iar proiectul ajunsese la 13 fișiere în api/, exact motivul pentru care actualizările din ultimele zile nu ajungeau live deși erau pe GitHub. Șterse 4 fișiere API confirmate 100% moarte (research-source.js, research-scrape.js, research-ai.js, competitor-analyze.js) — foloseau exclusiv taburile „Research produs"/„Scorecard competitori"/„Decizie produs", ascunse din navigare de multă vreme (style="display:none", fără nicio cale de reactivare) — nicio funcție folosită de tine nu a fost atinsă. Unite api/image-generate.js + api/ai-image.js într-un singur fișier (POST=generează, GET=servește), fără nicio schimbare vizibilă. Total: 13 → 8 fișiere API, cu rezervă pentru viitor. Actualizat și vercel.json la configurația modernă Vercel (fără „builds", care declanșa un warning la fiecare deploy)',date:'2026-08-20'},
   {n:148,text:'Generator anunțuri eMAG — actualizare mare pentru listări mai eficiente: (1) Brandul e acum ÎNTOTDEAUNA „AB HOMES" pe produse noi, indiferent de furnizor. (2) Titlul generat de AI e acum vast/complet, dens în cuvinte-cheie SEO, și include obligatoriu „AB HOMES" în interior (nu la început); descrierea e mai dezvoltată (1500-2400 caractere, mai multe paragrafe). (3) ID produs/Cod produs au acum o schemă reală, unică: contor zilnic + zi+lună+an (ex. al 2-lea produs generat azi → „2190826", cod „AB2190826") — alocat o singură dată per anunț, nu se schimbă la re-export. (4) Volumetria (Lungime/Lățime/Înălțime) se completează automat din titlu/specificații (ex. „33x45x22 cm") când produsul nu are dimensiunile EasyBox setate — înainte rămânea goală des. (5) Panou nou „🏭 Detalii producător / persoană responsabilă UE" (Generator anunțuri) — introduci o singură dată datele reale per furnizor cunoscut (Jumbo/Maxy/Verk); de atunci se completează automat în ghid și XLSX, după furnizorul dosarului — rămân goale dacă furnizorul nu e cunoscut, nu inventăm date legale. (6) Poze — buton nou „🎨 Recreează cu AI" pe fiecare poză selectată: generează o variantă curățată/profesională (fundal neutru, calitate e-commerce), PORNIND de la poza reală a produsului, nu inventată — verifică vizual rezultatul înainte de folosire; poze AI au buton „🗑 Elimină". Necesită migration_ai_images.sql în Supabase pentru pozele AI (restul update-ului funcționează fără nicio migrare nouă)',date:'2026-08-19'},
@@ -6385,7 +6386,11 @@ function renderListingResult(l,pages){
   </div>`;
 }
 function factoryImages(l,pages){
-  const fromListing=[l?.main_image,...(l?.images||[]),...(l?.best_images||[]),...(l?.image_urls||[])];
+  // best_images vine din AI ca array de OBIECTE {url,role,reason} (vezi buildSynthesizePrompt),
+  // nu de string-uri simple ca images/image_urls — bug real găsit: se amestecau obiecte brute în
+  // lista de URL-uri, spărgând orice cod care presupune string (esc, proxyImg, u.includes etc.).
+  const bestUrls=(l?.best_images||[]).map(x=>typeof x==='string'?x:x?.url).filter(Boolean);
+  const fromListing=[l?.main_image,...(l?.images||[]),...bestUrls,...(l?.image_urls||[])];
   const fromPages=(pages||[]).flatMap(p=>p.images||[]);
   return[...new Set([...fromListing,...fromPages].filter(Boolean))].slice(0,14);
 }
@@ -6400,8 +6405,12 @@ function renderSpecTable(specs){
   if(!rows.length)return'';
   return`<div style="margin-top:14px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><strong style="font-size:23px">Specificații copiable</strong><button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(specsCopyText(specs)))})">Copiază toate specificațiile</button></div><div class="listing-spec-table">${rows.map(([k,v])=>`<div class="listing-spec-row"><div class="listing-spec-k">${esc(k)}</div><div class="listing-spec-v">${esc(v)}</div><button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(`${k}: ${v}`))})">Copiază</button></div>`).join('')}</div></div>`;
 }
+// Bug real găsit: citea dintr-un câmp „image_recommendations" pe care nimic nu-l populează
+// niciodată — AI-ul întoarce de fapt best_images (url/role/reason, vezi factoryImages mai sus),
+// deci etichetele „impact"/„specificații" din „Poze selectate" nu se arătau NICIODATĂ real,
+// doar fallback-ul implicit ("impact" pe prima poză).
 function imageRecommendationMap(l){
-  return Object.fromEntries((l?.image_recommendations||[]).filter(x=>x?.url).map(x=>[x.url,x]));
+  return Object.fromEntries((l?.best_images||[]).filter(x=>x?.url).map(x=>[x.url,x]));
 }
 /* ══════════════════════════════════════════════════════════════════════════════════════
    eMAG LISTING READINESS — Product Truth + Gap Analysis + Validation
