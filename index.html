@@ -1007,6 +1007,10 @@ function buildRaportCats(){
 .emg-truth-k{color:var(--t2);font-weight:700}
 .emg-truth-v{color:var(--t1);font-family:var(--mono);word-break:break-word}
 .emg-truth-s{font-size:22px;white-space:nowrap;text-align:right}
+.emg-guide-row{display:grid;grid-template-columns:1fr 1.6fr auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--b1);font-size:23px}
+.emg-guide-row:last-child{border-bottom:none}
+.emg-guide-k{color:var(--t2);font-weight:700}
+.emg-guide-v{color:var(--t1);word-break:break-word}
 .emg-blocking{margin-top:10px;background:rgba(220,38,38,.08);border:1px solid var(--rd);border-radius:var(--r);padding:10px 12px;color:var(--rd)}
 .emg-blocking ul{margin:6px 0 0 18px;padding:0}
 /* ── COPY BUTTON ── */
@@ -1950,6 +1954,16 @@ th{font-weight:800!important;color:var(--t3)!important}
       <button class="btn btn-sm" id="inv-cancel-btn" onclick="closeInvoice()">Anulează</button>
       <button class="btn btn-sm btn-acc" id="inv-apply-btn" onclick="applyInvoice()" disabled>Importă în stoc</button>
     </div>
+  </div>
+</div>
+</div>
+
+<div class="ov" id="ov-emag-guide" onclick="if(event.target===this)closeEmagGuide()">
+<div class="inv-modal" onclick="event.stopPropagation()">
+  <div class="inv-head"><h2>📋 Ghid completare eMAG (pas cu pas)</h2><button class="m-close" onclick="closeEmagGuide()">×</button></div>
+  <div class="inv-body">
+    <div style="font-size:22px;color:var(--t3);margin-bottom:10px">Aceleași secțiuni, în aceeași ordine ca formularul de creare produs din eMAG Marketplace — copiază fiecare valoare și lipește-o direct în câmpul corespunzător.</div>
+    <div id="emag-guide-content"></div>
   </div>
 </div>
 </div>
@@ -5799,6 +5813,10 @@ async function downloadEmagOfferPreset(){
 // identificat prin PNK — part_number_key). Îl folosim când AB HOMES e primul/singurul
 // seller pe eMAG pentru acel produs, deci nu există niciun PNK de potrivit și trebuie
 // trimise toate detaliile complete (nume, brand, descriere, poze, caracteristici).
+// Codurile tehnice ale celor 31 coloane — ordinea oficială eMAG, reutilizate atât la exportul
+// XLSX (downloadEmagNewProductPreset) cât și la ghidul de completare manuală (emagManualGuideData),
+// ca ambele să calculeze mereu exact aceleași valori, dintr-un singur loc.
+const EMAG_NEW_PRODUCT_CODES=['part_number','ext_id','category_id','category_name','ean','sale_price','original_sale_price','vat_rate','status','offer_currency','stock','min_sale_price','max_sale_price','name','brand','description','main_image_url','other_image_url1','other_image_url2','other_image_url3','other_image_url4','other_image_url5','extra_details','translation_locale','safety_information','manufacturer_name','manufacturer_address','manufacturer_email','responsible_name','responsible_address','responsible_email'];
 function emagNewProductRow(l,proj){
   const name=(l?.title||'').slice(0,250);
   const brand=(l?.specs||{}).Brand&&l.specs.Brand!=='AB HOMES'?l.specs.Brand:(proj?.supplier||'AB HOMES');
@@ -5831,6 +5849,90 @@ function emagNewProductRow(l,proj){
     extraDetails,'ro_RO','','','','','','',''
   ];
 }
+// ═══════════════════════════════════════════════════════════════════════════════════════
+// GHID DE COMPLETARE MANUALĂ eMAG — pentru câmpurile pe care eMAG le cere DOAR din formularul
+// lui propriu (categorie restrictivă, caracteristici cu ID de taxonomie, detalii producător/
+// persoană responsabilă) și pe care nu le putem trimite direct într-un fișier de import. Arată
+// EXACT aceleași secțiuni, în aceeași ordine ca pașii reali din eMAG Marketplace (Draft →
+// Caracteristici → Descriere → Detalii ofertă), cu buton de copiere la fiecare valoare —
+// reutilizează calculele deja făcute în emagNewProductRow, ca cele două fluxuri (XLSX + ghid
+// manual) să arate mereu aceleași numere, nu două logici separate care pot diverge.
+const EMAG_DEFAULT_SAFETY_TEXT='A se utiliza conform instrucțiunilor din manual sau de pe ambalaj, pentru a evita accidentele sau deteriorarea echipamentului.';
+function emagManualGuideData(l,proj){
+  const row=emagNewProductRow(l,proj);
+  const f=Object.fromEntries(EMAG_NEW_PRODUCT_CODES.map((c,i)=>[c,row[i]]));
+  const p=P.find(x=>(f.ean&&String(x.sku||'').replace(/\D/g,'')===f.ean)||researchNorm(x.name)===researchNorm(proj?.title||f.name));
+  const mm=v=>v?Math.round(v*10):'';
+  const volume={l:mm(p?.easyboxL),w:mm(p?.easyboxW),h:mm(p?.easyboxT)};
+  // Greutate — căutăm un număr urmat de kg/g în specificațiile deja extrase (research AI), nu inventăm.
+  let weightG='';
+  const gTxt=String((l?.specs||{}).Greutate||(l?.specs||{})['Greutate/Dimensiuni']||'');
+  const gm=gTxt.match(/([\d.,]+)\s*kg/i),ggm=gTxt.match(/([\d.,]+)\s*g\b/i);
+  if(gm)weightG=Math.round(parseFloat(gm[1].replace(',','.'))*1000);
+  else if(ggm)weightG=Math.round(parseFloat(ggm[1].replace(',','.')));
+  const characteristics=Object.entries(l?.specs||{}).filter(([k,v])=>k&&v&&k!=='Brand');
+  return{f,volume,weightG,characteristics,descHtml:l?.description_html||'',descPlain:f.description};
+}
+function emgGuideRow(label,value,opts){
+  opts=opts||{};
+  const has=value!==undefined&&value!==null&&value!==''&&!(typeof value==='number'&&isNaN(value));
+  const display=has?esc(String(value)):'<span style="color:var(--t3)">— completează manual, nu generăm date fictive</span>';
+  const copyBtn=has?`<button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(String(value)))})">📋 Copiază</button>`:'';
+  return`<div class="emg-guide-row"><div class="emg-guide-k">${esc(label)}${opts.hint?`<div style="font-size:19px;color:var(--t3);font-weight:400">${esc(opts.hint)}</div>`:''}</div><div class="emg-guide-v">${display}</div><div>${copyBtn}</div></div>`;
+}
+function emgGuideSec(title){return`<div class="sec" style="margin-top:18px">${esc(title)}</div>`;}
+function openEmagManualGuide(){
+  const l=listingData||researchData?.listing||{};
+  if(!l.title){toast('Generează întâi un anunț');return;}
+  const proj=listingProjectId?researchProjects.find(p=>Number(p.id)===Number(listingProjectId)):null;
+  const d=emagManualGuideData(l,proj);
+  const html=`
+    ${emgGuideSec('1. Date generale (Draft)')}
+    ${emgGuideRow('Nume produs',d.f.name)}
+    ${emgGuideRow('Categorie',d.f.category_name,{hint:'Selectează manual categoria exactă din eMAG — nu putem seta automat ID-ul de categorie'})}
+    ${emgGuideRow('Brand',d.f.brand)}
+    ${emgGuideRow('ID produs',d.f.ext_id)}
+    ${emgGuideRow('Cod produs',d.f.part_number)}
+    ${emgGuideRow('EAN',d.f.ean)}
+    ${emgGuideRow('Limba sursă','Română')}
+    ${emgGuideSec('2. Caracteristici')}
+    <div style="font-size:22px;color:var(--t3);margin-bottom:8px">Valorile noastre — potrivește-le manual cu atributul eMAG corect din categorie (multe sunt restrictive, cu listă fixă de opțiuni; nu avem acces la taxonomia eMAG ca să le mapăm automat).</div>
+    ${d.characteristics.length?d.characteristics.map(([k,v])=>emgGuideRow(k,v)).join(''):'<div style="color:var(--t3);font-size:22px">Nicio caracteristică extrasă încă în acest anunț.</div>'}
+    ${emgGuideSec('3. Descriere')}
+    <div class="emg-guide-row"><div class="emg-guide-k">Descriere</div><div class="emg-guide-v" style="font-size:21px;line-height:1.4">${esc((d.descPlain||'').slice(0,240))}${(d.descPlain||'').length>240?'…':''}</div><div><button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(d.descHtml||d.descPlain||''))})">📋 Copiază HTML</button></div></div>
+    ${emgGuideRow('Avertizări de siguranță',EMAG_DEFAULT_SAFETY_TEXT,{hint:'Sugestia implicită eMAG (o completează automat dacă lași câmpul gol) — înlocuiește-o dacă produsul chiar are avertizări reale, specifice'})}
+    ${emgGuideSec('4. Detalii ofertă — Preț')}
+    ${emgGuideRow('Preț vânzare (fără TVA)',d.f.sale_price)}
+    ${emgGuideRow('PRP (preț recomandat producător)',null,{hint:'Nu avem o sursă reală pentru acest preț — completează manual dacă îl ai'})}
+    ${emgGuideRow('TVA','21%')}
+    ${emgGuideRow('Validare preț — Prag minim',d.f.min_sale_price)}
+    ${emgGuideRow('Validare preț — Prag maxim',d.f.max_sale_price)}
+    ${emgGuideSec('Stoc')}
+    ${emgGuideRow('Stoc',d.f.stock)}
+    ${emgGuideRow('În câte zile predai comanda curierului',null,{hint:'Completează manual — depinde de procesul tău de expediere'})}
+    ${emgGuideRow('În câte zile poți reaproviziona',null,{hint:'Completează manual'})}
+    ${emgGuideSec('Identificare')}
+    ${emgGuideRow('EAN',d.f.ean)}
+    ${emgGuideSec('Proprietăți ofertă')}
+    ${emgGuideRow('Garanție (luni)',null,{hint:'Completează manual'})}
+    ${emgGuideSec('Volumetrie')}
+    ${emgGuideRow('Lungime (mm)',d.volume.l,{hint:d.volume.l?'':'Completează Lungime/Lățime/Grosime în fișa produsului (secțiunea EasyBox) ca să apară aici'})}
+    ${emgGuideRow('Lățime (mm)',d.volume.w)}
+    ${emgGuideRow('Înălțime (mm)',d.volume.h)}
+    ${emgGuideRow('Greutate (g)',d.weightG,{hint:d.weightG?'':'Nu am găsit o greutate în specificațiile extrase — completează manual'})}
+    ${emgGuideSec('5. Detalii producător (max. 10)')}
+    ${emgGuideRow('Nume producător',null)}
+    ${emgGuideRow('Email producător',null)}
+    ${emgGuideRow('Adresă producător',null)}
+    ${emgGuideSec('6. Detalii persoană responsabilă UE (max. 10)')}
+    ${emgGuideRow('Nume persoană responsabilă',null)}
+    ${emgGuideRow('Email persoană responsabilă',null)}
+    ${emgGuideRow('Adresă persoană responsabilă',null)}
+  `;
+  document.getElementById('emag-guide-content').innerHTML=html;
+  document.getElementById('ov-emag-guide').classList.add('on');
+}
+function closeEmagGuide(){document.getElementById('ov-emag-guide').classList.remove('on');}
 async function downloadEmagNewProductPreset(){
   try{
     const l=listingData||researchData?.listing||{};
@@ -5843,7 +5945,7 @@ async function downloadEmagNewProductPreset(){
     const XLSX=await ensureXLSX();
     const groups=['Identificare produs','','','','','Oferta - Pret','','','','Moneda','Oferta - Disponibilitate stoc','Oferta - Verificare pret','','Descriere produs','','','Imagini','','','','','','Detalii suplimentare','','Avertizari de siguranta','Detalii producator','','','Detalii persoana responsabila UE','',''];
     const hdr2=new Array(31).fill('');
-    const codes=['part_number','ext_id','category_id','category_name','ean','sale_price','original_sale_price','vat_rate','status','offer_currency','stock','min_sale_price','max_sale_price','name','brand','description','main_image_url','other_image_url1','other_image_url2','other_image_url3','other_image_url4','other_image_url5','extra_details','translation_locale','safety_information','manufacturer_name','manufacturer_address','manufacturer_email','responsible_name','responsible_address','responsible_email'];
+    const codes=EMAG_NEW_PRODUCT_CODES;
     // Valorile de mai jos (coduri/obligativitate/etichete) sunt copiate EXACT din template-ul oficial
     // eMAG EXT_ro_new_products_translation.xlsx (rândurile 3-5, sheet "Template"), ca fișierul nostru
     // să fie 1:1 compatibil dacă utilizatorul copiază rândurile direct în template-ul original eMAG.
@@ -6017,6 +6119,7 @@ function renderListingResult(l,pages){
         <button class="btn btn-sm btn-acc" onclick="applyListingToProduct()">Aplică în produs</button>
         <button class="btn btn-sm" onclick="downloadEmagOfferPreset()" title="Produs deja existent în catalogul eMAG (ai un PNK de potrivit)">📄 Preset eMAG ERP</button>
         <button class="btn btn-sm" onclick="downloadEmagNewProductPreset()" title="Produs NOU pe eMAG — nu există încă în catalog, trimiți toate detaliile">📄 Preset eMAG (produs nou)</button>
+        <button class="btn btn-sm" onclick="openEmagManualGuide()" title="Toate câmpurile, în ordinea din formularul de creare produs eMAG, cu buton de copiere la fiecare">📋 Ghid completare eMAG</button>
       </div>
     </div>
     <div class="listing-title">${esc(l.title||researchData?.name||'')}</div>
@@ -6447,6 +6550,7 @@ function renderListingFactoryResult(l,pages,allImages=[]){
         <button class="btn btn-sm btn-acc" onclick="applyListingToProduct()">Aplică în produs</button>
         <button class="btn btn-sm" onclick="downloadEmagOfferPreset()" title="Produs deja existent în catalogul eMAG (ai un PNK de potrivit)">📄 Preset eMAG ERP</button>
         <button class="btn btn-sm" onclick="downloadEmagNewProductPreset()" title="Produs NOU pe eMAG — nu există încă în catalog, trimiți toate detaliile">📄 Preset eMAG (produs nou)</button>
+        <button class="btn btn-sm" onclick="openEmagManualGuide()" title="Toate câmpurile, în ordinea din formularul de creare produs eMAG, cu buton de copiere la fiecare">📋 Ghid completare eMAG</button>
         ${projectLinkBtn}
       </div>
     </div>
