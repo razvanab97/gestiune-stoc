@@ -2010,6 +2010,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:153,text:'Două bug-uri reale reparate — anunțuri generate din dosar (Generează anunț din dosar) puteau ieși FĂRĂ nicio poză, deși dosarul avea zeci deja capturate. Cauza: la generare, serverul încerca un AL DOILEA fetch live al fiecărui link, ca să scoată poze — dacă fetch-ul ăsta eșua (blocaje eMAG etc.), ieșeau 0 poze, deși linkurile aveau deja imagini reale salvate de la adăugare. Acum trimitem acele poze deja capturate direct, ca plasă de siguranță — nu mai depinde de reușita unui al doilea fetch. (2) Pagina publică de produs (/produs/ID) arăta doar descrierea simplă, ignorând complet descrierea bogată cu structură (beneficii ca listă, poze intercalate) generată de AI — acum o arată, curățată de orice tag nesigur (verificat cu payload-uri XSS reale: script/onerror/onclick/javascript: — toate eliminate, conținutul normal păstrat intact)',date:'2026-08-20'},
   {n:152,text:'Model AI pe 3 niveluri, cu lanț de fallback — OPENAI_MODEL (gpt-5.6-luna: traduceri, clasificări, task-uri simple), OPENAI_MODEL_ANALYSIS (gpt-5.6-terra: citire poze, PDF-uri, research, potriviri complexe), OPENAI_MODEL_LISTING (gpt-5.6-sol: generarea finală a anunțului — titlu SEO, descriere). Toate cele 14 apeluri AI din aplicație verificate și repartizate pe categoria corectă. Dacă un nivel superior nu e setat în Vercel, cade automat pe cel de dedesubt (listing→analysis→simple), niciodată eroare din lipsă de configurare',date:'2026-08-20'},
   {n:151,text:'Bug real reparat — crash „u.includes is not a function" la anunțuri generate din mai multe surse (Generează anunț din dosar). Cauza: AI-ul întoarce best_images ca listă de OBIECTE {url,role,reason}, nu de linkuri simple, dar factoryImages() le amesteca direct în lista de poze ca și cum ar fi text, spărgând orice cod care presupunea un URL (afișare poze, „Recreează cu AI" etc.). Reparat atât în anunțul din aplicație, cât și pe pagina publică de produs (api/product-page.js). Bonus găsit pe drum: etichetele „impact"/„specificații" de pe pozele selectate nu se arătau NICIODATĂ real (citeau dintr-un câmp gol, image_recommendations, în loc de best_images cel corect) — acum apar corect',date:'2026-08-20'},
   {n:150,text:'Modelul AI folosit peste tot (traduceri, citire poze, generare anunțuri) a trecut de la gpt-4.1-mini la gpt-5.6-terra — implicit mai capabil, la un cost intermediar. Adăugată și o variabilă separată, opțională, OPENAI_MODEL_LISTING — dacă e setată în Vercel, generarea anunțului (task-ul cel mai greu: titlu SEO + descriere) poate folosi un model diferit (ex. mai puternic) față de restul apelurilor AI (traduceri, citire poze), care rămân pe OPENAI_MODEL — schimbabil oricând direct din Environment Variables, fără nicio modificare de cod',date:'2026-08-20'},
@@ -5450,6 +5451,12 @@ async function buildListingFromProject(projectId){
   const urls=[...new Set(tracked.filter(l=>/^https?:\/\//i.test(l.url||'')&&l.source!=='screenshot').map(l=>l.url||l.normalized_url))].slice(0,MAX_RESEARCH_LINKS);
   const extraPages=tracked.filter(l=>l.source==='screenshot'||l.source==='pdf').map(l=>({url:l.url,platform:l.platform,title:l.title,description:l.description,price:l.price,currency:l.currency})).slice(0,MAX_RESEARCH_LINKS);
   if(urls.length+extraPages.length<2){toast('Adaugă cel puțin 2 linkuri/anunțuri analizate în dosar pentru un anunț bun','err');return;}
+  // Bug real găsit: la generarea anunțului, serverul re-încearcă un fetch LIVE al fiecărui link ca să
+  // scoată poze — dar dacă fetch-ul ăsta eșuează (eMAG blochează des cereri repetate), anunțul ieșea cu
+  // ZERO poze, deși dosarul avea deja zeci capturate cu succes la adăugarea linkurilor. Le trimitem acum
+  // direct, ca plasă de siguranță — doar URL-uri reale http(s), nu poze base64 din screenshot-uri (prea
+  // mari pentru prompt și inutilizabile în XLSX/OG oricum).
+  const knownImages=[...new Set(tracked.flatMap(l=>(l.images||[]).filter(u=>typeof u==='string'&&/^https?:\/\//i.test(u))))].slice(0,60);
   const btn=document.getElementById('rp-build-'+projectId),wrap=document.getElementById('research-result-wrap'),out=document.getElementById('listing-result');
   document.getElementById('research-result')?.style.setProperty('display','none');
   document.getElementById('competition-result')?.style.setProperty('display','none');
@@ -5459,7 +5466,7 @@ async function buildListingFromProject(projectId){
   if(btn){btn.disabled=true;btn.textContent='⏳ Generez…';}
   try{
     const product={name:pr.title||'',priceBuy:Number(pr.acquisition_price)||0,supplier:pr.supplier||'AB HOMES'};
-    const data=await apiJson('/api/listing-builder',{mode:'synthesize',product,urls,extraPages},180000);
+    const data=await apiJson('/api/listing-builder',{mode:'synthesize',product,urls,extraPages,knownImages},180000);
     const l=data.listing||{};
     listingFactoryData={listing:l,pages:data.pages||[],allImages:data.allImages||[]};
     listingData=l;

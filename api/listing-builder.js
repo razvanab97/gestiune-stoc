@@ -497,8 +497,18 @@ module.exports=async function handler(req,res){
 
     const pages=[...await Promise.all(urls.map(u=>fetchPage(u).catch(()=>({url:u,title:'',description:'',images:[],text:'',error:'fetch failed'})))),...extraPages];
 
+    // Bug real găsit: linkurile din dosar (research_links) au adesea imagini DEJA capturate cu succes
+    // când au fost adăugate (fetch-ul propriu al research-projects.js, separat de fetchPage de mai jos) —
+    // dar acest handler le ignora complet și încerca un AL DOILEA fetch live, la generarea anunțului.
+    // Dacă al doilea fetch eșuează (rate-limit, blocare temporară eMAG etc.) — foarte posibil, mai ales
+    // pe mai multe linkuri deodată — anunțul ieșea cu ZERO poze, deși dosarul chiar avea zeci disponibile.
+    // knownImages = poze reale (URL http/https, NU base64 din screenshot-uri — prea mari pentru prompt și
+    // inutilizabile în XLSX/OG oricum), trimise de client din research_links.images, ca plasă de siguranță
+    // care nu depinde de reușita fetch-ului live.
+    const knownImages=(Array.isArray(req.body?.knownImages)?req.body.knownImages:[]).filter(u=>typeof u==='string'&&/^https?:\/\//i.test(u)).slice(0,60);
+
     // Colectăm TOATE imaginile din toate paginile, deduplicate
-    const pageImages=[...new Set(pages.flatMap(p=>p.images||[]).filter(x=>x&&isLikelyProductImage(x)))];
+    const pageImages=[...new Set([...pages.flatMap(p=>p.images||[]),...knownImages].filter(x=>x&&isLikelyProductImage(x)))];
 
     // DDG Images ca supliment dacă avem mai puțin de 10 imagini de calitate
     let ddgImages=[];
