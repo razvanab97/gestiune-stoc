@@ -1,5 +1,5 @@
 const MAX_BODY_BYTES=10*1024*1024;
-const DEFAULT_MODEL='gpt-4.1-mini';
+const DEFAULT_MODEL='gpt-5.6-terra';
 
 function contentParts(content){
   if(typeof content==='string')return[{type:'input_text',text:content}];

@@ -267,7 +267,7 @@ async function repairJsonWithAI(raw,mode){
   const ai=await fetch('https://api.openai.com/v1/responses',{
     method:'POST',
     headers:{'content-type':'application/json','authorization':'Bearer '+process.env.OPENAI_API_KEY},
-    body:JSON.stringify({model:process.env.OPENAI_MODEL||'gpt-4.1-mini',max_output_tokens:2200,input:[{role:'user',content:[{type:'input_text',text:prompt}]}]})
+    body:JSON.stringify({model:process.env.OPENAI_MODEL||'gpt-5.6-terra',max_output_tokens:2200,input:[{role:'user',content:[{type:'input_text',text:prompt}]}]})
   });
   const data=await ai.json();
   if(!ai.ok)throw new Error('Repararea JSON a eșuat');
@@ -511,10 +511,13 @@ module.exports=async function handler(req,res){
     const visionImages=prepareImageListForAI(allImages).filter(x=>x.score>=55).slice(0,4);
     const content=[{type:'input_text',text:prompt},...visionImages.map(img=>({type:'input_image',image_url:img.url}))];
 
+    // Generarea propriu-zisă a anunțului (titlu SEO, descriere, specs) — task-ul cel mai greu din
+    // aplicație, singurul cu model dedicat (OPENAI_MODEL_LISTING), separat de restul apelurilor AI
+    // (traduceri, citire poze etc.), care rămân pe modelul general OPENAI_MODEL — vezi api/openai.js.
     const ai=await fetch('https://api.openai.com/v1/responses',{
       method:'POST',
       headers:{'content-type':'application/json','authorization':'Bearer '+process.env.OPENAI_API_KEY},
-      body:JSON.stringify({model:process.env.OPENAI_MODEL||'gpt-4.1-mini',max_output_tokens:mode==='synthesize'?4200:2800,input:[{role:'user',content}]})
+      body:JSON.stringify({model:process.env.OPENAI_MODEL_LISTING||process.env.OPENAI_MODEL||'gpt-5.6-terra',max_output_tokens:mode==='synthesize'?4200:2800,input:[{role:'user',content}]})
     });
     const data=await ai.json();
     if(!ai.ok)return res.status(ai.status).json(data);
