@@ -1940,6 +1940,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:131,text:'Research: 2 reparații. (1) Link-ul de căutare Trendyol era greșit de la bun început — folosea trendyol.com/sr cu parametri culture=ro-RO&currency=RON, dar site-ul real folosește calea trendyol.com/ro/sr (confirmat pe un URL real, indexat), nu parametri de query — de-asta căutarea AI nu găsea niciodată rezultate pe Trendyol. Reparat în toate cele 3 locuri unde se construia linkul. (2) Promptul AI (căutare + verificare potrivire) folosea titlul brut de pe pagina furnizorului ca identitate a produsului — care poate fi încă netradus (engleză/altă limbă) dacă traducerea automată n-a apucat să ruleze — în loc de titlul dosarului, cel pe care chiar l-ai scris/verificat/editat manual. Acum titlul dosarului e sursa de încredere pentru identitate; titlul furnizorului rămâne doar detaliu tehnic suplimentar',date:'2026-08-19'},
   {n:130,text:'Research: avertismentul de „posibil duplicat" (titlu+preț similare cu alt link deja din dosar) era doar un ⚠ mic pe titlu, cu tooltip vag — nu spunea CU CE anume e duplicat. Acum apare un rând dedicat, sub linkul respectiv, care arată exact titlul/prețul linkului cu care se suprapune (+ link direct spre el), și 2 butoane: „🗑 Șterge acest duplicat" (dacă chiar e) sau „✓ Nu e duplicat" (dacă alarma e falsă — rămâne în dosar, doar dispare avertismentul). Duplicatele SIGURE (URL sau PNK identic) tot se resping automat, fără să mai apară deloc — asta rămâne neschimbat, doar zona ambiguă („probabil") a devenit acționabilă',date:'2026-08-19'},
   {n:129,text:'Research: 2 bug-uri reale găsite, direct legate de „nu apare ✦ Recunoaștere AI" și de potrivirea slabă în dosare. (1) Orice link de la un furnizor care nu era pe o listă fixă de 4 domenii cunoscute (jumbo/maxy/verk/i-want) ieșea clasificat „altul" — ceea ce ascundea butonul de căutare eMAG/Trendyol ȘI, mai grav, intra GREȘIT în calculul prețului minim de concurență (recalcProject exclude explicit doar „furnizor", nu și „altul"), umflând fals verdictul/marja. Acum orice link non-eMAG/non-Trendyol e tratat direct ca furnizor. (2) Linkurile eMAG/Trendyol adăugate normal (lipind un URL — fluxul principal) nu primeau NICIODATĂ un scor de potrivire (doar cele din import PDF); coloana Match cădea pe numărul de recenzii, irelevant. Acum primesc automat același scor 55/30/15 (nume/dimensiuni/EAN) ca la PDF, iar sub 80% nu mai intră automat în calculul verdictului/prețului de piață (50-79% rămâne editabil manual, ca înainte doar la PDF)',date:'2026-08-19'},
   {n:128,text:'Research: matching mai la obiect, 2 schimbări. (1) Buton nou „🎯 Verifică AI" pe fiecare candidat eMAG/Trendyol — compară efectiv poza + titlul + specificațiile cu produsul nostru de referință și dă un verdict real (Potrivire / Nu e același / Incert, cu motiv), spre deosebire de scorul existent (Match), care e doar suprapunere de cuvinte din titlu și ratează sinonime („cutie litieră" vs „toaletă pisică"). (2) Promptul de căutare AI („✦ Recunoaștere AI") primește acum și specificațiile deja confirmate ale produsului (Material/Culoare/Dimensiuni etc.) plus o categorie eMAG detectată automat — fapte sigure, nu ghicite din titlu, deci query-uri mai precise. Necesită migration_research_links_ai_match.sql în Supabase',date:'2026-08-18'},
@@ -4082,7 +4083,7 @@ function researchSearchQuery(link){
 function researchSearchLinks(link){
   const q=researchSearchQuery(link);
   if(!q?.emag&&!q?.trendyol)return null;
-  return{emag:`https://www.emag.ro/search/${encodeURIComponent(q.emag)}`,trendyol:`https://www.trendyol.com/sr?q=${encodeURIComponent(q.trendyol)}&culture=ro-RO&currency=RON`};
+  return{emag:`https://www.emag.ro/search/${encodeURIComponent(q.emag)}`,trendyol:`https://www.trendyol.com/ro/sr?q=${encodeURIComponent(q.trendyol)}`};
 }
 // Versiunea AI a căutării: reface generateAIQueries (vechiul api/research-scrape.js) — traduce titlul,
 // generează query-uri progresive (specific → general), dar AICI trimite ȘI poza principală la AI vision,
@@ -4122,8 +4123,16 @@ async function generateAiSearchLinks(linkId){
       const specsText=Object.entries(link.specs||{}).filter(([k,v])=>k&&v&&k!=='Brand').map(([k,v])=>`${k}: ${v}`).join(', ');
       const categoryKey=emgDetectCategory(proj,link);
       const categoryLabel=categoryKey!=='generic'?EMG_CATEGORY_PROFILES[categoryKey]?.label:'';
+      // BUG real găsit: promptul folosea l.title (titlul brut de pe pagina furnizorului — des netradus,
+      // în engleză/poloneză/etc., dacă researchTranslateLinkTitles n-a apucat încă să ruleze) ca sursă
+      // PRINCIPALĂ de identitate a produsului, ignorând titlul dosarului (proj.title) — cel pe care
+      // utilizatorul chiar l-a scris/verificat/editat manual (✏️) în „zona de titlu" la creare. Acum
+      // titlul dosarului e sursa de încredere pentru identitate; titlul furnizorului rămâne doar ca
+      // detaliu tehnic suplimentar (poate avea specificații mai exacte), niciodată ca bază de traducere.
+      const projTitle=(proj?.title||'').trim();
+      const linkTitleDiffers=link.title&&link.title.trim()!==projTitle;
       const content=[{type:'text',text:`Ești expert în marketplace-uri ROMÂNEȘTI: eMAG.ro și Trendyol.com — varianta ROMÂNĂ (trendyol.com/ro), NU cea turcească.
-Produs sursă — titlu: "${link.title||''}"${link.brand?`, brand: "${link.brand}"`:''}${link.description?`, descriere: "${String(link.description).slice(0,300)}"`:''}${specsText?`, specificații confirmate: ${specsText}`:''}${categoryLabel?`, categorie probabilă eMAG: ${categoryLabel}`:''}.${img?' Am atașat și poza principală a produsului — folosește-o ca să identifici detalii vizuale (culoare, material, formă, tip) care NU apar în titlu, ca să faci query-urile mai precise.':''}
+Produs sursă — titlul stabilit de utilizator în dosar (folosește-l ca identitate PRINCIPALĂ a produsului, e cel verificat manual): "${projTitle||link.title||''}".${linkTitleDiffers?` Titlul complet de pe pagina furnizorului (DOAR detaliu tehnic suplimentar — poate fi încă în altă limbă, NU-l folosi ca bază de traducere sau ca identitate principală): "${link.title}".`:''}${link.brand?` Brand: "${link.brand}".`:''}${link.description?` Descriere: "${String(link.description).slice(0,300)}".`:''}${specsText?` Specificații confirmate: ${specsText}.`:''}${categoryLabel?` Categorie probabilă eMAG: ${categoryLabel}.`:''}${img?' Am atașat și poza principală a produsului — folosește-o ca să identifici detalii vizuale (culoare, material, formă, tip) care NU apar în titlu, ca să faci query-urile mai precise.':''}
 
 Sarcina ta: recunoaște ce TIP de produs e — așa cum l-ar căuta sau titra un cumpărător/vânzător ROMÂN pe
 eMAG/Trendyol (nu o traducere cuvânt-cu-cuvânt a titlului original, care poate suna nefiresc și să nu se
@@ -4161,7 +4170,7 @@ Răspunde STRICT cu JSON: {"emag":["q1","q2","q3","q4"],"trendyol":["q1","q2"]}`
     // #1 (cea mai specifică) chiar există listată; a doua/a treia variantă (mai generică) găsește des
     // produsul când prima nu găsește nimic. Îl lăsăm pe utilizator să încerce rapid, dintr-un click.
     const emagChips=queries.emag.map(q=>`<a href="https://www.emag.ro/search/${encodeURIComponent(q)}" target="_blank" class="rsx-icon-btn" style="text-decoration:none">${esc(q)}</a>`).join('');
-    const trendyolChips=trendyolQueries.map(q=>`<a href="https://www.trendyol.com/sr?q=${encodeURIComponent(q)}&culture=ro-RO&currency=RON" target="_blank" class="rsx-icon-btn" style="text-decoration:none">${esc(q)}</a>`).join('');
+    const trendyolChips=trendyolQueries.map(q=>`<a href="https://www.trendyol.com/ro/sr?q=${encodeURIComponent(q)}" target="_blank" class="rsx-icon-btn" style="text-decoration:none">${esc(q)}</a>`).join('');
     if(out)out.innerHTML=`<span class="rsx-search-label">✦ eMAG (recunoscut de AI)</span>${emagChips}<span class="rsx-search-label" style="margin-left:8px">Trendyol</span>${trendyolChips}`;
     toast('Căutare AI generată — încearcă mai multe variante, de la specific la general ✓');
   }catch(e){
@@ -4191,9 +4200,13 @@ async function verifyLinkMatchWithAI(linkId){
   const btn=document.getElementById('rlmatch-'+linkId);
   if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span>';}
   try{
-    // Produsul de referință = linkul de furnizor cu date reale (sursa costului nostru); dacă nu există
-    // încă niciunul, titlul liber al dosarului e tot ce avem.
-    const ref=(proj.links||[]).find(x=>x.platform==='furnizor'&&x.title)||{title:proj.title,description:'',specs:{},images:[]};
+    // Titlul de referință = titlul DOSARULUI (proj.title — cel scris/verificat/editat manual de
+    // utilizator în "zona de titlu"), nu titlul brut al linkului de furnizor (poate fi încă netradus,
+    // în engleză/altă limbă, dacă traducerea automată n-a apucat să ruleze). Descrierea/specificațiile/
+    // pozele tot vin din linkul de furnizor — acolo au detalii tehnice reale, utile ca dovadă, doar
+    // identitatea (titlul) trebuie să fie cea confirmată de utilizator.
+    const furnizorLink=(proj.links||[]).find(x=>x.platform==='furnizor');
+    const ref={title:(proj.title||furnizorLink?.title||'').trim(),description:furnizorLink?.description||'',specs:furnizorLink?.specs||{},images:furnizorLink?.images||[]};
     const refImg=ref.images?.[0]||proj.cover_image||'';
     const candImg=link.images?.[0]||'';
     const specsText=obj=>Object.entries(obj||{}).filter(([k,v])=>k&&v&&k!=='Brand').map(([k,v])=>`${k}: ${v}`).join(', ');
@@ -6555,7 +6568,7 @@ function renderResearchResult(item){
   const platBlock=(plat,key,platform,price,offerCount,link,margin)=>{
     const fallbackLink=plat==='eMAG'
       ?`https://www.emag.ro/search/${encodeURIComponent((item.name||'').split(' ').slice(0,5).join(' '))}`
-      :`https://www.trendyol.com/sr?q=${encodeURIComponent((item.name||'').split(' ').slice(0,5).join(' '))}&culture=ro-RO&currency=RON`;
+      :`https://www.trendyol.com/ro/sr?q=${encodeURIComponent((item.name||'').split(' ').slice(0,5).join(' '))}`;
     const href=link||fallbackLink;
     const cands=platform?.candidates||[];
     const visible=cands.filter(c=>c.score>=50);
