@@ -95,8 +95,10 @@ async function fetchSourceImage(sourceUrl){
 }
 // sourceImageUrls (array, Galeria AI produs — vezi generateOneGalleryImage în index.html) sau
 // sourceImageUrl (singular, recreateImageWithAI — o singură poză) — ambele merg pe același model
-// image-edit, gpt-image-1 acceptă mai multe imagini de referință într-un singur apel (câmpuri
-// „image" repetate), utile ca AI-ul să vadă produsul din mai multe unghiuri deodată.
+// image-edit, gpt-image-1 acceptă mai multe imagini de referință într-un singur apel, dar API-ul
+// OpenAI cere sintaxa de array pentru câmpul multipart la 2+ imagini — „image[]", nu „image" repetat
+// (bug real găsit: cu „image" repetat, OpenAI respinge cererea cu „Duplicate parameter: image").
+// Pentru o singură imagine (recreateImageWithAI) rămâne „image", ca înainte.
 async function handleGenerate(req,res){
   if(req.body?.imageData)return handleUpload(req,res);
   if(!process.env.OPENAI_API_KEY)return res.status(503).json({error:'OPENAI_API_KEY nu este configurată în Vercel'});
@@ -111,7 +113,8 @@ async function handleGenerate(req,res){
 
     const form=new FormData();
     form.append('model',imageModel());
-    sources.forEach(({buf,ct},i)=>form.append('image',new Blob([buf],{type:ct}),`sursa${i+1}.`+(ct.split('/')[1]||'jpg')));
+    const imageField=sources.length>1?'image[]':'image';
+    sources.forEach(({buf,ct},i)=>form.append(imageField,new Blob([buf],{type:ct}),`sursa${i+1}.`+(ct.split('/')[1]||'jpg')));
     form.append('prompt',prompt);
     form.append('size',size);
     form.append('n','1');
