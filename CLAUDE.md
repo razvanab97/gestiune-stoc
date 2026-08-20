@@ -12,7 +12,7 @@ There is no build, lint, or test tooling — this is a hand-edited static file.
 
 - **Run locally**: open `index.html` directly in a browser (or serve the directory with any static file server, e.g. `python3 -m http.server`). AI-powered features require the Vercel serverless endpoint `/api/openai` and the `OPENAI_API_KEY` environment variable, so they do not work when opening the HTML file directly.
 - **Deploy**: drag-and-drop `index.html` onto Vercel (per README), or push to the connected git remote. `vercel.json` configures the static build, rewrites all routes to `/index.html`, and sets security headers (X-Content-Type-Options, X-Frame-Options, X-XSS-Protection).
-- **Database setup/migrations**: run the SQL files manually in the Supabase Dashboard → SQL Editor (Project: `nuvgwytanlgvcffxeahs`). `supabase_setup.sql` is the current full schema (idempotent — safe to re-run; uses `create table if not exists` / `add column if not exists`) — for a fresh setup this is the only file that needs to run. `migration_activity_log.sql` is a small incremental migration (adds `activitate_stoc`, for the stock-movement notification bell) not yet folded into `supabase_setup.sql`. `insert_produse.sql`, `update_images.sql`, `update_images_verk.sql` are one-off data-import scripts generated from supplier invoices/catalogs — not part of normal dev flow.
+- **Database setup/migrations**: run the SQL files manually in the Supabase Dashboard → SQL Editor (Project: `nuvgwytanlgvcffxeahs`). `supabase_setup.sql` is the current full schema (idempotent — safe to re-run; uses `create table if not exists` / `add column if not exists`) — for a fresh setup this is the only file that needs to run. `migration_activity_log.sql` is a small incremental migration (adds `activitate_stoc`, for the stock-movement notification bell) not yet folded into `supabase_setup.sql`. `migration_product_description_gallery.sql` likewise adds `produse.description`/`produse.images` (customer-facing description + thematic image gallery) and isn't folded in yet either. `insert_produse.sql`, `update_images.sql`, `update_images_verk.sql` are one-off data-import scripts generated from supplier invoices/catalogs — not part of normal dev flow.
 
 ## Architecture
 
@@ -34,7 +34,7 @@ Switching to `raport`/`jurnal` triggers a render+retry loop (`tryR`/`tryS`/`tryC
 - `OI` — stock-order/receipt history (from `comenzi_stoc`, populated by invoice import)
 - `ACT` — recent stock-movement notifications (in/out, from `activitate_stoc`), shown in the 🔔 bell dropdown in the header
 - `CATS` — custom product categories, persisted to `localStorage` (140+ predefined Romanian categories plus user-added ones via `addCustomCategory`)
-- `editId`, `curImg`, `invLines`/`invParsed` — modal/form/invoice-import transient state
+- `editId`, `curImg`, `curImages`, `invLines`/`invParsed` — modal/form/invoice-import transient state (`curImages` is the current product's thematic image gallery, array of URLs, edited via `addGalleryImg`/`removeGalleryImg`/`renderImgGallery`)
 
 ### Data layer: Supabase REST + localStorage fallback
 - `sb(method, path, body)` is the single fetch wrapper for Supabase's PostgREST API (`/rest/v1/<table>`), using the anon key (`SUPA_URL`/`SUPA_KEY`, hardcoded — this is intentional per README, RLS is disabled, single-user app). `dbGet`/`dbPost`/`dbPatch`/`dbDelete` are thin wrappers around it.
@@ -44,7 +44,7 @@ Switching to `raport`/`jurnal` triggers a render+retry loop (`tryR`/`tryS`/`tryC
 
 ### Supabase schema (`supabase_setup.sql`)
 Ten tables, no RLS (single-user, anon key is safe to expose client-side per README):
-- `produse` — products (name, sku, category, supplier, bought/sold quantities, prices, characteristics like colors/sizes/material)
+- `produse` — products (name, sku, category, supplier, bought/sold quantities, prices, characteristics like colors/sizes/material, plus `description`/`images` for the customer-facing description and thematic image gallery — distinct from `notes`, which is internal-only; added by `migration_product_description_gallery.sql`)
 - `vanzari_zilnice` — cache of today's sales per product (unique on `data, product_id`, used for the quick-sell UI)
 - `jurnal` — permanent sales journal/history (one row per product per day sold)
 - `comenzi_stoc` — stock-receipt/order history (invoice imports, bulk stock additions)
@@ -58,7 +58,7 @@ Ten tables, no RLS (single-user, anon key is safe to expose client-side per READ
 All AI requests go through the Vercel serverless endpoint `/api/openai`; the API key is never exposed in the browser:
 - `doSuggestCat` — suggests 1-3 product categories from the product name as the user types
 - `analyzeImage` — detects product name/category from an uploaded photo
-- `importFromUrl` — imports a product (title translated, image, SKU) from a product page URL
+- `importFromUrl` — imports a product (title translated, image, SKU, price/category/specs) from a product page URL; in parallel it also calls `/api/listing-builder` (mode `build`, the same eMAG/Trendyol listing generator used by Research) to fill the richer `description`/`images` gallery/specs fields
 - `parsePDFWithAI` — extracts product line items from an invoice PDF for bulk import (`openInvoice`/`applyInvoice` flow, with `fuzzyMatch`/`findExistingProduct` to detect existing products vs new ones)
 
 ### Other notable pieces

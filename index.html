@@ -263,7 +263,8 @@ tr:hover td{background:var(--surf2)}
 .sec:first-child{margin-top:0}
 .fld{margin-bottom:.9rem}
 .fld label{font-size:23px;font-weight:500;color:var(--t3);text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:5px}
-.fld input,.fld select{width:100%}
+.fld input,.fld select,.fld textarea{width:100%}
+.fld textarea{resize:vertical;line-height:1.5}
 .frow{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .m-foot{padding:1.1rem 2rem;border-top:1px solid var(--b1);display:flex;gap:8px;justify-content:flex-end;background:var(--surf2)}
 /* IMAGE */
@@ -276,6 +277,11 @@ tr:hover td{background:var(--surf2)}
 .img-ph-t{font-size:25px;color:var(--t3);line-height:1.7}
 .img-ctrls{display:flex;gap:8px;margin-bottom:.5rem}
 .img-ctrls input{flex:1;font-size:24px;padding:7px 10px}
+.img-gallery{display:flex;flex-wrap:wrap;gap:8px}
+.img-gallery-item{position:relative;width:64px;height:64px;flex:0 0 auto}
+.img-gallery-item img{width:100%;height:100%;object-fit:contain;border:1px solid var(--b1);border-radius:8px;background:var(--surf2)}
+.img-gallery-rm{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;border:1px solid var(--b1);background:var(--surf);color:var(--t2);font-size:12px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.img-gallery-rm:hover{background:var(--rd);color:#fff;border-color:var(--rd)}
 .ai-analyze-btn{width:100%;padding:8px;font-size:24px;font-weight:500;background:var(--acc-light);color:var(--acc);border:1px solid var(--acc-mid);border-radius:var(--r);cursor:pointer;font-family:var(--font);transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px}
 .ai-analyze-btn:hover{background:var(--acc);color:var(--acc-fg)}
 .ai-analyze-btn:disabled{opacity:.5;cursor:default}
@@ -1833,9 +1839,19 @@ th{font-weight:800!important;color:var(--t3)!important}
           <input type="text" id="f-product-url" placeholder="https://magazin.com/produs..." style="flex:1;min-width:0;font-size:23px;padding:9px 12px" onkeydown="if(event.key==='Enter'){event.preventDefault();importFromUrl();}">
           <button class="btn btn-sm btn-acc" onclick="importFromUrl()" id="import-url-btn" style="min-width:90px">↓ Importă</button>
         </div>
-        <div id="import-url-status" style="font-size:19px;color:var(--t3)">Completează automat numele, codul, categoria, poza, caracteristicile și prețul.</div>
+        <div id="import-url-status" style="font-size:19px;color:var(--t3)">Completează automat numele, codul, categoria, poza, descrierea, caracteristicile, prețul și o galerie de imagini tematice.</div>
       </div>
-      
+
+      <!-- Galerie imagini tematice -->
+      <div id="img-gallery-wrap" style="display:none;margin:0 0 1rem">
+        <div style="font-size:19px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);margin-bottom:8px">🖼 Galerie imagini tematice</div>
+        <div class="img-gallery" id="img-gallery"></div>
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <input type="text" id="f-gallery-url" placeholder="Adaugă URL imagine…" style="flex:1;font-size:19px;padding:7px 10px" onkeydown="if(event.key==='Enter'){event.preventDefault();addGalleryImg();}">
+          <button class="btn btn-sm" onclick="addGalleryImg()">+ Adaugă</button>
+        </div>
+      </div>
+
       <button class="ai-analyze-btn" id="ai-img-btn" onclick="analyzeImage()" disabled><span>✦</span> Analizează poza cu AI</button>
       <div class="ai-result" id="ai-result"></div>
 
@@ -1872,6 +1888,7 @@ th{font-weight:800!important;color:var(--t3)!important}
     <div class="m-col m-col-r">
       <div class="sec">Informații produs</div>
       <div class="fld"><label>Nume produs *</label><input id="f-name" type="text" placeholder="ex: Cafea Arabica 250g" oninput="suggestCatFromName()"></div>
+      <div class="fld"><label>Descriere produs</label><textarea id="f-description" rows="4" placeholder="Descriere detaliată pentru client: beneficii, utilizare, ce conține pachetul..."></textarea></div>
       <div class="frow">
         <div class="fld"><label>SKU / Cod extern</label><input id="f-sku" type="text" placeholder="CAF-001"></div>
         <div class="fld"><label>Furnizor</label><input id="f-sup" type="text" placeholder="SC Produse SRL"></div>
@@ -2030,6 +2047,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:160,text:'„Adaugă produs din link" (modalul de produs) completează acum și o descriere dezvoltată pentru client + o galerie de imagini tematice — până acum importul din link scria doar o descriere scurtă direct în „Note interne" (câmp intern, nu pentru client) și o singură poză. Acum: câmp nou „Descriere produs" (separat de notele interne, care rămân neatinse) și o galerie de poze suplimentare sub secțiunea de import, cu buton de ștergere pe fiecare și posibilitatea de a adăuga manual altele prin URL. Ambele sunt completate folosind ACELAȘI generator de anunțuri eMAG/Trendyol (api/listing-builder.js, cel din Research) — rulează acum în paralel și la „↓ Importă" din modal, nu doar din tab-ul Research. „Aplică în produs" din Research populează și el aceleași câmpuri noi, în loc de notele interne. Necesită migration_product_description_gallery.sql în Supabase (fără migrare, restul importului funcționează normal, doar descrierea/galeria nu se salvează încă)',date:'2026-08-20'},
   {n:159,text:'Generator anunțuri — poze în descriere, mai sigure și mai flexibile. (1) Buton nou „📁 Din calculator" — alegi o poză direct de pe telefon/laptop (fișier personal), fără niciun link extern; se redimensionează automat și se inserează. (2) Bug real reparat: linkuri de tip https://ibb.co/XXXXX (pagina care AFIȘEAZĂ poza, nu fișierul propriu-zis) treceau de validare dar nu se afișau niciodată — acum orice link extern (la inserare în descriere sau la „+ Adaugă poză externă") se verifică înainte să fie acceptat, cu mesaj clar dacă nu e link direct către imagine. (3) Bug de infrastructură găsit: poza reală/uploadată nu se poate salva încă — RLS activ pe tabela ai_images blochează inserarea (aceeași problemă ca la ean_pool). Necesită rulare manuală în Supabase (vezi mesajul din chat)',date:'2026-08-20'},
   {n:158,text:'Research: buton „📋 Copiază" adăugat la fiecare cod din „🔢 Bancă de coduri EAN" (lista de coduri disponibile) — până acum aveai doar bifa „folosit", trebuia să selectezi manual textul ca să-l copiezi',date:'2026-08-20'},
   {n:157,text:'Generator anunțuri — control mai bun peste poze. (1) Buton nou „➕ În descriere" pe fiecare poză din „Poze selectate" — o adaugă direct în descriere, fără să mai cauți/copiezi URL-ul manual. (2) Sub editorul de descriere apare acum „Poze folosite în descriere", cu fiecare poză din HTML arătată separat — utile mai ales pentru poze stock irelevante apărute din căutarea automată de rezervă. (3) Buton nou „🚫 Blochează" pe orice poză (din pool sau din descriere) — o elimină din anunțul curent ȘI o exclude definitiv din TOATE generările viitoare, pentru orice produs (util exact pentru poza stock nepotrivită care tot reapărea la mai multe listări)',date:'2026-08-20'},
@@ -2572,7 +2590,8 @@ function dbToP(r){
     priceBuyTTC:r.price_buy_ttc||0,priceBuyPrevTTC:r.price_buy_prev_ttc||0,priceBuyChangedAt:r.price_buy_changed_at||'',tvaAcq:r.tva_acq??0.21,
     stockAddedAt:r.stock_added_at||'',lastStockAddedQty:r.last_stock_added_qty||0,
     priceSell:r.price_sell||0,priceEmag:r.price_emag||0,priceTrendyol:r.price_trendyol||0,priceRec:r.price_rec||0,img:r.img||'',
-    colors:r.colors||'',sizes:r.sizes||'',material:r.material||'',dims:r.dims||'',notes:r.notes||'',createdAt:r.created_at||'',updatedAt:r.updated_at||'',
+    colors:r.colors||'',sizes:r.sizes||'',material:r.material||'',dims:r.dims||'',notes:r.notes||'',
+    description:r.description||'',images:Array.isArray(r.images)?r.images:[],createdAt:r.created_at||'',updatedAt:r.updated_at||'',
     supplierOOS:!!r.supplier_oos,supplierOOSSince:r.supplier_oos_since||'',supplierRestockEta:r.supplier_restock_eta||'',supplierNotify:!!r.supplier_notify,supplierNotified:!!r.supplier_notified,
     archived:!!r.archived,archivedAt:r.archived_at||'',
     easyboxL:r.easybox_l||0,easyboxW:r.easybox_w||0,easyboxT:r.easybox_t||0};
@@ -2584,6 +2603,7 @@ function pToDb(p){
     stock_added_at:p.stockAddedAt||null,last_stock_added_qty:p.lastStockAddedQty||0,
     price_sell:p.priceSell||0,price_emag:p.priceEmag||0,price_trendyol:p.priceTrendyol||0,price_rec:p.priceRec||0,img:p.img||'',
     colors:p.colors||'',sizes:p.sizes||'',material:p.material||'',dims:p.dims||'',notes:p.notes||'',
+    description:p.description||'',images:p.images||[],
     supplier_oos:!!p.supplierOOS,supplier_oos_since:p.supplierOOSSince||null,supplier_restock_eta:p.supplierRestockEta||null,supplier_notify:!!p.supplierNotify,supplier_notified:!!p.supplierNotified,
     archived:!!p.archived,archived_at:p.archivedAt||null,
     easybox_l:p.easyboxL||0,easybox_w:p.easyboxW||0,easybox_t:p.easyboxT||0};
@@ -2744,7 +2764,7 @@ function safeLocalSet(key,value){
   try{localStorage.setItem(key,value);}
   catch(e){console.warn('Nu s-a putut scrie în localStorage ('+key+'):',e);}
 }
-let P=[],TS={},JL=[],OI=[],editId=null,sCol='name',sDir=1,jMode='sales',curImg='',selProd=new Set(),selSuppliers=new Set(),savingProduct=false,invSourceName='',jMonthDefaulted=false;
+let P=[],TS={},JL=[],OI=[],editId=null,sCol='name',sDir=1,jMode='sales',curImg='',curImages=[],selProd=new Set(),selSuppliers=new Set(),savingProduct=false,invSourceName='',jMonthDefaulted=false;
 let compState={};
 let SYNCM=[],syncMapsLoaded=false,syncImpParsed=[];
 let PCOM=[],pcomLoaded=false,pcImpParsed=[],pcImpPlatforma='emag';
@@ -3338,6 +3358,10 @@ async function importFromUrl(){
       if(directResp.ok)pageData=await directResp.json();
     }catch(e){console.warn('Direct product import unavailable:',e);}
 
+    // Pornește în paralel generatorul de anunț eMAG (descriere dezvoltată + galerie de imagini tematice)
+    const listingPromise=fetch('/api/listing-builder',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({urls:[url],mode:'build'})})
+      .then(r=>r.ok?r.json():null).catch(e=>{console.warn('Listing builder unavailable:',e);return null;});
+
     const pageImgCandidate=(pageData.image&&pageData.image.startsWith('http'))?pageData.image:((pageData.images||[]).find(u=>u&&u.startsWith('http'))||'');
 
     const importPrompt=`Analizează informațiile extrase de server din pagina produsului: ${url}
@@ -3436,7 +3460,33 @@ Răspunde STRICT cu JSON:
     setImported('f-material',productData.material);
     setImported('f-dims',productData.dimensions);
     setImported('f-colors',productData.colors);
-    setImported('f-notes',productData.description);
+    setImported('f-description',productData.description);
+
+    // Step 2: Așteaptă anunțul eMAG generat — descriere dezvoltată + galerie de imagini tematice + specificații
+    status.innerHTML+='<br><span class="spin"></span> Generez descriere dezvoltată și galerie de imagini...';
+    const listingResp=await listingPromise;
+    const listing=listingResp?.listing;
+    if(listing&&(listing.description||listing.images?.length)){
+      const specs=listing.specs||{};
+      setImported('f-material',specs['Material']);
+      setImported('f-dims',specs['Dimensiuni']);
+      setImported('f-colors',specs['Culoare']);
+      if(listing.description){
+        document.getElementById('f-description').value=listing.description;
+        status.innerHTML+=`<br><span style="color:var(--gr)">✓ Descriere dezvoltată generată (${listing.description.length} caractere)</span>`;
+      }
+      if(!bestImg&&listing.main_image){
+        document.getElementById('f-imgurl').value=listing.main_image;
+        onImgUrl();
+        status.innerHTML+=`<br><span style="color:var(--gr)">✓ Imagine principală</span>`;
+      }
+      const mainUsed=bestImg||listing.main_image||'';
+      curImages=(listing.images||[]).filter(u=>u&&u!==mainUsed).slice(0,8);
+      renderImgGallery();
+      if(curImages.length)status.innerHTML+=`<br><span style="color:var(--gr)">✓ Galerie: ${curImages.length} imagini tematice</span>`;
+    }else{
+      status.innerHTML+='<br><span style="color:var(--t3)">— Descrierea dezvoltată și galeria nu au putut fi generate (poți completa manual)</span>';
+    }
 
     const price=typeof productData.price==='number'?productData.price:parseFloat(String(productData.price||'').replace(',','.'));
     const currency=String(productData.currency||'RON').toUpperCase();
@@ -7158,7 +7208,9 @@ function applyListingToProduct(){
     const projImg=proj?(proj.cover_image||(proj.links||[]).find(x=>Array.isArray(x.images)&&x.images.length)?.images?.[0]):null;
     const img=l.main_image||(l.images||[])[0]||projImg||researchData?.img;
     if(img){document.getElementById('f-imgurl').value=img;onImgUrl();}
-    if(l.description)document.getElementById('f-notes').value=l.description;
+    if(l.description)document.getElementById('f-description').value=l.description;
+    curImages=(l.images||[]).filter(u=>u&&u!==img).slice(0,8);
+    renderImgGallery();
     const specs=l.specs||{};
     if(specs.Material)document.getElementById('f-material').value=specs.Material;
     if(specs.Dimensiuni)document.getElementById('f-dims').value=specs.Dimensiuni;
@@ -8073,6 +8125,10 @@ function openModal(id){
   document.getElementById('f-material').value=p?.material||'';
   document.getElementById('f-dims').value=p?.dims||'';
   document.getElementById('f-notes').value=p?.notes||'';
+  document.getElementById('f-description').value=p?.description||'';
+  curImages=Array.isArray(p?.images)?[...p.images]:[];
+  document.getElementById('f-gallery-url').value='';
+  renderImgGallery();
   const ebGuess=(!p?.easyboxL&&p?.dims)?parseDimsText(p.dims):null;
   document.getElementById('f-eb-l').value=p?.easyboxL||ebGuess?.[0]||'';
   document.getElementById('f-eb-w').value=p?.easyboxW||ebGuess?.[1]||'';
@@ -8098,7 +8154,7 @@ function openModal(id){
   document.getElementById('cat-suggest').innerHTML='<span class="cat-chip-loading">Scrie numele produsului pentru sugestii…</span>';
   document.getElementById('ai-result').style.display='none';
   document.getElementById('f-product-url').value='';
-  document.getElementById('import-url-status').innerHTML='Completează automat numele, codul, categoria, poza, caracteristicile și prețul.';
+  document.getElementById('import-url-status').innerHTML='Completează automat numele, codul, categoria, poza, descrierea, caracteristicile, prețul și o galerie de imagini tematice.';
   lastNameForCat='';
   const acq=p?.priceBuyTTC?(p.tvaAcq>0?p.priceBuyTTC/(1+p.tvaAcq):p.priceBuyTTC):0;
   pcReset(acq,p?.priceSell||0);
@@ -8140,6 +8196,8 @@ async function saveProd(){
     material:document.getElementById('f-material').value.trim(),
     dims:document.getElementById('f-dims').value.trim(),
     notes:document.getElementById('f-notes').value.trim(),
+    description:document.getElementById('f-description').value.trim(),
+    images:curImages.slice(0,10),
     easyboxL:parseFloat(document.getElementById('f-eb-l').value)||0,
     easyboxW:parseFloat(document.getElementById('f-eb-w').value)||0,
     easyboxT:parseFloat(document.getElementById('f-eb-t').value)||0,
@@ -9416,6 +9474,23 @@ function onImgUrl(){const u=document.getElementById('f-imgurl').value.trim();if(
 function showPrev(s){const el=document.getElementById('f-prev');el.onerror=()=>imgErr(el,s);el.src=imgSrc(s);el.style.display='block';document.getElementById('img-ph').style.display='none';}
 function hidePrev(){document.getElementById('f-prev').style.display='none';document.getElementById('img-ph').style.display='flex';}
 function clearImg(){curImg='';document.getElementById('f-img').value='';document.getElementById('f-imgurl').value='';document.getElementById('ai-img-btn').disabled=true;hidePrev();}
+
+/* GALERIE IMAGINI TEMATICE */
+function renderImgGallery(){
+  const wrap=document.getElementById('img-gallery-wrap'),el=document.getElementById('img-gallery');
+  if(!curImages.length){wrap.style.display='none';el.innerHTML='';return;}
+  wrap.style.display='block';
+  el.innerHTML=curImages.map((u,i)=>`<div class="img-gallery-item"><img src="${esc(imgSrc(u))}" ${imgErrAttr(u)} alt="" title="${esc(u)}"><button type="button" class="img-gallery-rm" onclick="removeGalleryImg(${i})" title="Elimină din galerie">×</button></div>`).join('');
+}
+function addGalleryImg(){
+  const inp=document.getElementById('f-gallery-url');
+  const u=inp.value.trim();
+  if(!u||!u.startsWith('http'))return;
+  if(!curImages.includes(u))curImages.push(u);
+  inp.value='';
+  renderImgGallery();
+}
+function removeGalleryImg(i){curImages.splice(i,1);renderImgGallery();}
 
 /* CATS */
 function buildCats(f){
