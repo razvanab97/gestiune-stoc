@@ -2065,6 +2065,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:173,text:'Bug real reparat — „Creează planul galeriei" eșua cu „JSON Parse error: Expected \']\'" la aproape orice încercare. Cauza: cererea de plan (8 cadre, câmpuri multiple per cadru) cerea deja limita maximă de tokeni permisă de server (4000 — cea mai mare din toată aplicația) și răspunsul complet o depășea des, ieșind trunchiat la mijlocul JSON-ului. Reparat din trei direcții: (1) limita serverului ridicată la 8000, (2) schema cadrelor redusă la câmpurile chiar folosite (3 câmpuri generate degeaba, nefolosite nicăieri, au fost scoase — mai puțin de generat, mai puține șanse de trunchiere), (3) plasă de siguranță nouă — dacă răspunsul tot iese trunchiat, planul recuperează acum câte cadre COMPLETE există (ex. 5 din 8), în loc să eșueze integral pentru câteva cadre lipsă la final; primești un mesaj clar dacă planul a ieșit parțial, cu opțiunea de a reîncerca',date:'2026-08-21'},
   {n:172,text:'Galerie AI produs — „Generation failed: rejected by the safety system" reparat la sursă pentru cazul cel mai frecvent: sistemul de siguranță OpenAI refuză aproape orice cerere de generare/editare imagine care implică o persoană reală, mai ales un copil (frecvent la produse pentru copii — ghiozdane, jucării etc.) — iar planul de galerie cerea des cadre „lifestyle" de tipul „copil purtând produsul". Acum planul e instruit explicit să sugereze utilizarea prin context/decor (lângă o bancă, pe un scaun, într-un hol), NICIODATĂ printr-o persoană care ține/poartă produsul — regulă aplicată atât la crearea planului cât și direct în promptul de generare a imaginii, ca plasă de siguranță și pentru planuri mai vechi. Dacă respingerea tot apare (motive de siguranță nu sunt 100% predictibile), mesajul e acum clar în română, cu sugestia de a reîncerca sau edita manual instrucțiunea cadrului',date:'2026-08-21'},
   {n:171,text:'Galerie AI produs — selecția de fotografii originale (poze de referință bifate din dosar + cele adăugate manual prin URL/fișier) supraviețuiește acum unui refresh de pagină, la fel ca planul/imaginile deja generate (care persistau deja). Înainte, orice selecție se pierdea la refresh dacă nu apucaseși încă să generezi un plan — persistată acum într-o coloană dedicată (research_projects.gallery_ref_images). Bonus: pozele adăugate manual (nu din dosar) erau numărate la „X selectate" dar nu se vedeau nicăieri și nu puteau fi scoase — acum apar ca thumbnail, cu buton de eliminare. Necesită re-rularea migration_product_gallery_ai.sql în Supabase (fără migrare, selecția nu se salvează încă, restul galeriei funcționează normal)',date:'2026-08-21'},
   {n:170,text:'„Poze folosite în descriere" — butoane noi ↑/↓ pe fiecare poză, ca să le schimbi ordinea direct din descriere (interschimbă poza cu vecina, fără să atingă textul din jur — paragrafele rămân exact unde erau)',date:'2026-08-21'},
@@ -7287,7 +7288,8 @@ function galleryInnerHtml(projectId){
   </div>`);
   html.push(`<div style="font-size:19px;color:var(--t3);margin-bottom:10px">Generează automat o galerie de fotografii e-commerce pornind de la pozele reale ale produsului — AI-ul schimbă fundalul/contextul/unghiul/lumina, dar păstrează exact forma, culoarea, imprimeul și accesoriile produsului.</div>`);
   html.push(`<div style="margin-bottom:6px;font-weight:600;font-size:22px">Fotografii originale produs</div>`);
-  if(!candidates.length)html.push(`<div style="font-size:19px;color:var(--t3);margin-bottom:8px">Nicio poză găsită încă în dosar — adaugă una manual mai jos.</div>`);
+  if(!candidates.length&&!g.refImages.length)html.push(`<div style="font-size:19px;color:var(--t3);margin-bottom:8px">Nicio poză găsită încă în dosar — adaugă una manual mai jos.</div>`);
+  else if(!candidates.length)html.push(`<div style="font-size:19px;color:var(--t3);margin-bottom:8px">Nicio poză detectată automat în dosar — cele de mai jos sunt adăugate manual.</div>`);
   // Poze adăugate manual (URL/fișier) care NU sunt printre candidatele din dosar — altfel dispăreau
   // complet din UI (nu erau nici arătate, nici scoatibile) deși erau numărate la „X selectate".
   const extraSelected=g.refImages.filter(u=>!candidates.includes(u));
@@ -7453,6 +7455,36 @@ async function createGalleryPlanFlow(projectId){
   if(!g.dna){const ok=await computeVisualDna(projectId);if(!ok)return;}
   await createGalleryPlan(projectId);
 }
+// Parsează {"frames":[...]} — încearcă întâi JSON.parse direct (cazul normal). Dacă eșuează (bug real
+// găsit: răspuns trunchiat de limita de tokeni, „JSON Parse error: Expected ']'" pentru un plan de 8
+// cadre), recuperează CÂTE cadre complete există, scanând text-ul pentru obiecte {...} echilibrate
+// (respectă ghilimelele/escape-urile) — mai bine un plan cu mai puține cadre decât un eșec total,
+// mai ales că motivul e aproape mereu trunchiere, nu JSON structural greșit.
+function parsePartialFramesJson(text){
+  const raw=String(text||'');
+  try{const j=JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0]||raw);if(Array.isArray(j?.frames)&&j.frames.length)return j;}catch(e){}
+  // Scanăm DOAR de la începutul array-ului "frames" — dacă am porni de la caracterul 0, primul '{'
+  // întâlnit e cel al obiectului EXTERIOR ({"frames":[...), iar depth-ul nu mai revine niciodată la 0
+  // pentru un răspuns trunchiat (nu are '}' de închidere) — niciun cadru nu s-ar extrage vreodată.
+  const arrStart=raw.indexOf('[',raw.indexOf('"frames"'));
+  if(arrStart<0)return null;
+  const frames=[];
+  let depth=0,start=-1,inStr=false,esc=false;
+  for(let i=arrStart+1;i<raw.length;i++){
+    const ch=raw[i];
+    if(inStr){if(esc)esc=false;else if(ch==='\\')esc=true;else if(ch==='"')inStr=false;continue;}
+    if(ch==='"'){inStr=true;continue;}
+    if(ch==='{'){if(depth===0)start=i;depth++;}
+    else if(ch==='}'){
+      depth--;
+      if(depth===0&&start>=0){
+        try{const o=JSON.parse(raw.slice(start,i+1));if(o&&typeof o==='object'&&'position'in o&&'type'in o)frames.push(o);}catch(e2){}
+        start=-1;
+      }
+    }else if(ch===']'&&depth===0){break;}
+  }
+  return frames.length?{frames}:null;
+}
 async function createGalleryPlan(projectId){
   const g=galleryFor(projectId);
   const pr=researchProjects.find(p=>Number(p.id)===Number(projectId));
@@ -7479,23 +7511,31 @@ Structură orientativă (adaptează ultimele cadre la tipul REAL de produs — n
 4 PROFILE/3-QUARTER — unghi diferit de hero, cea mai multă informație nouă
 Restul cadrelor (adaptate la produs): dimensiuni, beneficii principale, funcționalități/caracteristici, capacitate/conținut pachet sau alt aspect relevant pentru ACEST produs specific.
 
-Pentru fiecare cadru întoarce: position (1..${g.settings.count}), type (scurt, ex. "hero"/"lifestyle"/"profile"/"dimensions"/"benefits"/"features"/"capacity"/altul potrivit produsului), title (scurt, românește), goal, scene_description, camera_angle, background, product_position, main_message, specifications_used (array din specs de mai sus), benefits_used (array din beneficii de mai sus), generation_prompt (instrucțiune COMPLETĂ în engleză pentru generarea imaginii, care descrie scena/fundalul/lumina/unghiul — NU descrie produsul, acela vine din Visual DNA).
+Pentru fiecare cadru întoarce DOAR aceste câmpuri, CONCIS (fără ele planul iese trunchiat la 8 cadre): position (1..${g.settings.count}), type (scurt, ex. "hero"/"lifestyle"/"profile"/"dimensions"/"benefits"/"features"/"capacity"/altul potrivit produsului), title (max 5 cuvinte, românește), scene_description (max 20 cuvinte, românește), camera_angle (2-4 cuvinte), background (max 8 cuvinte), product_position (2-4 cuvinte), generation_prompt (instrucțiune în engleză pentru generarea imaginii, care descrie scena/fundalul/lumina/unghiul, max 300 caractere — NU descrie produsul, acela vine din Visual DNA).
 
 Primele ${Math.min(4,g.settings.count)} cadre trebuie să fie fotografice (hero/lifestyle/profile), fără text sau callout-uri. Restul pot fi informative.
 Nu copia compoziția/fundalul/layout-ul vreunui concurent — creează o compoziție originală.
 
 REGULĂ OBLIGATORIE — FĂRĂ OAMENI ÎN NICIUN CADRU: cadrele „lifestyle" trebuie să sugereze utilizarea prin CONTEXT/DECOR (ex. ghiozdanul lângă o bancă de școală, pe un scaun lângă cărți și rechizite, într-un hol de școală, agățat de un cuier, lângă o ușă de clasă), NU printr-o persoană/copil/mână/față care îl poartă sau ține. Generatorul de imagini refuză aproape orice cerere care implică o persoană reală (mai ales un copil) într-o imagine generată/editată — orice cadru cu oameni are șanse mari să eșueze cu eroare de la sistemul de siguranță al furnizorului. Dacă produsul e destinat copiilor (ghiozdan, jucărie etc.), evită și mai strict orice sugestie de persoană — rămâi STRICT la produs + decor/context, fără siluete, fără mâini, fără umbre de persoană.
 
-Răspunde STRICT cu JSON: {"frames":[{"position":1,"type":"hero","title":"...","goal":"...","scene_description":"...","camera_angle":"...","background":"...","product_position":"...","main_message":"...","specifications_used":[],"benefits_used":[],"generation_prompt":"..."}]}`;
-    const text=await callAI([{role:'user',content:prompt}],null,4000,'analysis');
-    const m=text.match(/\{[\s\S]*\}/);
-    if(!m)throw new Error('Răspuns AI invalid pentru planul galeriei');
-    const parsed=JSON.parse(m[0]);
+Răspunde STRICT cu JSON, câmpuri scurte, fără text în plus: {"frames":[{"position":1,"type":"hero","title":"...","scene_description":"...","camera_angle":"...","background":"...","product_position":"...","generation_prompt":"..."}]}`;
+    // maxTokens ridicat (era 4000, cel mai mare din toată aplicația) + schemă redusă la câmpurile
+    // chiar folosite (main_message/specifications_used/benefits_used erau generate, dar nefolosite
+    // nicăieri — pură risipă de tokeni) — bug real găsit: planul ieșea trunchiat la 8 cadre
+    // ("JSON Parse error: Expected ']'"), pentru că răspunsul complet depășea limita veche.
+    // parsePartialFramesJson e o plasă de siguranță suplimentară — chiar dacă tot trunchiază, recuperează
+    // cadrele complete deja generate, în loc să eșueze planul întreg pentru câteva cadre lipsă la final.
+    const text=await callAI([{role:'user',content:prompt}],null,6000,'analysis');
+    const parsed=parsePartialFramesJson(text);
+    if(!parsed)throw new Error('Răspuns AI invalid pentru planul galeriei');
     const frames=(Array.isArray(parsed.frames)?parsed.frames:[]).slice(0,10).map((f,i)=>({...f,position:f.position||i+1,enabled:true,status:'planned',reference_images:[...g.refImages]}));
     if(!frames.length)throw new Error('Planul generat nu conține niciun cadru');
     g.plan=frames;
     await persistGalleryPlan(projectId);
-    toast(`Plan galerie generat ✓ — ${frames.length} cadre`);
+    // toast() suprascrie mereu ultimul mesaj (fără coadă) — avertismentul de plan parțial trebuie
+    // să fie ULTIMUL apel, altfel mesajul de succes de mai jos l-ar acoperi imediat, tăcut.
+    if(frames.length<g.settings.count)toast(`Plan parțial — au ieșit complete ${frames.length}/${g.settings.count} cadre (răspunsul AI a fost trunchiat); poți încerca „↻ Recreează planul galeriei" din nou`,'err');
+    else toast(`Plan galerie generat ✓ — ${frames.length} cadre`);
   }catch(e){
     toast(e.message||'Eroare la crearea planului galeriei','err');
   }finally{
@@ -7532,8 +7572,8 @@ async function regenerateFramePlan(projectId,i){
   toast('Regenerez planul cadrului…');
   try{
     const l=listingData||listingFactoryData?.listing||{};
-    const prompt=`Product Visual DNA: ${JSON.stringify(g.dna)}\nProdus: ${l.title||''}\nCadrul curent (de îmbunătățit, păstrează type-ul „${f.type}" și poziția ${f.position}): ${JSON.stringify(f)}\nRescrie acest cadru, cu o abordare diferită/mai bună, stil "${g.settings.style}", format ${g.settings.format}. FĂRĂ oameni/persoane/copii/mâini în scenă — sugerează utilizarea DOAR prin context/decor (ex. lângă o bancă, pe un scaun, într-un hol), niciodată printr-o persoană care ține/poartă produsul (generatorul de imagini refuză aproape orice cerere cu o persoană reală, mai ales copii). Răspunde STRICT cu JSON, aceleași câmpuri: {"position":${f.position},"type":"...","title":"...","goal":"...","scene_description":"...","camera_angle":"...","background":"...","product_position":"...","main_message":"...","specifications_used":[],"benefits_used":[],"generation_prompt":"..."}`;
-    const text=await callAI([{role:'user',content:prompt}],null,900,'analysis');
+    const prompt=`Product Visual DNA: ${JSON.stringify(g.dna)}\nProdus: ${l.title||''}\nCadrul curent (de îmbunătățit, păstrează type-ul „${f.type}" și poziția ${f.position}): ${JSON.stringify(f)}\nRescrie acest cadru, cu o abordare diferită/mai bună, stil "${g.settings.style}", format ${g.settings.format}. FĂRĂ oameni/persoane/copii/mâini în scenă — sugerează utilizarea DOAR prin context/decor (ex. lângă o bancă, pe un scaun, într-un hol), niciodată printr-o persoană care ține/poartă produsul (generatorul de imagini refuză aproape orice cerere cu o persoană reală, mai ales copii). Răspunde STRICT cu JSON, concis: {"position":${f.position},"type":"...","title":"max 5 cuvinte","scene_description":"max 20 cuvinte","camera_angle":"...","background":"...","product_position":"...","generation_prompt":"engleză, max 300 caractere"}`;
+    const text=await callAI([{role:'user',content:prompt}],null,1200,'analysis');
     const m=text.match(/\{[\s\S]*\}/);
     if(!m)throw new Error('Răspuns AI invalid');
     const nf=JSON.parse(m[0]);

@@ -40,7 +40,11 @@ module.exports=async function handler(req,res){
     if(!Array.isArray(input?.messages)||!input.messages.length)return res.status(400).json({error:{message:'Lipsesc mesajele pentru OpenAI'}});
     const body={
       model:modelForTier(input.tier),
-      max_output_tokens:Math.min(Math.max(Number(input.max_tokens)||400,1),4000),
+      // Plafon ridicat de la 4000 la 8000 — bug real găsit: planul Galeriei AI produs (8 cadre, câmpuri
+      // multiple per cadru) cerea deja exact 4000 (cel mai mare dintre toți apelanții din index.html)
+      // și tot ieșea trunchiat ("JSON Parse error: Expected ']'"), pentru că răspunsul complet depășea
+      // plafonul vechi. Restul apelanților cer mult sub 4000, deci nu sunt afectați de ridicarea limitei.
+      max_output_tokens:Math.min(Math.max(Number(input.max_tokens)||400,1),8000),
       input:input.messages.map(m=>({role:m.role==='assistant'?'assistant':'user',content:contentParts(m.content)}))
     };
     if(typeof input.system==='string'&&input.system.trim())body.instructions=input.system.slice(0,20000);
