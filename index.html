@@ -2065,6 +2065,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:167,text:'Galerie AI produs — două bug-uri reale reparate la selecția pozelor de referință. (1) „Nicio poză găsită încă în dosar" apărea chiar și pentru dosare cu poze reale, dacă ajungeai la Generator anunțuri altfel decât prin desfacerea cardului din „Dosare" (ex. „👁 Vezi anunț salvat", link direct #research/&lt;id&gt;) — pozele per-link se încarcă leneș, la cerere, iar acel „la cerere" nu se întâmpla niciodată pe aceste căi. Acum galeria le hidratează explicit ea însăși, indiferent cum ai ajuns la panou. (2) Linkuri DIRECTE și valide (ex. CDN eMAG) erau respinse la „+ URL" cu mesajul „acest link nu se poate încărca" — verificarea trece printr-un proxy care poate eșua/expira din motive trecătoare (cold start, rețea), fără ca link-ul chiar să fie greșit; acum, dacă verificarea automată eșuează, întrebăm în loc să refuzăm direct („o adaugi oricum?"), plus timeout mărit de la 8 la 12 secunde',date:'2026-08-21'},
   {n:166,text:'Galerie AI produs — încercare de reparare pentru problema raportată: toate cele 8 cadre ieșeau ca variații ale ACELEIAȘI poze (identic unghi/fundal/poziție), deși planul avea scene diferite per cadru (hero/lifestyle/dimensiuni/etc). Cauza cea mai probabilă: promptul trimis la generare ÎNCEPEA cu un bloc masiv „păstrează STRICT" (tot obiectul Visual DNA ca JSON), care domina modelul spre „nu schimba nimic", iar cerința de scenă efectivă venea abia la mijloc, pe o singură linie scurtă — plus până la 6 poze de referință identice trimise deodată la fiecare cadru, care ancorau puternic spre „mai fă o poză la fel". Restructurat: instrucțiunea de scenă vine acum ÎNTÂI, explicit ca prioritate („creează o poză COMPLET diferită, nu doar retușează referința"), constrângerea de fidelitate e condensată la lista scurtă must_preserve (nu tot obiectul DNA), iar la generare trimitem doar 2 poze de referință, nu 6. Nu am putut testa live efectul (necesită cheia OpenAI, doar în Vercel) — reîncearcă și spune-mi dacă imaginile chiar variază acum între ele',date:'2026-08-21'},
   {n:165,text:'Generator anunțuri — anunțul afișat NU mai dispare când apeși din nou „Generează anunț din dosar" (regenerare, alt dosar sau reîncercare după eroare). Înainte, primul lucru care se întâmpla era ștergerea completă a anunțului vizibil și înlocuirea lui cu un spinner — dacă noua generare dura mult sau eșua, rămâneai fără nimic pe ecran, deși anunțul vechi era în continuare bun (butonul „⏳ Generez…" + indicatorul din antet arată deja clar că rulează o generare, nu mai era nevoie să ștergem conținutul ca să comunicăm asta). Acum anunțul anterior rămâne vizibil neschimbat până se termină CU SUCCES noua generare — pe eroare, rămâne la fel, doar cu un mesaj clar (toast roșu); doar la prima generare vreodată (nimic de păstrat) mai apare spinner-ul peste tot cardul, ca înainte. Aceeași reparație și pe generatorul „de sine stătător" (fără dosar)',date:'2026-08-21'},
   {n:164,text:'Bug real reparat — Galeria AI produs genera „Generation failed: Duplicate parameter: image" la FIECARE cadru, pentru orice produs cu 2+ poze de referință selectate (adică practic mereu). Cauza: la trimiterea mai multor poze de referință către OpenAI într-un singur apel, api/ai-image.js trimitea toate pozele pe același nume de câmp „image" repetat — OpenAI cere explicit sintaxa de array pentru acest caz, „image[]", nu „image" repetat de mai multe ori. Reparat (doar pentru 2+ poze — o singură poză de referință, cazul „🎨 Recreează cu AI", merge la fel ca înainte, neschimbat). Verificat structural (fără cost real, interceptând cererea către OpenAI): 2 poze -> „image[]" x2, 1 poză -> „image" x1',date:'2026-08-21'},
@@ -6582,7 +6583,7 @@ function toggleListingHtmlView(mode){
 function validateImageUrl(url){
   return new Promise(resolve=>{
     const img=new Image();
-    const timer=setTimeout(()=>resolve(false),8000);
+    const timer=setTimeout(()=>resolve(false),12000);
     img.onload=()=>{clearTimeout(timer);resolve(true);};
     img.onerror=()=>{clearTimeout(timer);resolve(false);};
     img.src=proxyImg(url);
@@ -7218,6 +7219,12 @@ async function loadProductGallery(projectId){
   const g=galleryFor(projectId);
   if(g.loaded)return;
   g.loaded=true;
+  // Bug real raportat: „Nicio poză găsită încă în dosar" chiar și pentru dosare cu poze reale —
+  // pozele per-link (research_links.images) se încarcă LENEȘ (hydrateResearchProjectImages), doar la
+  // desfacerea cardului din „Dosare" sau la generarea anunțului (buildListingFromProject). Dacă ajungi
+  // aici altfel (ex. „👁 Vezi anunț salvat", link direct #research/<id>), nu s-a întâmplat niciodată —
+  // hidratăm explicit aici, indiferent cum ai ajuns la acest panou.
+  try{await hydrateResearchProjectImages(projectId);}catch(e){}
   try{
     const rows=await dbGet(`product_generated_images?project_id=eq.${projectId}&select=*&order=position.asc`);
     if(rows?.length)g.plan=rows.map(dbRowToGalleryFrame);
@@ -7327,9 +7334,15 @@ async function addGalleryRefUrl(projectId){
   if(!/^https?:\/\//i.test(url)){toast('URL invalid','err');return;}
   toast('Verific imaginea…');
   const ok=await validateImageUrl(url);
-  if(!ok){toast(BAD_IMAGE_LINK_HINT,'err');return;}
+  // Bug real raportat: link-uri DIRECTE, valide (ex. CDN eMAG) erau respinse — verificarea trece prin
+  // proxy și poate eșua/expira din motive trecătoare (cold start, rețea), fără ca link-ul chiar să fie
+  // greșit. Nu mai blocăm strict — dacă verificarea eșuează, întrebăm în loc să refuzăm direct.
+  if(!ok&&!confirm('Nu am putut confirma automat imaginea (poate fi doar o verificare lentă/eșuată, nu neapărat un link greșit).\n\n'+BAD_IMAGE_LINK_HINT+'\n\nO adaugi oricum?')){
+    return;
+  }
   if(!g.refImages.includes(url))g.refImages.push(url);
   refreshGallery(projectId);
+  toast('Poză adăugată ca referință ✓');
 }
 async function addGalleryRefFile(projectId,ev){
   const file=ev?.target?.files?.[0];if(!file)return;
