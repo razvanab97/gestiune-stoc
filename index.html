@@ -2065,6 +2065,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:171,text:'Galerie AI produs — selecția de fotografii originale (poze de referință bifate din dosar + cele adăugate manual prin URL/fișier) supraviețuiește acum unui refresh de pagină, la fel ca planul/imaginile deja generate (care persistau deja). Înainte, orice selecție se pierdea la refresh dacă nu apucaseși încă să generezi un plan — persistată acum într-o coloană dedicată (research_projects.gallery_ref_images). Bonus: pozele adăugate manual (nu din dosar) erau numărate la „X selectate" dar nu se vedeau nicăieri și nu puteau fi scoase — acum apar ca thumbnail, cu buton de eliminare. Necesită re-rularea migration_product_gallery_ai.sql în Supabase (fără migrare, selecția nu se salvează încă, restul galeriei funcționează normal)',date:'2026-08-21'},
   {n:170,text:'„Poze folosite în descriere" — butoane noi ↑/↓ pe fiecare poză, ca să le schimbi ordinea direct din descriere (interschimbă poza cu vecina, fără să atingă textul din jur — paragrafele rămân exact unde erau)',date:'2026-08-21'},
   {n:169,text:'Galerie AI produs: buton nou „➕ Descriere" pe fiecare imagine generată — o adaugă direct în descrierea anunțului, la final, fără să cauți/copiezi URL-ul manual (același mecanism ca butonul „➕ În descriere" de pe pozele din „Poze selectate")',date:'2026-08-21'},
   {n:168,text:'Bug real reparat — anunțul generat (Generator anunțuri) se „pierdea" la refresh de pagină, deși exista deja un mecanism de salvare a draftului (localStorage). Cauza: la restaurare, codul folosea mereu randarea VECHE (fără dosar), chiar și pentru un anunț legat de un dosar Research — care are propriul panou, cu „Aplică în produs", Galerie AI produs etc. — plus containerul anunțului rămânea ascuns (display:none), deci draftul „revenea" în memorie, dar invizibil pe ecran, exact ca și cum s-ar fi pierdut. Reparat: la refresh se folosește randarea corectă (cu sau fără dosar, după caz) și containerul devine vizibil corect; reparat și un bug conex — funcția care re-randează lista de dosare ascundea din nou panoul anunțului standalone tocmai restaurat. Verificat cu reload real de pagină (nu doar schimbare de hash), pentru ambele fluxuri (cu dosar / standalone)',date:'2026-08-21'},
@@ -7250,6 +7251,14 @@ async function loadProductGallery(projectId){
     if(rows?.length)g.plan=rows.map(dbRowToGalleryFrame);
     const pr=researchProjects.find(p=>Number(p.id)===Number(projectId));
     if(pr?.visual_dna&&Object.keys(pr.visual_dna).length)g.dna=pr.visual_dna;
+    // Selecția de referință trebuie să supraviețuiască refresh-ului la fel ca planul/imaginile generate
+    // (bug real raportat) — restaurăm din coloana dedicată; pentru dosare vechi (create înainte de
+    // gallery_ref_images) recompunem cât putem din pozele de referință deja salvate în plan.
+    if(Array.isArray(pr?.gallery_ref_images)&&pr.gallery_ref_images.length)g.refImages=[...pr.gallery_ref_images];
+    else if(g.plan.length){
+      const refUnion=[...new Set(g.plan.flatMap(f=>f.reference_images||[]))];
+      if(refUnion.length)g.refImages=refUnion.slice(0,8);
+    }
   }catch(e){console.warn('Nu am putut încărca galeria AI existentă (rulează migration_product_gallery_ai.sql?):',e);}
   refreshGallery(projectId);
 }
@@ -7278,8 +7287,12 @@ function galleryInnerHtml(projectId){
   html.push(`<div style="font-size:19px;color:var(--t3);margin-bottom:10px">Generează automat o galerie de fotografii e-commerce pornind de la pozele reale ale produsului — AI-ul schimbă fundalul/contextul/unghiul/lumina, dar păstrează exact forma, culoarea, imprimeul și accesoriile produsului.</div>`);
   html.push(`<div style="margin-bottom:6px;font-weight:600;font-size:22px">Fotografii originale produs</div>`);
   if(!candidates.length)html.push(`<div style="font-size:19px;color:var(--t3);margin-bottom:8px">Nicio poză găsită încă în dosar — adaugă una manual mai jos.</div>`);
+  // Poze adăugate manual (URL/fișier) care NU sunt printre candidatele din dosar — altfel dispăreau
+  // complet din UI (nu erau nici arătate, nici scoatibile) deși erau numărate la „X selectate".
+  const extraSelected=g.refImages.filter(u=>!candidates.includes(u));
   html.push(`<div class="gallery-ref-grid">`);
   html.push(candidates.map(u=>`<label class="gallery-ref-pick${g.refImages.includes(u)?' on':''}" title="${g.refImages.includes(u)?'Scoate din referințe':'Folosește ca referință'}"><input type="checkbox" ${g.refImages.includes(u)?'checked':''} onchange="toggleGalleryRefImage(${projectId},${esc(JSON.stringify(u))},this.checked)"><img src="${esc(proxyImg(u))}" onerror="this.src='${esc(u)}'" alt=""></label>`).join(''));
+  html.push(extraSelected.map(u=>`<div class="gallery-ref-pick on" style="position:relative" title="Adăugată manual"><img src="${esc(proxyImg(u))}" onerror="this.src='${esc(u)}'" alt=""><button type="button" class="img-gallery-rm" onclick="toggleGalleryRefImage(${projectId},${esc(JSON.stringify(u))},false)" title="Elimină din referințe" style="position:absolute;top:-6px;right:-6px">×</button></div>`).join(''));
   html.push(`<div class="gallery-ref-pick gallery-ref-add" onclick="addGalleryRefUrl(${projectId})">+ URL</div>`);
   html.push(`<label class="gallery-ref-pick gallery-ref-add">+ Fișier<input type="file" accept="image/*" style="display:none" onchange="addGalleryRefFile(${projectId},event)"></label>`);
   html.push(`</div>`);
@@ -7341,11 +7354,23 @@ function galleryFrameCardHtml(projectId,f,i){
     </div>${f._editing?`<textarea class="gallery-prompt-edit" onblur="saveGalleryFramePrompt(${projectId},${i},this.value)">${esc(f.generation_prompt||'')}</textarea>`:''}`:''}
   </div>`;
 }
+// Persistă selecția de poze de referință — separat de plan/imagini generate, ca să supraviețuiască
+// unui refresh chiar dacă nu s-a creat încă niciun plan (bug real raportat: se pierdeau altfel).
+// Best-effort, nu blochează UI-ul — dacă migration_product_gallery_ai.sql nu a rulat încă, eșuează
+// tăcut (console.warn), selecția rămâne validă doar pentru sesiunea curentă, ca înainte.
+async function saveGalleryRefImages(projectId){
+  const g=galleryFor(projectId);
+  const pr=researchProjects.find(p=>Number(p.id)===Number(projectId));
+  if(pr)pr.gallery_ref_images=g.refImages;
+  try{await dbPatch(`research_projects?id=eq.${projectId}`,{gallery_ref_images:g.refImages});}
+  catch(e){console.warn('Nu am putut salva selecția de poze de referință (rulează migration_product_gallery_ai.sql?):',e);}
+}
 function toggleGalleryRefImage(projectId,url,checked){
   const g=galleryFor(projectId);
   if(checked){if(g.refImages.length>=8){toast('Maxim 8 imagini de referință','err');return;}if(!g.refImages.includes(url))g.refImages.push(url);}
   else g.refImages=g.refImages.filter(u=>u!==url);
   refreshGallery(projectId);
+  saveGalleryRefImages(projectId);
 }
 async function addGalleryRefUrl(projectId){
   const g=galleryFor(projectId);
@@ -7363,6 +7388,7 @@ async function addGalleryRefUrl(projectId){
   }
   if(!g.refImages.includes(url))g.refImages.push(url);
   refreshGallery(projectId);
+  saveGalleryRefImages(projectId);
   toast('Poză adăugată ca referință ✓');
 }
 async function addGalleryRefFile(projectId,ev){
@@ -7374,6 +7400,7 @@ async function addGalleryRefFile(projectId,ev){
     const dataUrl=await resizeImageDataUrl(rawDataUrl,1600,.85);
     const data=await apiJson('/api/ai-image',{imageData:dataUrl},60000);
     g.refImages.push(location.origin+data.url);
+    saveGalleryRefImages(projectId);
   }catch(e){toast('Eroare la încărcarea pozei: '+(e.message||e),'err');}
   finally{if(ev?.target)ev.target.value='';refreshGallery(projectId);}
 }

@@ -6,6 +6,10 @@
 -- galeria aprobată în produse.images, exact ca restul câmpurilor anunțului.
 
 alter table research_projects add column if not exists visual_dna jsonb default '{}'::jsonb;
+-- Selecția de fotografii originale de referință — persistată separat de plan/imagini generate, ca să
+-- supraviețuiască unui refresh chiar înainte de a crea vreun plan (bug real raportat: pozele deja
+-- încărcate/selectate dispăreau la refresh dacă nu apucaseși încă să generezi un plan).
+alter table research_projects add column if not exists gallery_ref_images jsonb default '[]'::jsonb;
 
 create table if not exists product_generated_images (
   id bigint primary key generated always as identity,
