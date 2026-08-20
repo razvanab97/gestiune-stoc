@@ -2065,6 +2065,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:168,text:'Bug real reparat — anunțul generat (Generator anunțuri) se „pierdea" la refresh de pagină, deși exista deja un mecanism de salvare a draftului (localStorage). Cauza: la restaurare, codul folosea mereu randarea VECHE (fără dosar), chiar și pentru un anunț legat de un dosar Research — care are propriul panou, cu „Aplică în produs", Galerie AI produs etc. — plus containerul anunțului rămânea ascuns (display:none), deci draftul „revenea" în memorie, dar invizibil pe ecran, exact ca și cum s-ar fi pierdut. Reparat: la refresh se folosește randarea corectă (cu sau fără dosar, după caz) și containerul devine vizibil corect; reparat și un bug conex — funcția care re-randează lista de dosare ascundea din nou panoul anunțului standalone tocmai restaurat. Verificat cu reload real de pagină (nu doar schimbare de hash), pentru ambele fluxuri (cu dosar / standalone)',date:'2026-08-21'},
   {n:167,text:'Galerie AI produs — două bug-uri reale reparate la selecția pozelor de referință. (1) „Nicio poză găsită încă în dosar" apărea chiar și pentru dosare cu poze reale, dacă ajungeai la Generator anunțuri altfel decât prin desfacerea cardului din „Dosare" (ex. „👁 Vezi anunț salvat", link direct #research/&lt;id&gt;) — pozele per-link se încarcă leneș, la cerere, iar acel „la cerere" nu se întâmpla niciodată pe aceste căi. Acum galeria le hidratează explicit ea însăși, indiferent cum ai ajuns la panou. (2) Linkuri DIRECTE și valide (ex. CDN eMAG) erau respinse la „+ URL" cu mesajul „acest link nu se poate încărca" — verificarea trece printr-un proxy care poate eșua/expira din motive trecătoare (cold start, rețea), fără ca link-ul chiar să fie greșit; acum, dacă verificarea automată eșuează, întrebăm în loc să refuzăm direct („o adaugi oricum?"), plus timeout mărit de la 8 la 12 secunde',date:'2026-08-21'},
   {n:166,text:'Galerie AI produs — încercare de reparare pentru problema raportată: toate cele 8 cadre ieșeau ca variații ale ACELEIAȘI poze (identic unghi/fundal/poziție), deși planul avea scene diferite per cadru (hero/lifestyle/dimensiuni/etc). Cauza cea mai probabilă: promptul trimis la generare ÎNCEPEA cu un bloc masiv „păstrează STRICT" (tot obiectul Visual DNA ca JSON), care domina modelul spre „nu schimba nimic", iar cerința de scenă efectivă venea abia la mijloc, pe o singură linie scurtă — plus până la 6 poze de referință identice trimise deodată la fiecare cadru, care ancorau puternic spre „mai fă o poză la fel". Restructurat: instrucțiunea de scenă vine acum ÎNTÂI, explicit ca prioritate („creează o poză COMPLET diferită, nu doar retușează referința"), constrângerea de fidelitate e condensată la lista scurtă must_preserve (nu tot obiectul DNA), iar la generare trimitem doar 2 poze de referință, nu 6. Nu am putut testa live efectul (necesită cheia OpenAI, doar în Vercel) — reîncearcă și spune-mi dacă imaginile chiar variază acum între ele',date:'2026-08-21'},
   {n:165,text:'Generator anunțuri — anunțul afișat NU mai dispare când apeși din nou „Generează anunț din dosar" (regenerare, alt dosar sau reîncercare după eroare). Înainte, primul lucru care se întâmpla era ștergerea completă a anunțului vizibil și înlocuirea lui cu un spinner — dacă noua generare dura mult sau eșua, rămâneai fără nimic pe ecran, deși anunțul vechi era în continuare bun (butonul „⏳ Generez…" + indicatorul din antet arată deja clar că rulează o generare, nu mai era nevoie să ștergem conținutul ca să comunicăm asta). Acum anunțul anterior rămâne vizibil neschimbat până se termină CU SUCCES noua generare — pe eroare, rămâne la fel, doar cu un mesaj clar (toast roșu); doar la prima generare vreodată (nimic de păstrat) mai apare spinner-ul peste tot cardul, ca înainte. Aceeași reparație și pe generatorul „de sine stătător" (fără dosar)',date:'2026-08-21'},
@@ -3234,10 +3235,25 @@ function goPage(id,btn){
     const tryRs=(n)=>{if(P.length>0){}else if(n>0)setTimeout(()=>tryRs(n-1),300);};
     setTimeout(()=>tryRs(20),100);
     if(!researchProjectsLoaded)loadResearchProjects();else renderResearchTopProducts();
-    // Restaurează draft listing dacă există
+    // Restaurează draft listing dacă există — la refresh, listingData se pierde din memorie, dar
+    // draftul (localStorage) supraviețuiește. Bug real găsit: se folosea mereu renderListingResult
+    // (fluxul vechi, fără dosar) chiar și pentru un anunț legat de un dosar (draft.projectId), care are
+    // propriul panou (renderListingFactoryResult — cu „Aplică în produs", Galerie AI produs etc.) —
+    // plus #research-result-wrap rămânea display:none, deci anunțul „revenea" în memorie, dar invizibil
+    // pe ecran, exact ca și cum s-ar fi pierdut.
     if(!listingData){
       const draft=loadListingDraft();
-      if(draft?.listing?.title){listingData=draft.listing;listingProjectId=draft.projectId||null;if(researchData||true){const out=document.getElementById('listing-result');if(out&&!out.innerHTML.trim())renderListingResult(draft.listing,[]);}}
+      if(draft?.listing?.title){
+        listingData=draft.listing;
+        listingProjectId=draft.projectId||null;
+        if(listingProjectId)listingFactoryData={listing:draft.listing,pages:[],allImages:[]};
+        const out=document.getElementById('listing-result'),wrap=document.getElementById('research-result-wrap');
+        if(out&&!out.innerHTML.trim()){
+          if(wrap)wrap.style.display='block';
+          if(listingProjectId)renderListingFactoryResult(draft.listing,[],[]);
+          else renderListingResult(draft.listing,[]);
+        }
+      }
     }
   }
 }
@@ -5084,9 +5100,11 @@ function renderResearchProjects(){
   const box=document.getElementById('research-projects-list');if(!box)return;
   // Panoul vechi de research pe un singur produs (research-result-wrap) nu trebuie să rămână vizibil
   // sub lista de dosare — DAR același panou e folosit și pentru anunțul tocmai generat dintr-un dosar
-  // (buildListingFromProject apelează renderResearchProjects() imediat după ce îl arată!). Îl ascundem
-  // doar când NU arată un anunț legat de un dosar cunoscut (listingProjectId), ca să nu se autoascundă.
-  const oldWrap=document.getElementById('research-result-wrap');if(oldWrap&&!listingProjectId)oldWrap.style.display='none';
+  // (buildListingFromProject apelează renderResearchProjects() imediat după ce îl arată!) SAU pentru
+  // un anunț standalone abia restaurat din draft la refresh (vezi restaurarea din goPage/'research').
+  // Îl ascundem doar când NU arată absolut niciun anunț (nici dosar, nici standalone), ca să nu se
+  // autoascundă un anunț tocmai afișat/restaurat.
+  const oldWrap=document.getElementById('research-result-wrap');if(oldWrap&&!listingProjectId&&!listingData)oldWrap.style.display='none';
   // Ține cache-ul local la zi cu orice modificare (nu doar la reîncărcarea de la server), ca după un
   // refresh de pagină să nu se vadă o versiune veche pentru o clipă înainte de răspunsul serverului.
   if(researchProjectsLoaded)saveResearchProjectsCache(researchProjects);
