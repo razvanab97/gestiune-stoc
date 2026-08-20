@@ -133,7 +133,7 @@ async function handleGenerate(req,res){
       // asta, dar rejecțiile de siguranță nu sunt 100% predictibile — mesaj clar, în română, în loc de
       // textul brut OpenAI, ca utilizatorul să știe imediat ce s-a întâmplat și ce poate încerca.
       if(/rejected by the safety system|safety system/i.test(rawMsg)){
-        return res.status(400).json({error:'Cererea a fost respinsă de sistemul de siguranță al OpenAI — cel mai probabil pentru că scena cerea o persoană (ex. un copil folosind produsul); modelele OpenAI refuză aproape mereu asta. Încearcă din nou (regenerare) sau editează manual instrucțiunea cadrului, fără nicio persoană în scenă.',details:rawMsg});
+        return res.status(400).json({error:'Cererea a fost respinsă de sistemul de siguranță al OpenAI. Cel mai probabil, una dintre pozele de referință folosite arată o persoană reală (ex. un copil purtând produsul, frecvent în poze de eMAG/marketplace) — index.html exclude automat pozele semnalate de Visual DNA, dar dacă tocmai ai adăugat poze noi fără să reanalizezi (✨ Reanalizează pozele), verificarea e încă veche. Reanalizează pozele (Visual DNA), apoi încearcă din nou regenerarea.',details:rawMsg});
       }
       return res.status(aiResp.status===429?429:502).json({error:rawMsg||'Eroare la generarea imaginii cu AI'});
     }

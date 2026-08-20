@@ -2065,6 +2065,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:174,text:'Galerie AI produs — trei schimbări mari, la cerere directă. (1) Flux complet automat: din momentul în care ai 2+ poze de referință selectate, analiza (Visual DNA) + planul + generarea TUTUROR imaginilor pornesc singure, fără niciun buton apăsat (rămâne un mic delay de 1.5s după ultima selecție, ca să nu pornească de la fiecare click în parte); butoanele „Creează planul"/„Generează toate" rămân disponibile pentru reluare manuală, dar nu mai sunt obligatorii. (2) Setările galeriei (număr imagini/stil/format) rămân salvate la refresh, la fel ca referințele și imaginile generate — nimic nu mai revine la valorile implicite. (3) Reparare directă la cauza rejecțiilor „safety system": Visual DNA detectă acum automat dacă vreo poză de referință arată o persoană reală (frecvent în poze eMAG pentru produse de copii) și o exclude din generarea propriu-zisă (rămâne folosită doar pentru analiza vizuală) — poza semnalată apare cu un mic marcaj 🧑 în selector. Necesită re-rularea migration_product_gallery_ai.sql în Supabase (coloană nouă pentru setări)',date:'2026-08-21'},
   {n:173,text:'Bug real reparat — „Creează planul galeriei" eșua cu „JSON Parse error: Expected \']\'" la aproape orice încercare. Cauza: cererea de plan (8 cadre, câmpuri multiple per cadru) cerea deja limita maximă de tokeni permisă de server (4000 — cea mai mare din toată aplicația) și răspunsul complet o depășea des, ieșind trunchiat la mijlocul JSON-ului. Reparat din trei direcții: (1) limita serverului ridicată la 8000, (2) schema cadrelor redusă la câmpurile chiar folosite (3 câmpuri generate degeaba, nefolosite nicăieri, au fost scoase — mai puțin de generat, mai puține șanse de trunchiere), (3) plasă de siguranță nouă — dacă răspunsul tot iese trunchiat, planul recuperează acum câte cadre COMPLETE există (ex. 5 din 8), în loc să eșueze integral pentru câteva cadre lipsă la final; primești un mesaj clar dacă planul a ieșit parțial, cu opțiunea de a reîncerca',date:'2026-08-21'},
   {n:172,text:'Galerie AI produs — „Generation failed: rejected by the safety system" reparat la sursă pentru cazul cel mai frecvent: sistemul de siguranță OpenAI refuză aproape orice cerere de generare/editare imagine care implică o persoană reală, mai ales un copil (frecvent la produse pentru copii — ghiozdane, jucării etc.) — iar planul de galerie cerea des cadre „lifestyle" de tipul „copil purtând produsul". Acum planul e instruit explicit să sugereze utilizarea prin context/decor (lângă o bancă, pe un scaun, într-un hol), NICIODATĂ printr-o persoană care ține/poartă produsul — regulă aplicată atât la crearea planului cât și direct în promptul de generare a imaginii, ca plasă de siguranță și pentru planuri mai vechi. Dacă respingerea tot apare (motive de siguranță nu sunt 100% predictibile), mesajul e acum clar în română, cu sugestia de a reîncerca sau edita manual instrucțiunea cadrului',date:'2026-08-21'},
   {n:171,text:'Galerie AI produs — selecția de fotografii originale (poze de referință bifate din dosar + cele adăugate manual prin URL/fișier) supraviețuiește acum unui refresh de pagină, la fel ca planul/imaginile deja generate (care persistau deja). Înainte, orice selecție se pierdea la refresh dacă nu apucaseși încă să generezi un plan — persistată acum într-o coloană dedicată (research_projects.gallery_ref_images). Bonus: pozele adăugate manual (nu din dosar) erau numărate la „X selectate" dar nu se vedeau nicăieri și nu puteau fi scoase — acum apar ca thumbnail, cu buton de eliminare. Necesită re-rularea migration_product_gallery_ai.sql în Supabase (fără migrare, selecția nu se salvează încă, restul galeriei funcționează normal)',date:'2026-08-21'},
@@ -7261,8 +7262,15 @@ async function loadProductGallery(projectId){
       const refUnion=[...new Set(g.plan.flatMap(f=>f.reference_images||[]))];
       if(refUnion.length)g.refImages=refUnion.slice(0,8);
     }
+    // Setările (număr/stil/format) trebuie să supraviețuiască refresh-ului la fel ca restul.
+    if(pr?.gallery_settings&&Object.keys(pr.gallery_settings).length)g.settings={...g.settings,...pr.gallery_settings};
   }catch(e){console.warn('Nu am putut încărca galeria AI existentă (rulează migration_product_gallery_ai.sql?):',e);}
+  // Analiza+planul+generarea rulează automat, o singură dată per dosar — dacă exista deja un plan
+  // (restaurat mai sus) nu mai reluăm nimic; altfel, o programăm (poate porni imediat dacă ai deja
+  // 2+ referințe selectate/restaurate, sau la prima selecție viitoare — vezi scheduleGalleryAutoRun).
+  if(g.plan.length)g.autoRunDone=true;
   refreshGallery(projectId);
+  scheduleGalleryAutoRun(projectId);
 }
 function refreshGallery(projectId){
   const el=document.getElementById('gallery-wrap-'+projectId);
@@ -7293,12 +7301,15 @@ function galleryInnerHtml(projectId){
   // Poze adăugate manual (URL/fișier) care NU sunt printre candidatele din dosar — altfel dispăreau
   // complet din UI (nu erau nici arătate, nici scoatibile) deși erau numărate la „X selectate".
   const extraSelected=g.refImages.filter(u=>!candidates.includes(u));
+  const peopleRefs=new Set(g.dna?.people_ref_urls||[]);
+  const peopleBadge=u=>peopleRefs.has(u)?`<span style="position:absolute;bottom:-6px;left:-6px;font-size:16px;background:var(--rd);border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center" title="Detectată o persoană în această poză — exclusă automat din generare">🧑</span>`:'';
   html.push(`<div class="gallery-ref-grid">`);
-  html.push(candidates.map(u=>`<label class="gallery-ref-pick${g.refImages.includes(u)?' on':''}" title="${g.refImages.includes(u)?'Scoate din referințe':'Folosește ca referință'}"><input type="checkbox" ${g.refImages.includes(u)?'checked':''} onchange="toggleGalleryRefImage(${projectId},${esc(JSON.stringify(u))},this.checked)"><img src="${esc(proxyImg(u))}" onerror="this.src='${esc(u)}'" alt=""></label>`).join(''));
-  html.push(extraSelected.map(u=>`<div class="gallery-ref-pick on" style="position:relative" title="Adăugată manual"><img src="${esc(proxyImg(u))}" onerror="this.src='${esc(u)}'" alt=""><button type="button" class="img-gallery-rm" onclick="toggleGalleryRefImage(${projectId},${esc(JSON.stringify(u))},false)" title="Elimină din referințe" style="position:absolute;top:-6px;right:-6px">×</button></div>`).join(''));
+  html.push(candidates.map(u=>`<label class="gallery-ref-pick${g.refImages.includes(u)?' on':''}" style="position:relative" title="${g.refImages.includes(u)?'Scoate din referințe':'Folosește ca referință'}"><input type="checkbox" ${g.refImages.includes(u)?'checked':''} onchange="toggleGalleryRefImage(${projectId},${esc(JSON.stringify(u))},this.checked)"><img src="${esc(proxyImg(u))}" onerror="this.src='${esc(u)}'" alt="">${peopleBadge(u)}</label>`).join(''));
+  html.push(extraSelected.map(u=>`<div class="gallery-ref-pick on" style="position:relative" title="Adăugată manual"><img src="${esc(proxyImg(u))}" onerror="this.src='${esc(u)}'" alt=""><button type="button" class="img-gallery-rm" onclick="toggleGalleryRefImage(${projectId},${esc(JSON.stringify(u))},false)" title="Elimină din referințe" style="position:absolute;top:-6px;right:-6px">×</button>${peopleBadge(u)}</div>`).join(''));
   html.push(`<div class="gallery-ref-pick gallery-ref-add" onclick="addGalleryRefUrl(${projectId})">+ URL</div>`);
   html.push(`<label class="gallery-ref-pick gallery-ref-add">+ Fișier<input type="file" accept="image/*" style="display:none" onchange="addGalleryRefFile(${projectId},event)"></label>`);
   html.push(`</div>`);
+  if(peopleRefs.size)html.push(`<div style="font-size:18px;color:var(--rd);margin-bottom:8px">🧑 ${peopleRefs.size} poză${peopleRefs.size>1?'e':''} cu o persoană detectată — exclusă${peopleRefs.size>1?'e':''} automat din generarea imaginilor (folosită${peopleRefs.size>1?'e':''} doar pentru Visual DNA)</div>`);
   html.push(`<div style="font-size:19px;color:var(--t3);margin-bottom:14px">${g.refImages.length} imagini selectate ca referință${g.refImages.length&&g.refImages.length<2?' — recomandat minim 2':''}</div>`);
   html.push(`<div class="sec">Strategie galerie</div>`);
   html.push(`<div class="gallery-settings-row">
@@ -7374,6 +7385,7 @@ function toggleGalleryRefImage(projectId,url,checked){
   else g.refImages=g.refImages.filter(u=>u!==url);
   refreshGallery(projectId);
   saveGalleryRefImages(projectId);
+  scheduleGalleryAutoRun(projectId);
 }
 async function addGalleryRefUrl(projectId){
   const g=galleryFor(projectId);
@@ -7392,6 +7404,7 @@ async function addGalleryRefUrl(projectId){
   if(!g.refImages.includes(url))g.refImages.push(url);
   refreshGallery(projectId);
   saveGalleryRefImages(projectId);
+  scheduleGalleryAutoRun(projectId);
   toast('Poză adăugată ca referință ✓');
 }
 async function addGalleryRefFile(projectId,ev){
@@ -7404,11 +7417,16 @@ async function addGalleryRefFile(projectId,ev){
     const data=await apiJson('/api/ai-image',{imageData:dataUrl},60000);
     g.refImages.push(location.origin+data.url);
     saveGalleryRefImages(projectId);
+    scheduleGalleryAutoRun(projectId);
   }catch(e){toast('Eroare la încărcarea pozei: '+(e.message||e),'err');}
   finally{if(ev?.target)ev.target.value='';refreshGallery(projectId);}
 }
 function updateGallerySetting(projectId,key,value){
-  galleryFor(projectId).settings[key]=key==='count'?Number(value):value;
+  const g=galleryFor(projectId);
+  g.settings[key]=key==='count'?Number(value):value;
+  const pr=researchProjects.find(p=>Number(p.id)===Number(projectId));
+  if(pr)pr.gallery_settings=g.settings;
+  dbPatch(`research_projects?id=eq.${projectId}`,{gallery_settings:g.settings}).catch(e=>console.warn('Nu am putut salva setările galeriei:',e));
 }
 function researchCompetitorSummary(pr){
   if(!pr)return'';
@@ -7423,21 +7441,27 @@ async function computeVisualDna(projectId){
   const l=listingData||listingFactoryData?.listing||{};
   g.dnaLoading=true;refreshGallery(projectId);
   try{
+    const refSlice=g.refImages.slice(0,6);
     const content=[
-      ...g.refImages.slice(0,6).map(u=>({type:'image',source:{type:'url',url:u}})),
+      ...refSlice.map(u=>({type:'image',source:{type:'url',url:u}})),
       {type:'text',text:`Analizează aceste fotografii ale ACELUIAȘI produs fizic și descrie exact ce vezi — acesta va fi „Product Visual DNA", folosit ca reper obligatoriu la generarea altor fotografii ale produsului, ca AI-ul să nu inventeze/schimbe nimic din aspectul real.
 Titlu produs: ${l.title||pr?.title||''}
 Descriere: ${String(l.description||'').slice(0,600)}
 Specificații cunoscute: ${JSON.stringify(l.specs||{}).slice(0,600)}
 
 Răspunde STRICT cu JSON:
-{"product_type":"","main_color":"","secondary_colors":[],"shape":"","materials":[],"visible_features":[],"branding":[],"patterns":[],"construction_details":[],"must_preserve":[],"dimensions":{"width":"","height":"","depth":""},"uncertain_elements":[]}
-Reguli: must_preserve = lista scurtă a caracteristicilor CRITICE care NU au voie să se schimbe la nicio generare (formă, culoare, imprimeu, logo, număr de buzunare/compartimente, fermoare, cusături, accesorii). uncertain_elements = ce nu se vede clar/sigur în poze. Nu inventa dimensiuni dacă nu apar în text — lasă string gol.`}
+{"product_type":"","main_color":"","secondary_colors":[],"shape":"","materials":[],"visible_features":[],"branding":[],"patterns":[],"construction_details":[],"must_preserve":[],"dimensions":{"width":"","height":"","depth":""},"uncertain_elements":[],"images_with_people":[]}
+Reguli: must_preserve = lista scurtă a caracteristicilor CRITICE care NU au voie să se schimbe la nicio generare (formă, culoare, imprimeu, logo, număr de buzunare/compartimente, fermoare, cusături, accesorii). uncertain_elements = ce nu se vede clar/sigur în poze. Nu inventa dimensiuni dacă nu apar în text — lasă string gol.
+images_with_people = array cu indexul (0-based, ordinea imaginilor atașate mai sus) al FIECĂREI imagini care arată o persoană reală/parte de corp uman (față, mână, copil purtând produsul etc.) — chiar și parțial/neclar. Important: generatorul de imagini refuză să folosească drept referință orice poză cu o persoană reală, deci trebuie identificate STRICT, ca să fie excluse din generare. Listă goală dacă nicio imagine nu arată o persoană.`}
     ];
     const text=await callAI([{role:'user',content}],null,2200,'analysis');
     const m=text.match(/\{[\s\S]*\}/);
     if(!m)throw new Error('Răspuns AI invalid pentru Visual DNA');
     const dna=JSON.parse(m[0]);
+    // Convertim indecșii (0-based, relativi la refSlice) în URL-uri reale — rămân valide chiar dacă
+    // g.refImages se reordonează ulterior, spre deosebire de indecși bruți.
+    dna.people_ref_urls=(Array.isArray(dna.images_with_people)?dna.images_with_people:[])
+      .map(i=>refSlice[i]).filter(Boolean);
     g.dna=dna;
     if(pr){pr.visual_dna=dna;try{await dbPatch(`research_projects?id=eq.${projectId}`,{visual_dna:dna});}catch(e){console.warn('Nu am putut salva Visual DNA:',e);}}
     toast('Product Visual DNA generat ✓');
@@ -7449,11 +7473,34 @@ Reguli: must_preserve = lista scurtă a caracteristicilor CRITICE care NU au voi
     g.dnaLoading=false;refreshGallery(projectId);
   }
 }
+// Flux unic: analiză (Visual DNA) → plan → TOATE imaginile generate, fără pas manual intermediar —
+// atât la click („✨ Creează planul galeriei"), cât și la pornirea automată (scheduleGalleryAutoRun).
 async function createGalleryPlanFlow(projectId){
   const g=galleryFor(projectId);
   if(!g.refImages.length){toast('Selectează cel puțin o fotografie originală','err');return;}
+  g.autoRunDone=true;// orice pornire (manuală sau automată) blochează o pornire automată redundantă ulterioară
+  clearTimeout(galleryAutoRunTimers[projectId]);
   if(!g.dna){const ok=await computeVisualDna(projectId);if(!ok)return;}
   await createGalleryPlan(projectId);
+  if(g.plan.length)await generateAllGalleryImages(projectId);
+}
+// Pornește automat analiza+planul+generarea, o singură dată per dosar, la 1.5s după ultima
+// selectare/adăugare de poză de referință (debounce, ca să nu pornească de mai multe ori la selecții
+// rapide succesive) — cerință directă: „sa nu trebuiasca eu sa mai apas sau ceva". Minim 2 referințe
+// (recomandarea din UI), nu pornește dacă deja rulează ceva sau dacă există deja un plan.
+let galleryAutoRunTimers={};
+function scheduleGalleryAutoRun(projectId){
+  const g=galleryFor(projectId);
+  if(g.autoRunDone||g.plan.length||g.dnaLoading||g.planLoading||g.generating)return;
+  if(g.refImages.length<2)return;
+  clearTimeout(galleryAutoRunTimers[projectId]);
+  galleryAutoRunTimers[projectId]=setTimeout(()=>{
+    const g2=galleryFor(projectId);
+    if(g2.autoRunDone||g2.plan.length||g2.refImages.length<2)return;
+    g2.autoRunDone=true;
+    toast('Pornesc automat analiza și generarea galeriei…');
+    createGalleryPlanFlow(projectId);
+  },1500);
 }
 // Parsează {"frames":[...]} — încearcă întâi JSON.parse direct (cazul normal). Dacă eșuează (bug real
 // găsit: răspuns trunchiat de limita de tokeni, „JSON Parse error: Expected ']'" pentru un plan de 8
@@ -7620,7 +7667,15 @@ ${f.generation_prompt||''}
 The product shown in the reference images must stay 100% recognizable and unchanged: ${preserve}. Do not invent, remove or redesign any product feature. Everything else — background, setting, camera, lighting, other objects, context — must change completely to match the scene above.
 Do NOT include any person, human figure, face, hand or body part in this image, even partially or implied — show the product plus its setting/context only, never someone using or holding it. This applies especially strictly if the product could be for children.
 Create an original composition — do not reproduce any competitor's composition, background or layout.${realism}`.slice(0,4000);
-    const refs=(f.reference_images?.length?f.reference_images:g.refImages).slice(0,2);
+    // Excludem din generare (nu și din Visual DNA/validare) pozele de referință pe care Visual DNA
+    // le-a semnalat ca arătând o persoană reală — sursa cea mai probabilă a respingerilor „rejected by
+    // the safety system", indiferent cât de atent e formulat promptul de scenă (input-ul de imagine e
+    // verificat separat de OpenAI). Dacă TOATE referințele arată persoane, folosim tot ce avem — mai
+    // bine o încercare decât niciuna.
+    const peopleRefs=new Set(g.dna?.people_ref_urls||[]);
+    const allRefs=f.reference_images?.length?f.reference_images:g.refImages;
+    const safeRefs=allRefs.filter(u=>!peopleRefs.has(u));
+    const refs=(safeRefs.length?safeRefs:allRefs).slice(0,2);
     const data=await apiJson('/api/ai-image',{sourceImageUrls:refs,prompt:promptText,format:g.settings.format},150000);
     const absoluteUrl=location.origin+data.url;
     f.url=absoluteUrl;f.status='generated';

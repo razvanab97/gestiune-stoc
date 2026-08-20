@@ -10,6 +10,9 @@ alter table research_projects add column if not exists visual_dna jsonb default 
 -- supraviețuiască unui refresh chiar înainte de a crea vreun plan (bug real raportat: pozele deja
 -- încărcate/selectate dispăreau la refresh dacă nu apucaseși încă să generezi un plan).
 alter table research_projects add column if not exists gallery_ref_images jsonb default '[]'::jsonb;
+-- Setările galeriei (număr imagini/stil/format) — persistate separat, ca să nu revină la valorile
+-- implicite la refresh dacă utilizatorul le-a schimbat înainte de a crea planul.
+alter table research_projects add column if not exists gallery_settings jsonb default '{}'::jsonb;
 
 create table if not exists product_generated_images (
   id bigint primary key generated always as identity,
