@@ -125,7 +125,18 @@ async function handleGenerate(req,res){
       body:form
     });
     const aiData=await aiResp.json();
-    if(!aiResp.ok)return res.status(aiResp.status===429?429:502).json({error:aiData?.error?.message||'Eroare la generarea imaginii cu AI'});
+    if(!aiResp.ok){
+      const rawMsg=aiData?.error?.message||'';
+      // Sistemul de siguranță OpenAI respinge aproape orice cerere care implică o persoană reală
+      // (mai ales copii) într-o imagine editată/generată — cel mai des declanșat de un prompt de tip
+      // „lifestyle" (cineva purtând/folosind produsul). Promptul din index.html evită deja explicit
+      // asta, dar rejecțiile de siguranță nu sunt 100% predictibile — mesaj clar, în română, în loc de
+      // textul brut OpenAI, ca utilizatorul să știe imediat ce s-a întâmplat și ce poate încerca.
+      if(/rejected by the safety system|safety system/i.test(rawMsg)){
+        return res.status(400).json({error:'Cererea a fost respinsă de sistemul de siguranță al OpenAI — cel mai probabil pentru că scena cerea o persoană (ex. un copil folosind produsul); modelele OpenAI refuză aproape mereu asta. Încearcă din nou (regenerare) sau editează manual instrucțiunea cadrului, fără nicio persoană în scenă.',details:rawMsg});
+      }
+      return res.status(aiResp.status===429?429:502).json({error:rawMsg||'Eroare la generarea imaginii cu AI'});
+    }
     const b64=aiData?.data?.[0]?.b64_json;
     if(!b64)return res.status(502).json({error:'Răspuns invalid de la OpenAI (fără imagine)'});
 
