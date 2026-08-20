@@ -2065,6 +2065,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:170,text:'„Poze folosite în descriere" — butoane noi ↑/↓ pe fiecare poză, ca să le schimbi ordinea direct din descriere (interschimbă poza cu vecina, fără să atingă textul din jur — paragrafele rămân exact unde erau)',date:'2026-08-21'},
   {n:169,text:'Galerie AI produs: buton nou „➕ Descriere" pe fiecare imagine generată — o adaugă direct în descrierea anunțului, la final, fără să cauți/copiezi URL-ul manual (același mecanism ca butonul „➕ În descriere" de pe pozele din „Poze selectate")',date:'2026-08-21'},
   {n:168,text:'Bug real reparat — anunțul generat (Generator anunțuri) se „pierdea" la refresh de pagină, deși exista deja un mecanism de salvare a draftului (localStorage). Cauza: la restaurare, codul folosea mereu randarea VECHE (fără dosar), chiar și pentru un anunț legat de un dosar Research — care are propriul panou, cu „Aplică în produs", Galerie AI produs etc. — plus containerul anunțului rămânea ascuns (display:none), deci draftul „revenea" în memorie, dar invizibil pe ecran, exact ca și cum s-ar fi pierdut. Reparat: la refresh se folosește randarea corectă (cu sau fără dosar, după caz) și containerul devine vizibil corect; reparat și un bug conex — funcția care re-randează lista de dosare ascundea din nou panoul anunțului standalone tocmai restaurat. Verificat cu reload real de pagină (nu doar schimbare de hash), pentru ambele fluxuri (cu dosar / standalone)',date:'2026-08-21'},
   {n:167,text:'Galerie AI produs — două bug-uri reale reparate la selecția pozelor de referință. (1) „Nicio poză găsită încă în dosar" apărea chiar și pentru dosare cu poze reale, dacă ajungeai la Generator anunțuri altfel decât prin desfacerea cardului din „Dosare" (ex. „👁 Vezi anunț salvat", link direct #research/&lt;id&gt;) — pozele per-link se încarcă leneș, la cerere, iar acel „la cerere" nu se întâmpla niciodată pe aceste căi. Acum galeria le hidratează explicit ea însăși, indiferent cum ai ajuns la panou. (2) Linkuri DIRECTE și valide (ex. CDN eMAG) erau respinse la „+ URL" cu mesajul „acest link nu se poate încărca" — verificarea trece printr-un proxy care poate eșua/expira din motive trecătoare (cold start, rețea), fără ca link-ul chiar să fie greșit; acum, dacă verificarea automată eșuează, întrebăm în loc să refuzăm direct („o adaugi oricum?"), plus timeout mărit de la 8 la 12 secunde',date:'2026-08-21'},
@@ -7149,7 +7150,7 @@ function renderListingFactoryResult(l,pages,allImages=[]){
     </div>
     <div id="listing-html-preview" class="listing-html-preview on">${l?.description_html?proxyHtmlImgs(l.description_html):l?.description?esc(l.description):'<span style="color:var(--t3)">Nicio descriere încă — scrie una în „Editează HTML" și salvează</span>'}</div>
     <textarea id="listing-html-raw" class="listing-html-raw">${esc(l?.description_html||l?.description||'')}</textarea>
-    ${descImages.length?`<div style="margin-top:8px"><div style="font-size:19px;color:var(--t3);margin-bottom:4px">Poze folosite în descriere (${descImages.length}) — dacă una e greșită/irelevantă (ex. o poză stock nepotrivită), o scoți sau o blochezi definitiv de aici:</div><div class="listing-imgs">${descImages.map(u=>`<div class="listing-image-pick" style="grid-template-columns:70px 1fr"><img src="${esc(proxyImg(u))}" onerror="this.src='${esc(u)}'" alt="" style="width:70px;height:70px"><div><div style="display:flex;gap:5px;flex-wrap:wrap"><button class="btn btn-sm" onclick="removeImageFromDescription(${esc(JSON.stringify(u))})" title="O scoate doar din această descriere">🗑 Scoate</button><button class="btn btn-sm" style="color:var(--rd);border-color:var(--rd)" onclick="blockImage(${esc(JSON.stringify(u))})" title="Nu o mai arăta niciodată, la niciun anunț">🚫 Blochează</button></div></div></div>`).join('')}</div></div>`:''}
+    ${descImages.length?`<div style="margin-top:8px"><div style="font-size:19px;color:var(--t3);margin-bottom:4px">Poze folosite în descriere (${descImages.length}) — dacă una e greșită/irelevantă (ex. o poză stock nepotrivită), o scoți sau o blochezi definitiv de aici; cu ↑/↓ îi schimbi locul (ordinea în care apar în descriere):</div><div class="listing-imgs">${descImages.map((u,i)=>`<div class="listing-image-pick" style="grid-template-columns:70px 1fr"><img src="${esc(proxyImg(u))}" onerror="this.src='${esc(u)}'" alt="" style="width:70px;height:70px"><div><div style="display:flex;gap:5px;flex-wrap:wrap"><button class="btn btn-sm" onclick="moveImageInDescription(${esc(JSON.stringify(u))},-1)" title="Mută mai sus în descriere" ${i===0?'disabled':''}>↑</button><button class="btn btn-sm" onclick="moveImageInDescription(${esc(JSON.stringify(u))},1)" title="Mută mai jos în descriere" ${i===descImages.length-1?'disabled':''}>↓</button><button class="btn btn-sm" onclick="removeImageFromDescription(${esc(JSON.stringify(u))})" title="O scoate doar din această descriere">🗑 Scoate</button><button class="btn btn-sm" style="color:var(--rd);border-color:var(--rd)" onclick="blockImage(${esc(JSON.stringify(u))})" title="Nu o mai arăta niciodată, la niciun anunț">🚫 Blochează</button></div></div></div>`).join('')}</div></div>`:''}
     </div>
     ${Array.isArray(l?.bullets)&&l.bullets.length?`<ul class="listing-bullets">${l.bullets.map(b=>`<li>${esc(b)}</li>`).join('')}</ul>`:''}
     ${renderSpecTable(specs)}
@@ -7680,6 +7681,22 @@ function removeImageFromDescription(url){
   l.description=String(l.description_html).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
   renderListingFactoryResult(l,listingFactoryData?.pages||[],listingFactoryData?.allImages||[]);
   toast('Poză scoasă din descriere ✓');
+}
+// Schimbă ordinea a două poze din descriere — interschimbă poziția tag-ului <img> al pozei date cu cel
+// al vecinei (dir=-1 mai sus, dir=1 mai jos), fără să atingă textul din jur (paragrafe, titluri etc).
+function moveImageInDescription(url,dir){
+  const l=listingData||listingFactoryData?.listing;
+  if(!l)return;
+  const html=String(l.description_html||'');
+  const tags=[...html.matchAll(/<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*>/gi)];
+  const idx=tags.findIndex(m=>m[1]===url);
+  const j=idx+dir;
+  if(idx<0||j<0||j>=tags.length)return;
+  const a=tags[idx],b=tags[j];
+  const first=a.index<b.index?a:b,second=a.index<b.index?b:a;
+  l.description_html=html.slice(0,first.index)+second[0]+html.slice(first.index+first[0].length,second.index)+first[0]+html.slice(second.index+second[0].length);
+  l.description=String(l.description_html).replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').trim();
+  renderListingFactoryResult(l,listingFactoryData?.pages||[],listingFactoryData?.allImages||[]);
 }
 // Poze blocate DEFINITIV — utilizatorul le respinge o dată (ex. o poză stock irelevantă, recurentă
 // din căutarea DDG de rezervă), rămân excluse din TOATE generările viitoare de anunțuri, pentru orice
