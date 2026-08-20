@@ -2065,6 +2065,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:165,text:'Generator anunțuri — anunțul afișat NU mai dispare când apeși din nou „Generează anunț din dosar" (regenerare, alt dosar sau reîncercare după eroare). Înainte, primul lucru care se întâmpla era ștergerea completă a anunțului vizibil și înlocuirea lui cu un spinner — dacă noua generare dura mult sau eșua, rămâneai fără nimic pe ecran, deși anunțul vechi era în continuare bun (butonul „⏳ Generez…" + indicatorul din antet arată deja clar că rulează o generare, nu mai era nevoie să ștergem conținutul ca să comunicăm asta). Acum anunțul anterior rămâne vizibil neschimbat până se termină CU SUCCES noua generare — pe eroare, rămâne la fel, doar cu un mesaj clar (toast roșu); doar la prima generare vreodată (nimic de păstrat) mai apare spinner-ul peste tot cardul, ca înainte. Aceeași reparație și pe generatorul „de sine stătător" (fără dosar)',date:'2026-08-21'},
   {n:164,text:'Bug real reparat — Galeria AI produs genera „Generation failed: Duplicate parameter: image" la FIECARE cadru, pentru orice produs cu 2+ poze de referință selectate (adică practic mereu). Cauza: la trimiterea mai multor poze de referință către OpenAI într-un singur apel, api/ai-image.js trimitea toate pozele pe același nume de câmp „image" repetat — OpenAI cere explicit sintaxa de array pentru acest caz, „image[]", nu „image" repetat de mai multe ori. Reparat (doar pentru 2+ poze — o singură poză de referință, cazul „🎨 Recreează cu AI", merge la fel ca înainte, neschimbat). Verificat structural (fără cost real, interceptând cererea către OpenAI): 2 poze -> „image[]" x2, 1 poză -> „image" x1',date:'2026-08-21'},
   {n:163,text:'Funcție nouă majoră — „🖼 Galerie AI produs", în Generator anunțuri (dosar Research), sub anunțul eMAG generat. Pornind de la 1-8 poze reale ale produsului (selectate din dosar sau adăugate manual), generează automat o galerie de ~8 fotografii e-commerce: (1) analizează pozele + descrierea/specificațiile într-un „Product Visual DNA" (culoare, formă, imprimeu, accesorii, ce NU are voie AI-ul să schimbe), (2) creează un plan de cadre adaptat produsului (hero/lifestyle/profil/dimensiuni/beneficii/etc, editabil înainte de generare), (3) generează fiecare imagine (image-edit pornind de la pozele reale, max 2 simultan, nu toate deodată), (4) verifică automat cât de fidelă e fiecare imagine față de produsul real („Product Match" 0-100%, cu avertizări dacă ceva nu se potrivește). Fiecare imagine poate fi aprobată/regenerată/înlocuită manual/repoziționată/descărcată; galeria rămâne salvată la refresh; imaginile APROBATE se preiau automat în produs la „Aplică în produs". Extins api/ai-image.js să accepte mai multe poze de referință deodată și un model configurabil din Vercel (OPENAI_IMAGE_MODEL, implicit gpt-image-1) — fără niciun endpoint nou (limita de 12 funcții Vercel). Necesită migration_product_gallery_ai.sql în Supabase (fără migrare, restul aplicației funcționează normal, doar galeria nu se salvează încă). Notă onestă: template-urile grafice cu overlay (săgeți de dimensiune, liste de beneficii desenate peste poză) NU sunt încă implementate — cadrele de tip dimensiuni/beneficii ies deocamdată ca fotografii AI simple, fără text suprapus; reordonarea e prin butoane ↑/↓, nu drag&drop; descărcarea „toate" e secvențială, nu arhivă ZIP',date:'2026-08-21'},
   {n:162,text:'Bug real reparat — „🔗 Link public produs" nu mai copia nimic în clipboard pe Safari (funcționa pe Chrome). Cauza: codul aștepta întâi să se termine salvarea anunțului în baza de date (un fetch) și DUPĂ aceea încerca să scrie linkul în clipboard — Safari refuză scrierea în clipboard dacă nu se întâmplă STRICT în interiorul click-ului utilizatorului, fără nicio pauză asincronă înainte; Chrome e mai permisiv și lăsa să treacă. Acum linkul se copiază imediat, sincron, chiar la click, iar salvarea în baza de date se face după — linkul e copiat corect indiferent cum iese salvarea',date:'2026-08-20'},
@@ -5616,7 +5617,11 @@ async function buildListingFromProject(projectId){
   document.getElementById('competition-result')?.style.setProperty('display','none');
   document.getElementById('decision-result')?.style.setProperty('display','none');
   if(wrap)wrap.style.display='block';
-  if(out){out.style.display='';out.innerHTML=`<div class="listing-card"><span class="spin"></span> Generez anunț AB HOMES din dosarul „${esc(pr.title)}”…</div>`;}
+  // Nu mai ștergem anunțul afișat anterior (dacă exista unul) — doar când NU e nimic de păstrat
+  // arătăm spinner-ul peste tot cardul. Altfel rămâne vizibil/utilizabil cât timp se generează cel
+  // nou, ca să nu-l pierzi dacă noua cerere durează mult sau eșuează (butonul + indicatorul din
+  // header arată deja clar că rulează o generare — vezi genInProgress).
+  if(out&&!out.innerHTML.trim()){out.style.display='';out.innerHTML=`<div class="listing-card"><span class="spin"></span> Generez anunț AB HOMES din dosarul „${esc(pr.title)}”…</div>`;}
   if(btn){btn.disabled=true;btn.textContent='⏳ Generez…';}
   genInProgress.add(projectId);
   renderGenStatusBadge();
@@ -5635,7 +5640,10 @@ async function buildListingFromProject(projectId){
     }catch(e){toast('Anunțul e generat, dar statusul nu s-a salvat: '+(e.message||e),'err');}
     toast('Anunț generat din dosar ✓');
   }catch(e){
-    if(out)out.innerHTML=`<div class="listing-card" style="border-color:var(--rd);color:var(--rd)">⚠️ ${esc(e.message||'Eroare generator anunț')}</div>`;
+    // Nu mai suprascriem out.innerHTML cu un card de eroare — dacă exista deja un anunț afișat,
+    // rămâne vizibil (nu-l pierzi la o generare eșuată); eroarea se vede clar din toast.
+    if(out&&!out.innerHTML.trim())out.innerHTML=`<div class="listing-card" style="border-color:var(--rd);color:var(--rd)">⚠️ ${esc(e.message||'Eroare generator anunț')}</div>`;
+    toast('Eroare generator anunț: '+(e.message||e),'err');
   }finally{
     if(btn){btn.disabled=false;btn.textContent='✨ Generează anunț din dosar';}
     // Necondiționat (și pe eroare) — repară starea butonului din listă chiar dacă `btn` de mai sus
@@ -5672,7 +5680,9 @@ async function buildListingFromResearch(){
   const btn=document.getElementById('listing-build-btn');
   const out=document.getElementById('listing-result');
   if(btn){btn.disabled=true;btn.textContent='⏳ Generez anunț…';}
-  if(out)out.innerHTML=`<div class="listing-card"><span class="spin"></span> Adun informațiile din linkuri și creez anunțul…</div>`;
+  // Nu ștergem anunțul anterior dacă exista deja unul — vezi buildListingFromProject mai sus, același
+  // motiv: rămâne vizibil/utilizabil cât timp se generează cel nou, nu-l pierzi la o eroare/durată mare.
+  if(out&&!out.innerHTML.trim())out.innerHTML=`<div class="listing-card"><span class="spin"></span> Adun informațiile din linkuri și creez anunțul…</div>`;
   try{
     const payload={product:researchProductPayload(),urls:researchListingUrls()};
     const data=await apiJson('/api/listing-builder',payload,180000);
@@ -5682,7 +5692,8 @@ async function buildListingFromResearch(){
     renderListingResult(listingData,data.pages||[]);
     toast('Anunț generat ✓');
   }catch(e){
-    if(out)out.innerHTML=`<div class="listing-card" style="border-color:var(--rd);color:var(--rd)">⚠️ ${esc(e.message||'Eroare generator')}</div>`;
+    if(out&&!out.innerHTML.trim())out.innerHTML=`<div class="listing-card" style="border-color:var(--rd);color:var(--rd)">⚠️ ${esc(e.message||'Eroare generator')}</div>`;
+    toast('Eroare generator: '+(e.message||e),'err');
   }finally{
     if(btn){btn.disabled=false;btn.textContent='✨ Generează anunț';}
   }
