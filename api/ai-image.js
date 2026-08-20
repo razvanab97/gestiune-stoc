@@ -3,6 +3,9 @@
 //   POST cu sourceImageUrl+prompt -> recreează/îmbunătățește o poză existentă cu AI (fundal curat,
 //           prezentare profesională de tip e-commerce), PORNIND de la poza reală a produsului (image
 //           edit, nu generare din imaginație). Rezultatul se salvează în ai_images.
+//   POST cu sourceImageUrls (array, max 6) +prompt+format -> la fel, dar cu mai multe poze de referință
+//           deodată (Galeria AI produs, vezi generateOneGalleryImage în index.html) — util ca AI-ul să
+//           vadă produsul din mai multe unghiuri înainte să genereze cadrul nou.
 //   POST cu imageData (base64)    -> upload DIRECT, fără AI — o poză de pe calculatorul utilizatorului
 //           (fișier personal), inserată în descriere fără să treacă printr-un link extern.
 //   GET  -> servește o imagine deja stocată (generată SAU încărcată manual), ca URL public stabil —
@@ -12,6 +15,17 @@
 const SUPA_URL=process.env.SUPABASE_URL||'https://nuvgwytanlgvcffxeahs.supabase.co';
 const SUPA_KEY=process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.SUPABASE_ANON_KEY||'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51dmd3eXRhbmxndmNmZnhlYWhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MDI0OTAsImV4cCI6MjA5NTI3ODQ5MH0.lSy1CUJA9xlVv1isAyfTIxGUAbGMUIS7c3TXQ-5pcEg';
 const MAX_SRC_SIZE=8*1024*1024;
+const MAX_SRC_IMAGES=6;
+// OPENAI_IMAGE_MODEL -> gpt-image-1 (implicit) — vezi Environment Variables în Vercel. Același pattern
+// de fallback ca simpleModel()/analysisModel()/listingModel() din api/listing-builder.js.
+function imageModel(){return process.env.OPENAI_IMAGE_MODEL||'gpt-image-1';}
+// Mapează formatul cerut (Galeria AI produs) pe cele mai apropiate dimensiuni suportate de gpt-image-1
+// (doar 1024x1024 / 1024x1536 / 1536x1024 / auto) — nu orice raport de aspect e posibil nativ.
+function sizeForFormat(fmt){
+  if(fmt==='9:16'||fmt==='4:5')return'1024x1536';
+  if(fmt==='16:9')return'1536x1024';
+  return'1024x1024';
+}
 
 function isPrivateHost(h){
   return h==='localhost'||h.endsWith('.localhost')||h==='0.0.0.0'||h==='::1'
@@ -61,36 +75,45 @@ async function handleUpload(req,res){
     return res.status(e.status||500).json({error:e.message||'Eroare la încărcarea imaginii',details});
   }
 }
+async function fetchSourceImage(sourceUrl){
+  let parsed;
+  try{parsed=new URL(sourceUrl);}catch(e){throw Object.assign(new Error('URL imagine invalid: '+sourceUrl),{status:400});}
+  if(!['http:','https:'].includes(parsed.protocol))throw Object.assign(new Error('Protocol nepermis'),{status:400});
+  if(isPrivateHost(parsed.hostname.toLowerCase()))throw Object.assign(new Error('Host privat nepermis'),{status:400});
+  const imgResp=await fetch(sourceUrl,{
+    headers:{
+      'user-agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'referer':`${parsed.protocol}//${parsed.hostname}/`
+    }
+  });
+  if(!imgResp.ok)throw Object.assign(new Error('Nu am putut descărca imaginea sursă (HTTP '+imgResp.status+')'),{status:422});
+  const ct=imgResp.headers.get('content-type')||'image/jpeg';
+  if(!ct.startsWith('image/'))throw Object.assign(new Error('Sursa nu este o imagine ('+ct+')'),{status:422});
+  const buf=Buffer.from(await imgResp.arrayBuffer());
+  if(buf.byteLength>MAX_SRC_SIZE)throw Object.assign(new Error('Imaginea sursă e prea mare (max 8MB)'),{status:413});
+  return{buf,ct};
+}
+// sourceImageUrls (array, Galeria AI produs — vezi generateOneGalleryImage în index.html) sau
+// sourceImageUrl (singular, recreateImageWithAI — o singură poză) — ambele merg pe același model
+// image-edit, gpt-image-1 acceptă mai multe imagini de referință într-un singur apel (câmpuri
+// „image" repetate), utile ca AI-ul să vadă produsul din mai multe unghiuri deodată.
 async function handleGenerate(req,res){
   if(req.body?.imageData)return handleUpload(req,res);
   if(!process.env.OPENAI_API_KEY)return res.status(503).json({error:'OPENAI_API_KEY nu este configurată în Vercel'});
   try{
-    const sourceUrl=String(req.body?.sourceImageUrl||'').trim();
-    const prompt=String(req.body?.prompt||'').trim().slice(0,2000);
-    if(!sourceUrl||!prompt)return res.status(400).json({error:'Lipsesc imaginea sursă sau instrucțiunea'});
+    const urls=(Array.isArray(req.body?.sourceImageUrls)?req.body.sourceImageUrls:[req.body?.sourceImageUrl])
+      .map(u=>String(u||'').trim()).filter(Boolean).slice(0,MAX_SRC_IMAGES);
+    const prompt=String(req.body?.prompt||'').trim().slice(0,4000);
+    if(!urls.length||!prompt)return res.status(400).json({error:'Lipsesc imaginea sursă sau instrucțiunea'});
+    const size=sizeForFormat(String(req.body?.format||'1:1'));
 
-    let parsed;
-    try{parsed=new URL(sourceUrl);}catch(e){return res.status(400).json({error:'URL imagine invalid'});}
-    if(!['http:','https:'].includes(parsed.protocol))return res.status(400).json({error:'Protocol nepermis'});
-    if(isPrivateHost(parsed.hostname.toLowerCase()))return res.status(400).json({error:'Host privat nepermis'});
-
-    const imgResp=await fetch(sourceUrl,{
-      headers:{
-        'user-agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'referer':`${parsed.protocol}//${parsed.hostname}/`
-      }
-    });
-    if(!imgResp.ok)return res.status(422).json({error:'Nu am putut descărca imaginea sursă (HTTP '+imgResp.status+')'});
-    const ct=imgResp.headers.get('content-type')||'image/jpeg';
-    if(!ct.startsWith('image/'))return res.status(422).json({error:'Sursa nu este o imagine ('+ct+')'});
-    const srcBuf=Buffer.from(await imgResp.arrayBuffer());
-    if(srcBuf.byteLength>MAX_SRC_SIZE)return res.status(413).json({error:'Imaginea sursă e prea mare (max 8MB)'});
+    const sources=await Promise.all(urls.map(fetchSourceImage));
 
     const form=new FormData();
-    form.append('model','gpt-image-1');
-    form.append('image',new Blob([srcBuf],{type:ct}),'sursa.'+(ct.split('/')[1]||'jpg'));
+    form.append('model',imageModel());
+    sources.forEach(({buf,ct},i)=>form.append('image',new Blob([buf],{type:ct}),`sursa${i+1}.`+(ct.split('/')[1]||'jpg')));
     form.append('prompt',prompt);
-    form.append('size','1024x1024');
+    form.append('size',size);
     form.append('n','1');
 
     const aiResp=await fetch('https://api.openai.com/v1/images/edits',{
