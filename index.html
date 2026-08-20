@@ -1137,6 +1137,7 @@ th{font-weight:800!important;color:var(--t3)!important}
     <button class="h-tab" data-page="research" onclick="goPage('research',this)">🔍 Research</button>
     <button class="h-tab" data-page="archive" onclick="goPage('archive',this)">🗄️ Arhivă</button>
   </div>
+  <span class="h-right" id="gen-status" style="display:none;cursor:pointer" onclick="goToResearchProject(genStatusProjectId)" title="Click pentru a deschide dosarul"></span>
   <span class="h-right" id="saved"></span>
   <div class="notif-wrap">
     <button class="notif-bell" id="tabcfg-btn" onclick="toggleTabCfgPanel(event)" title="Personalizează ordinea paginilor">⚙️</button>
@@ -2047,6 +2048,8 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:162,text:'Bug real reparat — „🔗 Link public produs" nu mai copia nimic în clipboard pe Safari (funcționa pe Chrome). Cauza: codul aștepta întâi să se termine salvarea anunțului în baza de date (un fetch) și DUPĂ aceea încerca să scrie linkul în clipboard — Safari refuză scrierea în clipboard dacă nu se întâmplă STRICT în interiorul click-ului utilizatorului, fără nicio pauză asincronă înainte; Chrome e mai permisiv și lăsa să treacă. Acum linkul se copiază imediat, sincron, chiar la click, iar salvarea în baza de date se face după — linkul e copiat corect indiferent cum iese salvarea',date:'2026-08-20'},
+  {n:161,text:'Research — două reparații pentru lucrul cu mai multe dosare deodată. (1) Fiecare dosar are acum link propriu (buton nou 🔗 lângă titlu, sau apare direct în bara de adrese când îl deschizi) — până acum toate dosarele arătau exact „#research" în URL, deci Safari (Mac) sărea mereu la tab-ul deja deschis în loc să lase un tab nou pentru alt dosar; acum linkul e distinct per dosar, îl poți lipi într-un tab separat. (2) Bug real reparat la „✨ Generează anunț din dosar": cererea către AI oricum continua să ruleze în fundal chiar dacă plecai să lucrezi la alt dosar sau altă pagină (nu era ea problema), DAR orice altă acțiune între timp (deschideai alt dosar, adăugai un link) rescria lista de dosare și „pierdea" referința butonului „⏳ Generez…", care reapărea activ ca și cum nimic n-ar rula — deruta, deși anunțul chiar se genera și se salva corect. Acum starea „în curs" e ținută separat și se vede corect oricând, plus un indicator nou în antet, vizibil din orice pagină a aplicației, cu click direct înapoi la dosar',date:'2026-08-20'},
   {n:160,text:'„Adaugă produs din link" (modalul de produs) completează acum și o descriere dezvoltată pentru client + o galerie de imagini tematice — până acum importul din link scria doar o descriere scurtă direct în „Note interne" (câmp intern, nu pentru client) și o singură poză. Acum: câmp nou „Descriere produs" (separat de notele interne, care rămân neatinse) și o galerie de poze suplimentare sub secțiunea de import, cu buton de ștergere pe fiecare și posibilitatea de a adăuga manual altele prin URL. Ambele sunt completate folosind ACELAȘI generator de anunțuri eMAG/Trendyol (api/listing-builder.js, cel din Research) — rulează acum în paralel și la „↓ Importă" din modal, nu doar din tab-ul Research. „Aplică în produs" din Research populează și el aceleași câmpuri noi, în loc de notele interne. Necesită migration_product_description_gallery.sql în Supabase (fără migrare, restul importului funcționează normal, doar descrierea/galeria nu se salvează încă)',date:'2026-08-20'},
   {n:159,text:'Generator anunțuri — poze în descriere, mai sigure și mai flexibile. (1) Buton nou „📁 Din calculator" — alegi o poză direct de pe telefon/laptop (fișier personal), fără niciun link extern; se redimensionează automat și se inserează. (2) Bug real reparat: linkuri de tip https://ibb.co/XXXXX (pagina care AFIȘEAZĂ poza, nu fișierul propriu-zis) treceau de validare dar nu se afișau niciodată — acum orice link extern (la inserare în descriere sau la „+ Adaugă poză externă") se verifică înainte să fie acceptat, cu mesaj clar dacă nu e link direct către imagine. (3) Bug de infrastructură găsit: poza reală/uploadată nu se poate salva încă — RLS activ pe tabela ai_images blochează inserarea (aceeași problemă ca la ean_pool). Necesită rulare manuală în Supabase (vezi mesajul din chat)',date:'2026-08-20'},
   {n:158,text:'Research: buton „📋 Copiază" adăugat la fiecare cod din „🔢 Bancă de coduri EAN" (lista de coduri disponibile) — până acum aveai doar bifa „folosit", trebuia să selectezi manual textul ca să-l copiezi',date:'2026-08-20'},
@@ -2830,6 +2833,19 @@ function setSyncStatus(status,msg){
   if(!el){el=document.createElement('span');el.id='sync-status';el.className='h-right';el.style.cssText='font-family:var(--mono);font-size:19px;align-items:center;gap:5px';document.getElementById('saved').replaceWith(el);}
   const dot=status==='ok'?'🟢':status==='err'?'🔴':'🟡';
   el.innerHTML=`<span>${dot}</span><span style="color:var(--t3)">${msg}</span>`;
+}
+// Indicator vizibil din ORICE pagină a aplicației, nu doar din Research — genInProgress/buildListingFromProject
+// arată corect starea și-n cardul dosarului, dar cardul e vizibil doar cât timp ești chiar pe pagina Research
+// cu acel dosar deschis. Ăsta e singurul semnal că generarea încă rulează dacă ai plecat să lucrezi altceva.
+function renderGenStatusBadge(){
+  const el=document.getElementById('gen-status');if(!el)return;
+  if(!genInProgress.size){el.style.display='none';return;}
+  genStatusProjectId=[...genInProgress][genInProgress.size-1];
+  const pr=researchProjects.find(p=>Number(p.id)===Number(genStatusProjectId));
+  const title=String(pr?.title||genStatusProjectId);
+  const short=title.length>24?title.slice(0,24)+'…':title;
+  el.style.cssText='display:flex;cursor:pointer;margin-left:auto;font-family:var(--mono);font-size:19px;align-items:center;gap:5px;white-space:nowrap;overflow:hidden;max-width:220px';
+  el.innerHTML=`<span class="spin" style="flex:0 0 auto"></span><span style="color:var(--t3);overflow:hidden;text-overflow:ellipsis" title="${esc(title)}">Generez: „${esc(short)}"…</span>`;
 }
 
 // ── LOAD FROM SUPABASE ──
@@ -3906,6 +3922,15 @@ let listingData=null;
 // vine din vechiul flux "Research produs" (researchData) sau din Generatorul de anunțuri de sine stătător.
 // Folosit de applyListingToProduct() ca să știe din ce sursă să preia preț de achiziție/furnizor.
 let listingProjectId=null;
+// Dosare cu generare de anunț în curs (buildListingFromProject) — set separat de listingData/
+// listingProjectId de mai sus, care țin DOAR ultimul anunț afișat. Cererea către /api/listing-builder
+// nu se leagă de navigare (vezi apiJson) și continuă să ruleze chiar dacă utilizatorul pleacă din
+// dosar — dar orice alt renderResearchProjects() intermediar (deschide alt dosar, adaugă un link)
+// rescrie innerHTML-ul listei și orfanizează referințele DOM capturate la pornirea acțiunii, făcând
+// butonul „Generează anunț" să reapară activ ca și cum nimic n-ar rula. genInProgress e citit la
+// FIECARE randare din renderResearchProjects(), deci starea rămâne corectă indiferent câte re-randări
+// au loc între timp — vezi și renderGenStatusBadge() pentru indicatorul global din header.
+let genInProgress=new Set(),genStatusProjectId=null;
 let listingFactoryData=null,competitionLabData=null;
 let researchProjects=[],researchProjectFilter='all',researchProjectsLoaded=false,researchProjectsLoading=false,researchShowFinalized=false;
 const MAX_RESEARCH_LINKS=20;
@@ -3993,6 +4018,9 @@ function goToResearchProject(id){
   saveResearchCollapsed();
   renderResearchProjects();
   hydrateResearchProjectImages(id);
+  // Link distinct per dosar — altfel URL-ul rămâne mereu „#research" identic, iar Safari
+  // (Mac) sare mereu la tab-ul deja deschis în loc să permită un tab nou pentru alt dosar.
+  history.replaceState(null,'','#research/'+id);
   setTimeout(()=>{
     const card=document.getElementById('rp-card-'+id);
     if(!card)return;
@@ -4947,6 +4975,9 @@ function toggleResearchProjectCard(id){
     saveResearchCollapsed();
     renderResearchProjects();
     hydrateResearchProjectImages(id);
+    // Link distinct per dosar — altfel URL-ul rămâne mereu „#research" identic, iar Safari
+    // (Mac) sare mereu la tab-ul deja deschis în loc să permită un tab nou pentru alt dosar.
+    history.replaceState(null,'','#research/'+id);
   }else{
     researchCollapsed.add(id);
     saveResearchCollapsed();
@@ -5181,7 +5212,7 @@ function renderResearchProjects(){
         <button class="rsx-btn rsx-btn-primary" id="rp-analyze-${p.id}" onclick="analyzeWholeProject(${p.id})" title="Recalculează verdictul ȘI regenerează draftul de anunț, dintr-un click — rulează parțial dacă mai lipsesc screenshot-uri/PDF-uri">🚀 Analizează tot dosarul</button>
         <button class="rsx-btn rsx-btn-secondary" onclick="recalcResearchProject(${p.id})">↻ Recalculează verdict</button>
         <button class="rsx-btn rsx-btn-secondary" onclick="recheckResearchProjectPrices(${p.id})" ${links.length?'':'disabled'} title="Re-analizează linkurile existente și verifică dacă prețurile s-au schimbat">🔄 Reverifică prețurile</button>
-        <button class="rsx-btn rsx-btn-secondary" id="rp-build-${p.id}" onclick="buildListingFromProject(${p.id})">✨ Generează anunț din dosar</button>
+        <button class="rsx-btn rsx-btn-secondary" id="rp-build-${p.id}" onclick="buildListingFromProject(${p.id})" ${genInProgress.has(p.id)?'disabled':''}>${genInProgress.has(p.id)?'⏳ Generez…':'✨ Generează anunț din dosar'}</button>
         ${hasListing?`<button class="rsx-btn rsx-btn-secondary" onclick="showSavedProjectListing(${p.id})">👁 Vezi anunț salvat</button>`:''}
         <button class="rsx-btn rsx-btn-secondary acc" onclick="addResearchProjectToInventar(${p.id})" title="Creează produsul în Inventar, cu numele/poza/costul din dosar">📦 Adaugă în Inventar</button>
       </div>
@@ -5204,6 +5235,7 @@ function renderResearchProjects(){
             <div style="display:flex;align-items:center;gap:6px">
               <div class="rsx-head-title">${esc(p.title)}</div>
               <button class="rsx-title-edit" onclick="editResearchProjectTitle(${p.id},event)" title="Editează titlul dosarului">✏️</button>
+              <button class="rsx-title-edit" onclick="event.stopPropagation();copyText(location.origin+'/#research/${p.id}')" title="Copiază link direct către acest dosar — îl poți deschide într-un tab Safari separat, fără să sară la un alt dosar deja deschis">🔗</button>
             </div>
             <div class="rsx-head-meta"><span class="rsx-head-chevron">${collapsed?'▸':'▾'}</span>#${p.id} · ${new Date(p.updated_at||p.created_at).toLocaleDateString('ro-RO')} ${p.supplier?'· '+esc(p.supplier):''}${collapsed?' · '+links.length+' linkuri':''}
               ${p.acquisition_price?`<span class="rsx-head-price" title="Preț de achiziție (furnizor)">Achiziție ${Number(p.acquisition_price).toFixed(2)} RON</span>`:''}
@@ -5567,6 +5599,8 @@ async function buildListingFromProject(projectId){
   if(wrap)wrap.style.display='block';
   if(out){out.style.display='';out.innerHTML=`<div class="listing-card"><span class="spin"></span> Generez anunț AB HOMES din dosarul „${esc(pr.title)}”…</div>`;}
   if(btn){btn.disabled=true;btn.textContent='⏳ Generez…';}
+  genInProgress.add(projectId);
+  renderGenStatusBadge();
   try{
     const product={name:pr.title||'',priceBuy:Number(pr.acquisition_price)||0,supplier:pr.supplier||'AB HOMES'};
     const data=await apiJson('/api/listing-builder',{mode:'synthesize',product,urls,extraPages,knownImages},180000);
@@ -5585,6 +5619,11 @@ async function buildListingFromProject(projectId){
     if(out)out.innerHTML=`<div class="listing-card" style="border-color:var(--rd);color:var(--rd)">⚠️ ${esc(e.message||'Eroare generator anunț')}</div>`;
   }finally{
     if(btn){btn.disabled=false;btn.textContent='✨ Generează anunț din dosar';}
+    // Necondiționat (și pe eroare) — repară starea butonului din listă chiar dacă `btn` de mai sus
+    // e o referință orfană (alt renderResearchProjects() a rulat între timp, vezi genInProgress mai sus).
+    genInProgress.delete(projectId);
+    renderResearchProjects();
+    renderGenStatusBadge();
   }
 }
 // Un singur click: recalculează verdictul ȘI regenerează draftul de anunț, din aceleași linkuri —
@@ -6382,14 +6421,18 @@ function emagPublicLinkButtonHtml(){
 async function openPublicProductLink(){
   const l=listingData||researchData?.listing;
   if(!listingProjectId||!l?.title){toast('Anunțul trebuie generat dintr-un dosar Research salvat, ca să aibă link public','err');return;}
+  const url=`${location.origin}/produs/${listingProjectId}`;
+  // Scriem în clipboard SINCRON, înainte de orice await — Safari respinge navigator.clipboard.writeText()
+  // dacă vine după o pauză asincronă (fetch), considerând că nu mai suntem în gestul de click al userului
+  // (bug real raportat: „nu mai merge pe Safari" — Chrome e mai permisiv, de-aia funcționa acolo).
+  try{await navigator.clipboard.writeText(url);}catch(e){toast('Eroare copiere link','err');return;}
   try{
-    // salvăm anunțul curent înainte de link, ca pagina publică să reflecte mereu ultima variantă
+    // salvăm anunțul curent după — pagina publică să reflecte mereu ultima variantă — dar link-ul
+    // e deja copiat corect, indiferent dacă salvarea de mai jos reușește sau nu.
     await apiJson('/api/research-projects',{action:'save_listing',project_id:listingProjectId,status:'generat',listing:l},30000);
-    const url=`${location.origin}/produs/${listingProjectId}`;
-    copyText(url);
     toast('Link public copiat ✓ — lipește-l în eMAG, la „Adaugă produs cu URL"');
   }catch(e){
-    toast('Eroare la generarea linkului public: '+(e.message||e),'err');
+    toast('Link copiat, dar anunțul nu s-a putut re-salva: '+(e.message||e),'err');
   }
 }
 async function saveListingPriceObservations(a,pages){
@@ -10829,13 +10872,30 @@ document.addEventListener('keydown',rptCardKeyHandler);
 document.addEventListener('click',ev=>{if(!ev.target.closest('#ss-drop')&&!ev.target.closest('.ss-field'))document.getElementById('ss-drop').classList.remove('on');});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkSupplierRestockAlerts();});
 setInterval(checkSupplierRestockAlerts,10*60*1000);
-// Deschide direct secțiunea din link (#stoc, #raport, #dashboard...), dacă există în URL
-const initHash=(location.hash||'').replace('#','');
-if(initHash&&document.getElementById('page-'+initHash))goPage(initHash);
-window.addEventListener('hashchange',()=>{
-  const h=(location.hash||'').replace('#','');
-  if(h&&document.getElementById('page-'+h))goPage(h);
-});
+// Deschide direct secțiunea din link (#stoc, #raport, #dashboard...), sau un dosar Research anume
+// (#research/<id>, generat de „🔗 Copiază link dosar" / goToResearchProject) — al doilea segment
+// există DOAR ca fiecare dosar să aibă un URL propriu, altfel toate dosarele arătau exact „#research",
+// identic, iar Safari sărea mereu la tab-ul deja deschis în loc să permită tab-uri separate per dosar.
+function openHashRoute(raw){
+  const h=(raw||'').replace('#','');
+  if(!h)return;
+  const slash=h.indexOf('/');
+  const page=slash<0?h:h.slice(0,slash);
+  const sub=slash<0?'':h.slice(slash+1);
+  if(!document.getElementById('page-'+page))return;
+  goPage(page);
+  if(page==='research'&&sub){
+    const pid=Number(sub);
+    const tryOpen=(n)=>{
+      if(researchProjectsLoaded){
+        if(researchProjects.some(p=>Number(p.id)===pid))goToResearchProject(pid);
+      }else if(n>0)setTimeout(()=>tryOpen(n-1),300);
+    };
+    tryOpen(20);
+  }
+}
+openHashRoute(location.hash);
+window.addEventListener('hashchange',()=>openHashRoute(location.hash));
 applyTabOrder();
 load();
 // Preîncarcă dosarele Research tăcut, în fundal, chiar de la pornirea aplicației — nu doar la prima
