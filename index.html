@@ -2065,6 +2065,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:175,text:'Galerie AI produs — patru schimbări la cerere directă. (1) Descărcare „toate imaginile" reparată la sursă: acum construiește o singură arhivă ZIP (la calitatea originală, fără nicio recomprimare) și pornește UN singur download din click-ul utilizatorului, în loc de 8 click-uri programatice pe care Safari le bloca/ignora parțial. (2) Promptul de generare rescris ca planul să ceară explicit cadre DIFERITE unul de altul (nu variații ale aceleiași poze) — cadrul curent primește acum și lista scenelor deja folosite de celelalte cadre din plan, ca AI-ul să nu repete fundal/unghi/iluminare. (3) Regula „fără oameni" a fost relaxată la cea intenționată de la început: oameni și animale sunt acum binevenite atunci când au sens comercial (ex. o pisică lângă litieră, o mână care folosește produsul) — restricția rămâne STRICT despre copii/minori, niciodată permiși. (4) Cadrele de la poziția 4 în sus primesc acum text real suprapus pe poză (titlu + până la 3 bife cu beneficii/specificații reale ale produsului, desenat de aplicație cu canvas, nu inventat de AI în pixeli) — banda de jos își ajustează automat înălțimea și mărimea textului după cât conținut există, ca nicio bifă să nu iasă tăiată la titluri lungi (bug găsit și reparat chiar în testarea acestei funcții). Primele 3 cadre rămân curat fotografice, fără text. Prompt-urile de generare/plan nu pot fi verificate live (cheia OpenAI există doar în Vercel) — spune-mi dacă pozele chiar ies diferite între ele și dacă apar oameni/animale unde au sens',date:'2026-08-21'},
   {n:174,text:'Galerie AI produs — trei schimbări mari, la cerere directă. (1) Flux complet automat: din momentul în care ai 2+ poze de referință selectate, analiza (Visual DNA) + planul + generarea TUTUROR imaginilor pornesc singure, fără niciun buton apăsat (rămâne un mic delay de 1.5s după ultima selecție, ca să nu pornească de la fiecare click în parte); butoanele „Creează planul"/„Generează toate" rămân disponibile pentru reluare manuală, dar nu mai sunt obligatorii. (2) Setările galeriei (număr imagini/stil/format) rămân salvate la refresh, la fel ca referințele și imaginile generate — nimic nu mai revine la valorile implicite. (3) Reparare directă la cauza rejecțiilor „safety system": Visual DNA detectă acum automat dacă vreo poză de referință arată o persoană reală (frecvent în poze eMAG pentru produse de copii) și o exclude din generarea propriu-zisă (rămâne folosită doar pentru analiza vizuală) — poza semnalată apare cu un mic marcaj 🧑 în selector. Necesită re-rularea migration_product_gallery_ai.sql în Supabase (coloană nouă pentru setări)',date:'2026-08-21'},
   {n:173,text:'Bug real reparat — „Creează planul galeriei" eșua cu „JSON Parse error: Expected \']\'" la aproape orice încercare. Cauza: cererea de plan (8 cadre, câmpuri multiple per cadru) cerea deja limita maximă de tokeni permisă de server (4000 — cea mai mare din toată aplicația) și răspunsul complet o depășea des, ieșind trunchiat la mijlocul JSON-ului. Reparat din trei direcții: (1) limita serverului ridicată la 8000, (2) schema cadrelor redusă la câmpurile chiar folosite (3 câmpuri generate degeaba, nefolosite nicăieri, au fost scoase — mai puțin de generat, mai puține șanse de trunchiere), (3) plasă de siguranță nouă — dacă răspunsul tot iese trunchiat, planul recuperează acum câte cadre COMPLETE există (ex. 5 din 8), în loc să eșueze integral pentru câteva cadre lipsă la final; primești un mesaj clar dacă planul a ieșit parțial, cu opțiunea de a reîncerca',date:'2026-08-21'},
   {n:172,text:'Galerie AI produs — „Generation failed: rejected by the safety system" reparat la sursă pentru cazul cel mai frecvent: sistemul de siguranță OpenAI refuză aproape orice cerere de generare/editare imagine care implică o persoană reală, mai ales un copil (frecvent la produse pentru copii — ghiozdane, jucării etc.) — iar planul de galerie cerea des cadre „lifestyle" de tipul „copil purtând produsul". Acum planul e instruit explicit să sugereze utilizarea prin context/decor (lângă o bancă, pe un scaun, într-un hol), NICIODATĂ printr-o persoană care ține/poartă produsul — regulă aplicată atât la crearea planului cât și direct în promptul de generare a imaginii, ca plasă de siguranță și pentru planuri mai vechi. Dacă respingerea tot apare (motive de siguranță nu sunt 100% predictibile), mesajul e acum clar în română, cu sugestia de a reîncerca sau edita manual instrucțiunea cadrului',date:'2026-08-21'},
@@ -7539,7 +7540,7 @@ async function createGalleryPlan(projectId){
   g.planLoading=true;refreshGallery(projectId);
   try{
     const competitorNote=researchCompetitorSummary(pr);
-    const prompt=`Ești director de imagine pentru un magazin online (marketplace eMAG/Trendyol). Creează un plan de galerie foto pentru produsul de mai jos — exact ${g.settings.count} cadre, stil "${g.settings.style}", format ${g.settings.format}.
+    const prompt=`Ești director de imagine + copywriter SEO pentru un magazin online (marketplace eMAG/Trendyol). Creează un plan de galerie foto pentru produsul de mai jos — exact ${g.settings.count} cadre, stil "${g.settings.style}", format ${g.settings.format}. Scop: poze care opresc scroll-ul, transmit încredere și CONVERTESC — nu poze plate de catalog.
 
 PRODUCT VISUAL DNA (obligatoriu de respectat la fiecare cadru — nu inventa alte caracteristici):
 ${JSON.stringify(g.dna)}
@@ -7558,14 +7559,16 @@ Structură orientativă (adaptează ultimele cadre la tipul REAL de produs — n
 4 PROFILE/3-QUARTER — unghi diferit de hero, cea mai multă informație nouă
 Restul cadrelor (adaptate la produs): dimensiuni, beneficii principale, funcționalități/caracteristici, capacitate/conținut pachet sau alt aspect relevant pentru ACEST produs specific.
 
-Pentru fiecare cadru întoarce DOAR aceste câmpuri, CONCIS (fără ele planul iese trunchiat la 8 cadre): position (1..${g.settings.count}), type (scurt, ex. "hero"/"lifestyle"/"profile"/"dimensions"/"benefits"/"features"/"capacity"/altul potrivit produsului), title (max 5 cuvinte, românește), scene_description (max 20 cuvinte, românește), camera_angle (2-4 cuvinte), background (max 8 cuvinte), product_position (2-4 cuvinte), generation_prompt (instrucțiune în engleză pentru generarea imaginii, care descrie scena/fundalul/lumina/unghiul, max 300 caractere — NU descrie produsul, acela vine din Visual DNA).
+REGULĂ OBLIGATORIE — CADRE VIZIBIL DIFERITE ÎNTRE ELE, NU VARIAȚII ALE ACELUIAȘI SHOT: fiecare cadru trebuie să aibă fundal, decor, unghi de cameră și iluminare DIFERITE față de TOATE celelalte cadre din acest plan — nu 7 poze de produs pe fundaluri aproape identice cu doar unghiul schimbat. Diversifică radical: interior/exterior, aproape/departe, zi/seară, cu/fără elemente auxiliare. Dacă două cadre ar arăta la fel, schimbă unul complet.
 
-Primele ${Math.min(4,g.settings.count)} cadre trebuie să fie fotografice (hero/lifestyle/profile), fără text sau callout-uri. Restul pot fi informative.
+REGULĂ — OAMENI/ANIMALE, când ajută vânzarea: NU evita implicit oamenii sau animalele — folosește-le exact acolo unde un cumpărător s-ar aștepta să le vadă și ar crește încrederea (ex. produs pentru animale de companie → un câine/pisică folosind produsul real; produs de uz casnic → o mână de adult, discret, care îl folosește). Restricția reală e STRICT despre COPII: nu genera NICIUN cadru cu un copil/minor (chiar dacă produsul e pentru copii — în acel caz arată produsul prin context/decor, nu prin copil). Animale și adulți generici (fără accent pe față, fără persoană identificabilă) sunt binevenite atunci când au sens comercial real.
+
+Pentru fiecare cadru întoarce DOAR aceste câmpuri, CONCIS (fără ele planul iese trunchiat la 8 cadre): position (1..${g.settings.count}), type (scurt, ex. "hero"/"lifestyle"/"profile"/"dimensions"/"benefits"/"features"/"capacity"/altul potrivit produsului), title (max 5 cuvinte, românește, orientat spre beneficiu/SEO), scene_description (max 20 cuvinte, românește), camera_angle (2-4 cuvinte), background (max 8 cuvinte), product_position (2-4 cuvinte), generation_prompt (instrucțiune în engleză pentru generarea imaginii, care descrie scena/fundalul/lumina/unghiul/persoane sau animale dacă e cazul, max 300 caractere — NU descrie produsul, acela vine din Visual DNA), overlay_bullets (array de 0-3 texte FOARTE scurte, max 4-5 cuvinte fiecare, românește — beneficiu sau specificație reală, DOAR din datele produsului de mai sus, NU inventa cifre/caracteristici; array gol pentru primele ${Math.min(3,g.settings.count)} cadre, care rămân curat fotografice).
+
+Primele ${Math.min(3,g.settings.count)} cadre trebuie să fie fotografice (hero/lifestyle/profile), fără text sau callout-uri — las-o loc vizual generos (spațiu liber, nu aglomerat) în josul cadrului pentru cadrele URMĂTOARE care VOR primi text suprapus de aplicație. Restul cadrelor (poziția ${Math.min(3,g.settings.count)+1} și mai departe) sunt informative, cu overlay_bullets completat.
 Nu copia compoziția/fundalul/layout-ul vreunui concurent — creează o compoziție originală.
 
-REGULĂ OBLIGATORIE — FĂRĂ OAMENI ÎN NICIUN CADRU: cadrele „lifestyle" trebuie să sugereze utilizarea prin CONTEXT/DECOR (ex. ghiozdanul lângă o bancă de școală, pe un scaun lângă cărți și rechizite, într-un hol de școală, agățat de un cuier, lângă o ușă de clasă), NU printr-o persoană/copil/mână/față care îl poartă sau ține. Generatorul de imagini refuză aproape orice cerere care implică o persoană reală (mai ales un copil) într-o imagine generată/editată — orice cadru cu oameni are șanse mari să eșueze cu eroare de la sistemul de siguranță al furnizorului. Dacă produsul e destinat copiilor (ghiozdan, jucărie etc.), evită și mai strict orice sugestie de persoană — rămâi STRICT la produs + decor/context, fără siluete, fără mâini, fără umbre de persoană.
-
-Răspunde STRICT cu JSON, câmpuri scurte, fără text în plus: {"frames":[{"position":1,"type":"hero","title":"...","scene_description":"...","camera_angle":"...","background":"...","product_position":"...","generation_prompt":"..."}]}`;
+Răspunde STRICT cu JSON, câmpuri scurte, fără text în plus: {"frames":[{"position":1,"type":"hero","title":"...","scene_description":"...","camera_angle":"...","background":"...","product_position":"...","generation_prompt":"...","overlay_bullets":[]}]}`;
     // maxTokens ridicat (era 4000, cel mai mare din toată aplicația) + schemă redusă la câmpurile
     // chiar folosite (main_message/specifications_used/benefits_used erau generate, dar nefolosite
     // nicăieri — pură risipă de tokeni) — bug real găsit: planul ieșea trunchiat la 8 cadre
@@ -7619,7 +7622,7 @@ async function regenerateFramePlan(projectId,i){
   toast('Regenerez planul cadrului…');
   try{
     const l=listingData||listingFactoryData?.listing||{};
-    const prompt=`Product Visual DNA: ${JSON.stringify(g.dna)}\nProdus: ${l.title||''}\nCadrul curent (de îmbunătățit, păstrează type-ul „${f.type}" și poziția ${f.position}): ${JSON.stringify(f)}\nRescrie acest cadru, cu o abordare diferită/mai bună, stil "${g.settings.style}", format ${g.settings.format}. FĂRĂ oameni/persoane/copii/mâini în scenă — sugerează utilizarea DOAR prin context/decor (ex. lângă o bancă, pe un scaun, într-un hol), niciodată printr-o persoană care ține/poartă produsul (generatorul de imagini refuză aproape orice cerere cu o persoană reală, mai ales copii). Răspunde STRICT cu JSON, concis: {"position":${f.position},"type":"...","title":"max 5 cuvinte","scene_description":"max 20 cuvinte","camera_angle":"...","background":"...","product_position":"...","generation_prompt":"engleză, max 300 caractere"}`;
+    const prompt=`Product Visual DNA: ${JSON.stringify(g.dna)}\nProdus: ${l.title||''}\nCadrul curent (de îmbunătățit, păstrează type-ul „${f.type}" și poziția ${f.position}): ${JSON.stringify(f)}\nRescrie acest cadru, cu o abordare VIZIBIL diferită/mai bună (alt fundal, alt unghi, altă iluminare), stil "${g.settings.style}", format ${g.settings.format}. Oameni/animale sunt binevenite dacă au sens comercial pentru acest produs (ex. animal de companie folosind produsul) — restricția reală e STRICT despre copii/minori, evită-i complet. Dacă poziția ${f.position} e peste ${Math.min(3,g.settings.count)}, completează overlay_bullets (0-3 texte foarte scurte, beneficiu/specificație reală din datele produsului, NU inventa). Răspunde STRICT cu JSON, concis: {"position":${f.position},"type":"...","title":"max 5 cuvinte","scene_description":"max 20 cuvinte","camera_angle":"...","background":"...","product_position":"...","generation_prompt":"engleză, max 300 caractere","overlay_bullets":[]}`;
     const text=await callAI([{role:'user',content:prompt}],null,1200,'analysis');
     const m=text.match(/\{[\s\S]*\}/);
     if(!m)throw new Error('Răspuns AI invalid');
@@ -7642,6 +7645,78 @@ async function generateAllGalleryImages(projectId){
   g.generating=false;refreshGallery(projectId);
   toast('Generare galerie finalizată ✓');
 }
+// Scrie text pe canvas cu word-wrap simplu, întors la linia următoare când depășește lățimea maximă.
+function wrapCanvasText(ctx,text,x,y,maxWidth,lineHeight,draw){
+  if(draw===undefined)draw=true;
+  const words=String(text||'').split(/\s+/).filter(Boolean);
+  let line='';
+  for(const w of words){
+    const test=line?line+' '+w:w;
+    if(ctx.measureText(test).width>maxWidth&&line){if(draw)ctx.fillText(line,x,y);line=w;y+=lineHeight;}
+    else line=test;
+  }
+  if(line){if(draw)ctx.fillText(line,x,y);}
+  return y+lineHeight;
+}
+// Suprapune titlul + beneficii/specificații reale peste o fotografie generată (canvas 2D) — cerut
+// explicit: text REAL, desenat de aplicație, nu inventat de AI direct în pixelii imaginii. Banda de jos
+// se dimensionează DINAMIC după câte rânduri ocupă titlul+bifele (măsurate întâi cu wrapCanvasText în
+// modul draw=false) — bug real găsit la test: bandă fixă la 30% din H tăia ultima bifă când titlul sau
+// vreo bifă se înfășura pe 2 rânduri. Dacă textul tot nu încape sub plafonul de bandă, fonturile se
+// micșorează proporțional (min 70%) înainte să înceapă să se renunțe la bife.
+async function applyGalleryOverlay(imageUrl,title,bullets){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    img.crossOrigin='anonymous';
+    img.onload=()=>{
+      try{
+        const canvas=document.createElement('canvas');
+        canvas.width=img.naturalWidth||1024;canvas.height=img.naturalHeight||1024;
+        const ctx=canvas.getContext('2d');
+        ctx.drawImage(img,0,0,canvas.width,canvas.height);
+        const W=canvas.width,H=canvas.height;
+        const pad=Math.round(W*0.055),topPad=Math.round(W*0.045),bottomPad=Math.round(W*0.03);
+        const maxBandH=Math.round(H*0.48),minBandH=Math.round(H*0.24);
+        const bullets3=(bullets||[]).filter(Boolean).slice(0,3);
+        const measure=scale=>{
+          ctx.font=`700 ${Math.round(W*0.05*scale)}px Arial, Helvetica, sans-serif`;
+          let h=wrapCanvasText(ctx,title||'',0,0,W-pad*2,Math.round(W*0.06*scale),false);
+          h+=Math.round(W*0.015*scale);
+          ctx.font=`600 ${Math.round(W*0.03*scale)}px Arial, Helvetica, sans-serif`;
+          bullets3.forEach(b=>{h+=wrapCanvasText(ctx,String(b||''),0,0,W-pad*2-Math.round(W*0.04),Math.round(W*0.038*scale),false)+Math.round(W*0.006*scale);});
+          return h;
+        };
+        let scale=1,contentH=measure(1);
+        const avail=maxBandH-topPad-bottomPad;
+        if(contentH>avail){scale=Math.max(0.7,avail/contentH);contentH=measure(scale);}
+        const bandH=Math.min(maxBandH,Math.max(minBandH,contentH+topPad+bottomPad));
+        const grad=ctx.createLinearGradient(0,H-bandH,0,H);
+        grad.addColorStop(0,'rgba(12,12,16,0)');
+        grad.addColorStop(0.4,'rgba(12,12,16,0.80)');
+        grad.addColorStop(1,'rgba(12,12,16,0.92)');
+        ctx.fillStyle=grad;
+        ctx.fillRect(0,H-bandH,W,bandH);
+        let y=H-bandH+topPad+Math.round(W*0.05*scale*0.85);
+        ctx.textBaseline='alphabetic';
+        ctx.fillStyle='#ffffff';
+        ctx.font=`700 ${Math.round(W*0.05*scale)}px Arial, Helvetica, sans-serif`;
+        y=wrapCanvasText(ctx,title||'',pad,y,W-pad*2,Math.round(W*0.06*scale));
+        y+=Math.round(W*0.015*scale);
+        ctx.font=`600 ${Math.round(W*0.03*scale)}px Arial, Helvetica, sans-serif`;
+        bullets3.forEach(b=>{
+          if(y>H-bottomPad){return;}
+          ctx.fillStyle='#4ade80';
+          ctx.fillText('✓',pad,y);
+          ctx.fillStyle='#f4f4f5';
+          y=wrapCanvasText(ctx,String(b||''),pad+Math.round(W*0.04),y,W-pad*2-Math.round(W*0.04),Math.round(W*0.038*scale))+Math.round(W*0.006*scale);
+        });
+        resolve(canvas.toDataURL('image/jpeg',0.92));
+      }catch(e){reject(e);}
+    };
+    img.onerror=()=>reject(new Error('Nu am putut încărca imaginea pentru a adăuga text'));
+    img.src=imageUrl;
+  });
+}
 async function generateOneGalleryImage(projectId,f){
   const g=galleryFor(projectId);
   f.status='generating';delete f._error;refreshGallery(projectId);
@@ -7658,14 +7733,20 @@ async function generateOneGalleryImage(projectId,f){
     // — spune-mi dacă imaginile chiar variază acum între ele.
     const preserve=(g.dna?.must_preserve||[]).slice(0,8).join(', ')||'forma, culoarea, imprimeul și accesoriile exacte ale produsului';
     const realism=g.settings.style==='Natural comercial'?' Photorealistic, natural lighting and shadows, normal camera perspective, slight photographic imperfections — like a real photo taken with a good camera, NOT a CGI/3D-render look; avoid artificial glow, impossible reflections, floating product, exaggerated symmetry.':'';
+    // Context din CELELALTE cadre ale aceluiași plan — trimis explicit, ca acest cadru să nu iasă
+    // vizual identic cu vecinii lui (bug real raportat: 7-8 poze aproape indistincte între ele).
+    const otherFrames=g.plan.filter(x=>x!==f&&(x.background||x.scene_description)).slice(0,7)
+      .map(x=>`- ${x.background||x.scene_description}`).join('\n');
+    const hasOverlay=(f.overlay_bullets||[]).length>0;
     const promptText=`Create a NEW commercial product photo with a COMPLETELY DIFFERENT setting, background, camera angle and context than the reference photos — do NOT just retouch, crop or lightly edit the reference image; this must look like a different photo shoot entirely.
 
 MAIN INSTRUCTION — the scene for this specific photo: ${f.scene_description||f.goal||'a distinct, new composition — do not repeat a plain studio product shot if another frame already used one'}
 Camera angle: ${f.camera_angle||'choose one that fits this scene, different from a flat front-on product shot'}. Background/setting: ${f.background||'as described above'}. Product position in frame: ${f.product_position||'as needed for this scene'}.
 ${f.generation_prompt||''}
-
+${otherFrames?`\nThis product already has OTHER photos in this same gallery with these settings — this new photo must look CLEARLY different from ALL of them (different background, different lighting, different angle, different mood):\n${otherFrames}\n`:''}
 The product shown in the reference images must stay 100% recognizable and unchanged: ${preserve}. Do not invent, remove or redesign any product feature. Everything else — background, setting, camera, lighting, other objects, context — must change completely to match the scene above.
-Do NOT include any person, human figure, face, hand or body part in this image, even partially or implied — show the product plus its setting/context only, never someone using or holding it. This applies especially strictly if the product could be for children.
+People and animals are welcome in this photo when commercially relevant to the product (e.g. a pet using a pet product, an adult's hand using a household item) — keep any person generic/non-identifiable (no prominent face), and NEVER include a child or minor under any circumstance, even implied.
+${hasOverlay?'Leave generous clean visual space (e.g. lower third or one side) with simple background there — text will be overlaid on this photo afterward by the app, do not add any text/graphics yourself.':''}
 Create an original composition — do not reproduce any competitor's composition, background or layout.${realism}`.slice(0,4000);
     // Excludem din generare (nu și din Visual DNA/validare) pozele de referință pe care Visual DNA
     // le-a semnalat ca arătând o persoană reală — sursa cea mai probabilă a respingerilor „rejected by
@@ -7677,10 +7758,22 @@ Create an original composition — do not reproduce any competitor's composition
     const safeRefs=allRefs.filter(u=>!peopleRefs.has(u));
     const refs=(safeRefs.length?safeRefs:allRefs).slice(0,2);
     const data=await apiJson('/api/ai-image',{sourceImageUrls:refs,prompt:promptText,format:g.settings.format},150000);
-    const absoluteUrl=location.origin+data.url;
-    f.url=absoluteUrl;f.status='generated';
-    if(f.dbId){try{await dbPatch(`product_generated_images?id=eq.${f.dbId}`,{generated_image_url:absoluteUrl,status:'generated',source_images:refs});}catch(e){}}
-    else{try{const rows=await dbPost('product_generated_images',{project_id:projectId,position:f.position,type:f.type,title:f.title,prompt:f.generation_prompt,source_images:refs,generated_image_url:absoluteUrl,status:'generated'});if(rows?.[0]?.id)f.dbId=rows[0].id;}catch(e){}}
+    let finalUrl=location.origin+data.url;
+    f.rawUrl=finalUrl;
+    // Text pe poză (beneficii/specificații) pentru cadrele 4+ — cerut explicit: text REAL, desenat de
+    // aplicație peste fotografie (canvas), nu generat de AI direct în pixeli (care poate greși/inventa
+    // cifre). Dacă randarea overlay-ului eșuează dintr-un motiv oarecare, folosim poza brută — mai bine
+    // fără text decât fără nicio poză.
+    if((f.overlay_bullets||[]).length){
+      try{
+        const composedDataUrl=await applyGalleryOverlay(finalUrl,f.title,f.overlay_bullets);
+        const up=await apiJson('/api/ai-image',{imageData:composedDataUrl},60000);
+        finalUrl=location.origin+up.url;
+      }catch(e){console.warn('Overlay text eșuat, folosesc poza fără text:',e);}
+    }
+    f.url=finalUrl;f.status='generated';
+    if(f.dbId){try{await dbPatch(`product_generated_images?id=eq.${f.dbId}`,{generated_image_url:finalUrl,status:'generated',source_images:refs});}catch(e){}}
+    else{try{const rows=await dbPost('product_generated_images',{project_id:projectId,position:f.position,type:f.type,title:f.title,prompt:f.generation_prompt,source_images:refs,generated_image_url:finalUrl,status:'generated'});if(rows?.[0]?.id)f.dbId=rows[0].id;}catch(e){}}
     refreshGallery(projectId);
     await validateGalleryImage(projectId,f);
   }catch(e){
@@ -7695,7 +7788,8 @@ async function validateGalleryImage(projectId,f){
   try{
     const content=[
       ...g.refImages.slice(0,3).map(u=>({type:'image',source:{type:'url',url:u}})),
-      {type:'image',source:{type:'url',url:f.url}},
+      // f.rawUrl (fără text suprapus, dacă exista overlay) — comparăm produsul real, nu banda de text.
+      {type:'image',source:{type:'url',url:f.rawUrl||f.url}},
       {type:'text',text:`Primele imagini sunt fotografii ORIGINALE ale produsului real. Ultima imagine este o variantă generată de AI, pornind de la Product Visual DNA de mai jos. Compară-le și verifică dacă produsul din imaginea generată e IDENTIC cu cel din pozele originale (nu doar similar).
 Visual DNA: ${JSON.stringify(g.dna||{})}
 Elemente critice de verificat: ${(g.dna?.must_preserve||[]).join(', ')}
@@ -7744,17 +7838,73 @@ function moveGalleryFrame(projectId,i,dir){
   g.plan.forEach((f,idx)=>{f.position=idx+1;if(f.dbId)dbPatch(`product_generated_images?id=eq.${f.dbId}`,{position:f.position}).catch(()=>{});});
   refreshGallery(projectId);
 }
-function downloadAllGalleryImages(projectId){
+// ── ZIP minimal, fără dependențe (metoda „store" — fără compresie; pozele sunt deja PNG/JPEG
+// comprimate, tot n-ar mai scădea mult, și ținem codul simplu, fără nicio librărie externă) ──
+// Bug real raportat: descărcarea „toate" declanșa 8 click-uri secvențiale pe <a download> — multe
+// browsere (mai ales Safari) blochează sau ignoră descărcări multiple pornite programatic, nu de un
+// gest real al utilizatorului, deci ieșeau incomplete/deloc. O arhivă ZIP e UN singur fișier, UN
+// singur download, pornit direct din click-ul utilizatorului — sigur, la calitatea originală exactă
+// (fără nicio recomprimare/pierdere).
+function crc32(bytes){
+  let crc=0xFFFFFFFF;
+  for(let i=0;i<bytes.length;i++){
+    let c=(crc^bytes[i])&0xFF;
+    for(let k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);
+    crc=(crc>>>8)^c;
+  }
+  return(crc^0xFFFFFFFF)>>>0;
+}
+function buildZip(files){
+  const now=new Date();
+  const dosTime=((now.getHours()&0x1F)<<11)|((now.getMinutes()&0x3F)<<5)|((now.getSeconds()>>1)&0x1F);
+  const dosDate=(((now.getFullYear()-1980)&0x7F)<<9)|(((now.getMonth()+1)&0xF)<<5)|(now.getDate()&0x1F);
+  const parts=[];let offset=0;const centralParts=[];
+  for(const f of files){
+    const nameBytes=new TextEncoder().encode(f.name);
+    const crc=crc32(f.bytes),size=f.bytes.length;
+    const local=new Uint8Array(30+nameBytes.length),lv=new DataView(local.buffer);
+    lv.setUint32(0,0x04034b50,true);lv.setUint16(4,20,true);lv.setUint16(6,0,true);lv.setUint16(8,0,true);
+    lv.setUint16(10,dosTime,true);lv.setUint16(12,dosDate,true);lv.setUint32(14,crc,true);
+    lv.setUint32(18,size,true);lv.setUint32(22,size,true);lv.setUint16(26,nameBytes.length,true);lv.setUint16(28,0,true);
+    local.set(nameBytes,30);
+    parts.push(local,f.bytes);
+    const central=new Uint8Array(46+nameBytes.length),cv=new DataView(central.buffer);
+    cv.setUint32(0,0x02014b50,true);cv.setUint16(4,20,true);cv.setUint16(6,20,true);cv.setUint16(8,0,true);cv.setUint16(10,0,true);
+    cv.setUint16(12,dosTime,true);cv.setUint16(14,dosDate,true);cv.setUint32(16,crc,true);
+    cv.setUint32(20,size,true);cv.setUint32(24,size,true);cv.setUint16(28,nameBytes.length,true);
+    cv.setUint16(30,0,true);cv.setUint16(32,0,true);cv.setUint16(34,0,true);cv.setUint16(36,0,true);
+    cv.setUint32(38,0,true);cv.setUint32(42,offset,true);
+    central.set(nameBytes,46);
+    centralParts.push(central);
+    offset+=local.length+f.bytes.length;
+  }
+  const centralSize=centralParts.reduce((s,p)=>s+p.length,0),centralOffset=offset;
+  const end=new Uint8Array(22),ev=new DataView(end.buffer);
+  ev.setUint32(0,0x06054b50,true);ev.setUint16(8,files.length,true);ev.setUint16(10,files.length,true);
+  ev.setUint32(12,centralSize,true);ev.setUint32(16,centralOffset,true);
+  return new Blob([...parts,...centralParts,end],{type:'application/zip'});
+}
+async function downloadAllGalleryImages(projectId){
   const g=galleryFor(projectId);
   const ready=g.plan.filter(f=>f.url);
   if(!ready.length){toast('Nicio imagine gata de descărcat','err');return;}
-  ready.forEach((f,i)=>{
-    setTimeout(()=>{
-      const a=document.createElement('a');
-      a.href=f.url;a.download=`${String(i+1).padStart(2,'0')}-${(f.type||'img').toLowerCase()}.png`;
-      document.body.appendChild(a);a.click();a.remove();
-    },i*400);
-  });
+  toast('Pregătesc arhiva ZIP…');
+  try{
+    const files=await Promise.all(ready.map(async(f,i)=>{
+      const resp=await fetch(f.url);
+      if(!resp.ok)throw new Error('Nu am putut descărca imaginea '+(i+1));
+      const bytes=new Uint8Array(await resp.arrayBuffer());
+      const ext=(resp.headers.get('content-type')||'image/png').includes('jpeg')?'jpg':'png';
+      return{name:`${String(i+1).padStart(2,'0')}-${(f.type||'img').toLowerCase().replace(/[^a-z0-9]+/g,'-')}.${ext}`,bytes};
+    }));
+    const blob=buildZip(files);
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download='galerie-produs.zip';
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),15000);
+    toast(`Arhivă ZIP cu ${files.length} imagini descărcată ✓`);
+  }catch(e){toast('Eroare la crearea arhivei ZIP: '+(e.message||e),'err');}
 }
 
 // Adaugă manual o poză externă (orice URL http/https) în „Poze selectate" — util mai ales când
