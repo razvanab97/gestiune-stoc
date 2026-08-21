@@ -2100,6 +2100,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:182,text:'Generator anunțuri — două completări la cererea directă. (1) Butonul de copy din „🔢 Bancă de coduri EAN" (lista de coduri disponibile) era tot în dreapta — mutarea anterioară a acoperit doar EAN-ul de pe cardul anunțului, nu și lista din bancă; acum e la stânga și acolo. (2) „🏷 Bancă de coduri produs" — fiecare cod generat apare acum ca 2 piese direct-copiabile (click PE text, nu pe un buton separat): „ID produs" (doar cifre) și „Cod produs" (AB+cifre), fiecare cu bifă ✓ vizibilă după ce a fost copiată. După ce AMBELE piese ale codului activ (cel mai recent) au fost copiate, se generează automat următorul cod — nu mai trebuie apăsat manual „+ Generează cod nou" de fiecare dată',date:'2026-08-21'},
   {n:181,text:'Generator anunțuri — cinci reparații/ajustări la cererea directă. (1) „📄 Preset eMAG ERP" și „📄 Preset eMAG (produs nou)" nu mai apar deloc în rândul de butoane (înainte rămâneau vizibile, doar dezactivate) — reapar când le reactivăm. (2) „🔑 eMAG PNK" (portocaliu) și „🔗 Link public produs" (albastru) au acum culori distincte între ele, plus spațiu vizibil mai mare între ele. (3) Mai multă spațiere între titlu/titlu scurt/EAN/categorie — erau înghesuite unul sub altul. (4) Bug real reparat — EAN-ul unei listări prelua uneori un cod „real", găsit prin scraping pe un link concurent din dosar, ÎNAINTEA băncii proprii de coduri EAN — dar un asemenea cod scraped nu e sigur (poate aparține unui produs similar, nu identic), risc de EAN greșit pe eMAG. Acum EAN-ul vine STRICT din „🔢 Bancă de coduri EAN" — codul folosit tot dispare automat din bancă (asta funcționa deja corect). (5) Butonul „Copiază EAN" mutat din dreapta codului în stânga lui, la îndemână, primul lucru pe care dai click',date:'2026-08-21'},
   {n:180,text:'Research (dosar): rândul de Furnizor din tabel are acum un fundal verde deschis, distinct de restul — zonă delimitată vizual de listările concurenței (eMAG/Trendyol de dedesubt), e sursa costului nostru, nu o listare de comparat',date:'2026-08-21'},
   {n:179,text:'Generator anunțuri — reorganizare + funcții noi la cerere directă. (1) „🖼 Galerie AI produs" mută-o ÎNAINTE de „📋 eMAG — Listing Readiness" (era după). (2) Galeria nu mai generează automat imagini plătite imediat după plan — planul se oprește la cadre („📋 Copiază prompt" vizibil pe fiecare, alternativa gratuită prin ChatGPT), generarea plătită pornește doar la apăsarea explicită „🚀 Generează toate imaginile". (3) „📄 Preset eMAG ERP" și „📄 Preset eMAG (produs nou)" dezactivate temporar — rămân active „📋 Ghid completare eMAG" și „🔗 Link public produs", plus un ghid nou „🔑 eMAG PNK" (pentru produse care există deja în catalog, te asociezi la un PNK — listează PNK-urile eMAG găsite în dosar, cu buton de copiere pe fiecare). (4) „Ghid completare eMAG" arată acum și prețul minim/maxim de piață + prețul recomandat (aceleași calcule ca din cadranul eMAG al dosarului), la secțiunea Prețuri — reper direct înainte de a completa „Preț vânzare". (5) Toată pagina e mai aerisită — padding/spațiere mai mari pe cardurile de rezultat (anunț, galerie, listing readiness) și pe secțiunile dintre ele',date:'2026-08-21'},
@@ -5879,9 +5880,10 @@ function renderEanPoolList(){
   if(!el)return;
   if(!Array.isArray(eanPoolCodes)){el.innerHTML='';return;}
   if(!eanPoolCodes.length){el.innerHTML='<div style="font-size:21px;color:var(--t3);padding:8px 4px">Nu mai ai coduri EAN disponibile.</div>';return;}
-  el.innerHTML=eanPoolCodes.map(c=>`<div class="ean-pool-row" id="ean-pool-row-${c.id}" style="justify-content:space-between;gap:8px">
-    <label style="width:auto;flex:1;min-width:0"><input type="checkbox" onchange="markEanCodeUsed(${c.id},this)"> <span style="font-family:var(--mono)">${esc(c.ean)}</span></label>
+  // Butonul de copy la stânga (cerut direct — la îndemână, primul lucru pe care dai click, nu ultimul).
+  el.innerHTML=eanPoolCodes.map(c=>`<div class="ean-pool-row" id="ean-pool-row-${c.id}" style="justify-content:flex-start;gap:8px">
     <button class="btn btn-sm" style="flex-shrink:0" onclick="copyText(${esc(JSON.stringify(c.ean))})" title="Copiază codul EAN">📋 Copiază</button>
+    <label style="width:auto;flex:1;min-width:0"><input type="checkbox" onchange="markEanCodeUsed(${c.id},this)"> <span style="font-family:var(--mono)">${esc(c.ean)}</span></label>
   </div>`).join('');
 }
 async function refreshEanPoolCount(){
@@ -5927,13 +5929,15 @@ async function addEanCodes(){
 // se generează determinist din contorul zilnic — vezi allocateProductCode). Istoricul e doar per
 // sesiune de browser (nimic de persistat: codurile nu se „epuizează", oricând poți genera altul nou).
 let productCodeHistory=[];
-function productCodeRowHtml(code){
-  return`<div class="ean-pool-row" style="justify-content:space-between;gap:8px">
-    <span style="font-family:var(--mono)"><strong>AB${esc(code)}</strong> <span style="color:var(--t3);font-size:19px">— cod produs · ID produs ${esc(code)}</span></span>
-    <span style="display:flex;gap:6px;flex-shrink:0">
-      <button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify('AB'+code))})" title="Copiază codul complet (pentru câmpul „Cod produs”)">📋 Copiază tot</button>
-      <button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(code))})" title="Copiază doar cifrele (pentru câmpul „ID produs”)">📋 Doar cifrele</button>
-    </span>
+// Fiecare cod, împărțit în 2 piese direct-copiabile (click PE text, nu un buton generic separat —
+// aceeași convenție ca .rsx-pnk din tabelul Research): „ID produs" (doar cifre) și „Cod produs"
+// (AB+cifre). Bifa ✓ persistă pe intrarea din istoric (nu doar vizual, temporar), ca să se vadă
+// clar ce anume a fost deja copiat, chiar și după un re-randare.
+function productCodeRowHtml(entry,idx){
+  return`<div class="ean-pool-row" style="justify-content:flex-start;gap:8px;flex-wrap:wrap">
+    <button class="rsx-pnk" onclick="copyProductCodePart(${idx},'digits')" title="Copiază doar cifrele (pentru câmpul „ID produs”)">${esc(entry.code)}${entry.copiedDigits?' ✓':''}</button>
+    <button class="rsx-pnk" onclick="copyProductCodePart(${idx},'full')" title="Copiază codul complet (pentru câmpul „Cod produs”)">AB${esc(entry.code)}${entry.copiedFull?' ✓':''}</button>
+    <span style="font-size:18px;color:var(--t3)">ID produs · Cod produs</span>
   </div>`;
 }
 function renderProductCodeList(){
@@ -5942,13 +5946,26 @@ function renderProductCodeList(){
   if(!productCodeHistory.length){el.innerHTML='<div style="font-size:21px;color:var(--t3);padding:8px 4px">Niciun cod generat încă în această sesiune.</div>';return;}
   el.innerHTML=productCodeHistory.map(productCodeRowHtml).join('');
 }
+function copyProductCodePart(idx,part){
+  const entry=productCodeHistory[idx];
+  if(!entry)return;
+  if(part==='digits'){copyText(entry.code);entry.copiedDigits=true;}
+  else{copyText('AB'+entry.code);entry.copiedFull=true;}
+  renderProductCodeList();
+  // Doar codul ACTIV (cel mai recent, idx 0) declanșează generarea automată a următorului — cerut
+  // direct: după ce ambele piese au fost copiate, nu mai trebuie apăsat manual „+ Generează cod nou".
+  // Istoricul mai vechi rămâne doar jurnal — bifarea retroactivă a unui cod vechi nu redeschide ciclul.
+  if(idx===0&&entry.copiedFull&&entry.copiedDigits){
+    toast('Ambele coduri copiate ✓ — generez automat următorul');
+    generateProductCode();
+  }
+}
 async function generateProductCode(){
   try{
     const code=await allocateProductCode();
-    productCodeHistory.unshift(code);
+    productCodeHistory.unshift({code,copiedFull:false,copiedDigits:false});
     renderProductCodeList();
-    copyText('AB'+code);
-    toast(`Cod generat: AB${code} — copiat ✓`);
+    toast(`Cod nou generat: AB${code} ✓`);
   }catch(e){
     toast('Eroare la generarea codului: '+(e.message||e),'err');
   }
