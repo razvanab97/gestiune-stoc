@@ -2107,6 +2107,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:184,text:'Ghidul „🔑 eMAG PNK" — două completări la cerere directă. (1) Secțiunea „PNK de asociat" arată acum explicit câte PNK-uri eMAG au fost găsite în linkurile dosarului (ex. „3 PNK-uri găsite"), nu doar lista fără context de amploare. (2) „ID produs"/„Cod produs" din secțiunea Identificare sunt acum 2 piese direct-copiabile (click PE text, ca la Banca de coduri produs) — după ce AMBELE au fost copiate, se generează automat următorul cod, util când asociezi mai multe PNK-uri la rând din același dosar, fără să mai cauți generarea manuală în altă parte a paginii. Eliminat și un rând duplicat („Cod produs (al tău, intern)" apărea de 2 ori în ghid)',date:'2026-08-21'},
   {n:183,text:'Ghidul „🔑 eMAG PNK" — redesign vizual la cerere directă. Secțiunile (PNK de asociat/Prețuri/Stocuri/Identificare/etc.) au acum fundal alternant alb/gri, ca să se vadă clar din priviri când treci de la una la alta, nu un perete continuu de rânduri identice. Fiecare PNK candidat din dosar arată acum și brandul (înainte de codul PNK), ca reper rapid când mai multe candidate au titluri aproape identice. Secțiunea Prețuri arată acum, primul rând, prețul de achiziție al produsului — comparație directă cu prețul de vânzare, înainte de calculele de piață',date:'2026-08-21'},
   {n:182,text:'Generator anunțuri — două completări la cererea directă. (1) Butonul de copy din „🔢 Bancă de coduri EAN" (lista de coduri disponibile) era tot în dreapta — mutarea anterioară a acoperit doar EAN-ul de pe cardul anunțului, nu și lista din bancă; acum e la stânga și acolo. (2) „🏷 Bancă de coduri produs" — fiecare cod generat apare acum ca 2 piese direct-copiabile (click PE text, nu pe un buton separat): „ID produs" (doar cifre) și „Cod produs" (AB+cifre), fiecare cu bifă ✓ vizibilă după ce a fost copiată. După ce AMBELE piese ale codului activ (cel mai recent) au fost copiate, se generează automat următorul cod — nu mai trebuie apăsat manual „+ Generează cod nou" de fiecare dată',date:'2026-08-21'},
   {n:181,text:'Generator anunțuri — cinci reparații/ajustări la cererea directă. (1) „📄 Preset eMAG ERP" și „📄 Preset eMAG (produs nou)" nu mai apar deloc în rândul de butoane (înainte rămâneau vizibile, doar dezactivate) — reapar când le reactivăm. (2) „🔑 eMAG PNK" (portocaliu) și „🔗 Link public produs" (albastru) au acum culori distincte între ele, plus spațiu vizibil mai mare între ele. (3) Mai multă spațiere între titlu/titlu scurt/EAN/categorie — erau înghesuite unul sub altul. (4) Bug real reparat — EAN-ul unei listări prelua uneori un cod „real", găsit prin scraping pe un link concurent din dosar, ÎNAINTEA băncii proprii de coduri EAN — dar un asemenea cod scraped nu e sigur (poate aparține unui produs similar, nu identic), risc de EAN greșit pe eMAG. Acum EAN-ul vine STRICT din „🔢 Bancă de coduri EAN" — codul folosit tot dispare automat din bancă (asta funcționa deja corect). (5) Butonul „Copiază EAN" mutat din dreapta codului în stânga lui, la îndemână, primul lucru pe care dai click',date:'2026-08-21'},
@@ -6493,8 +6494,33 @@ function emagPnkCandidatesHtml(proj){
   if(!links.length)return`<div style="font-size:22px;color:var(--t3);margin-bottom:8px">Niciun PNK eMAG găsit încă în linkurile din dosar — caută manual produsul pe eMAG și copiază PNK-ul lui de acolo.</div>`;
   // Brand afișat ÎNAINTE de PNK (cerut direct) — ca reper rapid, ca să știi pe care candidat lucrezi
   // fără să citești tot titlul (util mai ales când mai multe candidate au titluri aproape identice).
-  return`<div style="font-size:22px;color:var(--t3);margin-bottom:8px">PNK-uri eMAG găsite în linkurile din acest dosar — alege-l pe cel cu care asociezi oferta:</div>
+  // Numărul explicit (cerut direct) — cât de multe linkuri din dosar au deja un PNK extras, ca reper
+  // rapid câte asocieri ai de făcut din acest dosar, nu doar o listă fără context de amploare.
+  return`<div style="font-size:22px;color:var(--t3);margin-bottom:8px"><strong style="color:var(--t1)">${links.length}</strong> PNK-uri eMAG găsite în linkurile din acest dosar — alege-l pe cel cu care asociezi oferta:</div>
     <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">${links.map(l=>`<div class="emg-guide-row"><div class="emg-guide-k" style="font-size:21px;font-weight:400">${esc((l.title||l.url||'').slice(0,90))}${l.brand?`<div style="font-size:19px;color:var(--acc2);font-weight:800;margin-top:3px">🏷 ${esc(l.brand)}</div>`:''}</div><div class="emg-guide-v">${esc(l.pnk)}</div><div><button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(String(l.pnk)))})">📋 Copiază</button></div></div>`).join('')}</div>`;
+}
+// „ID produs" (cifre) și „Cod produs" (AB+cifre) — aceeași convenție ca „🏷 Bancă de coduri produs":
+// 2 piese direct-copiabile (click PE text), nu un buton generic alăturat. Cerut direct: după ce AMBELE
+// au fost copiate, avansează automat la următorul cod — nu mai trebuie generat manual din altă parte
+// când asociezi mai multe PNK-uri la rând din același dosar.
+let pnkGuideCodeCopyState={digits:false,full:false};
+function emgPnkCodeChipsRowHtml(d){
+  return`<div class="emg-guide-row"><div class="emg-guide-k">ID produs · Cod produs</div><div class="emg-guide-v" style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="rsx-pnk" onclick="copyPnkGuideCodePart('digits')" title="Copiază doar cifrele (pentru câmpul „ID produs”)">${esc(d.f.ext_id)}${pnkGuideCodeCopyState.digits?' ✓':''}</button>
+    <button class="rsx-pnk" onclick="copyPnkGuideCodePart('full')" title="Copiază codul complet (pentru câmpul „Cod produs”)">${esc(d.f.part_number)}${pnkGuideCodeCopyState.full?' ✓':''}</button>
+  </div><div></div></div>`;
+}
+async function copyPnkGuideCodePart(part){
+  const l=listingData||researchData?.listing;
+  if(!l)return;
+  if(part==='digits'){copyText(String(l.emag_id||''));pnkGuideCodeCopyState.digits=true;}
+  else{copyText('AB'+(l.emag_id||''));pnkGuideCodeCopyState.full=true;}
+  if(pnkGuideCodeCopyState.digits&&pnkGuideCodeCopyState.full){
+    toast('Ambele coduri copiate ✓ — generez automat următorul');
+    l.emag_id=await allocateProductCode();
+    pnkGuideCodeCopyState={digits:false,full:false};
+  }
+  openEmagPnkGuide();// re-randează tot ghidul — simplu și robust, reutilizează logica existentă
 }
 // Ghid separat de „Ghid completare eMAG" — pentru produse care EXISTĂ deja în catalogul eMAG (te
 // asociezi la un PNK găsit prin Research, nu creezi produs nou): doar oferta ta (preț/stoc/identificare),
@@ -6510,7 +6536,7 @@ async function openEmagPnkGuide(){
   // Grupat pe secțiuni cu fundal alternant (alb/gri, cerut direct) — mai ușor de urmărit din priviri
   // scurte decât un perete continuu de rânduri identice, fără să adauge culori zgomotoase.
   const sections=[
-    {title:'PNK de asociat',rows:emagPnkCandidatesHtml(proj)+emgGuideRow('Cod produs (al tău, intern)',d.f.part_number)},
+    {title:'PNK de asociat',rows:emagPnkCandidatesHtml(proj)},
     {title:'Prețuri',rows:
       emgGuideRow('Preț achiziție (cost)',proj?.acquisition_price?Number(proj.acquisition_price).toFixed(2)+' RON':null,{hint:'Confirmă din priviri că prețul de vânzare de mai jos e corect — comparat cu costul, nu doar cu piața'})
       +emgMarketPriceGuideRows(proj)
@@ -6525,8 +6551,7 @@ async function openEmagPnkGuide(){
       +emgGuideRow('În câte zile poți reaproviziona',null,{hint:'Completează manual'})},
     {title:'Identificare',rows:
       emgGuideRow('EAN',d.f.ean)
-      +emgGuideRow('ID produs',d.f.ext_id)
-      +emgGuideRow('Cod produs',d.f.part_number)},
+      +emgPnkCodeChipsRowHtml(d)},
     {title:'Proprietățile ofertei & programarea modificărilor',rows:
       emgGuideRow('Garanție (luni)',null,{hint:'Completează manual'})
       +emgGuideRow('Taxa verde',null,{hint:'Completează manual dacă produsul intră sub incidența taxei verzi (electronice/electrocasnice etc.)'})
