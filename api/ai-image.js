@@ -26,6 +26,11 @@ function sizeForFormat(fmt){
   if(fmt==='16:9')return'1536x1024';
   return'1024x1024';
 }
+// Cost real măsurat (test manual, 21.08.2026): fără „quality" explicit, gpt-image-1 alege implicit
+// treapta „high" — 4160 tokeni ieșire, ~$0.17/poză. Treapta „medium" costă de ~4x mai puțin (~$0.04),
+// diferența vizuală fiind greu de observat la poze de produs 1024px — implicit acum „medium" peste tot;
+// Galeria AI produs poate cere explicit „high"/„low" din setările ei (vezi quality în index.html).
+function imageQuality(q){return['low','medium','high','auto'].includes(q)?q:'medium';}
 
 function isPrivateHost(h){
   return h==='localhost'||h.endsWith('.localhost')||h==='0.0.0.0'||h==='::1'
@@ -118,6 +123,7 @@ async function handleGenerate(req,res){
     form.append('prompt',prompt);
     form.append('size',size);
     form.append('n','1');
+    form.append('quality',imageQuality(req.body?.quality));
 
     const aiResp=await fetch('https://api.openai.com/v1/images/edits',{
       method:'POST',

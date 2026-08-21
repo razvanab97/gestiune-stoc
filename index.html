@@ -2065,6 +2065,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:176,text:'Galerie AI produs — două schimbări legate de cost, în urma discuției directe despre costurile reale (măsurate cu o cheie API de test): (1) calitatea implicită a pozelor generate a scăzut de la „high" (~$0.17/poză, alegerea implicită a OpenAI când nu se cere altceva) la „medium" (~$0.04/poză) — o reducere de ~4x, diferența vizuală fiind greu de observat la poze de produs; calitatea rămâne configurabilă per dosar (redusă/medie/înaltă) în „Strategie galerie". (2) Buton nou „📋 Copiază prompt" pe fiecare cadru (planificat sau deja generat) — copiază exact instrucțiunea de generare, ca alternativă GRATUITĂ la generarea prin API: se lipește în aplicația ChatGPT (unde există deja abonament, deci generarea nu costă suplimentar per poză), iar rezultatul se încarcă înapoi cu „📤 Încarcă manual"/„Înlocuiește" — fără niciun apel AI plătit. Bug real reparat pe acest fir: încărcarea manuală pentru un cadru niciodată generat cu succes (ex. respins de sistemul de siguranță) se salva doar în memorie și dispărea la refresh, fără rând în baza de date',date:'2026-08-21'},
   {n:175,text:'Galerie AI produs — patru schimbări la cerere directă. (1) Descărcare „toate imaginile" reparată la sursă: acum construiește o singură arhivă ZIP (la calitatea originală, fără nicio recomprimare) și pornește UN singur download din click-ul utilizatorului, în loc de 8 click-uri programatice pe care Safari le bloca/ignora parțial. (2) Promptul de generare rescris ca planul să ceară explicit cadre DIFERITE unul de altul (nu variații ale aceleiași poze) — cadrul curent primește acum și lista scenelor deja folosite de celelalte cadre din plan, ca AI-ul să nu repete fundal/unghi/iluminare. (3) Regula „fără oameni" a fost relaxată la cea intenționată de la început: oameni și animale sunt acum binevenite atunci când au sens comercial (ex. o pisică lângă litieră, o mână care folosește produsul) — restricția rămâne STRICT despre copii/minori, niciodată permiși. (4) Cadrele de la poziția 4 în sus primesc acum text real suprapus pe poză (titlu + până la 3 bife cu beneficii/specificații reale ale produsului, desenat de aplicație cu canvas, nu inventat de AI în pixeli) — banda de jos își ajustează automat înălțimea și mărimea textului după cât conținut există, ca nicio bifă să nu iasă tăiată la titluri lungi (bug găsit și reparat chiar în testarea acestei funcții). Primele 3 cadre rămân curat fotografice, fără text. Prompt-urile de generare/plan nu pot fi verificate live (cheia OpenAI există doar în Vercel) — spune-mi dacă pozele chiar ies diferite între ele și dacă apar oameni/animale unde au sens',date:'2026-08-21'},
   {n:174,text:'Galerie AI produs — trei schimbări mari, la cerere directă. (1) Flux complet automat: din momentul în care ai 2+ poze de referință selectate, analiza (Visual DNA) + planul + generarea TUTUROR imaginilor pornesc singure, fără niciun buton apăsat (rămâne un mic delay de 1.5s după ultima selecție, ca să nu pornească de la fiecare click în parte); butoanele „Creează planul"/„Generează toate" rămân disponibile pentru reluare manuală, dar nu mai sunt obligatorii. (2) Setările galeriei (număr imagini/stil/format) rămân salvate la refresh, la fel ca referințele și imaginile generate — nimic nu mai revine la valorile implicite. (3) Reparare directă la cauza rejecțiilor „safety system": Visual DNA detectă acum automat dacă vreo poză de referință arată o persoană reală (frecvent în poze eMAG pentru produse de copii) și o exclude din generarea propriu-zisă (rămâne folosită doar pentru analiza vizuală) — poza semnalată apare cu un mic marcaj 🧑 în selector. Necesită re-rularea migration_product_gallery_ai.sql în Supabase (coloană nouă pentru setări)',date:'2026-08-21'},
   {n:173,text:'Bug real reparat — „Creează planul galeriei" eșua cu „JSON Parse error: Expected \']\'" la aproape orice încercare. Cauza: cererea de plan (8 cadre, câmpuri multiple per cadru) cerea deja limita maximă de tokeni permisă de server (4000 — cea mai mare din toată aplicația) și răspunsul complet o depășea des, ieșind trunchiat la mijlocul JSON-ului. Reparat din trei direcții: (1) limita serverului ridicată la 8000, (2) schema cadrelor redusă la câmpurile chiar folosite (3 câmpuri generate degeaba, nefolosite nicăieri, au fost scoase — mai puțin de generat, mai puține șanse de trunchiere), (3) plasă de siguranță nouă — dacă răspunsul tot iese trunchiat, planul recuperează acum câte cadre COMPLETE există (ex. 5 din 8), în loc să eșueze integral pentru câteva cadre lipsă la final; primești un mesaj clar dacă planul a ieșit parțial, cu opțiunea de a reîncerca',date:'2026-08-21'},
@@ -7231,7 +7232,7 @@ function removeAiImage(url){
 let galleryState={};
 const GALLERY_MAX_CONCURRENT=2;
 function galleryFor(projectId){
-  if(!galleryState[projectId])galleryState[projectId]={refImages:[],dna:null,dnaLoading:false,planLoading:false,generating:false,loaded:false,plan:[],settings:{count:8,style:'Natural comercial',format:'1:1'}};
+  if(!galleryState[projectId])galleryState[projectId]={refImages:[],dna:null,dnaLoading:false,planLoading:false,generating:false,loaded:false,plan:[],settings:{count:8,style:'Natural comercial',format:'1:1',quality:'medium'}};
   return galleryState[projectId];
 }
 function dbRowToGalleryFrame(r){
@@ -7317,6 +7318,7 @@ function galleryInnerHtml(projectId){
     <label>Număr imagini<select onchange="updateGallerySetting(${projectId},'count',this.value)">${[5,6,7,8,9,10].map(n=>`<option value="${n}" ${g.settings.count===n?'selected':''}>${n}</option>`).join('')}</select></label>
     <label>Stil<select onchange="updateGallerySetting(${projectId},'style',this.value)">${['Natural comercial','Premium studio','Lifestyle realist','Minimal marketplace'].map(s=>`<option ${g.settings.style===s?'selected':''}>${esc(s)}</option>`).join('')}</select></label>
     <label>Format<select onchange="updateGallerySetting(${projectId},'format',this.value)">${['1:1','4:5','9:16'].map(f=>`<option ${g.settings.format===f?'selected':''}>${f}</option>`).join('')}</select></label>
+    <label title="Calitatea imaginii generate — afectează direct costul: high ≈ 4x mai scump decât medium, greu de observat vizual la poze de produs">Calitate<select onchange="updateGallerySetting(${projectId},'quality',this.value)">${[['low','redusă — ieftin'],['medium','medie — recomandat'],['high','înaltă — scump']].map(([v,lbl])=>`<option value="${v}" ${(g.settings.quality||'medium')===v?'selected':''}>${lbl}</option>`).join('')}</select></label>
   </div>`);
   html.push(`<div style="display:flex;gap:8px;flex-wrap:wrap;margin:10px 0">
     <button class="btn btn-sm btn-acc" ${g.refImages.length?'':'disabled'} onclick="createGalleryPlanFlow(${projectId})">${g.dnaLoading?'⏳ Analizez pozele…':g.planLoading?'⏳ Creez planul…':g.plan.length?'↻ Recreează planul galeriei':'✨ Creează planul galeriei'}</button>
@@ -7345,7 +7347,12 @@ function galleryFrameCardHtml(projectId,f,i){
       ${f.status==='failed'?`<div style="color:var(--rd);font-size:19px;margin:4px 0">⚠️ Generation failed${f._error?': '+esc(f._error):''} <button class="btn btn-sm" onclick="regenerateGalleryFrame(${projectId},${i})">Retry</button></div>`:''}
       <div style="font-size:19px;color:var(--t2);margin:6px 0">${esc(f.scene_description||f.goal||'')}</div>
       ${f._editing?`<textarea class="gallery-prompt-edit" onblur="saveGalleryFramePrompt(${projectId},${i},this.value)">${esc(f.generation_prompt||'')}</textarea>`
-        :`<div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn btn-sm" onclick="toggleGalleryFrameEdit(${projectId},${i})">✏️ Editează instrucțiunea</button><button class="btn btn-sm" onclick="regenerateFramePlan(${projectId},${i})">↻ Regenerează planul cadrului</button></div>`}
+        :`<div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn btn-sm" onclick="toggleGalleryFrameEdit(${projectId},${i})">✏️ Editează instrucțiunea</button>
+          <button class="btn btn-sm" onclick="regenerateFramePlan(${projectId},${i})">↻ Regenerează planul cadrului</button>
+          <button class="btn btn-sm" onclick="copyGalleryFramePrompt(${projectId},${i})" title="Fără cost AI — lipește promptul în aplicația ChatGPT (unde ai deja abonament), atașează manual pozele de referință selectate mai sus, apoi încarcă rezultatul cu „📤 Încarcă manual"">📋 Copiază prompt</button>
+          <label class="btn btn-sm" style="cursor:pointer" title="Încarcă o poză generată manual (ex. din ChatGPT) — fără niciun cost AI">📤 Încarcă manual<input type="file" accept="image/*" style="display:none" onchange="replaceGalleryFrameImage(${projectId},${i},event)"></label>
+        </div>`}
     </div>`;
   }
   const score=f.identityScore;
@@ -7362,6 +7369,7 @@ function galleryFrameCardHtml(projectId,f,i){
       <button class="btn btn-sm" onclick="insertImageIntoDescriptionFromPool(${esc(JSON.stringify(f.url))})" title="Adaugă direct în descriere, la final">➕ Descriere</button>
       <button class="btn btn-sm" onclick="regenerateGalleryFrame(${projectId},${i})">↻ Regenerare</button>
       <button class="btn btn-sm" onclick="toggleGalleryFrameEdit(${projectId},${i})">✏️ Editează prompt</button>
+      <button class="btn btn-sm" onclick="copyGalleryFramePrompt(${projectId},${i})" title="Fără cost AI — lipește promptul în aplicația ChatGPT, apoi încarcă rezultatul cu „Înlocuiește" în loc de „↻ Regenerare" (plătită)">📋 Copiază prompt</button>
       <label class="btn btn-sm" style="cursor:pointer">Înlocuiește<input type="file" accept="image/*" style="display:none" onchange="replaceGalleryFrameImage(${projectId},${i},event)"></label>
       <a class="btn btn-sm" href="${esc(f.url)}" download="${String(i+1).padStart(2,'0')}-${esc((f.type||'img').toLowerCase())}.png">↓ Descarcă</a>
       <button class="btn btn-sm" onclick="moveGalleryFrame(${projectId},${i},-1)" ${i===0?'disabled':''}>↑</button>
@@ -7717,28 +7725,31 @@ async function applyGalleryOverlay(imageUrl,title,bullets){
     img.src=imageUrl;
   });
 }
-async function generateOneGalleryImage(projectId,f){
+// Instrucțiunea de generare pentru UN cadru — extrasă separat din generateOneGalleryImage ca să poată
+// fi refolosită și de copyGalleryFramePrompt (butonul „📋 Copiază prompt"), fără costul AI: promptul e
+// identic cu cel trimis efectiv la generarea automată, doar că utilizatorul îl lipește manual în
+// aplicația ChatGPT (unde are deja abonament, deci generarea nu costă suplimentar) și încarcă rezultatul
+// înapoi cu „📤 Încarcă manual" / „Înlocuiește" — vezi replaceGalleryFrameImage mai jos.
+function buildGalleryFramePrompt(projectId,f){
   const g=galleryFor(projectId);
-  f.status='generating';delete f._error;refreshGallery(projectId);
-  try{
-    // Bug real raportat: toate cele 8 cadre ieșeau ca variații ale ACELEIAȘI poze (aceeași poziție,
-    // fundal, unghi) — deși planul avea scene diferite per cadru. Cauza cea mai probabilă: promptul
-    // vechi ÎNCEPEA cu un bloc masiv „păstrează STRICT" (tot JSON-ul Visual DNA), care domina modelul
-    // spre „nu schimba nimic", iar cerința de scenă venea abia la mijloc, comprimată pe o linie — plus
-    // până la 6 poze de referință identice (product shot plat) trimise deodată, care ancorau puternic
-    // spre „mai fă o poză la fel". Acum: instrucțiunea de scenă vine ÎNTÂI și explicit ca prioritate,
-    // constrângerea de fidelitate e condensată (doar lista must_preserve, nu tot obiectul DNA), și
-    // trimitem mai puține poze de referință (2, nu 6) la generare — mai puțină ancorare vizuală spre
-    // „copiază exact ce vezi". Nu am putut testa live efectul (necesită cheia OpenAI, doar în Vercel)
-    // — spune-mi dacă imaginile chiar variază acum între ele.
-    const preserve=(g.dna?.must_preserve||[]).slice(0,8).join(', ')||'forma, culoarea, imprimeul și accesoriile exacte ale produsului';
-    const realism=g.settings.style==='Natural comercial'?' Photorealistic, natural lighting and shadows, normal camera perspective, slight photographic imperfections — like a real photo taken with a good camera, NOT a CGI/3D-render look; avoid artificial glow, impossible reflections, floating product, exaggerated symmetry.':'';
-    // Context din CELELALTE cadre ale aceluiași plan — trimis explicit, ca acest cadru să nu iasă
-    // vizual identic cu vecinii lui (bug real raportat: 7-8 poze aproape indistincte între ele).
-    const otherFrames=g.plan.filter(x=>x!==f&&(x.background||x.scene_description)).slice(0,7)
-      .map(x=>`- ${x.background||x.scene_description}`).join('\n');
-    const hasOverlay=(f.overlay_bullets||[]).length>0;
-    const promptText=`Create a NEW commercial product photo with a COMPLETELY DIFFERENT setting, background, camera angle and context than the reference photos — do NOT just retouch, crop or lightly edit the reference image; this must look like a different photo shoot entirely.
+  // Bug real raportat: toate cele 8 cadre ieșeau ca variații ale ACELEIAȘI poze (aceeași poziție,
+  // fundal, unghi) — deși planul avea scene diferite per cadru. Cauza cea mai probabilă: promptul
+  // vechi ÎNCEPEA cu un bloc masiv „păstrează STRICT" (tot JSON-ul Visual DNA), care domina modelul
+  // spre „nu schimba nimic", iar cerința de scenă venea abia la mijloc, comprimată pe o linie — plus
+  // până la 6 poze de referință identice (product shot plat) trimise deodată, care ancorau puternic
+  // spre „mai fă o poză la fel". Acum: instrucțiunea de scenă vine ÎNTÂI și explicit ca prioritate,
+  // constrângerea de fidelitate e condensată (doar lista must_preserve, nu tot obiectul DNA), și
+  // trimitem mai puține poze de referință (2, nu 6) la generare — mai puțină ancorare vizuală spre
+  // „copiază exact ce vezi". Nu am putut testa live efectul (necesită cheia OpenAI, doar în Vercel)
+  // — spune-mi dacă imaginile chiar variază acum între ele.
+  const preserve=(g.dna?.must_preserve||[]).slice(0,8).join(', ')||'forma, culoarea, imprimeul și accesoriile exacte ale produsului';
+  const realism=g.settings.style==='Natural comercial'?' Photorealistic, natural lighting and shadows, normal camera perspective, slight photographic imperfections — like a real photo taken with a good camera, NOT a CGI/3D-render look; avoid artificial glow, impossible reflections, floating product, exaggerated symmetry.':'';
+  // Context din CELELALTE cadre ale aceluiași plan — trimis explicit, ca acest cadru să nu iasă
+  // vizual identic cu vecinii lui (bug real raportat: 7-8 poze aproape indistincte între ele).
+  const otherFrames=g.plan.filter(x=>x!==f&&(x.background||x.scene_description)).slice(0,7)
+    .map(x=>`- ${x.background||x.scene_description}`).join('\n');
+  const hasOverlay=(f.overlay_bullets||[]).length>0;
+  return`Create a NEW commercial product photo with a COMPLETELY DIFFERENT setting, background, camera angle and context than the reference photos — do NOT just retouch, crop or lightly edit the reference image; this must look like a different photo shoot entirely.
 
 MAIN INSTRUCTION — the scene for this specific photo: ${f.scene_description||f.goal||'a distinct, new composition — do not repeat a plain studio product shot if another frame already used one'}
 Camera angle: ${f.camera_angle||'choose one that fits this scene, different from a flat front-on product shot'}. Background/setting: ${f.background||'as described above'}. Product position in frame: ${f.product_position||'as needed for this scene'}.
@@ -7748,6 +7759,24 @@ The product shown in the reference images must stay 100% recognizable and unchan
 People and animals are welcome in this photo when commercially relevant to the product (e.g. a pet using a pet product, an adult's hand using a household item) — keep any person generic/non-identifiable (no prominent face), and NEVER include a child or minor under any circumstance, even implied.
 ${hasOverlay?'Leave generous clean visual space (e.g. lower third or one side) with simple background there — text will be overlaid on this photo afterward by the app, do not add any text/graphics yourself.':''}
 Create an original composition — do not reproduce any competitor's composition, background or layout.${realism}`.slice(0,4000);
+}
+// Copiază promptul unui cadru fără niciun cost AI — alternativă gratuită la generarea automată,
+// pentru utilizatori cu abonament ChatGPT (unde generarea de imagini nu costă suplimentar per poză,
+// spre deosebire de API-ul OpenAI, facturat per token/imagine — vezi discuția de cost din chat).
+// Scriem în clipboard SINCRON, ca prim await (fără nimic async înainte) — Safari respinge scrierea
+// dacă vine după o pauză asincronă, la fel ca la openPublicProductLink.
+async function copyGalleryFramePrompt(projectId,i){
+  const g=galleryFor(projectId);const f=g.plan[i];if(!f)return;
+  const promptText=buildGalleryFramePrompt(projectId,f);
+  try{await navigator.clipboard.writeText(promptText);}
+  catch(e){window.prompt('Nu am putut copia automat — copiază manual textul de mai jos:',promptText);return;}
+  toast('Prompt copiat ✓ — lipește-l în ChatGPT, atașează pozele de referință selectate mai sus, apoi încarcă rezultatul cu „📤 Încarcă manual"');
+}
+async function generateOneGalleryImage(projectId,f){
+  const g=galleryFor(projectId);
+  f.status='generating';delete f._error;refreshGallery(projectId);
+  try{
+    const promptText=buildGalleryFramePrompt(projectId,f);
     // Excludem din generare (nu și din Visual DNA/validare) pozele de referință pe care Visual DNA
     // le-a semnalat ca arătând o persoană reală — sursa cea mai probabilă a respingerilor „rejected by
     // the safety system", indiferent cât de atent e formulat promptul de scenă (input-ul de imagine e
@@ -7757,7 +7786,7 @@ Create an original composition — do not reproduce any competitor's composition
     const allRefs=f.reference_images?.length?f.reference_images:g.refImages;
     const safeRefs=allRefs.filter(u=>!peopleRefs.has(u));
     const refs=(safeRefs.length?safeRefs:allRefs).slice(0,2);
-    const data=await apiJson('/api/ai-image',{sourceImageUrls:refs,prompt:promptText,format:g.settings.format},150000);
+    const data=await apiJson('/api/ai-image',{sourceImageUrls:refs,prompt:promptText,format:g.settings.format,quality:g.settings.quality},150000);
     let finalUrl=location.origin+data.url;
     f.rawUrl=finalUrl;
     // Text pe poză (beneficii/specificații) pentru cadrele 4+ — cerut explicit: text REAL, desenat de
@@ -7826,7 +7855,12 @@ async function replaceGalleryFrameImage(projectId,i,ev){
     const dataUrl=await resizeImageDataUrl(rawDataUrl,1600,.9);
     const data=await apiJson('/api/ai-image',{imageData:dataUrl},60000);
     f.url=location.origin+data.url;f.status='generated';f.approved=false;f.identityScore=null;f.validation={};
+    // Bug real găsit: cadrele niciodată generate cu succes (eșuate din prima încercare, ex. respinse de
+    // sistemul de siguranță) nu au încă f.dbId — fără ramura else de mai jos, o poză încărcată manual
+    // (ex. „📤 Încarcă manual" pentru fluxul gratuit cu ChatGPT) se salva doar în memorie și dispărea
+    // la refresh, ca și cum nu s-ar fi întâmplat nimic.
     if(f.dbId)await dbPatch(`product_generated_images?id=eq.${f.dbId}`,{generated_image_url:f.url,status:'generated',approved:false,identity_score:null,validation_result:{}}).catch(()=>{});
+    else{try{const rows=await dbPost('product_generated_images',{project_id:projectId,position:f.position,type:f.type,title:f.title,prompt:f.generation_prompt,source_images:f.reference_images||g.refImages||[],generated_image_url:f.url,status:'generated'});if(rows?.[0]?.id)f.dbId=rows[0].id;}catch(e){}}
     toast('Imagine înlocuită ✓');
   }catch(e){toast('Eroare la înlocuirea imaginii: '+(e.message||e),'err');}
   finally{if(ev?.target)ev.target.value='';refreshGallery(projectId);}
