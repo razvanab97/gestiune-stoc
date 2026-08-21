@@ -2107,6 +2107,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:185,text:'Generator anunțuri — buton nou „📋 Lipește din clipboard" lângă „+ Adaugă poză externă" (secțiunea „Poze selectate") — pentru poze de pe pagini care nu se pot fetch-ui automat (ex. Trendyol): faci un screenshot cu unealta nativă a sistemului (pe Mac, Cmd+Shift+4 copiază direct în clipboard, fără fișier pe disc), apoi un singur click aici, fără să salvezi și să încarci din nou local. Idee discutată direct — implementare pas 1: paste manual, un click per poză',date:'2026-08-21'},
   {n:184,text:'Ghidul „🔑 eMAG PNK" — două completări la cerere directă. (1) Secțiunea „PNK de asociat" arată acum explicit câte PNK-uri eMAG au fost găsite în linkurile dosarului (ex. „3 PNK-uri găsite"), nu doar lista fără context de amploare. (2) „ID produs"/„Cod produs" din secțiunea Identificare sunt acum 2 piese direct-copiabile (click PE text, ca la Banca de coduri produs) — după ce AMBELE au fost copiate, se generează automat următorul cod, util când asociezi mai multe PNK-uri la rând din același dosar, fără să mai cauți generarea manuală în altă parte a paginii. Eliminat și un rând duplicat („Cod produs (al tău, intern)" apărea de 2 ori în ghid)',date:'2026-08-21'},
   {n:183,text:'Ghidul „🔑 eMAG PNK" — redesign vizual la cerere directă. Secțiunile (PNK de asociat/Prețuri/Stocuri/Identificare/etc.) au acum fundal alternant alb/gri, ca să se vadă clar din priviri când treci de la una la alta, nu un perete continuu de rânduri identice. Fiecare PNK candidat din dosar arată acum și brandul (înainte de codul PNK), ca reper rapid când mai multe candidate au titluri aproape identice. Secțiunea Prețuri arată acum, primul rând, prețul de achiziție al produsului — comparație directă cu prețul de vânzare, înainte de calculele de piață',date:'2026-08-21'},
   {n:182,text:'Generator anunțuri — două completări la cererea directă. (1) Butonul de copy din „🔢 Bancă de coduri EAN" (lista de coduri disponibile) era tot în dreapta — mutarea anterioară a acoperit doar EAN-ul de pe cardul anunțului, nu și lista din bancă; acum e la stânga și acolo. (2) „🏷 Bancă de coduri produs" — fiecare cod generat apare acum ca 2 piese direct-copiabile (click PE text, nu pe un buton separat): „ID produs" (doar cifre) și „Cod produs" (AB+cifre), fiecare cu bifă ✓ vizibilă după ce a fost copiată. După ce AMBELE piese ale codului activ (cel mai recent) au fost copiate, se generează automat următorul cod — nu mai trebuie apăsat manual „+ Generează cod nou" de fiecare dată',date:'2026-08-21'},
@@ -7336,6 +7337,7 @@ function renderListingFactoryResult(l,pages,allImages=[]){
         <strong style="font-size:23px">Poze selectate (${imgs.length}) — gata de încărcat pe eMAG</strong>
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn btn-sm btn-acc" onclick="addExternalImage()">+ Adaugă poză externă</button>
+          <button class="btn btn-sm btn-blue" onclick="pasteImageFromClipboard()" title="Fă un screenshot direct pe pagina produsului (Cmd/Ctrl+Shift+4 pe Mac, sau orice unealtă de captură) — apoi apasă aici, fără să salvezi fișierul local">📋 Lipește din clipboard</button>
           ${imgs.length?`<button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(imgs.join('\n')))})">Copiază toate linkurile</button>`:''}
         </div>
       </div>
@@ -8131,6 +8133,34 @@ async function addExternalImage(){
   l.images=[...(l.images||[]),url];
   renderListingFactoryResult(l,listingFactoryData?.pages||[],listingFactoryData?.allImages||[]);
   toast('Poză externă adăugată ✓');
+}
+// Aduce o poză direct din clipboard-ul sistemului — cerut direct, ca alternativă la „descarcă local +
+// urcă din nou" pentru poze de pe pagini care nu se pot fetch-ui automat (ex. Trendyol): faci un
+// screenshot cu unealta nativă a sistemului (pe Mac, Cmd+Shift+4 copiază direct în clipboard, fără
+// fișier pe disc), apoi un singur click aici. Reutilizează exact același traseu de upload ca fișierele
+// (imageData base64 -> /api/ai-image, fără AI, doar stocare — vezi handleUpload în api/ai-image.js).
+async function pasteImageFromClipboard(){
+  const l=listingData||listingFactoryData?.listing;
+  if(!l){toast('Nu există anunț generat');return;}
+  if(!navigator.clipboard?.read){toast('Browserul nu suportă citirea directă din clipboard — folosește „+ Adaugă poză externă" sau încarcă manual fișierul','err');return;}
+  try{
+    const items=await navigator.clipboard.read();
+    let blob=null;
+    for(const item of items){
+      const type=item.types.find(t=>t.startsWith('image/'));
+      if(type){blob=await item.getType(type);break;}
+    }
+    if(!blob){toast('Nu am găsit nicio imagine în clipboard — fă întâi un screenshot (Cmd/Ctrl+Shift+4 pe Mac), apoi încearcă din nou','err');return;}
+    toast('Încarc poza din clipboard…');
+    const rawDataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(blob);});
+    const dataUrl=await resizeImageDataUrl(rawDataUrl,1600,.9);
+    const data=await apiJson('/api/ai-image',{imageData:dataUrl},60000);
+    l.images=[...(l.images||[]),location.origin+data.url];
+    renderListingFactoryResult(l,listingFactoryData?.pages||[],listingFactoryData?.allImages||[]);
+    toast('Poză din clipboard adăugată ✓');
+  }catch(e){
+    toast('Eroare la citirea clipboard-ului: '+(e.message||e)+' — pe unele browsere e nevoie de permisiune, sau folosește „+ Adaugă poză externă"','err');
+  }
 }
 // Inserează direct o poză din „Poze selectate" în descriere — fără prompt, fără să caute manual
 // URL-ul, un click pe „➕ În descriere" e suficient (vezi butonul de pe fiecare poză din pool).
