@@ -411,6 +411,9 @@ tr:hover td{background:var(--surf2)}
 .tabcfg-row:last-child{border-bottom:none}
 .tabcfg-arrows{display:flex;gap:4px}
 .tabcfg-arrows button{width:29px;height:29px;padding:0;font-size:22px;line-height:1}
+.uicust-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 4px;border-bottom:1px solid var(--b1);font-size:22px}
+.uicust-row:last-child{border-bottom:none}
+.uicust-row input[type=color]{width:38px;height:32px;padding:0;border:1px solid var(--b2);border-radius:8px;cursor:pointer;background:none}
 .pcom-prev-row{align-items:flex-start;padding:12px 0}
 .pcom-prev-row.pcom-row-amanat{opacity:.65}
 .pcom-prev-nm{white-space:normal;overflow:visible;text-overflow:clip}
@@ -1195,6 +1198,15 @@ th{font-weight:800!important;color:var(--t3)!important}
       <div class="notif-head"><span>Ordinea paginilor</span></div>
       <div class="notif-list" id="tabcfg-list"></div>
       <div style="padding:10px 14px;border-top:1px solid var(--b1)"><button type="button" class="btn btn-sm" onclick="resetTabOrder()">↻ Resetează la ordinea implicită</button></div>
+    </div>
+  </div>
+  <div class="notif-wrap">
+    <button class="notif-bell" id="uicust-btn" onclick="toggleUiCustPanel(event)" title="Editor interfață — personalizează culorile aplicației">🎨</button>
+    <div class="notif-panel" id="uicust-panel">
+      <div class="notif-head"><span>🎨 Editor interfață — Culori</span></div>
+      <div style="padding:10px 14px 0;font-size:19px;color:var(--t3)">Fiecare culoare de mai jos se aplică imediat, în toată aplicația, și rămâne salvată pe acest dispozitiv (și pe cont, dacă Supabase e disponibil).</div>
+      <div class="notif-list" id="uicust-list"></div>
+      <div style="padding:10px 14px;border-top:1px solid var(--b1)"><button type="button" class="btn btn-sm" onclick="resetUiCustomizations()">↻ Resetează la culorile implicite</button></div>
     </div>
   </div>
   <div class="notif-wrap">
@@ -2107,6 +2119,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:189,text:'Funcție nouă — „🎨 Editor interfață" (iconița lângă roata de personalizare a paginilor din antet). Prima etapă dintr-un plan mai mare: temă de culori — 12 selectoare grupate (Fundal, Suprafață, Text principal/secundar/terțiar, Accent, Succes, Avertizare, Eroare, Info/linkuri), fiecare aplicat live, imediat, în toată aplicația, fără reîncărcare. Grupate, nu pe variabile CSS individuale — mai multe variabile reprezintă azi aceeași culoare semantică (ex. avertizare = 3 variabile diferite, folosite în locuri diferite), un selector per variabilă brută ar fi dat un recolorat pe jumătate aplicat. Se salvează atât local (pe acest dispozitiv) cât și pe cont (dacă Supabase e disponibil), cu buton de resetare la valorile implicite. Etapele următoare (editare text static și arată/ascunde secțiuni întregi) urmează separat, verificate pas cu pas',date:'2026-08-21'},
   {n:188,text:'Bug real reparat — „⚠ Răspuns invalid de la AI" apărea des la citirea pozelor pentru linkuri Trendyol/furnizor (butonul „📷 Adaugă poze"), deși cererea către OpenAI reușea tehnic. Cauza: modelele gpt-5.6-* fac raționament intern înainte de răspuns, iar proxy-ul folosit de majoritatea funcțiilor AI din aplicație (sugestie categorie, citire poze, PDF facturi, Visual DNA galerie etc.) nu seta niciun nivel explicit — modelul putea consuma tot bugetul de tokeni pe raționament, fără text vizibil rămas pentru răspunsul efectiv. Același fix era deja aplicat, dar DOAR pentru generarea de anunțuri (endpoint separat); acum e aplicat și aici, la nivel central, pentru toate funcțiile care trec prin acest proxy',date:'2026-08-21'},
   {n:187,text:'Research: buton nou „📋 Lipește din clipboard" pe fiecare link care nu s-a putut deschide automat (Trendyol, dar și furnizor unde e cazul), lângă „📷 Adaugă poze" — fă un screenshot cu unealta nativă a sistemului (Cmd/Ctrl+Shift+4 pe Mac, direct în clipboard) pe pagina produsului, apoi un singur click aici, fără să salvezi fișierul local și să-l reîncarci. Trece prin exact același traseu de analiză AI (titlu/preț/specificații) ca fișierul încărcat manual',date:'2026-08-21'},
   {n:186,text:'Două completări la cerere directă, legate de poze de pe linkuri externe (ex. Trendyol). (1) La adăugarea unui link fetch-abil (Jumbo/verk/eMAG etc.), extragerea de poze e acum mult mai lată — pe lângă JSON-LD, caută acum și în chei JSON suplimentare (thumbnailUrl/zoomImage/largeImage/productImage/originalImage), array-uri „images":[...]" (tiparul folosit des de state-ul inițial al paginilor SPA, chiar dacă poza nu apare deloc în DOM-ul brut) și srcset — plus plafonul de poze reținute a crescut de la 16 la 30. Nu am putut testa live pe Trendyol (fără acces la o pagină reală din acest mediu) — spune-mi ce aduce pe un link real, ajustez exact pe ce lipsește. (2) Buton nou „⬇ Descarcă toate ca PNG" în „Poze selectate" — o singură arhivă ZIP cu toate pozele curente (externe sau interne, indiferent de formatul original) convertite la PNG',date:'2026-08-21'},
@@ -2605,6 +2618,8 @@ function toggleTabCfgPanel(ev){
 document.addEventListener('click',ev=>{
   const panel=document.getElementById('tabcfg-panel');
   if(panel&&panel.classList.contains('on')&&!ev.target.closest('#tabcfg-panel')&&!ev.target.closest('#tabcfg-btn'))panel.classList.remove('on');
+  const uiPanel=document.getElementById('uicust-panel');
+  if(uiPanel&&uiPanel.classList.contains('on')&&!ev.target.closest('#uicust-panel')&&!ev.target.closest('#uicust-btn'))uiPanel.classList.remove('on');
 });
 function renderTabCfgList(){
   const nav=document.querySelector('.h-tabs');
@@ -2638,6 +2653,102 @@ function resetTabOrder(){
   localStorage.removeItem(TAB_ORDER_KEY);
   toast('Ordinea implicită restaurată ✓');
   location.reload();
+}
+
+// ── Editor interfață — personalizare vizuală (Faza 1+2 dintr-un plan mai mare: comutator + temă de
+// culori; text static/ascundere secțiuni rămân pentru o etapă viitoare). Grupuri, nu variabile CSS
+// brute — mai multe variabile reprezintă azi aceeași culoare semantică (--am/--or/--yl = același
+// portocaliu, --gr/--grn = același verde), folosite în locuri diferite din aplicație; un picker per
+// variabilă brută ar da un recolorat pe jumătate aplicat, confuz. Fiecare grup scrie simultan în toate
+// variabilele echivalente, plus o variantă „-bg" calculată (tentă deschisă, nu aceeași culoare plină —
+// altfel fundalurile de insigne/butoane secundare ar ieși pline, nu deschise).
+const UI_COLOR_GROUPS=[
+  {id:'bg',label:'Fundal pagină',vars:['--bg','--bg1'],def:'#F6F7FB'},
+  {id:'surf',label:'Suprafață carduri',vars:['--surf','--bg2'],def:'#FFFFFF'},
+  {id:'surf2',label:'Suprafață secundară',vars:['--surf2'],def:'#F8F9FC'},
+  {id:'text1',label:'Text principal',vars:['--t1'],def:'#17181C'},
+  {id:'text2',label:'Text secundar',vars:['--t2'],def:'#3F4451'},
+  {id:'text3',label:'Text terțiar',vars:['--t3'],def:'#667085'},
+  {id:'acc',label:'Accent (butoane principale)',vars:['--acc','--dash-sales'],bgVars:['--acc-light'],def:'#7657F6'},
+  {id:'acc2',label:'Accent — culoare la hover',vars:['--acc2'],def:'#6342E8'},
+  {id:'gr',label:'Succes',vars:['--gr','--grn'],bgVars:['--gr-bg','--grn-bg'],def:'#12B76A'},
+  {id:'am',label:'Avertizare',vars:['--am','--or','--yl'],bgVars:['--am-bg','--or-bg','--yl-bg'],def:'#F79009'},
+  {id:'rd',label:'Eroare',vars:['--rd'],bgVars:['--rd-bg'],def:'#F04438'},
+  {id:'bl',label:'Info / linkuri',vars:['--bl'],bgVars:['--bl-bg'],def:'#2E90FA'}
+];
+const UI_CUSTOM_KEY='sm6_ui_customizations';
+let uiCustom={v:1,colors:{}};
+function hexToRgba(hex,alpha){
+  const h=String(hex||'').replace('#','');
+  const r=parseInt(h.substring(0,2),16)||0,g=parseInt(h.substring(2,4),16)||0,b=parseInt(h.substring(4,6),16)||0;
+  return`rgba(${r},${g},${b},${alpha})`;
+}
+function applyUiColorGroup(group,hex){
+  const style=document.documentElement.style;
+  (group.vars||[]).forEach(v=>style.setProperty(v,hex));
+  if(group.bgVars?.length){const tint=hexToRgba(hex,.12);group.bgVars.forEach(v=>style.setProperty(v,tint));}
+}
+function applyUiColors(){
+  UI_COLOR_GROUPS.forEach(g=>{const hex=uiCustom.colors[g.id];if(hex)applyUiColorGroup(g,hex);});
+}
+// Debounce generic — nu exista în cod până acum. Fără el, un color picker tras cu mouse-ul ar
+// bombarda /api/settings la fiecare tick al culorii, în loc de o singură cerere la final.
+function debounce(fn,ms){
+  let t;
+  return(...args)=>{clearTimeout(t);t=setTimeout(()=>fn(...args),ms);};
+}
+async function saveUiCustomizations(){
+  safeLocalSet(UI_CUSTOM_KEY,JSON.stringify(uiCustom));
+  try{await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:'ui_customizations',value:JSON.stringify(uiCustom)})});}
+  catch(e){console.warn('Nu am putut sincroniza personalizarea de interfață pe cont:',e);}
+}
+const saveUiCustomizationsDebounced=debounce(saveUiCustomizations,600);
+function setUiColor(groupId,hex){
+  uiCustom.colors[groupId]=hex;
+  const group=UI_COLOR_GROUPS.find(g=>g.id===groupId);
+  if(group)applyUiColorGroup(group,hex);
+  saveUiCustomizationsDebounced();
+}
+async function loadUiCustomizations(){
+  try{
+    const raw=localStorage.getItem(UI_CUSTOM_KEY);
+    if(raw){const parsed=JSON.parse(raw);if(parsed&&typeof parsed==='object')uiCustom={v:1,colors:{},...parsed};}
+  }catch(e){}
+  applyUiColors();
+  // Supabase e sursa mai proaspătă (ex. schimbată de pe alt dispozitiv) — dacă diferă de cache-ul
+  // local, se aplică peste și se resincronizează local, fără să blocheze pornirea aplicației.
+  try{
+    const r=await fetch('/api/settings?key=ui_customizations');
+    const data=await r.json();
+    if(data?.value){
+      const parsed=JSON.parse(data.value);
+      if(parsed&&typeof parsed==='object'){uiCustom={v:1,colors:{},...parsed};applyUiColors();safeLocalSet(UI_CUSTOM_KEY,JSON.stringify(uiCustom));}
+    }
+  }catch(e){}
+}
+function toggleUiCustPanel(ev){
+  ev.stopPropagation();
+  const panel=document.getElementById('uicust-panel');if(!panel)return;
+  const willOpen=!panel.classList.contains('on');
+  panel.classList.toggle('on');
+  if(willOpen)renderUiCustList();
+}
+function renderUiCustList(){
+  const list=document.getElementById('uicust-list');if(!list)return;
+  list.innerHTML=UI_COLOR_GROUPS.map(g=>`<div class="uicust-row">
+    <span>${esc(g.label)}</span>
+    <input type="color" value="${esc(uiCustom.colors[g.id]||g.def)}" oninput="setUiColor('${g.id}',this.value)">
+  </div>`).join('');
+}
+function resetUiCustomizations(){
+  UI_COLOR_GROUPS.forEach(g=>{
+    (g.vars||[]).forEach(v=>document.documentElement.style.removeProperty(v));
+    (g.bgVars||[]).forEach(v=>document.documentElement.style.removeProperty(v));
+  });
+  uiCustom={v:1,colors:{}};
+  saveUiCustomizations();
+  renderUiCustList();
+  toast('Culori resetate la valorile implicite ✓');
 }
 
 // ── COPY FUNCTIONS ──
@@ -11987,6 +12098,7 @@ function openHashRoute(raw){
 openHashRoute(location.hash);
 window.addEventListener('hashchange',()=>openHashRoute(location.hash));
 applyTabOrder();
+loadUiCustomizations();
 load();
 // Preîncarcă dosarele Research tăcut, în fundal, chiar de la pornirea aplicației — nu doar la prima
 // vizită a tab-ului. Până apeși pe „Research" (de obicei la câteva secunde după ce ai deschis
