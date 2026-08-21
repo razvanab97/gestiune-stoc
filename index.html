@@ -2129,6 +2129,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:191,text:'Ghidul „🔑 eMAG PNK" — EAN-ul are acum aceeași convenție ca „ID produs"/„Cod produs" (cerut direct): click direct PE cod pentru copiere, iar după copiere se înlocuiește AUTOMAT cu următorul din „🔢 Bancă de coduri EAN" — util când asociezi mai multe PNK-uri la rând din același dosar, fiecare are nevoie de propriul EAN, nu se refolosește la nesfârșit același cod. Distinct de EAN-ul unic per anunț din „Ghid completare eMAG" (acela rămâne neschimbat, o singură valoare per listare)',date:'2026-08-21'},
   {n:190,text:'Research — update vizual semnificativ pe lista de dosare: verdictul (Cumpără/Testează/Evită/etc.) era doar text colorat, ușor de ratat pe o listă lungă. Acum fiecare dosar are un accent colorat pe marginea din stânga a cardului, care se potrivește cu verdictul lui, plus insigna de verdict are și fundal colorat (nu doar text), nu doar contur — se recunoaște instant, fără să citești. Butoanele „FILTRE VERDICT" (Cumpără/Testează/Doar sub X/Evită) au acum aceleași culori ca verdictele pe care le filtrează, ca toată paleta vizuală să fie consecventă de sus până jos',date:'2026-08-21'},
   {n:189,text:'Funcție nouă — „🎨 Editor interfață" (iconița lângă roata de personalizare a paginilor din antet). Prima etapă dintr-un plan mai mare: temă de culori — 12 selectoare grupate (Fundal, Suprafață, Text principal/secundar/terțiar, Accent, Succes, Avertizare, Eroare, Info/linkuri), fiecare aplicat live, imediat, în toată aplicația, fără reîncărcare. Grupate, nu pe variabile CSS individuale — mai multe variabile reprezintă azi aceeași culoare semantică (ex. avertizare = 3 variabile diferite, folosite în locuri diferite), un selector per variabilă brută ar fi dat un recolorat pe jumătate aplicat. Se salvează atât local (pe acest dispozitiv) cât și pe cont (dacă Supabase e disponibil), cu buton de resetare la valorile implicite. Etapele următoare (editare text static și arată/ascunde secțiuni întregi) urmează separat, verificate pas cu pas',date:'2026-08-21'},
   {n:188,text:'Bug real reparat — „⚠ Răspuns invalid de la AI" apărea des la citirea pozelor pentru linkuri Trendyol/furnizor (butonul „📷 Adaugă poze"), deși cererea către OpenAI reușea tehnic. Cauza: modelele gpt-5.6-* fac raționament intern înainte de răspuns, iar proxy-ul folosit de majoritatea funcțiilor AI din aplicație (sugestie categorie, citire poze, PDF facturi, Visual DNA galerie etc.) nu seta niciun nivel explicit — modelul putea consuma tot bugetul de tokeni pe raționament, fără text vizibil rămas pentru răspunsul efectiv. Același fix era deja aplicat, dar DOAR pentru generarea de anunțuri (endpoint separat); acum e aplicat și aici, la nivel central, pentru toate funcțiile care trec prin acest proxy',date:'2026-08-21'},
@@ -6688,6 +6689,41 @@ async function copyPnkGuideCodePart(part){
   }
   openEmagPnkGuide();// re-randează tot ghidul — simplu și robust, reutilizează logica existentă
 }
+// EAN — aceeași convenție ca ID produs/Cod produs (cerut direct): click PE cod pentru copiere, apoi
+// se înlocuiește AUTOMAT cu următorul din „🔢 Bancă de coduri EAN" — spre deosebire de EAN-ul unic
+// per anunț (d.f.ean/l.ean, folosit de „Ghid completare eMAG"), aici fiecare PNK asociat din dosar are
+// nevoie de PROPRIUL EAN, nu se refolosește la nesfârșit același cod la mai multe asocieri la rând.
+let pnkGuideEan={ean:'',copied:false};
+async function ensurePnkGuideEan(){
+  if(pnkGuideEan.ean)return;
+  try{
+    const data=await apiJson('/api/research-projects',{action:'consume_ean'},15000);
+    refreshEanPoolCount();
+    if(!data.ean){
+      toast('⚠ Nu mai ai coduri EAN disponibile — adaugă mai multe în „🔢 Bancă de coduri EAN"','err');
+      return;
+    }
+    pnkGuideEan={ean:data.ean,copied:false};
+    if(data.remaining===0)toast('⚠ Ai folosit ultimul cod EAN disponibil — adaugă mai multe în „🔢 Bancă de coduri EAN"','err');
+  }catch(e){
+    toast(e.message||'Eroare alocare cod EAN — rulează migration_ean_pool.sql în Supabase','err');
+  }
+}
+function emgPnkEanRowHtml(){
+  const v=pnkGuideEan.ean
+    ?`<button class="rsx-pnk" onclick="copyPnkGuideEan()" title="Copiază EAN — se înlocuiește automat cu următorul din bancă">${esc(pnkGuideEan.ean)}${pnkGuideEan.copied?' ✓':''}</button>`
+    :'<span style="color:var(--t3)">— completează manual, nu generăm date fictive</span>';
+  return`<div class="emg-guide-row"><div class="emg-guide-k">EAN</div><div class="emg-guide-v">${v}</div><div></div></div>`;
+}
+async function copyPnkGuideEan(){
+  if(!pnkGuideEan.ean)return;
+  copyText(pnkGuideEan.ean);
+  pnkGuideEan.copied=true;
+  toast('EAN copiat ✓ — aloc automat următorul');
+  pnkGuideEan={ean:'',copied:false};
+  await ensurePnkGuideEan();
+  openEmagPnkGuide();
+}
 // Ghid separat de „Ghid completare eMAG" — pentru produse care EXISTĂ deja în catalogul eMAG (te
 // asociezi la un PNK găsit prin Research, nu creezi produs nou): doar oferta ta (preț/stoc/identificare),
 // fără nume/categorie/descriere (eMAG le are deja de la primul seller care a creat produsul). Reutilizează
@@ -6698,6 +6734,7 @@ async function openEmagPnkGuide(){
   const proj=listingProjectId?researchProjects.find(p=>Number(p.id)===Number(listingProjectId)):null;
   await ensureListingEmagId(l);
   await ensureSupplierPartyData();
+  await ensurePnkGuideEan();
   const d=emagManualGuideData(l,proj);
   // Grupat pe secțiuni cu fundal alternant (alb/gri, cerut direct) — mai ușor de urmărit din priviri
   // scurte decât un perete continuu de rânduri identice, fără să adauge culori zgomotoase.
@@ -6716,7 +6753,7 @@ async function openEmagPnkGuide(){
       +emgGuideRow('În câte zile predai comanda curierului',null,{hint:'Completează manual — depinde de procesul tău de expediere'})
       +emgGuideRow('În câte zile poți reaproviziona',null,{hint:'Completează manual'})},
     {title:'Identificare',rows:
-      emgGuideRow('EAN',d.f.ean)
+      emgPnkEanRowHtml()
       +emgPnkCodeChipsRowHtml(d)},
     {title:'Proprietățile ofertei & programarea modificărilor',rows:
       emgGuideRow('Garanție (luni)',null,{hint:'Completează manual'})
