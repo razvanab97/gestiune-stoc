@@ -40,6 +40,17 @@ module.exports=async function handler(req,res){
     if(!Array.isArray(input?.messages)||!input.messages.length)return res.status(400).json({error:{message:'Lipsesc mesajele pentru OpenAI'}});
     const body={
       model:modelForTier(input.tier),
+      // reasoning:effort 'low' — bug real găsit (23.08.2026): modelele gpt-5.6-* fac raționament intern
+      // înainte de răspuns (niveluri none/low/medium/high/xhigh/max); fără să setăm explicit unul JOS,
+      // modelul poate consuma TOT bugetul de tokeni pe raționament, fără să mai apuce să scrie vreun
+      // text vizibil — output_text iese gol, callAI() întoarce '', iar orice apelant care așteaptă JSON
+      // (ex. citirea unui screenshot Trendyol/furnizor) eșuează cu „Răspuns invalid de la AI", deși
+      // cererea a reușit tehnic (HTTP 200). Același fix era deja aplicat DOAR în api/listing-builder.js
+      // (endpoint separat) — lipsea aici, în proxy-ul folosit de callAI() pentru restul aplicației
+      // (sugestie categorie, citire poze, PDF facturi, Visual DNA galerie etc.). Task de redactare
+      // simplă (citește o poză/extrage JSON), nu de logică multi-pas — un nivel mai mare adaugă doar
+      // latență și risc de răspuns gol, fără beneficiu real.
+      reasoning:{effort:'low'},
       // Plafon ridicat de la 4000 la 8000 — bug real găsit: planul Galeriei AI produs (8 cadre, câmpuri
       // multiple per cadru) cerea deja exact 4000 (cel mai mare dintre toți apelanții din index.html)
       // și tot ieșea trunchiat ("JSON Parse error: Expected ']'"), pentru că răspunsul complet depășea

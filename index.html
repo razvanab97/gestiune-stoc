@@ -2107,6 +2107,8 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:188,text:'Bug real reparat — „⚠ Răspuns invalid de la AI" apărea des la citirea pozelor pentru linkuri Trendyol/furnizor (butonul „📷 Adaugă poze"), deși cererea către OpenAI reușea tehnic. Cauza: modelele gpt-5.6-* fac raționament intern înainte de răspuns, iar proxy-ul folosit de majoritatea funcțiilor AI din aplicație (sugestie categorie, citire poze, PDF facturi, Visual DNA galerie etc.) nu seta niciun nivel explicit — modelul putea consuma tot bugetul de tokeni pe raționament, fără text vizibil rămas pentru răspunsul efectiv. Același fix era deja aplicat, dar DOAR pentru generarea de anunțuri (endpoint separat); acum e aplicat și aici, la nivel central, pentru toate funcțiile care trec prin acest proxy',date:'2026-08-21'},
+  {n:187,text:'Research: buton nou „📋 Lipește din clipboard" pe fiecare link care nu s-a putut deschide automat (Trendyol, dar și furnizor unde e cazul), lângă „📷 Adaugă poze" — fă un screenshot cu unealta nativă a sistemului (Cmd/Ctrl+Shift+4 pe Mac, direct în clipboard) pe pagina produsului, apoi un singur click aici, fără să salvezi fișierul local și să-l reîncarci. Trece prin exact același traseu de analiză AI (titlu/preț/specificații) ca fișierul încărcat manual',date:'2026-08-21'},
   {n:186,text:'Două completări la cerere directă, legate de poze de pe linkuri externe (ex. Trendyol). (1) La adăugarea unui link fetch-abil (Jumbo/verk/eMAG etc.), extragerea de poze e acum mult mai lată — pe lângă JSON-LD, caută acum și în chei JSON suplimentare (thumbnailUrl/zoomImage/largeImage/productImage/originalImage), array-uri „images":[...]" (tiparul folosit des de state-ul inițial al paginilor SPA, chiar dacă poza nu apare deloc în DOM-ul brut) și srcset — plus plafonul de poze reținute a crescut de la 16 la 30. Nu am putut testa live pe Trendyol (fără acces la o pagină reală din acest mediu) — spune-mi ce aduce pe un link real, ajustez exact pe ce lipsește. (2) Buton nou „⬇ Descarcă toate ca PNG" în „Poze selectate" — o singură arhivă ZIP cu toate pozele curente (externe sau interne, indiferent de formatul original) convertite la PNG',date:'2026-08-21'},
   {n:185,text:'Generator anunțuri — buton nou „📋 Lipește din clipboard" lângă „+ Adaugă poză externă" (secțiunea „Poze selectate") — pentru poze de pe pagini care nu se pot fetch-ui automat (ex. Trendyol): faci un screenshot cu unealta nativă a sistemului (pe Mac, Cmd+Shift+4 copiază direct în clipboard, fără fișier pe disc), apoi un singur click aici, fără să salvezi și să încarci din nou local. Idee discutată direct — implementare pas 1: paste manual, un click per poză',date:'2026-08-21'},
   {n:184,text:'Ghidul „🔑 eMAG PNK" — două completări la cerere directă. (1) Secțiunea „PNK de asociat" arată acum explicit câte PNK-uri eMAG au fost găsite în linkurile dosarului (ex. „3 PNK-uri găsite"), nu doar lista fără context de amploare. (2) „ID produs"/„Cod produs" din secțiunea Identificare sunt acum 2 piese direct-copiabile (click PE text, ca la Banca de coduri produs) — după ce AMBELE au fost copiate, se generează automat următorul cod, util când asociezi mai multe PNK-uri la rând din același dosar, fără să mai cauți generarea manuală în altă parte a paginii. Eliminat și un rând duplicat („Cod produs (al tău, intern)" apărea de 2 ori în ghid)',date:'2026-08-21'},
@@ -5212,7 +5214,7 @@ function renderResearchProjects(){
             <span class="rsx-pending-num" title="Poziția printre linkurile în așteptare de screenshot din acest dosar">Link #${pendingIdx} din ${pendingLinks.length}</span>
             <strong style="color:var(--t1)">${esc(hint||'Produs fără titlu încă')}</strong>
           </div>
-          <a href="${esc(l.url)}" target="_blank" style="color:var(--t3);font-size:19px;text-decoration:none;word-break:break-all">${esc(l.url)}</a> <span class="rsx-status-warn" id="rlss-status-${l.id}">${waitLabel}</span> <input type="file" accept="image/*" multiple id="rlss-${l.id}" style="display:none" onchange="handleLinkScreenshotFile(${l.id},this)"><label for="rlss-${l.id}" class="rsx-icon-btn" style="cursor:pointer" title="Poze cu listarea de pe platformă — până la 5; pentru mai multe, folosește PDF mai jos">📷 Adaugă poze (max 5)</label></td><td class="rsx-row-actions">${del}</td></tr>`;
+          <a href="${esc(l.url)}" target="_blank" style="color:var(--t3);font-size:19px;text-decoration:none;word-break:break-all">${esc(l.url)}</a> <span class="rsx-status-warn" id="rlss-status-${l.id}">${waitLabel}</span> <input type="file" accept="image/*" multiple id="rlss-${l.id}" style="display:none" onchange="handleLinkScreenshotFile(${l.id},this)"><label for="rlss-${l.id}" class="rsx-icon-btn" style="cursor:pointer" title="Poze cu listarea de pe platformă — până la 5; pentru mai multe, folosește PDF mai jos">📷 Adaugă poze (max 5)</label> <button class="rsx-icon-btn" onclick="pasteLinkScreenshotFromClipboard(${l.id})" title="Fă un screenshot direct pe pagina produsului (Cmd/Ctrl+Shift+4 pe Mac) — apoi apasă aici, fără să salvezi fișierul local și să-l reîncarci">📋 Lipește din clipboard</button></td><td class="rsx-row-actions">${del}</td></tr>`;
       }
       const dupFlag=l.duplicate_type&&l.duplicate_type!=='none';
       const sourceIcon=l.source==='screenshot'?' 📷':l.source==='pdf'?' 📄':'';
@@ -5362,17 +5364,18 @@ function renderResearchProjects(){
 // screenshot al paginii, AI-ul (vision, ca la analyzeImage) extrage titlu/preț/descriere din poză, iar
 // serverul doar salvează rezultatul (set_link_data) — linkul original rămâne mereu vizibil/salvat.
 const LINK_PHOTO_MAX=5;
-async function handleLinkScreenshotFile(linkId,inputEl){
-  const files=[...(inputEl?.files||[])];if(!files.length)return;
+// Nucleul comun (analiză AI + salvare) — extras din handleLinkScreenshotFile ca să poată fi reutilizat
+// și de pasteLinkScreenshotFromClipboard (cerut direct: să putem lipi captura direct din clipboard,
+// fără să salvăm local și să reîncărcăm fișierul — o etapă mai puțin), fără să dublăm promptul AI.
+async function processLinkScreenshotDataUrls(linkId,rawDataUrls){
+  if(!rawDataUrls.length)return;
   const statusEl=document.getElementById('rlss-status-'+linkId);
-  if(files.length>LINK_PHOTO_MAX){
+  if(rawDataUrls.length>LINK_PHOTO_MAX){
     toast(`Maxim ${LINK_PHOTO_MAX} poze pe link — pentru mai multe, combină-le într-un PDF și folosește „PDF rezultate" mai jos`,'err');
-    if(inputEl)inputEl.value='';
     return;
   }
-  if(statusEl){statusEl.style.color='';statusEl.innerHTML=`<span class="spin"></span> Analizez ${files.length>1?files.length+' poze':'poza'}…`;}
+  if(statusEl){statusEl.style.color='';statusEl.innerHTML=`<span class="spin"></span> Analizez ${rawDataUrls.length>1?rawDataUrls.length+' poze':'poza'}…`;}
   try{
-    const rawDataUrls=await Promise.all(files.map(f=>new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(f);})));
     // 1400px păstrează textul lizibil pentru AI (titlu/preț/descriere) — doar reduce rezoluția de telefon
     // needitată (deseori 3000px+), care oricum nu ajută AI-ul, dar umflă baza de date degeaba.
     const dataUrls=await Promise.all(rawDataUrls.map(u=>resizeImageDataUrl(u,1400,.8)));
@@ -5412,7 +5415,35 @@ Răspunde STRICT în format JSON: {"title":"<titlu>","price":<număr>,"currency"
   }catch(e){
     if(statusEl){statusEl.style.color='var(--rd)';statusEl.textContent='⚠ '+(e.message||'Eroare la analiza pozelor');}
     toast(e.message||'Eroare la analiza pozelor','err');
+  }
+}
+async function handleLinkScreenshotFile(linkId,inputEl){
+  const files=[...(inputEl?.files||[])];if(!files.length)return;
+  try{
+    const rawDataUrls=await Promise.all(files.map(f=>new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(f);})));
+    await processLinkScreenshotDataUrls(linkId,rawDataUrls);
   }finally{if(inputEl)inputEl.value='';}
+}
+// Lipește captura direct din clipboard — fără să salvezi local fișierul și să-l reîncarci în sistem
+// (cerut direct: „scăpăm de o etapă"). Faci un screenshot cu unealta nativă a sistemului (pe Mac,
+// Cmd+Shift+4 copiază direct în clipboard) pe pagina Trendyol/furnizor care nu s-a putut deschide
+// automat, apoi un singur click aici — se duce prin ACELAȘI traseu de analiză AI ca fișierul încărcat.
+async function pasteLinkScreenshotFromClipboard(linkId){
+  if(!navigator.clipboard?.read){toast('Browserul nu suportă citirea directă din clipboard — încarcă manual fișierul cu „📷 Adaugă poze"','err');return;}
+  try{
+    const items=await navigator.clipboard.read();
+    const rawDataUrls=[];
+    for(const item of items){
+      const type=item.types.find(t=>t.startsWith('image/'));
+      if(!type)continue;
+      const blob=await item.getType(type);
+      rawDataUrls.push(await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(blob);}));
+    }
+    if(!rawDataUrls.length){toast('Nu am găsit nicio imagine în clipboard — fă întâi un screenshot (Cmd/Ctrl+Shift+4 pe Mac), apoi încearcă din nou','err');return;}
+    await processLinkScreenshotDataUrls(linkId,rawDataUrls);
+  }catch(e){
+    toast('Eroare la citirea clipboard-ului: '+(e.message||e)+' — sau încarcă manual fișierul','err');
+  }
 }
 // Aplică local un link+dosar actualizat, primit direct din răspunsul serverului — fără refetch.
 // loadResearchProjects() golește toată lista cu un spinner ("Încarc dosarele…") înainte de reîncărcare,
