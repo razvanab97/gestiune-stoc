@@ -176,11 +176,23 @@ function extract(html,url){
     const code=findLabeledProductCode(textOnly);
     if(code)data.product_code=code.slice(0,60);
   }
+  // Plasă de extragere lărgită (cerut direct: „majoritatea pozelor", nu doar 1-2) — site-urile SPA
+  // (Trendyol și altele) NU au poze reale în DOM-ul brut (randate prin JS după fetch), dar de multe ori
+  // TOT au un blob JSON de stare inițială (hidratare) chiar în HTML-ul brut, cu poze incluse — de-aici
+  // și pattern-urile de chei JSON de mai jos, mai multe decât înainte, plus array-uri „images":[...]".
+  // Nu am putut verifica live pe Trendyol (fără acces la un produs real din acest mediu) — dacă tot nu
+  // aduce destule poze pe un link real, spune-mi ce arată pagina și ajustez pattern-urile exact pe ea.
   const imgs=(ld?.images||[]).slice();
   for(const m of html.matchAll(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/gi))imgs.push(m[1]);
-  for(const m of html.matchAll(/"(?:image|imageUrl|bigImage)"\s*:\s*"([^"]+)"/gi))imgs.push(m[1]);
-  for(const m of html.matchAll(/<(?:img|source)[^>]+(?:src|data-src|data-zoom-image)=["']([^"']+)["']/gi))imgs.push(m[1]);
-  let absImgs=imgs.map(x=>{try{return new URL(x,url).toString()}catch(e){return''}}).filter(x=>x&&!isJunkImageUrl(x));
+  for(const m of html.matchAll(/"(?:image|imageUrl|bigImage|thumbnailUrl|zoomImage|largeImage|productImage|originalImage)"\s*:\s*"([^"]+)"/gi))imgs.push(m[1]);
+  for(const arrMatch of html.matchAll(/"images"\s*:\s*\[([^\]]{0,4000})\]/gi)){
+    for(const m of arrMatch[1].matchAll(/"(https?:[^"]+)"/gi))imgs.push(m[1]);
+  }
+  for(const m of html.matchAll(/<(?:img|source)[^>]+(?:src|data-src|data-zoom-image|data-original)=["']([^"']+)["']/gi))imgs.push(m[1]);
+  // srcset — unele pagini pun DOAR srcset, fără src (ex. <img srcset="url1 400w, url2 800w">); prima
+  // variantă listată e suficientă ca referință, nu avem nevoie de toate rezoluțiile aceleiași poze.
+  for(const m of html.matchAll(/<(?:img|source)[^>]+srcset=["']([^"',\s]+)/gi))imgs.push(m[1]);
+  let absImgs=imgs.map(x=>{try{return new URL(String(x).replace(/&amp;/g,'&'),url).toString()}catch(e){return''}}).filter(x=>x&&!isJunkImageUrl(x));
   // eMAG afișează des poze ale altor produse pe aceeași pagină (variantă vecină din selector, recomandări
   // „s-ar putea să-ți placă"), sub același tipar de URL — le izolăm strict la id-ul de produs identificat
   // din singura imagine oficială (JSON-LD), altfel am număra/afișa poze ale unui produs GREȘIT.
@@ -194,7 +206,9 @@ function extract(html,url){
     const key=imageDedupKey(u);
     if(!seenImgs.has(key)||imageWidthHint(u)>imageWidthHint(seenImgs.get(key)))seenImgs.set(key,u);
   }
-  data.images=[...seenImgs.values()].slice(0,16);
+  // Plafon ridicat de la 16 la 30 — cerut direct („majoritatea pozelor"), ca o pagină chiar bogată în
+  // imagini să nu fie tăiată prea devreme; dedup-ul de mai sus deja elimină duplicatele reale.
+  data.images=[...seenImgs.values()].slice(0,30);
   return data;
 }
 function similarity(a,b){

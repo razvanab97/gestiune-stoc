@@ -2107,6 +2107,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:186,text:'Două completări la cerere directă, legate de poze de pe linkuri externe (ex. Trendyol). (1) La adăugarea unui link fetch-abil (Jumbo/verk/eMAG etc.), extragerea de poze e acum mult mai lată — pe lângă JSON-LD, caută acum și în chei JSON suplimentare (thumbnailUrl/zoomImage/largeImage/productImage/originalImage), array-uri „images":[...]" (tiparul folosit des de state-ul inițial al paginilor SPA, chiar dacă poza nu apare deloc în DOM-ul brut) și srcset — plus plafonul de poze reținute a crescut de la 16 la 30. Nu am putut testa live pe Trendyol (fără acces la o pagină reală din acest mediu) — spune-mi ce aduce pe un link real, ajustez exact pe ce lipsește. (2) Buton nou „⬇ Descarcă toate ca PNG" în „Poze selectate" — o singură arhivă ZIP cu toate pozele curente (externe sau interne, indiferent de formatul original) convertite la PNG',date:'2026-08-21'},
   {n:185,text:'Generator anunțuri — buton nou „📋 Lipește din clipboard" lângă „+ Adaugă poză externă" (secțiunea „Poze selectate") — pentru poze de pe pagini care nu se pot fetch-ui automat (ex. Trendyol): faci un screenshot cu unealta nativă a sistemului (pe Mac, Cmd+Shift+4 copiază direct în clipboard, fără fișier pe disc), apoi un singur click aici, fără să salvezi și să încarci din nou local. Idee discutată direct — implementare pas 1: paste manual, un click per poză',date:'2026-08-21'},
   {n:184,text:'Ghidul „🔑 eMAG PNK" — două completări la cerere directă. (1) Secțiunea „PNK de asociat" arată acum explicit câte PNK-uri eMAG au fost găsite în linkurile dosarului (ex. „3 PNK-uri găsite"), nu doar lista fără context de amploare. (2) „ID produs"/„Cod produs" din secțiunea Identificare sunt acum 2 piese direct-copiabile (click PE text, ca la Banca de coduri produs) — după ce AMBELE au fost copiate, se generează automat următorul cod, util când asociezi mai multe PNK-uri la rând din același dosar, fără să mai cauți generarea manuală în altă parte a paginii. Eliminat și un rând duplicat („Cod produs (al tău, intern)" apărea de 2 ori în ghid)',date:'2026-08-21'},
   {n:183,text:'Ghidul „🔑 eMAG PNK" — redesign vizual la cerere directă. Secțiunile (PNK de asociat/Prețuri/Stocuri/Identificare/etc.) au acum fundal alternant alb/gri, ca să se vadă clar din priviri când treci de la una la alta, nu un perete continuu de rânduri identice. Fiecare PNK candidat din dosar arată acum și brandul (înainte de codul PNK), ca reper rapid când mai multe candidate au titluri aproape identice. Secțiunea Prețuri arată acum, primul rând, prețul de achiziție al produsului — comparație directă cu prețul de vânzare, înainte de calculele de piață',date:'2026-08-21'},
@@ -7339,6 +7340,7 @@ function renderListingFactoryResult(l,pages,allImages=[]){
           <button class="btn btn-sm btn-acc" onclick="addExternalImage()">+ Adaugă poză externă</button>
           <button class="btn btn-sm btn-blue" onclick="pasteImageFromClipboard()" title="Fă un screenshot direct pe pagina produsului (Cmd/Ctrl+Shift+4 pe Mac, sau orice unealtă de captură) — apoi apasă aici, fără să salvezi fișierul local">📋 Lipește din clipboard</button>
           ${imgs.length?`<button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(imgs.join('\n')))})">Copiază toate linkurile</button>`:''}
+          ${imgs.length?`<button class="btn btn-sm" onclick="downloadAllListingImagesAsPng()" title="O singură arhivă ZIP, toate pozele curente (externe sau încărcate/generate) convertite la PNG">⬇ Descarcă toate ca PNG</button>`:''}
         </div>
       </div>
       <div style="font-size:19px;color:var(--t3);margin:2px 0 6px">Verde = rezoluție OK pentru eMAG (min. 600×800px, verificat pe imaginea reală) · roșu/galben = posibil sub prag · „🎨 Recreează cu AI" curăță/îmbunătățește fotografia, pornind de la poza reală — verifică vizual rezultatul înainte să-l folosești, AI-ul poate greși detalii</div>
@@ -8119,6 +8121,54 @@ async function downloadAllGalleryImages(projectId){
   }catch(e){toast('Eroare la crearea arhivei ZIP: '+(e.message||e),'err');}
 }
 
+// Descarcă o imagine (URL extern SAU intern) și o convertește la PNG prin canvas — indiferent de
+// formatul original (JPEG/WebP/etc.), rezultatul e mereu PNG, cerut direct („tot ce avem în sistem,
+// adus din exterior sau interior, în format PNG"). Poze externe trec prin proxyImg (api/img-proxy.js,
+// deja setează Access-Control-Allow-Origin:* — fără el, canvas-ul ar ieși „tainted" de CORS și
+// .toBlob() ar eșua silențios pentru orice sursă externă care nu trimite explicit CORS).
+function imageUrlToPngBytes(url){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    img.crossOrigin='anonymous';
+    img.onload=()=>{
+      try{
+        const canvas=document.createElement('canvas');
+        canvas.width=img.naturalWidth||1;canvas.height=img.naturalHeight||1;
+        canvas.getContext('2d').drawImage(img,0,0);
+        canvas.toBlob(blob=>{
+          if(!blob){reject(new Error('Conversie PNG eșuată'));return;}
+          blob.arrayBuffer().then(buf=>resolve(new Uint8Array(buf))).catch(reject);
+        },'image/png');
+      }catch(e){reject(e);}
+    };
+    img.onerror=()=>reject(new Error('Nu am putut încărca imaginea'));
+    img.src=url;
+  });
+}
+// Toate pozele curente din „Poze selectate" (externe SAU interne, generate/încărcate/lipite) — o
+// singură arhivă ZIP, un singur download, toate convertite la PNG. Reutilizează buildZip (aceeași
+// funcție ca la Galerie AI produs) — fără nicio librărie nouă, fără endpoint nou.
+async function downloadAllListingImagesAsPng(){
+  const l=listingData||listingFactoryData?.listing;
+  if(!l){toast('Nu există anunț generat');return;}
+  const imgs=factoryImages(l,listingFactoryData?.pages||[]);
+  if(!imgs.length){toast('Nicio poză de descărcat','err');return;}
+  toast('Pregătesc arhiva PNG…');
+  try{
+    const files=await Promise.all(imgs.map(async(u,i)=>{
+      const sameOrigin=u.startsWith(location.origin)||u.startsWith('/');
+      const bytes=await imageUrlToPngBytes(sameOrigin?u:proxyImg(u));
+      return{name:`${String(i+1).padStart(2,'0')}-poza.png`,bytes};
+    }));
+    const blob=buildZip(files);
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download='poze-produs-png.zip';
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),15000);
+    toast(`Arhivă ZIP cu ${files.length} poze PNG descărcată ✓`);
+  }catch(e){toast('Eroare la crearea arhivei PNG: '+(e.message||e),'err');}
+}
 // Adaugă manual o poză externă (orice URL http/https) în „Poze selectate" — util mai ales când
 // AI-ul nu a reușit să găsească/selecteze nicio poză, ca lista să nu rămână niciodată complet goală.
 async function addExternalImage(){
