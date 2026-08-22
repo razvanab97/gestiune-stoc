@@ -2158,6 +2158,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:205,text:'URGENT — bug critic reparat, raportat direct: cu zoom-ul activ (butonul − 100% + din header), niciun dropdown poziționat din JS nu mai răspundea la click („nu se întâmplă nimic" la alegerea unui produs în Sincronizare, dar afecta identic ȘI importul de factură, ȘI cel de comenzi platforme). Cauza: coordonatele citite din pagină erau deja ajustate de zoom, dar browserul le mai înmulțea o dată cu factorul de zoom la afișare, trimițând dropdown-ul complet în afara ecranului — invizibil, deși tehnic funcțional. Corectat la sursă, într-un singur loc, pentru toate cele 5 dropdown-uri afectate din aplicație; verificat pe tot intervalul de zoom (80%-150%). De asemenea: „+ Nou" pe fiecare listare fără nicio potrivire în import XLSX — creează direct un produs nou (din titlul extern), fără să mai pleci din Sincronizare; completezi preț/stoc/poză după, în Inventar, ca la orice produs nou',date:'2026-08-22'},
   {n:204,text:'Sincronizare — buton nou „🤖 Sugerează cu AI" în previzualizarea importului XLSX în masă, la cerere directă, pentru liniile fără o potrivire sigură (nici PNK, nici titlu ≥70%). Nu trimite tot inventarul la AI (sute de produse) — restrânge local, cu aceeași potrivire fuzzy, la 5 candidați per linie, apoi AI alege dintre ei (sau „niciunul", dacă nu e sigur), grupat eficient în apeluri de câte 12 linii deodată. Rezultatul umple direct produsul sugerat, exact ca o potrivire normală — singura intervenție rămasă e să confirmi cu „Adaugă mapările selectate" sau să alegi altceva din picker înainte, fără flux separat de aprobare',date:'2026-08-22'},
   {n:203,text:'Sincronizare — „Produs corespunzător din Inventar" avea un simplu select, greu de folosit cu 200+ produse. Acum e un picker căutabil (nume sau SKU, cu poza produsului), plus un buton nou „📋 Caută din imagine" — lipești din clipboard o captură eMAG/Trendyol sau poza produsului, AI recunoaște ce e în poză, iar cele mai apropiate potriviri din inventar apar direct în listă, gata de confirmat dintr-un click (nu selectează niciodată automat — recunoașterea din poză poate fi imprecisă)',date:'2026-08-22'},
   {n:202,text:'Sincronizare — două completări la câmpul PNK din „Adaugă mapare nouă", ambele la cerere directă. (1) O precizare sub câmp: PNK-ul diferă pe piață (RO pentru eMAG România, BG pentru eMAG Bulgaria, HU pentru eMAG Ungaria) — același produs poate avea un PNK separat pe fiecare piață. (2) Pe măsură ce tastezi, apar direct ca sugestii (dropdown nativ al browserului) toate PNK-urile deja cunoscute din mapările existente, cu numele produsului asociat — recunoști imediat un cod deja folosit, fără să mai cauți manual. Verificat și direct în producție: lista „Mapări existente" (raportată ca goală) afișează corect toate mapările reale (27 la verificare) — dacă tot nu apar, e nevoie de un deploy Vercel cu ultima versiune',date:'2026-08-22'},
@@ -2740,6 +2741,13 @@ function loadZoom(){
   if(Number.isFinite(saved)&&saved>=ZOOM_MIN&&saved<=ZOOM_MAX)zoomLevel=saved;
   applyZoom();
 }
+// Bug real raportat direct („nu se întâmplă nimic" la un dropdown poziționat din JS, cu zoom activ):
+// getBoundingClientRect() întoarce coordonate deja ajustate de zoom, dar orice element sub <html> cu
+// zoom aplicat re-multiplică din nou cu factorul de zoom valorile atribuite direct prin style.left/top
+// — fără compensare, un dropdown poziționat din JS (nu prin CSS relativ la părinte) ajunge complet în
+// afara ecranului de îndată ce zoom-ul nu mai e 100%. Orice cod care face drop.style.left/top din
+// getBoundingClientRect() trebuie să împartă la (zoomLevel/100) înainte de atribuire.
+function zoomAdjust(px){return px/(zoomLevel/100);}
 function zoomIn(){zoomLevel=Math.min(ZOOM_MAX,zoomLevel+ZOOM_STEP);applyZoom();safeLocalSet(ZOOM_KEY,String(zoomLevel));}
 function zoomOut(){zoomLevel=Math.max(ZOOM_MIN,zoomLevel-ZOOM_STEP);applyZoom();safeLocalSet(ZOOM_KEY,String(zoomLevel));}
 function zoomReset(){zoomLevel=100;applyZoom();safeLocalSet(ZOOM_KEY,'100');}
@@ -9968,7 +9976,7 @@ function openSmProductPick(ev){
   let left=btn.left,top=btn.bottom+4;
   if(left+300>window.innerWidth)left=window.innerWidth-310;
   if(top+340>window.innerHeight)top=Math.max(8,btn.top-344);
-  drop.style.left=left+'px';drop.style.top=top+'px';
+  drop.style.left=zoomAdjust(left)+'px';drop.style.top=zoomAdjust(top)+'px';
   drop.classList.add('on');
   const search=document.getElementById('sm-produs-pick-search');
   search.value='';
@@ -10032,7 +10040,7 @@ async function pasteSmProductImageSearch(){
       let left=r.left,top=r.bottom+4;
       if(left+300>window.innerWidth)left=window.innerWidth-310;
       if(top+340>window.innerHeight)top=Math.max(8,r.top-344);
-      drop.style.left=left+'px';drop.style.top=top+'px';
+      drop.style.left=zoomAdjust(left)+'px';drop.style.top=zoomAdjust(top)+'px';
       drop.classList.add('on');
       document.getElementById('sm-produs-pick-search').value=query;
       renderSmProductPickCandidates(scored.length?scored.slice(0,20).map(x=>x.p):smProdPickList.slice(0,20));
@@ -10153,20 +10161,35 @@ async function handleSyncImportFile(ev){
 }
 function syncPickBtnHtml(idx){
   const it=syncImpParsed[idx];
+  if(it.newProduct){
+    return`<button type="button" class="smi-pick-btn" style="border-color:var(--acc);color:var(--acc)" onclick="openSyncPick(event,${idx})" title="Se va crea un produs nou cu acest titlu — click pentru a alege un produs existent în loc">✚ Produs nou (se creează)</button>`;
+  }
   const p=it.produsId?P.find(x=>x.id===it.produsId):null;
   const th=p?(p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'pick')}>`:`<div class="smi-pick-th-ph">📦</div>`):'';
   const nm=p?`${esc(p.name)}${p.sku?' · '+esc(p.sku):''}`:'— alege produs —';
   return`<button type="button" class="smi-pick-btn" onclick="openSyncPick(event,${idx})">${th}<span class="smi-pick-nm">${nm}</span><span class="smi-pick-car">▾</span></button>`;
 }
+// Pentru o listare fără nicio potrivire în inventar (nici PNK, nici titlu, nici AI) — la cerere directă,
+// „dacă nu există produs, trebuie importat". Creează un produs „schelet" (doar numele, din titlul
+// extern) — utilizatorul completează preț/stoc/poză ulterior în Inventar, ca la orice produs nou.
+function markSyncRowNewProduct(idx){
+  syncImpParsed[idx].newProduct=true;
+  syncImpParsed[idx].produsId=null;
+  syncImpParsed[idx].include=true;
+  const host=document.getElementById('smi-pick-'+idx);if(host)host.innerHTML=syncPickBtnHtml(idx);
+  renderSyncImportPreview();
+}
 function renderSyncImportPreview(){
   const prev=document.getElementById('smi-preview');
   const rows=syncImpParsed.map((it,idx)=>{
-    const tag=it.viaPnk?`<span class="inv-match upd" style="background:var(--gr-bg);color:var(--gr)" title="Produsul e deja mapat pe acest PNK">✓ prin PNK</span>`:it.viaAi?`<span class="inv-match upd" style="background:var(--acc-light);color:var(--acc)" title="Sugerat de AI — verifică și confirmă">🤖 sugestie AI</span>`:it.produsId?`<span class="inv-match upd" title="potrivire ${Math.round(it.score*100)}%">↑ ${Math.round(it.score*100)}%</span>`:`<span class="inv-match new">? fără sugestie</span>`;
+    const tag=it.viaPnk?`<span class="inv-match upd" style="background:var(--gr-bg);color:var(--gr)" title="Produsul e deja mapat pe acest PNK">✓ prin PNK</span>`:it.viaAi?`<span class="inv-match upd" style="background:var(--acc-light);color:var(--acc)" title="Sugerat de AI — verifică și confirmă">🤖 sugestie AI</span>`:it.newProduct?`<span class="inv-match new" style="background:var(--acc-light);color:var(--acc)">✚ produs nou</span>`:it.produsId?`<span class="inv-match upd" title="potrivire ${Math.round(it.score*100)}%">↑ ${Math.round(it.score*100)}%</span>`:`<span class="inv-match new">? fără sugestie</span>`;
     const pnkTag=it.pnk?`<span style="font-family:var(--mono);font-size:19px;color:var(--t3)">${esc(it.pnk)}</span>`:'';
+    const newBtn=(!it.produsId&&!it.newProduct)?`<button type="button" class="btn btn-sm" onclick="markSyncRowNewProduct(${idx})" title="Nu există încă în Inventar — creează un produs nou cu acest titlu">+ Nou</button>`:'';
     return`<div class="inv-prev-row" style="gap:10px">
       <input type="checkbox" ${it.include?'checked':''} onchange="syncImpParsed[${idx}].include=this.checked;updSyncImportInfo()">
       <div class="inv-prev-nm" style="flex:1">${esc(it.titluExtern)} ${pnkTag} ${tag}</div>
       <div class="smi-pick" id="smi-pick-${idx}">${syncPickBtnHtml(idx)}</div>
+      ${newBtn}
     </div>`;
   }).join('');
   prev.innerHTML=`<div class="inv-preview"><div class="inv-prev-title">Previzualizare (${syncImpParsed.length} listări)</div>${rows}</div>`+
@@ -10235,7 +10258,7 @@ function openSyncPick(ev,idx){
   let left=btn.left,top=btn.bottom+4;
   if(left+300>window.innerWidth)left=window.innerWidth-310;
   if(top+340>window.innerHeight)top=Math.max(8,btn.top-344);
-  drop.style.left=left+'px';drop.style.top=top+'px';
+  drop.style.left=zoomAdjust(left)+'px';drop.style.top=zoomAdjust(top)+'px';
   drop.classList.add('on');
   const search=document.getElementById('smi-pick-search');
   search.value='';
@@ -10256,12 +10279,13 @@ function filterSyncPick(){
 function pickSyncProduct(id){
   if(syncPickIdx==null)return;
   syncImpParsed[syncPickIdx].produsId=id||null;
+  syncImpParsed[syncPickIdx].newProduct=false;
   syncImpParsed[syncPickIdx].include=!!id;
   const host=document.getElementById('smi-pick-'+syncPickIdx);
   if(host)host.innerHTML=syncPickBtnHtml(syncPickIdx);
   document.getElementById('smi-pickdrop').classList.remove('on');
   syncPickIdx=null;
-  updSyncImportInfo();
+  renderSyncImportPreview();
 }
 document.addEventListener('click',ev=>{
   if(!ev.target.closest('#smi-pickdrop')&&!ev.target.closest('.smi-pick-btn')){
@@ -10270,25 +10294,43 @@ document.addEventListener('click',ev=>{
   }
 });
 function updSyncImportInfo(){
-  const n=syncImpParsed.filter(x=>x.include&&x.produsId).length;
+  const n=syncImpParsed.filter(x=>x.include&&(x.produsId||x.newProduct)).length;
   document.getElementById('smi-info').textContent=`${n} mapări selectate pentru adăugare`;
   document.getElementById('smi-apply-btn').disabled=n===0;
 }
 async function applySyncImport(){
   if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
   const platforma=document.getElementById('smi-preview').dataset.platforma||'emag';
-  const toAdd=syncImpParsed.filter(x=>x.include&&x.produsId);
+  const toAdd=syncImpParsed.filter(x=>x.include&&(x.produsId||x.newProduct));
   if(!toAdd.length)return;
   const btn=document.getElementById('smi-apply-btn');
   btn.disabled=true;btn.textContent='Se adaugă…';
   try{
-    const rows=await dbPost('platforma_mapari',toAdd.map(it=>syncMapToDb({platforma,titluExtern:it.titluExtern,idExtern:it.pnk||null,produsId:it.produsId,confirmat:true})));
+    let created=0;
+    for(const it of toAdd){
+      if(it.produsId||!it.newProduct)continue;
+      const newP={name:it.titluExtern.slice(0,240),sku:null,bought:0,sold:0,minQty:0,priceBuyTTC:0,tvaAcq:0.21,priceSell:0,priceEmag:0,priceTrendyol:0,category:'',supplier:'',img:''};
+      const beforeLen=P.length;
+      // saveProdToDb își arată singur eroarea (toast) și întoarce false fără să arunce — dacă eșuează,
+      // P NU crește, deci NU tragem greșit id-ul ultimului produs EXISTENT ca și cum ar fi cel nou creat.
+      const ok=await saveProdToDb(newP,null);
+      if(ok&&P.length>beforeLen){
+        it.produsId=P[P.length-1]?.id||null;
+        if(it.produsId)created++;
+      }
+    }
+    const resolved=toAdd.filter(x=>x.produsId);
+    const rows=resolved.length?await dbPost('platforma_mapari',resolved.map(it=>syncMapToDb({platforma,titluExtern:it.titluExtern,idExtern:it.pnk||null,produsId:it.produsId,confirmat:true}))):[];
     SYNCM=rows.map(dbToSyncMap).concat(SYNCM);
-    syncImpParsed=[];
-    document.getElementById('smi-preview').innerHTML='';
-    document.getElementById('smi-foot').style.display='none';
+    // Rămân în listă doar liniile care NU s-au aplicat (produs nou eșuat la creare) — la fel ca la
+    // import factură, ca să nu dispară din vedere fără să se fi întâmplat de fapt nimic pentru ele.
+    const appliedSet=new Set(resolved);
+    syncImpParsed=syncImpParsed.filter(it=>!appliedSet.has(it));
+    if(syncImpParsed.length){renderSyncImportPreview();}
+    else{document.getElementById('smi-preview').innerHTML='';document.getElementById('smi-foot').style.display='none';}
     renderSyncPage();
-    toast(`${rows.length} mapări adăugate ✓`);
+    if(created)renderTable();
+    toast(`${rows.length} mapări adăugate${created?` (${created} produse noi create — completează preț/stoc/poză în Inventar)`:''} ✓`);
   }catch(err){
     toast('Eroare la salvare: '+err.message,'err');
   }finally{
@@ -10737,7 +10779,7 @@ function openPcomPick(ev,idx){
   let left=btn.left,top=btn.bottom+4;
   if(left+300>window.innerWidth)left=window.innerWidth-310;
   if(top+340>window.innerHeight)top=Math.max(8,btn.top-344);
-  drop.style.left=left+'px';drop.style.top=top+'px';
+  drop.style.left=zoomAdjust(left)+'px';drop.style.top=zoomAdjust(top)+'px';
   drop.classList.add('on');
   const search=document.getElementById('pcmi-pick-search');
   search.value='';
@@ -11851,7 +11893,7 @@ function openInvPick(ev,idx){
   let left=btn.left,top=btn.bottom+4;
   if(left+300>window.innerWidth)left=window.innerWidth-310;
   if(top+340>window.innerHeight)top=Math.max(8,btn.top-344);
-  drop.style.left=left+'px';drop.style.top=top+'px';
+  drop.style.left=zoomAdjust(left)+'px';drop.style.top=zoomAdjust(top)+'px';
   drop.classList.add('on');
   const search=document.getElementById('invmi-pick-search');
   search.value='';
