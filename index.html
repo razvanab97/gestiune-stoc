@@ -1510,9 +1510,12 @@ th{font-weight:800!important;color:var(--t3)!important}
     </div>
     <div id="smi-parsing" style="display:none;font-size:22px;color:var(--t3);margin:8px 0"><span class="spin"></span> Se procesează fișierul…</div>
     <div id="smi-preview"></div>
-    <div id="smi-foot" style="display:none;justify-content:space-between;align-items:center;margin-top:12px">
+    <div id="smi-foot" style="display:none;justify-content:space-between;align-items:center;margin-top:12px;gap:10px;flex-wrap:wrap">
       <span id="smi-info" style="font-size:22px;color:var(--t3)"></span>
-      <button class="btn btn-sm btn-acc" id="smi-apply-btn" onclick="applySyncImport()" disabled>Adaugă mapările selectate</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-sm" id="smi-ai-btn" onclick="suggestSyncImportWithAI()" title="AI sugerează produsul pentru liniile fără o potrivire sigură — tu doar confirmi sau alegi altceva">🤖 Sugerează cu AI</button>
+        <button class="btn btn-sm btn-acc" id="smi-apply-btn" onclick="applySyncImport()" disabled>Adaugă mapările selectate</button>
+      </div>
     </div>
   </div>
 
@@ -2155,6 +2158,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:204,text:'Sincronizare — buton nou „🤖 Sugerează cu AI" în previzualizarea importului XLSX în masă, la cerere directă, pentru liniile fără o potrivire sigură (nici PNK, nici titlu ≥70%). Nu trimite tot inventarul la AI (sute de produse) — restrânge local, cu aceeași potrivire fuzzy, la 5 candidați per linie, apoi AI alege dintre ei (sau „niciunul", dacă nu e sigur), grupat eficient în apeluri de câte 12 linii deodată. Rezultatul umple direct produsul sugerat, exact ca o potrivire normală — singura intervenție rămasă e să confirmi cu „Adaugă mapările selectate" sau să alegi altceva din picker înainte, fără flux separat de aprobare',date:'2026-08-22'},
   {n:203,text:'Sincronizare — „Produs corespunzător din Inventar" avea un simplu select, greu de folosit cu 200+ produse. Acum e un picker căutabil (nume sau SKU, cu poza produsului), plus un buton nou „📋 Caută din imagine" — lipești din clipboard o captură eMAG/Trendyol sau poza produsului, AI recunoaște ce e în poză, iar cele mai apropiate potriviri din inventar apar direct în listă, gata de confirmat dintr-un click (nu selectează niciodată automat — recunoașterea din poză poate fi imprecisă)',date:'2026-08-22'},
   {n:202,text:'Sincronizare — două completări la câmpul PNK din „Adaugă mapare nouă", ambele la cerere directă. (1) O precizare sub câmp: PNK-ul diferă pe piață (RO pentru eMAG România, BG pentru eMAG Bulgaria, HU pentru eMAG Ungaria) — același produs poate avea un PNK separat pe fiecare piață. (2) Pe măsură ce tastezi, apar direct ca sugestii (dropdown nativ al browserului) toate PNK-urile deja cunoscute din mapările existente, cu numele produsului asociat — recunoști imediat un cod deja folosit, fără să mai cauți manual. Verificat și direct în producție: lista „Mapări existente" (raportată ca goală) afișează corect toate mapările reale (27 la verificare) — dacă tot nu apar, e nevoie de un deploy Vercel cu ultima versiune',date:'2026-08-22'},
   {n:201,text:'Sincronizare eMAG/Trendyol — PNK devine sursa principală de potrivire peste tot, nu doar la importul de comenzi (unde deja funcționa așa). (1) „Adaugă mapare nouă" are acum un câmp PNK — dacă PNK-ul e deja cunoscut dintr-o comandă/mapare anterioară, produsul se găsește automat, fără să mai depinzi de titlu. (2) „Import în masă din fișier .xlsx" (exportul de produse/oferte din Seller Center) citește acum și coloana PNK, dacă există în fișier — o listare cu PNK deja mapat se leagă direct de produsul corect, nu mai trece prin potrivire după titlu; rândurile cu PNK deja confirmat nu se mai reafișează la reimport. (3) Lista „Mapări existente" arată acum PNK-ul pe fiecare rând (click pentru copiere). (4) Un produs poate avea în continuare mai multe PNK-uri (variante, sau piețe diferite RO/HU/BG) — toate apar pe pagina produsului, gata de copiat, exact ca înainte, doar cu chip-ul unificat „click direct pe cod" (același stil ca în Research), nu mai un buton „Copy" separat',date:'2026-08-22'},
@@ -10157,7 +10161,7 @@ function syncPickBtnHtml(idx){
 function renderSyncImportPreview(){
   const prev=document.getElementById('smi-preview');
   const rows=syncImpParsed.map((it,idx)=>{
-    const tag=it.viaPnk?`<span class="inv-match upd" style="background:var(--gr-bg);color:var(--gr)" title="Produsul e deja mapat pe acest PNK">✓ prin PNK</span>`:it.produsId?`<span class="inv-match upd" title="potrivire ${Math.round(it.score*100)}%">↑ ${Math.round(it.score*100)}%</span>`:`<span class="inv-match new">? fără sugestie</span>`;
+    const tag=it.viaPnk?`<span class="inv-match upd" style="background:var(--gr-bg);color:var(--gr)" title="Produsul e deja mapat pe acest PNK">✓ prin PNK</span>`:it.viaAi?`<span class="inv-match upd" style="background:var(--acc-light);color:var(--acc)" title="Sugerat de AI — verifică și confirmă">🤖 sugestie AI</span>`:it.produsId?`<span class="inv-match upd" title="potrivire ${Math.round(it.score*100)}%">↑ ${Math.round(it.score*100)}%</span>`:`<span class="inv-match new">? fără sugestie</span>`;
     const pnkTag=it.pnk?`<span style="font-family:var(--mono);font-size:19px;color:var(--t3)">${esc(it.pnk)}</span>`:'';
     return`<div class="inv-prev-row" style="gap:10px">
       <input type="checkbox" ${it.include?'checked':''} onchange="syncImpParsed[${idx}].include=this.checked;updSyncImportInfo()">
@@ -10169,6 +10173,57 @@ function renderSyncImportPreview(){
     `<div class="smi-pickdrop" id="smi-pickdrop"><input type="text" id="smi-pick-search" placeholder="Caută produs după nume sau SKU…" oninput="filterSyncPick()"><div class="smi-pick-list" id="smi-pick-list"></div></div>`;
   document.getElementById('smi-foot').style.display='flex';
   updSyncImportInfo();
+}
+// Sugestie AI pentru liniile fără o potrivire sigură (nici PNK, nici scor de titlu ≥70%) — la cerere
+// directă, după un import real din Seller Center. Nu trimitem tot catalogul la AI (sute de produse,
+// prea scump/lent) — folosim mai întâi potrivirea fuzzy locală ca să restrângem la top 5 candidați per
+// linie, apoi AI alege DINTRE ei (sau „niciunul"), într-un singur apel batch pentru mai multe linii
+// deodată. Rezultatul umple produsId/include, exact ca o potrivire normală — omul confirmă din butonul
+// „Adaugă mapările selectate" sau alege altceva din picker înainte să confirme, fără flux nou.
+async function suggestSyncImportWithAI(){
+  const idxs=syncImpParsed.map((it,idx)=>idx).filter(idx=>{const it=syncImpParsed[idx];return!it.viaPnk&&(!it.produsId||it.score<0.7);});
+  if(!idxs.length){toast('Toate liniile au deja o potrivire sigură (prin PNK sau titlu)');return;}
+  const btn=document.getElementById('smi-ai-btn');
+  if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span> Analizez…';}
+  let resolved=0;
+  try{
+    const CHUNK=12;
+    for(let c=0;c<idxs.length;c+=CHUNK){
+      const chunk=idxs.slice(c,c+CHUNK);
+      const candByIdx={};
+      const promptRows=chunk.map((idx,i)=>{
+        const it=syncImpParsed[idx];
+        const cands=P.map(p=>({p,score:fuzzyMatch(it.titluExtern,p.name||'')})).sort((a,b)=>b.score-a.score).slice(0,5);
+        candByIdx[idx]=cands;
+        const candLines=cands.map((cd,ci)=>`   ${ci+1}) ${cd.p.name}${cd.p.sku?' (SKU '+cd.p.sku+')':''}`).join('\n');
+        return`${i+1}. Titlu extern: "${it.titluExtern}"\nCandidați din inventar:\n${candLines}`;
+      }).join('\n\n');
+      const systemPrompt='Ești expert în identificarea produselor identice pe marketplace-uri românești (eMAG/Trendyol). Primești titluri de listări externe și candidați din inventarul propriu — alegi candidatul care e SIGUR același produs fizic (nu doar aceeași categorie sau un produs asemănător), nu ghicești. Răspunzi STRICT cu JSON valid, fără markdown.';
+      const userPrompt=`Pentru fiecare titlu de mai jos, alege numărul candidatului care e SIGUR același produs fizic — dacă niciun candidat nu se potrivește sigur, răspunde 0.\n\n${promptRows}\n\nRăspunde STRICT cu JSON: un obiect cu o cheie per titlu (numărul lui, ca text), valoarea fiind numărul candidatului ales sau 0. Ex: {"1":2,"2":0,"3":1}`;
+      const resp=await callAI([{role:'user',content:userPrompt}],systemPrompt,600,'analysis');
+      const match=resp.trim().match(/\{[\s\S]*\}/);
+      if(!match)continue;
+      let picks;
+      try{picks=JSON.parse(match[0]);}catch(e){continue;}
+      chunk.forEach((idx,i)=>{
+        const pick=Number(picks[String(i+1)]);
+        if(!pick||pick<1)return;
+        const cand=candByIdx[idx][pick-1];
+        if(!cand)return;
+        syncImpParsed[idx].produsId=cand.p.id;
+        syncImpParsed[idx].score=1;
+        syncImpParsed[idx].viaAi=true;
+        syncImpParsed[idx].include=true;
+        resolved++;
+      });
+      renderSyncImportPreview();
+    }
+    toast(resolved?`AI a sugerat ${resolved} din ${idxs.length} linii fără potrivire sigură — verifică și confirmă`:'AI nu a găsit potriviri sigure pentru liniile rămase — alege manual din picker');
+  }catch(e){
+    toast('Eroare la sugestia AI: '+(e.message||e),'err');
+  }finally{
+    if(btn){btn.disabled=false;btn.innerHTML='🤖 Sugerează cu AI';}
+  }
 }
 let syncPickIdx=null,syncPickProds=null;
 function openSyncPick(ev,idx){
