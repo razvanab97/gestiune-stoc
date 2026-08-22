@@ -717,8 +717,6 @@ function buildRaportCats(){
 .scorecard-row-meta{font-family:var(--mono);color:var(--t3);white-space:nowrap}
 .scorecard-row-gap.pos{color:var(--gr)}
 .scorecard-row-gap.neg{color:var(--rd)}
-.pnk-copy{display:flex;align-items:center;gap:5px;background:rgba(167,139,250,.12);border:1px solid var(--acc);border-radius:999px;padding:3px 7px;color:var(--t1);font-family:var(--mono);font-size:19px}
-.pnk-copy button{border:0;background:transparent;color:var(--acc);font-size:19px;cursor:pointer;padding:0}
 .decision-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
 .decision-card{background:var(--surf);border:1px solid var(--b1);border-radius:var(--r);padding:12px}
 .decision-card span{display:block;font-size:18px;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;font-weight:800;margin-bottom:5px}
@@ -1521,22 +1519,29 @@ th{font-weight:800!important;color:var(--t3)!important}
   <div class="card" style="padding:1rem 1.25rem;margin-bottom:1rem">
     <div class="sec" style="margin-top:0">Adaugă mapare nouă</div>
     <div style="font-size:22px;color:var(--t3);margin-bottom:10px">
-      SKU-urile interne nu coincid cu cele de pe platforme — leagă listarea după <b>titlul</b> ei
-      de pe eMAG/Trendyol și produsul corespunzător din inventar. Poți lega mai multe listări de
-      același produs (ex: variante de culoare/mărime listate separat).
+      SKU-urile interne nu coincid cu cele de pe platforme — leagă listarea de produsul corespunzător
+      din inventar. <b>PNK-ul</b> (dacă îl ai) e sursa de adevăr — e unic per listare și nu se schimbă
+      niciodată, spre deosebire de titlu, care se poate edita; dacă PNK-ul e deja cunoscut dintr-o
+      comandă importată anterior, produsul se găsește automat. Titlul rămâne rezervă, când nu ai încă
+      PNK-ul. Poți lega mai multe listări (PNK-uri diferite) de același produs (ex: variante de
+      culoare/mărime listate separat).
     </div>
     <div class="frow">
       <div class="fld">
         <label>Platformă</label>
-        <select id="sm-platforma">
+        <select id="sm-platforma" onchange="suggestSyncProduct()">
           <option value="emag">eMAG</option>
           <option value="trendyol">Trendyol</option>
         </select>
       </div>
       <div class="fld">
-        <label>Titlu listare pe platformă</label>
-        <input type="text" id="sm-titlu" placeholder="ex: Set 4 perne decorative bumbac 45x45cm gri" oninput="suggestSyncProduct()">
+        <label>PNK (recomandat — vezi „Comenzi Platforme” sau Seller Center)</label>
+        <input type="text" id="sm-pnk" placeholder="ex: DGF9K9BBM" oninput="suggestSyncProduct()">
       </div>
+    </div>
+    <div class="fld">
+      <label>Titlu listare pe platformă</label>
+      <input type="text" id="sm-titlu" placeholder="ex: Set 4 perne decorative bumbac 45x45cm gri" oninput="suggestSyncProduct()">
     </div>
     <div class="cat-suggest" id="sm-suggest" style="display:none"></div>
     <div class="fld">
@@ -2143,6 +2148,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:201,text:'Sincronizare eMAG/Trendyol — PNK devine sursa principală de potrivire peste tot, nu doar la importul de comenzi (unde deja funcționa așa). (1) „Adaugă mapare nouă" are acum un câmp PNK — dacă PNK-ul e deja cunoscut dintr-o comandă/mapare anterioară, produsul se găsește automat, fără să mai depinzi de titlu. (2) „Import în masă din fișier .xlsx" (exportul de produse/oferte din Seller Center) citește acum și coloana PNK, dacă există în fișier — o listare cu PNK deja mapat se leagă direct de produsul corect, nu mai trece prin potrivire după titlu; rândurile cu PNK deja confirmat nu se mai reafișează la reimport. (3) Lista „Mapări existente" arată acum PNK-ul pe fiecare rând (click pentru copiere). (4) Un produs poate avea în continuare mai multe PNK-uri (variante, sau piețe diferite RO/HU/BG) — toate apar pe pagina produsului, gata de copiat, exact ca înainte, doar cu chip-ul unificat „click direct pe cod" (același stil ca în Research), nu mai un buton „Copy" separat',date:'2026-08-22'},
   {n:200,text:'„Comenzi stoc" — reparată cauza reală pentru care o comandă putea rămâne DEFINITIV nesincronizată cu contul: dacă salvarea către Supabase eșua o singură dată (ex. RLS blocat temporar — exact ce s-a întâmplat azi), comanda rămânea salvată DOAR local, la nesfârșit, fără nicio reîncercare ulterioară — la un re-render se putea amesteca cu o versiune corectă, dând impresia de date greșite/„fantomă". Acum, la fiecare pornire a aplicației, orice comandă rămasă doar locală se resincronizează automat cu contul, silențios, cu o confirmare scurtă dacă chiar a recuperat ceva',date:'2026-08-22'},
   {n:199,text:'URGENT — bug critic reparat, introdus chiar de fix-ul anterior (#198): orice link eMAG/Trendyol (nu doar furnizor) arunca o eroare la randare, care oprea COMPLET lista de dosare din Research (apărea complet goală, ca și cum dosarele/pozele ar fi „dispărut" — datele erau intacte în baza de date tot timpul, doar afișarea se oprea). Cauza: verificarea noului „ai_search_queries" încerca să citească datele de căutare eMAG/Trendyol înainte să verifice dacă acel link chiar le are (doar linkurile de furnizor le au) — corectat să verifice întâi, la fel ca înainte de #198',date:'2026-08-22'},
   {n:198,text:'Bug real reparat, raportat direct — „✦ Recunoaștere AI" (interogările eMAG/Trendyol generate de AI pe un link) dispărea la deschiderea altui dosar. Cauza: rezultatul se scria doar direct pe ecran (DOM), niciodată în datele linkului — orice re-render (declanșat de aproape orice altă acțiune din Research) reconstruia rândul de la zero, fără el. Acum rezultatul se ține pe link ȘI se salvează pe cont (research_links.ai_search_queries) — rămâne vizibil la schimbarea dosarului și supraviețuiește unui refresh de pagină. Necesită migration_link_ai_search_queries.sql în Supabase pentru partea de refresh/alt dispozitiv; până atunci, rezultatul tot rămâne vizibil în sesiunea curentă (nu se mai pierde la schimbarea dosarului), doar nu supraviețuiește unui refresh',date:'2026-08-22'},
@@ -8765,7 +8771,7 @@ async function analyzeCompetitorLab(){
 }
 function arrList(items){return Array.isArray(items)&&items.length?`<ul>${items.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'<div style="font-size:22px;color:var(--t3)">—</div>';}
 function pnkBadge(pnk){
-  return pnk?`<div class="pnk-copy"><span>PNK ${esc(pnk)}</span><button onclick="copyText('${esc(pnk)}')" title="Copiază PNK">Copy</button></div>`:'<div class="scorecard-row-meta">PNK —</div>';
+  return pnk?`<button type="button" class="rsx-pnk" onclick="copyText(${esc(JSON.stringify(String(pnk)))})" title="Copiază PNK">PNK ${esc(pnk)} ⧉</button>`:'<div class="scorecard-row-meta">PNK —</div>';
 }
 function renderCompetitionLab(data){
   const out=document.getElementById('competition-result');if(!out)return;
@@ -9153,7 +9159,7 @@ function renderProductEmagCountries(productId){
   maps.forEach(m=>{const c=m.tara||'Altă piață';(byCountry[c]=byCountry[c]||[]).push(m);});
   const cols=Object.keys(byCountry).sort((a,b)=>(['RO','HU','BG'].indexOf(a)+1||9)-(['RO','HU','BG'].indexOf(b)+1||9)).map(c=>{
     const label=PCOM_COUNTRY_LABEL[c]||c;
-    const pnks=byCountry[c].map(m=>`<div class="pnk-copy"><span>${esc(m.idExtern)}</span><button type="button" onclick="copyText('${esc(m.idExtern)}')" title="Copiază PNK">Copy</button></div>`).join('');
+    const pnks=byCountry[c].map(m=>`<button type="button" class="rsx-pnk" onclick="copyText(${esc(JSON.stringify(String(m.idExtern)))})" title="Copiază PNK">${esc(m.idExtern)} ⧉</button>`).join('');
     return`<div class="pcom-country-col"><div class="pcom-country-lbl">${esc(label)}</div>${pnks}</div>`;
   }).join('');
   box.innerHTML=`<div class="m-sales-head"><div class="m-sales-title">PNK-uri eMAG pe țară</div></div><div class="pcom-country-grid">${cols}</div>`;
@@ -9886,6 +9892,14 @@ async function loadSyncMappings(){
     toast('Eroare la încărcarea mapărilor: '+err.message,'err');
   }
 }
+// PNK e mai fiabil decât titlul — unic per listare, nu se schimbă niciodată la o editare de titlu
+// (spre deosebire de titlu, care se poate rescrie oricând pe platformă). Orice flux de mapare/potrivire
+// din aplicație încearcă întâi PNK-ul, titlul rămâne doar rezervă când PNK-ul lipsește/nu e cunoscut.
+function findProductByPnk(platforma,pnk){
+  if(!pnk)return null;
+  const m=SYNCM.find(s=>s.platforma===platforma&&s.confirmat&&s.idExtern===pnk);
+  return m?P.find(p=>p.id===m.produsId)||null:null;
+}
 let smSuggestTimer=null;
 function suggestSyncProduct(){
   clearTimeout(smSuggestTimer);
@@ -9893,6 +9907,16 @@ function suggestSyncProduct(){
 }
 function doSuggestSyncProduct(){
   const el=document.getElementById('sm-suggest');if(!el)return;
+  const platforma=document.getElementById('sm-platforma').value;
+  const pnk=document.getElementById('sm-pnk')?.value.trim()||'';
+  if(pnk){
+    const byPnk=findProductByPnk(platforma,pnk);
+    if(byPnk){
+      el.style.display='flex';
+      el.innerHTML=`<span class="cat-chip-loading" style="width:100%">✓ Găsit după PNK (deja mapat anterior):</span><span class="cat-chip" onclick="selectSyncProduct(${byPnk.id})">📦 ${esc(byPnk.name)}</span>`;
+      return;
+    }
+  }
   const title=document.getElementById('sm-titlu').value.trim();
   if(!title||!P.length){el.style.display='none';el.innerHTML='';return;}
   const scored=P.map(p=>({p,score:fuzzyMatch(title,p.name||'')}))
@@ -9920,6 +9944,11 @@ async function handleSyncImportFile(ev){
     const wb=window.XLSX.read(buf,{type:'array'});
     const findSub=(hdr,names)=>{for(const n of names){const i=hdr.findIndex(h=>h.includes(n));if(i>-1)return i;}return -1;};
     const findExact=(hdr,names)=>{for(const n of names){const i=hdr.findIndex(h=>h===n);if(i>-1)return i;}return -1;};
+    // PNK e mai fiabil decât titlul (unic per listare, nu se schimbă la o editare de titlu pe platformă)
+    // — exportul de produse/oferte din Seller Center îl conține de obicei; dacă PNK-ul e deja cunoscut
+    // dintr-o mapare confirmată anterior (ex. dintr-un import de comenzi), produsul se leagă direct,
+    // fără să mai depindă de o potrivire fuzzy după titlu.
+    const pnkPat=['pnk','part number key','part_number_key'];
     // Format curat de asocieri (ex. export "asociere eMAG ↔ stoc"): titlu extern + produs_id deja determinat
     const curRows=window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
     const curHdr=(curRows[0]||[]).map(h=>String(h).trim().toLowerCase());
@@ -9928,22 +9957,30 @@ async function handleSyncImportFile(ev){
     if(iCurTitle>-1&&iCurPid>-1){
       const iCurStatus=findExact(curHdr,['status_asociere']);
       const iCurScore=findExact(curHdr,['scor_asociere']);
+      const iCurPnk=findExact(curHdr,['pnk','id_extern']);
       const existing=new Set(SYNCM.filter(m=>m.platforma===platforma).map(m=>m.titluExtern.toLowerCase().trim()));
+      const existingPnk=new Set(SYNCM.filter(m=>m.platforma===platforma&&m.idExtern).map(m=>m.idExtern));
       const seen=new Set();
       for(let i=1;i<curRows.length;i++){
         const titlu=String(curRows[i][iCurTitle]||'').trim();
-        if(!titlu||seen.has(titlu.toLowerCase())||existing.has(titlu.toLowerCase()))continue;
+        const pnk=iCurPnk>-1?String(curRows[i][iCurPnk]||'').trim():'';
+        if(!titlu||seen.has(titlu.toLowerCase())||existing.has(titlu.toLowerCase())||(pnk&&existingPnk.has(pnk)))continue;
         seen.add(titlu.toLowerCase());
+        const byPnk=findProductByPnk(platforma,pnk);
+        if(byPnk){
+          syncImpParsed.push({titluExtern:titlu,pnk,produsId:byPnk.id,score:1,viaPnk:true,include:true});
+          continue;
+        }
         const status=iCurStatus>-1?String(curRows[i][iCurStatus]||'').trim().toUpperCase():'';
         const pidRaw=String(curRows[i][iCurPid]||'').trim();
         const pid=pidRaw?Number(pidRaw):null;
         const fromFile=(status==='AUTO'||status==='REVIEW')&&pid&&P.some(p=>p.id===pid);
         if(fromFile){
           const score=iCurScore>-1?(Number(curRows[i][iCurScore])||0)/100:1;
-          syncImpParsed.push({titluExtern:titlu,produsId:pid,score,include:status==='AUTO'});
+          syncImpParsed.push({titluExtern:titlu,pnk,produsId:pid,score,include:status==='AUTO'});
         }else{
           const match=findExistingProduct({name:titlu});
-          syncImpParsed.push({titluExtern:titlu,produsId:match?match.product.id:null,score:match?match.score:0,include:!!match});
+          syncImpParsed.push({titluExtern:titlu,pnk,produsId:match?match.product.id:null,score:match?match.score:0,include:!!match});
         }
       }
       if(!syncImpParsed.length){toast('Nicio listare nouă găsită (toate sunt deja mapate)','err');parsing.style.display='none';return;}
@@ -9963,24 +10000,32 @@ async function handleSyncImportFile(ev){
         const iTitle=findSub(hdr,titlePat);
         if(iTitle<0)continue;
         const iStock=findExact(hdr,stockPat);
-        const score=1+(iStock>-1?5:0);
-        if(!best||score>best.score)best={rows:rws,headerIdx:r,iTitle,iStock,score};
+        const iPnk=findSub(hdr,pnkPat);
+        const score=1+(iStock>-1?5:0)+(iPnk>-1?3:0);
+        if(!best||score>best.score)best={rows:rws,headerIdx:r,iTitle,iStock,iPnk,score};
       }
     }
     if(!best){toast('Nu am găsit o coloană cu titlul produsului în fișier','err');parsing.style.display='none';return;}
-    const{rows,headerIdx,iTitle,iStock}=best;
+    const{rows,headerIdx,iTitle,iStock,iPnk}=best;
     const existing=new Set(SYNCM.filter(m=>m.platforma===platforma).map(m=>m.titluExtern.toLowerCase().trim()));
+    const existingPnk=new Set(SYNCM.filter(m=>m.platforma===platforma&&m.idExtern).map(m=>m.idExtern));
     const seen=new Set();
     for(let i=headerIdx+1;i<rows.length;i++){
       const titlu=String(rows[i][iTitle]||'').trim();
-      if(!titlu||seen.has(titlu.toLowerCase())||existing.has(titlu.toLowerCase()))continue;
+      const pnk=iPnk>-1?String(rows[i][iPnk]||'').trim():'';
+      if(!titlu||seen.has(titlu.toLowerCase())||existing.has(titlu.toLowerCase())||(pnk&&existingPnk.has(pnk)))continue;
       if(iStock>-1){
         const stockVal=String(rows[i][iStock]).trim();
         if(stockVal===''||isNaN(Number(stockVal)))continue;
       }
       seen.add(titlu.toLowerCase());
+      const byPnk=findProductByPnk(platforma,pnk);
+      if(byPnk){
+        syncImpParsed.push({titluExtern:titlu,pnk,produsId:byPnk.id,score:1,viaPnk:true,include:true});
+        continue;
+      }
       const match=findExistingProduct({name:titlu});
-      syncImpParsed.push({titluExtern:titlu,produsId:match?match.product.id:null,score:match?match.score:0,include:!!match});
+      syncImpParsed.push({titluExtern:titlu,pnk,produsId:match?match.product.id:null,score:match?match.score:0,include:!!match});
     }
     if(!syncImpParsed.length){toast('Nicio listare nouă găsită (toate sunt deja mapate sau coloana e goală)','err');parsing.style.display='none';return;}
     parsing.style.display='none';
@@ -10004,10 +10049,11 @@ function syncPickBtnHtml(idx){
 function renderSyncImportPreview(){
   const prev=document.getElementById('smi-preview');
   const rows=syncImpParsed.map((it,idx)=>{
-    const tag=it.produsId?`<span class="inv-match upd" title="potrivire ${Math.round(it.score*100)}%">↑ ${Math.round(it.score*100)}%</span>`:`<span class="inv-match new">? fără sugestie</span>`;
+    const tag=it.viaPnk?`<span class="inv-match upd" style="background:var(--gr-bg);color:var(--gr)" title="Produsul e deja mapat pe acest PNK">✓ prin PNK</span>`:it.produsId?`<span class="inv-match upd" title="potrivire ${Math.round(it.score*100)}%">↑ ${Math.round(it.score*100)}%</span>`:`<span class="inv-match new">? fără sugestie</span>`;
+    const pnkTag=it.pnk?`<span style="font-family:var(--mono);font-size:19px;color:var(--t3)">${esc(it.pnk)}</span>`:'';
     return`<div class="inv-prev-row" style="gap:10px">
       <input type="checkbox" ${it.include?'checked':''} onchange="syncImpParsed[${idx}].include=this.checked;updSyncImportInfo()">
-      <div class="inv-prev-nm" style="flex:1">${esc(it.titluExtern)} ${tag}</div>
+      <div class="inv-prev-nm" style="flex:1">${esc(it.titluExtern)} ${pnkTag} ${tag}</div>
       <div class="smi-pick" id="smi-pick-${idx}">${syncPickBtnHtml(idx)}</div>
     </div>`;
   }).join('');
@@ -10073,7 +10119,7 @@ async function applySyncImport(){
   const btn=document.getElementById('smi-apply-btn');
   btn.disabled=true;btn.textContent='Se adaugă…';
   try{
-    const rows=await dbPost('platforma_mapari',toAdd.map(it=>syncMapToDb({platforma,titluExtern:it.titluExtern,produsId:it.produsId,confirmat:true})));
+    const rows=await dbPost('platforma_mapari',toAdd.map(it=>syncMapToDb({platforma,titluExtern:it.titluExtern,idExtern:it.pnk||null,produsId:it.produsId,confirmat:true})));
     SYNCM=rows.map(dbToSyncMap).concat(SYNCM);
     syncImpParsed=[];
     document.getElementById('smi-preview').innerHTML='';
@@ -10848,8 +10894,10 @@ function renderSyncPage(){
   const plLabel={emag:'eMAG',trendyol:'Trendyol'};
   list.innerHTML=SYNCM.map(m=>{
     const p=P.find(x=>x.id===m.produsId);
+    const pnkChip=m.idExtern?`<button class="rsx-pnk" onclick="copyText(${esc(JSON.stringify(String(m.idExtern)))})" title="PNK — click pentru copiere">${esc(m.idExtern)} ⧉</button>`:'<span style="font-size:19px;color:var(--t3)">fără PNK</span>';
     return`<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--b1)">
       <span class="badge" style="background:var(--surf2);border:1px solid var(--b1);border-radius:6px;padding:3px 8px;font-size:19px;font-weight:600">${plLabel[m.platforma]||m.platforma}</span>
+      ${pnkChip}
       <div style="flex:1;min-width:0">
         <div style="font-size:23px;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(m.titluExtern)}</div>
         <div style="font-size:19px;color:var(--t3)">→ ${p?esc(p.name):'<span style="color:var(--err,#e55)">produs șters</span>'}</div>
@@ -10861,14 +10909,16 @@ function renderSyncPage(){
 async function addSyncMapping(){
   const platforma=document.getElementById('sm-platforma').value;
   const titluExtern=document.getElementById('sm-titlu').value.trim();
+  const pnk=document.getElementById('sm-pnk').value.trim();
   const produsId=+document.getElementById('sm-produs').value;
   if(!titluExtern){toast('Completează titlul listării de pe platformă','err');return;}
   if(!produsId){toast('Alege produsul corespunzător din inventar','err');return;}
   if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
   try{
-    const [row]=await dbPost('platforma_mapari',syncMapToDb({platforma,titluExtern,produsId,confirmat:true}));
+    const [row]=await dbPost('platforma_mapari',syncMapToDb({platforma,titluExtern,idExtern:pnk||null,produsId,confirmat:true}));
     SYNCM.unshift(dbToSyncMap(row));
     document.getElementById('sm-titlu').value='';
+    document.getElementById('sm-pnk').value='';
     const sg=document.getElementById('sm-suggest');if(sg){sg.style.display='none';sg.innerHTML='';}
     renderSyncPage();
     toast('Mapare adăugată ✓');
