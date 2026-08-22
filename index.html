@@ -1177,6 +1177,11 @@ th{font-weight:800!important;color:var(--t3)!important}
 .notif-panel.on{display:block}
 .notif-head{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--b1);font-size:23px;font-weight:800;color:var(--t2);position:sticky;top:0;background:var(--surf)}
 .notif-list{padding:6px}
+.zoom-wrap{display:flex;align-items:center;gap:2px;margin-left:10px;border:1px solid var(--b1);border-radius:8px;padding:2px}
+.zoom-btn{background:none;border:none;color:var(--t2);font-size:24px;font-weight:700;cursor:pointer;padding:2px 9px;border-radius:6px;line-height:1.4}
+.zoom-btn:hover{background:var(--surf2);color:var(--t1)}
+.zoom-level{font-size:17px;color:var(--t3);cursor:pointer;min-width:42px;text-align:center;user-select:none;font-family:var(--mono)}
+.zoom-level:hover{color:var(--t1)}
 .notif-empty{padding:20px;text-align:center;font-size:23px;color:var(--t3)}
 .notif-row{display:flex;gap:10px;padding:9px 8px;border-radius:8px;align-items:flex-start}
 .notif-row:hover{background:var(--surf2)}
@@ -1226,6 +1231,11 @@ th{font-weight:800!important;color:var(--t3)!important}
       <div class="notif-head"><span>Mișcări de stoc</span></div>
       <div class="notif-list" id="notif-list"></div>
     </div>
+  </div>
+  <div class="zoom-wrap" title="Mărește/micșorează afișarea">
+    <button class="zoom-btn" onclick="zoomOut()" title="Micșorează (Zoom -)">−</button>
+    <span class="zoom-level" id="zoom-level" onclick="zoomReset()" title="Click pentru a reseta la 100%">100%</span>
+    <button class="zoom-btn" onclick="zoomIn()" title="Mărește (Zoom +)">+</button>
   </div>
 </header>
 
@@ -2130,6 +2140,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:196,text:'Cerute direct, 3 completări: (1) Buton nou de zoom (−/100%/+) direct în header, vizibil pe orice pagină — mărește/micșorează toată afișarea (80%-150%), reținut pe acest dispozitiv. (2) „Personalizează ordinea paginilor" (⚙️) nu mai era doar per-browser — ordinea se salvează acum și pe cont, la fel ca „Editor interfață"; pe alt browser/dispozitiv sau după curățarea datelor site-ului, ordinea salvată reapare, nu se mai resetează la implicit. (3) „Lipește din clipboard" (Research, pe linkurile în așteptare de screenshot) — clipboard-ul sistemului ține o singură captură per copiere, deci acum fiecare click ADAUGĂ poza la un lot, nu mai analizează imediat (ceea ce suprascria rezultatul pasului anterior); poți lipi mai multe capturi pe rând, apoi „🔎 Analizează" citește tot lotul odată. La fel, „Lipește din clipboard" din Generator anunțuri prelua doar prima poză dacă clipboard-ul avea mai multe (ex. mai multe fișiere selectate din Finder) — acum le adaugă pe toate',date:'2026-08-22'},
   {n:193,text:'Tabelul de inventar — poza produsului era 46×46px dar coloana ei avea doar 38px lățime, cu conținutul tăiat automat de browser (overflow ascuns) ca să nu iasă din celulă; comportamentul de tăiere diferă subtil între motoarele de randare, ceea ce dădea o poziționare inconsecventă Chrome vs. Safari. Acum coloana are 68px și poza 60px — încape exact, fără nicio tăiere, sensibil mai mare și centrată curat; verificat identic în Chromium și WebKit (motorul din spatele Safari)',date:'2026-08-22'},
   {n:192,text:'Reparat: „Comenzi stoc" (Jurnal vânzări) rămânea goală deși stocul chiar se adăuga constant — jurnalul acela (tabela comenzi_stoc) era alimentat DOAR de „📥 Adaugă stoc" (bulk) și import factură, nu și de editarea unui singur produs din Inventar sau de ajustarea rapidă din Raport stoc (căile cele mai folosite zi de zi). Acum orice creștere de stoc, indiferent de cale — produs nou, editare manuală sau ajustare din Raport stoc — apare și în „Comenzi stoc", nu doar în clopoțelul de activitate 🔔. Scăderile de stoc (vânzări, corecții în minus) continuă să apară doar în clopoțel, ca și până acum — „Comenzi stoc" e gândit specific ca evidență de intrări',date:'2026-08-22'},
   {n:191,text:'Ghidul „🔑 eMAG PNK" — EAN-ul are acum aceeași convenție ca „ID produs"/„Cod produs" (cerut direct): click direct PE cod pentru copiere, iar după copiere se înlocuiește AUTOMAT cu următorul din „🔢 Bancă de coduri EAN" — util când asociezi mai multe PNK-uri la rând din același dosar, fiecare are nevoie de propriul EAN, nu se refolosește la nesfârșit același cod. Distinct de EAN-ul unic per anunț din „Ghid completare eMAG" (acela rămâne neschimbat, o singură valoare per listare)',date:'2026-08-21'},
@@ -2610,18 +2621,33 @@ document.addEventListener('click',ev=>{
   if(panel&&panel.classList.contains('on')&&!ev.target.closest('.notif-wrap'))panel.classList.remove('on');
 });
 
-// ── PERSONALIZARE ORDINE PAGINI ── preferință pur vizuală, per-browser, nu are legătură cu datele din Supabase
+// ── PERSONALIZARE ORDINE PAGINI ── preferință vizuală; salvată local (aplicare instant, fără flash la
+// pornire) ȘI pe cont prin api/settings.js (cheie tab_order) — la fel ca „Editor interfață" (culori).
+// Bug real raportat: ordinea „nu se salvează" — până acum ținea DOAR de localStorage, per-browser; pe
+// alt browser/dispozitiv sau după curățarea datelor site-ului, ordinea reapărea implicită, ceea ce se
+// simte exact ca „nu s-a salvat". Acum se resincronizează de pe cont, ca restul setărilor.
 const TAB_ORDER_KEY='sm6_tab_order';
-function applyTabOrder(){
+function reorderTabsDom(order){
   const nav=document.querySelector('.h-tabs');if(!nav)return;
-  let order=[];
-  try{order=JSON.parse(localStorage.getItem(TAB_ORDER_KEY)||'[]');}catch(e){}
   if(!Array.isArray(order)||!order.length)return;
   const btns=[...nav.querySelectorAll('.h-tab')];
   const byId={};btns.forEach(b=>byId[b.dataset.page]=b);
   order.forEach(id=>{if(byId[id])nav.appendChild(byId[id]);});
   // orice tab nou, apărut ulterior și neinclus în ordinea salvată, rămâne la final
   btns.forEach(b=>{if(!order.includes(b.dataset.page))nav.appendChild(b);});
+}
+async function applyTabOrder(){
+  let order=[];
+  try{order=JSON.parse(localStorage.getItem(TAB_ORDER_KEY)||'[]');}catch(e){}
+  reorderTabsDom(order);
+  try{
+    const r=await fetch('/api/settings?key=tab_order');
+    const data=await r.json();
+    if(data?.value){
+      const parsed=JSON.parse(data.value);
+      if(Array.isArray(parsed)&&parsed.length){reorderTabsDom(parsed);safeLocalSet(TAB_ORDER_KEY,JSON.stringify(parsed));}
+    }
+  }catch(e){}
 }
 function toggleTabCfgPanel(ev){
   ev.stopPropagation();
@@ -2659,16 +2685,38 @@ function moveTabOrder(id,dir){
   saveTabOrder();
   renderTabCfgList();
 }
-function saveTabOrder(){
+async function saveTabOrder(){
   const nav=document.querySelector('.h-tabs');if(!nav)return;
   const order=[...nav.querySelectorAll('.h-tab')].map(b=>b.dataset.page);
   safeLocalSet(TAB_ORDER_KEY,JSON.stringify(order));
+  try{await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:'tab_order',value:JSON.stringify(order)})});}
+  catch(e){console.warn('Nu am putut sincroniza ordinea paginilor pe cont:',e);}
 }
-function resetTabOrder(){
+async function resetTabOrder(){
   localStorage.removeItem(TAB_ORDER_KEY);
+  try{await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:'tab_order',value:'[]'})});}catch(e){}
   toast('Ordinea implicită restaurată ✓');
   location.reload();
 }
+
+// ── ZOOM PAGINĂ ── mărește/micșorează afișarea, cerut direct, buton vizibil în header. Preferință de
+// afișare per-dispozitiv (ca zoom-ul nativ din browser) — doar localStorage, nu se sincronizează pe
+// cont. „zoom" CSS (nu transform:scale) — reflow real, nu doar vizual, și nu rupe elementele fixed
+// (header-ul, overlay-ul modalului) cum ar face transform pe <html>. Suportat în Chrome și Safari.
+const ZOOM_KEY='sm6_zoom_level',ZOOM_MIN=80,ZOOM_MAX=150,ZOOM_STEP=10;
+let zoomLevel=100;
+function applyZoom(){
+  document.documentElement.style.zoom=(zoomLevel/100);
+  const el=document.getElementById('zoom-level');if(el)el.textContent=zoomLevel+'%';
+}
+function loadZoom(){
+  const saved=parseInt(localStorage.getItem(ZOOM_KEY),10);
+  if(Number.isFinite(saved)&&saved>=ZOOM_MIN&&saved<=ZOOM_MAX)zoomLevel=saved;
+  applyZoom();
+}
+function zoomIn(){zoomLevel=Math.min(ZOOM_MAX,zoomLevel+ZOOM_STEP);applyZoom();safeLocalSet(ZOOM_KEY,String(zoomLevel));}
+function zoomOut(){zoomLevel=Math.max(ZOOM_MIN,zoomLevel-ZOOM_STEP);applyZoom();safeLocalSet(ZOOM_KEY,String(zoomLevel));}
+function zoomReset(){zoomLevel=100;applyZoom();safeLocalSet(ZOOM_KEY,'100');}
 
 // ── Editor interfață — personalizare vizuală (Faza 1+2 dintr-un plan mai mare: comutator + temă de
 // culori; text static/ascundere secțiuni rămân pentru o etapă viitoare). Grupuri, nu variabile CSS
@@ -5346,12 +5394,14 @@ function renderResearchProjects(){
         const waitLabel=l.status==='eroare'?'⚠ Nu s-a putut deschide automat':'📷 Aștept screenshot';
         const pendingIdx=pendingLinks.findIndex(x=>Number(x.id)===Number(l.id))+1;
         const hint=urlSlugHint(l.url);
+        const staged=(pendingClipShots[l.id]||[]).length;
+        const stagedActions=staged?` <button class="rsx-icon-btn" onclick="analyzePendingClipShots(${l.id})" title="Analizează toate pozele lipite până acum, combinate">🔎 Analizează (${staged})</button> <button class="rsx-icon-btn danger" onclick="clearPendingClipShots(${l.id})" title="Șterge pozele lipite, fără să le analizezi">✕</button>`:'';
         return`<tr><td><span class="rsx-src ${platformClass}">${esc(l.platform||'altul')}</span></td><td colspan="9">
           <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
             <span class="rsx-pending-num" title="Poziția printre linkurile în așteptare de screenshot din acest dosar">Link #${pendingIdx} din ${pendingLinks.length}</span>
             <strong style="color:var(--t1)">${esc(hint||'Produs fără titlu încă')}</strong>
           </div>
-          <a href="${esc(l.url)}" target="_blank" style="color:var(--t3);font-size:19px;text-decoration:none;word-break:break-all">${esc(l.url)}</a> <span class="rsx-status-warn" id="rlss-status-${l.id}">${waitLabel}</span> <input type="file" accept="image/*" multiple id="rlss-${l.id}" style="display:none" onchange="handleLinkScreenshotFile(${l.id},this)"><label for="rlss-${l.id}" class="rsx-icon-btn" style="cursor:pointer" title="Poze cu listarea de pe platformă — până la 5; pentru mai multe, folosește PDF mai jos">📷 Adaugă poze (max 5)</label> <button class="rsx-icon-btn" onclick="pasteLinkScreenshotFromClipboard(${l.id})" title="Fă un screenshot direct pe pagina produsului (Cmd/Ctrl+Shift+4 pe Mac) — apoi apasă aici, fără să salvezi fișierul local și să-l reîncarci">📋 Lipește din clipboard</button></td><td class="rsx-row-actions">${del}</td></tr>`;
+          <a href="${esc(l.url)}" target="_blank" style="color:var(--t3);font-size:19px;text-decoration:none;word-break:break-all">${esc(l.url)}</a> <span class="rsx-status-warn" id="rlss-status-${l.id}">${waitLabel}</span> <input type="file" accept="image/*" multiple id="rlss-${l.id}" style="display:none" onchange="handleLinkScreenshotFile(${l.id},this)"><label for="rlss-${l.id}" class="rsx-icon-btn" style="cursor:pointer" title="Poze cu listarea de pe platformă — până la 5; pentru mai multe, folosește PDF mai jos">📷 Adaugă poze (max 5)</label> <button class="rsx-icon-btn" onclick="pasteLinkScreenshotFromClipboard(${l.id})" title="Fă un screenshot direct pe pagina produsului (Cmd/Ctrl+Shift+4 pe Mac) — apoi apasă aici; poți lipi mai multe capturi pe rând, fiecare click se adaugă la lot, fără să salvezi fișierul local și să-l reîncarci">📋 Lipește din clipboard${staged?` (${staged})`:''}</button>${stagedActions}</td><td class="rsx-row-actions">${del}</td></tr>`;
       }
       const dupFlag=l.duplicate_type&&l.duplicate_type!=='none';
       const sourceIcon=l.source==='screenshot'?' 📷':l.source==='pdf'?' 📄':'';
@@ -5549,9 +5599,11 @@ Răspunde STRICT în format JSON: {"title":"<titlu>","price":<număr>,"currency"
     toast(`${dataUrls.length>1?dataUrls.length+' poze analizate':'Poză analizată'} ✓`);
     patchResearchLink(saveResp.link,saveResp.verdict);
     renderResearchProjects();
+    return true;
   }catch(e){
     if(statusEl){statusEl.style.color='var(--rd)';statusEl.textContent='⚠ '+(e.message||'Eroare la analiza pozelor');}
     toast(e.message||'Eroare la analiza pozelor','err');
+    return false;
   }
 }
 async function handleLinkScreenshotFile(linkId,inputEl){
@@ -5565,6 +5617,12 @@ async function handleLinkScreenshotFile(linkId,inputEl){
 // (cerut direct: „scăpăm de o etapă"). Faci un screenshot cu unealta nativă a sistemului (pe Mac,
 // Cmd+Shift+4 copiază direct în clipboard) pe pagina Trendyol/furnizor care nu s-a putut deschide
 // automat, apoi un singur click aici — se duce prin ACELAȘI traseu de analiză AI ca fișierul încărcat.
+// Clipboard-ul sistemului ține UN SINGUR conținut per copiere — pentru mai multe capturi (scroll pe o
+// pagină lungă), utilizatorul face o captură, apasă „Lipește", face următoarea captură, apasă din nou
+// ș.a.m.d. Fiecare click ADAUGĂ la un lot în așteptare (nu analizează imediat — analiza imediată la
+// fiecare click ar suprascrie pe server rezultatul pasului anterior, cerut direct: „search la toate"
+// dintr-o dată), până apeși explicit „🔎 Analizează" pe lotul complet.
+let pendingClipShots={};
 async function pasteLinkScreenshotFromClipboard(linkId){
   if(!navigator.clipboard?.read){toast('Browserul nu suportă citirea directă din clipboard — încarcă manual fișierul cu „📷 Adaugă poze"','err');return;}
   try{
@@ -5577,10 +5635,27 @@ async function pasteLinkScreenshotFromClipboard(linkId){
       rawDataUrls.push(await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(blob);}));
     }
     if(!rawDataUrls.length){toast('Nu am găsit nicio imagine în clipboard — fă întâi un screenshot (Cmd/Ctrl+Shift+4 pe Mac), apoi încearcă din nou','err');return;}
-    await processLinkScreenshotDataUrls(linkId,rawDataUrls);
+    const existing=pendingClipShots[linkId]||[];
+    const merged=[...existing,...rawDataUrls].slice(0,LINK_PHOTO_MAX);
+    const overflow=(existing.length+rawDataUrls.length)>LINK_PHOTO_MAX;
+    pendingClipShots[linkId]=merged;
+    toast(`${rawDataUrls.length>1?rawDataUrls.length+' poze adăugate':'Poză adăugată'} (${merged.length}/${LINK_PHOTO_MAX}) — mai lipește sau apasă „🔎 Analizează"${overflow?'. Ai atins maximul.':''}`);
+    renderResearchProjects();
   }catch(e){
     toast('Eroare la citirea clipboard-ului: '+(e.message||e)+' — sau încarcă manual fișierul','err');
   }
+}
+async function analyzePendingClipShots(linkId){
+  const shots=pendingClipShots[linkId]||[];
+  if(!shots.length)return;
+  const ok=await processLinkScreenshotDataUrls(linkId,shots);
+  if(ok)delete pendingClipShots[linkId];
+  renderResearchProjects();
+}
+function clearPendingClipShots(linkId){
+  delete pendingClipShots[linkId];
+  renderResearchProjects();
+  toast('Poze lipite șterse');
 }
 // Aplică local un link+dosar actualizat, primit direct din răspunsul serverului — fără refetch.
 // loadResearchProjects() golește toată lista cu un spinner ("Încarc dosarele…") înainte de reîncărcare,
@@ -8399,19 +8474,25 @@ async function pasteImageFromClipboard(){
   if(!navigator.clipboard?.read){toast('Browserul nu suportă citirea directă din clipboard — folosește „+ Adaugă poză externă" sau încarcă manual fișierul','err');return;}
   try{
     const items=await navigator.clipboard.read();
-    let blob=null;
+    // Clipboard-ul poate conține mai multe imagini deodată (ex. mai multe fișiere selectate și copiate
+    // din Finder/Explorer) — se preiau TOATE, nu doar prima găsită.
+    const blobs=[];
     for(const item of items){
       const type=item.types.find(t=>t.startsWith('image/'));
-      if(type){blob=await item.getType(type);break;}
+      if(type)blobs.push(await item.getType(type));
     }
-    if(!blob){toast('Nu am găsit nicio imagine în clipboard — fă întâi un screenshot (Cmd/Ctrl+Shift+4 pe Mac), apoi încearcă din nou','err');return;}
-    toast('Încarc poza din clipboard…');
-    const rawDataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(blob);});
-    const dataUrl=await resizeImageDataUrl(rawDataUrl,1600,.9);
-    const data=await apiJson('/api/ai-image',{imageData:dataUrl},60000);
-    l.images=[...(l.images||[]),location.origin+data.url];
+    if(!blobs.length){toast('Nu am găsit nicio imagine în clipboard — fă întâi un screenshot (Cmd/Ctrl+Shift+4 pe Mac), apoi încearcă din nou','err');return;}
+    toast(`Încarc ${blobs.length>1?blobs.length+' poze':'poza'} din clipboard…`);
+    const newUrls=[];
+    for(const blob of blobs){
+      const rawDataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(blob);});
+      const dataUrl=await resizeImageDataUrl(rawDataUrl,1600,.9);
+      const data=await apiJson('/api/ai-image',{imageData:dataUrl},60000);
+      newUrls.push(location.origin+data.url);
+    }
+    l.images=[...(l.images||[]),...newUrls];
     renderListingFactoryResult(l,listingFactoryData?.pages||[],listingFactoryData?.allImages||[]);
-    toast('Poză din clipboard adăugată ✓');
+    toast(`${newUrls.length>1?newUrls.length+' poze din clipboard adăugate':'Poză din clipboard adăugată'} ✓`);
   }catch(e){
     toast('Eroare la citirea clipboard-ului: '+(e.message||e)+' — pe unele browsere e nevoie de permisiune, sau folosește „+ Adaugă poză externă"','err');
   }
@@ -12178,6 +12259,7 @@ openHashRoute(location.hash);
 window.addEventListener('hashchange',()=>openHashRoute(location.hash));
 applyTabOrder();
 loadUiCustomizations();
+loadZoom();
 load();
 // Preîncarcă dosarele Research tăcut, în fundal, chiar de la pornirea aplicației — nu doar la prima
 // vizită a tab-ului. Până apeși pe „Research" (de obicei la câteva secunde după ce ai deschis
