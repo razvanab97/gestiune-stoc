@@ -2143,6 +2143,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:200,text:'„Comenzi stoc" — reparată cauza reală pentru care o comandă putea rămâne DEFINITIV nesincronizată cu contul: dacă salvarea către Supabase eșua o singură dată (ex. RLS blocat temporar — exact ce s-a întâmplat azi), comanda rămânea salvată DOAR local, la nesfârșit, fără nicio reîncercare ulterioară — la un re-render se putea amesteca cu o versiune corectă, dând impresia de date greșite/„fantomă". Acum, la fiecare pornire a aplicației, orice comandă rămasă doar locală se resincronizează automat cu contul, silențios, cu o confirmare scurtă dacă chiar a recuperat ceva',date:'2026-08-22'},
   {n:199,text:'URGENT — bug critic reparat, introdus chiar de fix-ul anterior (#198): orice link eMAG/Trendyol (nu doar furnizor) arunca o eroare la randare, care oprea COMPLET lista de dosare din Research (apărea complet goală, ca și cum dosarele/pozele ar fi „dispărut" — datele erau intacte în baza de date tot timpul, doar afișarea se oprea). Cauza: verificarea noului „ai_search_queries" încerca să citească datele de căutare eMAG/Trendyol înainte să verifice dacă acel link chiar le are (doar linkurile de furnizor le au) — corectat să verifice întâi, la fel ca înainte de #198',date:'2026-08-22'},
   {n:198,text:'Bug real reparat, raportat direct — „✦ Recunoaștere AI" (interogările eMAG/Trendyol generate de AI pe un link) dispărea la deschiderea altui dosar. Cauza: rezultatul se scria doar direct pe ecran (DOM), niciodată în datele linkului — orice re-render (declanșat de aproape orice altă acțiune din Research) reconstruia rândul de la zero, fără el. Acum rezultatul se ține pe link ȘI se salvează pe cont (research_links.ai_search_queries) — rămâne vizibil la schimbarea dosarului și supraviețuiește unui refresh de pagină. Necesită migration_link_ai_search_queries.sql în Supabase pentru partea de refresh/alt dispozitiv; până atunci, rezultatul tot rămâne vizibil în sesiunea curentă (nu se mai pierde la schimbarea dosarului), doar nu supraviețuiește unui refresh',date:'2026-08-22'},
   {n:197,text:'Research — poza de copertă a dosarului (iconița din colțul cardului) se putea încărca până acum DOAR dintr-un fișier local. Adăugat un al doilea buton „📋", lângă cel de fișier („📷"), pentru lipire directă din clipboard — la fel ca la pozele din linkuri și din Generator anunțuri: faci un screenshot cu unealta nativă a sistemului, apoi un click, fără să salvezi fișierul local și să-l reîncarci',date:'2026-08-22'},
@@ -2991,23 +2992,30 @@ function mergeStockOrders(...groups){
   groups.flat().filter(Boolean).forEach(o=>{const k=stockOrderKey(o);if(!m.has(k))m.set(k,o);});
   return [...m.values()].sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||''))).slice(0,200);
 }
+// Trimite o comandă (nouă sau reîncercată) în comenzi_stoc — extras separat din saveStockOrderHistory
+// ca să fie reutilizat și de resyncLocalOnlyStockOrders (aceeași logică, inclusiv fallback-ul pentru
+// coloana invoice_number lipsă, într-un singur loc, nu duplicată).
+async function trySyncStockOrderToDb(order){
+  const sent=stockOrderToDb(order);
+  let rows;
+  try{rows=await dbPost('comenzi_stoc',sent);}
+  catch(e){
+    if(sent.invoice_number&&/Could not find the 'invoice_number' column/i.test(String(e.message||e))){
+      delete sent.invoice_number;
+      rows=await dbPost('comenzi_stoc',sent);
+      toast('Numărul facturii a fost păstrat doar local. Pentru salvare în baza de date rulează migration_invoice_number.sql.','err');
+    }else throw e;
+  }
+  return rows?.[0]||null;
+}
 async function saveStockOrderHistory(order){
   order.createdAt=order.createdAt||new Date().toISOString();
   order.localId=order.localId||('ord-'+Date.now()+'-'+Math.random().toString(36).slice(2,8));
   OI=mergeStockOrders([order],OI);
   if(sbReady){
     try{
-      const sent=stockOrderToDb(order);
-      let rows;
-      try{rows=await dbPost('comenzi_stoc',sent);}
-      catch(e){
-        if(sent.invoice_number&&/Could not find the 'invoice_number' column/i.test(String(e.message||e))){
-          delete sent.invoice_number;
-          rows=await dbPost('comenzi_stoc',sent);
-          toast('Numărul facturii a fost păstrat doar local. Pentru salvare în baza de date rulează migration_invoice_number.sql.','err');
-        }else throw e;
-      }
-      if(rows?.[0])OI=mergeStockOrders([{...dbToStockOrder(rows[0]),invoiceNumber:dbToStockOrder(rows[0]).invoiceNumber||order.invoiceNumber||''}],OI.filter(o=>o.localId!==order.localId));
+      const row=await trySyncStockOrderToDb(order);
+      if(row)OI=mergeStockOrders([{...dbToStockOrder(row),invoiceNumber:dbToStockOrder(row).invoiceNumber||order.invoiceNumber||''}],OI.filter(o=>o.localId!==order.localId));
     }catch(e){
       console.warn('Nu s-a salvat istoricul comenzii în Supabase:',e);
       toast('Comanda a fost salvată local. Pentru salvare în baza de date rulează SQL-ul pentru comenzi_stoc.','err');
@@ -3015,6 +3023,30 @@ async function saveStockOrderHistory(order){
     }
   }else{
     safeLocalSet(OK,JSON.stringify(OI));
+  }
+}
+// La fiecare pornire, dacă rămân comenzi salvate DOAR local (ex. dintr-o eroare trecătoare ca RLS
+// blocat pe comenzi_stoc), încearcă automat resincronizarea — până acum rămâneau divergente la
+// nesfârșit între cache local și baza de date (bug real raportat direct: exact asta a produs o comandă
+// „fantomă" locală, cu preț vechi, care s-a amestecat greșit cu varianta corectă din Supabase la un
+// re-render). Rulează tăcut, doar anunță dacă chiar a recuperat ceva.
+async function resyncLocalOnlyStockOrders(){
+  if(!sbReady)return;
+  const localOnly=OI.filter(o=>!o.id);
+  if(!localOnly.length)return;
+  let synced=0;
+  for(const order of localOnly){
+    try{
+      const row=await trySyncStockOrderToDb(order);
+      if(row){
+        OI=mergeStockOrders([{...dbToStockOrder(row),invoiceNumber:dbToStockOrder(row).invoiceNumber||order.invoiceNumber||''}],OI.filter(o=>o.localId!==order.localId));
+        synced++;
+      }
+    }catch(e){console.warn('Resincronizare eșuată pentru o comandă locală:',e);}
+  }
+  if(synced){
+    safeLocalSet(OK,JSON.stringify(OI));
+    toast(`${synced} comandă/comenzi locale, nesincronizate anterior, s-au salvat acum pe cont ✓`);
   }
 }
 
@@ -3146,6 +3178,7 @@ async function load(){
       const oRows=await dbGet('comenzi_stoc?select=*&order=created_at.desc');
       OI=mergeStockOrders(oRows.map(dbToStockOrder),loadLocalStockOrders());
       safeLocalSet(OK,JSON.stringify(OI));
+      resyncLocalOnlyStockOrders();
     }catch(e){
       OI=loadLocalStockOrders();
       console.warn('comenzi_stoc unavailable:',e);
