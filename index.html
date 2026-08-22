@@ -2143,6 +2143,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:198,text:'Bug real reparat, raportat direct — „✦ Recunoaștere AI" (interogările eMAG/Trendyol generate de AI pe un link) dispărea la deschiderea altui dosar. Cauza: rezultatul se scria doar direct pe ecran (DOM), niciodată în datele linkului — orice re-render (declanșat de aproape orice altă acțiune din Research) reconstruia rândul de la zero, fără el. Acum rezultatul se ține pe link ȘI se salvează pe cont (research_links.ai_search_queries) — rămâne vizibil la schimbarea dosarului și supraviețuiește unui refresh de pagină. Necesită migration_link_ai_search_queries.sql în Supabase pentru partea de refresh/alt dispozitiv; până atunci, rezultatul tot rămâne vizibil în sesiunea curentă (nu se mai pierde la schimbarea dosarului), doar nu supraviețuiește unui refresh',date:'2026-08-22'},
   {n:197,text:'Research — poza de copertă a dosarului (iconița din colțul cardului) se putea încărca până acum DOAR dintr-un fișier local. Adăugat un al doilea buton „📋", lângă cel de fișier („📷"), pentru lipire directă din clipboard — la fel ca la pozele din linkuri și din Generator anunțuri: faci un screenshot cu unealta nativă a sistemului, apoi un click, fără să salvezi fișierul local și să-l reîncarci',date:'2026-08-22'},
   {n:196,text:'Cerute direct, 3 completări: (1) Buton nou de zoom (−/100%/+) direct în header, vizibil pe orice pagină — mărește/micșorează toată afișarea (80%-150%), reținut pe acest dispozitiv. (2) „Personalizează ordinea paginilor" (⚙️) nu mai era doar per-browser — ordinea se salvează acum și pe cont, la fel ca „Editor interfață"; pe alt browser/dispozitiv sau după curățarea datelor site-ului, ordinea salvată reapare, nu se mai resetează la implicit. (3) „Lipește din clipboard" (Research, pe linkurile în așteptare de screenshot) — clipboard-ul sistemului ține o singură captură per copiere, deci acum fiecare click ADAUGĂ poza la un lot, nu mai analizează imediat (ceea ce suprascria rezultatul pasului anterior); poți lipi mai multe capturi pe rând, apoi „🔎 Analizează" citește tot lotul odată. La fel, „Lipește din clipboard" din Generator anunțuri prelua doar prima poză dacă clipboard-ul avea mai multe (ex. mai multe fișiere selectate din Finder) — acum le adaugă pe toate',date:'2026-08-22'},
   {n:193,text:'Tabelul de inventar — poza produsului era 46×46px dar coloana ei avea doar 38px lățime, cu conținutul tăiat automat de browser (overflow ascuns) ca să nu iasă din celulă; comportamentul de tăiere diferă subtil între motoarele de randare, ceea ce dădea o poziționare inconsecventă Chrome vs. Safari. Acum coloana are 68px și poza 60px — încape exact, fără nicio tăiere, sensibil mai mare și centrată curat; verificat identic în Chromium și WebKit (motorul din spatele Safari)',date:'2026-08-22'},
@@ -4598,10 +4599,18 @@ function findResearchLink(linkId){
 function findResearchLinkProject(linkId){
   return researchProjects.find(p=>(p.links||[]).some(x=>Number(x.id)===Number(linkId)))||null;
 }
+// Randare comună pentru chip-urile de căutare recunoscute de AI — folosită atât la primul render
+// (dacă l.ai_search_queries e deja persistat) cât și imediat după generare, ca să nu existe două
+// variante de markup care pot ajunge să difere (o sursă unică a formatului afișat).
+function aiSearchQueriesHtml(queries){
+  const emagChips=(queries.emag||[]).map(q=>`<a href="https://www.emag.ro/search/${encodeURIComponent(q)}" target="_blank" class="rsx-icon-btn" style="text-decoration:none">${esc(q)}</a>`).join('');
+  const trendyolChips=(queries.trendyol||[]).map(q=>`<a href="https://www.trendyol.com/ro/sr?q=${encodeURIComponent(q)}" target="_blank" class="rsx-icon-btn" style="text-decoration:none">${esc(q)}</a>`).join('');
+  return`<span class="rsx-search-label">✦ eMAG (recunoscut de AI)</span>${emagChips}<span class="rsx-search-label" style="margin-left:8px">Trendyol</span>${trendyolChips}`;
+}
 async function generateAiSearchLinks(linkId){
   const link=findResearchLink(linkId);
   if(!link){toast('Linkul nu a fost găsit','err');return;}
-  const btn=document.getElementById('rlai-'+linkId),out=document.getElementById('rlsearch-'+linkId);
+  const btn=document.getElementById('rlai-'+linkId);
   if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span>';}
   try{
     let queries=researchAiQueryCache[linkId];
@@ -4671,10 +4680,21 @@ Răspunde STRICT cu JSON: {"emag":["q1","q2","q3","q4"],"trendyol":["q1","q2"]}`
     // Afișăm TOATE variantele (nu doar prima) — chiar și cel mai bun AI nu poate garanta că interogarea
     // #1 (cea mai specifică) chiar există listată; a doua/a treia variantă (mai generică) găsește des
     // produsul când prima nu găsește nimic. Îl lăsăm pe utilizator să încerce rapid, dintr-un click.
-    const emagChips=queries.emag.map(q=>`<a href="https://www.emag.ro/search/${encodeURIComponent(q)}" target="_blank" class="rsx-icon-btn" style="text-decoration:none">${esc(q)}</a>`).join('');
-    const trendyolChips=trendyolQueries.map(q=>`<a href="https://www.trendyol.com/ro/sr?q=${encodeURIComponent(q)}" target="_blank" class="rsx-icon-btn" style="text-decoration:none">${esc(q)}</a>`).join('');
-    if(out)out.innerHTML=`<span class="rsx-search-label">✦ eMAG (recunoscut de AI)</span>${emagChips}<span class="rsx-search-label" style="margin-left:8px">Trendyol</span>${trendyolChips}`;
+    const finalQueries={emag:queries.emag,trendyol:trendyolQueries};
+    // Bug real raportat: rezultatul dispărea la deschiderea altui dosar — se scria doar direct în DOM,
+    // niciodată în datele linkului, deci un re-render (declanșat de aproape orice altă acțiune) îl
+    // pierdea. Acum se scrie pe obiectul linkului ȘI se cere un re-render — șablonul (searchRow, mai
+    // sus) citește l.ai_search_queries și arată direct rezultatul, la fel indiferent cum a ajuns acolo.
+    link.ai_search_queries=finalQueries;
+    renderResearchProjects();
     toast('Căutare AI generată — încearcă mai multe variante, de la specific la general ✓');
+    // Persistă pe cont separat, tolerant la eșec — dacă migrarea coloanei ai_search_queries nu a fost
+    // încă rulată în Supabase, rezultatul tot rămâne vizibil ACUM (nu se pierde din nou ca înainte),
+    // doar nu supraviețuiește unui refresh de pagină până se rulează migrarea.
+    try{
+      const data=await apiJson('/api/research-projects',{action:'set_link_ai_search_queries',link_id:linkId,queries:finalQueries},20000);
+      if(data.link)link.ai_search_queries=data.link.ai_search_queries;
+    }catch(e){console.warn('Nu am putut salva căutarea AI pe cont (poate lipsi migration_link_ai_search_queries.sql):',e);}
   }catch(e){
     toast(e.message||'Eroare generare căutare AI','err');
     if(btn){btn.disabled=false;btn.textContent='✦ Recunoaștere AI';}
@@ -5480,13 +5500,18 @@ function renderResearchProjects(){
       // Rând separat, pe toată lățimea tabelului, pentru linkurile de căutare eMAG/Trendyol — înainte
       // stăteau înghesuite în celula îngustă „Acțiuni", lângă butonul de ștergere, unde textul lung
       // (mai ales cel generat de AI) se rupea pe 2-3 linii, ilizibil. Aici au loc din belșug.
-      const searchRow=searchLinks?`<tr class="rsx-search-row"><td colspan="11">
-        <div class="rsx-search-box" id="rlsearch-${l.id}">
-          <span class="rsx-search-label">🔍 Caută concurența</span>
+      // Bug real raportat: rezultatul „✦ Recunoaștere AI" dispărea la deschiderea altui dosar — se
+      // scria direct în DOM, dar rândul se reconstruia din acest template la orice re-render, fără să
+      // știe de el. Acum șablonul verifică l.ai_search_queries (persistat) — dacă există, arată direct
+      // rezultatul AI, nu mai reapare starea implicită.
+      const aiQ=l.ai_search_queries;
+      const hasAiQ=aiQ&&Array.isArray(aiQ.emag)&&aiQ.emag.length;
+      const searchBoxInner=hasAiQ?aiSearchQueriesHtml(aiQ):`<span class="rsx-search-label">🔍 Caută concurența</span>
           <a href="${esc(searchLinks.emag)}" target="_blank" class="rsx-icon-btn" style="text-decoration:none">eMAG: ${esc(searchQ.emag)}</a>
           <a href="${esc(searchLinks.trendyol)}" target="_blank" class="rsx-icon-btn" style="text-decoration:none">Trendyol: ${esc(searchQ.trendyol)}</a>
-          <button class="rsx-icon-btn" id="rlai-${l.id}" onclick="generateAiSearchLinks(${l.id})" title="AI recunoaște mai bine produsul — folosește și poza principală dacă există, generează mai multe variante de căutare, de la specific la general">✦ Recunoaștere AI</button>
-        </div>
+          <button class="rsx-icon-btn" id="rlai-${l.id}" onclick="generateAiSearchLinks(${l.id})" title="AI recunoaște mai bine produsul — folosește și poza principală dacă există, generează mai multe variante de căutare, de la specific la general">✦ Recunoaștere AI</button>`;
+      const searchRow=searchLinks?`<tr class="rsx-search-row"><td colspan="11">
+        <div class="rsx-search-box" id="rlsearch-${l.id}">${searchBoxInner}</div>
       </td></tr>`:'';
       // Rând de rezolvare pentru duplicate „probabile" (titlu+preț similare, nu neapărat același URL/PNK
       // — „duplicat sigur", cu URL/PNK identic, e deja respins automat la adăugare, fără să mai apară în

@@ -360,7 +360,7 @@ module.exports=async function handler(req,res){
         }catch(e){projects.forEach(p=>{p.finalizat=false;});}
       }
       const ids=projects.map(p=>p.id);
-      const LINK_LIST_COLUMNS='id,project_id,url,normalized_url,platform,pnk,title,price,currency,rating,review_count,specs,description,duplicate_of,duplicate_type,include_in_listing,status,error,created_at,updated_at,source,score,score_zone,brand,seller,ean,ai_match_verdict,ai_match_reason';
+      const LINK_LIST_COLUMNS='id,project_id,url,normalized_url,platform,pnk,title,price,currency,rating,review_count,specs,description,duplicate_of,duplicate_type,include_in_listing,status,error,created_at,updated_at,source,score,score_zone,brand,seller,ean,ai_match_verdict,ai_match_reason,ai_search_queries';
       const CHUNK=10;
       const chunks=[];
       for(let i=0;i<ids.length;i+=CHUNK)chunks.push(ids.slice(i,i+CHUNK));
@@ -559,6 +559,21 @@ module.exports=async function handler(req,res){
       const reason=clean(body.reason).slice(0,500);
       if(!linkId||!verdict)return res.status(400).json({error:'Lipsesc datele'});
       const rows=await supa('PATCH',`research_links?id=eq.${linkId}`,{ai_match_verdict:verdict,ai_match_reason:reason});
+      const link=rows?.[0];
+      if(!link)return res.status(404).json({error:'Linkul nu a fost găsit'});
+      return res.status(200).json({link});
+    }
+    if(body.action==='set_link_ai_search_queries'){
+      // Rezultatul "✦ Recunoaștere AI" (interogări eMAG/Trendyol generate de AI, client-side, din
+      // poză+titlu+specificații) — serverul doar salvează rezultatul, nu apelează AI aici. Bug real
+      // raportat: ținut doar în memoria browserului, dispărea la deschiderea altui dosar/refresh —
+      // acum persistă, la fel ca ai_match_verdict de mai sus.
+      const linkId=Number(body.link_id);
+      const queries=body.queries&&typeof body.queries==='object'?body.queries:null;
+      if(!linkId||!queries||!Array.isArray(queries.emag)||!queries.emag.length)return res.status(400).json({error:'Lipsesc datele'});
+      const clampList=(arr)=>Array.isArray(arr)?arr.map(q=>clean(String(q||'')).slice(0,200)).filter(Boolean).slice(0,6):[];
+      const clean_queries={emag:clampList(queries.emag),trendyol:clampList(queries.trendyol)};
+      const rows=await supa('PATCH',`research_links?id=eq.${linkId}`,{ai_search_queries:clean_queries});
       const link=rows?.[0];
       if(!link)return res.status(404).json({error:'Linkul nu a fost găsit'});
       return res.status(200).json({link});
