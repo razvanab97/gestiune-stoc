@@ -2129,6 +2129,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:192,text:'Reparat: „Comenzi stoc" (Jurnal vânzări) rămânea goală deși stocul chiar se adăuga constant — jurnalul acela (tabela comenzi_stoc) era alimentat DOAR de „📥 Adaugă stoc" (bulk) și import factură, nu și de editarea unui singur produs din Inventar sau de ajustarea rapidă din Raport stoc (căile cele mai folosite zi de zi). Acum orice creștere de stoc, indiferent de cale — produs nou, editare manuală sau ajustare din Raport stoc — apare și în „Comenzi stoc", nu doar în clopoțelul de activitate 🔔. Scăderile de stoc (vânzări, corecții în minus) continuă să apară doar în clopoțel, ca și până acum — „Comenzi stoc" e gândit specific ca evidență de intrări',date:'2026-08-22'},
   {n:191,text:'Ghidul „🔑 eMAG PNK" — EAN-ul are acum aceeași convenție ca „ID produs"/„Cod produs" (cerut direct): click direct PE cod pentru copiere, iar după copiere se înlocuiește AUTOMAT cu următorul din „🔢 Bancă de coduri EAN" — util când asociezi mai multe PNK-uri la rând din același dosar, fiecare are nevoie de propriul EAN, nu se refolosește la nesfârșit același cod. Distinct de EAN-ul unic per anunț din „Ghid completare eMAG" (acela rămâne neschimbat, o singură valoare per listare)',date:'2026-08-21'},
   {n:190,text:'Research — update vizual semnificativ pe lista de dosare: verdictul (Cumpără/Testează/Evită/etc.) era doar text colorat, ușor de ratat pe o listă lungă. Acum fiecare dosar are un accent colorat pe marginea din stânga a cardului, care se potrivește cu verdictul lui, plus insigna de verdict are și fundal colorat (nu doar text), nu doar contur — se recunoaște instant, fără să citești. Butoanele „FILTRE VERDICT" (Cumpără/Testează/Doar sub X/Evită) au acum aceleași culori ca verdictele pe care le filtrează, ca toată paleta vizuală să fie consecventă de sus până jos',date:'2026-08-21'},
   {n:189,text:'Funcție nouă — „🎨 Editor interfață" (iconița lângă roata de personalizare a paginilor din antet). Prima etapă dintr-un plan mai mare: temă de culori — 12 selectoare grupate (Fundal, Suprafață, Text principal/secundar/terțiar, Accent, Succes, Avertizare, Eroare, Info/linkuri), fiecare aplicat live, imediat, în toată aplicația, fără reîncărcare. Grupate, nu pe variabile CSS individuale — mai multe variabile reprezintă azi aceeași culoare semantică (ex. avertizare = 3 variabile diferite, folosite în locuri diferite), un selector per variabilă brută ar fi dat un recolorat pe jumătate aplicat. Se salvează atât local (pe acest dispozitiv) cât și pe cont (dacă Supabase e disponibil), cu buton de resetare la valorile implicite. Etapele următoare (editare text static și arată/ascunde secțiuni întregi) urmează separat, verificate pas cu pas',date:'2026-08-21'},
@@ -9530,8 +9531,19 @@ async function saveProd(){
     const saved=await saveProdToDb(d,editId);
     if(!saved)return;
     const savedId=editId||P[P.length-1]?.id||null;
-    if(!editId&&d.bought>0)await logMove('in',d.name,d.bought,'Produs nou',savedId);
-    else if(editId&&qtyDelta>0)await logMove('in',d.name,qtyDelta,'Editare manuală (Inventar)',savedId);
+    // Bug real raportat — „Comenzi stoc" (Jurnal vânzări) rămânea goală deși stocul chiar se adăuga
+    // constant, pentru că saveStockOrderHistory (tabela comenzi_stoc, sursa acelui tab) se apela DOAR
+    // din bulkAddStock/import factură — o editare manuală a UNUI produs (calea cea mai folosită zi de
+    // zi) trecea doar prin logMove (activitate_stoc, alimentează clopoțelul 🔔), niciodată prin
+    // comenzi_stoc. Acum orice intrare de stoc, indiferent de cale, ajunge în ambele — evidență completă.
+    if(!editId&&d.bought>0){
+      await logMove('in',d.name,d.bought,'Produs nou',savedId);
+      await saveStockOrderHistory({source:'Produs nou',invoiceNumber:'',totalItems:1,totalQty:d.bought,totalValue:Math.round(d.bought*d.priceBuyTTC*100)/100,updatedCount:0,createdCount:1,skippedCount:0,details:[{status:'produs nou',sku:d.sku||'',productId:savedId,name:d.name,qty:d.bought,price:d.priceBuyTTC,value:Math.round(d.bought*d.priceBuyTTC*100)/100}]});
+    }
+    else if(editId&&qtyDelta>0){
+      await logMove('in',d.name,qtyDelta,'Editare manuală (Inventar)',savedId);
+      await saveStockOrderHistory({source:'Editare manuală (Inventar)',invoiceNumber:'',totalItems:1,totalQty:qtyDelta,totalValue:Math.round(qtyDelta*d.priceBuyTTC*100)/100,updatedCount:1,createdCount:0,skippedCount:0,details:[{status:'actualizat',sku:d.sku||'',productId:savedId,name:d.name,qty:qtyDelta,price:d.priceBuyTTC,value:Math.round(qtyDelta*d.priceBuyTTC*100)/100}]});
+    }
     else if(editId&&qtyDelta<0)await logMove('out',d.name,-qtyDelta,'Editare manuală (Inventar)',savedId);
     if(existing)await logPriceChanges(savedId,d.name,existing,d,'Editare manuală (Inventar)');
     toast(editId?'Actualizat și salvat în baza de date':'Adăugat și salvat în baza de date');
@@ -11821,7 +11833,13 @@ async function updateStockFromCard(id){
   const data=val>bought?{...p,bought:val+sold,sold}:{...p,sold:bought-val};
   showLoading('Se actualizează stocul…');
   await saveProdToDb(data,id);
-  if(delta>0)await logMove('in',p.name,delta,'Ajustare manuală din Raport stoc',id);
+  // Aceeași reparare ca la saveProd() — o creștere de stoc trebuie să ajungă și în „Comenzi stoc"
+  // (comenzi_stoc), nu doar în clopoțelul de activitate (activitate_stoc), altfel evidența rămâne
+  // incompletă pentru ajustările făcute direct din Raport stoc (ex. inventariere fizică).
+  if(delta>0){
+    await logMove('in',p.name,delta,'Ajustare manuală din Raport stoc',id);
+    await saveStockOrderHistory({source:'Ajustare manuală din Raport stoc',invoiceNumber:'',totalItems:1,totalQty:delta,totalValue:Math.round(delta*(Number(p.priceBuyTTC)||0)*100)/100,updatedCount:1,createdCount:0,skippedCount:0,details:[{status:'actualizat',sku:p.sku||'',productId:id,name:p.name,qty:delta,price:Number(p.priceBuyTTC)||0,value:Math.round(delta*(Number(p.priceBuyTTC)||0)*100)/100}]});
+  }
   else if(delta<0)await logMove('out',p.name,-delta,'Ajustare manuală din Raport stoc',id);
   hideLoading();
   toast(`Stoc actualizat: ${p.name} → ${fmtQty(val)} buc.`);
