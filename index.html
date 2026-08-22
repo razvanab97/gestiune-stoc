@@ -2143,6 +2143,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:199,text:'URGENT — bug critic reparat, introdus chiar de fix-ul anterior (#198): orice link eMAG/Trendyol (nu doar furnizor) arunca o eroare la randare, care oprea COMPLET lista de dosare din Research (apărea complet goală, ca și cum dosarele/pozele ar fi „dispărut" — datele erau intacte în baza de date tot timpul, doar afișarea se oprea). Cauza: verificarea noului „ai_search_queries" încerca să citească datele de căutare eMAG/Trendyol înainte să verifice dacă acel link chiar le are (doar linkurile de furnizor le au) — corectat să verifice întâi, la fel ca înainte de #198',date:'2026-08-22'},
   {n:198,text:'Bug real reparat, raportat direct — „✦ Recunoaștere AI" (interogările eMAG/Trendyol generate de AI pe un link) dispărea la deschiderea altui dosar. Cauza: rezultatul se scria doar direct pe ecran (DOM), niciodată în datele linkului — orice re-render (declanșat de aproape orice altă acțiune din Research) reconstruia rândul de la zero, fără el. Acum rezultatul se ține pe link ȘI se salvează pe cont (research_links.ai_search_queries) — rămâne vizibil la schimbarea dosarului și supraviețuiește unui refresh de pagină. Necesită migration_link_ai_search_queries.sql în Supabase pentru partea de refresh/alt dispozitiv; până atunci, rezultatul tot rămâne vizibil în sesiunea curentă (nu se mai pierde la schimbarea dosarului), doar nu supraviețuiește unui refresh',date:'2026-08-22'},
   {n:197,text:'Research — poza de copertă a dosarului (iconița din colțul cardului) se putea încărca până acum DOAR dintr-un fișier local. Adăugat un al doilea buton „📋", lângă cel de fișier („📷"), pentru lipire directă din clipboard — la fel ca la pozele din linkuri și din Generator anunțuri: faci un screenshot cu unealta nativă a sistemului, apoi un click, fără să salvezi fișierul local și să-l reîncarci',date:'2026-08-22'},
   {n:196,text:'Cerute direct, 3 completări: (1) Buton nou de zoom (−/100%/+) direct în header, vizibil pe orice pagină — mărește/micșorează toată afișarea (80%-150%), reținut pe acest dispozitiv. (2) „Personalizează ordinea paginilor" (⚙️) nu mai era doar per-browser — ordinea se salvează acum și pe cont, la fel ca „Editor interfață"; pe alt browser/dispozitiv sau după curățarea datelor site-ului, ordinea salvată reapare, nu se mai resetează la implicit. (3) „Lipește din clipboard" (Research, pe linkurile în așteptare de screenshot) — clipboard-ul sistemului ține o singură captură per copiere, deci acum fiecare click ADAUGĂ poza la un lot, nu mai analizează imediat (ceea ce suprascria rezultatul pasului anterior); poți lipi mai multe capturi pe rând, apoi „🔎 Analizează" citește tot lotul odată. La fel, „Lipește din clipboard" din Generator anunțuri prelua doar prima poză dacă clipboard-ul avea mai multe (ex. mai multe fișiere selectate din Finder) — acum le adaugă pe toate',date:'2026-08-22'},
@@ -5506,12 +5507,15 @@ function renderResearchProjects(){
       // rezultatul AI, nu mai reapare starea implicită.
       const aiQ=l.ai_search_queries;
       const hasAiQ=aiQ&&Array.isArray(aiQ.emag)&&aiQ.emag.length;
-      const searchBoxInner=hasAiQ?aiSearchQueriesHtml(aiQ):`<span class="rsx-search-label">🔍 Caută concurența</span>
+      // searchQ/searchLinks sunt null pentru orice link care NU e furnizor cu titlu (ex. link eMAG/
+      // Trendyol) — trebuie evaluate LENEȘ, doar în ramura care chiar are searchLinks, altfel accesarea
+      // searchQ.emag pe null aruncă o eroare care oprește TOT randamentul listei de dosare (nu doar al
+      // acestui rând) — bug real, grav, introdus la fix-ul de mai sus și reparat imediat.
+      const searchRow=searchLinks?`<tr class="rsx-search-row"><td colspan="11">
+        <div class="rsx-search-box" id="rlsearch-${l.id}">${hasAiQ?aiSearchQueriesHtml(aiQ):`<span class="rsx-search-label">🔍 Caută concurența</span>
           <a href="${esc(searchLinks.emag)}" target="_blank" class="rsx-icon-btn" style="text-decoration:none">eMAG: ${esc(searchQ.emag)}</a>
           <a href="${esc(searchLinks.trendyol)}" target="_blank" class="rsx-icon-btn" style="text-decoration:none">Trendyol: ${esc(searchQ.trendyol)}</a>
-          <button class="rsx-icon-btn" id="rlai-${l.id}" onclick="generateAiSearchLinks(${l.id})" title="AI recunoaște mai bine produsul — folosește și poza principală dacă există, generează mai multe variante de căutare, de la specific la general">✦ Recunoaștere AI</button>`;
-      const searchRow=searchLinks?`<tr class="rsx-search-row"><td colspan="11">
-        <div class="rsx-search-box" id="rlsearch-${l.id}">${searchBoxInner}</div>
+          <button class="rsx-icon-btn" id="rlai-${l.id}" onclick="generateAiSearchLinks(${l.id})" title="AI recunoaște mai bine produsul — folosește și poza principală dacă există, generează mai multe variante de căutare, de la specific la general">✦ Recunoaștere AI</button>`}</div>
       </td></tr>`:'';
       // Rând de rezolvare pentru duplicate „probabile" (titlu+preț similare, nu neapărat același URL/PNK
       // — „duplicat sigur", cu URL/PNK identic, e deja respins automat la adăugare, fără să mai apară în
