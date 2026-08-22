@@ -1536,7 +1536,9 @@ th{font-weight:800!important;color:var(--t3)!important}
       </div>
       <div class="fld">
         <label>PNK (recomandat — vezi „Comenzi Platforme” sau Seller Center)</label>
-        <input type="text" id="sm-pnk" placeholder="ex: DGF9K9BBM" oninput="suggestSyncProduct()">
+        <input type="text" id="sm-pnk" list="sm-pnk-list" placeholder="ex: DGF9K9BBM" oninput="suggestSyncProduct()">
+        <datalist id="sm-pnk-list"></datalist>
+        <div style="font-size:19px;color:var(--t3);margin-top:4px">PNK diferă pe piață — RO pentru eMAG România, BG pentru eMAG Bulgaria, HU pentru eMAG Ungaria; același produs poate avea un PNK separat pe fiecare</div>
       </div>
     </div>
     <div class="fld">
@@ -2148,6 +2150,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:202,text:'Sincronizare — două completări la câmpul PNK din „Adaugă mapare nouă", ambele la cerere directă. (1) O precizare sub câmp: PNK-ul diferă pe piață (RO pentru eMAG România, BG pentru eMAG Bulgaria, HU pentru eMAG Ungaria) — același produs poate avea un PNK separat pe fiecare piață. (2) Pe măsură ce tastezi, apar direct ca sugestii (dropdown nativ al browserului) toate PNK-urile deja cunoscute din mapările existente, cu numele produsului asociat — recunoști imediat un cod deja folosit, fără să mai cauți manual. Verificat și direct în producție: lista „Mapări existente" (raportată ca goală) afișează corect toate mapările reale (27 la verificare) — dacă tot nu apar, e nevoie de un deploy Vercel cu ultima versiune',date:'2026-08-22'},
   {n:201,text:'Sincronizare eMAG/Trendyol — PNK devine sursa principală de potrivire peste tot, nu doar la importul de comenzi (unde deja funcționa așa). (1) „Adaugă mapare nouă" are acum un câmp PNK — dacă PNK-ul e deja cunoscut dintr-o comandă/mapare anterioară, produsul se găsește automat, fără să mai depinzi de titlu. (2) „Import în masă din fișier .xlsx" (exportul de produse/oferte din Seller Center) citește acum și coloana PNK, dacă există în fișier — o listare cu PNK deja mapat se leagă direct de produsul corect, nu mai trece prin potrivire după titlu; rândurile cu PNK deja confirmat nu se mai reafișează la reimport. (3) Lista „Mapări existente" arată acum PNK-ul pe fiecare rând (click pentru copiere). (4) Un produs poate avea în continuare mai multe PNK-uri (variante, sau piețe diferite RO/HU/BG) — toate apar pe pagina produsului, gata de copiat, exact ca înainte, doar cu chip-ul unificat „click direct pe cod" (același stil ca în Research), nu mai un buton „Copy" separat',date:'2026-08-22'},
   {n:200,text:'„Comenzi stoc" — reparată cauza reală pentru care o comandă putea rămâne DEFINITIV nesincronizată cu contul: dacă salvarea către Supabase eșua o singură dată (ex. RLS blocat temporar — exact ce s-a întâmplat azi), comanda rămânea salvată DOAR local, la nesfârșit, fără nicio reîncercare ulterioară — la un re-render se putea amesteca cu o versiune corectă, dând impresia de date greșite/„fantomă". Acum, la fiecare pornire a aplicației, orice comandă rămasă doar locală se resincronizează automat cu contul, silențios, cu o confirmare scurtă dacă chiar a recuperat ceva',date:'2026-08-22'},
   {n:199,text:'URGENT — bug critic reparat, introdus chiar de fix-ul anterior (#198): orice link eMAG/Trendyol (nu doar furnizor) arunca o eroare la randare, care oprea COMPLET lista de dosare din Research (apărea complet goală, ca și cum dosarele/pozele ar fi „dispărut" — datele erau intacte în baza de date tot timpul, doar afișarea se oprea). Cauza: verificarea noului „ai_search_queries" încerca să citească datele de căutare eMAG/Trendyol înainte să verifice dacă acel link chiar le are (doar linkurile de furnizor le au) — corectat să verifice întâi, la fel ca înainte de #198',date:'2026-08-22'},
@@ -10885,8 +10888,19 @@ function fillSyncProdSelect(){
     .map(p=>`<option value="${p.id}">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</option>`).join('');
   if(cur)sel.value=cur;
 }
+// Listă nativă de sugestii (datalist) — orice PNK deja cunoscut apare direct în dropdown-ul browser-ului
+// pe măsură ce tastezi în câmpul PNK, la cerere directă, ca să recunoști imediat un cod deja folosit.
+function renderSyncPnkDatalist(){
+  const dl=document.getElementById('sm-pnk-list');if(!dl)return;
+  const seen=new Set();
+  dl.innerHTML=SYNCM.filter(m=>m.idExtern&&!seen.has(m.idExtern)&&seen.add(m.idExtern)).map(m=>{
+    const p=P.find(x=>x.id===m.produsId);
+    return`<option value="${esc(m.idExtern)}">${esc(p?p.name:m.titluExtern)}</option>`;
+  }).join('');
+}
 function renderSyncPage(){
   fillSyncProdSelect();
+  renderSyncPnkDatalist();
   const list=document.getElementById('sync-map-list');if(!list)return;
   if(!sbReady){list.textContent='Necesită conexiune Supabase activă.';return;}
   if(!syncMapsLoaded){list.textContent='Se încarcă…';return;}
