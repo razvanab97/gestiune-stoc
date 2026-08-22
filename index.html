@@ -919,9 +919,12 @@ textarea.listing-html-raw{width:100%;min-height:180px;box-sizing:border-box;resi
 .rsx-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;margin-bottom:14px;cursor:pointer}
 .rsx-head-l{display:flex;gap:14px;align-items:flex-start;min-width:0}
 .rsx-head-img,.rsx-head-img-ph{width:77px;height:77px;border-radius:var(--r);object-fit:contain;background:var(--surf2);border:1px solid var(--b1);flex-shrink:0}
+.rsx-head-img-group{position:relative;display:inline-block;flex-shrink:0}
 .rsx-head-img-wrap{position:relative;display:inline-block;cursor:pointer;flex-shrink:0}
 .rsx-head-img-hint{position:absolute;bottom:-4px;right:-4px;width:24px;height:24px;border-radius:50%;background:var(--acc);color:#fff;font-size:19px;display:flex;align-items:center;justify-content:center;border:2px solid var(--surf);opacity:0;transition:opacity .15s}
-.rsx-head-img-wrap:hover .rsx-head-img-hint{opacity:1}
+.rsx-head-img-paste{position:absolute;bottom:-4px;left:-4px;width:24px;height:24px;border-radius:50%;background:var(--surf3);color:var(--t2);font-size:13px;display:flex;align-items:center;justify-content:center;border:2px solid var(--surf);opacity:0;transition:opacity .15s;cursor:pointer;padding:0}
+.rsx-head-img-group:hover .rsx-head-img-hint,.rsx-head-img-group:hover .rsx-head-img-paste{opacity:1}
+.rsx-head-img-paste:hover{background:var(--acc);color:#fff}
 .rsx-head-img-ph{display:flex;align-items:center;justify-content:center;font-size:43px}
 .rsx-head-title{font-size:31px;font-weight:800;color:var(--t1);line-height:1.28}
 .rsx-title-edit{background:transparent;border:none;cursor:pointer;font-size:24px;opacity:.5;padding:2px 4px;line-height:1;flex-shrink:0}
@@ -2140,6 +2143,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:197,text:'Research — poza de copertă a dosarului (iconița din colțul cardului) se putea încărca până acum DOAR dintr-un fișier local. Adăugat un al doilea buton „📋", lângă cel de fișier („📷"), pentru lipire directă din clipboard — la fel ca la pozele din linkuri și din Generator anunțuri: faci un screenshot cu unealta nativă a sistemului, apoi un click, fără să salvezi fișierul local și să-l reîncarci',date:'2026-08-22'},
   {n:196,text:'Cerute direct, 3 completări: (1) Buton nou de zoom (−/100%/+) direct în header, vizibil pe orice pagină — mărește/micșorează toată afișarea (80%-150%), reținut pe acest dispozitiv. (2) „Personalizează ordinea paginilor" (⚙️) nu mai era doar per-browser — ordinea se salvează acum și pe cont, la fel ca „Editor interfață"; pe alt browser/dispozitiv sau după curățarea datelor site-ului, ordinea salvată reapare, nu se mai resetează la implicit. (3) „Lipește din clipboard" (Research, pe linkurile în așteptare de screenshot) — clipboard-ul sistemului ține o singură captură per copiere, deci acum fiecare click ADAUGĂ poza la un lot, nu mai analizează imediat (ceea ce suprascria rezultatul pasului anterior); poți lipi mai multe capturi pe rând, apoi „🔎 Analizează" citește tot lotul odată. La fel, „Lipește din clipboard" din Generator anunțuri prelua doar prima poză dacă clipboard-ul avea mai multe (ex. mai multe fișiere selectate din Finder) — acum le adaugă pe toate',date:'2026-08-22'},
   {n:193,text:'Tabelul de inventar — poza produsului era 46×46px dar coloana ei avea doar 38px lățime, cu conținutul tăiat automat de browser (overflow ascuns) ca să nu iasă din celulă; comportamentul de tăiere diferă subtil între motoarele de randare, ceea ce dădea o poziționare inconsecventă Chrome vs. Safari. Acum coloana are 68px și poza 60px — încape exact, fără nicio tăiere, sensibil mai mare și centrată curat; verificat identic în Chromium și WebKit (motorul din spatele Safari)',date:'2026-08-22'},
   {n:192,text:'Reparat: „Comenzi stoc" (Jurnal vânzări) rămânea goală deși stocul chiar se adăuga constant — jurnalul acela (tabela comenzi_stoc) era alimentat DOAR de „📥 Adaugă stoc" (bulk) și import factură, nu și de editarea unui singur produs din Inventar sau de ajustarea rapidă din Raport stoc (căile cele mai folosite zi de zi). Acum orice creștere de stoc, indiferent de cale — produs nou, editare manuală sau ajustare din Raport stoc — apare și în „Comenzi stoc", nu doar în clopoțelul de activitate 🔔. Scăderile de stoc (vânzări, corecții în minus) continuă să apară doar în clopoțel, ca și până acum — „Comenzi stoc" e gândit specific ca evidență de intrări',date:'2026-08-22'},
@@ -5314,20 +5318,40 @@ function resizeImageDataUrl(dataUrl,maxDim,quality){
 }
 // Poză de copertă setată manual pe dosar — utilă când niciun link nu are încă o poză extrasă automat
 // (JSON-LD/screenshot); click pe poză/cutia-placeholder din header, separat de restrângerea cardului.
+async function applyProjectImageDataUrl(projectId,rawDataUrl){
+  if(!rawDataUrl||!rawDataUrl.startsWith('data:image'))throw new Error('Imagine invalidă');
+  // Copertă = doar o iconiță mică (64×64px în UI) — 400px e generos, sub 30-40KB de obicei.
+  const dataUrl=await resizeImageDataUrl(rawDataUrl,400,0.7);
+  await apiJson('/api/research-projects',{action:'set_project_image',project_id:projectId,image:dataUrl},30000);
+  const proj=researchProjects.find(p=>Number(p.id)===Number(projectId));
+  if(proj)proj.cover_image=dataUrl;
+  renderResearchProjects();
+}
 async function handleProjectImageFile(projectId,inputEl){
   const file=inputEl?.files?.[0];if(!file)return;
   try{
     const rawDataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(file);});
-    if(!rawDataUrl||!rawDataUrl.startsWith('data:image'))throw new Error('Fișier imagine invalid');
-    // Copertă = doar o iconiță mică (64×64px în UI) — 400px e generos, sub 30-40KB de obicei.
-    const dataUrl=await resizeImageDataUrl(rawDataUrl,400,0.7);
-    await apiJson('/api/research-projects',{action:'set_project_image',project_id:projectId,image:dataUrl},30000);
-    const proj=researchProjects.find(p=>Number(p.id)===Number(projectId));
-    if(proj)proj.cover_image=dataUrl;
-    renderResearchProjects();
+    await applyProjectImageDataUrl(projectId,rawDataUrl);
     toast('Poză actualizată ✓');
   }catch(e){toast(e.message||'Eroare la încărcarea pozei','err');}
   finally{if(inputEl)inputEl.value='';}
+}
+// La cerere directă — pe lângă „adaugă din local" (fișier), și „adaugă din clipboard" (fără să
+// salvezi local screenshot-ul și să-l reîncarci), la fel ca la linkurile/pozele din Generator anunțuri.
+async function pasteProjectImageFromClipboard(projectId){
+  if(!navigator.clipboard?.read){toast('Browserul nu suportă citirea directă din clipboard — încarcă manual fișierul','err');return;}
+  try{
+    const items=await navigator.clipboard.read();
+    let blob=null;
+    for(const item of items){
+      const type=item.types.find(t=>t.startsWith('image/'));
+      if(type){blob=await item.getType(type);break;}
+    }
+    if(!blob){toast('Nu am găsit nicio imagine în clipboard — fă întâi un screenshot (Cmd/Ctrl+Shift+4 pe Mac), apoi încearcă din nou','err');return;}
+    const rawDataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(blob);});
+    await applyProjectImageDataUrl(projectId,rawDataUrl);
+    toast('Poză din clipboard adăugată ✓');
+  }catch(e){toast('Eroare la citirea clipboard-ului: '+(e.message||e)+' — sau încarcă manual fișierul','err');}
 }
 // Performanță eMAG (Target Zone) — 5 nivele, apreciate manual de utilizator pe baza analizei/
 // căutărilor proprii (nu calculate automat) — vezi coloana „Performanță eMAG" din tabelul dosarului.
@@ -5484,7 +5508,7 @@ function renderResearchProjects(){
     const collapsed=researchCollapsed.has(p.id);
     const imgSrc=p.cover_image||(links.find(l=>l.platform==='furnizor'&&Array.isArray(l.images)&&l.images.length)||links.find(l=>Array.isArray(l.images)&&l.images.length))?.images?.[0]||'';
     const headerImgInner=imgSrc?`<img class="rsx-head-img" src="${esc(imgSrc)}" alt="">`:`<div class="rsx-head-img-ph">📦</div>`;
-    const headerImg=`<label class="rsx-head-img-wrap" for="rp-img-${p.id}" onclick="event.stopPropagation()" title="${imgSrc?'Schimbă poza':'Adaugă o poză'}">${headerImgInner}<span class="rsx-head-img-hint">📷</span></label><input type="file" accept="image/*" id="rp-img-${p.id}" style="display:none" onclick="event.stopPropagation()" onchange="handleProjectImageFile(${p.id},this)">`;
+    const headerImg=`<div class="rsx-head-img-group"><label class="rsx-head-img-wrap" for="rp-img-${p.id}" onclick="event.stopPropagation()" title="${imgSrc?'Schimbă poza (fișier local)':'Adaugă o poză (fișier local)'}">${headerImgInner}<span class="rsx-head-img-hint">📷</span></label><input type="file" accept="image/*" id="rp-img-${p.id}" style="display:none" onclick="event.stopPropagation()" onchange="handleProjectImageFile(${p.id},this)"><button type="button" class="rsx-head-img-paste" onclick="event.stopPropagation();pasteProjectImageFromClipboard(${p.id})" title="Lipește poza din clipboard">📋</button></div>`;
     const kpis=[
       ['Achiziție',p.acquisition_price?Number(p.acquisition_price).toFixed(2)+' RON':'—',''],
       ['Linkuri',String(links.length),''],
