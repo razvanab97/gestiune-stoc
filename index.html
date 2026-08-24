@@ -406,7 +406,7 @@ tr:hover td{background:var(--surf2)}
 .pcom-country-lbl{font-size:19px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.03em}
 .pcom-group{border:1px solid var(--b1);border-radius:var(--r);margin:10px 0;padding:0 14px;background:var(--surf2)}
 .pcom-group-hd{font-size:22px;font-weight:700;color:var(--acc);padding:10px 0 4px}
-.pcom-group .pcom-prev-row{border-bottom:1px solid var(--b1)}
+.pcom-group .pcom-prev-row{border:none;border-bottom:2px solid var(--b1);border-radius:0;margin-bottom:0;background:transparent}
 .pcom-group .pcom-prev-row:last-of-type{border-bottom:none}
 .tabcfg-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 4px;border-bottom:1px solid var(--b1);font-size:23px}
 .tabcfg-row:last-child{border-bottom:none}
@@ -415,8 +415,11 @@ tr:hover td{background:var(--surf2)}
 .uicust-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 4px;border-bottom:1px solid var(--b1);font-size:22px}
 .uicust-row:last-child{border-bottom:none}
 .uicust-row input[type=color]{width:38px;height:32px;padding:0;border:1px solid var(--b2);border-radius:8px;cursor:pointer;background:none}
-.pcom-prev-row{align-items:flex-start;padding:12px 0}
+.pcom-prev-row{align-items:flex-start;padding:14px 16px;border:2px solid var(--b2);border-radius:var(--r2);margin-bottom:12px;background:var(--surf)}
+.pcom-prev-row:last-child{margin-bottom:0}
 .pcom-prev-row.pcom-row-amanat{opacity:.65}
+.pcom-row-img,.pcom-row-img-ph{width:60px;height:60px;border-radius:var(--r);object-fit:cover;border:1px solid var(--b1);flex-shrink:0}
+.pcom-row-img-ph{background:var(--surf2);display:flex;align-items:center;justify-content:center;font-size:30px}
 .pcom-prev-nm{white-space:normal;overflow:visible;text-overflow:clip}
 .pcom-platform-title{font-size:19px;color:var(--t3);line-height:1.5}
 .pcom-platform-title-ro{color:var(--acc);font-style:italic}
@@ -2158,6 +2161,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:206,text:'Comenzi Platforme — previzualizarea importului, două îmbunătățiri la cerere directă. (1) Poza produsului asociat apare acum direct pe fiecare linie (nu doar minusculă în interiorul selectorului) — dintr-o privire vezi dacă potrivirea e cea corectă, fără să mai deschizi nimic; placeholder 📦 doar când produsul nu are încă poză. (2) Fiecare linie e acum un „card" clar delimitat — margine mai groasă, colțuri rotunjite, spațiu vizibil între linii — mult mai ușor de parcurs și de lucrat pe o listă lungă (ex. 22+ linii dintr-un import mare); comenzile grupate (mai multe produse expediate împreună) rămân vizual grupate în interiorul propriei cutii, cu un separator simplu între produse',date:'2026-08-24'},
   {n:205,text:'URGENT — bug critic reparat, raportat direct: cu zoom-ul activ (butonul − 100% + din header), niciun dropdown poziționat din JS nu mai răspundea la click („nu se întâmplă nimic" la alegerea unui produs în Sincronizare, dar afecta identic ȘI importul de factură, ȘI cel de comenzi platforme). Cauza: coordonatele citite din pagină erau deja ajustate de zoom, dar browserul le mai înmulțea o dată cu factorul de zoom la afișare, trimițând dropdown-ul complet în afara ecranului — invizibil, deși tehnic funcțional. Corectat la sursă, într-un singur loc, pentru toate cele 5 dropdown-uri afectate din aplicație; verificat pe tot intervalul de zoom (80%-150%). De asemenea: „+ Nou" pe fiecare listare fără nicio potrivire în import XLSX — creează direct un produs nou (din titlul extern), fără să mai pleci din Sincronizare; completezi preț/stoc/poză după, în Inventar, ca la orice produs nou',date:'2026-08-22'},
   {n:204,text:'Sincronizare — buton nou „🤖 Sugerează cu AI" în previzualizarea importului XLSX în masă, la cerere directă, pentru liniile fără o potrivire sigură (nici PNK, nici titlu ≥70%). Nu trimite tot inventarul la AI (sute de produse) — restrânge local, cu aceeași potrivire fuzzy, la 5 candidați per linie, apoi AI alege dintre ei (sau „niciunul", dacă nu e sigur), grupat eficient în apeluri de câte 12 linii deodată. Rezultatul umple direct produsul sugerat, exact ca o potrivire normală — singura intervenție rămasă e să confirmi cu „Adaugă mapările selectate" sau să alegi altceva din picker înainte, fără flux separat de aprobare',date:'2026-08-22'},
   {n:203,text:'Sincronizare — „Produs corespunzător din Inventar" avea un simplu select, greu de folosit cu 200+ produse. Acum e un picker căutabil (nume sau SKU, cu poza produsului), plus un buton nou „📋 Caută din imagine" — lipești din clipboard o captură eMAG/Trendyol sau poza produsului, AI recunoaște ce e în poză, iar cele mai apropiate potriviri din inventar apar direct în listă, gata de confirmat dintr-un click (nu selectează niciodată automat — recunoașterea din poză poate fi imprecisă)',date:'2026-08-22'},
@@ -10716,8 +10720,11 @@ function pcomRowHtml(idx,showOwnAwb){
   // titlul de pe eMAG/Trendyol contează doar ca reper de căutare (pasul 1) — îl arătăm mic, discret
   const titluHtml=`<div class="pcom-platform-title">${esc(it.titluExtern)}${it.titluRo?` <span class="pcom-platform-title-ro">🌐 ${esc(it.titluRo)}</span>`:''} ${tag}</div>`;
   const awbHtml=it.newProduct?'':(showOwnAwb?pcomAwbTitleHtml(idx):'');
+  const p=it.produsId?P.find(x=>x.id===it.produsId):null;
+  const rowImg=p&&p.img?`<img src="${esc(imgSrc(p.img))}" class="pcom-row-img" ${imgErrAttr(p.img,'pick')}>`:`<div class="pcom-row-img-ph">📦</div>`;
   return`<div class="inv-prev-row pcom-prev-row${it.amanat?' pcom-row-amanat':''}">
     <input type="checkbox" ${it.include?'checked':''} onchange="pcImpParsed[${idx}].include=this.checked;updPcomImportInfo()">
+    ${rowImg}
     <div class="inv-prev-nm pcom-prev-nm">${titluHtml}<div class="pcom-meta-line">${priceInfoHtml}${it.pnk?' · PNK '+esc(it.pnk)+(it.tara?' ('+esc(it.tara)+')':''):''}${it.comandaId?' · #'+esc(it.comandaId):''}${it.clientNume?' · 👤 '+esc(it.clientNume):''}</div>${it.newProduct?pcomNewProductPromptHtml(idx):(awbHtml+pcomFinancialsHtml(idx)+pcomStockWarningHtml(idx))}</div>
     <div class="smi-pick" id="pcmi-pick-${idx}">${pcomPickBtnHtml(idx)}</div>
     <button type="button" class="rsx-icon-btn danger" onclick="removePcomLine(${idx})" title="Elimină definitiv această linie din import">🗑</button>
