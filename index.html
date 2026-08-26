@@ -1599,6 +1599,7 @@ th{font-weight:800!important;color:var(--t3)!important}
       <button class="research-tab on" id="pcom-tab-import" onclick="pcomMode('import')">Import comenzi</button>
       <button class="research-tab" id="pcom-tab-profit" onclick="pcomMode('profit')">Profit vânzări</button>
       <button class="research-tab" id="pcom-tab-totals" onclick="pcomMode('totals')">Total încasări</button>
+      <button class="research-tab" id="pcom-tab-reorder" onclick="pcomMode('reorder')">🛒 Produse de comandat</button>
     </div>
 
     <div class="research-mode on" id="pcom-mode-import">
@@ -1693,6 +1694,22 @@ th{font-weight:800!important;color:var(--t3)!important}
         </div>
       </div>
       <div class="dash-plat-grid" id="pcom-totals-grid"></div>
+    </div>
+
+    <div class="research-mode" id="pcom-mode-reorder">
+      <div class="card" style="padding:1rem 1.25rem">
+        <div class="sec" style="margin-top:0">Produse de comandat</div>
+        <div style="font-size:22px;color:var(--t3);margin-bottom:10px">
+          Produse fără stoc, dar cu comenzi pe ele — le adaugi aici direct din avertismentul de stoc
+          de la „Import comenzi" (🛒 Adaugă la comandat). Lista ține evidența pe lună: la o lună nouă
+          pornești cu lista goală, dar istoricul lunilor anterioare rămâne salvat mai jos, la alegere.
+        </div>
+        <div class="fld" style="max-width:280px;margin-bottom:10px">
+          <label>Lună</label>
+          <select id="pcom-reorder-month" onchange="renderReorderList()"></select>
+        </div>
+        <div id="pcom-reorder-list"></div>
+      </div>
     </div>
   </div>
 </div></div>
@@ -2182,6 +2199,7 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:215,text:'Comenzi Platforme — tab nou „🛒 Produse de comandat": produsele fără stoc dar cu comenzi pe ele se pot adăuga direct din avertismentul de stoc de la Import comenzi (lângă „⏳ Amână livrarea"), într-o listă alfabetică cu denumire + SKU de la furnizor. Lista ține evidența pe lună — luna curentă pornește goală, dar istoricul lunilor anterioare rămâne salvat și poate fi consultat oricând din selectorul de lună (needitabil, doar de consultat)',date:'2026-08-26'},
   {n:214,text:'Inventar — antetul tabelului (Produs, SKU, Categ., Stoc...) rămâne acum vizibil fix sus când derulezi lista lungă de produse, la fel ca bara de navigare a aplicației — nu mai trebuie să te întorci sus ca să-ți amintești ce coloană e care. Coloana Stoc are acum și o nuanță distinctă (mov deschis), să iasă în evidență față de celelalte',date:'2026-08-26'},
   {n:213,text:'Editează/Adaugă produs — poza principală a produsului se poate acum lipi direct din clipboard („📋" lângă câmpul de URL imagine), la fel ca la celelalte poze din aplicație — nu mai e nevoie să salvezi mai întâi screenshot-ul ca fișier, ca să-l încarci apoi manual',date:'2026-08-26'},
   {n:212,text:'Importă factură — previzualizarea produselor (după atașare PDF/CSV/poză sau introducere manuală) reproiectată în stilul „premium" de la Comenzi Platforme, la cerere directă: carduri mai mari, cu poza reală a produsului, mai ușor de citit și de lucrat pe ele, atât pe desktop cât și pe mobil (reparat și un bug de suprapunere a textului pe ecran îngust, apărut chiar în timpul reproiectării). În plus, un rând marcat „🆕 produs nou" primește acum un formular direct în card — poză (fișier sau lipită din clipboard), categorie și preț de vânzare — completabile pe loc, înainte de „Importă în stoc"; înainte, produsele noi se creau doar cu denumire și preț, iar restul detaliilor trebuia completat separat, din Inventar',date:'2026-08-26'},
@@ -3128,6 +3146,8 @@ let P=[],TS={},JL=[],OI=[],editId=null,sCol='name',sDir=1,jMode='sales',curImg='
 let compState={};
 let SYNCM=[],syncMapsLoaded=false,syncImpParsed=[];
 let PCOM=[],pcomLoaded=false,pcImpParsed=[],pcImpPlatforma='emag';
+let REORDER=[];
+const REORDER_KEY='reorder_list';
 const PCIK='sm6_pcom_import';
 let invLines=[],invParsed=[],catSuggestTimer=null,lastNameForCat='';
 let sbReady=false;
@@ -3273,6 +3293,17 @@ async function load(){
     }catch(e){
       PCOM=[];
       console.warn('platforma_comenzi unavailable (rulează migration_platforma_comenzi.sql):',e);
+    }
+
+    // produse de comandat (fără stoc, dar cu comenzi pe ele) — listă simplă, ținută în setari_app
+    // (ca tab_order/ui_customizations), grupată pe lună prin addedAt.slice(0,7), nu prin ștergere
+    try{
+      const rr=await fetch('/api/settings?key='+REORDER_KEY);
+      const rd=await rr.json();
+      REORDER=rd?.value?JSON.parse(rd.value):[];
+      safeLocalSet(REORDER_KEY,JSON.stringify(REORDER));
+    }catch(e){
+      try{REORDER=JSON.parse(localStorage.getItem(REORDER_KEY)||'[]');}catch(e2){REORDER=[];}
     }
 
     // fallback to sample if empty
@@ -10376,13 +10407,14 @@ async function applySyncImport(){
 }
 /* COMENZI PLATFORME (import comenzi eMAG/Trendyol) */
 function pcomMode(mode){
-  ['import','profit','totals'].forEach(m=>{
+  ['import','profit','totals','reorder'].forEach(m=>{
     document.getElementById('pcom-tab-'+m)?.classList.toggle('on',m===mode);
     document.getElementById('pcom-mode-'+m)?.classList.toggle('on',m===mode);
   });
   if(mode==='import')renderPcomImportHistory();
   if(mode==='profit')renderPcomProfit();
   if(mode==='totals')renderPcomTotals();
+  if(mode==='reorder')renderReorderList();
 }
 // Grupează liniile importate după import_batch_id (un upload = un batch), ca să poți șterge dintr-o
 // singură acțiune tot ce a intrat greșit dintr-un fișier, cu readăugarea stocului scăzut la import.
@@ -10614,11 +10646,55 @@ function pcomStockWarningHtml(idx){
   const btn=it.amanat
     ?`<button type="button" class="btn btn-sm" style="color:var(--gr);border-color:var(--gr)" onclick="togglePcomAmanat(${idx})">↺ Anulează amânarea</button>`
     :`<button type="button" class="btn btn-sm" style="color:var(--or);border-color:var(--or)" onclick="togglePcomAmanat(${idx})">⏳ Amână livrarea</button>`;
-  return`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:5px">${stockLbl}${(problem||it.amanat)?btn:''}${it.amanat?'<span style="font-size:19px;color:var(--or)">Amânat — nu se importă acum</span>':''}</div>`;
+  // Produs fără stoc dar cu comandă pe el — la cerere directă, poate fi trecut direct de aici pe
+  // lista "Produse de comandat" (tab nou în Comenzi Platforme), fără să mai fie nevoie să-l cauți
+  // separat mai târziu.
+  const reorderBtn=problem?(isInReorderList(p.id)?`<span style="font-size:19px;color:var(--gr);font-weight:600">✓ În lista de comandat</span>`:`<button type="button" class="btn btn-sm" style="color:var(--bl);border-color:var(--bl)" onclick="addToReorderList(${p.id})">🛒 Adaugă la comandat</button>`):'';
+  return`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:5px">${stockLbl}${(problem||it.amanat)?btn:''}${reorderBtn}${it.amanat?'<span style="font-size:19px;color:var(--or)">Amânat — nu se importă acum</span>':''}</div>`;
 }
 function togglePcomAmanat(idx){
   pcImpParsed[idx].amanat=!pcImpParsed[idx].amanat;
   renderPcomImportPreview();
+}
+function currentMonthKey(){return new Date().toISOString().slice(0,7);}
+function isInReorderList(productId){
+  const cur=currentMonthKey();
+  return REORDER.some(r=>r.productId===productId&&(r.addedAt||'').slice(0,7)===cur);
+}
+function addToReorderList(productId){
+  const p=P.find(x=>x.id===productId);
+  if(!p)return;
+  if(isInReorderList(productId)){toast('Produsul e deja în lista de comandat pentru luna asta');return;}
+  REORDER.push({id:'ro-'+Date.now()+Math.random().toString(36).slice(2),productId:p.id,name:p.name,sku:p.sku||'',addedAt:new Date().toISOString()});
+  saveReorderList();
+  renderPcomImportPreview();
+  toast('Adăugat la „Produse de comandat" ✓');
+}
+function removeFromReorderList(id){
+  REORDER=REORDER.filter(r=>r.id!==id);
+  saveReorderList();
+  renderReorderList();
+}
+function saveReorderList(){
+  safeLocalSet(REORDER_KEY,JSON.stringify(REORDER));
+  fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:REORDER_KEY,value:JSON.stringify(REORDER)})}).catch(()=>{});
+}
+// Nu se șterge nimic la schimbarea lunii — "reset" înseamnă doar că luna curentă pornește goală,
+// pentru că filtrăm după addedAt.slice(0,7); lunile anterioare rămân alese din dropdown, needitabile
+// (butonul "Comandat" apare doar pe luna curentă — istoricul e doar de consultat).
+function renderReorderList(){
+  const host=document.getElementById('pcom-reorder-list');
+  const monthSel=document.getElementById('pcom-reorder-month');
+  if(!host||!monthSel)return;
+  const cur=currentMonthKey();
+  const months=[...new Set(REORDER.map(r=>(r.addedAt||'').slice(0,7)))].filter(Boolean);
+  if(!months.includes(cur))months.push(cur);
+  months.sort().reverse();
+  const sel=months.includes(monthSel.value)?monthSel.value:cur;
+  monthSel.innerHTML=months.map(m=>{const[y,mo]=m.split('-');const lbl=new Date(y,mo-1).toLocaleDateString('ro-RO',{month:'long',year:'numeric'});return`<option value="${m}"${m===sel?' selected':''}>${lbl}${m===cur?' (luna curentă)':''}</option>`;}).join('');
+  const isCurrent=sel===cur;
+  const list=REORDER.filter(r=>(r.addedAt||'').slice(0,7)===sel).sort((a,b)=>(a.name||'').localeCompare(b.name||'','ro'));
+  host.innerHTML=list.length?list.map(r=>`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(r.name)}</strong>${r.sku?` <span style="color:var(--t3);font-family:var(--mono)">· SKU ${esc(r.sku)}</span>`:''}</div>${isCurrent?`<button type="button" class="btn btn-sm" style="color:var(--gr);border-color:var(--gr)" onclick="removeFromReorderList('${r.id}')">✓ Comandat</button>`:''}</div>`).join(''):`<div style="font-size:22px;color:var(--t3);padding:8px 0">Nicio comandă pe listă ${isCurrent?'luna asta':'în luna selectată'}.</div>`;
 }
 // Liniile marcate "produs nou" nu se creează automat la aplicare — omul le adaugă manual, cu categorie/
 // preț/poză complete, prin formularul normal de produs (deschis pre-completat cu numele din comandă).
