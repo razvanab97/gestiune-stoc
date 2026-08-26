@@ -578,9 +578,28 @@ function buildRaportCats(){
   .jp-val{margin-left:auto}
   .rpt-cards-head{flex-direction:column;align-items:stretch;gap:10px}
   .rpt-cards-nav{justify-content:space-between}
-  .rpt-carousel{gap:10px}
+  .rpt-carousel{gap:8px}
   .rpt-card.rpt-car-ghost{display:none}
-  .rpt-car-main{width:100%;max-width:340px}
+  /* Bug real raportat: pe mobil, cardul (max-width:340px) + 2 săgeți (48px) + gap-uri depășeau lățimea
+     ecranului — săgeata din stânga ieșea aproape complet în afara ecranului, netap-abilă. Cardul se
+     dimensionează acum după spațiul chiar disponibil (săgeți mai mici, 36px, incluse în calcul), nu
+     după o valoare fixă presupusă. */
+  /* Scopate cu #page-raport (nu doar clasa goală): regulile de bază .rpt-car-arrow/.rpt-card-upd
+     input sunt definite mai jos în fișier, în afara acestui media query — la specificitate egală,
+     cascada le-ar fi lăsat pe ELE să câștige (poziția mai târzie în fișier), anulând tocmai fix-ul
+     de-aici. Bug real prins la testare: fără #page-raport, regulile de mai jos nu se aplicau deloc. */
+  #page-raport .rpt-car-main{width:calc(100% - 88px)}
+  #page-raport .rpt-car-arrow{width:36px;height:36px;font-size:26px}
+  /* Bug real raportat: câmpul "Stoc nou" ajungea de ~20px lățime (invizibil, nefolosibil) pentru că
+     butonul "Actualizează stoc" (text lung) nu se micșora deloc și lua aproape tot spațiul orizontal
+     din cardul îngust de pe mobil. Pe verticală, ambele au loc din plin, ușor de atins. */
+  #page-raport .rpt-card-upd{flex-direction:column}
+  #page-raport .rpt-card-upd input{width:100%}
+  #page-raport .rpt-card-upd button{width:100%}
+  /* Rândul de mapare din Sincronizare (platformă + PNK lung, necomprimabil + titlu + buton ✕) nu
+     încăpea pe un rând pe mobil — butonul ✕ de ștergere ajungea în afara ecranului, needitabil fără
+     scroll orizontal în card. */
+  #page-sync .sync-map-row{flex-wrap:wrap}
   #rpt-stats{grid-template-columns:1fr 1fr!important}
   #rpt-table-wrap{overflow-x:auto!important;-webkit-overflow-scrolling:touch}
   .rpt-table{font-size:24px;min-width:620px}
@@ -2242,6 +2261,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:219,text:'Raport stoc — două bug-uri reale de mobil, prinse la testare directă pe lățime de telefon: săgeata de navigare din stânga a cardului ieșea aproape complet în afara ecranului (netap-abilă — cardul + cele 2 săgeți erau, împreună, mai late decât ecranul), iar câmpul „Stoc nou" ajungea la ~20px lățime (practic invizibil) pentru că butonul „Actualizează stoc" nu se micșora deloc lângă el. Reparat: săgețile încap acum corect pe ecran, iar câmpul și butonul stau unul sub altul pe mobil, ambele pe toată lățimea — actualizarea stocului direct de pe telefon (motivul principal al paginii) funcționează acum de la un capăt la altul. Fix similar și la Sincronizare — rândul de mapare (platformă + PNK + titlu + ✕) nu mai împinge butonul de ștergere în afara ecranului',date:'2026-08-26'},
   {n:218,text:'Vânzări (Inventar) — ajustări la cerere directă: toate cifrele din tabel (Cump./Drum/Vând./Stoc/Cost/Direct/eMAG/Trendyol) sunt acum centrate în coloană (nu aliniate la dreapta) și puțin mai mari. La Cost, prețul de achiziție e acum mai mare decât diferența de preț de dedesubt (creștere/scădere față de achiziția anterioară) — înainte diferența arăta mai proeminentă decât costul real, ceea ce părea invers ca importanță',date:'2026-08-26'},
   {n:217,text:'Vânzări (Inventar) — temă vizuală nouă, la cerere directă, DEOCAMDATĂ DOAR pe această pagină, ca probă: stil Apple/Linear — alb aproape pur, text aproape negru, o singură culoare accent (albastru electric, nu mov) și carduri aproape fără umbră. Coloana Stoc și-a recăpătat fundalul colorat, mai deschis decât mov-ul vechi (acum un albastru foarte deschis). Restul aplicației rămâne neschimbat — dacă tema asta place, se poate extinde și pe celelalte pagini',date:'2026-08-26'},
   {n:216,text:'Inventar — redesign premium/minimalist al tabelului, la cerere directă: cifrele au acum ierarhie vizuală (Stoc e cifra "hero" a rândului, mare și colorată după status — verde/portocaliu/roșu, la fel ca badge-ul de Status; Direct e prețul evidențiat; Cump./Drum/Vând. și Cost sunt mai discrete). A dispărut umplerea plată mov de pe toată coloana Stoc și tenta portocalie de pe rândurile cu stoc scăzut — culoarea are acum sens, nu doar decor. Poza produsului e acum și cu 35% mai mare specific pe Safari (raportată ca vizibil mai mică acolo decât pe Chrome, la același CSS)',date:'2026-08-26'},
@@ -11279,7 +11299,7 @@ function renderSyncPage(){
   list.innerHTML=SYNCM.map(m=>{
     const p=P.find(x=>x.id===m.produsId);
     const pnkChip=m.idExtern?`<button class="rsx-pnk" onclick="copyText(${esc(JSON.stringify(String(m.idExtern)))})" title="PNK — click pentru copiere">${esc(m.idExtern)} ⧉</button>`:'<span style="font-size:19px;color:var(--t3)">fără PNK</span>';
-    return`<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--b1)">
+    return`<div class="sync-map-row" style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--b1)">
       <span class="badge" style="background:var(--surf2);border:1px solid var(--b1);border-radius:6px;padding:3px 8px;font-size:19px;font-weight:600">${plLabel[m.platforma]||m.platforma}</span>
       ${pnkChip}
       <div style="flex:1;min-width:0">
