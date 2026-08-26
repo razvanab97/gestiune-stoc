@@ -225,11 +225,14 @@ tr:hover td{background:var(--surf2)}
    secundară, mai mici; Direct e prețul de referință, mai proeminent decât eMAG/Trendyol. */
 #inv-table .p-nm{font-size:23px;font-weight:600}
 #inv-table .p-sku{font-size:18px}
-#inv-table .p-flow{font-size:19px}
-#inv-table .p-stoc{font-size:30px;font-weight:800}
-#inv-table .p-cost{font-size:18px}
-#inv-table .p-direct{font-size:23px;font-weight:700;color:var(--t1)}
-#inv-table .p-plat{font-size:20px;font-weight:500}
+#inv-table .p-flow{font-size:21px;text-align:center}
+#inv-table .p-stoc{font-size:32px;font-weight:800;text-align:center}
+#inv-table .p-cost{font-size:21px;text-align:center}
+#inv-table .p-direct{font-size:25px;font-weight:700;color:var(--t1);text-align:center}
+#inv-table .p-plat{font-size:22px;font-weight:500;text-align:center}
+/* Costul e cifra principală a coloanei — diferența de preț (creștere/scădere față de achiziția
+   anterioară) e doar o adnotare, nu trebuie să concureze vizual cu ea sau să pară mai importantă. */
+#inv-table .price-delta{font-size:16px}
 /* Poza produsului apărea vizibil mai mică pe Safari decât pe Chrome la aceeași dimensiune CSS —
    compensare directă doar pentru Safari (clasa .is-safari e pusă în JS, la pornire). */
 .is-safari #inv-table th:nth-child(2){width:92px!important}
@@ -2239,6 +2242,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:218,text:'Vânzări (Inventar) — ajustări la cerere directă: toate cifrele din tabel (Cump./Drum/Vând./Stoc/Cost/Direct/eMAG/Trendyol) sunt acum centrate în coloană (nu aliniate la dreapta) și puțin mai mari. La Cost, prețul de achiziție e acum mai mare decât diferența de preț de dedesubt (creștere/scădere față de achiziția anterioară) — înainte diferența arăta mai proeminentă decât costul real, ceea ce părea invers ca importanță',date:'2026-08-26'},
   {n:217,text:'Vânzări (Inventar) — temă vizuală nouă, la cerere directă, DEOCAMDATĂ DOAR pe această pagină, ca probă: stil Apple/Linear — alb aproape pur, text aproape negru, o singură culoare accent (albastru electric, nu mov) și carduri aproape fără umbră. Coloana Stoc și-a recăpătat fundalul colorat, mai deschis decât mov-ul vechi (acum un albastru foarte deschis). Restul aplicației rămâne neschimbat — dacă tema asta place, se poate extinde și pe celelalte pagini',date:'2026-08-26'},
   {n:216,text:'Inventar — redesign premium/minimalist al tabelului, la cerere directă: cifrele au acum ierarhie vizuală (Stoc e cifra "hero" a rândului, mare și colorată după status — verde/portocaliu/roșu, la fel ca badge-ul de Status; Direct e prețul evidențiat; Cump./Drum/Vând. și Cost sunt mai discrete). A dispărut umplerea plată mov de pe toată coloana Stoc și tenta portocalie de pe rândurile cu stoc scăzut — culoarea are acum sens, nu doar decor. Poza produsului e acum și cu 35% mai mare specific pe Safari (raportată ca vizibil mai mică acolo decât pe Chrome, la același CSS)',date:'2026-08-26'},
   {n:215,text:'Comenzi Platforme — tab nou „🛒 Produse de comandat": produsele fără stoc dar cu comenzi pe ele se pot adăuga direct din avertismentul de stoc de la Import comenzi (lângă „⏳ Amână livrarea"), într-o listă alfabetică cu denumire + SKU de la furnizor. Lista ține evidența pe lună — luna curentă pornește goală, dar istoricul lunilor anterioare rămâne salvat și poate fi consultat oricând din selectorul de lună (needitabil, doar de consultat)',date:'2026-08-26'},
@@ -9601,14 +9605,14 @@ function renderTable(){
       <td class="p-nm" title="${esc(p.name)}"><button class="copy-btn" onclick="copyProductName(${p.id})" title="Copiază">📋</button>${esc(p.name)}</td>
       <td class="p-sku" style="font-family:var(--mono);color:var(--t3)"><button class="copy-btn" onclick="copyProductSku(${p.id})" title="Copiază SKU" ${!p.sku?'style="visibility:hidden"':''}>📋</button>${esc(p.sku||'—')}<div style="margin-top:2px;color:var(--acc)"><button class="copy-btn" onclick="copyProductInternalCode(${p.id})" title="Copiază cod intern">📋</button>${esc(p.internalCode||'—')}</div></td>
       <td>${catB}</td>
-      <td class="p-flow" style="text-align:right;font-family:var(--mono);color:var(--bl)">${fmtQty(p.bought)}</td>
-      <td class="p-flow" style="text-align:right;font-family:var(--mono);color:${(p.incomingQty||0)>0?'var(--or)':'var(--t3)'}">${(p.incomingQty||0)>0?fmtQty(p.incomingQty):'—'}</td>
-      <td class="p-flow" style="text-align:right;font-family:var(--mono);color:var(--gr)">${fmtQty(p.sold)}</td>
-      <td class="p-stoc" style="text-align:right;font-family:var(--mono);color:${stocColor}">${fmtQty(q2)}</td>
-      <td class="p-cost" style="text-align:right;font-family:var(--mono);color:var(--t3)">${p.priceBuyTTC>0?p.priceBuyTTC.toFixed(2):'—'}${p.tvaAcq>0?' <span style="color:var(--bl)">·21%</span>':''}${priceDeltaHtml(p.priceBuyPrevTTC,p.priceBuyTTC)}</td>
-      <td class="p-direct" style="text-align:right;font-family:var(--mono)">${p.priceSell>0?p.priceSell.toFixed(2):'—'}</td>
-      <td class="p-plat" style="text-align:right;font-family:var(--mono);color:var(--gr)">${p.priceEmag>0?p.priceEmag.toFixed(2):'—'}</td>
-      <td class="p-plat" style="text-align:right;font-family:var(--mono);color:var(--gr)">${p.priceTrendyol>0?p.priceTrendyol.toFixed(2):'—'}</td>
+      <td class="p-flow" style="font-family:var(--mono);color:var(--bl)">${fmtQty(p.bought)}</td>
+      <td class="p-flow" style="font-family:var(--mono);color:${(p.incomingQty||0)>0?'var(--or)':'var(--t3)'}">${(p.incomingQty||0)>0?fmtQty(p.incomingQty):'—'}</td>
+      <td class="p-flow" style="font-family:var(--mono);color:var(--gr)">${fmtQty(p.sold)}</td>
+      <td class="p-stoc" style="font-family:var(--mono);color:${stocColor}">${fmtQty(q2)}</td>
+      <td class="p-cost" style="font-family:var(--mono);color:var(--t3)">${p.priceBuyTTC>0?p.priceBuyTTC.toFixed(2):'—'}${p.tvaAcq>0?' <span style="color:var(--bl)">·21%</span>':''}${priceDeltaHtml(p.priceBuyPrevTTC,p.priceBuyTTC)}</td>
+      <td class="p-direct" style="font-family:var(--mono)">${p.priceSell>0?p.priceSell.toFixed(2):'—'}</td>
+      <td class="p-plat" style="font-family:var(--mono);color:var(--gr)">${p.priceEmag>0?p.priceEmag.toFixed(2):'—'}</td>
+      <td class="p-plat" style="font-family:var(--mono);color:var(--gr)">${p.priceTrendyol>0?p.priceTrendyol.toFixed(2):'—'}</td>
       <td>${bdg}${p.supplierOOS?`<br><span class="bdg" style="background:rgba(255,138,61,.15);color:var(--or);margin-top:4px" title="Epuizat la furnizor${p.supplierRestockEta?' · revine '+fmtDateRo(p.supplierRestockEta):''}">🚫 Furnizor</span>`:''}</td>
       <td><div class="row-acts">
         <button class="ico-btn" onclick="openModal(${p.id})" title="Editează">✏️</button>
