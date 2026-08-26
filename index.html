@@ -1594,7 +1594,9 @@ th{font-weight:800!important;color:var(--t3)!important}
         <button class="btn btn-sm" onclick="exportHistoricStockExcel()" title="Calculează stocul contabil la data aleasă">📅 Stoc la dată Excel</button>
         <button class="btn btn-sm" onclick="document.getElementById('rpt-sup-file').click()" title="Încarcă înapoi fișierul descărcat (CSV/Excel) cu coloana Furnizor completată — se asociază automat după product_id">⬆ Încarcă furnizori din fișier</button>
         <input type="file" id="rpt-sup-file" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleRaportSupplierImport(event)">
+        <button class="btn btn-sm" onclick="previewSupplierNormalization()" title="Unește variantele de scriere ale aceluiași furnizor (ex. „Jumbo Romania"/„Jumbo / E-Jumbo Romania" → „Jumbo") într-un singur nume, cu confirmare înainte de aplicare">🧹 Normalizează furnizorii</button>
       </div>
+      <div id="rpt-sup-norm-preview"></div>
     </div>
   </div>
 
@@ -1661,6 +1663,18 @@ th{font-weight:800!important;color:var(--t3)!important}
   </div>
 
   <div class="card" style="padding:1rem 1.25rem;margin-bottom:1rem">
+    <div class="sec" style="margin-top:0">🆕 De listat pe eMAG</div>
+    <div style="font-size:22px;color:var(--t3);margin-bottom:10px">Produse cu stoc, dar fără nicio mapare eMAG confirmată încă — probabil ar trebui listate.</div>
+    <div id="sync-opportunity-list"></div>
+  </div>
+
+  <div class="card" style="padding:1rem 1.25rem;margin-bottom:1rem">
+    <div class="sec" style="margin-top:0">⚠️ Discrepanțe de stoc eMAG</div>
+    <div style="font-size:22px;color:var(--t3);margin-bottom:10px">Comparație între stocul intern și ultimul stoc citit de pe eMAG (din „Import în masă din fișier" de mai jos) — reîncarcă periodic exportul din Seller Center ca să rămână la zi.</div>
+    <div id="sync-mismatch-list"></div>
+  </div>
+
+  <div class="card" style="padding:1rem 1.25rem;margin-bottom:1rem">
     <div class="sec" style="margin-top:0">Import în masă din fișier (.xlsx)</div>
     <div style="font-size:22px;color:var(--t3);margin-bottom:10px">
       Încarcă exportul de produse/oferte din Seller Center (Excel) — aplicația detectează automat
@@ -1689,6 +1703,7 @@ th{font-weight:800!important;color:var(--t3)!important}
         <button class="btn btn-sm btn-acc" id="smi-apply-btn" onclick="applySyncImport()" disabled>Adaugă mapările selectate</button>
       </div>
     </div>
+    <div id="smi-stock-preview"></div>
   </div>
 
   <div class="card" style="padding:1rem 1.25rem;margin-bottom:1rem">
@@ -2306,6 +2321,7 @@ th{font-weight:800!important;color:var(--t3)!important}
     <div id="inv-preview"></div>
     <div class="smi-pickdrop" id="invmi-pickdrop"><input type="text" id="invmi-pick-search" placeholder="Caută produs după nume sau SKU…" oninput="filterInvPick()"><div class="smi-pick-list" id="invmi-pick-list"></div></div>
     <datalist id="inv-cat-list"></datalist>
+    <datalist id="inv-supplier-list"><option value="Jumbo"><option value="Maxy"><option value="Verk"></datalist>
   </div>
   <div class="inv-foot">
     <span class="inv-foot-info" id="inv-info">Adaugă produse pentru previzualizare</span>
@@ -2354,6 +2370,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:228,text:'Sincronizare — completare majoră, la cerere directă. Două carduri noi: „🆕 De listat pe eMAG" (produse cu stoc, dar fără mapare eMAG confirmată încă, grupate pe furnizor) și „⚠️ Discrepanțe de stoc eMAG" (compară stocul intern cu ultimul stoc citit de pe eMAG — „🔴 risc de suprastocare" când n-ai stoc dar eMAG arată disponibil, „🟡 vânzări pierdute" când ai stoc dar eMAG arată indisponibil). Stocul extern se citește automat din coloana Stock/Stoc a exportului Seller Center, la fiecare reimport din „Import în masă din fișier" — nu există API live eMAG, deci actualizarea e la fel de proaspătă ca ultimul fișier reîncărcat; se cere confirmare explicită înainte să se salveze. De asemenea: normalizare furnizori (buton nou în Raport stoc) — unește variante ca „Jumbo"/„Jumbo Romania"/„Jumbo / E-Jumbo Romania" într-un singur nume, cu previzualizare și confirmare înainte de aplicare; plus un câmp de furnizor corectabil la produsele noi create din factură (rezolvă o ambiguitate reală: preset-ul CSV Maxy/Verk nu poate distinge singur între cei doi din conținutul fișierului). Necesită migration_platforma_mapari_stoc_extern.sql în Supabase — până rulezi migrarea, restul paginii funcționează normal, doar fără discrepanțele de stoc',date:'2026-08-27'},
   {n:227,text:'Inventar — bug real raportat imediat după redesenul bifei de la actualizarea anterioară: bifa mărită (23px) nu mai încăpea în coloana ei veche (24px, cu padding se reducea la doar 10px liberi) — ieșea vizual peste margine, suprapunându-se cu poza produsului de alături. Coloanele de bifă și poză s-au lărgit (24→38px, respectiv 68→78px) cu padding mai potrivit, ca amândouă să aibă loc confortabil — și, la cerere directă, poza produsului e acum și puțin mai mare (60→66px)',date:'2026-08-27'},
   {n:226,text:'Inventar (Vânzări) — două ajustări la cerere directă. Bifa de selecție de pe fiecare rând (și cea din antet, „selectează tot") e acum redesenată complet — mai mare, cu contur clar și bifă vizibilă când e selectată, nu doar pătrățelul mic nativ al browserului, greu de observat/apăsat cu precizie pe o listă lungă. Butoanele de acțiune (✏️ editează, 🧮 calculator, 🗑 șterge) au altă înfățișare — circulare, fără fundal permanent, apare un cerc discret doar la trecerea cu mouse-ul (roșu la ștergere), nu mai stau montate cu bordură+fundal gri pe fiecare rând, ceea ce încărca vizual un tabel deja dens',date:'2026-08-27'},
   {n:225,text:'Dashboard — cadranele (rândul de sus + panoul „Vânzări & achiziții") au acum efect „liquid glass" (stil iOS 26), la cerere directă: sticlă semi-transparentă, cu blur și o strălucire discretă pe colț, peste un fundal cu pete de culoare difuze (mov/albastru/roșu, foarte estompate) — fără de care sticla n-ar avea ce reflecta. Deocamdată doar pe Dashboard',date:'2026-08-26'},
@@ -3258,7 +3275,8 @@ async function saveProductRequest(method,path,data){
 }
 
 function dbToSyncMap(r){
-  return{id:r.id,platforma:r.platforma,idExtern:r.id_extern||'',titluExtern:r.titlu_extern||'',produsId:r.produs_id,confirmat:r.confirmat!==false,tara:r.tara||''};
+  return{id:r.id,platforma:r.platforma,idExtern:r.id_extern||'',titluExtern:r.titlu_extern||'',produsId:r.produs_id,confirmat:r.confirmat!==false,tara:r.tara||'',
+    stocExtern:r.stoc_extern==null?null:Number(r.stoc_extern),stocExternAt:r.stoc_extern_actualizat_la||''};
 }
 function syncMapToDb(m){
   return{platforma:m.platforma,id_extern:m.idExtern||null,titlu_extern:m.titluExtern,produs_id:m.produsId,confirmat:m.confirmat!==false,tara:m.tara||null};
@@ -3418,7 +3436,7 @@ function safeLocalSet(key,value){
 }
 let P=[],TS={},JL=[],OI=[],editId=null,sCol='name',sDir=1,jMode='sales',curImg='',curImages=[],selProd=new Set(),selSuppliers=new Set(),savingProduct=false,invSourceName='',jMonthDefaulted=false;
 let compState={};
-let SYNCM=[],syncMapsLoaded=false,syncImpParsed=[];
+let SYNCM=[],syncMapsLoaded=false,syncImpParsed=[],syncImpStockUpdates=[];
 let PCOM=[],pcomLoaded=false,pcImpParsed=[],pcImpPlatforma='emag';
 let REORDER=[];
 const REORDER_KEY='reorder_list';
@@ -5541,6 +5559,16 @@ function researchSupplierNameFromUrl(url){
     const base=h.split('.').slice(-2)[0]||h;
     return base.charAt(0).toUpperCase()+base.slice(1);
   }catch(e){return'';}
+}
+// Normalizare furnizori (text liber, nu doar URL-uri, spre deosebire de researchSupplierNameFromUrl
+// de mai sus) — la cerere directă: utilizatorul are doar 3 furnizori reali, dar câmpul liber a
+// acumulat variante ("Jumbo", "Jumbo Romania", "Jumbo / E-Jumbo Romania"...). Potrivire după
+// substring, case-insensitive; nu forțează niciodată o valoare nerecunoscută într-una din cele 3.
+const SUPPLIER_CANONICAL=[{canon:'Jumbo',sub:['jumbo']},{canon:'Maxy',sub:['maxy']},{canon:'Verk',sub:['verk']}];
+function canonicalSupplierName(raw){
+  const s=(raw||'').toLowerCase();
+  for(const c of SUPPLIER_CANONICAL)if(c.sub.some(k=>s.includes(k)))return c.canon;
+  return null;
 }
 // Când lipești un link în câmpul de furnizor, îl recunoaște automat, îi pune numele detectat în
 // câmp (ca text) și ține minte link-ul original ca să fie salvat direct la crearea dosarului.
@@ -10268,6 +10296,13 @@ function findProductByPnk(platforma,pnk){
   const m=SYNCM.find(s=>s.platforma===platforma&&s.confirmat&&s.idExtern===pnk);
   return m?P.find(p=>p.id===m.produsId)||null:null;
 }
+// Găsește maparea SYNCM deja confirmată pentru un titlu/PNK — folosit la captarea stocului extern
+// pentru rânduri DEJA mapate dintr-un import (spre deosebire de findProductByPnk, care caută produsul).
+function findSyncMapEntry(platforma,titlu,pnk){
+  if(pnk){const m=SYNCM.find(s=>s.platforma===platforma&&s.idExtern===pnk);if(m)return m;}
+  const t=(titlu||'').toLowerCase().trim();
+  return SYNCM.find(s=>s.platforma===platforma&&s.titluExtern.toLowerCase().trim()===t)||null;
+}
 let smSuggestTimer=null;
 function suggestSyncProduct(){
   clearTimeout(smSuggestTimer);
@@ -10405,12 +10440,29 @@ async function handleSyncImportFile(ev){
   document.getElementById('smi-preview').innerHTML='';
   document.getElementById('smi-foot').style.display='none';
   syncImpParsed=[];
+  syncImpStockUpdates=[];
   try{
     await ensureXLSX();
     const buf=await file.arrayBuffer();
     const wb=window.XLSX.read(buf,{type:'array'});
     const findSub=(hdr,names)=>{for(const n of names){const i=hdr.findIndex(h=>h.includes(n));if(i>-1)return i;}return -1;};
     const findExact=(hdr,names)=>{for(const n of names){const i=hdr.findIndex(h=>h===n);if(i>-1)return i;}return -1;};
+    const stockPat=['stock','stoc'];
+    // Citește valoarea de stoc a unui rând (dacă există coloană) și, dacă rândul e deja mapat, o pune
+    // în syncImpStockUpdates (nu în syncImpParsed — lista de "listări noi" rămâne neatinsă). Returnează
+    // true dacă rândul era deja mapat (indiferent dacă a avut sau nu stoc de citit), ca apelantul să știe
+    // să treacă la următorul rând.
+    function captureStockIfMapped(titlu,pnk,iStockCol,rowArr){
+      const m=findSyncMapEntry(platforma,titlu,pnk);
+      if(!m)return false;
+      if(iStockCol>-1){
+        const stockVal=String(rowArr[iStockCol]).trim();
+        if(stockVal!==''&&!isNaN(Number(stockVal))){
+          syncImpStockUpdates.push({mapId:m.id,titluExtern:titlu,pnk:m.idExtern,produsId:m.produsId,stocExtern:Number(stockVal)});
+        }
+      }
+      return true;
+    }
     // PNK e mai fiabil decât titlul (unic per listare, nu se schimbă la o editare de titlu pe platformă)
     // — exportul de produse/oferte din Seller Center îl conține de obicei; dacă PNK-ul e deja cunoscut
     // dintr-o mapare confirmată anterior (ex. dintr-un import de comenzi), produsul se leagă direct,
@@ -10425,13 +10477,19 @@ async function handleSyncImportFile(ev){
       const iCurStatus=findExact(curHdr,['status_asociere']);
       const iCurScore=findExact(curHdr,['scor_asociere']);
       const iCurPnk=findExact(curHdr,['pnk','id_extern']);
+      const iCurStock=findExact(curHdr,stockPat);
       const existing=new Set(SYNCM.filter(m=>m.platforma===platforma).map(m=>m.titluExtern.toLowerCase().trim()));
       const existingPnk=new Set(SYNCM.filter(m=>m.platforma===platforma&&m.idExtern).map(m=>m.idExtern));
       const seen=new Set();
       for(let i=1;i<curRows.length;i++){
         const titlu=String(curRows[i][iCurTitle]||'').trim();
         const pnk=iCurPnk>-1?String(curRows[i][iCurPnk]||'').trim():'';
-        if(!titlu||seen.has(titlu.toLowerCase())||existing.has(titlu.toLowerCase())||(pnk&&existingPnk.has(pnk)))continue;
+        if(!titlu||seen.has(titlu.toLowerCase()))continue;
+        if(existing.has(titlu.toLowerCase())||(pnk&&existingPnk.has(pnk))){
+          seen.add(titlu.toLowerCase());
+          captureStockIfMapped(titlu,pnk,iCurStock,curRows[i]);
+          continue;
+        }
         seen.add(titlu.toLowerCase());
         const byPnk=findProductByPnk(platforma,pnk);
         if(byPnk){
@@ -10450,15 +10508,17 @@ async function handleSyncImportFile(ev){
           syncImpParsed.push({titluExtern:titlu,pnk,produsId:match?match.product.id:null,score:match?match.score:0,include:!!match});
         }
       }
-      if(!syncImpParsed.length){toast('Nicio listare nouă găsită (toate sunt deja mapate)','err');parsing.style.display='none';return;}
       parsing.style.display='none';
-      document.getElementById('smi-preview').dataset.platforma=platforma;
-      renderSyncImportPreview();
-      toast(`${syncImpParsed.length} listări detectate · ${syncImpParsed.filter(x=>x.produsId).length} cu sugestie (din fișier sau automată) ✓`);
+      if(!syncImpParsed.length&&!syncImpStockUpdates.length){toast('Nicio listare nouă găsită (toate sunt deja mapate)','err');return;}
+      if(syncImpParsed.length){
+        document.getElementById('smi-preview').dataset.platforma=platforma;
+        renderSyncImportPreview();
+      }
+      renderSyncStockPreview();
+      toast(`${syncImpParsed.length?syncImpParsed.length+' listări noi detectate · ':''}${syncImpStockUpdates.length?syncImpStockUpdates.length+' actualizări de stoc de revizuit':''}`.trim()||'Import procesat ✓');
       return;
     }
     const titlePat=['validation_name','numele produsului','nume produs','denumire produs','denumirea produsului','titlul produsului','titlu produs','titlu','name','title','produs','denumire'];
-    const stockPat=['stock','stoc'];
     let best=null;
     for(const sn of wb.SheetNames){
       const rws=window.XLSX.utils.sheet_to_json(wb.Sheets[sn],{header:1,defval:''});
@@ -10480,7 +10540,12 @@ async function handleSyncImportFile(ev){
     for(let i=headerIdx+1;i<rows.length;i++){
       const titlu=String(rows[i][iTitle]||'').trim();
       const pnk=iPnk>-1?String(rows[i][iPnk]||'').trim():'';
-      if(!titlu||seen.has(titlu.toLowerCase())||existing.has(titlu.toLowerCase())||(pnk&&existingPnk.has(pnk)))continue;
+      if(!titlu||seen.has(titlu.toLowerCase()))continue;
+      if(existing.has(titlu.toLowerCase())||(pnk&&existingPnk.has(pnk))){
+        seen.add(titlu.toLowerCase());
+        captureStockIfMapped(titlu,pnk,iStock,rows[i]);
+        continue;
+      }
       if(iStock>-1){
         const stockVal=String(rows[i][iStock]).trim();
         if(stockVal===''||isNaN(Number(stockVal)))continue;
@@ -10494,17 +10559,58 @@ async function handleSyncImportFile(ev){
       const match=findExistingProduct({name:titlu});
       syncImpParsed.push({titluExtern:titlu,pnk,produsId:match?match.product.id:null,score:match?match.score:0,include:!!match});
     }
-    if(!syncImpParsed.length){toast('Nicio listare nouă găsită (toate sunt deja mapate sau coloana e goală)','err');parsing.style.display='none';return;}
     parsing.style.display='none';
-    document.getElementById('smi-preview').dataset.platforma=platforma;
-    renderSyncImportPreview();
-    toast(`${syncImpParsed.length} listări detectate · ${syncImpParsed.filter(x=>x.produsId).length} cu sugestie automată ✓`);
+    if(!syncImpParsed.length&&!syncImpStockUpdates.length){toast('Nicio listare nouă găsită (toate sunt deja mapate sau coloana e goală)','err');return;}
+    if(syncImpParsed.length){
+      document.getElementById('smi-preview').dataset.platforma=platforma;
+      renderSyncImportPreview();
+    }
+    renderSyncStockPreview();
+    toast(`${syncImpParsed.length?syncImpParsed.length+' listări noi · ':''}${syncImpParsed.filter(x=>x.produsId).length?syncImpParsed.filter(x=>x.produsId).length+' cu sugestie automată · ':''}${syncImpStockUpdates.length?syncImpStockUpdates.length+' actualizări de stoc de revizuit':''}`.replace(/ · $/,'')||'Import procesat ✓');
   }catch(err){
     parsing.style.display='none';
     toast('Eroare la citirea fișierului: '+err.message,'err');
   }finally{
     ev.target.value='';
   }
+}
+// Listările DEJA mapate, cu stoc extern citit din fișierul reimportat — separat de syncImpParsed
+// (listări noi, cu confirmare de asociere) fiindcă aici nu e nimic de ales, doar de confirmat că se
+// scrie stocul citit. Niciodată nu modifică stocul intern — doar cifra "ce arată eMAG/Trendyol".
+function renderSyncStockPreview(){
+  const box=document.getElementById('smi-stock-preview');if(!box)return;
+  if(!syncImpStockUpdates.length){box.innerHTML='';return;}
+  const rows=syncImpStockUpdates.map(u=>{
+    const p=u.produsId?P.find(x=>x.id===u.produsId):null;
+    const intern=p?qty(p):null;
+    const risc=intern!=null&&intern<=0&&u.stocExtern>0;
+    const pierdut=intern!=null&&intern>0&&u.stocExtern<=0;
+    const tag=risc?'<span class="inv-match miss">⚠ risc suprastocare</span>':pierdut?'<span class="bdg bdg-low">⚠ vânzare pierdută</span>':'';
+    return`<div class="inv-prev-row"><div class="inv-prev-nm">${esc(p?p.name:u.titluExtern)}${u.pnk?` <span style="color:var(--t3);font-family:var(--mono);font-size:19px">· PNK ${esc(u.pnk)}</span>`:''}<div class="jp-meta">Stoc intern: ${intern==null?'—':fmtQty(intern)} · Stoc eMAG/Trendyol: ${fmtQty(u.stocExtern)} ${tag}</div></div></div>`;
+  }).join('');
+  box.innerHTML=`<div class="inv-preview" style="margin-top:12px"><div class="inv-prev-title">Actualizări de stoc detectate (${syncImpStockUpdates.length})</div>${rows}
+    <div style="display:flex;justify-content:flex-end;margin-top:10px"><button type="button" class="btn btn-sm btn-acc" onclick="applySyncStockUpdates()">Aplică actualizările de stoc</button></div>
+  </div>`;
+}
+async function applySyncStockUpdates(){
+  const n=syncImpStockUpdates.length;if(!n)return;
+  if(!confirm(`Se salvează stocul extern citit pentru ${n} listări deja mapate. Nu modifică stocul intern — doar cifra afișată de eMAG/Trendyol, pentru a putea semnala discrepanțe. Continui?`))return;
+  showLoading(`Se actualizează stocul la ${n} listări…`);
+  const stamp=new Date().toISOString();
+  for(const u of syncImpStockUpdates){
+    try{
+      await dbPatch(`platforma_mapari?id=eq.${u.mapId}`,{stoc_extern:u.stocExtern,stoc_extern_actualizat_la:stamp});
+      const m=SYNCM.find(x=>x.id===u.mapId);
+      if(m){m.stocExtern=u.stocExtern;m.stocExternAt=stamp;}
+    }catch(err){
+      console.warn('Nu s-a putut actualiza stocul extern pentru maparea '+u.mapId+' (rulează migration_platforma_mapari_stoc_extern.sql):',err);
+    }
+  }
+  hideLoading();
+  syncImpStockUpdates=[];
+  document.getElementById('smi-stock-preview').innerHTML='';
+  renderSyncPage();
+  toast(`Stoc actualizat la ${n} listări ✓`);
 }
 function syncPickBtnHtml(idx){
   const it=syncImpParsed[idx];
@@ -11500,9 +11606,63 @@ function renderSyncPnkDatalist(){
     return`<option value="${esc(m.idExtern)}">${esc(p?p.name:m.titluExtern)}</option>`;
   }).join('');
 }
+// Grupare simplă pe furnizor — folosită de cardurile "De listat pe eMAG" și "Discrepanțe de stoc",
+// ca produsele de comandat să fie ușor de citit pe furnizor, nu într-o listă lungă amestecată.
+// productOf(item) trebuie să întoarcă produsul (obiectul din P) pentru fiecare element din listă.
+function groupBySupplier(items,productOf){
+  const groups={};
+  items.forEach(it=>{const sup=(productOf(it)?.supplier||'').trim()||'Fără furnizor';(groups[sup]=groups[sup]||[]).push(it);});
+  return Object.keys(groups).sort((a,b)=>a==='Fără furnizor'?1:b==='Fără furnizor'?-1:a.localeCompare(b,'ro'))
+    .map(sup=>({supplier:sup,items:groups[sup]}));
+}
+// Produse cu stoc, dar fără nicio mapare eMAG confirmată — nu are nevoie de niciun import, se
+// calculează direct din P+SYNCM.
+function renderSyncOpportunityCard(){
+  const box=document.getElementById('sync-opportunity-list');if(!box)return;
+  if(!sbReady){box.textContent='Necesită conexiune Supabase activă.';return;}
+  const mappedIds=new Set(SYNCM.filter(m=>m.platforma==='emag'&&m.confirmat).map(m=>m.produsId));
+  const items=P.filter(p=>!p.archived&&qty(p)>0&&!mappedIds.has(p.id));
+  if(!items.length){box.innerHTML='<div style="font-size:22px;color:var(--t3)">Toate produsele cu stoc au deja o mapare eMAG confirmată ✓</div>';return;}
+  box.innerHTML=groupBySupplier(items,p=>p).map(g=>`<div class="sec">${esc(g.supplier)} (${g.items.length})</div>${g.items.map(p=>`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(p.name)}</strong>${p.sku?` <span style="color:var(--t3);font-family:var(--mono)">· SKU ${esc(p.sku)}</span>`:''}<div class="jp-meta">Stoc: ${fmtQty(qty(p))} buc.</div></div><button type="button" class="btn btn-sm" onclick="quickMapFromOpportunity(${p.id})">+ Adaugă mapare</button></div>`).join('')}`).join('');
+}
+// Pre-completează formularul manual existent (nu un mecanism nou de mapare) cu produsul ales din
+// cardul "De listat pe eMAG", ca să nu mai fie nevoie să-l cauți din nou.
+function quickMapFromOpportunity(productId){
+  const sel=document.getElementById('sm-platforma');if(sel)sel.value='emag';
+  setSmProduct(productId);
+  const titluInp=document.getElementById('sm-titlu');
+  titluInp?.scrollIntoView({block:'center',behavior:'smooth'});
+  titluInp?.focus();
+}
+// Discrepanțe între stocul intern și ultimul stoc citit de pe eMAG (stocExtern, populat de
+// applySyncStockUpdates). Suprastocarea (stoc intern 0, dar eMAG arată disponibil) e mai urgentă —
+// apare prima, cu roșu; vânzarea pierdută (ai stoc, dar eMAG arată indisponibil) apare a doua, amber.
+function renderSyncMismatchCard(){
+  const box=document.getElementById('sync-mismatch-list');if(!box)return;
+  if(!sbReady){box.textContent='Necesită conexiune Supabase activă.';return;}
+  const mapped=SYNCM.filter(m=>m.platforma==='emag'&&m.confirmat&&m.stocExtern!=null);
+  const withProduct=mapped.map(m=>({m,p:P.find(x=>x.id===m.produsId)})).filter(x=>x.p&&!x.p.archived);
+  if(!withProduct.length){box.innerHTML='<div style="font-size:22px;color:var(--t3)">Nicio discrepanță detectată încă — încarcă un export cu coloana Stock din „Import în masă din fișier" mai jos, pentru listări deja mapate.</div>';return;}
+  const risc=withProduct.filter(x=>qty(x.p)<=0&&x.m.stocExtern>0);
+  const pierdut=withProduct.filter(x=>qty(x.p)>0&&x.m.stocExtern<=0);
+  if(!risc.length&&!pierdut.length){box.innerHTML='<div style="font-size:22px;color:var(--t3)">Nicio discrepanță — stocul intern și cel de pe eMAG sunt aliniate ✓</div>';return;}
+  const rowHtml=x=>`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(x.p.name)}</strong><div class="jp-meta">Stoc intern: ${fmtQty(qty(x.p))} · Stoc eMAG: ${fmtQty(x.m.stocExtern)}${x.m.stocExternAt?' · actualizat '+fmtDateRo(x.m.stocExternAt.slice(0,10)):''}</div></div>${x.m.idExtern?`<span class="rsx-pnk">${esc(x.m.idExtern)}</span>`:''}</div>`;
+  let html='';
+  if(risc.length){
+    html+='<div class="sec" style="color:var(--rd)">🔴 Risc de suprastocare — stoc intern 0, eMAG arată disponibil</div>';
+    groupBySupplier(risc,x=>x.p).forEach(g=>{html+=`<div style="font-size:19px;color:var(--t3);margin:4px 0 2px">${esc(g.supplier)}</div>${g.items.map(rowHtml).join('')}`;});
+  }
+  if(pierdut.length){
+    html+=`<div class="sec" style="color:var(--am);margin-top:${risc.length?'12':'0'}px">🟡 Vânzări pierdute — ai stoc, eMAG arată indisponibil</div>`;
+    groupBySupplier(pierdut,x=>x.p).forEach(g=>{html+=`<div style="font-size:19px;color:var(--t3);margin:4px 0 2px">${esc(g.supplier)}</div>${g.items.map(rowHtml).join('')}`;});
+  }
+  box.innerHTML=html;
+}
 function renderSyncPage(){
   fillSyncProdSelect();
   renderSyncPnkDatalist();
+  renderSyncOpportunityCard();
+  renderSyncMismatchCard();
   const list=document.getElementById('sync-map-list');if(!list)return;
   if(!sbReady){list.textContent='Necesită conexiune Supabase activă.';return;}
   if(!syncMapsLoaded){list.textContent='Se încarcă…';return;}
@@ -12369,12 +12529,14 @@ function invNewProductFormHtml(idx){
     <button type="button" class="btn btn-sm" onclick="document.getElementById('invnp-file-${idx}').click()">📁 Poză</button>
     <button type="button" class="btn btn-sm" onclick="pasteInvNewProdImage(${idx})">📋 Lipește poză</button>
     <input type="text" list="inv-cat-list" placeholder="Categorie" value="${esc(it.category||'')}" oninput="setInvNewProdField(${idx},'category',this.value)" style="width:150px">
+    <input type="text" list="inv-supplier-list" placeholder="Furnizor" value="${esc(it.supplier||'')}" oninput="setInvNewProdField(${idx},'supplier',this.value)" title="Unele preset-uri de import (ex. CSV Maxy/Verk) ghicesc furnizorul din numele preset-ului, nu din conținutul fișierului — corectează aici dacă e cazul" style="width:120px">
     <input type="number" step="0.01" min="0" placeholder="Preț vânzare" value="${esc(sellVal)}" oninput="setInvNewProdField(${idx},'sellOverride',this.value)" style="width:110px">
   </div>`;
 }
 function setInvNewProdField(idx,field,val){
   const it=invParsed[idx];if(!it)return;
   if(field==='category')it.category=val;
+  else if(field==='supplier')it.supplier=val;
   else if(field==='sellOverride')it.sellOverride=val===''?null:Math.max(0,Number(val)||0);
 }
 async function applyInvNewProdImageDataUrl(idx,rawDataUrl){
@@ -12927,6 +13089,48 @@ async function handleRaportSupplierImport(ev){
   }finally{
     ev.target.value='';
   }
+}
+// Normalizare furnizori — la cerere directă: unește variantele de scriere ale aceluiași furnizor
+// ("Jumbo Romania"/"Jumbo / E-Jumbo Romania" → "Jumbo") într-un singur nume canonic. Niciodată
+// silențios — arată o previzualizare cu vechi→nou per produs, cu bifă de includere, înainte de aplicare.
+let supNormParsed=[];
+function previewSupplierNormalization(){
+  supNormParsed=P.filter(p=>!p.archived).map(p=>{
+    const canon=canonicalSupplierName(p.supplier);
+    return canon&&canon!==p.supplier?{pid:p.id,name:p.name,old:p.supplier,canon,include:true}:null;
+  }).filter(Boolean);
+  const box=document.getElementById('rpt-sup-norm-preview');if(!box)return;
+  if(!supNormParsed.length){box.innerHTML='<div style="font-size:22px;color:var(--t3);margin-top:10px">Niciun furnizor de normalizat — toate valorile recunoscute (Jumbo/Maxy/Verk) sunt deja scrise exact așa.</div>';return;}
+  renderSupplierNormPreview();
+}
+function toggleSupNormInclude(pid,checked){
+  const it=supNormParsed.find(x=>x.pid===pid);if(it)it.include=checked;
+  const n=supNormParsed.filter(x=>x.include).length;
+  const btn=document.getElementById('sup-norm-apply-btn');if(btn){btn.disabled=!n;btn.textContent=`Aplică normalizarea (${n})`;}
+}
+function renderSupplierNormPreview(){
+  const box=document.getElementById('rpt-sup-norm-preview');if(!box)return;
+  const groups={};
+  supNormParsed.forEach(it=>{(groups[it.canon]=groups[it.canon]||[]).push(it);});
+  const rows=Object.keys(groups).sort().map(canon=>`<div class="sec" style="margin-top:10px">${esc(canon)} (${groups[canon].length})</div>${groups[canon].map(it=>`<div class="inv-prev-row"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;min-width:0"><input type="checkbox" ${it.include?'checked':''} onchange="toggleSupNormInclude(${it.pid},this.checked)"><span class="inv-prev-nm" style="flex:1">${esc(it.name)}<div class="jp-meta">„${esc(it.old||'—')}" → „${esc(it.canon)}"</div></span></label></div>`).join('')}`).join('');
+  const n=supNormParsed.filter(x=>x.include).length;
+  box.innerHTML=`<div class="inv-preview" style="margin-top:10px"><div class="inv-prev-title">Normalizare furnizori — previzualizare</div>${rows}
+    <div style="display:flex;justify-content:flex-end;margin-top:10px"><button type="button" class="btn btn-sm btn-acc" id="sup-norm-apply-btn" onclick="applySupplierNormalization()" ${n?'':'disabled'}>Aplică normalizarea (${n})</button></div>
+  </div>`;
+}
+async function applySupplierNormalization(){
+  const toApply=supNormParsed.filter(x=>x.include);if(!toApply.length)return;
+  if(!confirm(`Se actualizează furnizorul la ${toApply.length} produse. Continui?`))return;
+  showLoading(`Se normalizează furnizorii la ${toApply.length} produse…`);
+  for(const it of toApply){
+    const p=P.find(x=>x.id===it.pid);if(!p)continue;
+    await saveProdToDb({...p,supplier:it.canon},p.id);
+  }
+  hideLoading();
+  supNormParsed=[];
+  document.getElementById('rpt-sup-norm-preview').innerHTML='';
+  renderTable();renderRaport();
+  toast(`Furnizor normalizat la ${toApply.length} produse ✓`);
 }
 
 /* JURNAL */
