@@ -2370,6 +2370,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:232,text:'Reparație de fond a erorii Supabase 57014, după ce ridicarea pragului de timeout (update #231) n-a rezolvat-o complet — pe conexiuni mai lente, cele ~30MB de poze tot puteau bloca încărcarea întregului inventar. Acum produsele (nume, stoc, prețuri) se încarcă separat de poze, garantat rapid — pozele se aduc după aceea, în fundal, în loturi mici, ca un lot lent să nu mai blocheze restul aplicației. Testat direct pe datele reale: cele 217 produse se încarcă acum în ~5 secunde, cu pozele completându-se progresiv în câteva secunde după',date:'2026-08-27'},
   {n:231,text:'Reparație reală, urgentă: Inventarul dădea eroare Supabase 57014 ("canceling statement due to statement timeout") la fiecare încărcare, în orice browser — nu un fluture trecător. Cauză găsită prin verificare directă: poza principală a produsului (coloana img) era salvată ca text base64 direct în baza de date, iar la 217 produse asta însemna ~30MB doar pentru poze la un simplu "select toate produsele" — peste pragul de 8 secunde pe care Supabase îl impune interogărilor. De acum, pozele noi se încarcă automat în Supabase Storage (fișier real + doar un URL în baza de date) — complet transparent, fără nimic de schimbat în felul în care adaugi o poză. Buton nou în Raport stoc, „📤 Migrează poze în Storage", mută și cele 217 poze vechi (previzualizare cu numărul exact înainte de aplicare). Necesită 2 migrări noi în Supabase: migration_fix_anon_statement_timeout.sql (reparația imediată, ridică pragul la 30s) și migration_storage_product_images.sql (creează spațiul de stocare) — până le rulezi, restul aplicației funcționează normal',date:'2026-08-27'},
   {n:230,text:'Două reparații de poziționare în Inventar, raportate cu poze. (1) Meniul de selectat furnizori la filtrare arăta bifele native ale browserului, înghesuite, și nu se închidea la click în afara lui — acum are bife proprii, cu stil consistent cu restul aplicației, spațiere mai clară între opțiuni și se închide corect la click oriunde altundeva. (2) Rândul de totaluri (BUC. CUMPĂRATE / PE DRUM / SUMA ACHIZIȚII / ÎN EURO / VÂNDUTE / SUMA VÂNZĂRI) stătea în subsolul tabelului, ascuns până derulai tot tabelul jos și apoi și la dreapta — acum e o bandă separată, imediat sub tabel, mereu vizibilă dintr-o privire, fără scroll',date:'2026-08-27'},
   {n:229,text:'Inventar — sistem nou de căutare a produsului prin poză, ca extra pe lângă căutarea după titlu, pentru când nu găsești produsul din nume. Buton 📋 lângă bara de căutare: lipești (paste) o poză din clipboard (ex. un screenshot de pe un site sau o poză făcută produsului), AI recunoaște ce e în ea, iar aplicația arată automat produsele din stoc cel mai asemănătoare ca titlu — click pe unul deschide direct fișa lui de editare',date:'2026-08-27'},
@@ -3544,10 +3545,16 @@ function renderGenStatusBadge(){
 async function load(){
   showLoading('Se conectează la Supabase…');
   try{
-    // produse
+    // produse — fără img: la produsele vechi cu poză base64 (nemigrate încă în Storage, vezi
+    // migration_storage_product_images.sql) coloana img poate fi foarte mare, iar un select(*)
+    // pe tot tabelul ajunge la zeci de MB — suficient să depășească timeout-ul sau să fie prea
+    // lent pe o conexiune slabă, blocând TOT inventarul doar din cauza pozelor. Datele care chiar
+    // contează pentru gestiune (stoc, prețuri, nume) se încarcă separat de poze, garantat rapid.
     showLoading('Se încarcă produsele…');
-    const rows=await dbGet('produse?select=*&order=id.asc');
-    P=rows.map(dbToP);
+    const prodCols='id,name,sku,internal_code,category,supplier,bought,incoming_qty,sold,min_qty,price_buy_ttc,price_buy_prev_ttc,price_buy_changed_at,tva_acq,stock_added_at,last_stock_added_qty,price_sell,price_emag,price_trendyol,price_rec,colors,sizes,material,dims,notes,description,images,created_at,updated_at,supplier_oos,supplier_oos_since,supplier_restock_eta,supplier_notify,supplier_notified,archived,archived_at,easybox_l,easybox_w,easybox_t';
+    const rows=await dbGet(`produse?select=${prodCols}&order=id.asc`);
+    P=rows.map(r=>dbToP({...r,img:''}));
+    loadProductImagesBatched();
 
     // today sales
     showLoading('Se încarcă vânzările de azi…');
@@ -3645,6 +3652,21 @@ async function load(){
   }
 }
 
+// Poze încărcate separat de restul produsului, în loturi mici — dacă un lot pică (poze base64
+// vechi, mari, neîncă migrate în Storage) sau e lent pe o conexiune slabă, doar acel lot rămâne
+// fără poze deocamdată; restul inventarului (deja încărcat de load()) nu e afectat deloc.
+async function loadProductImagesBatched(){
+  const BATCH=15;
+  for(let offset=0;offset<P.length;offset+=BATCH){
+    try{
+      const batch=await dbGet(`produse?select=id,img&order=id.asc&limit=${BATCH}&offset=${offset}`);
+      batch.forEach(r=>{const p=P.find(x=>x.id===r.id);if(p)p.img=r.img||'';});
+      renderTable();renderRaport();renderDashboard();
+    }catch(e){
+      console.warn('Lot de poze eșuat (offset '+offset+'), continui cu următorul:',e);
+    }
+  }
+}
 function loadLocalFallback(){
   try{const r=localStorage.getItem(K);if(r)P=JSON.parse(r);}catch(e){}
   if(!P.length)P=sample();
