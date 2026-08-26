@@ -83,6 +83,7 @@ header{background:var(--surf);border-bottom:1px solid var(--b1);height:64px;disp
 .dash-total-delta{font-size:22px;font-family:var(--mono);font-weight:700;margin-top:4px}
 .dash-total-delta.up{color:var(--gr)}
 .dash-total-delta.down{color:var(--rd)}
+.dash-total-alltime{font-size:19px;color:var(--t3);font-family:var(--mono);margin-top:8px;padding-top:6px;border-top:1px dashed var(--b1)}
 .dash-toggle-wrap{display:flex;gap:6px}
 .dash-toggle-btn{background:var(--surf2);border:1px solid var(--b1);border-radius:var(--r);padding:5px 12px;font-size:22px;font-weight:600;color:var(--t3);cursor:pointer}
 .dash-toggle-btn.on{background:var(--acc-light);color:var(--acc);border-color:var(--acc)}
@@ -1366,11 +1367,11 @@ th{font-weight:800!important;color:var(--t3)!important}
 
   <div class="dash-grid">
     <div class="tb">
-      <div class="tb-head"><div class="tb-title">🏆 Top produse vândute <span style="font-size:22px;font-weight:400;color:var(--t3)">— luna aceasta</span></div></div>
+      <div class="tb-head"><div class="tb-title">🏆 Top produse vândute direct <span style="font-size:22px;font-weight:400;color:var(--t3)">— luna aceasta</span></div></div>
       <div id="dash-top-products"></div>
     </div>
     <div class="tb">
-      <div class="tb-head"><div class="tb-title">🏭 Achiziții pe furnizor</div></div>
+      <div class="tb-head"><div class="tb-title">🏭 Achiziții pe furnizor <span style="font-size:22px;font-weight:400;color:var(--t3)">— de la început</span></div></div>
       <div id="dash-supplier-purch"></div>
     </div>
   </div>
@@ -2286,6 +2287,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:223,text:'Dashboard — reorganizare la cerere directă. „Vânzări totale" arăta suma de la începutul aplicației ca cifră principală; acum cifra mare e luna curentă (cu comparație față de luna trecută), iar totalul de la început apare doar ca referință, mic, dedesubt — la fel la „Achiziții". Panoul „Vânzări & achiziții" are acum 2 carduri noi: „Vânzări platforme — luna asta" (eMAG + Trendyol, până acum invizibile pe Dashboard — apar doar în Comenzi Platforme) și „Profit estimat — luna asta" (combină vânzările directe cu cele de pe platforme). „Top produse vândute" și „Achiziții pe furnizor" au acum etichete clare despre ce interval acoperă (direct/luna aceasta vs. de la început), ca să nu mai fie ambiguu ce reprezintă fiecare cifră',date:'2026-08-26'},
   {n:222,text:'Două ajustări la cerere directă, după confirmarea că fix-urile anterioare de mobil chiar funcționează: (1) controlul de zoom fusese ascuns complet pe telefon data trecută — se folosește totuși des acolo, așa că a revenit, dar mult mai compact (doar − / +, fără eticheta „100%"), ca taburile de navigare să aibă tot destul spațiu; (2) în Raport stoc, cardul de produs (poză + nume + SKU + stoc + actualizare) era suficient de înalt încât butonul „Actualizează stoc" — motivul principal al paginii pe telefon — cerea scroll ca să fie atins. Poza s-a micșorat de la 252px la 130px (cel mai mare consumator de înălțime) și restul cardului s-a strâns puțin — acum toată secțiunea de actualizat stocul încape pe primul ecran',date:'2026-08-26'},
   {n:221,text:'Raport stoc — încă un bug real de poziționare pe mobil, din aceeași cauză ca cele reparate anterior (o regulă de bază definită mai jos în fișier câștiga cascada în locul celei pentru mobil): titlul „Actualizare rapidă stoc" și eticheta „X din Y" nu se întindeau pe toată lățimea, ci stăteau centrate ca niște cutii mici, nealiniate cu restul paginii; spațiul dintre card și săgețile de navigare era și el mai mare decât trebuia, apropiind din nou săgețile de marginea ecranului. Ambele reparate acum cu aceeași soluție — scopate explicit pe pagină, ca să câștige garantat',date:'2026-08-26'},
   {n:220,text:'Bug real de mobil, raportat cu poză: pe telefon, paginile chiar nu se puteau selecta — controlul de zoom (util mai ales pe desktop) și cele două butoane de personalizare ⚙️🎨 (mai puțin folosite zi de zi) ocupau aproape tot header-ul, lăsând sub 45px pentru TOATE cele 9 taburi de navigare la un loc, fără nicio urmă vizuală că mai era ceva de derulat. Acum zoom-ul și ⚙️🎨 se ascund pe mobil (clopoțelul de notificări 🔔 rămâne), taburile au ~285px la dispoziție, iar un fade discret în dreapta arată clar că se mai poate derula. În plus, tab-ul paginii curente se derulează acum automat în vedere la navigare, ca să se vadă mereu unde ești',date:'2026-08-26'},
@@ -2678,17 +2680,48 @@ function renderBarChart(containerId,rows,mode){
 // Vânzări/achiziții agregate pe lună (cheie "AAAA-LL") — folosit pentru comparația lună curentă vs precedentă
 function monthlyTotals(){
   const sales=salesByDate(),purch=purchasesByDate(),salesM={},purchM={};
-  Object.entries(sales).forEach(([d,v])=>{const k=d.slice(0,7);salesM[k]=(salesM[k]||0)+v.value;});
-  Object.entries(purch).forEach(([d,v])=>{const k=d.slice(0,7);purchM[k]=(purchM[k]||0)+v.value;});
+  Object.entries(sales).forEach(([d,v])=>{const k=d.slice(0,7);if(!salesM[k])salesM[k]={value:0,qty:0};salesM[k].value+=v.value;salesM[k].qty+=v.qty;});
+  Object.entries(purch).forEach(([d,v])=>{const k=d.slice(0,7);if(!purchM[k])purchM[k]={value:0,qty:0};purchM[k].value+=v.value;purchM[k].qty+=v.qty;});
   return{salesM,purchM};
 }
+function currentYM(){const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;}
 function monthOverMonthDelta(){
   const{salesM,purchM}=monthlyTotals();
-  const now=new Date(),curKey=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const now=new Date(),curKey=currentYM();
   const prevD=new Date(now.getFullYear(),now.getMonth()-1,1),prevKey=`${prevD.getFullYear()}-${String(prevD.getMonth()+1).padStart(2,'0')}`;
   const pct=(cur,prev)=>prev>0?((cur-prev)/prev*100):(cur>0?100:0);
-  const curSales=salesM[curKey]||0,prevSales=salesM[prevKey]||0,curPurch=purchM[curKey]||0,prevPurch=purchM[prevKey]||0;
-  return{curSales,prevSales,pctSales:pct(curSales,prevSales),curPurch,prevPurch,pctPurch:pct(curPurch,prevPurch)};
+  const curSales=salesM[curKey]?.value||0,prevSales=salesM[prevKey]?.value||0,curPurch=purchM[curKey]?.value||0,prevPurch=purchM[prevKey]?.value||0;
+  const curSalesQty=salesM[curKey]?.qty||0,curPurchQty=purchM[curKey]?.qty||0;
+  return{curSales,prevSales,pctSales:pct(curSales,prevSales),curPurch,prevPurch,pctPurch:pct(curPurch,prevPurch),curSalesQty,curPurchQty};
+}
+// Vânzări prin eMAG/Trendyol (platforma_comenzi) — separate de JL (vânzările directe), ca să existe
+// o imagine completă a activității, nu doar canalul direct.
+function pcomAllTimeTotal(){
+  let value=0,qty=0;
+  PCOM.forEach(o=>{value+=Number(o.pretTotalCuTvaRon)||0;qty+=Number(o.cantitate)||0;});
+  return{value,qty};
+}
+function pcomThisMonthTotal(){
+  const ym=currentYM();let value=0,qty=0;
+  PCOM.forEach(o=>{if(!String(o.data||'').startsWith(ym))return;value+=Number(o.pretTotalCuTvaRon)||0;qty+=Number(o.cantitate)||0;});
+  return{value,qty};
+}
+// Profit estimat — combină vânzările directe (marjă: preț vânzare din jurnal minus costul CURENT al
+// produsului — jurnalul nu ține un istoric de cost per vânzare, e o aproximare, ca peste tot în restul
+// aplicației) cu profitul deja calculat la import pentru comenzile eMAG/Trendyol (profitEstimat).
+function estimatedProfitThisMonth(){
+  const ym=currentYM();
+  let directProfit=0;
+  JL.forEach(day=>{
+    if(!String(day.date||'').startsWith(ym))return;
+    (day.entries||[]).forEach(en=>{
+      const p=P.find(x=>x.id===en.id);
+      const cost=p?(Number(p.priceBuyTTC)||0):0;
+      directProfit+=(Number(en.qty)||0)*((Number(en.priceSell)||0)-cost);
+    });
+  });
+  const platformProfit=PCOM.reduce((s,o)=>String(o.data||'').startsWith(ym)?s+(Number(o.profitEstimat)||0):s,0);
+  return directProfit+platformProfit;
 }
 function deltaBadgeHtml(pct){
   if(!Number.isFinite(pct)||pct===0)return'<div class="dash-total-delta">— față de luna trecută</div>';
@@ -2753,14 +2786,23 @@ function renderDashSupplierPurchases(){
     <div class="dash-rank-bar-wrap"><div class="dash-rank-bar" style="width:${Math.max(3,Math.round(r.value/max*100))}%;background:var(--dash-purch)"></div></div>
   </div>`).join('');
 }
+// Cerere directă: "Vânzări totale" arăta suma de la începutul aplicației ca cifră principală — mai
+// util e opusul, luna curentă în prim-plan (cifra mare), iar totalul de la început doar ca referință,
+// mic, dedesubt. Aplicat la fel la Achiziții, plus 2 carduri noi (platforme, profit) pentru o imagine
+// completă a activității — nu doar vânzările directe, ci și eMAG/Trendyol.
 function renderDashSalesPurchases(){
   const totalsBox=document.getElementById('dash-totals');
   if(totalsBox){
     const s=allTimeSalesTotal(),p=allTimePurchasesTotal(),d=monthOverMonthDelta();
+    const pcomAll=pcomAllTimeTotal(),pcomMonth=pcomThisMonthTotal();
+    const profitMonth=estimatedProfitThisMonth();
+    const fmt=v=>v.toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2});
     totalsBox.innerHTML=`
-      <div class="dash-total-card"><div class="dash-total-lbl"><span class="dash-total-dot" style="background:var(--dash-sales)"></span>Vânzări totale</div><div class="dash-total-val">${s.value.toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})} RON</div><div class="dash-total-sub">${fmtQty(s.qty)} buc. vândute</div>${deltaBadgeHtml(d.pctSales)}</div>
-      <div class="dash-total-card"><div class="dash-total-lbl"><span class="dash-total-dot" style="background:var(--dash-purch)"></span>Achiziții totale</div><div class="dash-total-val">${p.value.toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})} RON</div><div class="dash-total-sub">${fmtQty(p.qty)} buc. cumpărate</div>${deltaBadgeHtml(d.pctPurch)}</div>
-      <div class="dash-total-card"><div class="dash-total-lbl">Azi</div><div class="dash-total-val">${fmtQty(Object.values(TS).reduce((a,v)=>a+v,0))} buc.</div><div class="dash-total-sub">vândute azi</div></div>`;
+      <div class="dash-total-card"><div class="dash-total-lbl"><span class="dash-total-dot" style="background:var(--dash-sales)"></span>Vânzări directe — luna asta</div><div class="dash-total-val">${fmt(d.curSales)} RON</div><div class="dash-total-sub">${fmtQty(d.curSalesQty)} buc. vândute</div>${deltaBadgeHtml(d.pctSales)}<div class="dash-total-alltime">De la început: ${fmt(s.value)} RON · ${fmtQty(s.qty)} buc.</div></div>
+      <div class="dash-total-card"><div class="dash-total-lbl">🛒 Vânzări platforme — luna asta</div><div class="dash-total-val">${fmt(pcomMonth.value)} RON</div><div class="dash-total-sub">${fmtQty(pcomMonth.qty)} buc. · eMAG + Trendyol</div><div class="dash-total-alltime">De la început: ${fmt(pcomAll.value)} RON · ${fmtQty(pcomAll.qty)} buc.</div></div>
+      <div class="dash-total-card"><div class="dash-total-lbl"><span class="dash-total-dot" style="background:var(--dash-purch)"></span>Achiziții — luna asta</div><div class="dash-total-val">${fmt(d.curPurch)} RON</div><div class="dash-total-sub">${fmtQty(d.curPurchQty)} buc. cumpărate</div>${deltaBadgeHtml(d.pctPurch)}<div class="dash-total-alltime">De la început: ${fmt(p.value)} RON · ${fmtQty(p.qty)} buc.</div></div>
+      <div class="dash-total-card"><div class="dash-total-lbl">💵 Profit estimat — luna asta</div><div class="dash-total-val" style="color:${profitMonth>=0?'var(--gr)':'var(--rd)'}">${fmt(profitMonth)} RON</div><div class="dash-total-sub">direct + eMAG + Trendyol</div></div>
+      <div class="dash-total-card"><div class="dash-total-lbl">Azi</div><div class="dash-total-val">${fmtQty(Object.values(TS).reduce((a,v)=>a+v,0))} buc.</div><div class="dash-total-sub">vândute azi (direct)</div></div>`;
   }
   renderBarChart('dash-chart-days',lastNDays(14));
   renderBarChart('dash-chart-months',lastNMonths(12));
