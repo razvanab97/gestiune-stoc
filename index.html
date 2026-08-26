@@ -105,6 +105,18 @@ header{background:var(--surf);border-bottom:1px solid var(--b1);height:64px;disp
 .bchart-bar{width:11px;border-radius:4px 4px 0 0;min-height:2px;cursor:default;transition:opacity .1s}
 .bchart-bar:hover{opacity:.7}
 .bchart-lbl{font-size:18px;color:var(--t3);margin-top:6px;font-family:var(--mono);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+/* Grafice tip "gogoașă" (compoziție/proporție) — perspectivă diferită de barele existente (volum în
+   timp): cât la sută din întreg reprezintă fiecare parte. conic-gradient e suficient, fără librărie. */
+.dash-donut-wrap{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.dash-donut{width:148px;height:148px;border-radius:50%;flex-shrink:0;position:relative}
+.dash-donut-hole{position:absolute;inset:22px;background:var(--surf);border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:4px}
+.dash-donut-hole-val{font-family:var(--mono);font-size:21px;font-weight:700;color:var(--t1);line-height:1.15}
+.dash-donut-hole-lbl{font-size:16px;color:var(--t3);margin-top:2px}
+.dash-donut-legend{display:flex;flex-direction:column;gap:9px;flex:1;min-width:150px}
+.dash-donut-legend-item{display:flex;align-items:center;gap:8px;font-size:21px;color:var(--t2)}
+.dash-donut-legend-dot{width:11px;height:11px;border-radius:50%;flex-shrink:0}
+.dash-donut-legend-val{margin-left:auto;font-family:var(--mono);color:var(--t3);font-size:18px;white-space:nowrap}
+.dash-donut-empty{font-size:22px;color:var(--t3);padding:20px 0}
 .dash-empty{font-size:23px;color:var(--t3);padding:1.5rem;text-align:center}
 @media(max-width:900px){.dash-grid{grid-template-columns:1fr}#dash-stats{grid-template-columns:repeat(2,1fr)}.dash-plat-grid{grid-template-columns:1fr}.dash-charts{grid-template-columns:1fr}.dash-totals{grid-template-columns:repeat(2,1fr)}}
 .stat-actions{display:flex;gap:6px;margin-top:8px}
@@ -1362,6 +1374,14 @@ th{font-weight:800!important;color:var(--t3)!important}
         <div class="dash-chart-title">Pe luni (ultimele 12)</div>
         <div id="dash-chart-months"></div>
       </div>
+      <div class="dash-chart-box">
+        <div class="dash-chart-title">🥧 Compoziție vânzări — luna asta</div>
+        <div id="dash-chart-composition"></div>
+      </div>
+      <div class="dash-chart-box">
+        <div class="dash-chart-title">🥧 Valoare stoc pe categorie</div>
+        <div id="dash-chart-category"></div>
+      </div>
     </div>
   </div>
 
@@ -2287,6 +2307,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:224,text:'Dashboard — 3 completări la cerere directă. (1) Rândul de cadrane de sus are acum 5 în plus: Categorii, Furnizori, Valoare stoc la preț de vânzare, În tranzit și „De comandat — luna asta" (click → deschide direct lista); pe drum, reparat și un bug real neraportat — „Epuizate la furnizor" nu mai naviga nicăieri la click, din cauza unei etichete de tab vechi ("Inventar") rămase în cod după ce pagina a fost redenumită „Vânzări". (2) Cadranul „Azi" arăta doar bucăți — acum arată și suma vânzărilor de azi în RON. (3) Două grafice noi tip „gogoașă" lângă cele existente — „Compoziție vânzări" (Direct vs eMAG vs Trendyol, ca proporție din total) și „Valoare stoc pe categorie" — o perspectivă diferită față de barele de volum-în-timp deja existente',date:'2026-08-26'},
   {n:223,text:'Dashboard — reorganizare la cerere directă. „Vânzări totale" arăta suma de la începutul aplicației ca cifră principală; acum cifra mare e luna curentă (cu comparație față de luna trecută), iar totalul de la început apare doar ca referință, mic, dedesubt — la fel la „Achiziții". Panoul „Vânzări & achiziții" are acum 2 carduri noi: „Vânzări platforme — luna asta" (eMAG + Trendyol, până acum invizibile pe Dashboard — apar doar în Comenzi Platforme) și „Profit estimat — luna asta" (combină vânzările directe cu cele de pe platforme). „Top produse vândute" și „Achiziții pe furnizor" au acum etichete clare despre ce interval acoperă (direct/luna aceasta vs. de la început), ca să nu mai fie ambiguu ce reprezintă fiecare cifră',date:'2026-08-26'},
   {n:222,text:'Două ajustări la cerere directă, după confirmarea că fix-urile anterioare de mobil chiar funcționează: (1) controlul de zoom fusese ascuns complet pe telefon data trecută — se folosește totuși des acolo, așa că a revenit, dar mult mai compact (doar − / +, fără eticheta „100%"), ca taburile de navigare să aibă tot destul spațiu; (2) în Raport stoc, cardul de produs (poză + nume + SKU + stoc + actualizare) era suficient de înalt încât butonul „Actualizează stoc" — motivul principal al paginii pe telefon — cerea scroll ca să fie atins. Poza s-a micșorat de la 252px la 130px (cel mai mare consumator de înălțime) și restul cardului s-a strâns puțin — acum toată secțiunea de actualizat stocul încape pe primul ecran',date:'2026-08-26'},
   {n:221,text:'Raport stoc — încă un bug real de poziționare pe mobil, din aceeași cauză ca cele reparate anterior (o regulă de bază definită mai jos în fișier câștiga cascada în locul celei pentru mobil): titlul „Actualizare rapidă stoc" și eticheta „X din Y" nu se întindeau pe toată lățimea, ci stăteau centrate ca niște cutii mici, nealiniate cu restul paginii; spațiul dintre card și săgețile de navigare era și el mai mare decât trebuia, apropiind din nou săgețile de marginea ecranului. Ambele reparate acum cu aceeași soluție — scopate explicit pe pagină, ca să câștige garantat',date:'2026-08-26'},
@@ -2581,15 +2602,28 @@ function renderDashboard(){
   const activeP=P.filter(p=>!p.archived);
   const tot=activeP.length,lowC=activeP.filter(p=>st(p)==='low').length,outC=activeP.filter(p=>st(p)==='out').length,oosC=activeP.filter(p=>p.supplierOOS).length;
   const val=activeP.reduce((a,p)=>a+(qty(p)*(p.priceBuyTTC||0)),0);
+  const valSell=activeP.reduce((a,p)=>a+(qty(p)*(p.priceSell||0)),0);
   const azi=Object.values(TS).reduce((a,v)=>a+v,0);
+  const catCount=new Set(activeP.map(p=>p.category).filter(Boolean)).size;
+  const supCount=new Set(activeP.map(p=>p.supplier).filter(Boolean)).size;
+  const incomingTotal=activeP.reduce((a,p)=>a+(Number(p.incomingQty)||0),0);
+  const reorderCount=REORDER.filter(r=>(r.addedAt||'').slice(0,7)===currentYM()).length;
   const dashStats=document.getElementById('dash-stats');
+  // Cerere directă: mai multe cadrane sus, ca imaginea de ansamblu să fie mai completă — pe lângă
+  // sănătatea stocului (existent), acum și lățimea catalogului (categorii/furnizori), fluxul de intrări
+  // (în tranzit) și un cadran acționabil spre lista nou adăugată "Produse de comandat".
   if(dashStats)dashStats.innerHTML=`
     <div class="stat"><div class="stat-l">Produse</div><div class="stat-v">${tot}</div></div>
     <div class="stat"><div class="stat-l">Valoare stoc</div><div class="stat-v" style="font-size:25px">${val.toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})} RON</div></div>
     <div class="stat"><div class="stat-l">Vândute azi</div><div class="stat-v g">${azi}</div></div>
     <div class="stat"><div class="stat-l">Stoc scăzut</div><div class="stat-v w">${lowC}</div></div>
     <div class="stat"><div class="stat-l">Epuizate</div><div class="stat-v d">${outC}</div></div>
-    <div class="stat" style="cursor:pointer" onclick="goDashToSupplierOOS()" title="Vezi produsele epuizate la furnizor"><div class="stat-l">🚫 Epuizate la furnizor</div><div class="stat-v" style="color:var(--or)">${oosC}</div></div>`;
+    <div class="stat" style="cursor:pointer" onclick="goDashToSupplierOOS()" title="Vezi produsele epuizate la furnizor"><div class="stat-l">🚫 Epuizate la furnizor</div><div class="stat-v" style="color:var(--or)">${oosC}</div></div>
+    <div class="stat"><div class="stat-l">Categorii</div><div class="stat-v">${catCount}</div></div>
+    <div class="stat"><div class="stat-l">Furnizori</div><div class="stat-v">${supCount}</div></div>
+    <div class="stat"><div class="stat-l">Valoare stoc (vânzare)</div><div class="stat-v" style="font-size:25px">${valSell.toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2})} RON</div></div>
+    <div class="stat"><div class="stat-l">În tranzit</div><div class="stat-v" style="color:var(--or)">${fmtQty(incomingTotal)}</div></div>
+    <div class="stat" style="cursor:pointer" onclick="goDashToReorder()" title="Vezi lista de comandat"><div class="stat-l">🛒 De comandat — luna asta</div><div class="stat-v" style="color:var(--bl)">${reorderCount}</div></div>`;
 
   const platGrid=document.getElementById('dash-plat-grid');
   if(platGrid){
@@ -2796,18 +2830,64 @@ function renderDashSalesPurchases(){
     const s=allTimeSalesTotal(),p=allTimePurchasesTotal(),d=monthOverMonthDelta();
     const pcomAll=pcomAllTimeTotal(),pcomMonth=pcomThisMonthTotal();
     const profitMonth=estimatedProfitThisMonth();
+    // Cerere directă: cadranul "Azi" arăta doar bucăți, fără suma în RON — salesByDate() ține deja
+    // valoarea per zi (din Jurnal, actualizat live la fiecare vânzare, nu doar la închiderea zilei).
+    const todaySales=salesByDate()[td()]||{qty:0,value:0};
     const fmt=v=>v.toLocaleString('ro-RO',{minimumFractionDigits:2,maximumFractionDigits:2});
     totalsBox.innerHTML=`
       <div class="dash-total-card"><div class="dash-total-lbl"><span class="dash-total-dot" style="background:var(--dash-sales)"></span>Vânzări directe — luna asta</div><div class="dash-total-val">${fmt(d.curSales)} RON</div><div class="dash-total-sub">${fmtQty(d.curSalesQty)} buc. vândute</div>${deltaBadgeHtml(d.pctSales)}<div class="dash-total-alltime">De la început: ${fmt(s.value)} RON · ${fmtQty(s.qty)} buc.</div></div>
       <div class="dash-total-card"><div class="dash-total-lbl">🛒 Vânzări platforme — luna asta</div><div class="dash-total-val">${fmt(pcomMonth.value)} RON</div><div class="dash-total-sub">${fmtQty(pcomMonth.qty)} buc. · eMAG + Trendyol</div><div class="dash-total-alltime">De la început: ${fmt(pcomAll.value)} RON · ${fmtQty(pcomAll.qty)} buc.</div></div>
       <div class="dash-total-card"><div class="dash-total-lbl"><span class="dash-total-dot" style="background:var(--dash-purch)"></span>Achiziții — luna asta</div><div class="dash-total-val">${fmt(d.curPurch)} RON</div><div class="dash-total-sub">${fmtQty(d.curPurchQty)} buc. cumpărate</div>${deltaBadgeHtml(d.pctPurch)}<div class="dash-total-alltime">De la început: ${fmt(p.value)} RON · ${fmtQty(p.qty)} buc.</div></div>
       <div class="dash-total-card"><div class="dash-total-lbl">💵 Profit estimat — luna asta</div><div class="dash-total-val" style="color:${profitMonth>=0?'var(--gr)':'var(--rd)'}">${fmt(profitMonth)} RON</div><div class="dash-total-sub">direct + eMAG + Trendyol</div></div>
-      <div class="dash-total-card"><div class="dash-total-lbl">Azi</div><div class="dash-total-val">${fmtQty(Object.values(TS).reduce((a,v)=>a+v,0))} buc.</div><div class="dash-total-sub">vândute azi (direct)</div></div>`;
+      <div class="dash-total-card"><div class="dash-total-lbl">📅 Azi</div><div class="dash-total-val">${fmt(todaySales.value)} RON</div><div class="dash-total-sub">${fmtQty(todaySales.qty)} buc. vândute (direct)</div></div>`;
   }
   renderBarChart('dash-chart-days',lastNDays(14));
   renderBarChart('dash-chart-months',lastNMonths(12));
+  renderDashSalesComposition();
+  renderDashCategoryValue();
   renderDashTopProducts();
   renderDashSupplierPurchases();
+}
+// Grafice "gogoașă" — cerere directă: perspectivă diferită de barele de mai sus (volum pe zi/lună),
+// aici proporția fiecărei părți din întreg. Direct/eMAG/Trendyol pentru vânzări, categorii pentru stoc.
+function renderDashSalesComposition(){
+  const box=document.getElementById('dash-chart-composition');if(!box)return;
+  const ym=currentYM();
+  const emag=PCOM.reduce((s,o)=>String(o.data||'').startsWith(ym)&&o.platforma==='emag'?s+(Number(o.pretTotalCuTvaRon)||0):s,0);
+  const trendyol=PCOM.reduce((s,o)=>String(o.data||'').startsWith(ym)&&o.platforma==='trendyol'?s+(Number(o.pretTotalCuTvaRon)||0):s,0);
+  const direct=monthOverMonthDelta().curSales;
+  const total=direct+emag+trendyol;
+  if(total<=0){box.innerHTML='<div class="dash-donut-empty">Nicio vânzare luna aceasta încă.</div>';return;}
+  const segs=[{lbl:'Direct',val:direct,color:'var(--dash-sales)'},{lbl:'eMAG',val:emag,color:'var(--bl)'},{lbl:'Trendyol',val:trendyol,color:'var(--or)'}].filter(s=>s.val>0);
+  box.innerHTML=dashDonutHtml(segs,total,total.toLocaleString('ro-RO',{maximumFractionDigits:0}),'RON total');
+}
+function renderDashCategoryValue(){
+  const box=document.getElementById('dash-chart-category');if(!box)return;
+  const map={};
+  P.filter(p=>!p.archived).forEach(p=>{
+    const v=qty(p)*(p.priceBuyTTC||0);if(v<=0)return;
+    const cat=p.category||'Fără categorie';
+    map[cat]=(map[cat]||0)+v;
+  });
+  const rows=Object.entries(map).map(([cat,val])=>({lbl:cat,val})).sort((a,b)=>b.val-a.val);
+  const total=rows.reduce((s,r)=>s+r.val,0);
+  if(total<=0){box.innerHTML='<div class="dash-donut-empty">Niciun stoc cu valoare încă.</div>';return;}
+  const top=rows.slice(0,5);
+  const rest=rows.slice(5);
+  if(rest.length)top.push({lbl:`Altele (${rest.length})`,val:rest.reduce((s,r)=>s+r.val,0)});
+  const palette=['var(--dash-sales)','var(--bl)','var(--or)','var(--gr)','var(--rd)','var(--t3)'];
+  top.forEach((r,i)=>r.color=palette[i%palette.length]);
+  box.innerHTML=dashDonutHtml(top,total,total.toLocaleString('ro-RO',{maximumFractionDigits:0}),'RON stoc');
+}
+// segs: [{lbl,val,color}], deja filtrate de valori 0 — construiește conic-gradient + legendă din ele
+function dashDonutHtml(segs,total,holeVal,holeLbl){
+  let acc=0;
+  const stops=segs.map(s=>{
+    const from=acc/total*100;acc+=s.val;const to=acc/total*100;
+    return`${s.color} ${from}% ${to}%`;
+  }).join(',');
+  const legend=segs.map(s=>`<div class="dash-donut-legend-item"><span class="dash-donut-legend-dot" style="background:${s.color}"></span>${esc(s.lbl)}<span class="dash-donut-legend-val">${Math.round(s.val/total*100)}% · ${s.val.toLocaleString('ro-RO',{maximumFractionDigits:0})} RON</span></div>`).join('');
+  return`<div class="dash-donut-wrap"><div class="dash-donut" style="background:conic-gradient(${stops})"><div class="dash-donut-hole"><div class="dash-donut-hole-val">${esc(holeVal)}</div><div class="dash-donut-hole-lbl">${esc(holeLbl)}</div></div></div><div class="dash-donut-legend">${legend}</div></div>`;
 }
 function renderDashActivity(){
   const box=document.getElementById('dash-activity-list');if(!box)return;
@@ -2818,10 +2898,18 @@ function goDashToJurnal(){
   if(btn)goPage('jurnal',btn);
 }
 function goDashToSupplierOOS(){
-  const btn=[...document.querySelectorAll('.h-tab')].find(b=>b.textContent.includes('Inventar'));
+  // Bug real găsit din greșeală (nu raportat): tab-ul se numea "Inventar" când a fost scris asta,
+  // dar eticheta a devenit între timp "Vânzări" — căutarea după text nu mai găsea nimic, click-ul
+  // nu naviga nicăieri. data-page nu depinde de eticheta afișată, deci nu se poate desincroniza la fel.
+  const btn=document.querySelector('.h-tab[data-page="stoc"]');
   if(btn)goPage('stoc',btn);
   const fs=document.getElementById('fs');
   if(fs){fs.value='supplier_oos';renderTable();}
+}
+function goDashToReorder(){
+  const btn=document.querySelector('.h-tab[data-page="pcom"]');
+  if(btn)goPage('pcom',btn);
+  pcomMode('reorder');
 }
 function toggleNotifPanel(ev){
   ev.stopPropagation();
