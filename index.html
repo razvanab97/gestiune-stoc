@@ -2374,6 +2374,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:234,text:'Pagină nouă, separată, pentru Staff — împachetare comenzi, gândită pentru tabletă: link propriu (/staff), fără PIN, care nu afectează restul aplicației. Arată o comandă eMAG/Trendyol pe tot ecranul (poză mare, nume, cantitate), staff-ul apasă „📦 Împachetat" sau „❌ Stoc zero" per produs, iar la finalizarea completă a comenzii trece automat la următoarea nefinalizată din coadă (cronologic). Căutare rapidă după nr. comandă/client/produs pentru când ai un AWB în mână, plus butoane manuale Înapoi/Înainte. „Stoc zero" doar semnalează, nu modifică stocul produsului — e o discrepanță de verificat, nu de corectat automat. Comenzile Platforme din aplicația principală arată acum și eticheta „📦 Împachetat"/„❌ Stoc zero" pe rândurile deja procesate de staff. Necesită migration_platforma_comenzi_packing.sql în Supabase',date:'2026-08-27'},
   {n:233,text:'Căutarea prin poză din Inventar (update #229) — ajustare la cerere directă, după primul test real. Rezultatul recunoscut apărea prea mic și înghesuit, iar click pe el sărea direct în editarea produsului. Acum potrivirea apare mult mai mare și clară (poză și text vizibil, nu înghesuite), iar click pe ea doar selectează produsul și îl arată în lista de mai jos — fără să deschidă nimic automat, exact cât e nevoie',date:'2026-08-27'},
   {n:232,text:'Reparație de fond a erorii Supabase 57014, după ce ridicarea pragului de timeout (update #231) n-a rezolvat-o complet — pe conexiuni mai lente, cele ~30MB de poze tot puteau bloca încărcarea întregului inventar. Acum produsele (nume, stoc, prețuri) se încarcă separat de poze, garantat rapid — pozele se aduc după aceea, în fundal, în loturi mici, ca un lot lent să nu mai blocheze restul aplicației. Testat direct pe datele reale: cele 217 produse se încarcă acum în ~5 secunde, cu pozele completându-se progresiv în câteva secunde după',date:'2026-08-27'},
   {n:231,text:'Reparație reală, urgentă: Inventarul dădea eroare Supabase 57014 ("canceling statement due to statement timeout") la fiecare încărcare, în orice browser — nu un fluture trecător. Cauză găsită prin verificare directă: poza principală a produsului (coloana img) era salvată ca text base64 direct în baza de date, iar la 217 produse asta însemna ~30MB doar pentru poze la un simplu "select toate produsele" — peste pragul de 8 secunde pe care Supabase îl impune interogărilor. De acum, pozele noi se încarcă automat în Supabase Storage (fișier real + doar un URL în baza de date) — complet transparent, fără nimic de schimbat în felul în care adaugi o poză. Buton nou în Raport stoc, „📤 Migrează poze în Storage", mută și cele 217 poze vechi (previzualizare cu numărul exact înainte de aplicare). Necesită 2 migrări noi în Supabase: migration_fix_anon_statement_timeout.sql (reparația imediată, ridică pragul la 30s) și migration_storage_product_images.sql (creează spațiul de stocare) — până le rulezi, restul aplicației funcționează normal',date:'2026-08-27'},
@@ -3343,7 +3344,8 @@ function dbToPcom(r){
     cantitate:Number(r.cantitate)||0,pretFaraTva:Number(r.pret_fara_tva)||0,pretTotalCuTva:Number(r.pret_total_cu_tva)||0,
     moneda:r.moneda||'RON',pretTotalCuTvaRon:Number(r.pret_total_cu_tva_ron)||0,
     profitEstimat:Number(r.profit_estimat)||0,marjaEstimata:Number(r.marja_estimata)||0,
-    importBatchId:r.import_batch_id||'',createdAt:r.created_at};
+    importBatchId:r.import_batch_id||'',createdAt:r.created_at,
+    impachetat:!!r.impachetat,impachetatAt:r.impachetat_at||'',faraStoc:!!r.fara_stoc,faraStocAt:r.fara_stoc_at||''};
 }
 function pcomToDb(o){
   return{platforma:o.platforma,data:o.data,comanda_id:o.comandaId||null,pnk:o.pnk||null,tara:o.tara||null,cod_produs:o.codProdus||null,
@@ -11667,8 +11669,9 @@ function renderPcomProfitOrders(rows){
   if(!sorted.length){host.innerHTML='<div class="empty-row">Nicio comandă importată încă</div>';return;}
   host.innerHTML=sorted.map(o=>{
     const plLabel=o.platforma==='emag'?'eMAG':'Trendyol';
+    const packBadge=o.impachetat?'<span class="bdg bdg-ok">📦 Împachetat</span>':o.faraStoc?'<span class="bdg bdg-out">❌ Stoc zero</span>':'';
     return`<div class="pcom-batch-row">
-      <div class="pcom-batch-info"><b>${esc(plLabel)}</b> · ${esc(o.data)} · ${esc(o.produsNume||o.titluExtern)} · ${o.cantitate}× · ${o.pretTotalCuTvaRon.toFixed(2)} RON${o.comandaId?' · #'+esc(o.comandaId):''}${o.clientNume?' · 👤 '+esc(o.clientNume):''}</div>
+      <div class="pcom-batch-info"><b>${esc(plLabel)}</b> · ${esc(o.data)} · ${esc(o.produsNume||o.titluExtern)} · ${o.cantitate}× · ${o.pretTotalCuTvaRon.toFixed(2)} RON${o.comandaId?' · #'+esc(o.comandaId):''}${o.clientNume?' · 👤 '+esc(o.clientNume):''}${packBadge?' · '+packBadge:''}</div>
       <button type="button" class="btn btn-sm" style="color:var(--rd);border-color:var(--rd);flex-shrink:0" onclick="deletePcomOrder(${o.id})">🗑️ Șterge</button>
     </div>`;
   }).join('');
