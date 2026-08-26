@@ -232,6 +232,10 @@ input:focus,select:focus,textarea:focus{border-color:var(--acc);box-shadow:0 0 0
 #search{width:100%;padding-right:40px}
 .inv-search-img-btn{position:absolute;right:5px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:21px;padding:5px 7px;border-radius:6px;color:var(--t3);line-height:1;transition:all .15s}
 .inv-search-img-btn:hover{background:var(--surf2);color:var(--acc)}
+#inv-search-pickdrop{width:440px}
+#inv-search-pickdrop .smi-pick-th,#inv-search-pickdrop .smi-pick-th-ph{width:76px;height:76px;border-radius:8px;font-size:36px}
+#inv-search-pickdrop .smi-pick-item{padding:12px 14px;gap:14px}
+#inv-search-pickdrop .smi-pick-item-nm{font-size:26px;white-space:normal}
 .btn{font-family:var(--font);font-size:25px;font-weight:500;padding:10px 18px;border-radius:var(--r);cursor:pointer;border:1px solid var(--b2);background:var(--surf);color:var(--t1);transition:all .15s;white-space:nowrap}
 .btn:hover{background:var(--surf2);border-color:var(--b3)}
 .btn-acc{background:var(--acc);color:var(--acc-fg);border-color:var(--acc)}
@@ -2370,6 +2374,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:233,text:'Căutarea prin poză din Inventar (update #229) — ajustare la cerere directă, după primul test real. Rezultatul recunoscut apărea prea mic și înghesuit, iar click pe el sărea direct în editarea produsului. Acum potrivirea apare mult mai mare și clară (poză și text vizibil, nu înghesuite), iar click pe ea doar selectează produsul și îl arată în lista de mai jos — fără să deschidă nimic automat, exact cât e nevoie',date:'2026-08-27'},
   {n:232,text:'Reparație de fond a erorii Supabase 57014, după ce ridicarea pragului de timeout (update #231) n-a rezolvat-o complet — pe conexiuni mai lente, cele ~30MB de poze tot puteau bloca încărcarea întregului inventar. Acum produsele (nume, stoc, prețuri) se încarcă separat de poze, garantat rapid — pozele se aduc după aceea, în fundal, în loturi mici, ca un lot lent să nu mai blocheze restul aplicației. Testat direct pe datele reale: cele 217 produse se încarcă acum în ~5 secunde, cu pozele completându-se progresiv în câteva secunde după',date:'2026-08-27'},
   {n:231,text:'Reparație reală, urgentă: Inventarul dădea eroare Supabase 57014 ("canceling statement due to statement timeout") la fiecare încărcare, în orice browser — nu un fluture trecător. Cauză găsită prin verificare directă: poza principală a produsului (coloana img) era salvată ca text base64 direct în baza de date, iar la 217 produse asta însemna ~30MB doar pentru poze la un simplu "select toate produsele" — peste pragul de 8 secunde pe care Supabase îl impune interogărilor. De acum, pozele noi se încarcă automat în Supabase Storage (fișier real + doar un URL în baza de date) — complet transparent, fără nimic de schimbat în felul în care adaugi o poză. Buton nou în Raport stoc, „📤 Migrează poze în Storage", mută și cele 217 poze vechi (previzualizare cu numărul exact înainte de aplicare). Necesită 2 migrări noi în Supabase: migration_fix_anon_statement_timeout.sql (reparația imediată, ridică pragul la 30s) și migration_storage_product_images.sql (creează spațiul de stocare) — până le rulezi, restul aplicației funcționează normal',date:'2026-08-27'},
   {n:230,text:'Două reparații de poziționare în Inventar, raportate cu poze. (1) Meniul de selectat furnizori la filtrare arăta bifele native ale browserului, înghesuite, și nu se închidea la click în afara lui — acum are bife proprii, cu stil consistent cu restul aplicației, spațiere mai clară între opțiuni și se închide corect la click oriunde altundeva. (2) Rândul de totaluri (BUC. CUMPĂRATE / PE DRUM / SUMA ACHIZIȚII / ÎN EURO / VÂNDUTE / SUMA VÂNZĂRI) stătea în subsolul tabelului, ascuns până derulai tot tabelul jos și apoi și la dreapta — acum e o bandă separată, imediat sub tabel, mereu vizibilă dintr-o privire, fără scroll',date:'2026-08-27'},
@@ -10474,6 +10479,12 @@ async function pasteInvSearchImage(){
     toast('Eroare la citirea clipboard-ului: '+(e.message||e)+' — sau încearcă căutarea cu text','err');
   }
 }
+function selectInvSearchImageMatch(id){
+  const p=P.find(x=>x.id===id);if(!p)return;
+  const searchInp=document.getElementById('search');
+  if(searchInp){searchInp.value=p.sku||p.name;renderTable();}
+  document.getElementById('inv-search-pickdrop')?.classList.remove('on');
+}
 function renderInvSearchImageResults(products){
   const drop=document.getElementById('inv-search-pickdrop');
   const list=document.getElementById('inv-search-pick-list');
@@ -10481,14 +10492,13 @@ function renderInvSearchImageResults(products){
   if(!products.length){drop.classList.remove('on');list.innerHTML='';return;}
   list.innerHTML=products.map(p=>{
     const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'pick')}>`:`<div class="smi-pick-th-ph">📦</div>`;
-    return`<div class="smi-pick-item" onclick="openModal(${p.id});document.getElementById('inv-search-pickdrop').classList.remove('on')">${th}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</span></div>`;
+    return`<div class="smi-pick-item" onclick="selectInvSearchImageMatch(${p.id})">${th}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</span></div>`;
   }).join('');
   const btn=document.getElementById('search');
   if(btn){
     const r=btn.getBoundingClientRect();
     drop.style.left=zoomAdjust(r.left)+'px';
     drop.style.top=zoomAdjust(r.bottom+4)+'px';
-    drop.style.width=Math.max(260,r.width)+'px';
   }
   drop.classList.add('on');
 }
