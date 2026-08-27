@@ -49,6 +49,7 @@ button{font-family:var(--font);cursor:pointer}
 .ord-pl{font-weight:700;padding:4px 12px;border-radius:999px;font-size:16px}
 .ord-pl.emag{background:var(--acc-light);color:var(--acc)}
 .ord-pl.trendyol{background:var(--or-bg);color:var(--or)}
+.ord-pl.direct{background:var(--surf2);color:var(--t2)}
 .ord-num{font-family:var(--mono);font-weight:700;font-size:20px}
 .ord-client{color:var(--t2);font-size:18px}
 .ord-date{color:var(--t3);font-size:16px;margin-left:auto}
@@ -114,7 +115,12 @@ async function sb(method,path,body){
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function imgSrc(url){if(!url)return'';if(url.startsWith('data:'))return url;if(url.startsWith(SUPA_URL))return url;if(url.startsWith('http'))return'/api/img-proxy?url='+encodeURIComponent(url);return url;}
 
-let PRODUSE=[],COMENZI=[],ORDERS=[],curKey=null,showFinalized=false,activeImg={};
+// Doar comenzile/vânzările de la această dată încolo intră în coadă — comenzile mai vechi decât
+// lansarea paginii de Staff rămân în istoric (index.html), dar nu mai apar aici (cerință directă:
+// "de azi trebuie sa inceapa"). NU se recalculează automat la fiecare zi — e un prag fix.
+const CUTOFF_DATE='2026-08-27';
+
+let PRODUSE=[],COMENZI=[],JURNAL=[],ORDERS=[],curKey=null,showFinalized=false,activeImg={};
 
 function findProdus(id){return id?PRODUSE.find(p=>p.id===id):null;}
 
@@ -122,11 +128,32 @@ function computeOrders(){
   const groups={};
   COMENZI.forEach(o=>{
     const key=o.comanda_id||('_row'+o.id);
-    if(!groups[key])groups[key]={key,comandaId:o.comanda_id||'',platforma:o.platforma,clientNume:o.client_nume||'',data:o.data,lines:[]};
+    if(!groups[key])groups[key]={key,comandaId:o.comanda_id||'',platforma:o.platforma,clientNume:o.client_nume||'',data:o.data,sortAt:o.created_at||o.data,lines:[]};
+    o._table='platforma_comenzi';
     groups[key].lines.push(o);
-    if(String(o.data)<String(groups[key].data))groups[key].data=o.data;
+    if(String(o.created_at||o.data)<String(groups[key].sortAt))groups[key].sortAt=o.created_at||o.data;
   });
-  ORDERS=Object.values(groups).sort((a,b)=>String(a.data).localeCompare(String(b.data))||a.key.localeCompare(b.key));
+
+  // Comenzile eMAG/Trendyol se scriu automat și în Jurnal la import (ca să existe evidența zilnică
+  // corectă acolo) — ca să nu apară de 2 ori în coadă, scădem din fiecare rând de Jurnal cantitatea
+  // deja acoperită de o comandă de platformă pentru același produs, în aceeași zi. Ce rămâne peste
+  // (dacă rămâne) chiar a fost o vânzare directă.
+  const coveredByPlatform={};
+  COMENZI.forEach(o=>{
+    const day=String(o.created_at||o.data).slice(0,10);
+    const k=o.produs_id+'|'+day;
+    coveredByPlatform[k]=(coveredByPlatform[k]||0)+(Number(o.cantitate)||0);
+  });
+  JURNAL.forEach(j=>{
+    const day=String(j.data).slice(0,10);
+    const k=j.product_id+'|'+day;
+    const remaining=(Number(j.qty)||0)-(coveredByPlatform[k]||0);
+    if(remaining<=0)return;
+    const line={id:j.id,produs_id:j.product_id,produs_nume:j.product_name,cantitate:remaining,pnk:'',impachetat:!!j.impachetat,fara_stoc:!!j.fara_stoc,_table:'jurnal'};
+    groups['j'+j.id]={key:'j'+j.id,comandaId:'',platforma:'direct',clientNume:'',data:j.data,sortAt:j.created_at||j.data,lines:[line]};
+  });
+
+  ORDERS=Object.values(groups).sort((a,b)=>String(a.sortAt).localeCompare(String(b.sortAt))||a.key.localeCompare(b.key));
   ORDERS.forEach(g=>{g.finalized=g.lines.every(l=>l.impachetat||l.fara_stoc);});
 }
 function visibleOrders(){return showFinalized?ORDERS:ORDERS.filter(o=>!o.finalized);}
@@ -149,6 +176,11 @@ function renderProgress(){
   document.getElementById('progress-txt').textContent=remaining?`${remaining} comenzi rămase de împachetat`:'Toate comenzile sunt împachetate ✓';
 }
 
+// id-urile din platforma_comenzi și din jurnal sunt secvențe separate — pot coincide (ex. ambele
+// au un rând cu id=5) — orice căutare/cheie pe un rând de linie folosește tabelul+id, nu doar id.
+function lineKey(l){return l._table+'_'+l.id;}
+function findLineByKey(lk){return ORDERS.flatMap(o=>o.lines).find(l=>lineKey(l)===lk)||null;}
+
 function lineImgList(l){
   const p=findProdus(l.produs_id);
   if(!p)return[];
@@ -169,15 +201,16 @@ function renderMain(){
     return;
   }
   const idxInVis=vis.findIndex(o=>o.key===ord.key);
-  const plLabel=ord.platforma==='emag'?'eMAG':'Trendyol';
+  const plLabel=ord.platforma==='emag'?'eMAG':ord.platforma==='trendyol'?'Trendyol':'Vânzare directă';
   const linesHtml=ord.lines.map((l,li)=>{
+    const lk=lineKey(l);
     const p=findProdus(l.produs_id);
     const imgs=lineImgList(l);
-    const activeUrl=activeImg[l.id]||imgs[0]||'';
+    const activeUrl=activeImg[lk]||imgs[0]||'';
     const imgHtml=activeUrl
-      ?`<img class="line-img" src="${esc(imgSrc(activeUrl))}" onerror="this.style.display='none'" onclick="cycleLineImg(${l.id})">`
+      ?`<img class="line-img" src="${esc(imgSrc(activeUrl))}" onerror="this.style.display='none'" onclick="cycleLineImg('${lk}')">`
       :`<div class="line-img-ph">📦</div>`;
-    const thumbsHtml=imgs.length>1?`<div class="line-thumbs">${imgs.map(u=>`<img class="line-thumb ${u===activeUrl?'active':''}" src="${esc(imgSrc(u))}" onclick="activeImg[${l.id}]='${esc(u)}';renderMain()">`).join('')}</div>`:'';
+    const thumbsHtml=imgs.length>1?`<div class="line-thumbs">${imgs.map(u=>`<img class="line-thumb ${u===activeUrl?'active':''}" src="${esc(imgSrc(u))}" onclick="activeImg['${lk}']='${esc(u)}';renderMain()">`).join('')}</div>`:'';
     const state=l.impachetat?'done':(l.fara_stoc?'oos':'');
     return`<div class="line ${state}">
       <div class="line-img-wrap">${imgHtml}${thumbsHtml}</div>
@@ -186,8 +219,8 @@ function renderMain(){
         <div class="line-meta">${p&&p.sku?'SKU '+esc(p.sku)+' · ':''}${l.pnk?'PNK '+esc(l.pnk):''}</div>
         <div class="line-qty">${l.cantitate}×</div>
         <div class="line-actions">
-          <button class="line-btn pack ${l.impachetat?'active':''}" onclick="markLine(${l.id},'impachetat')">📦 Împachetat</button>
-          <button class="line-btn oosbtn ${l.fara_stoc?'active':''}" onclick="markLine(${l.id},'fara_stoc')">❌ Stoc zero</button>
+          <button class="line-btn pack ${l.impachetat?'active':''}" onclick="markLine('${lk}','impachetat')">📦 Împachetat</button>
+          <button class="line-btn oosbtn ${l.fara_stoc?'active':''}" onclick="markLine('${lk}','fara_stoc')">❌ Stoc zero</button>
         </div>
       </div>
     </div>`;
@@ -195,7 +228,7 @@ function renderMain(){
   host.innerHTML=`<div class="card ${ord.finalized?'finalized':''}">
     <div class="ord-hdr">
       <span class="ord-pl ${ord.platforma}">${plLabel}</span>
-      <span class="ord-num">#${esc(ord.comandaId||'—')}</span>
+      ${ord.comandaId?`<span class="ord-num">#${esc(ord.comandaId)}</span>`:''}
       ${ord.clientNume?`<span class="ord-client">👤 ${esc(ord.clientNume)}</span>`:''}
       <span class="ord-date">${esc(ord.data||'')}</span>
       ${ord.finalized?'<span class="ord-finalized-badge">✓ Finalizată</span>':''}
@@ -208,25 +241,26 @@ function renderMain(){
   </div>`;
 }
 
-function cycleLineImg(lineId){
-  const imgs=lineImgList(ORDERS.flatMap(o=>o.lines).find(l=>l.id===lineId)||{});
+function cycleLineImg(lk){
+  const imgs=lineImgList(findLineByKey(lk)||{});
   if(imgs.length<2)return;
-  const cur=activeImg[lineId]||imgs[0];
+  const cur=activeImg[lk]||imgs[0];
   const idx=(imgs.indexOf(cur)+1)%imgs.length;
-  activeImg[lineId]=imgs[idx];
+  activeImg[lk]=imgs[idx];
   renderMain();
 }
 
-async function markLine(lineId,field){
-  const ord=ORDERS.find(o=>o.lines.some(l=>l.id===lineId));
+async function markLine(lk,field){
+  const line=findLineByKey(lk);
+  if(!line)return;
+  const ord=ORDERS.find(o=>o.lines.includes(line));
   if(!ord)return;
-  const line=ord.lines.find(l=>l.id===lineId);
   const other=field==='impachetat'?'fara_stoc':'impachetat';
   const newVal=!line[field];
   const body={[field]:newVal,[field+'_at']:newVal?new Date().toISOString():null};
   if(newVal&&line[other]){body[other]=false;body[other+'_at']=null;}
   try{
-    await sb('PATCH',`platforma_comenzi?id=eq.${lineId}`,body);
+    await sb('PATCH',`${line._table}?id=eq.${line.id}`,body);
     Object.assign(line,body);
     const wasFinalized=ord.finalized;
     ord.finalized=ord.lines.every(l=>l.impachetat||l.fara_stoc);
@@ -306,10 +340,16 @@ async function load(){
   try{
     const [prodRows,comRows]=await Promise.all([
       sb('GET','produse?select=id,name,sku,img,images&order=id.asc'),
-      sb('GET','platforma_comenzi?select=*&order=data.asc'),
+      sb('GET',`platforma_comenzi?select=*&created_at=gte.${CUTOFF_DATE}&order=created_at.asc`),
     ]);
     PRODUSE=prodRows;
     COMENZI=comRows;
+    try{
+      JURNAL=await sb('GET',`jurnal?select=*&data=gte.${CUTOFF_DATE}&order=data.asc`);
+    }catch(e){
+      JURNAL=[];
+      console.warn('Nu am putut încărca vânzările directe din Jurnal (rulează migration_jurnal_packing.sql):',e);
+    }
     document.getElementById('sync-dot').className='sync-dot ok';
     computeOrders();
     pickInitialOrder();
