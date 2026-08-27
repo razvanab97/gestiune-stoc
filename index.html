@@ -1691,6 +1691,12 @@ th{font-weight:800!important;color:var(--t3)!important}
   </div>
 
   <div class="card" style="padding:1rem 1.25rem;margin-bottom:1rem">
+    <div class="sec" style="margin-top:0">🔀 Activ pe eMAG, lipsă pe Trendyol</div>
+    <div style="font-size:22px;color:var(--t3);margin-bottom:10px">Produse cu mapare eMAG confirmată, dar fără nicio mapare Trendyol încă — candidați de postat și acolo.</div>
+    <div id="sync-cross-platform-list"></div>
+  </div>
+
+  <div class="card" style="padding:1rem 1.25rem;margin-bottom:1rem">
     <div class="sec" style="margin-top:0">Import în masă din fișier (.xlsx)</div>
     <div style="font-size:22px;color:var(--t3);margin-bottom:10px">
       Încarcă exportul de produse/oferte din Seller Center (Excel) — aplicația detectează automat
@@ -2386,6 +2392,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:239,text:'Sincronizare — card nou, la cerere directă: „🔀 Activ pe eMAG, lipsă pe Trendyol". Compară mapările confirmate de pe cele două platforme și arată, grupate pe furnizor, produsele active pe eMAG care încă n-au nicio mapare Trendyol — candidați de postat și acolo, cu buton „+ Adaugă mapare Trendyol" care pre-completează formularul manual. Nu ține cont de stoc (spre deosebire de „De listat pe eMAG") — scopul aici e acoperirea pe platforme, nu stocul curent',date:'2026-08-27'},
   {n:238,text:'Dashboard — cadrane mai vii, la cerere directă (fix #237 a fost prea subtil). Toate cele 16 cadrane (rândul de sus + panoul „Vânzări & achiziții") au acum o culoare proprie, vie, distinctă: contur colorat pe partea stângă + cifra principală colorată la fel, nu doar text negru pe sticlă transparentă — Produse (mov), Valoare stoc (turcoaz), Vândute azi (verde), Stoc scăzut (galben), Epuizate (roșu), Categorii (violet), Furnizori/Comenzi platforme (albastru), Achiziții (portocaliu) etc. Marginile cadranelor sunt și ele mai vizibile (înainte aproape invizibile, alb pe alb)',date:'2026-08-27'},
   {n:237,text:'Culori mai accentuate, la cerere directă. Textul secundar (etichete ca „PRODUSE"/„VALOARE STOC", meta-informații, titluri de coloană) folosea un gri destul de deschis (#667085) în toată aplicația — acum e vizibil mai închis (#4B5563), citește mai clar, nu mai „șters". Pe Dashboard, titlurile graficelor sunt acum și ele mai apăsate (negru, aldin). Graficul „Valoare stoc pe categorie" avea o culoare gri ștearsă pentru a 6-a categorie din listă — înlocuită cu un turcoaz distinct, ca toate categoriile să se vadă la fel de clar în grafic',date:'2026-08-27'},
   {n:236,text:'Bara de navigare de sus — la cerere directă. Iconițele câtorva taburi erau generice sau lipseau (Dashboard 🏠 se suprapunea cu logo-ul, Vânzări/Jurnal nu aveau deloc): acum Dashboard 📊, Vânzări 🛒, Jurnal vânzări 📖, Raport stoc 📦, Sincronizare 🔄, Comenzi Platforme 🛍️ — fiecare mai potrivit cu ce face pagina. Fiecare tab e acum și un cadru separat cu efect „liquid glass" (același stil de pe Dashboard, extins acum aici) — sticlă semi-transparentă cu blur peste un fundal cu pete de culoare discrete, tab-ul activ evidențiat cu un contur mov — ca să se distingă clar unul de altul, nu doar o simplă linie sub textul activ ca până acum',date:'2026-08-27'},
@@ -11790,11 +11797,31 @@ function renderSyncMismatchCard(){
   }
   box.innerHTML=html;
 }
+// Produse active pe eMAG (mapare confirmată) fără nicio mapare Trendyol încă — candidați de
+// cross-postat. Nu ține cont de stoc (spre deosebire de "De listat pe eMAG"): un produs poate fi
+// activ pe eMAG chiar și cu stoc temporar 0, iar scopul aici e acoperirea pe platforme, nu stocul.
+function renderSyncCrossPlatformCard(){
+  const box=document.getElementById('sync-cross-platform-list');if(!box)return;
+  if(!sbReady){box.textContent='Necesită conexiune Supabase activă.';return;}
+  const emagIds=new Set(SYNCM.filter(m=>m.platforma==='emag'&&m.confirmat).map(m=>m.produsId));
+  const trendyolIds=new Set(SYNCM.filter(m=>m.platforma==='trendyol'&&m.confirmat).map(m=>m.produsId));
+  const items=P.filter(p=>!p.archived&&emagIds.has(p.id)&&!trendyolIds.has(p.id));
+  if(!items.length){box.innerHTML='<div style="font-size:22px;color:var(--t3)">Toate produsele active pe eMAG au deja și o mapare Trendyol confirmată ✓</div>';return;}
+  box.innerHTML=groupBySupplier(items,p=>p).map(g=>`<div class="sec">${esc(g.supplier)} (${g.items.length})</div>${g.items.map(p=>`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(p.name)}</strong>${p.sku?` <span style="color:var(--t3);font-family:var(--mono)">· SKU ${esc(p.sku)}</span>`:''}<div class="jp-meta">Stoc: ${fmtQty(qty(p))} buc.</div></div><button type="button" class="btn btn-sm" onclick="quickMapForTrendyol(${p.id})">+ Adaugă mapare Trendyol</button></div>`).join('')}`).join('');
+}
+function quickMapForTrendyol(productId){
+  const sel=document.getElementById('sm-platforma');if(sel)sel.value='trendyol';
+  setSmProduct(productId);
+  const titluInp=document.getElementById('sm-titlu');
+  titluInp?.scrollIntoView({block:'center',behavior:'smooth'});
+  titluInp?.focus();
+}
 function renderSyncPage(){
   fillSyncProdSelect();
   renderSyncPnkDatalist();
   renderSyncOpportunityCard();
   renderSyncMismatchCard();
+  renderSyncCrossPlatformCard();
   const list=document.getElementById('sync-map-list');if(!list)return;
   if(!sbReady){list.textContent='Necesită conexiune Supabase activă.';return;}
   if(!syncMapsLoaded){list.textContent='Se încarcă…';return;}
