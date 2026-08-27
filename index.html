@@ -14,7 +14,7 @@
   --bg:#F6F7FB;--surf:#FFFFFF;--surf2:#F8F9FC;--surf3:#F3F0FF;
   --bg1:#F6F7FB;--bg2:#FFFFFF;
   --b1:#E5E7EB;--b2:#E5E7EB;--b3:#D0D5DD;
-  --t1:#17181C;--t2:#3F4451;--t3:#667085;
+  --t1:#17181C;--t2:#3F4451;--t3:#4B5563;
   --acc:#7657F6;--acc2:#6342E8;--acc-fg:#FFFFFF;
   --dash-sales:#7657F6;--dash-purch:#c06b1e;
   --acc-light:#F3F0FF;--acc-mid:rgba(118,87,246,.16);
@@ -25,6 +25,7 @@
   --yl:#F79009;--yl-bg:#FFFAEB;
   --grn:#12B76A;--grn-bg:#ECFDF3;
   --bl:#2E90FA;--bl-bg:#EFF8FF;
+  --tl:#0E9F8E;--tl-bg:#E7F9F6;
   --r:10px;--r2:14px;--r3:16px;
   --font:'DM Sans',sans-serif;--mono:'Roboto Mono',monospace;
   --sh:0 1px 2px rgba(16,24,40,.06);
@@ -118,6 +119,9 @@ header{
   pointer-events:none;
 }
 #page-dashboard .stat:hover{border-color:rgba(255,255,255,.8)}
+/* Titlurile de grafic (nu au deja un !important global ca .stat-l) citeau mai șters peste sticlă —
+   mai accentuate aici, la cerere directă. */
+#page-dashboard .dash-chart-title{color:var(--t1);font-weight:700}
 .dash-total-alltime{font-size:19px;color:var(--t3);font-family:var(--mono);margin-top:8px;padding-top:6px;border-top:1px dashed var(--b1)}
 .dash-toggle-wrap{display:flex;gap:6px}
 .dash-toggle-btn{background:var(--surf2);border:1px solid var(--b1);border-radius:var(--r);padding:5px 12px;font-size:22px;font-weight:600;color:var(--t3);cursor:pointer}
@@ -2381,6 +2385,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:237,text:'Culori mai accentuate, la cerere directă. Textul secundar (etichete ca „PRODUSE"/„VALOARE STOC", meta-informații, titluri de coloană) folosea un gri destul de deschis (#667085) în toată aplicația — acum e vizibil mai închis (#4B5563), citește mai clar, nu mai „șters". Pe Dashboard, titlurile graficelor sunt acum și ele mai apăsate (negru, aldin). Graficul „Valoare stoc pe categorie" avea o culoare gri ștearsă pentru a 6-a categorie din listă — înlocuită cu un turcoaz distinct, ca toate categoriile să se vadă la fel de clar în grafic',date:'2026-08-27'},
   {n:236,text:'Bara de navigare de sus — la cerere directă. Iconițele câtorva taburi erau generice sau lipseau (Dashboard 🏠 se suprapunea cu logo-ul, Vânzări/Jurnal nu aveau deloc): acum Dashboard 📊, Vânzări 🛒, Jurnal vânzări 📖, Raport stoc 📦, Sincronizare 🔄, Comenzi Platforme 🛍️ — fiecare mai potrivit cu ce face pagina. Fiecare tab e acum și un cadru separat cu efect „liquid glass" (același stil de pe Dashboard, extins acum aici) — sticlă semi-transparentă cu blur peste un fundal cu pete de culoare discrete, tab-ul activ evidențiat cu un contur mov — ca să se distingă clar unul de altul, nu doar o simplă linie sub textul activ ca până acum',date:'2026-08-27'},
   {n:235,text:'Pagina de Staff (/staff) — 2 ajustări la cerere directă, după primul test real. (1) Nu mai arată tot istoricul de comenzi (erau 71 vechi, nerelevante) — acum coada pornește curat de la 27.08.2026 încolo, doar comenzi eMAG/Trendyol procesate de atunci. (2) Apar acum și vânzările directe (din pagina Vânzări, nu doar din platforme) — etichetate „Vânzare directă". Din moment ce o comandă eMAG/Trendyol importată se scrie automat și în Jurnal, s-a adăugat o verificare care scade din vânzarea directă cantitatea deja acoperită de o comandă de platformă pentru același produs/aceeași zi, ca să nu apară dublată. Necesită și migration_jurnal_packing.sql în Supabase (aceleași coloane ca la platforma_comenzi, de data asta pe jurnal)',date:'2026-08-27'},
   {n:234,text:'Pagină nouă, separată, pentru Staff — împachetare comenzi, gândită pentru tabletă: link propriu (/staff), fără PIN, care nu afectează restul aplicației. Arată o comandă eMAG/Trendyol pe tot ecranul (poză mare, nume, cantitate), staff-ul apasă „📦 Împachetat" sau „❌ Stoc zero" per produs, iar la finalizarea completă a comenzii trece automat la următoarea nefinalizată din coadă (cronologic). Căutare rapidă după nr. comandă/client/produs pentru când ai un AWB în mână, plus butoane manuale Înapoi/Înainte. „Stoc zero" doar semnalează, nu modifică stocul produsului — e o discrepanță de verificat, nu de corectat automat. Comenzile Platforme din aplicația principală arată acum și eticheta „📦 Împachetat"/„❌ Stoc zero" pe rândurile deja procesate de staff. Necesită migration_platforma_comenzi_packing.sql în Supabase',date:'2026-08-27'},
@@ -2961,7 +2966,7 @@ function renderDashCategoryValue(){
   const top=rows.slice(0,5);
   const rest=rows.slice(5);
   if(rest.length)top.push({lbl:`Altele (${rest.length})`,val:rest.reduce((s,r)=>s+r.val,0)});
-  const palette=['var(--dash-sales)','var(--bl)','var(--or)','var(--gr)','var(--rd)','var(--t3)'];
+  const palette=['var(--dash-sales)','var(--bl)','var(--or)','var(--gr)','var(--rd)','var(--tl)'];
   top.forEach((r,i)=>r.color=palette[i%palette.length]);
   box.innerHTML=dashDonutHtml(top,total,total.toLocaleString('ro-RO',{maximumFractionDigits:0}),'RON stoc');
 }
