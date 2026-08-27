@@ -1742,6 +1742,7 @@ th{font-weight:800!important;color:var(--t3)!important}
       </div>
     </div>
     <div id="smi-stock-preview"></div>
+    <div id="smi-duplicate-preview"></div>
   </div>
 
   <div class="card" data-sync-sec="mapare-noua" style="padding:1rem 1.25rem;margin-bottom:1rem;--stat-accent:var(--gr)">
@@ -2408,6 +2409,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:242,text:'Sincronizare — la fiecare import din fișierul eMAG/Trendyol, se verifică acum și dacă vreun PNK din fișier e deja înregistrat DE MAI MULTE ORI în baza de date (posibil dintr-o greșeală mai veche — ex. o mapare adăugată o dată după titlu, o dată după PNK). Dacă găsește așa ceva, apare un panou nou „⚠️ Posibile mapări duplicate", cu toate variantele găsite pentru acel PNK, una recomandată automat (cea confirmată, cu produs valid) și un buton „🗑 Șterge" pe fiecare, ca să corectezi rapid duplicatul greșit',date:'2026-08-27'},
   {n:241,text:'Dashboard — a mai rămas o bucată "ștearsă" din fix-ul anterior (#238): cifra fiecărui cadran primise culoarea vie, dar eticheta de deasupra ei (ex. "PRODUSE") rămăsese tot gri, dintr-o regulă globală de lizibilitate mai veche care câștiga peste orice altceva. Acum eticheta ia exact aceeași culoare vie ca cifra, pe toate cele 16 cadrane — text colorat de sus până jos, nu doar cifrele',date:'2026-08-27'},
   {n:240,text:'Sincronizare — două completări la cerere directă. (1) Buton nou „🔀 Reordonează secțiunile" (sus, în dreapta) — mută orice secțiune (De listat pe eMAG, Discrepanțe, Import, etc.) mai sus sau mai jos cu săgeți, exact ca la reordonarea paginilor din bara de sus; ordinea rămâne salvată pe dispozitiv (și pe cont, dacă Supabase e disponibil). (2) Fiecare secțiune are acum propria culoare distinctă pe marginea din stânga (conexiune=albastru, De listat pe eMAG=mov, Discrepanțe=roșu, cross-platformă=portocaliu, Import=turcoaz, mapare nouă=verde, mapări existente=violet), ca să se distingă clar una de alta dintr-o privire',date:'2026-08-27'},
   {n:239,text:'Sincronizare — card nou, la cerere directă: „🔀 Activ pe eMAG, lipsă pe Trendyol". Compară mapările confirmate de pe cele două platforme și arată, grupate pe furnizor, produsele active pe eMAG care încă n-au nicio mapare Trendyol — candidați de postat și acolo, cu buton „+ Adaugă mapare Trendyol" care pre-completează formularul manual. Nu ține cont de stoc (spre deosebire de „De listat pe eMAG") — scopul aici e acoperirea pe platforme, nu stocul curent',date:'2026-08-27'},
@@ -3581,7 +3583,7 @@ function safeLocalSet(key,value){
 }
 let P=[],TS={},JL=[],OI=[],editId=null,sCol='name',sDir=1,jMode='sales',curImg='',curImages=[],selProd=new Set(),selSuppliers=new Set(),savingProduct=false,invSourceName='',jMonthDefaulted=false;
 let compState={};
-let SYNCM=[],syncMapsLoaded=false,syncImpParsed=[],syncImpStockUpdates=[];
+let SYNCM=[],syncMapsLoaded=false,syncImpParsed=[],syncImpStockUpdates=[],syncImpDuplicates=[];
 let PCOM=[],pcomLoaded=false,pcImpParsed=[],pcImpPlatforma='emag';
 let REORDER=[];
 const REORDER_KEY='reorder_list';
@@ -10474,6 +10476,17 @@ function findSyncMapEntry(platforma,titlu,pnk){
   const t=(titlu||'').toLowerCase().trim();
   return SYNCM.find(s=>s.platforma===platforma&&s.titluExtern.toLowerCase().trim()===t)||null;
 }
+// findSyncMapEntry (ca și .find() în general) întoarce mereu doar PRIMA potrivire — dacă PNK-ul e deja
+// dublat în platforma_mapari (ex. adăugat cronologic de două ori, o dată după titlu, o dată după PNK),
+// duplicatul rămâne complet invizibil în restul aplicației. Verificat explicit la fiecare import.
+function checkPnkDuplicate(platforma,pnk){
+  if(!pnk)return null;
+  const entries=SYNCM.filter(m=>m.platforma===platforma&&m.idExtern===pnk);
+  if(entries.length<2)return null;
+  const scored=entries.map(m=>({m,score:(m.confirmat?2:0)+(P.some(p=>p.id===m.produsId&&!p.archived)?1:0)}));
+  scored.sort((a,b)=>b.score-a.score||String(b.m.createdAt||'').localeCompare(String(a.m.createdAt||'')));
+  return{pnk,entries,recommended:scored[0].m};
+}
 let smSuggestTimer=null;
 function suggestSyncProduct(){
   clearTimeout(smSuggestTimer);
@@ -10670,6 +10683,13 @@ async function handleSyncImportFile(ev){
   document.getElementById('smi-foot').style.display='none';
   syncImpParsed=[];
   syncImpStockUpdates=[];
+  syncImpDuplicates=[];
+  const seenDupPnk=new Set();
+  function checkRowForDuplicate(pnk){
+    if(!pnk||seenDupPnk.has(pnk))return;
+    const dup=checkPnkDuplicate(platforma,pnk);
+    if(dup){seenDupPnk.add(pnk);syncImpDuplicates.push(dup);}
+  }
   try{
     await ensureXLSX();
     const buf=await file.arrayBuffer();
@@ -10713,6 +10733,7 @@ async function handleSyncImportFile(ev){
       for(let i=1;i<curRows.length;i++){
         const titlu=String(curRows[i][iCurTitle]||'').trim();
         const pnk=iCurPnk>-1?String(curRows[i][iCurPnk]||'').trim():'';
+        checkRowForDuplicate(pnk);
         if(!titlu||seen.has(titlu.toLowerCase()))continue;
         if(existing.has(titlu.toLowerCase())||(pnk&&existingPnk.has(pnk))){
           seen.add(titlu.toLowerCase());
@@ -10738,13 +10759,14 @@ async function handleSyncImportFile(ev){
         }
       }
       parsing.style.display='none';
-      if(!syncImpParsed.length&&!syncImpStockUpdates.length){toast('Nicio listare nouă găsită (toate sunt deja mapate)','err');return;}
+      if(!syncImpParsed.length&&!syncImpStockUpdates.length&&!syncImpDuplicates.length){toast('Nicio listare nouă găsită (toate sunt deja mapate)','err');return;}
       if(syncImpParsed.length){
         document.getElementById('smi-preview').dataset.platforma=platforma;
         renderSyncImportPreview();
       }
       renderSyncStockPreview();
-      toast(`${syncImpParsed.length?syncImpParsed.length+' listări noi detectate · ':''}${syncImpStockUpdates.length?syncImpStockUpdates.length+' actualizări de stoc de revizuit':''}`.trim()||'Import procesat ✓');
+      renderSyncDuplicatesPreview();
+      toast(`${syncImpParsed.length?syncImpParsed.length+' listări noi detectate · ':''}${syncImpStockUpdates.length?syncImpStockUpdates.length+' actualizări de stoc de revizuit · ':''}${syncImpDuplicates.length?syncImpDuplicates.length+' posibile duplicate PNK':''}`.replace(/ · $/,'')||'Import procesat ✓');
       return;
     }
     const titlePat=['validation_name','numele produsului','nume produs','denumire produs','denumirea produsului','titlul produsului','titlu produs','titlu','name','title','produs','denumire'];
@@ -10769,6 +10791,7 @@ async function handleSyncImportFile(ev){
     for(let i=headerIdx+1;i<rows.length;i++){
       const titlu=String(rows[i][iTitle]||'').trim();
       const pnk=iPnk>-1?String(rows[i][iPnk]||'').trim():'';
+      checkRowForDuplicate(pnk);
       if(!titlu||seen.has(titlu.toLowerCase()))continue;
       if(existing.has(titlu.toLowerCase())||(pnk&&existingPnk.has(pnk))){
         seen.add(titlu.toLowerCase());
@@ -10789,13 +10812,14 @@ async function handleSyncImportFile(ev){
       syncImpParsed.push({titluExtern:titlu,pnk,produsId:match?match.product.id:null,score:match?match.score:0,include:!!match});
     }
     parsing.style.display='none';
-    if(!syncImpParsed.length&&!syncImpStockUpdates.length){toast('Nicio listare nouă găsită (toate sunt deja mapate sau coloana e goală)','err');return;}
+    if(!syncImpParsed.length&&!syncImpStockUpdates.length&&!syncImpDuplicates.length){toast('Nicio listare nouă găsită (toate sunt deja mapate sau coloana e goală)','err');return;}
     if(syncImpParsed.length){
       document.getElementById('smi-preview').dataset.platforma=platforma;
       renderSyncImportPreview();
     }
     renderSyncStockPreview();
-    toast(`${syncImpParsed.length?syncImpParsed.length+' listări noi · ':''}${syncImpParsed.filter(x=>x.produsId).length?syncImpParsed.filter(x=>x.produsId).length+' cu sugestie automată · ':''}${syncImpStockUpdates.length?syncImpStockUpdates.length+' actualizări de stoc de revizuit':''}`.replace(/ · $/,'')||'Import procesat ✓');
+    renderSyncDuplicatesPreview();
+    toast(`${syncImpParsed.length?syncImpParsed.length+' listări noi · ':''}${syncImpParsed.filter(x=>x.produsId).length?syncImpParsed.filter(x=>x.produsId).length+' cu sugestie automată · ':''}${syncImpStockUpdates.length?syncImpStockUpdates.length+' actualizări de stoc de revizuit · ':''}${syncImpDuplicates.length?syncImpDuplicates.length+' posibile duplicate PNK':''}`.replace(/ · $/,'')||'Import procesat ✓');
   }catch(err){
     parsing.style.display='none';
     toast('Eroare la citirea fișierului: '+err.message,'err');
@@ -10840,6 +10864,35 @@ async function applySyncStockUpdates(){
   document.getElementById('smi-stock-preview').innerHTML='';
   renderSyncPage();
   toast(`Stoc actualizat la ${n} listări ✓`);
+}
+function renderSyncDuplicatesPreview(){
+  const box=document.getElementById('smi-duplicate-preview');if(!box)return;
+  if(!syncImpDuplicates.length){box.innerHTML='';return;}
+  const rowsHtml=syncImpDuplicates.map(d=>{
+    const entriesHtml=d.entries.map(m=>{
+      const p=P.find(x=>x.id===m.produsId);
+      const isRec=m.id===d.recommended.id;
+      return`<div class="pcom-batch-row" style="${isRec?'background:var(--gr-bg)':''}">
+        <div class="pcom-batch-info">
+          ${isRec?'<span style="color:var(--gr);font-weight:700">✓ Recomandat, păstrează · </span>':''}<strong>${esc(m.titluExtern)}</strong>
+          <div class="jp-meta">→ ${p?esc(p.name):'<span style="color:var(--rd)">produs șters</span>'} · ${m.confirmat?'confirmat':'neconfirmat'}${m.createdAt?' · '+fmtDateRo(String(m.createdAt).slice(0,10)):''}</div>
+        </div>
+        <button type="button" class="btn btn-sm" style="color:var(--rd);border-color:var(--rd);flex-shrink:0" onclick="deleteDuplicateMapping(${m.id})">🗑 Șterge</button>
+      </div>`;
+    }).join('');
+    return`<div class="sec" style="font-size:19px;color:var(--am);margin-top:8px">PNK ${esc(d.pnk)} — ${d.entries.length} mapări</div>${entriesHtml}`;
+  }).join('');
+  box.innerHTML=`<div class="inv-preview" style="margin-top:12px;border-color:var(--am)">
+    <div class="inv-prev-title" style="color:var(--am)">⚠️ Posibile mapări duplicate — același PNK apare de mai multe ori în baza de date</div>
+    ${rowsHtml}
+  </div>`;
+}
+async function deleteDuplicateMapping(id){
+  await deleteSyncMapping(id);
+  if(SYNCM.some(m=>m.id===id))return;
+  syncImpDuplicates.forEach(d=>{d.entries=d.entries.filter(m=>m.id!==id);});
+  syncImpDuplicates=syncImpDuplicates.filter(d=>d.entries.length>1);
+  renderSyncDuplicatesPreview();
 }
 function syncPickBtnHtml(idx){
   const it=syncImpParsed[idx];
