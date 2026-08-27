@@ -2432,6 +2432,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:244,text:'Fix real, raportat cu exemplu concret: la import PDF de comandă (Maxy/Verk), prețul de achiziție salvat pentru un produs era uneori prețul TOTAL al liniei (cantitate inclusă), nu prețul pe bucată — apărea o "creștere de preț" absurdă la reimport (ex. 971% pentru 55,40€/10 bucăți, în loc de 5,54€/bucată). Cauza reală: extragerea de text din PDF amesteca tot conținutul paginii într-un singur șir, fără nicio legătură rând-cu-rând — AI-ul nu mai putea asocia sigur cantitatea cu prețul de pe același rând al tabelului. Extragerea reconstruiește acum rândurile după poziția reală a textului în pagină, iar promptul AI a primit un exemplu concret de calcul corect (total/cantitate) direct din cazul raportat',date:'2026-08-27'},
   {n:243,text:'Buton nou „🖨️ Listă verificare depozit" în „Importă factură" (Vânzări) — generează o listă printabilă/PDF (poză, titlu tradus în română, cantitate comandată, bifă goală de completat cu pixul) din produsele deja detectate, indiferent de sursă: PDF de comandă, poze de comandă (Maxy/Verk) sau CSV. Gândită de trimis la depozit, ca să verifice la recepția mărfii dacă a ajuns tot ce s-a comandat. Reutilizează exact mecanismul de printare de la Raport stoc — „Salvează ca PDF" e opțiunea nativă din dialogul de printare al browserului, nicio librărie nouă. Poza apare doar dacă produsul e deja în inventar sau are o poză adăugată la import — pentru produse complet noi fără poză încă, apare un simbol 📦',date:'2026-08-27'},
   {n:242,text:'Sincronizare — la fiecare import din fișierul eMAG/Trendyol, se verifică acum și dacă vreun PNK din fișier e deja înregistrat DE MAI MULTE ORI în baza de date (posibil dintr-o greșeală mai veche — ex. o mapare adăugată o dată după titlu, o dată după PNK). Dacă găsește așa ceva, apare un panou nou „⚠️ Posibile mapări duplicate", cu toate variantele găsite pentru acel PNK, una recomandată automat (cea confirmată, cu produs valid) și un buton „🗑 Șterge" pe fiecare, ca să corectezi rapid duplicatul greșit',date:'2026-08-27'},
   {n:241,text:'Dashboard — a mai rămas o bucată "ștearsă" din fix-ul anterior (#238): cifra fiecărui cadran primise culoarea vie, dar eticheta de deasupra ei (ex. "PRODUSE") rămăsese tot gri, dintr-o regulă globală de lizibilitate mai veche care câștiga peste orice altceva. Acum eticheta ia exact aceeași culoare vie ca cifra, pe toate cele 16 cadrane — text colorat de sus până jos, nu doar cifrele',date:'2026-08-27'},
@@ -12320,7 +12321,21 @@ async function parsePDFWithAI(file){
       for(let i=1;i<=Math.min(pdf.numPages,10);i++){
         const page=await pdf.getPage(i);
         const content=await page.getTextContent();
-        pdfText+=content.items.map(it=>it.str).join(' ')+'\n';
+        // Bug real raportat cu exemplu concret: join simplu cu spațiu amestecă tot textul paginii
+        // într-un singur șir, fără nicio legătură vizuală rând-cu-rând — AI-ul nu mai putea asocia
+        // corect cantitatea cu prețul de pe același rând al tabelului (ex. "10 pcs" și "55,40 €" ajungeau
+        // depărtate în text), și salva prețul TOTAL al liniei ca preț PE BUCATĂ (umfla artificial
+        // "creșterea de preț" afișată la import, ex. 971%). Reconstruim rândurile după poziția Y a
+        // fiecărui fragment de text (transform[5]), sortate de sus în jos, iar în fiecare rând după
+        // poziția X, de la stânga la dreapta — text mult mai apropiat de layout-ul vizual real al PDF-ului.
+        const rows={};
+        content.items.forEach(it=>{
+          const y=Math.round(it.transform[5]/3)*3;
+          (rows[y]=rows[y]||[]).push(it);
+        });
+        const lineText=Object.keys(rows).map(Number).sort((a,b)=>b-a)
+          .map(y=>rows[y].sort((a,b)=>a.transform[4]-b.transform[4]).map(it=>it.str).join(' ')).join('\n');
+        pdfText+=lineText+'\n';
       }
     }catch(pdfErr){
       console.warn('PDF.js error, falling back to base64:',pdfErr);
@@ -12339,7 +12354,12 @@ TEXT FACTURĂ:
 ${pdfText.slice(0,10000)}
 
 Detectează automat formatul:
-- maxy.eu/verk.store: "Symbol: XXXXX", qty în "N szt/pcs", preț total EUR → priceBuy=total/qty, currency=EUR
+- maxy.eu/verk.store: titlul se termină cu cantitatea (ex. "..., 10 pcs" sau "..., 10 szt."), apoi
+  "Symbol: XXXXX" (codul produsului), apoi un preț în EUR. ATENȚIE, greșeală frecventă de evitat: acel
+  preț e TOTALUL pentru toată cantitatea de pe acel rând, NU prețul pe bucată — trebuie ÎMPĂRȚIT la
+  cantitate. Exemplu real: "Cat scratcher - corner, 10 pcs" cu prețul afișat "55,40 €" înseamnă qty=10,
+  priceBuy=55.40/10=5.54 (NU 55.40 — ar însemna 554€ pentru 10 bucăți, evident greșit). Verifică mereu
+  acest calcul (total/cantitate) înainte de a răspunde, pentru fiecare produs.
 - Skroutz: "N × XX,XX Lei" → priceBuy=prețul per buc, currency=RON
 - Facturi RO standard: cantitate × preț unitar
 
