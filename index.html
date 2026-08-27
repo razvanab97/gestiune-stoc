@@ -473,7 +473,8 @@ tr:hover td{background:var(--surf2)}
 .cat-g input[type=radio]{accent-color:var(--acc);width:14px;height:14px;flex-shrink:0}
 .cat-g label.sel{background:var(--acc);color:var(--acc-fg);border-color:var(--acc)}
 /* INVOICE */
-.inv-modal{background:var(--surf);border-radius:var(--r3);border:1px solid var(--b1);width:820px;max-width:95%;box-shadow:var(--sh2);margin:auto;overflow:hidden}
+.inv-modal{background:var(--surf);border-radius:var(--r3);border:1px solid var(--b1);width:820px;max-width:95%;box-shadow:var(--sh2);margin:auto;overflow:hidden;transition:width .2s}
+@media(min-width:641px){.inv-modal.wide{width:1640px}}
 .inv-head{padding:1.5rem 2rem 1.25rem;border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between}
 .inv-head h2{font-size:35px;font-weight:600;letter-spacing:-.02em}
 .inv-body{padding:1.75rem 2rem;max-height:75vh;overflow-y:auto}
@@ -2432,6 +2433,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:246,text:'Trei ajustări la „Importă factură", la cerere directă. (1) Modalul se lărgește acum automat (~2x) de îndată ce apare o previzualizare cu produse — la comenzi lungi (poze/PDF cu 20+ produse), spațiul dublu ajută mult, cu picker de produs, poză, preț și scroll pe fiecare rând. (2) „🖨️ Listă verificare depozit" nu a avut niciodată preț — deja confirmat că e doar poză, titlu, cantitate și bifă. (3) Aceeași listă se poate genera acum și ULTERIOR, din Jurnal vânzări → Comenzi stoc — buton 🖨️ nou pe fiecare comandă din istoric, regenerează lista din detaliile deja salvate, fără să fie nevoie să reimporți fișierul original',date:'2026-08-28'},
   {n:245,text:'Fix-ul de preț nedivizat la cantitate (#244) tot apărea — găsit motivul real: exista o A DOUA cale de citire a PDF-ului (folosită când PDF.js nu poate încărca/extrage text, ex. blocat de un ad-blocker), cu un prompt mult mai simplu, fără nicio mențiune despre împărțirea preț total/cantitate — fix-ul anterior corectase doar prima cale. Acum ambele căi folosesc exact aceleași reguli. În plus, plasă de siguranță suplimentară direct în previzualizare, independentă de AI: orice creștere de preț peste 250%, dacă raportul seamănă cu cantitatea comandată, arată acum un avertisment roșu explicit („pare prețul TOTAL, nu cel pe bucată") cu buton „➗ Împarte la cantitate" — corectează cu un click, fără să anulezi și să reîncarci fișierul',date:'2026-08-27'},
   {n:244,text:'Fix real, raportat cu exemplu concret: la import PDF de comandă (Maxy/Verk), prețul de achiziție salvat pentru un produs era uneori prețul TOTAL al liniei (cantitate inclusă), nu prețul pe bucată — apărea o "creștere de preț" absurdă la reimport (ex. 971% pentru 55,40€/10 bucăți, în loc de 5,54€/bucată). Cauza reală: extragerea de text din PDF amesteca tot conținutul paginii într-un singur șir, fără nicio legătură rând-cu-rând — AI-ul nu mai putea asocia sigur cantitatea cu prețul de pe același rând al tabelului. Extragerea reconstruiește acum rândurile după poziția reală a textului în pagină, iar promptul AI a primit un exemplu concret de calcul corect (total/cantitate) direct din cazul raportat',date:'2026-08-27'},
   {n:243,text:'Buton nou „🖨️ Listă verificare depozit" în „Importă factură" (Vânzări) — generează o listă printabilă/PDF (poză, titlu tradus în română, cantitate comandată, bifă goală de completat cu pixul) din produsele deja detectate, indiferent de sursă: PDF de comandă, poze de comandă (Maxy/Verk) sau CSV. Gândită de trimis la depozit, ca să verifice la recepția mărfii dacă a ajuns tot ce s-a comandat. Reutilizează exact mecanismul de printare de la Raport stoc — „Salvează ca PDF" e opțiunea nativă din dialogul de printare al browserului, nicio librărie nouă. Poza apare doar dacă produsul e deja în inventar sau are o poză adăugată la import — pentru produse complet noi fără poză încă, apare un simbol 📦',date:'2026-08-27'},
@@ -3610,6 +3612,7 @@ function safeLocalSet(key,value){
 let P=[],TS={},JL=[],OI=[],editId=null,sCol='name',sDir=1,jMode='sales',curImg='',curImages=[],selProd=new Set(),selSuppliers=new Set(),savingProduct=false,invSourceName='',jMonthDefaulted=false;
 let compState={};
 let SYNCM=[],syncMapsLoaded=false,syncImpParsed=[],syncImpStockUpdates=[],syncImpDuplicates=[];
+let jStockOrdersRendered=[];
 let PCOM=[],pcomLoaded=false,pcImpParsed=[],pcImpPlatforma='emag';
 let REORDER=[];
 const REORDER_KEY='reorder_list';
@@ -12171,6 +12174,7 @@ function openInvoice(){
   document.getElementById('inv-apply-btn').style.display='';
   document.getElementById('inv-checklist-btn').disabled=true;
   document.getElementById('inv-cancel-btn').textContent='Anulează';
+  document.querySelector('.inv-modal')?.classList.remove('wide');
   addInvLine();addInvLine();addInvLine();
   renderInvCatDatalist();
   document.getElementById('ov-inv').classList.add('on');
@@ -12931,7 +12935,11 @@ document.addEventListener('click',ev=>{
 });
 function renderInvPreview(){
   const prev=document.getElementById('inv-preview');
-  if(!invParsed.length){prev.innerHTML='';document.getElementById('inv-info').textContent='Adaugă produse';document.getElementById('inv-apply-btn').disabled=true;document.getElementById('inv-checklist-btn').disabled=true;return;}
+  if(!invParsed.length){prev.innerHTML='';document.getElementById('inv-info').textContent='Adaugă produse';document.getElementById('inv-apply-btn').disabled=true;document.getElementById('inv-checklist-btn').disabled=true;document.querySelector('.inv-modal')?.classList.remove('wide');return;}
+  // Modalul se lărgește doar cât timp chiar are ce arăta (previzualizare cu produse) — la un import
+  // cu multe linii (poze/PDF de comandă), lățimea implicită (820px) era prea înghesuită pentru poză +
+  // nume + picker + preț + scroll pe același rând, raportat direct.
+  document.querySelector('.inv-modal')?.classList.add('wide');
   // Calculează prețuri RON + sugestie automată de asociere (scor). NU decide singură "produs nou"
   // când scorul e sub prag (0.7) — bug real reparat: se creau des produse duplicate pentru produse
   // care EXISTAU deja, doar cu titlu ușor diferit în factură/CSV. produsId/newProduct se inițializează
@@ -13018,30 +13026,47 @@ function fixInvItemPriceDivision(idx){
 }
 // Listă printabilă de trimis la depozit, ca să verifice la recepția mărfii dacă a ajuns tot ce s-a
 // comandat — poză + titlu (deja tradus în română de AI la parsare, indiferent de sursă: PDF/poze
-// comandă/CSV) + cantitate + o bifă goală de completat cu pixul, nu interactivă. Reutilizează
-// window.print() exact ca la Raport stoc — fără nicio librărie PDF nouă, "Salvează ca PDF" e opțiune
-// nativă în dialogul de printare al browserului.
-function generateInvChecklist(){
-  if(!invParsed.length){toast('Adaugă întâi produsele de verificat','err');return;}
-  const orderNum=document.getElementById('inv-number')?.value.trim()||'';
-  const rows=invParsed.map(item=>{
-    const p=item.produsId?P.find(x=>x.id===item.produsId):null;
-    const nm=p?p.name:(item.name||item.sku||'Produs necunoscut');
-    const imgUrl=p&&p.img?p.img:(item.newProduct&&item.img?item.img:'');
+// comandă/CSV) + cantitate + o bifă goală de completat cu pixul, nu interactivă (fără preț, la cerere
+// directă). Reutilizează window.print() exact ca la Raport stoc — fără nicio librărie PDF nouă,
+// "Salvează ca PDF" e opțiunea nativă din dialogul de printare al browserului. Funcție generică —
+// folosită atât la importul curent (Importă factură), cât și, ulterior, din istoricul de comenzi de
+// stoc (Jurnal vânzări → Comenzi stoc), ca să poți regenera aceeași listă oricând, nu doar în momentul
+// importului.
+function printChecklist(items,meta){
+  if(!items.length){toast('Nimic de listat','err');return;}
+  const rows=items.map(it=>{
+    const p=it.produsId?P.find(x=>x.id===it.produsId):null;
+    const nm=p?p.name:(it.name||it.sku||'Produs necunoscut');
+    const imgUrl=p&&p.img?p.img:(it.img||'');
     const th=imgUrl?`<img src="${esc(imgSrc(imgUrl))}" class="invchk-th">`:`<div class="invchk-th-ph">📦</div>`;
-    return`<div class="invchk-row"><div class="invchk-check"></div>${th}<div class="invchk-nm">${esc(nm)}${item.sku?`<div class="invchk-sku">Cod: ${esc(item.sku)}</div>`:''}</div><div class="invchk-qty">${fmtQty(item.qty)} buc.</div></div>`;
+    return`<div class="invchk-row"><div class="invchk-check"></div>${th}<div class="invchk-nm">${esc(nm)}${it.sku?`<div class="invchk-sku">Cod: ${esc(it.sku)}</div>`:''}</div><div class="invchk-qty">${fmtQty(it.qty)} buc.</div></div>`;
   }).join('');
   document.getElementById('inv-checklist-print').innerHTML=`
     <div class="invchk-header">
       <h1>Listă de verificare recepție marfă</h1>
-      ${orderNum?`<div>Comandă: ${esc(orderNum)}</div>`:''}
-      <div>${new Date().toLocaleDateString('ro-RO')} · ${invParsed.length} produse · ${esc(invSourceName||'')}</div>
+      ${meta.orderNum?`<div>Comandă: ${esc(meta.orderNum)}</div>`:''}
+      <div>${esc(meta.dateLabel||new Date().toLocaleDateString('ro-RO'))} · ${items.length} produse${meta.sourceLabel?' · '+esc(meta.sourceLabel):''}</div>
     </div>
     <div class="invchk-rows">${rows}</div>`;
   document.body.classList.add('printing-invchecklist');
   window.print();
 }
 window.addEventListener('afterprint',()=>document.body.classList.remove('printing-invchecklist'));
+function generateInvChecklist(){
+  if(!invParsed.length){toast('Adaugă întâi produsele de verificat','err');return;}
+  printChecklist(invParsed.map(it=>({name:it.name,sku:it.sku,qty:it.qty,produsId:it.produsId,img:it.newProduct?it.img:''})),{
+    orderNum:document.getElementById('inv-number')?.value.trim()||'',
+    sourceLabel:invSourceName||''
+  });
+}
+// Regenerare ulterioară din Jurnal vânzări → Comenzi stoc — nu mai trebuie reimportat fișierul, lista
+// se reconstruiește din detaliile deja salvate ale comenzii (nume/SKU/cantitate/produsId).
+function generateStockOrderChecklist(idx){
+  const o=jStockOrdersRendered[idx];if(!o)return;
+  const items=(o.details||[]).filter(d=>d.qty>0).map(d=>({name:d.name,sku:d.sku,qty:d.qty,produsId:d.productId}));
+  if(!items.length){toast('Nicio linie de listat pentru această comandă','err');return;}
+  printChecklist(items,{orderNum:o.invoiceNumber||'',sourceLabel:o.source||'',dateLabel:new Date(o.createdAt||Date.now()).toLocaleDateString('ro-RO')});
+}
 async function applyInvoice(){
   showLoading('Se importă factura…');
   let updated=0,created=0,skipped=0,receivedLines=0,receivedQty=0,extraQty=0,unresolved=0;
@@ -13621,6 +13646,7 @@ function renderStockOrders(){
   let rows=[...OI];if(mo)rows=rows.filter(o=>(o.createdAt||'').startsWith(mo));
   if(q)rows=rows.filter(o=>(o.source||'').toLowerCase().includes(q)||(o.invoiceNumber||'').toLowerCase().includes(q)||(o.details||[]).some(d=>[d.name,d.sku,d.status].some(v=>String(v||'').toLowerCase().includes(q))));
   const body=document.getElementById('jbody');
+  jStockOrdersRendered=rows;
   if(!rows.length){body.innerHTML=`<div class="jrnl-empty">Nicio comandă de stoc încărcată</div>`;document.getElementById('jtotal').textContent='';return;}
   let gQ=0,gV=0,gI=0;
   body.innerHTML=rows.map((o,i)=>{
@@ -13633,7 +13659,7 @@ function renderStockOrders(){
       const stockLine=Number.isFinite(Number(d.stockBefore))?`<div class="jp-meta">Stoc: ${fmtQty(d.stockBefore)} + ${fmtQty(d.qty)} = ${fmtQty(d.stockAfter)}${Number(d.negativeCompensated)>0?' · minus compensat '+fmtQty(d.negativeCompensated):''}</div>`:'';
       return`<div class="jp-row"><div class="jp-th-ph">📦</div><div class="jp-nm">${esc(d.name||'—')}<br><span class="jp-cat">SKU: ${esc(d.sku||'—')} · <span class="inv-match ${cls}" style="margin-left:0">${esc(d.status||'actualizat')}</span></span>${delta?`<div class="jp-meta">${delta}</div>`:''}${stockLine}</div><div class="jp-qty">+${fmtQty(d.qty)}</div><div class="jp-val">${Number(d.price)>0?Number(d.price).toFixed(2)+' RON/buc':'—'}<br><span class="jp-cat">${Number(d.value)>0?Number(d.value).toFixed(2)+' RON':'—'}</span></div></div>`;
     }).join('');
-    return`<div class="jd-card"><div class="jd-head" onclick="togJ('${id}')"><span class="jd-date">${esc(o.source||'Import stoc')}${o.invoiceNumber?` · <span class="bdg-cat" style="font-size:22px">📄 ${esc(o.invoiceNumber)}</span>`:''}<br><span class="jp-cat">${dt}</span></span><div class="jd-stats"><span><strong>${fmtQty(o.totalQty)}</strong> buc</span><span><strong>${Number(o.totalValue||0).toFixed(2)}</strong> RON</span><span>${o.updatedCount||0} actualizate · ${o.createdCount||0} noi · ${o.skippedCount||0} sărite</span></div><span class="jd-chev" id="${id}-c">▼</span></div><div class="jd-body" id="${id}">${lines||'<div class="jrnl-empty">Fără detalii</div>'}</div></div>`;
+    return`<div class="jd-card"><div class="jd-head" onclick="togJ('${id}')"><span class="jd-date">${esc(o.source||'Import stoc')}${o.invoiceNumber?` · <span class="bdg-cat" style="font-size:22px">📄 ${esc(o.invoiceNumber)}</span>`:''}<br><span class="jp-cat">${dt}</span></span><div class="jd-stats"><span><strong>${fmtQty(o.totalQty)}</strong> buc</span><span><strong>${Number(o.totalValue||0).toFixed(2)}</strong> RON</span><span>${o.updatedCount||0} actualizate · ${o.createdCount||0} noi · ${o.skippedCount||0} sărite</span></div><button type="button" class="btn btn-sm" onclick="event.stopPropagation();generateStockOrderChecklist(${i})" title="Regenerează lista de verificare depozit pentru această comandă">🖨️</button><span class="jd-chev" id="${id}-c">▼</span></div><div class="jd-body" id="${id}">${lines||'<div class="jrnl-empty">Fără detalii</div>'}</div></div>`;
   }).join('');
   document.getElementById('jtotal').textContent=`Total comenzi: ${rows.length} · ${fmtQty(gQ)} buc · ${gV.toFixed(2)} RON · ${gI} linii`;
 }
