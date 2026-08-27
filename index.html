@@ -814,6 +814,26 @@ function buildRaportCats(){
 }
 .rpt-print-header { display: none; margin-bottom: 20px; }
 
+/* Listă de verificare recepție marfă (Importă factură → 🖨️ Listă verificare depozit) — container
+   ascuns în vizualizarea normală, arătat DOAR la print via clasa pe <body>. Nu atinge deloc regulile
+   de print de mai sus (scopate strict pe #page-raport) — mecanism separat, bazat pe faptul că header-ul
+   și fiecare .page sunt copii direcți ai <body>, deci "ascunde tot în afară de acest div" e suficient. */
+#inv-checklist-print{display:none}
+@media print{
+  body.printing-invchecklist>*:not(#inv-checklist-print){display:none!important}
+  body.printing-invchecklist #inv-checklist-print{display:block!important;padding:0}
+  .invchk-header h1{font-size:20px;margin-bottom:6px}
+  .invchk-header{margin-bottom:18px;color:#000}
+  .invchk-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #ccc;page-break-inside:avoid}
+  .invchk-check{width:20px;height:20px;border:2px solid #333;flex-shrink:0}
+  .invchk-th,.invchk-th-ph{width:50px;height:50px;flex-shrink:0}
+  .invchk-th{object-fit:cover;border:1px solid #ccc}
+  .invchk-th-ph{border:1px dashed #999;display:flex;align-items:center;justify-content:center;font-size:24px}
+  .invchk-nm{flex:1;font-size:13px;color:#000}
+  .invchk-sku{font-size:10px;color:#666}
+  .invchk-qty{font-weight:700;font-size:14px;color:#000;white-space:nowrap}
+}
+
 /* ── CALCULATOR PAGE ── */
 .calc-transport-toggle{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
 .calc-transport-toggle span{font-size:23px;color:var(--t3)}
@@ -2365,12 +2385,15 @@ th{font-weight:800!important;color:var(--t3)!important}
   <div class="inv-foot">
     <span class="inv-foot-info" id="inv-info">Adaugă produse pentru previzualizare</span>
     <div style="display:flex;gap:8px">
+      <button class="btn btn-sm" id="inv-checklist-btn" onclick="generateInvChecklist()" disabled title="Listă printabilă — poză, titlu și cantitate pentru fiecare produs, cu bifă goală, de trimis la depozit ca să verifice recepția mărfii">🖨️ Listă verificare depozit</button>
       <button class="btn btn-sm" id="inv-cancel-btn" onclick="closeInvoice()">Anulează</button>
       <button class="btn btn-sm btn-acc" id="inv-apply-btn" onclick="applyInvoice()" disabled>Importă în stoc</button>
     </div>
   </div>
 </div>
 </div>
+
+<div id="inv-checklist-print"></div>
 
 <div class="ov" id="ov-emag-guide" onclick="if(event.target===this)closeEmagGuide()">
 <div class="inv-modal" onclick="event.stopPropagation()">
@@ -2409,6 +2432,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:243,text:'Buton nou „🖨️ Listă verificare depozit" în „Importă factură" (Vânzări) — generează o listă printabilă/PDF (poză, titlu tradus în română, cantitate comandată, bifă goală de completat cu pixul) din produsele deja detectate, indiferent de sursă: PDF de comandă, poze de comandă (Maxy/Verk) sau CSV. Gândită de trimis la depozit, ca să verifice la recepția mărfii dacă a ajuns tot ce s-a comandat. Reutilizează exact mecanismul de printare de la Raport stoc — „Salvează ca PDF" e opțiunea nativă din dialogul de printare al browserului, nicio librărie nouă. Poza apare doar dacă produsul e deja în inventar sau are o poză adăugată la import — pentru produse complet noi fără poză încă, apare un simbol 📦',date:'2026-08-27'},
   {n:242,text:'Sincronizare — la fiecare import din fișierul eMAG/Trendyol, se verifică acum și dacă vreun PNK din fișier e deja înregistrat DE MAI MULTE ORI în baza de date (posibil dintr-o greșeală mai veche — ex. o mapare adăugată o dată după titlu, o dată după PNK). Dacă găsește așa ceva, apare un panou nou „⚠️ Posibile mapări duplicate", cu toate variantele găsite pentru acel PNK, una recomandată automat (cea confirmată, cu produs valid) și un buton „🗑 Șterge" pe fiecare, ca să corectezi rapid duplicatul greșit',date:'2026-08-27'},
   {n:241,text:'Dashboard — a mai rămas o bucată "ștearsă" din fix-ul anterior (#238): cifra fiecărui cadran primise culoarea vie, dar eticheta de deasupra ei (ex. "PRODUSE") rămăsese tot gri, dintr-o regulă globală de lizibilitate mai veche care câștiga peste orice altceva. Acum eticheta ia exact aceeași culoare vie ca cifra, pe toate cele 16 cadrane — text colorat de sus până jos, nu doar cifrele',date:'2026-08-27'},
   {n:240,text:'Sincronizare — două completări la cerere directă. (1) Buton nou „🔀 Reordonează secțiunile" (sus, în dreapta) — mută orice secțiune (De listat pe eMAG, Discrepanțe, Import, etc.) mai sus sau mai jos cu săgeți, exact ca la reordonarea paginilor din bara de sus; ordinea rămâne salvată pe dispozitiv (și pe cont, dacă Supabase e disponibil). (2) Fiecare secțiune are acum propria culoare distinctă pe marginea din stânga (conexiune=albastru, De listat pe eMAG=mov, Discrepanțe=roșu, cross-platformă=portocaliu, Import=turcoaz, mapare nouă=verde, mapări existente=violet), ca să se distingă clar una de alta dintr-o privire',date:'2026-08-27'},
@@ -12143,6 +12167,7 @@ function openInvoice(){
   document.getElementById('inv-info').textContent='Adaugă produse';
   document.getElementById('inv-apply-btn').disabled=true;
   document.getElementById('inv-apply-btn').style.display='';
+  document.getElementById('inv-checklist-btn').disabled=true;
   document.getElementById('inv-cancel-btn').textContent='Anulează';
   addInvLine();addInvLine();addInvLine();
   renderInvCatDatalist();
@@ -12877,7 +12902,7 @@ document.addEventListener('click',ev=>{
 });
 function renderInvPreview(){
   const prev=document.getElementById('inv-preview');
-  if(!invParsed.length){prev.innerHTML='';document.getElementById('inv-info').textContent='Adaugă produse';document.getElementById('inv-apply-btn').disabled=true;return;}
+  if(!invParsed.length){prev.innerHTML='';document.getElementById('inv-info').textContent='Adaugă produse';document.getElementById('inv-apply-btn').disabled=true;document.getElementById('inv-checklist-btn').disabled=true;return;}
   // Calculează prețuri RON + sugestie automată de asociere (scor). NU decide singură "produs nou"
   // când scorul e sub prag (0.7) — bug real reparat: se creau des produse duplicate pentru produse
   // care EXISTAU deja, doar cu titlu ușor diferit în factură/CSV. produsId/newProduct se inițializează
@@ -12936,7 +12961,34 @@ function renderInvPreview(){
   prev.innerHTML=`<div class="inv-preview"><div class="inv-prev-title">Previzualizare (${invParsed.length} produse)</div>${rows}</div>`;
   document.getElementById('inv-info').textContent=`${newC} produse noi · ${updC} actualizări stoc${missC?' · '+missC+' coduri negăsite':''}${unresolvedC?' · ⚠ '+unresolvedC+' linii fără produs ales':''}${receiptC?' · '+fmtQty(receiptQty)+' buc. recepționate din pe drum':''}`;
   document.getElementById('inv-apply-btn').disabled=false;
+  document.getElementById('inv-checklist-btn').disabled=false;
 }
+// Listă printabilă de trimis la depozit, ca să verifice la recepția mărfii dacă a ajuns tot ce s-a
+// comandat — poză + titlu (deja tradus în română de AI la parsare, indiferent de sursă: PDF/poze
+// comandă/CSV) + cantitate + o bifă goală de completat cu pixul, nu interactivă. Reutilizează
+// window.print() exact ca la Raport stoc — fără nicio librărie PDF nouă, "Salvează ca PDF" e opțiune
+// nativă în dialogul de printare al browserului.
+function generateInvChecklist(){
+  if(!invParsed.length){toast('Adaugă întâi produsele de verificat','err');return;}
+  const orderNum=document.getElementById('inv-number')?.value.trim()||'';
+  const rows=invParsed.map(item=>{
+    const p=item.produsId?P.find(x=>x.id===item.produsId):null;
+    const nm=p?p.name:(item.name||item.sku||'Produs necunoscut');
+    const imgUrl=p&&p.img?p.img:(item.newProduct&&item.img?item.img:'');
+    const th=imgUrl?`<img src="${esc(imgSrc(imgUrl))}" class="invchk-th">`:`<div class="invchk-th-ph">📦</div>`;
+    return`<div class="invchk-row"><div class="invchk-check"></div>${th}<div class="invchk-nm">${esc(nm)}${item.sku?`<div class="invchk-sku">Cod: ${esc(item.sku)}</div>`:''}</div><div class="invchk-qty">${fmtQty(item.qty)} buc.</div></div>`;
+  }).join('');
+  document.getElementById('inv-checklist-print').innerHTML=`
+    <div class="invchk-header">
+      <h1>Listă de verificare recepție marfă</h1>
+      ${orderNum?`<div>Comandă: ${esc(orderNum)}</div>`:''}
+      <div>${new Date().toLocaleDateString('ro-RO')} · ${invParsed.length} produse · ${esc(invSourceName||'')}</div>
+    </div>
+    <div class="invchk-rows">${rows}</div>`;
+  document.body.classList.add('printing-invchecklist');
+  window.print();
+}
+window.addEventListener('afterprint',()=>document.body.classList.remove('printing-invchecklist'));
 async function applyInvoice(){
   showLoading('Se importă factura…');
   let updated=0,created=0,skipped=0,receivedLines=0,receivedQty=0,extraQty=0,unresolved=0;
