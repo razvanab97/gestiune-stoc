@@ -2432,6 +2432,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:245,text:'Fix-ul de preț nedivizat la cantitate (#244) tot apărea — găsit motivul real: exista o A DOUA cale de citire a PDF-ului (folosită când PDF.js nu poate încărca/extrage text, ex. blocat de un ad-blocker), cu un prompt mult mai simplu, fără nicio mențiune despre împărțirea preț total/cantitate — fix-ul anterior corectase doar prima cale. Acum ambele căi folosesc exact aceleași reguli. În plus, plasă de siguranță suplimentară direct în previzualizare, independentă de AI: orice creștere de preț peste 250%, dacă raportul seamănă cu cantitatea comandată, arată acum un avertisment roșu explicit („pare prețul TOTAL, nu cel pe bucată") cu buton „➗ Împarte la cantitate" — corectează cu un click, fără să anulezi și să reîncarci fișierul',date:'2026-08-27'},
   {n:244,text:'Fix real, raportat cu exemplu concret: la import PDF de comandă (Maxy/Verk), prețul de achiziție salvat pentru un produs era uneori prețul TOTAL al liniei (cantitate inclusă), nu prețul pe bucată — apărea o "creștere de preț" absurdă la reimport (ex. 971% pentru 55,40€/10 bucăți, în loc de 5,54€/bucată). Cauza reală: extragerea de text din PDF amesteca tot conținutul paginii într-un singur șir, fără nicio legătură rând-cu-rând — AI-ul nu mai putea asocia sigur cantitatea cu prețul de pe același rând al tabelului. Extragerea reconstruiește acum rândurile după poziția reală a textului în pagină, iar promptul AI a primit un exemplu concret de calcul corect (total/cantitate) direct din cazul raportat',date:'2026-08-27'},
   {n:243,text:'Buton nou „🖨️ Listă verificare depozit" în „Importă factură" (Vânzări) — generează o listă printabilă/PDF (poză, titlu tradus în română, cantitate comandată, bifă goală de completat cu pixul) din produsele deja detectate, indiferent de sursă: PDF de comandă, poze de comandă (Maxy/Verk) sau CSV. Gândită de trimis la depozit, ca să verifice la recepția mărfii dacă a ajuns tot ce s-a comandat. Reutilizează exact mecanismul de printare de la Raport stoc — „Salvează ca PDF" e opțiunea nativă din dialogul de printare al browserului, nicio librărie nouă. Poza apare doar dacă produsul e deja în inventar sau are o poză adăugată la import — pentru produse complet noi fără poză încă, apare un simbol 📦',date:'2026-08-27'},
   {n:242,text:'Sincronizare — la fiecare import din fișierul eMAG/Trendyol, se verifică acum și dacă vreun PNK din fișier e deja înregistrat DE MAI MULTE ORI în baza de date (posibil dintr-o greșeală mai veche — ex. o mapare adăugată o dată după titlu, o dată după PNK). Dacă găsește așa ceva, apare un panou nou „⚠️ Posibile mapări duplicate", cu toate variantele găsite pentru acel PNK, una recomandată automat (cea confirmată, cu produs valid) și un buton „🗑 Șterge" pe fiecare, ca să corectezi rapid duplicatul greșit',date:'2026-08-27'},
@@ -12345,6 +12346,23 @@ async function parsePDFWithAI(file){
 
     parsing.innerHTML='<span class="spin"></span> Se analizează cu AI…';
 
+    // Regulile de detectare a formatului — comune ambelor căi de mai jos (text extras vs. PDF trimis
+    // direct ca document). Bug real, raportat de 2 ori: prima dată am corectat doar promptul căii cu
+    // text extras, dar calea de fallback (PDF ca document, folosită când PDF.js nu poate încărca/extrage
+    // text — ex. blocat de un ad-blocker sau o problemă de rețea la CDN) avea un prompt mult mai simplu,
+    // FĂRĂ nicio mențiune despre împărțirea preț total/cantitate — bug-ul persista neschimbat ori de
+    // câte ori se folosea acea cale, indiferent de fix-ul din prima variantă.
+    const invoiceFormatRules=`Detectează automat formatul:
+- maxy.eu/verk.store: titlul se termină cu cantitatea (ex. "..., 10 pcs" sau "..., 10 szt."), apoi
+  "Symbol: XXXXX" (codul produsului), apoi un preț în EUR. ATENȚIE, greșeală frecventă de evitat: acel
+  preț e TOTALUL pentru toată cantitatea de pe acel rând, NU prețul pe bucată — trebuie ÎMPĂRȚIT la
+  cantitate. Exemplu real: "Cat scratcher - corner, 10 pcs" cu prețul afișat "55,40 €" înseamnă qty=10,
+  priceBuy=55.40/10=5.54 (NU 55.40 — ar însemna 554€ pentru 10 bucăți, evident greșit). Verifică mereu
+  acest calcul (total/cantitate) înainte de a răspunde, pentru fiecare produs.
+- Skroutz: "N × XX,XX Lei" → priceBuy=prețul per buc, currency=RON
+- Facturi RO standard: cantitate × preț unitar`;
+    const invoiceJsonFormat=`Răspunde STRICT cu JSON (fără markdown, fără explicații):
+{"invoiceNumber":"<numărul facturii/comenzii găsit în document sau null>","items":[{"sku":"<cod/symbol sau null>","name":"<denumire în română>","qty":<întreg pozitiv>,"priceBuy":<preț/buc număr>,"currency":"<EUR sau RON>"}]}`;
     let resp='';
     if(pdfText&&pdfText.trim().length>50){
       // Send extracted text to OpenAI
@@ -12353,20 +12371,11 @@ async function parsePDFWithAI(file){
 TEXT FACTURĂ:
 ${pdfText.slice(0,10000)}
 
-Detectează automat formatul:
-- maxy.eu/verk.store: titlul se termină cu cantitatea (ex. "..., 10 pcs" sau "..., 10 szt."), apoi
-  "Symbol: XXXXX" (codul produsului), apoi un preț în EUR. ATENȚIE, greșeală frecventă de evitat: acel
-  preț e TOTALUL pentru toată cantitatea de pe acel rând, NU prețul pe bucată — trebuie ÎMPĂRȚIT la
-  cantitate. Exemplu real: "Cat scratcher - corner, 10 pcs" cu prețul afișat "55,40 €" înseamnă qty=10,
-  priceBuy=55.40/10=5.54 (NU 55.40 — ar însemna 554€ pentru 10 bucăți, evident greșit). Verifică mereu
-  acest calcul (total/cantitate) înainte de a răspunde, pentru fiecare produs.
-- Skroutz: "N × XX,XX Lei" → priceBuy=prețul per buc, currency=RON
-- Facturi RO standard: cantitate × preț unitar
+${invoiceFormatRules}
 
 Caută și numărul facturii sau codul comenzii (ex: "Factură nr.", "Invoice no.", "Order", "Nr. comandă") — dacă nu apare, folosește null.
 
-Răspunde STRICT cu JSON (fără markdown, fără explicații):
-{"invoiceNumber":"<numărul facturii/comenzii găsit în document sau null>","items":[{"sku":"<cod/symbol sau null>","name":"<denumire în română>","qty":<întreg pozitiv>,"priceBuy":<preț/buc număr>,"currency":"<EUR sau RON>"}]}
+${invoiceJsonFormat}
 
 Reguli: ignoră total/TVA/transport, consolidează duplicate, qty>0 obligatoriu`;
 
@@ -12374,7 +12383,7 @@ Reguli: ignoră total/TVA/transport, consolidează duplicate, qty>0 obligatoriu`
         'Ești expert procesare facturi. Răspunzi DOAR cu JSON valid, niciodată altceva.',
         3000,'analysis');
     } else {
-      // Fallback: send PDF as base64 document
+      // Fallback: send PDF as base64 document (PDF.js indisponibil sau text extras prea scurt)
       const b64=await new Promise(res=>{
         const r=new FileReader();
         r.onload=e=>res(e.target.result.split(',')[1]);
@@ -12382,7 +12391,7 @@ Reguli: ignoră total/TVA/transport, consolidează duplicate, qty>0 obligatoriu`
       });
       resp=await callAI([{role:'user',content:[
           {type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},
-          {type:'text',text:'Extrage produsele din această factură și, dacă apare, numărul facturii/comenzii. Răspunde STRICT cu JSON: {"invoiceNumber":"<număr factură/comandă sau null>","items":[{"sku":"...","name":"...","qty":N,"priceBuy":N,"currency":"EUR sau RON"}]}. Fără altceva.'}
+          {type:'text',text:`Extrage produsele din această factură/comandă și, dacă apare, numărul facturii/comenzii.\n\n${invoiceFormatRules}\n\n${invoiceJsonFormat}`}
         ]}],'Ești expert procesare facturi. Răspunzi DOAR cu JSON valid, niciodată altceva.',2000,'analysis');
     }
 
@@ -12966,11 +12975,26 @@ function renderInvPreview(){
     const delta=p&&item.costRon>0?priceDeltaHtml(oldPrice,item.costRon):'';
     const stockPlan=p?stockImportPlan(p,item.qty):null;
     const stockInfo=stockPlan?`<div class="pcom-meta-line">Stoc: ${fmtQty(stockPlan.before)} + ${fmtQty(stockPlan.add)} = ${fmtQty(stockPlan.after)}${stockPlan.compensated>0?' · compensează minus '+fmtQty(stockPlan.compensated):''}</div>`:'';
+    // Plasă de siguranță suplimentară, independentă de promptul AI — dacă bug-ul de mai sus (total
+    // nedivizat la cantitate) reapare din orice motiv, o creștere de preț de acest calibru tot ajunge
+    // vizibilă, apăsat, înainte de aplicare, nu doar ca procent mic lângă preț. Semnul cel mai clar al
+    // exact acestui bug: raportul noul_preț/preț_vechi e aproape identic cu cantitatea comandată.
+    let extremeWarn='';
+    if(p&&oldPrice>0&&item.costRon>0){
+      const ratio=item.costRon/oldPrice;
+      if(ratio>=2.5){
+        // Bandă largă (0.5x–2x cantitatea), nu potrivire exactă — de obicei mai există și o schimbare
+        // reală, modestă de preț ODATĂ cu bug-ul (raportul nu e niciodată perfect egal cu cantitatea în
+        // realitate). Verificat pe toate cele 4 cazuri reale raportate — raportul cade mereu în bandă.
+        const looksLikeQtyBug=item.qty>1&&ratio>=item.qty*0.5&&ratio<=item.qty*2;
+        extremeWarn=`<div class="pcom-meta-line" style="color:var(--rd);font-weight:700">⚠️ Creștere foarte mare de preț${looksLikeQtyBug?` — pare prețul TOTAL pentru ${fmtQty(item.qty)} buc., nu cel pe bucată.`:' — verifică prețul înainte de a aplica.'}${looksLikeQtyBug?` <button type="button" class="btn btn-sm" style="padding:2px 8px;font-size:18px" onclick="fixInvItemPriceDivision(${idx})">➗ Împarte la ${fmtQty(item.qty)}</button>`:''}</div>`;
+      }
+    }
     // Card mai mare, cu poză de produs — cerere directă: aceeași asezare "premium" ca la Comenzi
     // Platforme (pcomRowHtml), reutilizând exact aceleași clase CSS, nu o versiune separată.
     const rowImg=p&&p.img?`<img src="${esc(imgSrc(p.img))}" class="pcom-row-img" ${imgErrAttr(p.img,'pcomrow')}>`:(item.newProduct&&item.img?`<img src="${esc(imgSrc(item.img))}" class="pcom-row-img" ${imgErrAttr(item.img,'pcomrow')}>`:`<div class="pcom-row-img-ph">📦</div>`);
     const newProdForm=item.newProduct?invNewProductFormHtml(idx):'';
-    return`<div class="inv-prev-row pcom-prev-row">${rowImg}<div class="inv-prev-nm pcom-prev-nm"><div class="pcom-platform-title">${esc(nm)} ${tag}</div>${stockInfo}${newProdForm}</div><div class="smi-pick" id="invpick-${idx}">${invPickBtnHtml(idx)}</div><div class="inv-prev-price"><div class="inv-prev-q" style="font-size:22px">+${fmtQty(item.qty)}</div><div class="pcom-meta-line" style="margin-top:4px">${priceStr}${delta}</div></div></div>`;
+    return`<div class="inv-prev-row pcom-prev-row">${rowImg}<div class="inv-prev-nm pcom-prev-nm"><div class="pcom-platform-title">${esc(nm)} ${tag}</div>${stockInfo}${extremeWarn}${newProdForm}</div><div class="smi-pick" id="invpick-${idx}">${invPickBtnHtml(idx)}</div><div class="inv-prev-price"><div class="inv-prev-q" style="font-size:22px">+${fmtQty(item.qty)}</div><div class="pcom-meta-line" style="margin-top:4px">${priceStr}${delta}</div></div></div>`;
   }).join('');
   const newC=invParsed.filter(i=>!i.produsId&&i.newProduct).length;
   const updC=invParsed.filter(i=>i.produsId).length;
@@ -12982,6 +13006,15 @@ function renderInvPreview(){
   document.getElementById('inv-info').textContent=`${newC} produse noi · ${updC} actualizări stoc${missC?' · '+missC+' coduri negăsite':''}${unresolvedC?' · ⚠ '+unresolvedC+' linii fără produs ales':''}${receiptC?' · '+fmtQty(receiptQty)+' buc. recepționate din pe drum':''}`;
   document.getElementById('inv-apply-btn').disabled=false;
   document.getElementById('inv-checklist-btn').disabled=false;
+}
+// Corectare rapidă cu un click, direct din avertismentul de mai sus — evită să anulezi importul și
+// să reîncarci fișierul doar ca să corectezi un preț nedivizat la cantitate.
+function fixInvItemPriceDivision(idx){
+  const item=invParsed[idx];if(!item||!item.qty)return;
+  item.priceBuy=Math.round((item.priceBuy/item.qty)*100)/100;
+  item.costRon=item.currency==='EUR'?Math.round(item.priceBuy*EUR_RON*100)/100:item.priceBuy;
+  renderInvPreview();
+  toast('Preț corectat ✓');
 }
 // Listă printabilă de trimis la depozit, ca să verifice la recepția mărfii dacă a ajuns tot ce s-a
 // comandat — poză + titlu (deja tradus în română de AI la parsare, indiferent de sursă: PDF/poze
