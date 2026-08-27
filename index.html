@@ -513,6 +513,16 @@ tr:hover td{background:var(--surf2)}
 .smi-pick-th-ph{width:31px;height:31px;border-radius:5px;background:var(--surf2);border:1px dashed var(--b2);display:flex;align-items:center;justify-content:center;font-size:23px;flex-shrink:0}
 .smi-pick-nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;text-align:left}
 .smi-pick-car{color:var(--t3);font-size:18px;flex-shrink:0}
+/* Import Sincronizare (Import în masă din fișier) — la cerere directă: titlul stătea pe același rând
+   cu PNK-ul și eticheta de stare, îngrămădite, iar picker-ul de produs (elementul cu care chiar se
+   face maparea) era mic, la fel ca peste tot — aici e treaba principală a rândului, merită mai mult
+   spațiu. Titlul acum e singur pe rândul lui (elipsă dacă e prea lung), PNK+etichetă dedesubt, iar
+   picker-ul e mai lat, cu mai mult spațiu față de restul rândului.
+   Scopat pe #smi-preview, nu pe .smi-pick în general (folosit și în alte fluxuri mai compacte). */
+.smi-imp-meta{display:flex;align-items:center;gap:0;margin-top:4px;flex-wrap:wrap;min-height:26px}
+#smi-preview .smi-pick-lg{margin-left:16px}
+#smi-preview .smi-pick-lg .smi-pick-btn{max-width:320px;min-width:280px;padding:8px 12px;font-size:23px}
+#smi-preview .smi-pick-lg .smi-pick-th,#smi-preview .smi-pick-lg .smi-pick-th-ph{width:38px;height:38px}
 .pcom-table{width:100%;border-collapse:collapse;font-size:22px;margin-bottom:14px}
 .pcom-table th{text-align:left;padding:6px 8px;color:var(--t3);font-weight:600;border-bottom:1px solid var(--b1)}
 .pcom-table td{padding:6px 8px;border-bottom:1px solid var(--b1);font-family:var(--mono)}
@@ -2433,6 +2443,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:247,text:'Sincronizare — previzualizarea de la „Import în masă din fișier" (aducere listări eMAG/Trendyol), la cerere directă, raportată ca greu de lucrat. Titlul, PNK-ul și eticheta de stare (✓ prin PNK / 🤖 sugestie AI / etc.) stăteau înghesuite pe același rând, amestecate. Acum titlul e singur pe rândul lui (elipsă dacă e prea lung, nu se mai amestecă), PNK + etichetă apar dedesubt, iar picker-ul de produs — elementul cu care chiar se face maparea — e mai lat și mai bine separat de restul rândului, mai ușor de apăsat',date:'2026-08-28'},
   {n:246,text:'Trei ajustări la „Importă factură", la cerere directă. (1) Modalul se lărgește acum automat (~2x) de îndată ce apare o previzualizare cu produse — la comenzi lungi (poze/PDF cu 20+ produse), spațiul dublu ajută mult, cu picker de produs, poză, preț și scroll pe fiecare rând. (2) „🖨️ Listă verificare depozit" nu a avut niciodată preț — deja confirmat că e doar poză, titlu, cantitate și bifă. (3) Aceeași listă se poate genera acum și ULTERIOR, din Jurnal vânzări → Comenzi stoc — buton 🖨️ nou pe fiecare comandă din istoric, regenerează lista din detaliile deja salvate, fără să fie nevoie să reimporți fișierul original',date:'2026-08-28'},
   {n:245,text:'Fix-ul de preț nedivizat la cantitate (#244) tot apărea — găsit motivul real: exista o A DOUA cale de citire a PDF-ului (folosită când PDF.js nu poate încărca/extrage text, ex. blocat de un ad-blocker), cu un prompt mult mai simplu, fără nicio mențiune despre împărțirea preț total/cantitate — fix-ul anterior corectase doar prima cale. Acum ambele căi folosesc exact aceleași reguli. În plus, plasă de siguranță suplimentară direct în previzualizare, independentă de AI: orice creștere de preț peste 250%, dacă raportul seamănă cu cantitatea comandată, arată acum un avertisment roșu explicit („pare prețul TOTAL, nu cel pe bucată") cu buton „➗ Împarte la cantitate" — corectează cu un click, fără să anulezi și să reîncarci fișierul',date:'2026-08-27'},
   {n:244,text:'Fix real, raportat cu exemplu concret: la import PDF de comandă (Maxy/Verk), prețul de achiziție salvat pentru un produs era uneori prețul TOTAL al liniei (cantitate inclusă), nu prețul pe bucată — apărea o "creștere de preț" absurdă la reimport (ex. 971% pentru 55,40€/10 bucăți, în loc de 5,54€/bucată). Cauza reală: extragerea de text din PDF amesteca tot conținutul paginii într-un singur șir, fără nicio legătură rând-cu-rând — AI-ul nu mai putea asocia sigur cantitatea cu prețul de pe același rând al tabelului. Extragerea reconstruiește acum rândurile după poziția reală a textului în pagină, iar promptul AI a primit un exemplu concret de calcul corect (total/cantitate) direct din cazul raportat',date:'2026-08-27'},
@@ -10951,8 +10962,11 @@ function renderSyncImportPreview(){
     const newBtn=(!it.produsId&&!it.newProduct)?`<button type="button" class="btn btn-sm" onclick="markSyncRowNewProduct(${idx})" title="Nu există încă în Inventar — creează un produs nou cu acest titlu">+ Nou</button>`:'';
     return`<div class="inv-prev-row" style="gap:10px">
       <input type="checkbox" ${it.include?'checked':''} onchange="syncImpParsed[${idx}].include=this.checked;updSyncImportInfo()">
-      <div class="inv-prev-nm" style="flex:1">${esc(it.titluExtern)} ${pnkTag} ${tag}</div>
-      <div class="smi-pick" id="smi-pick-${idx}">${syncPickBtnHtml(idx)}</div>
+      <div style="flex:1;min-width:0">
+        <div class="inv-prev-nm">${esc(it.titluExtern)}</div>
+        <div class="smi-imp-meta">${pnkTag}${tag}</div>
+      </div>
+      <div class="smi-pick smi-pick-lg" id="smi-pick-${idx}">${syncPickBtnHtml(idx)}</div>
       ${newBtn}
     </div>`;
   }).join('');
