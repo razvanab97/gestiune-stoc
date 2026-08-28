@@ -1856,7 +1856,7 @@ th{font-weight:800!important;color:var(--t3)!important}
           </div>
           <div class="fld">
             <label>Fișier comenzi (.xlsx / .xls / .csv)</label>
-            <input type="file" id="pcmi-file" accept=".xlsx,.xls,.csv" onchange="handlePcomImportFile(event)">
+            <input type="file" id="pcmi-file" accept=".xlsx,.xls,.csv" multiple onchange="handlePcomImportFile(event)">
           </div>
         </div>
         <div id="pcmi-parsing" style="display:none;font-size:22px;color:var(--t3);margin:8px 0"><span class="spin"></span> Se procesează fișierul…</div>
@@ -2443,6 +2443,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:248,text:'Comenzi Platforme — „Import fișier comenzi" acceptă acum mai multe fișiere deodată (2-3 sau oricâte), nu doar unul pe rând — util pentru exporturi separate pe zile, sau eMAG + Trendyol una după alta. Liniile din toate fișierele se combină într-o singură previzualizare; dacă aceeași comandă apare din greșeală în două fișiere suprapuse, apare o singură dată, nu dublat. Dacă un fișier din lot nu poate fi citit (format necunoscut/coruput), restul fișierelor bune tot se procesează normal — nu se pierde tot lotul din cauza unuia singur',date:'2026-08-28'},
   {n:247,text:'Sincronizare — previzualizarea de la „Import în masă din fișier" (aducere listări eMAG/Trendyol), la cerere directă, raportată ca greu de lucrat. Titlul, PNK-ul și eticheta de stare (✓ prin PNK / 🤖 sugestie AI / etc.) stăteau înghesuite pe același rând, amestecate. Acum titlul e singur pe rândul lui (elipsă dacă e prea lung, nu se mai amestecă), PNK + etichetă apar dedesubt, iar picker-ul de produs — elementul cu care chiar se face maparea — e mai lat și mai bine separat de restul rândului, mai ușor de apăsat',date:'2026-08-28'},
   {n:246,text:'Trei ajustări la „Importă factură", la cerere directă. (1) Modalul se lărgește acum automat (~2x) de îndată ce apare o previzualizare cu produse — la comenzi lungi (poze/PDF cu 20+ produse), spațiul dublu ajută mult, cu picker de produs, poză, preț și scroll pe fiecare rând. (2) „🖨️ Listă verificare depozit" nu a avut niciodată preț — deja confirmat că e doar poză, titlu, cantitate și bifă. (3) Aceeași listă se poate genera acum și ULTERIOR, din Jurnal vânzări → Comenzi stoc — buton 🖨️ nou pe fiecare comandă din istoric, regenerează lista din detaliile deja salvate, fără să fie nevoie să reimporți fișierul original',date:'2026-08-28'},
   {n:245,text:'Fix-ul de preț nedivizat la cantitate (#244) tot apărea — găsit motivul real: exista o A DOUA cale de citire a PDF-ului (folosită când PDF.js nu poate încărca/extrage text, ex. blocat de un ad-blocker), cu un prompt mult mai simplu, fără nicio mențiune despre împărțirea preț total/cantitate — fix-ul anterior corectase doar prima cale. Acum ambele căi folosesc exact aceleași reguli. În plus, plasă de siguranță suplimentară direct în previzualizare, independentă de AI: orice creștere de preț peste 250%, dacă raportul seamănă cu cantitatea comandată, arată acum un avertisment roșu explicit („pare prețul TOTAL, nu cel pe bucată") cu buton „➗ Împarte la cantitate" — corectează cu un click, fără să anulezi și să reîncarci fișierul',date:'2026-08-27'},
@@ -11250,85 +11251,103 @@ Răspunde STRICT cu JSON, fără markdown: {"translations":[{"index":<index>,"ro
   }
 }
 async function handlePcomImportFile(ev){
-  const file=ev.target.files[0];if(!file)return;
+  const files=[...(ev.target.files||[])];if(!files.length)return;
   const platforma=pcImpPlatforma=document.getElementById('pcmi-platforma').value;
   const parsing=document.getElementById('pcmi-parsing');
   parsing.style.display='block';
+  parsing.innerHTML=files.length>1?`<span class="spin"></span> Se procesează ${files.length} fișiere…`:'<span class="spin"></span> Se procesează fișierul…';
   document.getElementById('pcmi-preview').innerHTML='';
   document.getElementById('pcmi-foot').style.display='none';
   document.getElementById('pcmi-ai-btn').style.display='none';
   pcImpParsed=[];
+  // Câteva fișiere deodată (ex. exporturi pe zile separate, sau eMAG+Trendyol una după alta) — la
+  // cerere directă. existingKeys se calculează o singură dată (nu se schimbă între fișiere), dar
+  // seenInBatch trebuie să fie comun TUTUROR fișierelor din acest upload, altfel același rând (ex.
+  // aceeași comandă apărută din greșeală în două exporturi suprapuse) ar intra de două ori în listă.
+  const existingKeys=new Set(PCOM.filter(o=>o.platforma===platforma).map(o=>o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern)));
+  const seenInBatch=new Set();
+  const failedFiles=[];
   try{
     await ensureXLSX();
-    const buf=await file.arrayBuffer();
-    const wb=window.XLSX.read(buf,{type:'array'});
-    const rows=window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
-    if(!rows.length){toast('Fișier gol','err');parsing.style.display='none';return;}
-    // unele exporturi (Trendyol) au un rând de avertisment/notă înaintea rândului real de headere —
-    // căutăm în primele câteva rânduri pe cel care conține efectiv titlul produsului + cantitatea
-    let headerRowIdx=-1,col={};
-    for(let hr=0;hr<Math.min(5,rows.length);hr++){
-      const hdrLower=rows[hr].map(h=>String(h).trim().toLowerCase());
-      const testCol={};
-      for(const key in PCOM_HDR_ALIASES)testCol[key]=pcomFindCol(hdrLower,PCOM_HDR_ALIASES[key]);
-      if(testCol.titlu>-1&&testCol.cantitate>-1){headerRowIdx=hr;col=testCol;break;}
-    }
-    if(headerRowIdx<0){toast('Nu am găsit coloana cu numele produsului în fișier','err');parsing.style.display='none';return;}
-    const existingKeys=new Set(PCOM.filter(o=>o.platforma===platforma).map(o=>o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern)));
-    for(let i=headerRowIdx+1;i<rows.length;i++){
-      const r=rows[i];
-      const titlu=String(r[col.titlu]||'').trim();
-      if(!titlu)continue;
-      const comandaId=col.comanda>-1?String(r[col.comanda]||'').trim():'';
-      const pachetId=col.pachet>-1?String(r[col.pachet]||'').trim():'';
-      const pnk=col.pnk>-1?String(r[col.pnk]||'').trim():'';
-      const codProdus=col.codProdus>-1?String(r[col.codProdus]||'').trim():'';
-      const clientNume=col.client>-1?String(r[col.client]||'').trim():'';
-      const key=comandaId+'|'+(pnk||codProdus||titlu);
-      if(existingKeys.has(key))continue;
-      const data=pcomParseDate(col.data>-1?r[col.data]:'')||td();
-      const cantitate=col.cantitate>-1?(Number(r[col.cantitate])||1):1;
-      let pretFaraTva,pretTotalCuTva;
-      if(col.pretTotalFactura>-1&&col.pretFaraTva<0&&col.pretTotalCuTva<0){
-        // Trendyol: nicio coloană fără/cu TVA separată — doar valoarea facturată pe toată linia
-        // (după eventuala reducere), cu TVA inclus; deducem prețul fără TVA per bucată la cota de 21%
-        const lineTotal=Number(r[col.pretTotalFactura])||0;
-        pretTotalCuTva=lineTotal;
-        pretFaraTva=cantitate>0?Math.round((lineTotal/cantitate/1.21)*100)/100:0;
-      }else{
-        pretFaraTva=col.pretFaraTva>-1?(Number(r[col.pretFaraTva])||0):0;
-        pretTotalCuTva=col.pretTotalCuTva>-1?(Number(r[col.pretTotalCuTva])||0):0;
+    for(const file of files){
+      try{
+        const buf=await file.arrayBuffer();
+        const wb=window.XLSX.read(buf,{type:'array'});
+        const rows=window.XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:''});
+        if(!rows.length){failedFiles.push(file.name);continue;}
+        // unele exporturi (Trendyol) au un rând de avertisment/notă înaintea rândului real de headere —
+        // căutăm în primele câteva rânduri pe cel care conține efectiv titlul produsului + cantitatea
+        let headerRowIdx=-1,col={};
+        for(let hr=0;hr<Math.min(5,rows.length);hr++){
+          const hdrLower=rows[hr].map(h=>String(h).trim().toLowerCase());
+          const testCol={};
+          for(const key in PCOM_HDR_ALIASES)testCol[key]=pcomFindCol(hdrLower,PCOM_HDR_ALIASES[key]);
+          if(testCol.titlu>-1&&testCol.cantitate>-1){headerRowIdx=hr;col=testCol;break;}
+        }
+        if(headerRowIdx<0){failedFiles.push(file.name);continue;}
+        for(let i=headerRowIdx+1;i<rows.length;i++){
+          const r=rows[i];
+          const titlu=String(r[col.titlu]||'').trim();
+          if(!titlu)continue;
+          const comandaId=col.comanda>-1?String(r[col.comanda]||'').trim():'';
+          const pachetId=col.pachet>-1?String(r[col.pachet]||'').trim():'';
+          const pnk=col.pnk>-1?String(r[col.pnk]||'').trim():'';
+          const codProdus=col.codProdus>-1?String(r[col.codProdus]||'').trim():'';
+          const clientNume=col.client>-1?String(r[col.client]||'').trim():'';
+          const key=comandaId+'|'+(pnk||codProdus||titlu);
+          if(existingKeys.has(key)||seenInBatch.has(key))continue;
+          seenInBatch.add(key);
+          const data=pcomParseDate(col.data>-1?r[col.data]:'')||td();
+          const cantitate=col.cantitate>-1?(Number(r[col.cantitate])||1):1;
+          let pretFaraTva,pretTotalCuTva;
+          if(col.pretTotalFactura>-1&&col.pretFaraTva<0&&col.pretTotalCuTva<0){
+            // Trendyol: nicio coloană fără/cu TVA separată — doar valoarea facturată pe toată linia
+            // (după eventuala reducere), cu TVA inclus; deducem prețul fără TVA per bucată la cota de 21%
+            const lineTotal=Number(r[col.pretTotalFactura])||0;
+            pretTotalCuTva=lineTotal;
+            pretFaraTva=cantitate>0?Math.round((lineTotal/cantitate/1.21)*100)/100:0;
+          }else{
+            pretFaraTva=col.pretFaraTva>-1?(Number(r[col.pretFaraTva])||0):0;
+            pretTotalCuTva=col.pretTotalCuTva>-1?(Number(r[col.pretTotalCuTva])||0):0;
+          }
+          const moneda=col.moneda>-1?String(r[col.moneda]||'RON').trim().toUpperCase():'RON';
+          const tara=platforma==='emag'?pcomCountryFromCurrency(moneda,titlu):'';
+          let produsId=null,score=0,viaPnk=false,viaTitle=false;
+          if(pnk){
+            const m=SYNCM.find(s=>s.platforma===platforma&&s.confirmat&&s.idExtern===pnk);
+            if(m){produsId=m.produsId;score=1;viaPnk=true;}
+          }
+          // al doilea fir de memorie, după titlul exact — mai ales pentru Trendyol, unde codul de bare
+          // nu e mereu de încredere; odată ce un titlu a fost confirmat manual o dată, se recunoaște automat
+          if(!produsId){
+            const titleKey=titlu.toLowerCase().trim();
+            const mt=SYNCM.find(s=>s.platforma===platforma&&s.confirmat&&s.titluExtern.toLowerCase().trim()===titleKey);
+            if(mt){produsId=mt.produsId;score=1;viaTitle=true;}
+          }
+          if(!produsId){
+            const match=findExistingProduct({name:titlu});
+            if(match){produsId=match.product.id;score=match.score;}
+          }
+          pcImpParsed.push({comandaId,pachetId,data,pnk,tara,codProdus,clientNume,titluExtern:titlu,cantitate,pretFaraTva,pretTotalCuTva,moneda,produsId,score,viaPnk,viaTitle,include:!!produsId});
+        }
+      }catch(fileErr){
+        console.warn('Fișier ignorat la import Comenzi Platforme:',file.name,fileErr);
+        failedFiles.push(file.name);
       }
-      const moneda=col.moneda>-1?String(r[col.moneda]||'RON').trim().toUpperCase():'RON';
-      const tara=platforma==='emag'?pcomCountryFromCurrency(moneda,titlu):'';
-      let produsId=null,score=0,viaPnk=false,viaTitle=false;
-      if(pnk){
-        const m=SYNCM.find(s=>s.platforma===platforma&&s.confirmat&&s.idExtern===pnk);
-        if(m){produsId=m.produsId;score=1;viaPnk=true;}
-      }
-      // al doilea fir de memorie, după titlul exact — mai ales pentru Trendyol, unde codul de bare
-      // nu e mereu de încredere; odată ce un titlu a fost confirmat manual o dată, se recunoaște automat
-      if(!produsId){
-        const titleKey=titlu.toLowerCase().trim();
-        const mt=SYNCM.find(s=>s.platforma===platforma&&s.confirmat&&s.titluExtern.toLowerCase().trim()===titleKey);
-        if(mt){produsId=mt.produsId;score=1;viaTitle=true;}
-      }
-      if(!produsId){
-        const match=findExistingProduct({name:titlu});
-        if(match){produsId=match.product.id;score=match.score;}
-      }
-      pcImpParsed.push({comandaId,pachetId,data,pnk,tara,codProdus,clientNume,titluExtern:titlu,cantitate,pretFaraTva,pretTotalCuTva,moneda,produsId,score,viaPnk,viaTitle,include:!!produsId});
     }
     parsing.style.display='none';
-    if(!pcImpParsed.length){toast('Nicio linie nouă de importat (toate există deja sau fișierul e gol)','err');return;}
+    if(!pcImpParsed.length){
+      toast(failedFiles.length?'Niciun fișier n-a putut fi citit: '+failedFiles.join(', '):'Nicio linie nouă de importat (toate există deja sau fișierele sunt goale)','err');
+      return;
+    }
     renderPcomImportPreview();
     const noMatch=pcImpParsed.filter(x=>!x.produsId).length;
     document.getElementById('pcmi-ai-btn').style.display=noMatch?'':'none';
-    toast(`${pcImpParsed.length} linii detectate · ${pcImpParsed.length-noMatch} cu produs asociat ✓`);
+    toast(`${pcImpParsed.length} linii detectate${files.length>1?' din '+files.length+' fișiere':''} · ${pcImpParsed.length-noMatch} cu produs asociat ✓${failedFiles.length?' · '+failedFiles.length+' fișiere ignorate: '+failedFiles.join(', '):''}`);
     pcomTranslateForeignTitles();
   }catch(err){
     parsing.style.display='none';
-    toast('Eroare la citirea fișierului: '+err.message,'err');
+    toast('Eroare la citirea fișierelor: '+err.message,'err');
   }finally{
     ev.target.value='';
   }
