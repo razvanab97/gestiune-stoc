@@ -537,6 +537,10 @@ tr:hover td{background:var(--surf2)}
 .pcom-group-hd{font-size:22px;font-weight:700;color:var(--acc);padding:10px 0 4px}
 .pcom-group .pcom-prev-row{border:none;border-bottom:2px solid var(--b1);border-radius:0;margin-bottom:0;background:transparent}
 .pcom-group .pcom-prev-row:last-of-type{border-bottom:none}
+.pcom-platform-divider{display:flex;align-items:center;gap:10px;margin:22px 0 10px;font-size:21px;font-weight:700;color:var(--t2)}
+.pcom-platform-divider:first-child{margin-top:8px}
+.pcom-platform-divider::after{content:'';flex:1;height:2px;background:var(--b1)}
+.pcom-platform-divider-count{font-weight:400;color:var(--t3);font-size:18px}
 .tabcfg-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 4px;border-bottom:1px solid var(--b1);font-size:23px}
 .tabcfg-row:last-child{border-bottom:none}
 .tabcfg-arrows{display:flex;gap:4px}
@@ -1855,9 +1859,10 @@ th{font-weight:800!important;color:var(--t3)!important}
         <div class="frow">
           <div class="fld">
             <label>Platformă fișier</label>
-            <select id="pcmi-platforma" onchange="pcImpPlatforma=this.value">
+            <select id="pcmi-platforma" onchange="pcImpPlatforma=this.value;updPcmiPlatformaHint()">
               <option value="emag">eMAG</option>
               <option value="trendyol">Trendyol</option>
+              <option value="both">eMAG + Trendyol (mixte)</option>
             </select>
           </div>
           <div class="fld">
@@ -1865,6 +1870,7 @@ th{font-weight:800!important;color:var(--t3)!important}
             <input type="file" id="pcmi-file" accept=".xlsx,.xls,.csv" multiple onchange="handlePcomImportFile(event)">
           </div>
         </div>
+        <div id="pcmi-platforma-hint" style="display:none;font-size:19px;color:var(--t3);margin:-4px 0 10px">Alege deodată fișierele eMAG și Trendyol ale zilei — platforma fiecărui fișier se detectează automat, iar în previzualizare liniile apar grupate pe platformă, separate printr-o linie.</div>
         <div id="pcmi-parsing" style="display:none;font-size:22px;color:var(--t3);margin:8px 0"><span class="spin"></span> Se procesează fișierul…</div>
         <div id="pcmi-preview"></div>
         <div class="smi-pickdrop" id="pcmi-pickdrop"><input type="text" id="pcmi-pick-search" placeholder="Caută produs după nume sau SKU…" oninput="filterPcomPick()"><div class="smi-pick-list" id="pcmi-pick-list"></div></div>
@@ -2449,6 +2455,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:250,text:'Comenzi Platforme — opțiune nouă la Import comenzi: „eMAG + Trendyol (mixte)", pentru când vrei să încarci fișierele ambelor platforme deodată, nu una câte una. Platforma fiecărui fișier se detectează automat (după forma coloanelor din export, nu trebuie aleasă manual), iar în previzualizare liniile apar grupate — întâi eMAG, apoi Trendyol — separate printr-o linie trasată cu eticheta și numărul de linii al fiecărei secțiuni',date:'2026-08-28'},
   {n:249,text:'Comenzi Platforme — „prea mult verde", raportat direct, la previzualizarea importului. Un rând inclus ȘI potrivit (cazul obișnuit — majoritatea rândurilor) aduna simultan fundal verde pe tot rândul + butonul „✓ Inclus" verde + eticheta de potrivire verde — pe o listă lungă, aproape totul arăta la fel. Fundalul de pe tot rândul (cel mai dominant dintre cele trei, oricum redundant cu butonul „✓ Inclus") e acum doar o tentă foarte estompată, aproape imperceptibilă',date:'2026-08-28'},
   {n:248,text:'Comenzi Platforme — „Import fișier comenzi" acceptă acum mai multe fișiere deodată (2-3 sau oricâte), nu doar unul pe rând — util pentru exporturi separate pe zile, sau eMAG + Trendyol una după alta. Liniile din toate fișierele se combină într-o singură previzualizare; dacă aceeași comandă apare din greșeală în două fișiere suprapuse, apare o singură dată, nu dublat. Dacă un fișier din lot nu poate fi citit (format necunoscut/coruput), restul fișierelor bune tot se procesează normal — nu se pierde tot lotul din cauza unuia singur',date:'2026-08-28'},
   {n:247,text:'Sincronizare — previzualizarea de la „Import în masă din fișier" (aducere listări eMAG/Trendyol), la cerere directă, raportată ca greu de lucrat. Titlul, PNK-ul și eticheta de stare (✓ prin PNK / 🤖 sugestie AI / etc.) stăteau înghesuite pe același rând, amestecate. Acum titlul e singur pe rândul lui (elipsă dacă e prea lung, nu se mai amestecă), PNK + etichetă apar dedesubt, iar picker-ul de produs — elementul cu care chiar se face maparea — e mai lat și mai bine separat de restul rândului, mai ușor de apăsat',date:'2026-08-28'},
@@ -11257,6 +11264,10 @@ Răspunde STRICT cu JSON, fără markdown: {"translations":[{"index":<index>,"ro
     console.warn('Traducere titluri comenzi eșuată:',err);
   }
 }
+function updPcmiPlatformaHint(){
+  const hint=document.getElementById('pcmi-platforma-hint');
+  if(hint)hint.style.display=pcImpPlatforma==='both'?'block':'none';
+}
 async function handlePcomImportFile(ev){
   const files=[...(ev.target.files||[])];if(!files.length)return;
   const platforma=pcImpPlatforma=document.getElementById('pcmi-platforma').value;
@@ -11267,11 +11278,13 @@ async function handlePcomImportFile(ev){
   document.getElementById('pcmi-foot').style.display='none';
   document.getElementById('pcmi-ai-btn').style.display='none';
   pcImpParsed=[];
-  // Câteva fișiere deodată (ex. exporturi pe zile separate, sau eMAG+Trendyol una după alta) — la
-  // cerere directă. existingKeys se calculează o singură dată (nu se schimbă între fișiere), dar
-  // seenInBatch trebuie să fie comun TUTUROR fișierelor din acest upload, altfel același rând (ex.
-  // aceeași comandă apărută din greșeală în două exporturi suprapuse) ar intra de două ori în listă.
-  const existingKeys=new Set(PCOM.filter(o=>o.platforma===platforma).map(o=>o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern)));
+  // Câteva fișiere deodată (ex. exporturi pe zile separate, sau eMAG+Trendyol deodată, cu platformă
+  // „both") — la cerere directă. existingKeys se calculează o singură dată (nu se schimbă între
+  // fișiere), dar seenInBatch trebuie să fie comun TUTUROR fișierelor din acest upload, altfel același
+  // rând (ex. aceeași comandă apărută din greșeală în două exporturi suprapuse) ar intra de două ori
+  // în listă. Cheile includ platforma (nu doar comandă+cod) ca să nu se amestece eMAG cu Trendyol la
+  // modul combinat — un nr. de comandă poate coincide accidental între cele două platforme.
+  const existingKeys=new Set(PCOM.map(o=>o.platforma+'|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern)));
   const seenInBatch=new Set();
   const failedFiles=[];
   try{
@@ -11292,6 +11305,12 @@ async function handlePcomImportFile(ev){
           if(testCol.titlu>-1&&testCol.cantitate>-1){headerRowIdx=hr;col=testCol;break;}
         }
         if(headerRowIdx<0){failedFiles.push(file.name);continue;}
+        // La platforma „both" (eMAG+Trendyol încărcate deodată), platforma fiecărui fișier se
+        // detectează din forma coloanelor găsite — același semnal deja folosit mai jos pentru deducerea
+        // TVA: Trendyol nu are coloane separate fără/cu TVA, doar „valoarea facturii" pe toată linia.
+        const filePlatforma=platforma==='both'
+          ?((col.pretTotalFactura>-1&&col.pretFaraTva<0&&col.pretTotalCuTva<0)?'trendyol':'emag')
+          :platforma;
         for(let i=headerRowIdx+1;i<rows.length;i++){
           const r=rows[i];
           const titlu=String(r[col.titlu]||'').trim();
@@ -11301,7 +11320,7 @@ async function handlePcomImportFile(ev){
           const pnk=col.pnk>-1?String(r[col.pnk]||'').trim():'';
           const codProdus=col.codProdus>-1?String(r[col.codProdus]||'').trim():'';
           const clientNume=col.client>-1?String(r[col.client]||'').trim():'';
-          const key=comandaId+'|'+(pnk||codProdus||titlu);
+          const key=filePlatforma+'|'+comandaId+'|'+(pnk||codProdus||titlu);
           if(existingKeys.has(key)||seenInBatch.has(key))continue;
           seenInBatch.add(key);
           const data=pcomParseDate(col.data>-1?r[col.data]:'')||td();
@@ -11318,24 +11337,24 @@ async function handlePcomImportFile(ev){
             pretTotalCuTva=col.pretTotalCuTva>-1?(Number(r[col.pretTotalCuTva])||0):0;
           }
           const moneda=col.moneda>-1?String(r[col.moneda]||'RON').trim().toUpperCase():'RON';
-          const tara=platforma==='emag'?pcomCountryFromCurrency(moneda,titlu):'';
+          const tara=filePlatforma==='emag'?pcomCountryFromCurrency(moneda,titlu):'';
           let produsId=null,score=0,viaPnk=false,viaTitle=false;
           if(pnk){
-            const m=SYNCM.find(s=>s.platforma===platforma&&s.confirmat&&s.idExtern===pnk);
+            const m=SYNCM.find(s=>s.platforma===filePlatforma&&s.confirmat&&s.idExtern===pnk);
             if(m){produsId=m.produsId;score=1;viaPnk=true;}
           }
           // al doilea fir de memorie, după titlul exact — mai ales pentru Trendyol, unde codul de bare
           // nu e mereu de încredere; odată ce un titlu a fost confirmat manual o dată, se recunoaște automat
           if(!produsId){
             const titleKey=titlu.toLowerCase().trim();
-            const mt=SYNCM.find(s=>s.platforma===platforma&&s.confirmat&&s.titluExtern.toLowerCase().trim()===titleKey);
+            const mt=SYNCM.find(s=>s.platforma===filePlatforma&&s.confirmat&&s.titluExtern.toLowerCase().trim()===titleKey);
             if(mt){produsId=mt.produsId;score=1;viaTitle=true;}
           }
           if(!produsId){
             const match=findExistingProduct({name:titlu});
             if(match){produsId=match.product.id;score=match.score;}
           }
-          pcImpParsed.push({comandaId,pachetId,data,pnk,tara,codProdus,clientNume,titluExtern:titlu,cantitate,pretFaraTva,pretTotalCuTva,moneda,produsId,score,viaPnk,viaTitle,include:!!produsId});
+          pcImpParsed.push({platforma:filePlatforma,comandaId,pachetId,data,pnk,tara,codProdus,clientNume,titluExtern:titlu,cantitate,pretFaraTva,pretTotalCuTva,moneda,produsId,score,viaPnk,viaTitle,include:!!produsId});
         }
       }catch(fileErr){
         console.warn('Fișier ignorat la import Comenzi Platforme:',file.name,fileErr);
@@ -11346,6 +11365,13 @@ async function handlePcomImportFile(ev){
     if(!pcImpParsed.length){
       toast(failedFiles.length?'Niciun fișier n-a putut fi citit: '+failedFiles.join(', '):'Nicio linie nouă de importat (toate există deja sau fișierele sunt goale)','err');
       return;
+    }
+    // La „both", grupează liniile pe platformă (eMAG întâi, apoi Trendyol) indiferent de ordinea în
+    // care au fost alese fișierele — sortare stabilă, păstrează ordinea originală în interiorul
+    // fiecărei platforme — ca previzualizarea să arate secțiuni curate, separate de o linie.
+    if(platforma==='both'){
+      const ord={emag:0,trendyol:1};
+      pcImpParsed.sort((a,b)=>(ord[a.platforma]??2)-(ord[b.platforma]??2));
     }
     renderPcomImportPreview();
     const noMatch=pcImpParsed.filter(x=>!x.produsId).length;
@@ -11586,14 +11612,27 @@ function togglePcomInclude(idx){
 function renderPcomImportPreview(){
   const prev=document.getElementById('pcmi-preview');
   pcomComputeGroups();
+  // Import combinat („both") — liniile sunt deja sortate pe platformă (vezi handlePcomImportFile),
+  // așa că o simplă schimbare de platformă între grupuri consecutive marchează exact granița dintre
+  // secțiuni; inserăm acolo o linie trasată cu eticheta platformei, ca cele două să se distingă clar.
+  const platformsPresent=new Set(pcImpParsed.map(x=>x.platforma).filter(Boolean));
+  const multiPlatform=platformsPresent.size>1;
+  let lastPlat=null;
   const groupsHtml=pcomGroups.map((idxs,gIdx)=>{
-    if(idxs.length<=1)return pcomRowHtml(idxs[0],true);
+    let divider='';
+    const plat=pcImpParsed[idxs[0]].platforma;
+    if(multiPlatform&&plat!==lastPlat){
+      lastPlat=plat;
+      const count=pcImpParsed.filter(x=>x.platforma===plat).length;
+      divider=`<div class="pcom-platform-divider"><span>${plat==='trendyol'?'🛍️ Trendyol':'🛒 eMAG'}</span><span class="pcom-platform-divider-count">${count} linii</span></div>`;
+    }
+    if(idxs.length<=1)return divider+pcomRowHtml(idxs[0],true);
     const linesHtml=idxs.map(i=>pcomRowHtml(i,false)).join('');
     const groupAwb=pcomGroupAwbTitle(gIdx);
     const groupCopied=idxs.every(i=>pcImpParsed[i]?.awbCopied);
     const pachetLabel=pcImpParsed[idxs[0]].pachetId||pcImpParsed[idxs[0]].comandaId;
     const groupAwbHtml=groupAwb?`<div class="pcom-awb-box${groupCopied?' pcom-awb-copied':''}" style="margin:2px 14px 10px"><span class="pcom-awb-title" title="Titlu combinat pentru AWB"><span class="pcom-awb-label">AWB —</span> ${esc(groupAwb)}</span><button type="button" class="btn ${groupCopied?'':'btn-acc'} pcom-awb-copy" onclick="copyPcomGroupAwbTitle(${gIdx})">${groupCopied?'✓ Copiat':'📋 Copiază tot pachetul'}</button></div>`:'';
-    return`<div class="pcom-group"><div class="pcom-group-hd">📦 Comandă${pachetLabel?' #'+esc(pachetLabel):''} · ${idxs.length} produse — se expediază împreună</div>${linesHtml}${groupAwbHtml}</div>`;
+    return divider+`<div class="pcom-group"><div class="pcom-group-hd">📦 Comandă${pachetLabel?' #'+esc(pachetLabel):''} · ${idxs.length} produse — se expediază împreună</div>${linesHtml}${groupAwbHtml}</div>`;
   }).join('');
   prev.innerHTML=`<div class="inv-preview"><div class="inv-prev-title">Previzualizare (${pcImpParsed.length} linii)</div>${groupsHtml}</div>`;
   document.getElementById('pcmi-foot').style.display='flex';
@@ -11614,6 +11653,7 @@ function loadPcomImportState(){
       pcImpParsed=saved.parsed;
       pcImpPlatforma=saved.platforma||'emag';
       const sel=document.getElementById('pcmi-platforma');if(sel)sel.value=pcImpPlatforma;
+      updPcmiPlatformaHint();
       renderPcomImportPreview();
       const noMatch=pcImpParsed.filter(x=>!x.produsId&&!x.newProduct).length;
       const aiBtn=document.getElementById('pcmi-ai-btn');if(aiBtn)aiBtn.style.display=noMatch?'':'none';
@@ -11750,7 +11790,6 @@ Răspunde STRICT cu JSON, fără markdown: {"matches":[{"index":<indexul liniei>
 }
 async function applyPcomImport(){
   if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
-  const platforma=pcImpPlatforma;
   // liniile "produs nou" nu se aplică automat — omul le adaugă manual în Inventar (buton dedicat pe
   // rând), ca să completeze corect categorie/preț/poză, nu doar un rând gol creat pe ascuns
   const toApply=pcImpParsed.filter(x=>x.include&&x.produsId&&!x.amanat);
@@ -11775,6 +11814,10 @@ async function applyPcomImport(){
     for(const it of toApply){
       const p=P.find(x=>x.id===it.produsId);
       if(!p){failed++;continue;}
+      // fiecare linie își poartă propria platformă (importantă la modul „both", unde un singur lot
+      // conține și eMAG și Trendyol) — cu fallback pe selecția globală pentru previzualizări vechi,
+      // salvate local înainte de acest câmp.
+      const platforma=it.platforma||pcImpPlatforma;
       try{
         const totalRon=pcomToRon(it.pretTotalCuTva,it.moneda);
         const fin=pcomSaleFinancials(p,it,platforma);
