@@ -2499,6 +2499,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:259,text:'Asociere automată produse (Sincronizare/Comenzi Platforme/Importă factură) — bug real reparat, raportat direct: multe listări cu titlu lung (stil eMAG, cu tot cu cuvinte de marketing) rămâneau „fără sugestie" deși produsul exista deja în stoc sub un nume intern mult mai scurt, conținut integral în titlu — formula veche penaliza nedrept diferența de lungime. Reparat + trei completări cerute explicit: (1) compararea folosește acum și dimensiunile/materialul/culoarea produsului, nu doar numele; (2) cifre identice între titlu și produs (ex. „22x15x7.5cm") cresc încrederea, cifre complet diferite o scad — protecție împotriva confundării unor variante diferite de mărime; (3) titlurile cu „AB HOMES" (brand propriu, des deja în stoc) primesc un bonus de încredere. „🤖 Sugerează cu AI" vede acum și specificațiile candidaților, nu doar numele, și știe explicit să prioritizeze AB HOMES. Verificat cu scoruri reale, înainte/după, pe liniile din captura primită',date:'2026-08-30'},
   {n:258,text:'Cadrane — prea multe culori diferite pe text (mov/verde/albastru/teal/portocaliu, aproape una per cadran), raportat direct. Simplificat la o singură paletă dominantă: majoritatea cadranelor (Produse, Valoare stoc, Vândute azi, Categorii, Furnizori, În tranzit, De comandat, Vânzări/Achiziții/Profit/Azi etc.) folosesc acum aceeași culoare de accent a paginii (mov pe Dashboard/Comenzi Platforme, albastru pe Vânzări — respectă tema proprie deja existentă a fiecărei pagini). Culorile de alertă rămân neatinse acolo unde chiar înseamnă ceva: roșu pentru Epuizate, portocaliu pentru Stoc scăzut/Epuizate la furnizor, verde/roșu dinamic pentru Profit (pozitiv/negativ)',date:'2026-08-28'},
   {n:257,text:'Dashboard — pata mov din colțul stânga-sus al fundalului paginii, scoasă la cerere directă și înlocuită cu un verde stins (după o poză de referință trimisă direct). Movul rămâne neatins acolo unde chiar aparține — bara de sus, pe tab-ul activ',date:'2026-08-28'},
   {n:256,text:'Cadrane redesenate peste toată aplicația (nu doar Dashboard — și rândul de sus din Vânzări, și „Profit vânzări" din Comenzi Platforme), după un reper vizual trimis direct: fiecare cadran are acum o iconiță rotundă în colțul din dreapta sus, colțuri mai rotunjite, un glow discret în culoarea proprie lângă iconiță (nu pe tot cadranul — varianta aia arăta urât, vezi #255) și eticheta colorată la fel ca iconița/cifra, nu doar gri. Bug real prins verificând computed style în browser, nu doar citind CSS-ul: eticheta nu se colora deloc, pentru că o regulă globală de lizibilitate ("Lizibilitate globală", cu !important pe zeci de clase) câștiga la egalitate de specificitate — reparat cu un selector mai specific',date:'2026-08-28'},
@@ -10646,7 +10647,7 @@ function doSuggestSyncProduct(){
   }
   const title=document.getElementById('sm-titlu').value.trim();
   if(!title||!P.length){el.style.display='none';el.innerHTML='';return;}
-  const scored=P.map(p=>({p,score:fuzzyMatch(title,p.name||'')}))
+  const scored=P.map(p=>({p,score:fuzzyMatch(title,productMatchText(p))}))
     .filter(x=>x.score>=0.3).sort((a,b)=>b.score-a.score).slice(0,3);
   if(!scored.length){el.style.display='none';el.innerHTML='';return;}
   el.style.display='flex';
@@ -10741,7 +10742,7 @@ async function pasteInvSearchImage(){
     if(!query){toast('AI nu a putut recunoaște produsul din poză','err');return;}
     const searchInp=document.getElementById('search');
     if(searchInp){searchInp.value=query;renderTable();}
-    const scored=P.filter(p=>!p.archived).map(p=>({p,score:fuzzyMatch(query,p.name||'')})).filter(x=>x.score>=0.2).sort((a,b)=>b.score-a.score).slice(0,15);
+    const scored=P.filter(p=>!p.archived).map(p=>({p,score:fuzzyMatch(query,productMatchText(p))})).filter(x=>x.score>=0.2).sort((a,b)=>b.score-a.score).slice(0,15);
     renderInvSearchImageResults(scored.map(x=>x.p));
     toast(scored.length?`AI a recunoscut „${query}" — vezi potrivirile din stoc mai jos, sub căutare`:`AI a recunoscut „${query}", dar nu am găsit nimic asemănător în stoc — probabil e un produs nou`,scored.length?undefined:'err');
   }catch(e){
@@ -10796,7 +10797,7 @@ async function pasteSmProductImageSearch(){
     const query=resp.trim().replace(/^["']|["']$/g,'').replace(/\.$/,'');
     if(!query){toast('AI nu a putut recunoaște produsul din poză','err');return;}
     if(!smProdPickList)smProdPickList=P.slice().sort((a,b)=>a.name.localeCompare(b.name));
-    const scored=smProdPickList.map(p=>({p,score:fuzzyMatch(query,p.name||'')})).filter(x=>x.score>=0.2).sort((a,b)=>b.score-a.score);
+    const scored=smProdPickList.map(p=>({p,score:fuzzyMatch(query,productMatchText(p))})).filter(x=>x.score>=0.2).sort((a,b)=>b.score-a.score);
     const btn=document.querySelector('#sm-produs-pick .smi-pick-btn');
     if(btn){
       const drop=document.getElementById('sm-produs-pickdrop');
@@ -11137,13 +11138,18 @@ async function suggestSyncImportWithAI(){
       const candByIdx={};
       const promptRows=chunk.map((idx,i)=>{
         const it=syncImpParsed[idx];
-        const cands=P.map(p=>({p,score:fuzzyMatch(it.titluExtern,p.name||'')})).sort((a,b)=>b.score-a.score).slice(0,5);
+        const cands=P.map(p=>({p,score:fuzzyMatch(it.titluExtern,productMatchText(p))})).sort((a,b)=>b.score-a.score).slice(0,5);
         candByIdx[idx]=cands;
-        const candLines=cands.map((cd,ci)=>`   ${ci+1}) ${cd.p.name}${cd.p.sku?' (SKU '+cd.p.sku+')':''}`).join('\n');
+        // Specificațiile (dimensiuni/material/culori), nu doar numele — la cerere directă, ca AI-ul
+        // să poată confirma SAU respinge un candidat pe baza lor, nu doar pe asemănarea titlului.
+        const candLines=cands.map((cd,ci)=>{
+          const specs=[cd.p.dims,cd.p.material,cd.p.colors,cd.p.sizes].filter(Boolean).join(' · ');
+          return`   ${ci+1}) ${cd.p.name}${cd.p.sku?' (SKU '+cd.p.sku+')':''}${specs?' — '+specs:''}`;
+        }).join('\n');
         return`${i+1}. Titlu extern: "${it.titluExtern}"\nCandidați din inventar:\n${candLines}`;
       }).join('\n\n');
-      const systemPrompt='Ești expert în identificarea produselor identice pe marketplace-uri românești (eMAG/Trendyol). Primești titluri de listări externe și candidați din inventarul propriu — alegi candidatul care e SIGUR același produs fizic (nu doar aceeași categorie sau un produs asemănător), nu ghicești. Răspunzi STRICT cu JSON valid, fără markdown.';
-      const userPrompt=`Pentru fiecare titlu de mai jos, alege numărul candidatului care e SIGUR același produs fizic — dacă niciun candidat nu se potrivește sigur, răspunde 0.\n\n${promptRows}\n\nRăspunde STRICT cu JSON: un obiect cu o cheie per titlu (numărul lui, ca text), valoarea fiind numărul candidatului ales sau 0. Ex: {"1":2,"2":0,"3":1}`;
+      const systemPrompt='Ești expert în identificarea produselor identice pe marketplace-uri românești (eMAG/Trendyol). Primești titluri de listări externe și candidați din inventarul propriu (nume + specificații: dimensiuni, material, culori, mărimi, când sunt cunoscute) — alegi candidatul care e SIGUR același produs fizic, nu doar aceeași categorie sau un produs asemănător. Bazează-te în primul rând pe dimensiuni/material/culoare când sunt disponibile — sunt mult mai fiabile decât titlul de marketing (dacă dimensiunile candidatului diferă clar de cele din titlu, NU e o potrivire, chiar dacă numele seamănă). Titlurile care conțin "AB HOMES" sunt brandul propriu — majoritatea produselor cu acest brand sunt deja în stoc, caută cu atenție sporită un candidat corespunzător pentru ele, dar tot NU alege dacă specificațiile nu se potrivesc. Nu ghicești. Răspunzi STRICT cu JSON valid, fără markdown.';
+      const userPrompt=`Pentru fiecare titlu de mai jos, alege numărul candidatului care e SIGUR același produs fizic — verifică mai ales dimensiunile/materialul/culoarea din candidat față de titlu — dacă niciun candidat nu se potrivește sigur, răspunde 0.\n\n${promptRows}\n\nRăspunde STRICT cu JSON: un obiect cu o cheie per titlu (numărul lui, ca text), valoarea fiind numărul candidatului ales sau 0. Ex: {"1":2,"2":0,"3":1}`;
       const resp=await callAI([{role:'user',content:userPrompt}],systemPrompt,600,'analysis');
       const match=resp.trim().match(/\{[\s\S]*\}/);
       if(!match)continue;
@@ -12543,16 +12549,52 @@ function fmTokens(s){
   return fmFold(s).toLowerCase().replace(/[^a-z0-9]/g,' ').replace(/(\d+)x\b/g,'$1').replace(/\s+/g,' ').trim()
     .split(' ').filter(w=>w.length>1&&!FM_STOP.has(w)).map(fmCanon);
 }
+// Cifre semnificative dintr-un text (dimensiuni, capacități) — comparate ca VALORI, nu ca text opac,
+// ca "51x37,5x38 cm" să conteze real în scor, la cerere directă ("să se raporteze mai mult la
+// specificații, la dimensiuni").
+function fmNumbers(s){
+  const out=new Set();
+  (String(s).match(/\d+(?:[.,]\d+)?/g)||[]).forEach(m=>{
+    const n=parseFloat(m.replace(',','.'));
+    if(n>0)out.add(Math.round(n*10)/10);
+  });
+  return out;
+}
 function fuzzyMatch(a,b){
   const na=fmNorm(a),nb=fmNorm(b);
   if(na===nb)return 1;
-  if(na.includes(nb)||nb.includes(na))return 0.9;
+  if(na.includes(nb)||nb.includes(na))return 0.95;
   const wa=new Set(fmTokens(a));
   const wb=new Set(fmTokens(b));
   const common=[...wa].filter(w=>wb.has(w)).length;
   const jacc=common/Math.max(wa.size,wb.size,1);
   const contain=common/Math.max(Math.min(wa.size,wb.size),1);
-  return (jacc+contain)/2;
+  // Titlurile eMAG/Trendyol sunt de obicei mult mai lungi decât numele intern, pline de cuvinte de
+  // marketing — Jaccard singur penaliza nedrept lungimea, chiar și când TOATE cuvintele
+  // identificatoare (mai puține, din numele intern) apăreau în titlul extern. Contain (raportat la
+  // cel mai scurt text) contează acum mult mai mult decât Jaccard — bug real, găsit verificând
+  // scoruri reale pe listări cu titluri lungi care rămâneau nepotrivite deși numele intern se
+  // regăsea integral în titlu.
+  let score=contain*0.75+jacc*0.25;
+  // Brand propriu — "AB HOMES" apare des pe listările eMAG ale produselor deja în stoc; dacă apare
+  // în ambele texte, e un semnal suplimentar că e chiar produsul nostru, la cerere directă.
+  if(wa.has('ab')&&wa.has('homes')&&wb.has('ab')&&wb.has('homes'))score=Math.min(1,score+0.1);
+  // Dimensiuni/cifre — dacă AMBELE texte au măcar 2 cifre semnificative, comparăm valorile: cifre
+  // comune întăresc scorul (rar coincid întâmplător), cifre complet diferite îl scad (semn că sunt
+  // variante diferite ale aceluiași produs — mărimi/culori diferite — nu chiar același articol).
+  const numsA=fmNumbers(a),numsB=fmNumbers(b);
+  if(numsA.size&&numsB.size){
+    const commonNums=[...numsA].filter(n=>numsB.has(n)).length;
+    if(commonNums>=2)score=Math.min(1,score+0.08);
+    else if(commonNums===0&&numsA.size>=2&&numsB.size>=2)score=Math.max(0,score-0.15);
+  }
+  return score;
+}
+// Text de comparat pentru un produs — numele PLUS specificațiile structurate (dimensiuni, material,
+// culori, mărimi), nu doar numele intern, adesea mult mai scurt/generic decât titlul de pe eMAG. La
+// cerere directă: asocierea trebuie să se bazeze mai mult pe specificații și dimensiuni, nu doar titlu.
+function productMatchText(p){
+  return[p.name,p.dims,p.material,p.colors,p.sizes].filter(Boolean).join(' ');
 }
 function findExistingProduct(item){
   if(item.sku){
@@ -12561,7 +12603,7 @@ function findExistingProduct(item){
   }
   let best=null,bestScore=0;
   for(const p of P){
-    const score=fuzzyMatch(item.name||'',p.name||'');
+    const score=fuzzyMatch(item.name||'',productMatchText(p));
     if(score>bestScore){bestScore=score;best=p;}
   }
   if(bestScore>=0.7)return{product:best,confidence:'name',score:bestScore};
