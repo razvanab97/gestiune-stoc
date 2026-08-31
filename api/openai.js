@@ -59,6 +59,12 @@ module.exports=async function handler(req,res){
       input:input.messages.map(m=>({role:m.role==='assistant'?'assistant':'user',content:contentParts(m.content)}))
     };
     if(typeof input.system==='string'&&input.system.trim())body.instructions=input.system.slice(0,20000);
+    // schema — opt-in structured output (Responses API `text.format`), folosit doar de apelanții care
+    // trimit explicit input.schema (ex. extragerea de produse din factură) — restul apelanților (sugestie
+    // categorie, listing builder etc.) nu trimit acest câmp, deci comportamentul lor rămâne identic.
+    if(input.schema&&typeof input.schema==='object'){
+      body.text={format:{type:'json_schema',name:String(input.schemaName||'structured_response').slice(0,64),schema:input.schema,strict:true}};
+    }
     const response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{'content-type':'application/json','authorization':'Bearer '+process.env.OPENAI_API_KEY},body:JSON.stringify(body)});
     const data=await response.json();
     if(!response.ok)return res.status(response.status).json(data);
