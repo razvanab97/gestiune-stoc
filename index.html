@@ -2469,6 +2469,15 @@ th{font-weight:800!important;color:var(--t3)!important}
     <div class="m-col m-col-r">
       <div class="sec">Informații produs</div>
       <div class="fld"><label>Nume produs *</label><input id="f-name" type="text" placeholder="ex: Cafea Arabica 250g" oninput="suggestCatFromName()"></div>
+      <!-- Combină cu produs existent — doar la editare (nu la "Produs nou"), pentru cazul în care s-a
+           creat din greșeală un produs care exista deja. Stocul + mapările eMAG/Trendyol se mută pe
+           produsul ales, iar acesta (duplicatul) e arhivat, nu șters — istoricul rămâne intact. -->
+      <div id="merge-dup-wrap" style="display:none;margin:0 0 1rem;padding:1rem 0;border-top:1px solid var(--b1);border-bottom:1px solid var(--b1)">
+        <div style="font-size:20px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--t3);margin-bottom:8px">🔀 Există deja acest produs?</div>
+        <div style="font-size:20px;color:var(--t3);margin-bottom:8px">Dacă acest produs a fost creat din greșeală și există deja în inventar, alege produsul corect — stocul și mapările eMAG/Trendyol se mută pe el, iar acesta va fi arhivat (nu șters).</div>
+        <div id="merge-dup-box"></div>
+        <div class="smi-pickdrop" id="merge-pickdrop"><input type="text" id="merge-pick-search" placeholder="Caută produs după nume sau SKU…" oninput="filterMergePickDebounced()"><div class="smi-pick-list" id="merge-pick-list"></div></div>
+      </div>
       <div class="fld"><label>Descriere produs</label><textarea id="f-description" rows="4" placeholder="Descriere detaliată pentru client: beneficii, utilizare, ce conține pachetul..."></textarea></div>
       <div class="frow">
         <div class="fld"><label>SKU / Cod extern</label><input id="f-sku" type="text" placeholder="CAF-001"></div>
@@ -2676,6 +2685,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:268,text:'Fișa produsului — buton nou „🔀 Există deja acest produs?", pentru cazul în care un produs a fost creat din greșeală, deși exista deja în inventar. Alegi produsul corect dintr-un picker (ca la Sincronizare/Comenzi Platforme) și: stocul (cumpărat/vândut/pe drum) se adună pe produsul corect, mapările eMAG/Trendyol se mută pe el, iar produsul greșit e ARHIVAT (nu șters) — istoricul de vânzări/prețuri rămâne consultabil în Arhivă, stocul lui devine 0 ca să nu se numere de două ori în rapoarte. Disponibil doar la editarea unui produs existent (nu la „Produs nou"). Testat cu produse reale (create și șterse doar pentru test): calculul stocului combinat corect, mapările mutate, produsul original arhivat cu notă explicativă',date:'2026-09-02'},
   {n:267,text:'Comenzi Platforme — cardurile din previzualizarea de import (Importă comenzi) redesenate vizual, la un spec „Liquid Glass" trimis explicit: transparență + blur + reflexie discretă sus + umbră moale + border luminos, mai mult spațiu între comenzi (18px), font DM Sans (distinct de Manrope, folosit pe restul aplicației). Structura pe 5 coloane, ordinea, toate calculele și acțiunile (selectare produs, ștergere, copiere AWB, adăugare la comandat, amânare livrare) rămân neatinse — s-a schimbat doar aspectul vizual. Produsele fără asociere arată acum numele original din comandă ca titlu principal (nu „— fără produs asociat —" needitor) — statusul devine o bifă mică, roșie, discretă dedesubt. Imaginea produsului mai mică (44px), badge-uri mai discrete (Inclus/Neinclus/Cod cunoscut/Fără produs), AWB cu mini-card propriu violet-glass. Sub 1280px, cele 5 coloane devin card stivuit — desktopul păstrează exact structura cerută. Verificat: produse asociate/neasociate, AWB prezent/lipsă, profit pozitiv/negativ, avertismente stoc și preț minim, copiere AWB, ștergere, responsive — toate funcționale, fără erori',date:'2026-08-31'},
   {n:266,text:'Importă factură — interfață reproiectată complet și AI de extragere rescris, la cerere directă. UI nou, premium: bară de rezumat (număr factură, ce extrage AI-ul, status real al analizei — nu un procent inventat, formate acceptate — acum inclusiv Excel .xlsx/.xls, reutilizând SheetJS deja folosit la Sincronizare/Comenzi Platforme), tabel pe 9 coloane (Produs detectat / SKU-Cod / Cantitate cu +/− / Buc.-set / Preț unitar original / Preț unitar RON / Total / Încredere / Acțiuni), footer cu total produse/unități/articole fizice/valoare estimată. AI-ul NU mai e singura sursă de adevăr: un pas nou de normalizare (normalizeInvoiceItem) validează matematic cantitate×preț≈total pentru fiecare linie, corectează automat prețul când totalul facturii nu se împarte corect la cantitate (cu avertisment vizibil „Calculat din total ÷ cantitate"), distinge acum explicit cantitatea comandată de numărul de piese dintr-un set/pachet (ex. „Set 6 organizatoare", cantitate 2 → 6 piese/set → 12 piese fizice total, nu 6 sau 12 ca cantitate comandată), și calculează un scor de încredere real (nu doar ce raportează AI-ul) — scade automat dacă lipsește numele, cantitatea sau dacă prețul nu se validează matematic. Extragerea AI trimite acum un JSON structurat cu schemă fixă către OpenAI (nu doar text liber), cu reguli explicite noi despre priorități SKU, diferența preț-unitar/total-linie și ce NU e prețul unui produs (transport, TVA, discount, total factură). Prețul rămâne editabil manual pe fiecare rând, cantitatea cu stepper +/−. Logica de aplicare în stoc (applyInvoice), calculul prețurilor și integrarea Supabase sunt complet neatinse — s-a adăugat un strat de validare înainte de previzualizare, nu s-a schimbat ce se scrie în baza de date. Testat cu cele 6 cazuri din specificație (cantitate din total, preț din total÷cantitate, seturi cu mai multe piese, preț greșit recalculat) — toate corecte. Bug găsit și reparat înainte de publicare: un comentariu CSS conținea din greșeală secvența „*/", închizând comentariul prematur și „înghițind" regula următoare (antetul tabelului nu se afișa ca grid) — corectat, verificat vizual pe desktop și mobil',date:'2026-08-31'},
   {n:265,text:'Tipografie — actualizată pe toată aplicația, la cerere directă: fontul principal a devenit Manrope (înlocuiește DM Sans), iar SKU/PNK/AWB/coduri comandă folosesc acum Geist Mono (înlocuiește Roboto Mono) — schimbarea s-a putut face central, dintr-o singură variabilă CSS (`--font`/`--mono`), pentru că toată aplicația citea deja aceste variabile, nu fonturi fixate direct. Toate cele 588 de dimensiuni de text existente au crescut cu minimum 1px (ex. 12px→13px, 19px→20px), ca aplicația să fie mai ușor de citit — nimic nu a scăzut. Cifrele (stocuri, prețuri, profit, AWB) au acum aliniere „tabular" (font-variant-numeric), ca să se scaneze mai ușor pe coloană. Verificat: Dashboard, Stoc, Comenzi Platforme, modalul de produs — fără overflow nou, fără suprapuneri, fără erori în consolă',date:'2026-08-31'},
@@ -3935,6 +3945,7 @@ const filterSmProductPickDebounced=debounce(()=>filterSmProductPick(),150);
 const filterPcomPickDebounced=debounce(()=>filterPcomPick(),150);
 const filterInvPickDebounced=debounce(()=>filterInvPick(),150);
 const filterSyncPickDebounced=debounce(()=>filterSyncPick(),150);
+const filterMergePickDebounced=debounce(()=>filterMergePick(),150);
 const suggestSyncProductDebounced=debounce(()=>suggestSyncProduct(),220);
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 function csvEsc(s){return String(s??'').replace(/"/g,'""');}
@@ -10484,11 +10495,101 @@ function renderEasyboxResult(){
   }
 }
 
+/* COMBINĂ PRODUS DUPLICAT — cerere directă: din fișa unui produs, poți alege un produs deja
+   existent în inventar, în cazul în care produsul curent a fost creat din greșeală (deja există).
+   Stocul (cumpărat/vândut/pe drum) se adună pe produsul ales, mapările eMAG/Trendyol (SYNCM) se mută
+   pe el, iar produsul curent (duplicatul) e ARHIVAT (nu șters) — istoricul de vânzări/prețuri/mișcări
+   rămâne intact și consultabil, doar stocul lui devine 0 ca să nu se numere de două ori. */
+let mergeTargetId=null,mergePickProds=null;
+function renderMergeBox(){
+  const box=document.getElementById('merge-dup-box');if(!box)return;
+  if(!mergeTargetId){
+    box.innerHTML=`<button type="button" class="smi-pick-btn" onclick="openMergePick(event)">— alege produsul corect —</button>`;
+    return;
+  }
+  const t=P.find(x=>x.id===mergeTargetId);
+  if(!t){mergeTargetId=null;renderMergeBox();return;}
+  const th=t.img?`<img src="${esc(imgSrc(t.img))}" class="smi-pick-th" ${imgErrAttr(t.img,'pick')}>`:`<div class="smi-pick-th-ph">📦</div>`;
+  box.innerHTML=`<button type="button" class="smi-pick-btn" onclick="openMergePick(event)">${th}<span class="smi-pick-nm">${esc(t.name)}${t.sku?' · '+esc(t.sku):''}</span><span class="smi-pick-car">▾</span></button>
+    <div style="margin-top:8px;font-size:20px;color:var(--t3)">Stoc curent al produsului ales: <strong style="color:var(--t1)">${fmtQty(qty(t))}</strong> buc. → după combinare: <strong style="color:var(--gr)">${fmtQty(qty(t)+(P.find(x=>x.id===editId)?qty(P.find(x=>x.id===editId)):0))}</strong> buc.</div>
+    <button type="button" class="btn btn-sm btn-acc" style="margin-top:8px" onclick="mergeDuplicateProduct()">🔀 Combină acest produs în „${esc(t.name)}"</button>`;
+}
+function openMergePick(ev){
+  ev.stopPropagation();
+  if(!mergePickProds||mergePickProds._t!==P.length)mergePickProds=Object.assign(P.filter(p=>!p.archived&&p.id!==editId).slice().sort((a,b)=>a.name.localeCompare(b.name,'ro')),{_t:P.length});
+  const drop=document.getElementById('merge-pickdrop');
+  const btn=ev.currentTarget.getBoundingClientRect();
+  let left=btn.left,top=btn.bottom+4;
+  if(left+300>window.innerWidth)left=window.innerWidth-310;
+  if(top+340>window.innerHeight)top=Math.max(8,btn.top-344);
+  drop.style.left=zoomAdjust(left)+'px';drop.style.top=zoomAdjust(top)+'px';
+  drop.classList.add('on');
+  const search=document.getElementById('merge-pick-search');
+  search.value='';
+  filterMergePick();
+  search.focus();
+}
+function filterMergePick(){
+  const q=document.getElementById('merge-pick-search').value.toLowerCase().trim();
+  const list=document.getElementById('merge-pick-list');
+  const matches=(q?mergePickProds.filter(p=>p.name.toLowerCase().includes(q)||(p.sku&&p.sku.toLowerCase().includes(q))):mergePickProds).slice(0,80);
+  list.innerHTML=matches.map(p=>{
+    const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'pick')}>`:`<div class="smi-pick-th-ph">📦</div>`;
+    return`<div class="smi-pick-item" onclick="pickMergeTarget(${p.id})">${th}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</span></div>`;
+  }).join('')||`<div class="smi-pick-item" style="color:var(--t3);cursor:default">Niciun produs găsit</div>`;
+}
+function pickMergeTarget(id){
+  mergeTargetId=id;
+  document.getElementById('merge-pickdrop').classList.remove('on');
+  renderMergeBox();
+}
+document.addEventListener('click',ev=>{
+  if(!ev.target.closest('#merge-pickdrop')&&!ev.target.closest('#merge-dup-box .smi-pick-btn')){
+    const d=document.getElementById('merge-pickdrop');
+    if(d)d.classList.remove('on');
+  }
+});
+async function mergeDuplicateProduct(){
+  const source=P.find(x=>x.id===editId),target=mergeTargetId?P.find(x=>x.id===mergeTargetId):null;
+  if(!source||!target||source.id===target.id)return;
+  const sQty=qty(source),tQty=qty(target);
+  if(!confirm(`Combini „${source.name}" în „${target.name}"?\n\n· Stocul (${fmtQty(sQty)} buc.) se adună la „${target.name}" (${fmtQty(tQty)} → ${fmtQty(tQty+sQty)} buc.)\n· Mapările eMAG/Trendyol ale acestui produs se mută pe „${target.name}"\n· „${source.name}" va fi ARHIVAT (nu șters) — istoricul rămâne consultabil în Arhivă\n\nContinuă?`))return;
+  showLoading('Se combină produsele…');
+  try{
+    const mergedTarget={...target,
+      bought:(Number(target.bought)||0)+(Number(source.bought)||0),
+      sold:(Number(target.sold)||0)+(Number(source.sold)||0),
+      incomingQty:(Number(target.incomingQty)||0)+(Number(source.incomingQty)||0),
+      img:target.img||source.img||''
+    };
+    await saveProdToDb(mergedTarget,target.id);
+    if(sbReady){
+      try{await dbPatch(`platforma_mapari?produs_id=eq.${source.id}`,{produs_id:target.id});}
+      catch(e){console.warn('Nu s-au putut muta mapările eMAG/Trendyol:',e);}
+    }
+    SYNCM.forEach(m=>{if(m.produsId===source.id)m.produsId=target.id;});
+    const stamp=new Date().toISOString();
+    const mergeNote=`Combinat cu „${target.name}"${target.internalCode?' ('+target.internalCode+')':''} la ${new Date(stamp).toLocaleDateString('ro-RO')} — stoc mutat, produs păstrat doar pentru istoric.`;
+    await saveProdToDb({...source,bought:0,sold:0,incomingQty:0,archived:true,archivedAt:stamp,notes:source.notes?source.notes+' · '+mergeNote:mergeNote},source.id);
+    hideLoading();
+    closeModal();
+    renderToday();renderTable();
+    toast(`✓ Combinat — stocul a fost mutat pe „${target.name}"`);
+  }catch(err){
+    hideLoading();
+    toast('Eroare la combinare: '+(err.message||err),'err');
+  }
+}
+
 /* MODAL */
 function openModal(id){
   editId=id||null;
   const p=id?P.find(x=>x.id===id):null;
   document.getElementById('m-title').textContent=p?'Editează produs':'Produs nou';
+  mergeTargetId=null;mergePickProds=null;
+  const mergeWrap=document.getElementById('merge-dup-wrap');
+  if(mergeWrap)mergeWrap.style.display=p?'':'none';
+  renderMergeBox();
   document.getElementById('f-name').value=p?.name||'';
   document.getElementById('f-sku').value=p?.sku||'';
   document.getElementById('f-internal-code').value=p?.internalCode||'';
@@ -10548,7 +10649,7 @@ function openModal(id){
   const body=document.querySelector('#ov .m-body');if(body)body.scrollTop=0;
   if(window.innerWidth>640)setTimeout(()=>document.getElementById('f-name').focus(),60);
 }
-function closeModal(){document.getElementById('ov').classList.remove('on');editId=null;pendingPlipsaCandidate=null;}
+function closeModal(){document.getElementById('ov').classList.remove('on');editId=null;pendingPlipsaCandidate=null;mergeTargetId=null;}
 
 async function saveProd(){
   if(savingProduct)return;
