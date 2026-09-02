@@ -50,6 +50,7 @@ alter table produse add column if not exists price_emag numeric(10,2) default 0;
 alter table produse add column if not exists price_trendyol numeric(10,2) default 0;
 alter table produse add column if not exists price_buy_prev_ttc numeric(10,2) default 0;
 alter table produse add column if not exists price_buy_changed_at timestamptz;
+alter table produse add column if not exists price_buy_eur numeric(10,2) default 0;
 
 alter table produse alter column bought type numeric(10,2) using bought::numeric;
 alter table produse alter column incoming_qty type numeric(10,2) using incoming_qty::numeric;

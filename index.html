@@ -2685,6 +2685,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:269,text:'Preț achiziție EUR — se salvează acum permanent pe produs (coloană nouă, price_buy_eur — rulează migrarea din supabase_setup.sql), nu doar temporar în formular. Înainte, la „Adaugă produs din link" cu preț în EUR, câmpul se completa automat, dar dispărea la reîncărcarea produsului — prețul RON rămânea, dar prețul EUR original se pierdea. La „Importă factură", prețul EUR nu se salva deloc, sub nicio formă. Acum ambele fluxuri (import din link, import din factură — atât produse noi, cât și reaprovizionări) păstrează prețul EUR original alături de cel RON, silențios, fără nicio confirmare — dacă redeschizi fișa unui produs cumpărat în EUR, câmpul „Preț achiziție EUR fără TVA" arată din nou valoarea corectă. Fără migrare rulată, aplicația funcționează neschimbat (doar prețul EUR nu persistă încă, restul salvării merge normal) — testat explicit acest caz',date:'2026-09-02'},
   {n:268,text:'Fișa produsului — buton nou „🔀 Există deja acest produs?", pentru cazul în care un produs a fost creat din greșeală, deși exista deja în inventar. Alegi produsul corect dintr-un picker (ca la Sincronizare/Comenzi Platforme) și: stocul (cumpărat/vândut/pe drum) se adună pe produsul corect, mapările eMAG/Trendyol se mută pe el, iar produsul greșit e ARHIVAT (nu șters) — istoricul de vânzări/prețuri rămâne consultabil în Arhivă, stocul lui devine 0 ca să nu se numere de două ori în rapoarte. Disponibil doar la editarea unui produs existent (nu la „Produs nou"). Testat cu produse reale (create și șterse doar pentru test): calculul stocului combinat corect, mapările mutate, produsul original arhivat cu notă explicativă',date:'2026-09-02'},
   {n:267,text:'Comenzi Platforme — cardurile din previzualizarea de import (Importă comenzi) redesenate vizual, la un spec „Liquid Glass" trimis explicit: transparență + blur + reflexie discretă sus + umbră moale + border luminos, mai mult spațiu între comenzi (18px), font DM Sans (distinct de Manrope, folosit pe restul aplicației). Structura pe 5 coloane, ordinea, toate calculele și acțiunile (selectare produs, ștergere, copiere AWB, adăugare la comandat, amânare livrare) rămân neatinse — s-a schimbat doar aspectul vizual. Produsele fără asociere arată acum numele original din comandă ca titlu principal (nu „— fără produs asociat —" needitor) — statusul devine o bifă mică, roșie, discretă dedesubt. Imaginea produsului mai mică (44px), badge-uri mai discrete (Inclus/Neinclus/Cod cunoscut/Fără produs), AWB cu mini-card propriu violet-glass. Sub 1280px, cele 5 coloane devin card stivuit — desktopul păstrează exact structura cerută. Verificat: produse asociate/neasociate, AWB prezent/lipsă, profit pozitiv/negativ, avertismente stoc și preț minim, copiere AWB, ștergere, responsive — toate funcționale, fără erori',date:'2026-08-31'},
   {n:266,text:'Importă factură — interfață reproiectată complet și AI de extragere rescris, la cerere directă. UI nou, premium: bară de rezumat (număr factură, ce extrage AI-ul, status real al analizei — nu un procent inventat, formate acceptate — acum inclusiv Excel .xlsx/.xls, reutilizând SheetJS deja folosit la Sincronizare/Comenzi Platforme), tabel pe 9 coloane (Produs detectat / SKU-Cod / Cantitate cu +/− / Buc.-set / Preț unitar original / Preț unitar RON / Total / Încredere / Acțiuni), footer cu total produse/unități/articole fizice/valoare estimată. AI-ul NU mai e singura sursă de adevăr: un pas nou de normalizare (normalizeInvoiceItem) validează matematic cantitate×preț≈total pentru fiecare linie, corectează automat prețul când totalul facturii nu se împarte corect la cantitate (cu avertisment vizibil „Calculat din total ÷ cantitate"), distinge acum explicit cantitatea comandată de numărul de piese dintr-un set/pachet (ex. „Set 6 organizatoare", cantitate 2 → 6 piese/set → 12 piese fizice total, nu 6 sau 12 ca cantitate comandată), și calculează un scor de încredere real (nu doar ce raportează AI-ul) — scade automat dacă lipsește numele, cantitatea sau dacă prețul nu se validează matematic. Extragerea AI trimite acum un JSON structurat cu schemă fixă către OpenAI (nu doar text liber), cu reguli explicite noi despre priorități SKU, diferența preț-unitar/total-linie și ce NU e prețul unui produs (transport, TVA, discount, total factură). Prețul rămâne editabil manual pe fiecare rând, cantitatea cu stepper +/−. Logica de aplicare în stoc (applyInvoice), calculul prețurilor și integrarea Supabase sunt complet neatinse — s-a adăugat un strat de validare înainte de previzualizare, nu s-a schimbat ce se scrie în baza de date. Testat cu cele 6 cazuri din specificație (cantitate din total, preț din total÷cantitate, seturi cu mai multe piese, preț greșit recalculat) — toate corecte. Bug găsit și reparat înainte de publicare: un comentariu CSS conținea din greșeală secvența „*/", închizând comentariul prematur și „înghițind" regula următoare (antetul tabelului nu se afișa ca grid) — corectat, verificat vizual pe desktop și mobil',date:'2026-08-31'},
@@ -3673,7 +3674,7 @@ async function uploadProductImageToStorage(dataUrl){
 function dbToP(r){
   return{id:r.id,name:r.name,sku:r.sku||'',internalCode:r.internal_code||productInternalCode(r.created_at,r.id),category:r.category||'',supplier:r.supplier||'',
     bought:r.bought||0,incomingQty:r.incoming_qty||0,sold:r.sold||0,minQty:r.min_qty||0,
-    priceBuyTTC:r.price_buy_ttc||0,priceBuyPrevTTC:r.price_buy_prev_ttc||0,priceBuyChangedAt:r.price_buy_changed_at||'',tvaAcq:r.tva_acq??0.21,
+    priceBuyTTC:r.price_buy_ttc||0,priceBuyPrevTTC:r.price_buy_prev_ttc||0,priceBuyChangedAt:r.price_buy_changed_at||'',priceBuyEur:r.price_buy_eur||0,tvaAcq:r.tva_acq??0.21,
     stockAddedAt:r.stock_added_at||'',lastStockAddedQty:r.last_stock_added_qty||0,
     priceSell:r.price_sell||0,priceEmag:r.price_emag||0,priceTrendyol:r.price_trendyol||0,priceRec:r.price_rec||0,img:r.img||'',
     colors:r.colors||'',sizes:r.sizes||'',material:r.material||'',dims:r.dims||'',notes:r.notes||'',
@@ -3685,7 +3686,7 @@ function dbToP(r){
 function pToDb(p){
   const d={name:p.name,sku:p.sku||'',category:p.category||'',supplier:p.supplier||'',
     bought:p.bought||0,incoming_qty:p.incomingQty||0,sold:p.sold||0,min_qty:p.minQty||0,
-    price_buy_ttc:p.priceBuyTTC||0,price_buy_prev_ttc:p.priceBuyPrevTTC||0,price_buy_changed_at:p.priceBuyChangedAt||null,tva_acq:p.tvaAcq??0.21,
+    price_buy_ttc:p.priceBuyTTC||0,price_buy_prev_ttc:p.priceBuyPrevTTC||0,price_buy_changed_at:p.priceBuyChangedAt||null,price_buy_eur:p.priceBuyEur||0,tva_acq:p.tvaAcq??0.21,
     stock_added_at:p.stockAddedAt||null,last_stock_added_qty:p.lastStockAddedQty||0,
     price_sell:p.priceSell||0,price_emag:p.priceEmag||0,price_trendyol:p.priceTrendyol||0,price_rec:p.priceRec||0,img:p.img||'',
     colors:p.colors||'',sizes:p.sizes||'',material:p.material||'',dims:p.dims||'',notes:p.notes||'',
@@ -3704,7 +3705,7 @@ function dbSavedProductMatches(row,sent){
 }
 function missingProductColumn(err){return String(err?.message||err).match(/Could not find the '([^']+)' column of 'produse'/i)?.[1]||'';}
 function missingProductValues(data,missing){
-  const map={incoming_qty:'incomingQty',price_emag:'priceEmag',price_trendyol:'priceTrendyol',tva_acq:'tvaAcq',internal_code:'internalCode',price_buy_prev_ttc:'priceBuyPrevTTC',price_buy_changed_at:'priceBuyChangedAt',stock_added_at:'stockAddedAt',last_stock_added_qty:'lastStockAddedQty',
+  const map={incoming_qty:'incomingQty',price_emag:'priceEmag',price_trendyol:'priceTrendyol',tva_acq:'tvaAcq',internal_code:'internalCode',price_buy_prev_ttc:'priceBuyPrevTTC',price_buy_changed_at:'priceBuyChangedAt',price_buy_eur:'priceBuyEur',stock_added_at:'stockAddedAt',last_stock_added_qty:'lastStockAddedQty',
     supplier_oos:'supplierOOS',supplier_oos_since:'supplierOOSSince',supplier_restock_eta:'supplierRestockEta',supplier_notify:'supplierNotify',supplier_notified:'supplierNotified',
     archived:'archived',archived_at:'archivedAt',
     easybox_l:'easyboxL',easybox_w:'easyboxW',easybox_t:'easyboxT'};
@@ -10615,7 +10616,7 @@ function openModal(id){
   document.getElementById('f-min').value=p?.minQty?fmtQty(p.minQty):'';
   const _tva=p?.tvaAcq!==undefined?p.tvaAcq:0.21;
   const _ttc=p?.priceBuyTTC||0,_net=_ttc>0&&_tva>0?_ttc/(1+_tva):_ttc;
-  document.getElementById('f-pbuy-eur').value='';
+  document.getElementById('f-pbuy-eur').value=p?.priceBuyEur?p.priceBuyEur.toFixed(2):'';
   document.getElementById('f-pbuy-ttc').value=_ttc||'';
   document.getElementById('f-pbuy').value=_net>0?_net.toFixed(2):'';
   document.getElementById('f-tva-acq').value=String(_tva);
@@ -10683,6 +10684,7 @@ async function saveProd(){
     priceBuyTTC:newCost,
     priceBuyPrevTTC:priceChanged?oldCost:(existing?.priceBuyPrevTTC||0),
     priceBuyChangedAt:priceChanged?new Date().toISOString():(existing?.priceBuyChangedAt||''),
+    priceBuyEur:Math.max(0,parseFloat(document.getElementById('f-pbuy-eur').value)||0),
     tvaAcq,
     priceSell:Math.max(0,parseFloat(document.getElementById('f-psell').value)||0),
     priceEmag:Math.max(0,parseFloat(document.getElementById('f-pemag').value)||0),
@@ -14000,6 +14002,10 @@ async function applyInvoice(){
           const oldCost=oldCostBefore;
           if(oldCost>0&&Math.abs(oldCost-costRon)>=0.005){P[idx].priceBuyPrevTTC=oldCost;P[idx].priceBuyChangedAt=new Date().toISOString();}
           P[idx].priceBuyTTC=costRon;P[idx].priceSell=prices.sell;P[idx].priceEmag=prices.emag;P[idx].priceTrendyol=prices.trendyol;P[idx].priceRec=prices.rec;
+          // Prețul original, în moneda facturii — dincolo de prețul RON deja salvat mai sus, cerut
+          // explicit: prețul EUR (când factura era în EUR) rămâne vizibil ulterior în fișa produsului,
+          // nu doar în timpul importului. Silențios, fără nicio confirmare — se întâmplă în fundal.
+          if(item.currency==='EUR'&&item.priceBuy>0)P[idx].priceBuyEur=item.priceBuy;
         }
         await saveProdToDb(P[idx],P[idx].id);
         await logMove('in',P[idx].name,item.qty,invSourceName||'Import factură',P[idx].id);
@@ -14016,7 +14022,7 @@ async function applyInvoice(){
         sku:item.sku||null,
         bought:item.qty,sold:0,minQty:0,
         stockAddedAt:stockStamp,lastStockAddedQty:item.qty,
-        priceBuyTTC:costRon,tvaAcq:0.21,
+        priceBuyTTC:costRon,priceBuyEur:item.currency==='EUR'?item.priceBuy||0:0,tvaAcq:0.21,
         priceSell:item.sellOverride!=null?item.sellOverride:prices.sell,priceEmag:prices.emag,priceTrendyol:prices.trendyol,priceRec:prices.rec,
         category:item.category||'',supplier:item.supplier||'',img:item.img||''
       };
