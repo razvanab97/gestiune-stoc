@@ -285,6 +285,14 @@ input:focus,select:focus,textarea:focus{border-color:var(--acc);box-shadow:0 0 0
 #sm-produs-pickdrop .smi-pick-th,#sm-produs-pickdrop .smi-pick-th-ph,#smi-pickdrop .smi-pick-th,#smi-pickdrop .smi-pick-th-ph{width:76px;height:76px;border-radius:8px;font-size:37px}
 #sm-produs-pickdrop .smi-pick-item,#smi-pickdrop .smi-pick-item{padding:12px 14px;gap:14px}
 #sm-produs-pickdrop .smi-pick-item-nm,#smi-pickdrop .smi-pick-item-nm{font-size:27px;white-space:normal}
+/* Picker-ul de produs din Importă factură (#invmi-pickdrop) — lipsea din grupul de mai sus (bug real,
+   raportat direct cu captură: titlurile lungi ale produselor din listă apăreau tăiate cu „…", greu de
+   ales pe care chiar îl vrei). Același tipar mărit ca la celelalte 4 picker-e similare. */
+#invmi-pickdrop{width:460px;max-height:420px}
+#invmi-pickdrop input{font-size:27px;padding:9px 12px}
+#invmi-pickdrop .smi-pick-th,#invmi-pickdrop .smi-pick-th-ph{width:76px;height:76px;border-radius:8px;font-size:37px}
+#invmi-pickdrop .smi-pick-item{padding:12px 14px;gap:14px}
+#invmi-pickdrop .smi-pick-item-nm{font-size:27px;white-space:normal}
 .btn{font-family:var(--font);font-size:26px;font-weight:500;padding:10px 18px;border-radius:var(--r);cursor:pointer;border:1px solid var(--b2);background:var(--surf);color:var(--t1);transition:all .15s;white-space:nowrap}
 .btn:hover{background:var(--surf2);border-color:var(--b3)}
 .btn-acc{background:var(--acc);color:var(--acc-fg);border-color:var(--acc)}
@@ -531,10 +539,15 @@ tr:hover td{background:var(--surf2)}
    eMAG, #ov-emag-guide/#ov-emag-pnk) — reproiectarea de mai jos (la cerere directă: premium,
    minimalist, fără chenare multe) e scopată strict la conținutul specific facturii. */
 .inv-modal{background:var(--surf);border-radius:var(--r3);border:1px solid var(--b1);width:820px;max-width:95%;box-shadow:var(--sh2);margin:auto;overflow:hidden;transition:width .2s}
-@media(min-width:641px){.inv-modal.wide{width:1640px}}
+/* .wide se aplică DOAR pe modalul de factură (singurul care primește clasa asta din JS) — celelalte
+   .inv-modal (ghidurile eMAG) rămân la lățimea de bază, neatinse. Lărgit mult mai mult (cerere
+   directă: tabelul de 9 coloane tot ieșea peste marginea modalului pe ecrane sub ~1700px, fără
+   scroll orizontal — conținutul se tăia/suprapunea peste pagina din spate). */
+.inv-modal.wide{width:min(1900px,97vw)}
 .inv-head{padding:1.5rem 2rem 1.25rem;border-bottom:1px solid var(--b1);display:flex;align-items:center;justify-content:space-between}
 .inv-head h2{font-size:36px;font-weight:600;letter-spacing:-.02em}
-.inv-body{padding:1.75rem 2rem;max-height:75vh;overflow-y:auto;background:#F7F8FA}
+.inv-body{padding:1.75rem 2rem;max-height:85vh;overflow-y:auto;background:#F7F8FA}
+.invx-table-scroll{overflow-x:auto}
 .inv-drop{border:2px dashed #D8DEE8;border-radius:14px;padding:1.75rem 2rem;text-align:center;cursor:pointer;transition:all .15s;position:relative;margin-bottom:1.25rem;background:#FFFFFF}
 .inv-drop:hover{border-color:var(--acc);background:var(--acc-light)}
 .inv-drop input{position:absolute;inset:0;opacity:0;cursor:pointer;z-index:2;width:100%;height:100%}
@@ -2831,10 +2844,12 @@ th{font-weight:800!important;color:var(--t3)!important}
     <div class="inv-mh"><span>SKU / Cod</span><span>Cant.</span><span>P. acq.</span><span>P. vânz.</span><span></span></div>
     <div id="inv-lines"></div>
     <button class="btn btn-sm" style="margin-top:4px" onclick="addInvLine()">+ Linie nouă</button>
-    <div class="invx-table-head" id="invx-table-head" style="display:none">
-      <div>Produs detectat</div><div>SKU / Cod</div><div>Cantitate</div><div>Buc./set</div><div>Preț unitar original</div><div>Preț unitar RON</div><div>Total</div><div>Încredere</div><div>Acțiuni</div>
+    <div class="invx-table-scroll">
+      <div class="invx-table-head" id="invx-table-head" style="display:none">
+        <div>Produs detectat</div><div>SKU / Cod</div><div>Cantitate</div><div>Buc./set</div><div>Preț unitar original</div><div>Preț unitar RON</div><div>Total</div><div>Încredere</div><div>Acțiuni</div>
+      </div>
+      <div id="inv-preview"></div>
     </div>
-    <div id="inv-preview"></div>
     <div class="smi-pickdrop" id="invmi-pickdrop"><input type="text" id="invmi-pick-search" placeholder="Caută produs după nume sau SKU…" oninput="filterInvPickDebounced()"><div class="smi-pick-list" id="invmi-pick-list"></div></div>
     <datalist id="inv-cat-list"></datalist>
     <datalist id="inv-supplier-list"><option value="Jumbo"><option value="Maxy"><option value="Verk"></datalist>
@@ -2900,6 +2915,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:279,text:'Importă factură — mărit mult și reparat un bug real, raportat direct cu captură (tabelul de 9 coloane ieșea peste marginea modalului, text suprapus peste pagina din spate). Cauza: la lărgirea modalului (după ce apare o previzualizare), codul folosea `document.querySelector(\'.inv-modal\')` — fără să știe că, de când a apărut Creator postări (Creator postări/Post Creator), există MAI MULTE elemente `.inv-modal` în pagină; selectorul nescopat prindea mereu PE ALTUL (Creator postări, invizibil), nu pe cel al facturii — modalul de factură rămânea blocat la 820px indiferent de câte produse avea previzualizarea. Reparat: selectorul e acum scopat strict la modalul facturii (`#ov-inv .inv-modal`); lărgit și pragul de „wide" (1640px → până la 1900px, responsive), plus scroll orizontal de siguranță pe tabel dacă tot nu încape pe ecrane mici. Completare: picker-ul de asociere produs din factură (`#invmi-pickdrop`) — singurul dintre cele 5 picker-e similare din aplicație care nu primise mărirea/textul complet (titluri tăiate cu „…", raportat cu captură) — acum arată numele întreg, la fel ca la Comenzi Platforme/Sincronizare. Verificat de 2 ori: lățime reală ~1340-1800px (nu 820px) la 2 rezoluții, fără scurgere peste viewport, dropdown-ul de produs arată titlul complet, iar celelalte modale care refolosesc aceeași clasă (ghidul eMAG, Creator postări) rămân neschimbate la lățimea lor de bază',date:'2026-09-04'},
   {n:278,text:'Pagina de Staff (/staff) — extindere majoră, Faza 1 dintr-un plan pe 3 faze (specificație detaliată primită direct). Navigare pe 5 secțiuni (Împachetare / În așteptare / Finalizate azi / Căutare / Legendă) în loc de pagina unică de până acum. Card comandă reproiectat: „✓ ÎMPACHETAT" mare/dominant/mov (pentru comenzi cu un singur produs) sau bifă individuală per produs + „✓ ÎMPACHETAT" activat abia după ce toate sunt confirmate (comenzi cu produse multiple, cu progres „X/Y produse pregătite"). Nou: „Raportează problemă" (buton mic, secundar) — Stoc redus (doar alertă pentru admin, NU modifică stocul, comanda continuă normal) / Stoc zero / Cantitate insuficientă / Produs deteriorat / Produs greșit / Nu găsesc produsul / Altă problemă (toate blocante — comanda trece automat în „În așteptare"). Undo 5 secunde după ÎMPACHETAT sau raportare blocantă, cu trecere automată la comanda următoare dacă nu anulezi. AWB — coloană nouă, afișat foarte vizibil pe comandă când există, căutabil; completare manuală din Comenzi Platforme → Profit vânzări (buton „✏️ AWB" pe fiecare linie). Progres real în antet („N comenzi rămase din TOTAL" + bară vizuală). Reîmprospătare automată la ~25s (pusă pe pauză cât timp e deschis un raport de problemă sau o anulare în așteptare, ca ecranul să nu „sară" de sub deget). Cerere explicită respectată: nicio comandă nu depinde de existența unui AWB ca să apară la împachetare. Necesită 3 migrări noi în Supabase (AWB, urmărire probleme raportate, jurnal de activitate) — rulate și verificate cu date reale (comandă cu 1 produs, comandă cu produse multiple, Stoc redus confirmat că NU atinge stocul oficial, Stoc zero confirmat că mută comanda în „În așteptare" fără să atingă stocul). Identitate/blocare comenzi între tablete (Faza 2) și secțiunea admin „Monitorizare Staff" (Faza 3) urmează separat',date:'2026-09-04'},
   {n:277,text:'Performanță — pornirea aplicației e mult mai rapidă, mai ales la prima intrare (raportat direct ca delay mare). Două cauze reale găsite la profilare, nu presupuse: (1) cele ~10 cereri către Supabase la încărcare (produse, jurnal, comenzi de stoc, mișcări de stoc, istoric prețuri, comenzi platforme, mapări, setări) rulau STRICT una după alta, nu în paralel — acum pornesc toate deodată, fiecare cu propriul fallback dacă o migrare nu a rulat încă. (2) Bug real: la un inventar mare (ex. 271 produse → 19 loturi de poze), un re-render complet al tabelului/dashboard-ului la FIECARE lot de poze reîncărcate recrea toate imaginile din pagină de la zero, nu doar cele noi — retrimitea prin proxy poze deja afișate, până la 2000+ cereri redundante la un singur load (mult mai costisitor cu cache-ul de imagini rece, exact la prima intrare). Acum se randează din 5 în 5 loturi. Măsurat automat, de 2 ori: timpul până dispare ecranul de încărcare a scăzut de la ~7,6s la ~1,8s (−76%), iar numărul de cereri către Supabase/imagini de la ~2000 la ~20-70 — datele încărcate verificate identice (același număr de produse/jurnal/comenzi ca într-o interogare directă), nimic pierdut',date:'2026-09-04'},
   {n:276,text:'Header — buton nou „📝" pentru o Notiță rapidă: un pop-up mic, independent de orice produs/comandă, unde poți scrie orice vrei să ții la îndemână (numere de comandă, idei, calcule rapide) și îl copiezi cu un click. Se deschide/închide din buton sau din „×"; se trage de bara de sus oriunde pe ecran și se poate mări din colțul din dreapta-jos (redimensionare nativă din browser). Conținutul rămâne salvat local (pe acest dispozitiv) chiar dacă închizi pop-up-ul sau reîncarci pagina — poziția/mărimea nu se rețin, se redeschide mereu în colțul din dreapta-sus',date:'2026-09-04'},
@@ -13236,7 +13252,7 @@ function openInvoice(){
   document.getElementById('inv-apply-btn').style.display='';
   document.getElementById('inv-checklist-btn').disabled=true;
   document.getElementById('inv-cancel-btn').textContent='Anulează';
-  document.querySelector('.inv-modal')?.classList.remove('wide');
+  document.querySelector('#ov-inv .inv-modal')?.classList.remove('wide');
   const tableHead=document.getElementById('invx-table-head');if(tableHead)tableHead.style.display='none';
   updateInvxStatus();
   addInvLine();addInvLine();addInvLine();
@@ -14270,11 +14286,11 @@ function removeInvParsedLine(idx){
 function renderInvPreview(){
   const prev=document.getElementById('inv-preview');
   const tableHead=document.getElementById('invx-table-head');
-  if(!invParsed.length){prev.innerHTML='';if(tableHead)tableHead.style.display='none';document.getElementById('inv-info').textContent='Adaugă produse pentru previzualizare';document.getElementById('inv-apply-btn').disabled=true;document.getElementById('inv-checklist-btn').disabled=true;document.querySelector('.inv-modal')?.classList.remove('wide');updateInvxStatus();return;}
+  if(!invParsed.length){prev.innerHTML='';if(tableHead)tableHead.style.display='none';document.getElementById('inv-info').textContent='Adaugă produse pentru previzualizare';document.getElementById('inv-apply-btn').disabled=true;document.getElementById('inv-checklist-btn').disabled=true;document.querySelector('#ov-inv .inv-modal')?.classList.remove('wide');updateInvxStatus();return;}
   // Modalul se lărgește doar cât timp chiar are ce arăta (previzualizare cu produse) — la un import
   // cu multe linii (poze/PDF de comandă), lățimea implicită (820px) era prea înghesuită pentru poză +
   // nume + picker + preț + scroll pe același rând, raportat direct.
-  document.querySelector('.inv-modal')?.classList.add('wide');
+  document.querySelector('#ov-inv .inv-modal')?.classList.add('wide');
   if(tableHead)tableHead.style.display='';
   // Calculează prețuri RON + sugestie automată de asociere (scor). NU decide singură "produs nou"
   // când scorul e sub prag (0.7) — bug real reparat: se creau des produse duplicate pentru produse
