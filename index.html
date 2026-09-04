@@ -1683,6 +1683,16 @@ th{font-weight:800!important;color:var(--t3)!important}
 .notif-meta{font-size:23px;color:var(--t3);font-family:var(--mono);margin-top:2px}
 .notif-row.notif-in .notif-meta{color:var(--gr)}
 .notif-row.notif-out .notif-meta{color:var(--or)}
+/* NOTIȚĂ RAPIDĂ — pop-up mic, mutabil oriunde pe pagină (trage de bara de sus) și redimensionabil
+   (colțul din dreapta-jos, resize CSS nativ), conținutul persistă local (localStorage), nu e legat
+   de Supabase — un simplu bloc-notes la îndemână, nu o notă pe produs/comandă. */
+.notepad-widget{display:none;flex-direction:column;position:fixed;top:70px;right:24px;width:320px;height:240px;min-width:220px;min-height:150px;max-width:96vw;max-height:90vh;background:var(--surf);border:1px solid var(--b2);border-radius:var(--r2);box-shadow:var(--sh2);z-index:190;overflow:auto;resize:both}
+.notepad-widget.on{display:flex}
+.notepad-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:var(--surf2);border-bottom:1px solid var(--b1);cursor:move;font-size:22px;font-weight:800;color:var(--t2);flex-shrink:0;user-select:none}
+.notepad-head-actions{display:flex;gap:2px}
+.notepad-head-actions button{background:none;border:none;cursor:pointer;font-size:22px;padding:2px 7px;border-radius:6px;color:var(--t2);line-height:1.4}
+.notepad-head-actions button:hover{background:rgba(0,0,0,.08);color:var(--t1)}
+#notepad-text{flex:1;border:none;outline:none;resize:none;padding:12px;font-family:var(--font);font-size:21px;background:var(--surf);color:var(--t1);width:100%;line-height:1.5}
 </style>
 </head>
 <body>
@@ -1726,6 +1736,7 @@ th{font-weight:800!important;color:var(--t3)!important}
       <div class="notif-list" id="notif-list"></div>
     </div>
   </div>
+  <button class="notif-bell" id="notepad-btn" style="margin-left:10px" onclick="toggleNotepad()" title="Notiță rapidă — scrie și copiază orice vrei să ții la îndemână">📝</button>
   <div class="zoom-wrap" title="Mărește/micșorează afișarea">
     <button class="zoom-btn" onclick="zoomOut()" title="Micșorează (Zoom -)">−</button>
     <span class="zoom-level" id="zoom-level" onclick="zoomReset()" title="Click pentru a reseta la 100%">100%</span>
@@ -2867,6 +2878,17 @@ th{font-weight:800!important;color:var(--t3)!important}
   <button class="upd-btn" id="upd-btn" onclick="toggleUpdPanel(event)"><span class="dot"></span><span id="upd-btn-label">Update</span></button>
 </div>
 
+<div class="notepad-widget" id="notepad-widget">
+  <div class="notepad-head" id="notepad-head">
+    <span>📝 Notiță</span>
+    <div class="notepad-head-actions">
+      <button type="button" onclick="copyNotepadContent()" title="Copiază tot textul">📋</button>
+      <button type="button" onclick="closeNotepad()" title="Închide">×</button>
+    </div>
+  </div>
+  <textarea id="notepad-text" placeholder="Scrie aici orice vrei să ții la îndemână…" oninput="saveNotepadDebounced()"></textarea>
+</div>
+
 <script>
 const SUPA_URL='https://nuvgwytanlgvcffxeahs.supabase.co';
 const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51dmd3eXRhbmxndmNmZnhlYWhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MDI0OTAsImV4cCI6MjA5NTI3ODQ5MH0.lSy1CUJA9xlVv1isAyfTIxGUAbGMUIS7c3TXQ-5pcEg';
@@ -2878,6 +2900,8 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:276,text:'Header — buton nou „📝" pentru o Notiță rapidă: un pop-up mic, independent de orice produs/comandă, unde poți scrie orice vrei să ții la îndemână (numere de comandă, idei, calcule rapide) și îl copiezi cu un click. Se deschide/închide din buton sau din „×"; se trage de bara de sus oriunde pe ecran și se poate mări din colțul din dreapta-jos (redimensionare nativă din browser). Conținutul rămâne salvat local (pe acest dispozitiv) chiar dacă închizi pop-up-ul sau reîncarci pagina — poziția/mărimea nu se rețin, se redeschide mereu în colțul din dreapta-sus',date:'2026-09-04'},
+  {n:275,text:'Comenzi Platforme — două reparații la „Istoric importuri" (Import comenzi), raportate direct după un import dublu eMAG+Trendyol. (1) Data afișată pe fiecare import era data COMENZII de pe eMAG/Trendyol (din fișier), nu data la care chiar ai făcut importul — un import făcut azi putea arăta o dată de-o zi mai veche, confuz la verificare. Acum arată ziua reală a importului, la fel ca peste tot în aplicație (Jurnal/Vânzări azi). (2) Bug real găsit la cod, deși nu s-a manifestat vizibil în cazul raportat: la un import „mixte" (eMAG + Trendyol deodată, dintr-o singură previzualizare), toate liniile primeau ACELAȘI id de lot — dacă vreo linie de pe fiecare platformă ajungea în aceeași previzualizare aplicată dintr-o singură apăsare, „Istoric importuri" le-ar fi amestecat pe un singur rând (etichetat cu o singură platformă, total însumat greșit pe amândouă), imposibil de anulat separat dacă doar unul dintre fișiere era greșit. Acum fiecare platformă primește propriul id de lot, mereu — testat explicit acest caz (linie eMAG + linie Trendyol în același import), confirmat: 2 rânduri separate, etichetate corect, fiecare cu totalul lui, fiecare anulabil independent',date:'2026-09-04'},
   {n:274,text:'Fix: ștergerea unei vânzări din „Vânzări azi" (butonul „×" de pe cardul de produs) nu mai lasă vânzarea „fantomă" în Jurnal vânzări — înainte, contorul de azi arăta 0, dar rândul rămânea vizibil în jurnal, cu cantitatea originală, ca și cum vânzarea tot exista. Acum se șterge din ambele locuri deodată, la fel ca ștergerea directă din Jurnal. Nu afectează „−1" (corectare rapidă, care rămâne intenționat fără atingere la jurnal). Testat cu produs disponibil (creat/vândut/șters doar pentru test): jurnalul confirmă rândul șters din Supabase, nu doar local',date:'2026-09-03'},
   {n:273,text:'Sincronizare (Import în masă din fișier) — două completări la cerere directă. (1) PNK-ul din previzualizare devine buton de copiere (același stil folosit peste tot în aplicație) — link direct pe PNK nu e posibil: testat explicit emag.ro/pd/{PNK}/ fără segmentul de titlu din URL, răspunde cu 404 (eMAG cere slug-ul complet al produsului, nu doar codul), așa că a rămas copiere; titlul extern al listării primește și el un buton mic de copiere, lângă text. (2) Numele produsului selectat/sugerat de AI din picker-ul de mapare nu se mai taie cu „…" la o lungime fixă — apare complet, pe câte rânduri e nevoie, ca să se vadă dintr-o privire dacă AI-ul a nimerit produsul corect sau nu',date:'2026-09-02'},
   {n:272,text:'Fișa produsului — popup mult mai mare (raportat direct: „o vedere completă asupra întregii informații"), plus verificare secțiune cu secțiune a noului editor din #271 („mai sunt probleme", cu captură). Modalul crește la 1880px/94vh (de la 1500px/980px). Cardul „Stoc & disponibilitate" era real înghesuit (captură atașată: eticheta „Pe drum / comandate" se rupea în mijlocul cuvântului, câmpul „Stoc minim" tăiat jos) — cauza: butoanele „+ Extra"/„✓ Recepționează" la font 24-25px, forțate în coloane de 1/3 din grid. Mutate într-un rând propriu, pe toată lățimea cardului, font redus la 14-15px; la fel și „✏️ Corectează"/„📥 Adaugă stoc din comandă"/„🚫 Marchează epuizat", găsite tot supradimensionate de o scanare automată ulterioară. Verificat de 2 ori: scanare automată de overflow orizontal pe toate secțiunile × 2 rezoluții (0 probleme), plus test funcțional (calcStoc/addExtraStoc/receiveIncoming/correctStocActual) — nimic stricat de mutarea elementelor în DOM',date:'2026-09-02'},
@@ -3163,6 +3187,49 @@ document.addEventListener('click',ev=>{
   const panel=document.getElementById('upd-panel');
   if(panel&&panel.classList.contains('on')&&!ev.target.closest('.upd-widget'))panel.classList.remove('on');
 });
+
+// ── NOTIȚĂ RAPIDĂ (buton 📝 din header) — bloc-notes local, fără legătură cu Supabase; conținutul
+// persistă în localStorage, nu poziția/mărimea (se redeschide mereu în colțul implicit) ──
+const NPK='sm6_notepad';
+function toggleNotepad(){
+  const w=document.getElementById('notepad-widget');
+  const opening=!w.classList.contains('on');
+  w.classList.toggle('on');
+  if(opening)document.getElementById('notepad-text').focus();
+}
+function closeNotepad(){document.getElementById('notepad-widget').classList.remove('on');}
+function copyNotepadContent(){
+  const v=document.getElementById('notepad-text').value;
+  if(!v){toast('Notița e goală');return;}
+  copyText(v);
+}
+let notepadSaveT=null;
+function saveNotepadDebounced(){
+  clearTimeout(notepadSaveT);
+  notepadSaveT=setTimeout(()=>safeLocalSet(NPK,document.getElementById('notepad-text').value),250);
+}
+(function initNotepad(){
+  try{const v=localStorage.getItem(NPK),ta=document.getElementById('notepad-text');if(v&&ta)ta.value=v;}catch(e){}
+  const widget=document.getElementById('notepad-widget'),head=document.getElementById('notepad-head');
+  if(!widget||!head)return;
+  let dragging=false,offX=0,offY=0;
+  head.addEventListener('pointerdown',e=>{
+    if(e.target.closest('button'))return;
+    const r=widget.getBoundingClientRect();
+    widget.style.left=r.left+'px';widget.style.top=r.top+'px';widget.style.right='auto';widget.style.bottom='auto';
+    offX=e.clientX-r.left;offY=e.clientY-r.top;
+    dragging=true;
+    head.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  head.addEventListener('pointermove',e=>{
+    if(!dragging)return;
+    const nx=Math.max(0,Math.min(window.innerWidth-widget.offsetWidth,e.clientX-offX));
+    const ny=Math.max(0,Math.min(window.innerHeight-widget.offsetHeight,e.clientY-offY));
+    widget.style.left=nx+'px';widget.style.top=ny+'px';
+  });
+  head.addEventListener('pointerup',()=>{dragging=false;});
+})();
 
 // ── NOTIFICĂRI MIȘCĂRI DE STOC (intrări/ieșiri, cu dată și oră) ──
 const AK='sm6_activity';
@@ -11912,8 +11979,11 @@ function renderPcomImportHistory(){
   const list=Object.values(batches).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
   if(!list.length){host.textContent='Niciun import încă.';return;}
   host.innerHTML=list.map(b=>{
+    // Data afișată e ziua în care s-a FĂCUT importul (createdAt, dedus din inserarea în DB), nu data
+    // comenzii de pe eMAG/Trendyol (raportat direct: importat azi, dar apărea data comenzii din
+    // fișier, uneori o zi mai veche) — la fel ca în Jurnal/Vânzări azi, unde se aplică aceeași regulă.
     const dates=[...b.dates].sort();
-    const dateLabel=dates.length===1?dates[0]:`${dates[0]} → ${dates[dates.length-1]}`;
+    const dateLabel=b.createdAt?b.createdAt.slice(0,10):(dates.length===1?dates[0]:`${dates[0]} → ${dates[dates.length-1]}`);
     const plLabel=b.platforma==='emag'?'eMAG':'Trendyol';
     return`<div class="pcom-batch-row">
       <div class="pcom-batch-info"><b>${esc(plLabel)}</b> · ${esc(dateLabel)} · ${b.count} linii · ${b.total.toFixed(2)} RON</div>
@@ -12585,7 +12655,12 @@ async function applyPcomImport(){
   }
   const btn=document.getElementById('pcmi-apply-btn');
   btn.disabled=true;btn.textContent='Se aplică…';
-  const batchId=Date.now().toString(36);
+  // Batch separat per platformă — la un import „mixte" (eMAG + Trendyol deodată, ambele fișiere în
+  // aceeași previzualizare), un singur ID comun ar amesteca liniile celor două platforme sub un
+  // singur rând în „Istoric importuri" (etichetat greșit cu o singură platformă, total însumat pe
+  // amândouă) — greu de anulat separat dacă doar unul dintre fișiere era greșit.
+  const batchIds={};
+  const batchIdFor=pl=>batchIds[pl]||(batchIds[pl]=Date.now().toString(36)+'-'+pl);
   let ok=0,failed=0;
   const succeeded=new Set();
   try{
@@ -12603,7 +12678,7 @@ async function applyPcomImport(){
         const row=pcomToDb({platforma,data:it.data,comandaId:it.comandaId,pnk:it.pnk,tara:it.tara,codProdus:it.codProdus,
           clientNume:it.clientNume,titluExtern:it.titluExtern,produsId:p.id,produsNume:p.name,cantitate:it.cantitate,
           pretFaraTva:it.pretFaraTva,pretTotalCuTva:it.pretTotalCuTva,moneda:it.moneda,pretTotalCuTvaRon:totalRon,
-          profitEstimat:profit,marjaEstimata:margin,importBatchId:batchId});
+          profitEstimat:profit,marjaEstimata:margin,importBatchId:batchIdFor(platforma)});
         let inserted;
         try{
           inserted=await dbPost('platforma_comenzi',row);
