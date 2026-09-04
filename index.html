@@ -2900,6 +2900,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:278,text:'Pagina de Staff (/staff) — extindere majoră, Faza 1 dintr-un plan pe 3 faze (specificație detaliată primită direct). Navigare pe 5 secțiuni (Împachetare / În așteptare / Finalizate azi / Căutare / Legendă) în loc de pagina unică de până acum. Card comandă reproiectat: „✓ ÎMPACHETAT" mare/dominant/mov (pentru comenzi cu un singur produs) sau bifă individuală per produs + „✓ ÎMPACHETAT" activat abia după ce toate sunt confirmate (comenzi cu produse multiple, cu progres „X/Y produse pregătite"). Nou: „Raportează problemă" (buton mic, secundar) — Stoc redus (doar alertă pentru admin, NU modifică stocul, comanda continuă normal) / Stoc zero / Cantitate insuficientă / Produs deteriorat / Produs greșit / Nu găsesc produsul / Altă problemă (toate blocante — comanda trece automat în „În așteptare"). Undo 5 secunde după ÎMPACHETAT sau raportare blocantă, cu trecere automată la comanda următoare dacă nu anulezi. AWB — coloană nouă, afișat foarte vizibil pe comandă când există, căutabil; completare manuală din Comenzi Platforme → Profit vânzări (buton „✏️ AWB" pe fiecare linie). Progres real în antet („N comenzi rămase din TOTAL" + bară vizuală). Reîmprospătare automată la ~25s (pusă pe pauză cât timp e deschis un raport de problemă sau o anulare în așteptare, ca ecranul să nu „sară" de sub deget). Cerere explicită respectată: nicio comandă nu depinde de existența unui AWB ca să apară la împachetare. Necesită 3 migrări noi în Supabase (AWB, urmărire probleme raportate, jurnal de activitate) — rulate și verificate cu date reale (comandă cu 1 produs, comandă cu produse multiple, Stoc redus confirmat că NU atinge stocul oficial, Stoc zero confirmat că mută comanda în „În așteptare" fără să atingă stocul). Identitate/blocare comenzi între tablete (Faza 2) și secțiunea admin „Monitorizare Staff" (Faza 3) urmează separat',date:'2026-09-04'},
   {n:277,text:'Performanță — pornirea aplicației e mult mai rapidă, mai ales la prima intrare (raportat direct ca delay mare). Două cauze reale găsite la profilare, nu presupuse: (1) cele ~10 cereri către Supabase la încărcare (produse, jurnal, comenzi de stoc, mișcări de stoc, istoric prețuri, comenzi platforme, mapări, setări) rulau STRICT una după alta, nu în paralel — acum pornesc toate deodată, fiecare cu propriul fallback dacă o migrare nu a rulat încă. (2) Bug real: la un inventar mare (ex. 271 produse → 19 loturi de poze), un re-render complet al tabelului/dashboard-ului la FIECARE lot de poze reîncărcate recrea toate imaginile din pagină de la zero, nu doar cele noi — retrimitea prin proxy poze deja afișate, până la 2000+ cereri redundante la un singur load (mult mai costisitor cu cache-ul de imagini rece, exact la prima intrare). Acum se randează din 5 în 5 loturi. Măsurat automat, de 2 ori: timpul până dispare ecranul de încărcare a scăzut de la ~7,6s la ~1,8s (−76%), iar numărul de cereri către Supabase/imagini de la ~2000 la ~20-70 — datele încărcate verificate identice (același număr de produse/jurnal/comenzi ca într-o interogare directă), nimic pierdut',date:'2026-09-04'},
   {n:276,text:'Header — buton nou „📝" pentru o Notiță rapidă: un pop-up mic, independent de orice produs/comandă, unde poți scrie orice vrei să ții la îndemână (numere de comandă, idei, calcule rapide) și îl copiezi cu un click. Se deschide/închide din buton sau din „×"; se trage de bara de sus oriunde pe ecran și se poate mări din colțul din dreapta-jos (redimensionare nativă din browser). Conținutul rămâne salvat local (pe acest dispozitiv) chiar dacă închizi pop-up-ul sau reîncarci pagina — poziția/mărimea nu se rețin, se redeschide mereu în colțul din dreapta-sus',date:'2026-09-04'},
   {n:275,text:'Comenzi Platforme — două reparații la „Istoric importuri" (Import comenzi), raportate direct după un import dublu eMAG+Trendyol. (1) Data afișată pe fiecare import era data COMENZII de pe eMAG/Trendyol (din fișier), nu data la care chiar ai făcut importul — un import făcut azi putea arăta o dată de-o zi mai veche, confuz la verificare. Acum arată ziua reală a importului, la fel ca peste tot în aplicație (Jurnal/Vânzări azi). (2) Bug real găsit la cod, deși nu s-a manifestat vizibil în cazul raportat: la un import „mixte" (eMAG + Trendyol deodată, dintr-o singură previzualizare), toate liniile primeau ACELAȘI id de lot — dacă vreo linie de pe fiecare platformă ajungea în aceeași previzualizare aplicată dintr-o singură apăsare, „Istoric importuri" le-ar fi amestecat pe un singur rând (etichetat cu o singură platformă, total însumat greșit pe amândouă), imposibil de anulat separat dacă doar unul dintre fișiere era greșit. Acum fiecare platformă primește propriul id de lot, mereu — testat explicit acest caz (linie eMAG + linie Trendyol în același import), confirmat: 2 rânduri separate, etichetate corect, fiecare cu totalul lui, fiecare anulabil independent',date:'2026-09-04'},
@@ -4036,7 +4037,8 @@ function dbToPcom(r){
     moneda:r.moneda||'RON',pretTotalCuTvaRon:Number(r.pret_total_cu_tva_ron)||0,
     profitEstimat:Number(r.profit_estimat)||0,marjaEstimata:Number(r.marja_estimata)||0,
     importBatchId:r.import_batch_id||'',createdAt:r.created_at,
-    impachetat:!!r.impachetat,impachetatAt:r.impachetat_at||'',faraStoc:!!r.fara_stoc,faraStocAt:r.fara_stoc_at||''};
+    impachetat:!!r.impachetat,impachetatAt:r.impachetat_at||'',faraStoc:!!r.fara_stoc,faraStocAt:r.fara_stoc_at||'',
+    awb:r.awb||'',staffBlocked:!!r.staff_blocked,staffIssueType:r.staff_issue_type||'',staffIssueResolved:!!r.staff_issue_resolved};
 }
 function pcomToDb(o){
   return{platforma:o.platforma,data:o.data,comanda_id:o.comandaId||null,pnk:o.pnk||null,tara:o.tara||null,cod_produs:o.codProdus||null,
@@ -12824,12 +12826,34 @@ function renderPcomProfitOrders(rows){
   if(!sorted.length){host.innerHTML='<div class="empty-row">Nicio comandă importată încă</div>';return;}
   host.innerHTML=sorted.map(o=>{
     const plLabel=o.platforma==='emag'?'eMAG':'Trendyol';
-    const packBadge=o.impachetat?'<span class="bdg bdg-ok">📦 Împachetat</span>':o.faraStoc?'<span class="bdg bdg-out">❌ Stoc zero</span>':'';
+    const packBadge=o.impachetat?'<span class="bdg bdg-ok">📦 Împachetat</span>':o.faraStoc?'<span class="bdg bdg-out">❌ Stoc zero</span>':(o.staffBlocked?'<span class="bdg bdg-low">⛔ Problemă raportată</span>':'');
+    const awbBtn=`<button type="button" class="btn btn-sm" style="flex-shrink:0" onclick="setPcomAwb(${o.id})" title="Completează manual AWB — apare apoi și în pagina de Staff">${o.awb?'📦 AWB '+esc(o.awb):'✏️ AWB'}</button>`;
     return`<div class="pcom-batch-row">
       <div class="pcom-batch-info"><b>${esc(plLabel)}</b> · ${esc(o.data)} · ${esc(o.produsNume||o.titluExtern)} · ${o.cantitate}× · ${o.pretTotalCuTvaRon.toFixed(2)} RON${o.comandaId?' · #'+esc(o.comandaId):''}${o.clientNume?' · 👤 '+esc(o.clientNume):''}${packBadge?' · '+packBadge:''}</div>
+      ${awbBtn}
       <button type="button" class="btn btn-sm" style="color:var(--rd);border-color:var(--rd);flex-shrink:0" onclick="deletePcomOrder(${o.id})">🗑️ Șterge</button>
     </div>`;
   }).join('');
+}
+// AWB — doar completare manuală deocamdată (un pipeline de asociere automată din fișiere de
+// curierat poate fi adăugat separat). Setat pe orice linie a comenzii, apare apoi în pagina de
+// Staff (/staff) pe TOATE liniile comenzii cu același comanda_id — staff.html ia primul AWB găsit.
+async function setPcomAwb(id){
+  const o=PCOM.find(x=>x.id===id);
+  if(!o)return;
+  const v=prompt('Număr AWB pentru această comandă:',o.awb||'');
+  if(v===null)return;
+  const awb=v.trim();
+  if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
+  try{
+    await dbPatch(`platforma_comenzi?id=eq.${id}`,{awb:awb||null});
+    o.awb=awb;
+    renderPcomProfitOrders(pcomFilteredRows(document.getElementById('pcp-platforma')?.value||'all',document.getElementById('pcp-period')?.value||'30'));
+    toast(awb?'AWB salvat ✓':'AWB șters ✓');
+  }catch(e){
+    toast('Eroare la salvare AWB','err');
+    console.error(e);
+  }
 }
 async function deletePcomOrder(id){
   const o=PCOM.find(x=>x.id===id);
