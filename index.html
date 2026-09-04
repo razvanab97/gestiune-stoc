@@ -1181,6 +1181,27 @@ function buildRaportCats(){
   .invchk-sku{font-size:11px;color:#666}
   .invchk-qty{font-weight:700;font-size:15px;color:#000;white-space:nowrap}
 }
+/* Export PDF „Raport vânzări" — același mecanism ca #inv-checklist-print: bloc simplu, dedicat
+   printului, NU o rasterizare a paginii interactive (graficul SVG/carduri nu se pretează la print
+   direct) — doar un rezumat tabelar (KPI + istoric lunar), la fel ca celelalte exporturi PDF din
+   aplicație (printChecklist/printRaport). */
+#sr-print{display:none}
+@media print{
+  body.printing-salesreport>*:not(#sr-print){display:none!important}
+  body.printing-salesreport #sr-print{display:block!important;padding:0;color:#000}
+  .sr-print-header h1{font-size:21px;margin-bottom:4px}
+  .sr-print-header div{font-size:13px;color:#333;margin-bottom:2px}
+  .sr-print-header{margin-bottom:18px}
+  .sr-print-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:20px}
+  .sr-print-kpi{border:1px solid #ccc;padding:8px 10px}
+  .sr-print-kpi-lbl{font-size:10px;color:#666;text-transform:uppercase}
+  .sr-print-kpi-val{font-size:15px;font-weight:700;color:#000}
+  .sr-print table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:16px}
+  .sr-print th,.sr-print td{border:1px solid #ccc;padding:5px 7px;text-align:left;color:#000}
+  .sr-print th{background:#f0f0f0;font-weight:700}
+  .sr-print tr{page-break-inside:avoid}
+  .sr-print h2{font-size:14px;margin:14px 0 6px}
+}
 
 /* ── CALCULATOR PAGE ── */
 .calc-transport-toggle{display:flex;gap:8px;align-items:center;margin-bottom:10px;flex-wrap:wrap}
@@ -2011,10 +2032,15 @@ th{font-weight:800!important;color:var(--t3)!important}
 
 <!-- PAGE RAPORT VÂNZĂRI -->
 <div id="page-salesreport" class="page"><div class="wrap">
-  <div class="sr-head">
+  <div class="sr-head" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">
     <div>
       <div class="sr-title">Raport vânzări</div>
       <div class="sr-sub">Analizează performanța afacerii pe orice perioadă</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button type="button" class="btn btn-sm" onclick="srExportCSV()">⬇ CSV</button>
+      <button type="button" class="btn btn-sm" onclick="srExportExcel()">⬇ Excel</button>
+      <button type="button" class="btn btn-sm" onclick="srExportPDF()">🖨️ PDF</button>
     </div>
   </div>
   <div class="sr-filters">
@@ -3003,6 +3029,7 @@ th{font-weight:800!important;color:var(--t3)!important}
 </div>
 
 <div id="inv-checklist-print"></div>
+<div id="sr-print"></div>
 
 <div class="ov" id="ov-emag-guide" onclick="if(event.target===this)closeEmagGuide()">
 <div class="inv-modal" onclick="event.stopPropagation()">
@@ -3052,6 +3079,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:284,text:'„Raport vânzări" — Faza 4, export (Faza 3 — canale/categorii/top produse/istoric lunar: #283). Trei butoane noi în antetul paginii: ⬇ CSV, ⬇ Excel, 🖨️ PDF. Toate exportă aceleași date — rezumatul KPI pentru perioada/comparația selectate + istoricul lunar pe 12 luni — nu o rasterizare a fiecărei secțiuni vizuale (grafic, carduri), la fel ca celelalte exporturi PDF din aplicație (Raport stoc, listă verificare recepție): un rezumat tabelar dedicat, curat la print, nu pagina interactivă capturată ca atare. CSV/Excel reutilizează tiparele deja existente (`ensureXLSX` pentru Excel); PDF refolosește exact mecanismul de la lista de verificare recepție (bloc ascuns, afișat doar la print, tot restul paginii ascuns temporar). Verificat de 2 ori: fișierele chiar se descarcă (CSV/Excel, conținut verificat), blocul de print se populează corect cu toate cifrele, fără erori consolă. Cu asta, planul de redesign Dashboard + Raport vânzări (Faze 0-4) e complet',date:'2026-09-04'},
   {n:283,text:'„Raport vânzări" — Faza 3, secțiunile analitice detaliate (Faza 2 — selector perioadă + KPI + grafic evoluție: #282). Pe aceeași pagină, sub graficul principal: „Vânzări pe canale" — carduri Direct/eMAG/Trendyol cu progress bar + % din total + tendință, plus propriul grafic de evoluție (3 linii) și un insight calculat („Canalul X generează cele mai multe vânzări, Y% din total…"). „Vânzări pe categorii" — carduri compacte + clasament cu poziții 1/2/3 + insight, metrică nouă (nu exista înainte — spre deosebire de „valoare stoc pe categorie" de pe Dashboard, asta e pe VÂNZĂRI reale din perioadă). „Top produse vândute" — sortabil RON/Bucăți/Profit, cu poză, SKU, tendință; click pe un produs deschide direct fișa lui. „Produse cu vânzări scăzute" — subperformeri (NU alertă de stoc, funcție separată de cea existentă). „Istoric lunar" — tabel pe 12 luni, cu rândul de lună clickabil: apasă pe „august 2026" și raportul se re-scopează instant pe luna aia. Toate secțiile respectă perioada/comparația selectate sus — nimic hardcodat. Verificat de 2 ori: click pe produs (deschide fișa corectă), click pe lună din istoric (schimbă corect selectoarele + recalculează), fără erori consolă. Rămâne doar exportul (CSV/Excel/PDF) pentru Faza 4',date:'2026-09-04'},
   {n:282,text:'Tab nou „📈 Raport vânzări" — Faza 2 din planul de redesign Dashboard/Raport (Faza 1: #281). Pagină analitică nouă, separată de Dashboard (care rămâne un overview rapid). Selector de perioadă reutilizabil (Azi/Ieri/7 zile/Luna asta/Luna trecută/3 luni/Anul acesta/Anul trecut/Lună specifică/Interval personalizat) + „Compară cu" (perioada precedentă/aceeași perioadă anul trecut/fără comparație) — niciun interval hardcodat, totul dinamic. 8 carduri KPI cu variație vs. perioada comparată (Vânzări totale, Produse vândute, Comenzi — doar eMAG/Trendyol, Jurnalul nu are concept de comandă pentru Direct, Valoare medie/comandă, Achiziții, Profit estimat, Marjă estimată, Produse active vândute). Grafic de evoluție complet nou, desenat manual (SVG, fără librărie de charting, la fel ca restul graficelor din aplicație) — linie continuă pentru perioada curentă, linie punctată gri pentru comparație, tooltip la hover cu valoare + diferență, toggle metrică (RON/Bucăți/Comenzi/Profit) și granularitate (auto — zi/săptămână/lună după lungimea intervalului — sau manuală), plus rând de insight-uri (total, medie/zi, cea mai bună zi, variație%) calculate matematic din date reale, nu text generat. Reutilizează integral stratul de date verificat la #280/#281 (dedupedSalesByDate, directSalesInRange etc.) — nicio recalculare nouă/divergentă. Verificat de 2 ori: toate selectoarele de perioadă, comparație, metrică și granularitate, hover pe grafic, fără erori consolă. Secțiunile analitice detaliate (canale/categorii/top produse/istoric lunar/export) urmează separat',date:'2026-09-04'},
   {n:281,text:'Dashboard — Faza 1 dintr-un plan pe mai multe faze (redesign Dashboard + „Raport vânzări", specificație detaliată primită direct). Semantică de culoare strictă: Vânzări = verde, Achiziții = amber, Profit = mov (doar identitatea cardului — cifra rămâne verde/roșie după semn, ca să nu se piardă informația „am câștigat sau am pierdut"). Eliminate ambele grafice donut, la cerere directă explicită. „Compoziție vânzări" → „Vânzări pe canale": carduri orizontale cu progress bar (Direct/eMAG/Trendyol), % din total și tendință față de luna trecută — pe cifrele corect deduplicate din #280, nu cele vechi umflate. „Valoare stoc pe categorie" → clasament (aceleași date ca înainte, doar fără cerc). Etichetă corectată: „Top produse vândute direct" arăta de fapt toate canalele combinat — acum spune asta explicit. Bug real găsit și reparat separat, în timpul verificării: ștergerea unui import eMAG/Trendyol greșit (🗑️ din Comenzi Platforme) corecta stocul, dar lăsa vânzarea „fantomă" în Jurnal la nesfârșit — acum se anulează și ecoul din Jurnal. Verificat pe date reale (produse/comenzi disponibile, create/șterse doar pentru test): recalculare cifre, anulare import cu verificare Jurnal înainte/după, fără erori consolă',date:'2026-09-04'},
@@ -4172,14 +4200,17 @@ function renderSrLowSalesSection(cur,cmp){
   return`<div class="sr-section-title" style="margin-top:28px">📉 Produse cu vânzări scăzute</div><div class="sr-section-sub">Produse care performează slab în această perioadă — nu e o alertă de stoc</div>${rowsHtml}`;
 }
 
-function renderSrMonthlyHistorySection(){
+// Datele brute din spatele tabelului "Istoric lunar" — extrase separat ca să fie reutilizabile și de
+// export (CSV/Excel/PDF), nu doar de randarea HTML, fără să calculeze de două ori aceleași cifre.
+function srMonthlyHistoryRows(n){
+  n=n||12;
   const months=[];
   const now=new Date();
-  for(let i=0;i<12;i++){
+  for(let i=0;i<n;i++){
     const d=new Date(now.getFullYear(),now.getMonth()-i,1);
     months.push(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
   }
-  const rowsHtml=months.map((ym,idx)=>{
+  return months.map((ym,idx)=>{
     const from=ym+'-01',to=monthEndISO(ym);
     const direct=directSalesInRange(from,to),emag=platformSalesInRange(from,to,'emag'),trendyol=platformSalesInRange(from,to,'trendyol');
     const val=direct.value+emag.value+trendyol.value,qty=direct.qty+emag.qty+trendyol.qty;
@@ -4188,16 +4219,18 @@ function renderSrMonthlyHistorySection(){
     const profit=profitInRange(from,to);
     const margin=val>0?profit/val*100:0;
     const prevYm=months[idx+1];
-    let trendHtml='—';
+    let trendPct=null;
     if(prevYm){
       const pFrom=prevYm+'-01',pTo=monthEndISO(prevYm);
       const pDirect=directSalesInRange(pFrom,pTo),pEmag=platformSalesInRange(pFrom,pTo,'emag'),pTrendyol=platformSalesInRange(pFrom,pTo,'trendyol');
-      const pVal=pDirect.value+pEmag.value+pTrendyol.value;
-      const pct=srPctDelta(val,pVal);
-      trendHtml=srTrendHtml(pct);
+      trendPct=srPctDelta(val,pDirect.value+pEmag.value+pTrendyol.value);
     }
-    return`<tr><td><button type="button" class="sr-hist-month" onclick="srJumpToMonth('${ym}')">${esc(monthLabelRo(ym))}</button></td><td>${val.toLocaleString('ro-RO',{maximumFractionDigits:0})} RON</td><td>${fmtQty(qty)} buc.</td><td>${fmtQty(comenzi)}</td><td>${purch.toLocaleString('ro-RO',{maximumFractionDigits:0})} RON</td><td>${profit.toLocaleString('ro-RO',{maximumFractionDigits:0})} RON</td><td>${margin.toFixed(1)}%</td><td>${trendHtml}</td></tr>`;
-  }).join('');
+    return{ym,label:monthLabelRo(ym),val,qty,comenzi,purch,profit,margin,trendPct};
+  });
+}
+function renderSrMonthlyHistorySection(){
+  const rows=srMonthlyHistoryRows(12);
+  const rowsHtml=rows.map(r=>`<tr><td><button type="button" class="sr-hist-month" onclick="srJumpToMonth('${r.ym}')">${esc(r.label)}</button></td><td>${r.val.toLocaleString('ro-RO',{maximumFractionDigits:0})} RON</td><td>${fmtQty(r.qty)} buc.</td><td>${fmtQty(r.comenzi)}</td><td>${r.purch.toLocaleString('ro-RO',{maximumFractionDigits:0})} RON</td><td>${r.profit.toLocaleString('ro-RO',{maximumFractionDigits:0})} RON</td><td>${r.margin.toFixed(1)}%</td><td>${r.trendPct!==null?srTrendHtml(r.trendPct):'—'}</td></tr>`).join('');
   return`<div class="sr-section-title" style="margin-top:28px">Istoric lunar</div>
     <div class="sr-hist-wrap"><table class="sr-hist-table"><thead><tr><th>Lună</th><th>Vânzări</th><th>Bucăți</th><th>Comenzi</th><th>Achiziții</th><th>Profit estimat</th><th>Marjă</th><th>vs. luna anterioară</th></tr></thead><tbody>${rowsHtml}</tbody></table></div>`;
 }
@@ -4218,6 +4251,70 @@ function renderSrMoreSections(cur,cmp){
     <div class="tb">${renderSrTopProductsSection(cur,cmp)}${renderSrLowSalesSection(cur,cmp)}</div>
     <div class="tb">${renderSrMonthlyHistorySection()}</div>`;
 }
+
+/* ══════════════ RAPORT VÂNZĂRI — Faza 4: export CSV/Excel/PDF ══════════════
+   Toate 3 exportă ACELEAȘI date (rezumat KPI pentru perioada/comparația curent selectată + istoricul
+   lunar pe 12 luni) — nu o rasterizare a fiecărei secțiuni vizuale (canale/categorii/top produse), la
+   fel cum PDF-ul de la Raport stoc/factură exportă un rezumat tabelar dedicat, nu pagina interactivă. */
+function srExportKpiSummary(){
+  const cur=srCurrentRange();
+  const cmp=srCompareKey==='none'?null:resolveComparePreset(srCompareKey,cur.from,cur.to);
+  const direct=directSalesInRange(cur.from,cur.to),emag=platformSalesInRange(cur.from,cur.to,'emag'),trendyol=platformSalesInRange(cur.from,cur.to,'trendyol');
+  const totalVal=direct.value+emag.value+trendyol.value,totalQty=direct.qty+emag.qty+trendyol.qty;
+  const purch=purchasesInRangeSimple(cur.from,cur.to).value;
+  const profit=profitInRange(cur.from,cur.to);
+  const margin=totalVal>0?profit/totalVal*100:0;
+  const comenzi=sumSeries(comenziSeriesInRange(cur.from,cur.to,'all'));
+  return{cur,cmp,rows:[
+    {lbl:'Vânzări totale',val:totalVal.toFixed(2)+' RON'},
+    {lbl:'Produse vândute',val:fmtQty(totalQty)+' buc.'},
+    {lbl:'Comenzi (eMAG+Trendyol)',val:fmtQty(comenzi)},
+    {lbl:'Achiziții',val:purch.toFixed(2)+' RON'},
+    {lbl:'Profit estimat',val:profit.toFixed(2)+' RON'},
+    {lbl:'Marjă estimată',val:margin.toFixed(1)+'%'},
+  ]};
+}
+function srExportCSV(){
+  const{cur,rows}=srExportKpiSummary();
+  const hist=srMonthlyHistoryRows(12);
+  let csv=`Raport vânzări — ${cur.label}\n\n`;
+  rows.forEach(r=>{csv+=`"${r.lbl}","${r.val}"\n`;});
+  csv+='\nIstoric lunar\n"Lună","Vânzări (RON)","Bucăți","Comenzi","Achiziții (RON)","Profit estimat (RON)","Marjă (%)"\n';
+  hist.forEach(r=>{csv+=`"${r.label}","${r.val.toFixed(2)}","${r.qty}","${r.comenzi}","${r.purch.toFixed(2)}","${r.profit.toFixed(2)}","${r.margin.toFixed(1)}"\n`;});
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);a.download='raport-vanzari-'+td()+'.csv';a.click();
+  toast('Raport CSV descărcat ✓');
+}
+async function srExportExcel(){
+  try{
+    const XLSX=await ensureXLSX();
+    const{cur,rows}=srExportKpiSummary();
+    const hist=srMonthlyHistoryRows(12);
+    const wb=XLSX.utils.book_new();
+    const kpiAoa=[['Raport vânzări',cur.label],[],...rows.map(r=>[r.lbl,r.val])];
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(kpiAoa),'Rezumat');
+    const histHead=['Lună','Vânzări (RON)','Bucăți','Comenzi','Achiziții (RON)','Profit estimat (RON)','Marjă (%)'];
+    const histAoa=[histHead,...hist.map(r=>[r.label,Number(r.val.toFixed(2)),r.qty,r.comenzi,Number(r.purch.toFixed(2)),Number(r.profit.toFixed(2)),Number(r.margin.toFixed(1))])];
+    XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(histAoa),'Istoric lunar');
+    XLSX.writeFile(wb,'raport-vanzari-'+td()+'.xlsx');
+    toast('Raport Excel descărcat ✓');
+  }catch(err){
+    toast('Eroare la generarea fișierului Excel: '+err.message,'err');
+  }
+}
+function srExportPDF(){
+  const{cur,rows}=srExportKpiSummary();
+  const hist=srMonthlyHistoryRows(12);
+  const kpiHtml=rows.map(r=>`<div class="sr-print-kpi"><div class="sr-print-kpi-lbl">${esc(r.lbl)}</div><div class="sr-print-kpi-val">${esc(r.val)}</div></div>`).join('');
+  const histHtml=hist.map(r=>`<tr><td>${esc(r.label)}</td><td>${r.val.toFixed(2)} RON</td><td>${fmtQty(r.qty)}</td><td>${fmtQty(r.comenzi)}</td><td>${r.purch.toFixed(2)} RON</td><td>${r.profit.toFixed(2)} RON</td><td>${r.margin.toFixed(1)}%</td></tr>`).join('');
+  document.getElementById('sr-print').innerHTML=`
+    <div class="sr-print-header"><h1>Raport vânzări</h1><div>${esc(cur.label)}</div><div>Generat ${new Date().toLocaleDateString('ro-RO')}</div></div>
+    <div class="sr-print-kpis">${kpiHtml}</div>
+    <h2>Istoric lunar</h2>
+    <table><thead><tr><th>Lună</th><th>Vânzări</th><th>Bucăți</th><th>Comenzi</th><th>Achiziții</th><th>Profit estimat</th><th>Marjă</th></tr></thead><tbody>${histHtml}</tbody></table>`;
+  document.body.classList.add('printing-salesreport');
+  window.print();
+}
+window.addEventListener('afterprint',()=>document.body.classList.remove('printing-salesreport'));
 function deltaBadgeHtml(pct){
   if(!Number.isFinite(pct)||pct===0)return'<div class="dash-total-delta">— față de luna trecută</div>';
   const up=pct>0;
