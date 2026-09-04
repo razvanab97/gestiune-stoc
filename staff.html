@@ -68,6 +68,11 @@ button{font-family:var(--font);cursor:pointer}
 .ord-date{color:var(--t3);font-size:16px;margin-left:auto}
 .ord-finalized-badge{background:var(--gr-bg);color:var(--gr);font-weight:700;padding:4px 12px;border-radius:999px;font-size:15px}
 .ord-waiting-badge{background:var(--or-bg);color:var(--or);font-weight:700;padding:4px 12px;border-radius:999px;font-size:15px}
+/* Prezență/blocare moale (Faza 2) — doar avertisment, angajatul poate continua oricând, decizie
+   confirmată direct. Nu e o măsură de securitate (nume din localStorage, peste cheia anon expusă). */
+.lock-banner{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--or-bg);color:#92400e;border-radius:var(--r2);font-size:16px;font-weight:600}
+.staff-name-badge{background:none;border:1px solid var(--b2);color:var(--t2);font-size:15px;font-weight:700;padding:6px 12px;border-radius:999px;flex-shrink:0}
+.staff-name-badge:active{background:var(--surf2)}
 
 .awb-box{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 16px;background:linear-gradient(135deg,var(--acc-light),#fff);border:1px solid rgba(118,87,246,.22);border-radius:var(--r2)}
 .awb-lbl{font-size:14px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--acc2)}
@@ -157,7 +162,10 @@ button{font-family:var(--font);cursor:pointer}
 <div class="wrap">
   <div class="hdr">
     <h1>📦 Împachetare comenzi</h1>
-    <span class="sync-dot" id="sync-dot"></span>
+    <div style="display:flex;align-items:center;gap:10px">
+      <button type="button" class="staff-name-badge" id="staff-name-badge" onclick="editStaffName()"></button>
+      <span class="sync-dot" id="sync-dot"></span>
+    </div>
   </div>
   <div class="progress-txt" id="progress-txt">Se încarcă…</div>
   <div class="progress-bar-wrap">
@@ -208,6 +216,14 @@ let sheetCtx=null; // {lk} sau {lk,type:'stoc_redus'} — comanda/linia pentru c
 let pendingUndo=null; // {orderKey,lines:[{table,id,prev}],timeoutId,type}
 let lineBusy={}; // lk -> true cât timp o cerere e în curs (protecție dublu-tap)
 let pollTimer=null;
+// Identitate — DOAR un semnal, nu o măsură de securitate (nume din localStorage, peste cheia anon
+// expusă, la fel ca restul aplicației, documentat intenționat). Consecvent cu filozofia "fără PIN"
+// originală a paginii Staff — nu adăugăm autentificare reală, doar atribuire pentru prezență/audit.
+const STAFF_NAME_KEY='sm6_staff_name';
+let staffName='';
+try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
+const LOCK_TTL_MIN=15;
+let lockHeartbeatTimer=null,lockHeartbeatKey=null;
 
 function findProdus(id){return id?PRODUSE.find(p=>p.id===id):null;}
 
@@ -308,8 +324,13 @@ function lineImgList(l){
   return list;
 }
 
+let lastLockedKey=undefined; // undefined != null, ca primul render (curKey posibil null) să nu fie ignorat
 function renderMain(){
   renderProgress();
+  if(curKey!==lastLockedKey){
+    lastLockedKey=curKey;
+    if(curKey)claimOrderLock(curKey);else stopLockHeartbeat();
+  }
   const host=document.getElementById('main-area');
   if(activeTab==='pack')return renderPackTab(host);
   if(activeTab==='waiting')return renderWaitingTab(host);
@@ -370,6 +391,7 @@ function renderPackTab(host){
       ${ord.comandaId?`<span class="ord-num">#${esc(ord.comandaId)}</span>`:''}
       <span class="ord-date">${esc(ord.data||'')}</span>
     </div>
+    <div id="lock-banner-slot"></div>
     ${ord.awb?`<div class="awb-box"><div><div class="awb-lbl">AWB</div><div class="awb-num">${esc(ord.awb)}</div></div></div>`:(ord.platforma!=='direct'?`<div class="awb-box"><span class="awb-pending">AWB în așteptare</span></div>`:'')}
     ${multi?`<div class="progress-mini">${doneCount} / ${ord.lines.length} produse pregătite</div>`:''}
     <div class="lines">${linesHtml}</div>
@@ -403,8 +425,73 @@ function cycleLineImg(lk){
 
 async function logActivity(action,line,detail){
   try{
-    await sb('POST','staff_activity_log',{staff_name:null,action,entity_table:line?line._table:null,entity_id:line?line.id:null,comanda_id:line?(orderOfLine(line)?.comandaId||null):null,detail:detail||null});
+    await sb('POST','staff_activity_log',{staff_name:staffName||null,action,entity_table:line?line._table:null,entity_id:line?line.id:null,comanda_id:line?(orderOfLine(line)?.comandaId||null):null,detail:detail||null});
   }catch(e){console.warn('activity log:',e);}
+}
+
+/* ── Identitate + blocare/prezență (Faza 2) ── */
+function renderStaffNameBadge(){
+  const el=document.getElementById('staff-name-badge');if(!el)return;
+  el.textContent=staffName?('👤 '+staffName):'👤 Cine ești?';
+}
+function editStaffName(){
+  const v=prompt('Numele tău (apare pe comenzile la care lucrezi, doar informativ):',staffName);
+  if(v===null)return;
+  staffName=v.trim();
+  try{localStorage.setItem(STAFF_NAME_KEY,staffName);}catch(e){}
+  renderStaffNameBadge();
+}
+function showLockBanner(name,ageMin){
+  const el=document.getElementById('lock-banner-slot');if(!el)return;
+  const ago=ageMin<1?'chiar acum':`acum ${Math.round(ageMin)} min`;
+  el.innerHTML=`<div class="lock-banner">👀 <b>${esc(name)}</b> lucrează la asta (${esc(ago)}) — poți continua oricând</div>`;
+}
+function hideLockBanner(){
+  const el=document.getElementById('lock-banner-slot');if(el)el.innerHTML='';
+}
+function orderLockTarget(ord){
+  // O comandă de platformă = mai multe rânduri (comanda_id+platforma) — blocarea trebuie scrisă/citită
+  // pe TOATE deodată (un singur PATCH), nu per linie, altfel două tablete pot "despărți" lock-ul pe o
+  // comandă cu produse multiple. Comenzile directe (jurnal) sunt deja un singur rând.
+  const l=ord.lines[0];
+  if(l._table==='platforma_comenzi'&&ord.comandaId)return{table:'platforma_comenzi',filter:`comanda_id=eq.${encodeURIComponent(ord.comandaId)}&platforma=eq.${ord.platforma}`};
+  return{table:l._table,filter:`id=eq.${l.id}`};
+}
+async function claimOrderLock(orderKey){
+  const ord=ORDERS.find(o=>o.key===orderKey);
+  if(!ord||!ord.lines.length){hideLockBanner();return;}
+  const target=orderLockTarget(ord);
+  let freshRows=[];
+  try{
+    freshRows=await sb('GET',`${target.table}?${target.filter}&select=staff_lock_by,staff_lock_at`);
+  }catch(e){console.warn('lock check:',e);}
+  const holder=freshRows.find(r=>r.staff_lock_by&&r.staff_lock_at);
+  if(holder&&holder.staff_lock_by!==staffName){
+    const ageMin=(Date.now()-new Date(holder.staff_lock_at).getTime())/60000;
+    if(ageMin<LOCK_TTL_MIN)showLockBanner(holder.staff_lock_by,ageMin);else hideLockBanner();
+  }else{
+    hideLockBanner();
+  }
+  if(!staffName){stopLockHeartbeat();return;} // fără nume, doar avertismentul de mai sus — nu scriem un lock gol
+  if(curKey!==orderKey)return; // navigare rapidă — nu mai scrie peste o comandă deja părăsită
+  try{
+    await sb('PATCH',`${target.table}?${target.filter}`,{staff_lock_by:staffName,staff_lock_at:new Date().toISOString()});
+  }catch(e){console.warn('lock claim:',e);}
+  startLockHeartbeat(orderKey);
+}
+function startLockHeartbeat(orderKey){
+  if(lockHeartbeatTimer&&lockHeartbeatKey===orderKey)return;
+  stopLockHeartbeat();
+  lockHeartbeatKey=orderKey;
+  lockHeartbeatTimer=setInterval(()=>{
+    if(curKey!==orderKey||!staffName){stopLockHeartbeat();return;}
+    const ord=ORDERS.find(o=>o.key===orderKey);if(!ord)return;
+    const target=orderLockTarget(ord);
+    sb('PATCH',`${target.table}?${target.filter}`,{staff_lock_at:new Date().toISOString()}).catch(()=>{});
+  },60000);
+}
+function stopLockHeartbeat(){
+  clearInterval(lockHeartbeatTimer);lockHeartbeatTimer=null;lockHeartbeatKey=null;
 }
 
 async function patchLine(l,body){
@@ -617,6 +704,7 @@ function renderWaitingTab(host){
       ${ord.comandaId?`<span class="ord-num">#${esc(ord.comandaId)}</span>`:''}
       <span class="ord-waiting-badge">⏸ În așteptare</span>
     </div>
+    <div id="lock-banner-slot"></div>
     ${ord.awb?`<div class="awb-box"><div><div class="awb-lbl">AWB</div><div class="awb-num">${esc(ord.awb)}</div></div></div>`:''}
     <div class="lines">${linesHtml}</div>
     <button type="button" class="nav-btn" onclick="curKey=null;renderMain()">← Înapoi la listă</button>
@@ -760,6 +848,7 @@ async function refreshData(){
 }
 
 async function load(){
+  renderStaffNameBadge();
   try{
     const [prodRows,comRows]=await Promise.all([
       sb('GET','produse?select=id,name,sku,internal_code,img,images&order=id.asc'),
