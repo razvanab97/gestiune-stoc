@@ -2900,6 +2900,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:277,text:'Performanță — pornirea aplicației e mult mai rapidă, mai ales la prima intrare (raportat direct ca delay mare). Două cauze reale găsite la profilare, nu presupuse: (1) cele ~10 cereri către Supabase la încărcare (produse, jurnal, comenzi de stoc, mișcări de stoc, istoric prețuri, comenzi platforme, mapări, setări) rulau STRICT una după alta, nu în paralel — acum pornesc toate deodată, fiecare cu propriul fallback dacă o migrare nu a rulat încă. (2) Bug real: la un inventar mare (ex. 271 produse → 19 loturi de poze), un re-render complet al tabelului/dashboard-ului la FIECARE lot de poze reîncărcate recrea toate imaginile din pagină de la zero, nu doar cele noi — retrimitea prin proxy poze deja afișate, până la 2000+ cereri redundante la un singur load (mult mai costisitor cu cache-ul de imagini rece, exact la prima intrare). Acum se randează din 5 în 5 loturi. Măsurat automat, de 2 ori: timpul până dispare ecranul de încărcare a scăzut de la ~7,6s la ~1,8s (−76%), iar numărul de cereri către Supabase/imagini de la ~2000 la ~20-70 — datele încărcate verificate identice (același număr de produse/jurnal/comenzi ca într-o interogare directă), nimic pierdut',date:'2026-09-04'},
   {n:276,text:'Header — buton nou „📝" pentru o Notiță rapidă: un pop-up mic, independent de orice produs/comandă, unde poți scrie orice vrei să ții la îndemână (numere de comandă, idei, calcule rapide) și îl copiezi cu un click. Se deschide/închide din buton sau din „×"; se trage de bara de sus oriunde pe ecran și se poate mări din colțul din dreapta-jos (redimensionare nativă din browser). Conținutul rămâne salvat local (pe acest dispozitiv) chiar dacă închizi pop-up-ul sau reîncarci pagina — poziția/mărimea nu se rețin, se redeschide mereu în colțul din dreapta-sus',date:'2026-09-04'},
   {n:275,text:'Comenzi Platforme — două reparații la „Istoric importuri" (Import comenzi), raportate direct după un import dublu eMAG+Trendyol. (1) Data afișată pe fiecare import era data COMENZII de pe eMAG/Trendyol (din fișier), nu data la care chiar ai făcut importul — un import făcut azi putea arăta o dată de-o zi mai veche, confuz la verificare. Acum arată ziua reală a importului, la fel ca peste tot în aplicație (Jurnal/Vânzări azi). (2) Bug real găsit la cod, deși nu s-a manifestat vizibil în cazul raportat: la un import „mixte" (eMAG + Trendyol deodată, dintr-o singură previzualizare), toate liniile primeau ACELAȘI id de lot — dacă vreo linie de pe fiecare platformă ajungea în aceeași previzualizare aplicată dintr-o singură apăsare, „Istoric importuri" le-ar fi amestecat pe un singur rând (etichetat cu o singură platformă, total însumat greșit pe amândouă), imposibil de anulat separat dacă doar unul dintre fișiere era greșit. Acum fiecare platformă primește propriul id de lot, mereu — testat explicit acest caz (linie eMAG + linie Trendyol în același import), confirmat: 2 rânduri separate, etichetate corect, fiecare cu totalul lui, fiecare anulabil independent',date:'2026-09-04'},
   {n:274,text:'Fix: ștergerea unei vânzări din „Vânzări azi" (butonul „×" de pe cardul de produs) nu mai lasă vânzarea „fantomă" în Jurnal vânzări — înainte, contorul de azi arăta 0, dar rândul rămânea vizibil în jurnal, cu cantitatea originală, ca și cum vânzarea tot exista. Acum se șterge din ambele locuri deodată, la fel ca ștergerea directă din Jurnal. Nu afectează „−1" (corectare rapidă, care rămâne intenționat fără atingere la jurnal). Testat cu produs disponibil (creat/vândut/șters doar pentru test): jurnalul confirmă rândul șters din Supabase, nu doar local',date:'2026-09-03'},
@@ -4273,22 +4274,33 @@ async function load(){
     // pe tot tabelul ajunge la zeci de MB — suficient să depășească timeout-ul sau să fie prea
     // lent pe o conexiune slabă, blocând TOT inventarul doar din cauza pozelor. Datele care chiar
     // contează pentru gestiune (stoc, prețuri, nume) se încarcă separat de poze, garantat rapid.
-    showLoading('Se încarcă produsele…');
     const prodCols='id,name,sku,internal_code,category,supplier,bought,incoming_qty,sold,min_qty,price_buy_ttc,price_buy_prev_ttc,price_buy_changed_at,tva_acq,stock_added_at,last_stock_added_qty,price_sell,price_emag,price_trendyol,price_rec,colors,sizes,material,dims,notes,description,images,created_at,updated_at,supplier_oos,supplier_oos_since,supplier_restock_eta,supplier_notify,supplier_notified,archived,archived_at,easybox_l,easybox_w,easybox_t';
-    const rows=await dbGet(`produse?select=${prodCols}&order=id.asc`);
+    const today=td();
+    showLoading('Se încarcă datele din Supabase…');
+    // Toate cererile independente pornesc DEODATĂ, nu una după alta — 8 cereri secvențiale își
+    // însumau timpii de rundă-trip unul peste altul (raportat direct: delay mare mai ales la prima
+    // intrare, cu cache local rece). Fiecare cerere „soft" (care are oricum un fallback local dacă
+    // migrarea ei nu a rulat) își prinde propria eroare imediat, ca restul să nu aștepte după ea.
+    const prodPromise=dbGet(`produse?select=${prodCols}&order=id.asc`);
+    const todayPromise=dbGet(`vanzari_zilnice?data=eq.${today}&select=*`);
+    const jurnalPromise=dbGet('jurnal?select=*&order=data.desc');
+    const stockOrdersPromise=dbGet('comenzi_stoc?select=*&order=created_at.desc').catch(e=>({__err:e}));
+    const activityPromise=dbGet('activitate_stoc?select=*&order=created_at.desc&limit=100').catch(e=>({__err:e}));
+    const priceHistPromise=dbGet('istoric_preturi?select=*&order=created_at.desc&limit=200').catch(e=>({__err:e}));
+    const pcomPromise=dbGet('platforma_comenzi?select=*&order=data.desc').catch(e=>({__err:e}));
+    const reorderPromise=fetch('/api/settings?key='+REORDER_KEY).then(r=>r.json()).catch(e=>({__err:e}));
+
+    const rows=await prodPromise;
     P=rows.map(r=>dbToP({...r,img:''}));
     loadProductImagesBatched();
 
     // today sales
-    showLoading('Se încarcă vânzările de azi…');
-    const today=td();
-    const todayRows=await dbGet(`vanzari_zilnice?data=eq.${today}&select=*`);
+    const todayRows=await todayPromise;
     TS={};
     todayRows.forEach(r=>{TS[r.product_id]=r.qty;});
 
     // jurnal
-    showLoading('Se încarcă jurnalul…');
-    const jRows=await dbGet('jurnal?select=*&order=data.desc');
+    const jRows=await jurnalPromise;
     // group by date
     const jMap={};
     jRows.forEach(r=>{
@@ -4298,56 +4310,53 @@ async function load(){
     JL=Object.values(jMap).sort((a,b)=>b.date.localeCompare(a.date));
 
     // istoric comenzi/incarcari stoc
-    showLoading('Se încarcă istoricul comenzilor de stoc…');
-    try{
-      const oRows=await dbGet('comenzi_stoc?select=*&order=created_at.desc');
-      OI=mergeStockOrders(oRows.map(dbToStockOrder),loadLocalStockOrders());
+    const oResult=await stockOrdersPromise;
+    if(oResult&&!oResult.__err){
+      OI=mergeStockOrders(oResult.map(dbToStockOrder),loadLocalStockOrders());
       safeLocalSet(OK,JSON.stringify(OI));
       resyncLocalOnlyStockOrders();
-    }catch(e){
+    }else{
       OI=loadLocalStockOrders();
-      console.warn('comenzi_stoc unavailable:',e);
+      console.warn('comenzi_stoc unavailable:',oResult?.__err);
     }
 
     // mișcări de stoc (notificări intrări/ieșiri)
-    showLoading('Se încarcă mișcările de stoc…');
-    try{
-      const mRows=await dbGet('activitate_stoc?select=*&order=created_at.desc&limit=100');
-      ACT=mRows.map(r=>({ts:r.created_at,tip:r.tip,name:r.product_name,qty:Number(r.qty)||0,sursa:r.sursa||'',seen:true,productId:r.product_id||null}));
+    const mResult=await activityPromise;
+    if(mResult&&!mResult.__err){
+      ACT=mResult.map(r=>({ts:r.created_at,tip:r.tip,name:r.product_name,qty:Number(r.qty)||0,sursa:r.sursa||'',seen:true,productId:r.product_id||null}));
       safeLocalSet(AK,JSON.stringify(ACT));
-    }catch(e){
+    }else{
       ACT=loadLocalActivity();
-      console.warn('activitate_stoc unavailable (rulează migration_activity_log.sql):',e);
+      console.warn('activitate_stoc unavailable (rulează migration_activity_log.sql):',mResult?.__err);
     }
 
     // istoric modificări de preț
-    try{
-      const phRows=await dbGet('istoric_preturi?select=*&order=created_at.desc&limit=200');
-      PCT=phRows.map(r=>({ts:r.created_at,productId:r.product_id||null,name:r.product_name,tipPret:r.tip_pret,oldPrice:Number(r.pret_vechi)||0,newPrice:Number(r.pret_nou)||0,sursa:r.sursa||''}));
+    const phResult=await priceHistPromise;
+    if(phResult&&!phResult.__err){
+      PCT=phResult.map(r=>({ts:r.created_at,productId:r.product_id||null,name:r.product_name,tipPret:r.tip_pret,oldPrice:Number(r.pret_vechi)||0,newPrice:Number(r.pret_nou)||0,sursa:r.sursa||''}));
       safeLocalSet(PHK,JSON.stringify(PCT));
-    }catch(e){
+    }else{
       PCT=loadLocalPriceHist();
-      console.warn('istoric_preturi unavailable (rulează migration_price_history.sql):',e);
+      console.warn('istoric_preturi unavailable (rulează migration_price_history.sql):',phResult?.__err);
     }
 
     // comenzi platforme (eMAG/Trendyol) importate
-    try{
-      const pcRows=await dbGet('platforma_comenzi?select=*&order=data.desc');
-      PCOM=pcRows.map(dbToPcom);
+    const pcResult=await pcomPromise;
+    if(pcResult&&!pcResult.__err){
+      PCOM=pcResult.map(dbToPcom);
       pcomLoaded=true;
-    }catch(e){
+    }else{
       PCOM=[];
-      console.warn('platforma_comenzi unavailable (rulează migration_platforma_comenzi.sql):',e);
+      console.warn('platforma_comenzi unavailable (rulează migration_platforma_comenzi.sql):',pcResult?.__err);
     }
 
     // produse de comandat (fără stoc, dar cu comenzi pe ele) — listă simplă, ținută în setari_app
     // (ca tab_order/ui_customizations), grupată pe lună prin addedAt.slice(0,7), nu prin ștergere
-    try{
-      const rr=await fetch('/api/settings?key='+REORDER_KEY);
-      const rd=await rr.json();
+    const rd=await reorderPromise;
+    if(rd&&!rd.__err){
       REORDER=rd?.value?JSON.parse(rd.value):[];
       safeLocalSet(REORDER_KEY,JSON.stringify(REORDER));
-    }catch(e){
+    }else{
       try{REORDER=JSON.parse(localStorage.getItem(REORDER_KEY)||'[]');}catch(e2){REORDER=[];}
     }
 
@@ -4358,8 +4367,9 @@ async function load(){
     }
 
     sbReady=true;
-    await loadGlobalSettings();
-    if(!syncMapsLoaded)await loadSyncMappings();
+    // Restul (setări globale + mapările de sincronizare) pornesc tot în paralel — nu depind una de
+    // alta, doar de sbReady, deja setat mai sus.
+    await Promise.all([loadGlobalSettings(),syncMapsLoaded?Promise.resolve():loadSyncMappings()]);
     setSyncStatus('ok','Supabase ✓');
     document.getElementById('day-badge').textContent=new Date().toLocaleDateString('ro-RO',{day:'numeric',month:'long'});
     hideLoading();
@@ -4381,11 +4391,22 @@ async function load(){
 // fără poze deocamdată; restul inventarului (deja încărcat de load()) nu e afectat deloc.
 async function loadProductImagesBatched(){
   const BATCH=15;
+  let batchesSinceRender=0;
   for(let offset=0;offset<P.length;offset+=BATCH){
     try{
       const batch=await dbGet(`produse?select=id,img&order=id.asc&limit=${BATCH}&offset=${offset}`);
       batch.forEach(r=>{const p=P.find(x=>x.id===r.id);if(p)p.img=r.img||'';});
-      renderTable();renderRaport();renderDashboard();
+      batchesSinceRender++;
+      // Randare progresivă, dar NU la fiecare lot — cu un inventar mare (ex. 271 produse → 19 loturi),
+      // un re-render complet al tabelului/dashboard-ului la fiecare lot recreează de la zero TOATE
+      // tag-urile <img> din pagină (nu doar cele din lotul curent), retrimițând prin proxy imagini
+      // deja randate la loturile anterioare — bug real găsit la profilare, cauza principală a
+      // delay-ului mare raportat direct de la prima intrare (2000+ cereri de imagine la un singur
+      // load, mai ales cu cache-ul de imagini rece). Randăm din 5 în 5 loturi, plus mereu la final.
+      if(batchesSinceRender>=5||offset+BATCH>=P.length){
+        renderTable();renderRaport();renderDashboard();
+        batchesSinceRender=0;
+      }
     }catch(e){
       console.warn('Lot de poze eșuat (offset '+offset+'), continui cu următorul:',e);
     }
@@ -11243,21 +11264,23 @@ function renderArchivePage(){
 /* ── SINCRONIZARE PLATFORME (mapare produse) ── */
 async function loadSyncMappings(){
   if(!sbReady)return;
+  // Cele două tabele nu depind una de alta — pornesc deodată, nu una după alta.
+  const mapPromise=dbGet('platforma_mapari?select=*&order=id.desc');
+  // Într-un lanț separat: dacă migration_platforma_produse_lipsa.sql nu a rulat încă, restul paginii
+  // Sincronizare (mapările reale, de mai jos) tot funcționează normal, doar fără secțiunea nouă.
+  const plipsaPromise=dbGet('platforma_produse_lipsa?select=*&order=created_at.desc').catch(err=>{
+    console.warn('platforma_produse_lipsa unavailable (rulează migration_platforma_produse_lipsa.sql):',err);
+    return null;
+  });
   try{
-    const rows=await dbGet('platforma_mapari?select=*&order=id.desc');
+    const rows=await mapPromise;
     SYNCM=rows.map(dbToSyncMap);
     syncMapsLoaded=true;
   }catch(err){
     toast('Eroare la încărcarea mapărilor: '+err.message,'err');
   }
-  // Într-un try separat: dacă migration_platforma_produse_lipsa.sql nu a rulat încă, restul paginii
-  // Sincronizare (mapările reale, de mai sus) tot funcționează normal, doar fără secțiunea nouă.
-  try{
-    const plRows=await dbGet('platforma_produse_lipsa?select=*&order=created_at.desc');
-    PLIPSA=plRows.map(dbToPlipsa);
-  }catch(err){
-    console.warn('platforma_produse_lipsa unavailable (rulează migration_platforma_produse_lipsa.sql):',err);
-  }
+  const plRows=await plipsaPromise;
+  if(plRows)PLIPSA=plRows.map(dbToPlipsa);
 }
 // PNK e mai fiabil decât titlul — unic per listare, nu se schimbă niciodată la o editare de titlu
 // (spre deosebire de titlu, care se poate rescrie oricând pe platformă). Orice flux de mapare/potrivire
