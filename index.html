@@ -3187,6 +3187,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:295,text:'Comenzi Platforme — bug real reparat, raportat direct: o comandă marcată „✓ Inclus" dar niciodată dusă până la „Aplică import" (stoc/Jurnal neatinse) apărea totuși în „Istoric importuri" ca și cum ar fi fost un import complet — iar butonul „Șterge" de-acolo ar fi readăugat în stoc o cantitate care nu fusese scăzută niciodată, coruptând stocul. Cauza: „Istoric importuri" grupa TOATE comenzile din platforma_comenzi după lot, indiferent dacă efectele de stoc chiar rulaseră. Acum fiecare comandă ține minte dacă a fost cu adevărat aplicată (coloană nouă `efecte_aplicate`); doar cele aplicate apar în Istoric — cele doar-confirmate rămân vizibile în Staff (asta era scopul lor) fără să polueze istoricul de importuri. Pe drum, reparat și un bug de reimportare: dacă o comandă deja confirmată prin „Inclus" era reîntâlnită la „Aplică import" (index unic în bază), codul vechi o trata orbește ca „deja aplicată" și sărea peste scăderea stocului — acum verifică explicit înainte să sară peste. **Necesită rulare manuală în Supabase SQL Editor ca să prindă efect complet** (fără ea, aplicația funcționează la fel ca înainte de acest fix, fără eroare): `alter table platforma_comenzi add column if not exists efecte_aplicate boolean default true;`. Verificat de 2 ori, inclusiv scenariul exact raportat (comandă confirmată, neaplicată) și fluxul normal (confirmare→aplicare, fără migrare rulată încă) — fără regresii, fără erori consolă',date:'2026-09-05'},
   {n:294,text:'Comenzi Platforme (Import comenzi) — cardul „📮 Asociază AWB-uri" mutat deasupra „Istoric importuri" (era dedesubt), ca să urmeze firesc ordinea reală de lucru: încarci fișierul de comenzi, apoi asociezi AWB-urile, abia apoi te uiți în istoric dacă e nevoie',date:'2026-09-05'},
   {n:293,text:'Comenzi Platforme (Import comenzi) — schimbare importantă de flux, cerută direct: până acum, bifarea „Inclus" pe o linie parcurgea deja tot fluxul de import (comandă + stoc scăzut + jurnal + profit) abia la „Aplică import"; asta însemna că o comandă nu apărea deloc în Staff (pagina de împachetat) până la aplicarea întregului import, chiar dacă fusese deja bifată. Acum bifarea „Inclus" scrie IMEDIAT comanda (client, produs, cantitate, preț) — devine vizibilă și împachetabilă în Staff pe loc — dar NU atinge încă stocul, jurnalul de vânzări sau profitul; acestea rămân strict la „Aplică import", care acum recunoaște liniile deja scrise (nu le duplică, doar le completează cu efectele rămase) alături de cele nescrise încă. Debifarea „Inclus" șterge comanda scrisă (nimic din stoc/jurnal nu a fost atins, deci nu e nimic de reversat). Ștergerea unei linii (🗑) sau resetarea paginii cât timp există linii deja bifate avertizează explicit și șterge mai întâi comanda reală, ca să nu rămână orfană (vizibilă în Staff dar fără niciun fir care s-o completeze vreodată). Verificat de 2 ori cu comenzi de test dedicate (create/șterse doar pentru test): bifare→comandă creată fără mișcare de stoc, debifare→comandă ștearsă, re-bifare→recreată, Aplică import→stocul crește o singură dată (nu dublu) și jurnalul se scrie o singură dată, ștergere linie deja bifată→comanda reală dispare corect din bază, fără erori consolă',date:'2026-09-05'},
   {n:292,text:'Asociază AWB-uri — al 3-lea format recunoscut: GLS (comenzi eMAG crossborder, ex. Ungaria), verificat pe o etichetă reală. Comanda_id e pe rândul „ID=X;”, confirmat exact pe date reale (client identic). Eticheta GLS nu are AWB-ul pe un rând curat ca celelalte formate — layout-ul ei complex (2 coloane, cod de bare rotit) face ca extragerea de text să-l „rupă” uneori pe mai multe rânduri — rezolvat prin căutare pe toată pagina, excluzând explicit ce sigur NU e AWB (numerele de telefon, mereu cu „+” în față, și ID-ul comenzii însuși): ce rămâne e AWB-ul. Verificat de 2 ori: eticheta GLS reală asociată corect (comandă + AWB exacte), fără nicio regresie pe celelalte 2 formate deja verificate (FAN Courier, Sameday/eMAG) pe același PDF cu 15 etichete mixte',date:'2026-09-05'},
@@ -5091,6 +5092,11 @@ function dbToPcom(r){
     moneda:r.moneda||'RON',pretTotalCuTvaRon:Number(r.pret_total_cu_tva_ron)||0,
     profitEstimat:Number(r.profit_estimat)||0,marjaEstimata:Number(r.marja_estimata)||0,
     importBatchId:r.import_batch_id||'',createdAt:r.created_at,
+    // r.efecte_aplicate===false înseamnă comandă creată prin „✓ Inclus”, dar Aplică import încă nu a
+    // rulat pentru ea (stoc/Jurnal neatinse). Orice altă valoare (true, null, coloană inexistentă încă,
+    // date vechi dinainte de această coloană) înseamnă „aplicată” — implicit true, ca datele vechi să
+    // nu dispară brusc din Istoric importuri.
+    efecteAplicate:r.efecte_aplicate!==false,
     impachetat:!!r.impachetat,impachetatAt:r.impachetat_at||'',faraStoc:!!r.fara_stoc,faraStocAt:r.fara_stoc_at||'',
     awb:r.awb||'',staffBlocked:!!r.staff_blocked,staffIssueType:r.staff_issue_type||'',staffIssueResolved:!!r.staff_issue_resolved};
 }
@@ -13070,6 +13076,11 @@ function renderPcomImportHistory(){
   if(!pcomLoaded&&!PCOM.length){host.textContent='Se încarcă…';return;}
   const batches={};
   PCOM.forEach(o=>{
+    // Comenzile create doar prin „✓ Inclus" (nu au trecut încă prin „Aplică import" — stoc/Jurnal
+    // neatinse) NU apar aici; ele rămân vizibile în previzualizarea de mai sus, până se aplică sau se
+    // șterg de-acolo. Altfel „Șterge" de mai jos ar readăuga în stoc o cantitate care n-a fost scăzută
+    // niciodată — bug real, raportat direct pe o comandă de test lăsată neaplicată.
+    if(o.efecteAplicate===false)return;
     const key=o.importBatchId||('legacy-'+o.id);
     if(!batches[key])batches[key]={batchId:o.importBatchId,platforma:o.platforma,dates:new Set(),count:0,total:0,createdAt:''};
     const b=batches[key];
@@ -13607,6 +13618,23 @@ function pcomRowHtml(idx,showOwnAwb){
 // fi împachetată, FĂRĂ să aștepte „Aplică import”. NU atinge stocul/Jurnalul/TS/activitatea — acelea
 // rămân strict la „Aplică import” (vezi acolo), ca să nu se scadă stocul de două ori și ca omul să
 // poată corecta/anula o confirmare greșită înainte ca ea să aibă vreun efect financiar real.
+// Inserare cu retry pe coloane opționale care încă nu există (migrare nerulată) — PostgREST spune
+// exact ce coloană lipsește ("Could not find the 'X' column"), deci scoatem DOAR acea coloană, nu
+// ghicim la nimereală care dintre client_nume/efecte_aplicate e de vină (bug real găsit aici: varianta
+// veche scotea AMÂNDOUĂ coloanele optionale la orice eroare de schemă, ștergând tăcut client_nume chiar
+// și când acea coloană exista, doar pentru că efecte_aplicate lipsea).
+async function pcomPostWithFallback(row){
+  let attempts=0;
+  while(attempts<4){
+    try{return await dbPost('platforma_comenzi',row);}
+    catch(e){
+      const m=String(e.message||e).match(/Could not find the '([^']+)' column/);
+      if(m&&row[m[1]]!==undefined){delete row[m[1]];attempts++;continue;}
+      throw e;
+    }
+  }
+  throw new Error('Prea multe coloane lipsă la inserarea comenzii');
+}
 async function commitPcomLine(idx){
   const it=pcImpParsed[idx];if(!it||it._committedId||it._committing||!it.produsId||it.amanat)return;
   const p=P.find(x=>x.id===it.produsId);if(!p)return;
@@ -13620,15 +13648,18 @@ async function commitPcomLine(idx){
       clientNume:it.clientNume,titluExtern:it.titluExtern,produsId:p.id,produsNume:p.name,cantitate:it.cantitate,
       pretFaraTva:it.pretFaraTva,pretTotalCuTva:it.pretTotalCuTva,moneda:it.moneda,pretTotalCuTvaRon:totalRon,
       profitEstimat:profit,marjaEstimata:margin,importBatchId:pcImpBatchIdFor(platforma)});
+    // Marchează explicit că stocul/Jurnalul NU au fost încă atinse — abia „Aplică import" le scrie.
+    // Fără asta, „Istoric importuri" nu poate distinge o comandă doar-confirmată de un import real
+    // finalizat, și butonul „Șterge" de-acolo ar readăuga în stoc o cantitate care nu a fost scăzută
+    // niciodată (bug real, raportat direct: o comandă de test, nescăzută din stoc, apărea totuși în
+    // Istoric importuri ca și cum ar fi fost un import complet).
+    row.efecte_aplicate=false;
     let inserted;
     try{
-      inserted=await dbPost('platforma_comenzi',row);
+      inserted=await pcomPostWithFallback(row);
     }catch(errInsert){
       if(/duplicate key|already exists|23505/i.test(String(errInsert.message||errInsert))){
         inserted=await dbGet(`platforma_comenzi?platforma=eq.${encodeURIComponent(platforma)}&comanda_id=eq.${encodeURIComponent(it.comandaId||'')}&pnk=eq.${encodeURIComponent(it.pnk||'')}&select=*`);
-      }else if(row.client_nume&&/column|schema cache|client_nume/i.test(String(errInsert.message||errInsert))){
-        const{client_nume,...rowWithoutClient}=row;
-        inserted=await dbPost('platforma_comenzi',rowWithoutClient);
       }else throw errInsert;
     }
     if(inserted?.[0]){
@@ -13904,6 +13935,10 @@ async function applyPcomImport(){
       try{
         // Linia a fost deja scrisă în bază la click pe „✓ Inclus” (vezi commitPcomLine) — aici mai
         // rămâne DOAR partea de stoc/Jurnal/activitate, nu se mai inserează comanda a doua oară.
+        // markAppliedId ține minte ce rând din platforma_comenzi trebuie marcat efecte_aplicate=true
+        // DUPĂ ce stocul/Jurnalul chiar se scriu mai jos (nu înainte — dacă scrierea eșuează, rândul
+        // trebuie să rămână marcat ca neaplicat, ca să poată fi reîncercat corect mai târziu).
+        let markAppliedId=it._committedId||null;
         if(!it._committedId){
           const totalRon=pcomToRon(it.pretTotalCuTva,it.moneda);
           const fin=pcomSaleFinancials(p,it,platforma);
@@ -13912,18 +13947,24 @@ async function applyPcomImport(){
             clientNume:it.clientNume,titluExtern:it.titluExtern,produsId:p.id,produsNume:p.name,cantitate:it.cantitate,
             pretFaraTva:it.pretFaraTva,pretTotalCuTva:it.pretTotalCuTva,moneda:it.moneda,pretTotalCuTvaRon:totalRon,
             profitEstimat:profit,marjaEstimata:margin,importBatchId:pcImpBatchIdFor(platforma)});
+          row.efecte_aplicate=true;
           let inserted;
           try{
-            inserted=await dbPost('platforma_comenzi',row);
+            inserted=await pcomPostWithFallback(row);
           }catch(errInsert){
-            // linia a mai fost scrisă într-o încercare anterioară (index unic platformă+comandă+PNK) —
-            // nu e o eroare reală, doar reimportare a aceleiași comenzi; o tratăm ca reușită, nu eșuată
-            if(/duplicate key|already exists|23505/i.test(String(errInsert.message||errInsert))){ok++;succeeded.add(it);continue;}
-            // migration_platforma_comenzi_client.sql nu a rulat încă (coloana client_nume nu există) —
-            // reîncercăm o dată fără ea, ca importul de comenzi să nu se blocheze complet din cauza asta.
-            if(row.client_nume&&/column|schema cache|client_nume/i.test(String(errInsert.message||errInsert))){
-              const{client_nume,...rowWithoutClient}=row;
-              inserted=await dbPost('platforma_comenzi',rowWithoutClient);
+            if(/duplicate key|already exists|23505/i.test(String(errInsert.message||errInsert))){
+              // linia există deja — fie reimportare a unui import deja aplicat, fie o comandă creată
+              // anterior prin „✓ Inclus” fără ca stocul să-i fi fost scăzut vreodată (ex. sesiune închisă
+              // înainte de Aplică import). Verificăm efecte_aplicate ca să nu pierdem tăcut o scădere de
+              // stoc reală — bug găsit direct pe o comandă reală, nescăzută din stoc, tratată greșit ca
+              // „deja aplicată" doar pentru că exista deja rândul.
+              let ex=null;
+              try{
+                const existing=await dbGet(`platforma_comenzi?platforma=eq.${encodeURIComponent(platforma)}&comanda_id=eq.${encodeURIComponent(it.comandaId||'')}&pnk=eq.${encodeURIComponent(it.pnk||'')}&select=id,efecte_aplicate`);
+                ex=existing?.[0]||null;
+              }catch(e){/* migrarea coloanei efecte_aplicate nu a rulat încă — tratăm conservator mai jos */}
+              if(!ex||ex.efecte_aplicate!==false){ok++;succeeded.add(it);continue;}
+              markAppliedId=ex.id;
             }else throw errInsert;
           }
           if(inserted?.[0])PCOM.unshift(dbToPcom(inserted[0]));
@@ -13948,6 +13989,16 @@ async function applyPcomImport(){
               console.warn('Nu s-a putut salva asocierea titlu→produs:',errMap2);
             }
           }
+        }
+        // Comanda exista deja (creată prin „✓ Inclus” sau găsită la duplicate-key mai sus) — abia acum,
+        // chiar înainte să scădem stocul, o marcăm ca aplicată. Dacă migrarea coloanei nu a rulat încă,
+        // eșuează silențios — stocul tot se scade normal mai jos, doar „Istoric importuri" rămâne
+        // neprecis până se rulează migrarea.
+        if(markAppliedId){
+          try{
+            await dbPatch(`platforma_comenzi?id=eq.${markAppliedId}`,{efecte_aplicate:true});
+            const ex=PCOM.find(o=>o.id===markAppliedId);if(ex)ex.efecteAplicate=true;
+          }catch(e){console.warn('Nu am putut marca linia ca aplicată (poate migrarea nu a rulat):',e);}
         }
         // scade stocul — o vânzare reală s-a produs
         p.sold=(p.sold||0)+it.cantitate;
