@@ -3187,6 +3187,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:297,text:'Sincronizare — toate listele lungi ale paginii (De listat pe eMAG, Discrepanțe de stoc, Activ pe eMAG/lipsă pe Trendyol, Produse eMAG lipsă din stoc) sunt acum restrânse implicit, cu buton „▾ Arată toate (N)" pentru fiecare, exact ca la „Mapări existente" (care avea deja acest tipar). Cerut direct: pagina ajunsese un derulaj nesfârșit — pe datele reale, listele au 59/192/246 produse, imposibil de citit dintr-o privire ca să-ți dai seama ce merită atenție. Acum fiecare secțiune arată doar primele câteva (6-8, în funcție de secțiune), iar restul apare doar la cerere, păstrat deschis până apeși „▴ Restrânge". Verificat de 2 ori cu datele reale: fiecare secțiune extinde/restrânge corect, fără erori consolă',date:'2026-09-06'},
   {n:296,text:'Comenzi Platforme — AWB-ul asociat („📮 Asociază AWB-uri") apare acum și direct pe cardul comenzii din previzualizarea de sus (lângă „✓ Comandă creată — vizibilă în Staff"), nu doar în Staff — două bug-uri reparate, raportate direct: (1) AWB-ul chiar se scria corect în bază, dar previzualizarea de sus rămânea cu ecranul vechi până la un re-render declanșat de altceva (ex. reîncărcarea paginii), părând că „nu a mers"; (2) fără un semnal vizibil imediat lângă comandă, era greu de verificat rapid dacă asocierea chiar a prins toate comenzile, mai ales cu mai multe comenzi deodată. Verificat de 2 ori cu PDF-ul real (4 comenzi): toate 4 arată AWB-ul corect imediat după asociere, fără reîncărcare, fără erori consolă',date:'2026-09-05'},
   {n:295,text:'Comenzi Platforme — bug real reparat, raportat direct: o comandă marcată „✓ Inclus" dar niciodată dusă până la „Aplică import" (stoc/Jurnal neatinse) apărea totuși în „Istoric importuri" ca și cum ar fi fost un import complet — iar butonul „Șterge" de-acolo ar fi readăugat în stoc o cantitate care nu fusese scăzută niciodată, coruptând stocul. Cauza: „Istoric importuri" grupa TOATE comenzile din platforma_comenzi după lot, indiferent dacă efectele de stoc chiar rulaseră. Acum fiecare comandă ține minte dacă a fost cu adevărat aplicată (coloană nouă `efecte_aplicate`); doar cele aplicate apar în Istoric — cele doar-confirmate rămân vizibile în Staff (asta era scopul lor) fără să polueze istoricul de importuri. Pe drum, reparat și un bug de reimportare: dacă o comandă deja confirmată prin „Inclus" era reîntâlnită la „Aplică import" (index unic în bază), codul vechi o trata orbește ca „deja aplicată" și sărea peste scăderea stocului — acum verifică explicit înainte să sară peste. **Necesită rulare manuală în Supabase SQL Editor ca să prindă efect complet** (fără ea, aplicația funcționează la fel ca înainte de acest fix, fără eroare): `alter table platforma_comenzi add column if not exists efecte_aplicate boolean default true;`. Verificat de 2 ori, inclusiv scenariul exact raportat (comandă confirmată, neaplicată) și fluxul normal (confirmare→aplicare, fără migrare rulată încă) — fără regresii, fără erori consolă',date:'2026-09-05'},
   {n:294,text:'Comenzi Platforme (Import comenzi) — cardul „📮 Asociază AWB-uri" mutat deasupra „Istoric importuri" (era dedesubt), ca să urmeze firesc ordinea reală de lucru: încarci fișierul de comenzi, apoi asociezi AWB-urile, abia apoi te uiți în istoric dacă e nevoie',date:'2026-09-05'},
@@ -14178,13 +14179,21 @@ function groupBySupplier(items,productOf){
 }
 // Produse cu stoc, dar fără nicio mapare eMAG confirmată — nu are nevoie de niciun import, se
 // calculează direct din P+SYNCM.
+let syncOppExpanded=false;
+function toggleSyncOppExpanded(){syncOppExpanded=!syncOppExpanded;renderSyncOpportunityCard();}
 function renderSyncOpportunityCard(){
   const box=document.getElementById('sync-opportunity-list');if(!box)return;
   if(!sbReady){box.textContent='Necesită conexiune Supabase activă.';return;}
   const mappedIds=new Set(SYNCM.filter(m=>m.platforma==='emag'&&m.confirmat).map(m=>m.produsId));
   const items=P.filter(p=>!p.archived&&qty(p)>0&&!mappedIds.has(p.id));
   if(!items.length){box.innerHTML='<div style="font-size:23px;color:var(--t3)">Toate produsele cu stoc au deja o mapare eMAG confirmată ✓</div>';return;}
-  box.innerHTML=groupBySupplier(items,p=>p).map(g=>`<div class="sec">${esc(g.supplier)} (${g.items.length})</div>${g.items.map(p=>`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(p.name)}</strong>${p.sku?` <span style="color:var(--t3);font-family:var(--mono)">· SKU ${esc(p.sku)}</span>`:''}<div class="jp-meta">Stoc: ${fmtQty(qty(p))} buc.</div></div><button type="button" class="btn btn-sm" onclick="quickMapFromOpportunity(${p.id})">+ Adaugă mapare</button></div>`).join('')}`).join('');
+  // Listele astea puteau ajunge la sute de rânduri (toate produsele fără mapare) — cerut direct, ca
+  // pagina Sincronizare să rămână o imagine de ansamblu, nu un derulaj nesfârșit: arată doar primele
+  // câteva, cu buton de extindere pentru restul (același tipar ca la „mapări existente" mai jos).
+  const collapseAt=6;
+  const shown=syncOppExpanded?items:items.slice(0,collapseAt);
+  const toggleHtml=items.length>collapseAt?`<div style="text-align:center;padding-top:10px"><button class="btn btn-sm" onclick="toggleSyncOppExpanded()">${syncOppExpanded?'▴ Restrânge':`▾ Arată toate (${items.length})`}</button></div>`:'';
+  box.innerHTML=groupBySupplier(shown,p=>p).map(g=>`<div class="sec">${esc(g.supplier)} (${g.items.length})</div>${g.items.map(p=>`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(p.name)}</strong>${p.sku?` <span style="color:var(--t3);font-family:var(--mono)">· SKU ${esc(p.sku)}</span>`:''}<div class="jp-meta">Stoc: ${fmtQty(qty(p))} buc.</div></div><button type="button" class="btn btn-sm" onclick="quickMapFromOpportunity(${p.id})">+ Adaugă mapare</button></div>`).join('')}`).join('')+toggleHtml;
 }
 // Pre-completează formularul manual existent (nu un mecanism nou de mapare) cu produsul ales din
 // cardul "De listat pe eMAG", ca să nu mai fie nevoie să-l cauți din nou.
@@ -14198,6 +14207,8 @@ function quickMapFromOpportunity(productId){
 // Discrepanțe între stocul intern și ultimul stoc citit de pe eMAG (stocExtern, populat de
 // applySyncStockUpdates). Suprastocarea (stoc intern 0, dar eMAG arată disponibil) e mai urgentă —
 // apare prima, cu roșu; vânzarea pierdută (ai stoc, dar eMAG arată indisponibil) apare a doua, amber.
+let syncMismatchExpanded=false;
+function toggleSyncMismatchExpanded(){syncMismatchExpanded=!syncMismatchExpanded;renderSyncMismatchCard();}
 function renderSyncMismatchCard(){
   const box=document.getElementById('sync-mismatch-list');if(!box)return;
   if(!sbReady){box.textContent='Necesită conexiune Supabase activă.';return;}
@@ -14208,20 +14219,30 @@ function renderSyncMismatchCard(){
   const pierdut=withProduct.filter(x=>qty(x.p)>0&&x.m.stocExtern<=0);
   if(!risc.length&&!pierdut.length){box.innerHTML='<div style="font-size:23px;color:var(--t3)">Nicio discrepanță — stocul intern și cel de pe eMAG sunt aliniate ✓</div>';return;}
   const rowHtml=x=>`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(x.p.name)}</strong><div class="jp-meta">Stoc intern: ${fmtQty(qty(x.p))} · Stoc eMAG: ${fmtQty(x.m.stocExtern)}${x.m.stocExternAt?' · actualizat '+fmtDateRo(x.m.stocExternAt.slice(0,10)):''}</div></div>${x.m.idExtern?`<span class="rsx-pnk">${esc(x.m.idExtern)}</span>`:''}</div>`;
+  // Cap independent pe fiecare categorie (nu una singură pe total), ca ambele să rămână vizibile în
+  // starea restrânsă — altfel „risc" ar putea consuma tot bugetul și „pierdut" ar dispărea complet
+  // din previzualizare, deși există.
+  const collapseAt=4;
+  const shownRisc=syncMismatchExpanded?risc:risc.slice(0,collapseAt);
+  const shownPierdut=syncMismatchExpanded?pierdut:pierdut.slice(0,collapseAt);
   let html='';
-  if(risc.length){
+  if(shownRisc.length){
     html+='<div class="sec" style="color:var(--rd)">🔴 Risc de suprastocare — stoc intern 0, eMAG arată disponibil</div>';
-    groupBySupplier(risc,x=>x.p).forEach(g=>{html+=`<div style="font-size:20px;color:var(--t3);margin:4px 0 2px">${esc(g.supplier)}</div>${g.items.map(rowHtml).join('')}`;});
+    groupBySupplier(shownRisc,x=>x.p).forEach(g=>{html+=`<div style="font-size:20px;color:var(--t3);margin:4px 0 2px">${esc(g.supplier)}</div>${g.items.map(rowHtml).join('')}`;});
   }
-  if(pierdut.length){
-    html+=`<div class="sec" style="color:var(--am);margin-top:${risc.length?'12':'0'}px">🟡 Vânzări pierdute — ai stoc, eMAG arată indisponibil</div>`;
-    groupBySupplier(pierdut,x=>x.p).forEach(g=>{html+=`<div style="font-size:20px;color:var(--t3);margin:4px 0 2px">${esc(g.supplier)}</div>${g.items.map(rowHtml).join('')}`;});
+  if(shownPierdut.length){
+    html+=`<div class="sec" style="color:var(--am);margin-top:${shownRisc.length?'12':'0'}px">🟡 Vânzări pierdute — ai stoc, eMAG arată indisponibil</div>`;
+    groupBySupplier(shownPierdut,x=>x.p).forEach(g=>{html+=`<div style="font-size:20px;color:var(--t3);margin:4px 0 2px">${esc(g.supplier)}</div>${g.items.map(rowHtml).join('')}`;});
   }
-  box.innerHTML=html;
+  const totalHidden=(risc.length-shownRisc.length)+(pierdut.length-shownPierdut.length);
+  const toggleHtml=totalHidden>0||syncMismatchExpanded&&(risc.length+pierdut.length)>collapseAt*2?`<div style="text-align:center;padding-top:10px"><button class="btn btn-sm" onclick="toggleSyncMismatchExpanded()">${syncMismatchExpanded?'▴ Restrânge':`▾ Arată toate (${risc.length+pierdut.length})`}</button></div>`:'';
+  box.innerHTML=html+toggleHtml;
 }
 // Produse active pe eMAG (mapare confirmată) fără nicio mapare Trendyol încă — candidați de
 // cross-postat. Nu ține cont de stoc (spre deosebire de "De listat pe eMAG"): un produs poate fi
 // activ pe eMAG chiar și cu stoc temporar 0, iar scopul aici e acoperirea pe platforme, nu stocul.
+let syncCrossExpanded=false;
+function toggleSyncCrossExpanded(){syncCrossExpanded=!syncCrossExpanded;renderSyncCrossPlatformCard();}
 function renderSyncCrossPlatformCard(){
   const box=document.getElementById('sync-cross-platform-list');if(!box)return;
   if(!sbReady){box.textContent='Necesită conexiune Supabase activă.';return;}
@@ -14229,7 +14250,10 @@ function renderSyncCrossPlatformCard(){
   const trendyolIds=new Set(SYNCM.filter(m=>m.platforma==='trendyol'&&m.confirmat).map(m=>m.produsId));
   const items=P.filter(p=>!p.archived&&emagIds.has(p.id)&&!trendyolIds.has(p.id));
   if(!items.length){box.innerHTML='<div style="font-size:23px;color:var(--t3)">Toate produsele active pe eMAG au deja și o mapare Trendyol confirmată ✓</div>';return;}
-  box.innerHTML=groupBySupplier(items,p=>p).map(g=>`<div class="sec">${esc(g.supplier)} (${g.items.length})</div>${g.items.map(p=>`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(p.name)}</strong>${p.sku?` <span style="color:var(--t3);font-family:var(--mono)">· SKU ${esc(p.sku)}</span>`:''}<div class="jp-meta">Stoc: ${fmtQty(qty(p))} buc.</div></div><button type="button" class="btn btn-sm" onclick="quickMapForTrendyol(${p.id})">+ Adaugă mapare Trendyol</button></div>`).join('')}`).join('');
+  const collapseAt=6;
+  const shown=syncCrossExpanded?items:items.slice(0,collapseAt);
+  const toggleHtml=items.length>collapseAt?`<div style="text-align:center;padding-top:10px"><button class="btn btn-sm" onclick="toggleSyncCrossExpanded()">${syncCrossExpanded?'▴ Restrânge':`▾ Arată toate (${items.length})`}</button></div>`:'';
+  box.innerHTML=groupBySupplier(shown,p=>p).map(g=>`<div class="sec">${esc(g.supplier)} (${g.items.length})</div>${g.items.map(p=>`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(p.name)}</strong>${p.sku?` <span style="color:var(--t3);font-family:var(--mono)">· SKU ${esc(p.sku)}</span>`:''}<div class="jp-meta">Stoc: ${fmtQty(qty(p))} buc.</div></div><button type="button" class="btn btn-sm" onclick="quickMapForTrendyol(${p.id})">+ Adaugă mapare Trendyol</button></div>`).join('')}`).join('')+toggleHtml;
 }
 function quickMapForTrendyol(productId){
   const sel=document.getElementById('sm-platforma');if(sel)sel.value='trendyol';
@@ -14306,6 +14330,8 @@ async function deleteSyncMapping(id){
 }
 // „📥 Produse eMAG lipsă din stoc" — listări puse deoparte cu „🕓 Mai târziu" (vezi parkSyncRowLater),
 // separat de mapările reale (care cer un produs_id valid) — vezi migration_platforma_produse_lipsa.sql.
+let syncMissingExpanded=false;
+function toggleSyncMissingExpanded(){syncMissingExpanded=!syncMissingExpanded;renderSyncMissingList();}
 function renderSyncMissingList(){
   const box=document.getElementById('sync-missing-list');if(!box)return;
   // Nu blochează pe un flag "se încarcă" separat — dacă migrarea nu a rulat încă, cererea eșuează
@@ -14313,7 +14339,10 @@ function renderSyncMissingList(){
   // spinner blocat la nesfârșit.
   if(!PLIPSA.length){box.innerHTML='<div style="font-size:23px;color:var(--t3)">Nimic pus deoparte încă — la „Import în masă din fișier", pe o listare fără potrivire în Inventar, apasă „🕓 Mai târziu".</div>';return;}
   const plLabel={emag:'eMAG',trendyol:'Trendyol'};
-  box.innerHTML=PLIPSA.map(x=>{
+  const collapseAt=8;
+  const shown=syncMissingExpanded?PLIPSA:PLIPSA.slice(0,collapseAt);
+  const toggleHtml=PLIPSA.length>collapseAt?`<div style="text-align:center;padding-top:10px"><button class="btn btn-sm" onclick="toggleSyncMissingExpanded()">${syncMissingExpanded?'▴ Restrânge':`▾ Arată toate (${PLIPSA.length})`}</button></div>`:'';
+  box.innerHTML=shown.map(x=>{
     const pnkChip=x.idExtern?`<button class="rsx-pnk" onclick="copyText(${esc(JSON.stringify(String(x.idExtern)))})" title="PNK — click pentru copiere">${esc(x.idExtern)} ⧉</button>`:'<span style="font-size:20px;color:var(--t3)">fără PNK</span>';
     return`<div class="sync-map-row" style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--b1)">
       <span class="badge" style="background:var(--surf2);border:1px solid var(--b1);border-radius:6px;padding:3px 8px;font-size:20px;font-weight:600">${plLabel[x.platforma]||x.platforma}</span>
@@ -14322,7 +14351,7 @@ function renderSyncMissingList(){
       <button class="btn btn-sm btn-acc" onclick="addProductFromMissing(${x.id})">+ Adaugă produs</button>
       <button class="btn btn-sm" onclick="deleteMissingCandidate(${x.id})" title="Elimină din listă, fără să creeze produs">🗑 Ignoră</button>
     </div>`;
-  }).join('');
+  }).join('')+toggleHtml;
 }
 // Deschide formularul obișnuit de produs nou, pre-completat cu titlul listării — la salvare (vezi
 // hook-ul din saveProd), produsul nou creat se leagă automat de acest PNK/titlu ca mapare confirmată,
