@@ -3187,6 +3187,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:293,text:'Comenzi Platforme (Import comenzi) — schimbare importantă de flux, cerută direct: până acum, bifarea „Inclus" pe o linie parcurgea deja tot fluxul de import (comandă + stoc scăzut + jurnal + profit) abia la „Aplică import"; asta însemna că o comandă nu apărea deloc în Staff (pagina de împachetat) până la aplicarea întregului import, chiar dacă fusese deja bifată. Acum bifarea „Inclus" scrie IMEDIAT comanda (client, produs, cantitate, preț) — devine vizibilă și împachetabilă în Staff pe loc — dar NU atinge încă stocul, jurnalul de vânzări sau profitul; acestea rămân strict la „Aplică import", care acum recunoaște liniile deja scrise (nu le duplică, doar le completează cu efectele rămase) alături de cele nescrise încă. Debifarea „Inclus" șterge comanda scrisă (nimic din stoc/jurnal nu a fost atins, deci nu e nimic de reversat). Ștergerea unei linii (🗑) sau resetarea paginii cât timp există linii deja bifate avertizează explicit și șterge mai întâi comanda reală, ca să nu rămână orfană (vizibilă în Staff dar fără niciun fir care s-o completeze vreodată). Verificat de 2 ori cu comenzi de test dedicate (create/șterse doar pentru test): bifare→comandă creată fără mișcare de stoc, debifare→comandă ștearsă, re-bifare→recreată, Aplică import→stocul crește o singură dată (nu dublu) și jurnalul se scrie o singură dată, ștergere linie deja bifată→comanda reală dispare corect din bază, fără erori consolă',date:'2026-09-05'},
   {n:292,text:'Asociază AWB-uri — al 3-lea format recunoscut: GLS (comenzi eMAG crossborder, ex. Ungaria), verificat pe o etichetă reală. Comanda_id e pe rândul „ID=X;”, confirmat exact pe date reale (client identic). Eticheta GLS nu are AWB-ul pe un rând curat ca celelalte formate — layout-ul ei complex (2 coloane, cod de bare rotit) face ca extragerea de text să-l „rupă” uneori pe mai multe rânduri — rezolvat prin căutare pe toată pagina, excluzând explicit ce sigur NU e AWB (numerele de telefon, mereu cu „+” în față, și ID-ul comenzii însuși): ce rămâne e AWB-ul. Verificat de 2 ori: eticheta GLS reală asociată corect (comandă + AWB exacte), fără nicio regresie pe celelalte 2 formate deja verificate (FAN Courier, Sameday/eMAG) pe același PDF cu 15 etichete mixte',date:'2026-09-05'},
   {n:291,text:'Asociază AWB-uri (#290) — extindere pe un exemplu real cu 4 formate diferite de etichetă în ACELAȘI PDF (FAN Courier, Sameday/DELIVERY SOLUTIONS pentru eMAG easybox/locker, GLS, Vinted). Adăugat al 2-lea format recunoscut: etichetele Sameday au un cod pe propriul rând, „AWB_comandaId_altceva" (ex. „4EMGLN184263343001_501145696_252034091") — segmentul din mijloc e exact comanda_id-ul eMAG (confirmat pe date reale). Pe drum, 2 bug-uri reale de extragere text găsite direct pe etichetele reale (nu doar pe facturile deja testate, unde AI-ul tolera zgomotul): unele etichete scriu fiecare literă ca fragment separat („A W B :" în loc de „AWB:") — reparat, spațiu inserat doar la un gol real între cuvinte, nu automat între orice două fragmente; textul îngroșat (bold fals, desenat de două ori) producea un fragment scurt aproape suprapus peste începutul celui lung („44EMGLN..." în loc de „4EMGLN...", care ar fi stricat exact AWB-ul salvat) — reparat, la suprapunere se păstrează fragmentul mai lung. Etichetele GLS din exemplu nu au NICIUN AWB sau număr de comandă tipărit (doar un cod de produs fără legătură cu comanda) — corect semnalate ca nerecunoscute, fără o asociere ghicită nesigur; la fel Vinted (platformă neconectată încă). Verificat de 2 ori pe PDF-ul real cu 15 etichete mixte: 9 din 9 comenzi identificabile găsite corect (inclusiv cele 5 deja verificate la #290), 6 nerecunoscute corect semnalate (GLS ×2, Vinted ×4), fără regresie pe fluxul de scriere testat anterior, fără erori consolă',date:'2026-09-05'},
   {n:290,text:'Comenzi Platforme — card nou „📮 Asociază AWB-uri" (Import comenzi). Încarci PDF-ul cu etichetele de expediere primit de la curier (verificat direct pe un exemplu real, FAN Courier/Trendyol) — fiecare etichetă are un câmp „Continut" care conține exact numărul comenzii Trendyol (confirmat pe date reale din platforma_comenzi), citit automat printr-un regex pe textul extras cu PDF.js (aceeași bibliotecă folosită deja la citirea facturilor) — fără AI, rapid și determinist. O previzualizare arată ce comenzi s-au găsit (→ AWB-ul care se va scrie, cu avertisment dacă înlocuiește unul existent) și ce comenzi încă nu există (nu au fost importate încă) — nimic nu se scrie până nu apeși „Asociază AWB-urile". O comandă cu mai multe produse (mai multe rânduri, același comanda_id) primește AWB-ul pe toate rândurile deodată. Verificat de 2 ori cu PDF-ul real trimis (5 etichete): 1 comandă de test potrivită corect cu AWB-ul exact de pe etichetă, 4 negăsite corect semnalate, scrierea în bază + în memorie confirmată, inclusiv cazul „înlocuiește AWB existent"',date:'2026-09-05'},
@@ -5216,6 +5217,11 @@ let SYNCM=[],syncMapsLoaded=false,syncImpParsed=[],syncImpStockUpdates=[],syncIm
 let PLIPSA=[],pendingPlipsaCandidate=null;
 let jStockOrdersRendered=[];
 let PCOM=[],pcomLoaded=false,pcImpParsed=[],pcImpPlatforma='emag';
+// Un singur import_batch_id per platformă, per sesiune de previzualizare — generat o singură dată,
+// reutilizat atât de commitPcomLine (scriere imediată, la „Inclus") cât și de applyPcomImport (mai
+// târziu), ca liniile confirmate din timp să rămână grupate corect în „Istoric importuri", nu izolate.
+let pcImpBatchIds={};
+function pcImpBatchIdFor(pl){return pcImpBatchIds[pl]||(pcImpBatchIds[pl]=Date.now().toString(36)+'-'+pl);}
 let REORDER=[];
 const REORDER_KEY='reorder_list';
 const PCIK='sm6_pcom_import';
@@ -13215,6 +13221,13 @@ function updPcmiPlatformaHint(){
 }
 async function handlePcomImportFile(ev){
   const files=[...(ev.target.files||[])];if(!files.length)return;
+  // O linie deja confirmată („✓ Inclus”) are ACUM o comandă reală, vizibilă în Staff — dar stocul/
+  // Jurnalul ei se aplică abia la „Aplică import”. Încărcarea unui fișier nou golește previzualizarea
+  // (pcImpParsed=[] mai jos) — fără avertisment, comenzile astea ar rămâne „agățate” în Staff, fără să
+  // li se mai scadă vreodată stocul (linia dispare din pcImpParsed, deci applyPcomImport n-ar mai ști
+  // de ea). Avertizăm explicit înainte, doar dacă există cu adevărat asemenea linii.
+  const pendingCommitted=pcImpParsed.filter(x=>x._committedId);
+  if(pendingCommitted.length&&!confirm(`Ai ${pendingCommitted.length} comenzi deja confirmate (vizibile în Staff), dar stocul/Jurnalul nu li s-a aplicat încă — apasă „Aplică import” pentru ele înainte de a încărca alt fișier. Continui oricum? (comenzile rămân în Staff, dar stocul NU li se va mai scădea automat)`))return;
   const platforma=pcImpPlatforma=document.getElementById('pcmi-platforma').value;
   const parsing=document.getElementById('pcmi-parsing');
   parsing.style.display='block';
@@ -13222,7 +13235,7 @@ async function handlePcomImportFile(ev){
   document.getElementById('pcmi-preview').innerHTML='';
   document.getElementById('pcmi-foot').style.display='none';
   document.getElementById('pcmi-ai-btn').style.display='none';
-  pcImpParsed=[];
+  pcImpParsed=[];pcImpBatchIds={};
   // Câteva fișiere deodată (ex. exporturi pe zile separate, sau eMAG+Trendyol deodată, cu platformă
   // „both") — la cerere directă. existingKeys se calculează o singură dată (nu se schimbă între
   // fișiere), dar seenInBatch trebuie să fie comun TUTUROR fișierelor din acest upload, altfel același
@@ -13299,7 +13312,10 @@ async function handlePcomImportFile(ev){
             const match=findExistingProduct({name:titlu});
             if(match){produsId=match.product.id;score=match.score;}
           }
-          pcImpParsed.push({platforma:filePlatforma,comandaId,pachetId,data,pnk,tara,codProdus,clientNume,titluExtern:titlu,cantitate,pretFaraTva,pretTotalCuTva,moneda,produsId,score,viaPnk,viaTitle,include:!!produsId});
+          // include pornește NEconfirmat (cerere directă) — chiar dacă produsul s-a potrivit automat,
+          // scrierea comenzii (și apariția ei în Staff) se întâmplă abia la click pe „✓ Inclus”, nu
+          // doar din încărcarea fișierului. Vezi togglePcomInclude/commitPcomLine mai jos.
+          pcImpParsed.push({platforma:filePlatforma,comandaId,pachetId,data,pnk,tara,codProdus,clientNume,titluExtern:titlu,cantitate,pretFaraTva,pretTotalCuTva,moneda,produsId,score,viaPnk,viaTitle,include:false});
         }
       }catch(fileErr){
         console.warn('Fișier ignorat la import Comenzi Platforme:',file.name,fileErr);
@@ -13519,9 +13535,18 @@ function copyPcomGroupAwbTitle(gIdx){
 // nu doar s-o excludem cu checkbox-ul (rămâne oricum vizibilă/încurcă printre celelalte). Diferit de
 // deletePcomOrder (care șterge o comandă DEJA aplicată, cu stoc de readăugat) — aici nimic nu a fost
 // încă salvat, deci pur și simplu dispare din previzualizare.
-function removePcomLine(idx){
+async function removePcomLine(idx){
   const it=pcImpParsed[idx];if(!it)return;
-  if(!confirm(`Elimini linia „${it.titluExtern}" din import? Nu se va aplica, nu se salvează nimic pentru ea.`))return;
+  // Linia poate fi deja confirmată (comandă reală creată de commitPcomLine, vizibilă în Staff) — mesajul
+  // de confirmare și acțiunea trebuie să reflecte asta, altfel „Șterge" ar lăsa o comandă „agățată".
+  const msg=it._committedId
+    ?`Elimini linia „${it.titluExtern}"? Are deja o comandă creată (vizibilă în Staff) — se va șterge și ea, stocul nu a fost atins încă.`
+    :`Elimini linia „${it.titluExtern}" din import? Nu se va aplica, nu se salvează nimic pentru ea.`;
+  if(!confirm(msg))return;
+  if(it._committedId){
+    try{await dbDelete(`platforma_comenzi?id=eq.${it._committedId}`);const i=PCOM.findIndex(o=>o.id===it._committedId);if(i>=0)PCOM.splice(i,1);}
+    catch(e){console.warn('Nu s-a putut șterge comanda deja confirmată:',e);toast('Eroare la ștergerea comenzii — încearcă din nou','err');return;}
+  }
   pcImpParsed.splice(idx,1);
   if(pcImpParsed.length){renderPcomImportPreview();}
   else{
@@ -13546,8 +13571,13 @@ function pcomRowHtml(idx,showOwnAwb){
   const p=it.produsId?P.find(x=>x.id===it.produsId):null;
   const rowImg=p&&p.img?`<img src="${esc(imgSrc(p.img))}" class="pcom-c1-img" ${imgErrAttr(p.img,'pcomc1')}>`:`<div class="pcom-c1-img-ph">${it.newProduct?'🆕':'📦'}</div>`;
   // "Inclus" — bifă/badge mic, discret (NU mai colorează tot cardul, cerut explicit) — click tot pe
-  // togglePcomInclude, neschimbat; doar stilul e altul (badge, nu buton mare cu contur).
-  const includeBadge=`<span class="pcom-included-badge${it.include?'':' off'}" onclick="togglePcomInclude(${idx})" title="${it.include?'Se va importa — click pentru a exclude':'Exclusă din import — click pentru a include'}">${it.include?'✓ Inclus':'Neinclus'}</span>`;
+  // togglePcomInclude, neschimbat; doar stilul e altul (badge, nu buton mare cu contur). Click pe
+  // „Inclus” scrie ACUM comanda (vezi commitPcomLine) — apare imediat în Staff, fără să aștepte
+  // „Aplică import”, care rămâne doar pentru stoc/Jurnal/profit (vezi comentariul de acolo).
+  const includeBadge=it._committing
+    ?`<span class="pcom-included-badge off">⏳ ...</span>`
+    :`<span class="pcom-included-badge${it.include?'':' off'}" onclick="togglePcomInclude(${idx})" title="${it.include?'Comandă creată, vizibilă în Staff — click pentru a anula':'Click pentru a confirma — scrie comanda și apare imediat în Staff'}">${it.include?'✓ Inclus':'Neinclus'}</span>`;
+  const committedNote=it._committedId?`<div class="pcom-sel-meta" style="color:var(--gr);font-weight:700">✓ Comandă creată — vizibilă în Staff</div>`:'';
   // Denumirea vizibilă din capul coloanei: numele produsului intern DACĂ e asociat; altfel, dacă avem
   // deja titlul original din comandă (it.titluExtern), îl arătăm PE ACELA (nu un „— fără produs
   // asociat —" mare, needitor) — statusul „fără produs" devine doar un badge mic, discret, dedesubt.
@@ -13559,7 +13589,7 @@ function pcomRowHtml(idx,showOwnAwb){
   // Coloana 1 — Produs selectat: poza + numele + PNK + cantitate×preț + client + status, în această
   // ordine (cerut explicit) — toate din date deja existente (p.sku/p.internalCode/p.supplier/
   // it.clientNume), nimic nou calculat.
-  const col1=`<div class="pcom-col pcom-col-product"><div class="pcom-col-lbl">Produs selectat</div>${rowImg}<div style="min-width:0"><div class="pcom-sel-nm">${primaryName}</div>${p&&(p.sku||p.internalCode)?`<div class="pcom-sel-meta">${p.sku?'SKU '+esc(p.sku):''}${p.sku&&p.internalCode?' · ':''}${p.internalCode?esc(p.internalCode):''}</div>`:''}${it.pnk?`<div class="pcom-sel-meta">PNK ${esc(it.pnk)}${it.tara?' ('+esc(it.tara)+')':''}</div>`:''}<div class="pcom-sel-meta">${priceInfoHtml}</div>${p&&p.supplier?`<div class="pcom-sel-meta">${esc(p.supplier)}</div>`:''}${it.clientNume?`<div class="pcom-sel-meta">👤 ${esc(it.clientNume)}</div>`:''}${noMatchBadge}${includeBadge}</div></div>`;
+  const col1=`<div class="pcom-col pcom-col-product"><div class="pcom-col-lbl">Produs selectat</div>${rowImg}<div style="min-width:0"><div class="pcom-sel-nm">${primaryName}</div>${p&&(p.sku||p.internalCode)?`<div class="pcom-sel-meta">${p.sku?'SKU '+esc(p.sku):''}${p.sku&&p.internalCode?' · ':''}${p.internalCode?esc(p.internalCode):''}</div>`:''}${it.pnk?`<div class="pcom-sel-meta">PNK ${esc(it.pnk)}${it.tara?' ('+esc(it.tara)+')':''}</div>`:''}<div class="pcom-sel-meta">${priceInfoHtml}</div>${p&&p.supplier?`<div class="pcom-sel-meta">${esc(p.supplier)}</div>`:''}${it.clientNume?`<div class="pcom-sel-meta">👤 ${esc(it.clientNume)}</div>`:''}${noMatchBadge}${committedNote}${includeBadge}</div></div>`;
   // Coloana 2 — Titlul produsului încărcat: exact titlul din fișierul platformei, cu traducerea (dacă
   // există) și eticheta de potrivire — titlul de pe eMAG/Trendyol contează doar ca reper de căutare.
   const col2=`<div class="pcom-col pcom-col-title"><div class="pcom-col-lbl">Titlul produsului încărcat</div><div class="pcom-c2-title">${esc(it.titluExtern)}${it.titluRo?` <span class="pcom-platform-title-ro">🌐 ${esc(it.titluRo)}</span>`:''}</div><div class="pcom-c2-meta">${tag}${it.comandaId?' · #'+esc(it.comandaId):''}</div>${it.newProduct?pcomNewProductPromptHtml(idx):''}</div>`;
@@ -13571,9 +13601,89 @@ function pcomRowHtml(idx,showOwnAwb){
   const col5=`<div class="pcom-col pcom-col-actions"><div class="pcom-col-lbl">Status &amp; acțiuni</div><div class="smi-pick" id="pcmi-pick-${idx}">${pcomPickBtnHtml(idx)}</div><button type="button" class="pcom-del-btn" onclick="removePcomLine(${idx})" title="Elimină definitiv această linie din import">🗑 Șterge</button></div>`;
   return`<div class="pcom-prev-row pcom-grid-cols${it.amanat?' pcom-row-amanat':''}${it.include?' pcom-row-included':''}">${col1}${col2}${col3}${col4}${col5}</div>`;
 }
-function togglePcomInclude(idx){
+// Scrie DOAR comanda (platforma_comenzi) + învață asocierea PNK/titlu→produs — cerere directă: de
+// îndată ce omul confirmă o linie („✓ Inclus”), comanda trebuie să apară imediat în Staff, ca să poată
+// fi împachetată, FĂRĂ să aștepte „Aplică import”. NU atinge stocul/Jurnalul/TS/activitatea — acelea
+// rămân strict la „Aplică import” (vezi acolo), ca să nu se scadă stocul de două ori și ca omul să
+// poată corecta/anula o confirmare greșită înainte ca ea să aibă vreun efect financiar real.
+async function commitPcomLine(idx){
+  const it=pcImpParsed[idx];if(!it||it._committedId||it._committing||!it.produsId||it.amanat)return;
+  const p=P.find(x=>x.id===it.produsId);if(!p)return;
+  it._committing=true;renderPcomImportPreview();
+  try{
+    const platforma=it.platforma||pcImpPlatforma;
+    const totalRon=pcomToRon(it.pretTotalCuTva,it.moneda);
+    const fin=pcomSaleFinancials(p,it,platforma);
+    const profit=Math.round(fin.profit*it.cantitate*100)/100,margin=fin.marja;
+    const row=pcomToDb({platforma,data:it.data,comandaId:it.comandaId,pnk:it.pnk,tara:it.tara,codProdus:it.codProdus,
+      clientNume:it.clientNume,titluExtern:it.titluExtern,produsId:p.id,produsNume:p.name,cantitate:it.cantitate,
+      pretFaraTva:it.pretFaraTva,pretTotalCuTva:it.pretTotalCuTva,moneda:it.moneda,pretTotalCuTvaRon:totalRon,
+      profitEstimat:profit,marjaEstimata:margin,importBatchId:pcImpBatchIdFor(platforma)});
+    let inserted;
+    try{
+      inserted=await dbPost('platforma_comenzi',row);
+    }catch(errInsert){
+      if(/duplicate key|already exists|23505/i.test(String(errInsert.message||errInsert))){
+        inserted=await dbGet(`platforma_comenzi?platforma=eq.${encodeURIComponent(platforma)}&comanda_id=eq.${encodeURIComponent(it.comandaId||'')}&pnk=eq.${encodeURIComponent(it.pnk||'')}&select=*`);
+      }else if(row.client_nume&&/column|schema cache|client_nume/i.test(String(errInsert.message||errInsert))){
+        const{client_nume,...rowWithoutClient}=row;
+        inserted=await dbPost('platforma_comenzi',rowWithoutClient);
+      }else throw errInsert;
+    }
+    if(inserted?.[0]){
+      it._committedId=inserted[0].id;
+      PCOM.unshift(dbToPcom(inserted[0]));
+    }
+    // Învață asocierea — omul tocmai a confirmat că potrivirea e corectă, la fel ca la Aplică import.
+    if(it.pnk&&!SYNCM.some(s=>s.platforma===platforma&&s.idExtern===it.pnk)){
+      try{
+        const mRows=await dbPost('platforma_mapari',syncMapToDb({platforma,idExtern:it.pnk,titluExtern:it.titluExtern,produsId:p.id,confirmat:true,tara:it.tara}));
+        if(mRows?.[0])SYNCM.unshift(dbToSyncMap(mRows[0]));
+      }catch(e){console.warn('Nu s-a putut salva asocierea cod→produs:',e);}
+    }
+    const titleKeyLc=it.titluExtern.toLowerCase().trim();
+    if(!SYNCM.some(s=>s.platforma===platforma&&s.titluExtern.toLowerCase().trim()===titleKeyLc)){
+      try{
+        const mRows2=await dbPost('platforma_mapari',syncMapToDb({platforma,idExtern:'',titluExtern:it.titluExtern,produsId:p.id,confirmat:true,tara:it.tara}));
+        if(mRows2?.[0])SYNCM.unshift(dbToSyncMap(mRows2[0]));
+      }catch(e){console.warn('Nu s-a putut salva asocierea titlu→produs:',e);}
+    }
+  }catch(e){
+    console.error('Nu s-a putut crea comanda:',e);
+    toast('Eroare la salvarea comenzii — încearcă din nou','err');
+    it.include=false;
+  }
+  it._committing=false;
+  renderPcomImportPreview();
+}
+// Anulează o confirmare — șterge comanda creată de commitPcomLine (nimic financiar nu s-a întâmplat
+// încă la acel moment, deci ștergerea e complet sigură, fără efecte secundare de anulat).
+async function uncommitPcomLine(idx){
+  const it=pcImpParsed[idx];if(!it||!it._committedId||it._committing)return;
+  const id=it._committedId;
+  it._committing=true;renderPcomImportPreview();
+  try{
+    await dbDelete(`platforma_comenzi?id=eq.${id}`);
+    const i=PCOM.findIndex(o=>o.id===id);if(i>=0)PCOM.splice(i,1);
+    it._committedId=null;
+  }catch(e){
+    console.error('Nu s-a putut anula comanda:',e);
+    toast('Eroare la anulare — încearcă din nou','err');
+    it.include=true;
+  }
+  it._committing=false;
+  renderPcomImportPreview();
+}
+async function syncPcomLineCommitState(idx){
+  const it=pcImpParsed[idx];if(!it)return;
+  const shouldCommit=it.include&&it.produsId&&!it.amanat;
+  if(shouldCommit&&!it._committedId)await commitPcomLine(idx);
+  else if(!shouldCommit&&it._committedId)await uncommitPcomLine(idx);
+}
+async function togglePcomInclude(idx){
   pcImpParsed[idx].include=!pcImpParsed[idx].include;
   renderPcomImportPreview();
+  await syncPcomLineCommitState(idx);
 }
 function renderPcomImportPreview(){
   const prev=document.getElementById('pcmi-preview');
@@ -13629,8 +13739,10 @@ function loadPcomImportState(){
   }catch(e){console.warn('Nu s-a putut reîncărca previzualizarea Comenzi Platforme:',e);}
 }
 function resetPcomImportPage(){
-  if(pcImpParsed.length&&!confirm('Golești previzualizarea curentă? Liniile neaplicate încă se pierd (cele deja aplicate rămân salvate, neatinse).'))return;
-  pcImpParsed=[];
+  const pendingCommitted=pcImpParsed.filter(x=>x._committedId);
+  const warn=pendingCommitted.length?` ATENȚIE: ${pendingCommitted.length} comenzi deja confirmate (vizibile în Staff) nu au încă stoc/Jurnal aplicat — golind previzualizarea, rămân în Staff dar stocul NU li se va mai scădea automat.`:'';
+  if(pcImpParsed.length&&!confirm('Golești previzualizarea curentă? Liniile neaplicate încă se pierd (cele deja aplicate rămân salvate, neatinse).'+warn))return;
+  pcImpParsed=[];pcImpBatchIds={};
   localStorage.removeItem(PCIK);
   document.getElementById('pcmi-preview').innerHTML='';
   document.getElementById('pcmi-foot').style.display='none';
@@ -13669,24 +13781,27 @@ function filterPcomPick(){
   }).join('');
   list.innerHTML=newRow+(rows||`<div class="smi-pick-item" style="color:var(--t3);cursor:default">Niciun produs găsit</div>`);
 }
-function pickPcomProduct(id){
+async function pickPcomProduct(id){
   if(pcomPickIdx==null)return;
-  pcImpParsed[pcomPickIdx].produsId=id||null;
-  pcImpParsed[pcomPickIdx].newProduct=false;
-  pcImpParsed[pcomPickIdx].score=1;
-  pcImpParsed[pcomPickIdx].viaPnk=false;
-  pcImpParsed[pcomPickIdx].include=!!id;
+  const idx=pcomPickIdx;
+  pcImpParsed[idx].produsId=id||null;
+  pcImpParsed[idx].newProduct=false;
+  pcImpParsed[idx].score=1;
+  pcImpParsed[idx].viaPnk=false;
+  pcImpParsed[idx].include=!!id;
   document.getElementById('pcmi-pickdrop').classList.remove('on');
   pcomPickIdx=null;
   renderPcomImportPreview();
+  await syncPcomLineCommitState(idx);
 }
-function pickPcomNewProduct(){
+async function pickPcomNewProduct(){
   if(pcomPickIdx==null)return;
-  pcImpParsed[pcomPickIdx].produsId=null;
-  pcImpParsed[pcomPickIdx].newProduct=true;
-  pcImpParsed[pcomPickIdx].score=0;
-  pcImpParsed[pcomPickIdx].viaPnk=false;
-  pcImpParsed[pcomPickIdx].include=true;
+  const idx=pcomPickIdx;
+  pcImpParsed[idx].produsId=null;
+  pcImpParsed[idx].newProduct=true;
+  pcImpParsed[idx].score=0;
+  pcImpParsed[idx].viaPnk=false;
+  pcImpParsed[idx].include=true;
   document.getElementById('pcmi-pickdrop').classList.remove('on');
   pcomPickIdx=null;
   renderPcomImportPreview();
@@ -13775,12 +13890,6 @@ async function applyPcomImport(){
   }
   const btn=document.getElementById('pcmi-apply-btn');
   btn.disabled=true;btn.textContent='Se aplică…';
-  // Batch separat per platformă — la un import „mixte" (eMAG + Trendyol deodată, ambele fișiere în
-  // aceeași previzualizare), un singur ID comun ar amesteca liniile celor două platforme sub un
-  // singur rând în „Istoric importuri" (etichetat greșit cu o singură platformă, total însumat pe
-  // amândouă) — greu de anulat separat dacă doar unul dintre fișiere era greșit.
-  const batchIds={};
-  const batchIdFor=pl=>batchIds[pl]||(batchIds[pl]=Date.now().toString(36)+'-'+pl);
   let ok=0,failed=0;
   const succeeded=new Set();
   try{
@@ -13792,47 +13901,51 @@ async function applyPcomImport(){
       // salvate local înainte de acest câmp.
       const platforma=it.platforma||pcImpPlatforma;
       try{
-        const totalRon=pcomToRon(it.pretTotalCuTva,it.moneda);
-        const fin=pcomSaleFinancials(p,it,platforma);
-        const profit=Math.round(fin.profit*it.cantitate*100)/100,margin=fin.marja;
-        const row=pcomToDb({platforma,data:it.data,comandaId:it.comandaId,pnk:it.pnk,tara:it.tara,codProdus:it.codProdus,
-          clientNume:it.clientNume,titluExtern:it.titluExtern,produsId:p.id,produsNume:p.name,cantitate:it.cantitate,
-          pretFaraTva:it.pretFaraTva,pretTotalCuTva:it.pretTotalCuTva,moneda:it.moneda,pretTotalCuTvaRon:totalRon,
-          profitEstimat:profit,marjaEstimata:margin,importBatchId:batchIdFor(platforma)});
-        let inserted;
-        try{
-          inserted=await dbPost('platforma_comenzi',row);
-        }catch(errInsert){
-          // linia a mai fost scrisă într-o încercare anterioară (index unic platformă+comandă+PNK) —
-          // nu e o eroare reală, doar reimportare a aceleiași comenzi; o tratăm ca reușită, nu eșuată
-          if(/duplicate key|already exists|23505/i.test(String(errInsert.message||errInsert))){ok++;succeeded.add(it);continue;}
-          // migration_platforma_comenzi_client.sql nu a rulat încă (coloana client_nume nu există) —
-          // reîncercăm o dată fără ea, ca importul de comenzi să nu se blocheze complet din cauza asta.
-          if(row.client_nume&&/column|schema cache|client_nume/i.test(String(errInsert.message||errInsert))){
-            const{client_nume,...rowWithoutClient}=row;
-            inserted=await dbPost('platforma_comenzi',rowWithoutClient);
-          }else throw errInsert;
-        }
-        if(inserted?.[0])PCOM.unshift(dbToPcom(inserted[0]));
-        // memorează asocierea, pe două fire în paralel — cod (PNK/cod de bare) ȘI titlu exact — într-un
-        // try separat de restul liniei: dacă tabela platforma_mapari nu are încă rulată migrarea coloanei
-        // "tara", nu trebuie ca asta să anuleze comanda+stocul deja salvate. Al doilea fir (titlu) contează
-        // mai ales la Trendyol, unde codul de bare nu e mereu de încredere ca unic semnal de reținere.
-        if(it.pnk&&!SYNCM.some(s=>s.platforma===platforma&&s.idExtern===it.pnk)){
+        // Linia a fost deja scrisă în bază la click pe „✓ Inclus” (vezi commitPcomLine) — aici mai
+        // rămâne DOAR partea de stoc/Jurnal/activitate, nu se mai inserează comanda a doua oară.
+        if(!it._committedId){
+          const totalRon=pcomToRon(it.pretTotalCuTva,it.moneda);
+          const fin=pcomSaleFinancials(p,it,platforma);
+          const profit=Math.round(fin.profit*it.cantitate*100)/100,margin=fin.marja;
+          const row=pcomToDb({platforma,data:it.data,comandaId:it.comandaId,pnk:it.pnk,tara:it.tara,codProdus:it.codProdus,
+            clientNume:it.clientNume,titluExtern:it.titluExtern,produsId:p.id,produsNume:p.name,cantitate:it.cantitate,
+            pretFaraTva:it.pretFaraTva,pretTotalCuTva:it.pretTotalCuTva,moneda:it.moneda,pretTotalCuTvaRon:totalRon,
+            profitEstimat:profit,marjaEstimata:margin,importBatchId:pcImpBatchIdFor(platforma)});
+          let inserted;
           try{
-            const mRows=await dbPost('platforma_mapari',syncMapToDb({platforma,idExtern:it.pnk,titluExtern:it.titluExtern,produsId:p.id,confirmat:true,tara:it.tara}));
-            if(mRows?.[0])SYNCM.unshift(dbToSyncMap(mRows[0]));
-          }catch(errMap){
-            console.warn('Nu s-a putut salva asocierea cod→produs (verifică migration_platforma_mapari_tara.sql):',errMap);
+            inserted=await dbPost('platforma_comenzi',row);
+          }catch(errInsert){
+            // linia a mai fost scrisă într-o încercare anterioară (index unic platformă+comandă+PNK) —
+            // nu e o eroare reală, doar reimportare a aceleiași comenzi; o tratăm ca reușită, nu eșuată
+            if(/duplicate key|already exists|23505/i.test(String(errInsert.message||errInsert))){ok++;succeeded.add(it);continue;}
+            // migration_platforma_comenzi_client.sql nu a rulat încă (coloana client_nume nu există) —
+            // reîncercăm o dată fără ea, ca importul de comenzi să nu se blocheze complet din cauza asta.
+            if(row.client_nume&&/column|schema cache|client_nume/i.test(String(errInsert.message||errInsert))){
+              const{client_nume,...rowWithoutClient}=row;
+              inserted=await dbPost('platforma_comenzi',rowWithoutClient);
+            }else throw errInsert;
           }
-        }
-        const titleKeyLc=it.titluExtern.toLowerCase().trim();
-        if(!SYNCM.some(s=>s.platforma===platforma&&s.titluExtern.toLowerCase().trim()===titleKeyLc)){
-          try{
-            const mRows2=await dbPost('platforma_mapari',syncMapToDb({platforma,idExtern:'',titluExtern:it.titluExtern,produsId:p.id,confirmat:true,tara:it.tara}));
-            if(mRows2?.[0])SYNCM.unshift(dbToSyncMap(mRows2[0]));
-          }catch(errMap2){
-            console.warn('Nu s-a putut salva asocierea titlu→produs:',errMap2);
+          if(inserted?.[0])PCOM.unshift(dbToPcom(inserted[0]));
+          // memorează asocierea, pe două fire în paralel — cod (PNK/cod de bare) ȘI titlu exact — într-un
+          // try separat de restul liniei: dacă tabela platforma_mapari nu are încă rulată migrarea coloanei
+          // "tara", nu trebuie ca asta să anuleze comanda+stocul deja salvate. Al doilea fir (titlu) contează
+          // mai ales la Trendyol, unde codul de bare nu e mereu de încredere ca unic semnal de reținere.
+          if(it.pnk&&!SYNCM.some(s=>s.platforma===platforma&&s.idExtern===it.pnk)){
+            try{
+              const mRows=await dbPost('platforma_mapari',syncMapToDb({platforma,idExtern:it.pnk,titluExtern:it.titluExtern,produsId:p.id,confirmat:true,tara:it.tara}));
+              if(mRows?.[0])SYNCM.unshift(dbToSyncMap(mRows[0]));
+            }catch(errMap){
+              console.warn('Nu s-a putut salva asocierea cod→produs (verifică migration_platforma_mapari_tara.sql):',errMap);
+            }
+          }
+          const titleKeyLc=it.titluExtern.toLowerCase().trim();
+          if(!SYNCM.some(s=>s.platforma===platforma&&s.titluExtern.toLowerCase().trim()===titleKeyLc)){
+            try{
+              const mRows2=await dbPost('platforma_mapari',syncMapToDb({platforma,idExtern:'',titluExtern:it.titluExtern,produsId:p.id,confirmat:true,tara:it.tara}));
+              if(mRows2?.[0])SYNCM.unshift(dbToSyncMap(mRows2[0]));
+            }catch(errMap2){
+              console.warn('Nu s-a putut salva asocierea titlu→produs:',errMap2);
+            }
           }
         }
         // scade stocul — o vânzare reală s-a produs
