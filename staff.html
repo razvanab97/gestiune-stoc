@@ -314,9 +314,20 @@ function showToast(msg,undoFn){
 }
 function hideToast(){document.getElementById('toast').classList.remove('on');}
 
+// Bara de progres arată doar ziua CEA MAI RECENTĂ prezentă în date (nu tot intervalul de la
+// CUTOFF_DATE) — cerere directă: numărul total nu trebuie să crească la nesfârșit pe măsură ce trec
+// zilele, ci să „se reseteze" de fiecare dată când intră un lot nou de comenzi, arătând doar câte sunt
+// de lucru în ziua respectivă. Coada reală de împachetat (packQueue/waitingQueue) rămâne neschimbată —
+// o comandă mai veche, încă neîmpachetată, tot apare acolo, doar bara de sus nu o mai numără la infinit.
+function progressDay(){
+  if(!ORDERS.length)return null;
+  return ORDERS.reduce((max,o)=>o.data>max?o.data:max,ORDERS[0].data);
+}
 function renderProgress(){
-  const total=ORDERS.length;
-  const done=ORDERS.filter(o=>o.finalized).length;
+  const day=progressDay();
+  const dayOrders=day?ORDERS.filter(o=>o.data===day):[];
+  const total=dayOrders.length;
+  const done=dayOrders.filter(o=>o.finalized).length;
   const remaining=total-done;
   document.getElementById('progress-txt').textContent=total?`${remaining} comenzi rămase din ${total}`:'Nicio comandă încă';
   const pct=total?Math.round(done/total*100):0;
