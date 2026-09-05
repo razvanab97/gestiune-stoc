@@ -3187,6 +3187,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:291,text:'Asociază AWB-uri (#290) — extindere pe un exemplu real cu 4 formate diferite de etichetă în ACELAȘI PDF (FAN Courier, Sameday/DELIVERY SOLUTIONS pentru eMAG easybox/locker, GLS, Vinted). Adăugat al 2-lea format recunoscut: etichetele Sameday au un cod pe propriul rând, „AWB_comandaId_altceva" (ex. „4EMGLN184263343001_501145696_252034091") — segmentul din mijloc e exact comanda_id-ul eMAG (confirmat pe date reale). Pe drum, 2 bug-uri reale de extragere text găsite direct pe etichetele reale (nu doar pe facturile deja testate, unde AI-ul tolera zgomotul): unele etichete scriu fiecare literă ca fragment separat („A W B :" în loc de „AWB:") — reparat, spațiu inserat doar la un gol real între cuvinte, nu automat între orice două fragmente; textul îngroșat (bold fals, desenat de două ori) producea un fragment scurt aproape suprapus peste începutul celui lung („44EMGLN..." în loc de „4EMGLN...", care ar fi stricat exact AWB-ul salvat) — reparat, la suprapunere se păstrează fragmentul mai lung. Etichetele GLS din exemplu nu au NICIUN AWB sau număr de comandă tipărit (doar un cod de produs fără legătură cu comanda) — corect semnalate ca nerecunoscute, fără o asociere ghicită nesigur; la fel Vinted (platformă neconectată încă). Verificat de 2 ori pe PDF-ul real cu 15 etichete mixte: 9 din 9 comenzi identificabile găsite corect (inclusiv cele 5 deja verificate la #290), 6 nerecunoscute corect semnalate (GLS ×2, Vinted ×4), fără regresie pe fluxul de scriere testat anterior, fără erori consolă',date:'2026-09-05'},
   {n:290,text:'Comenzi Platforme — card nou „📮 Asociază AWB-uri" (Import comenzi). Încarci PDF-ul cu etichetele de expediere primit de la curier (verificat direct pe un exemplu real, FAN Courier/Trendyol) — fiecare etichetă are un câmp „Continut" care conține exact numărul comenzii Trendyol (confirmat pe date reale din platforma_comenzi), citit automat printr-un regex pe textul extras cu PDF.js (aceeași bibliotecă folosită deja la citirea facturilor) — fără AI, rapid și determinist. O previzualizare arată ce comenzi s-au găsit (→ AWB-ul care se va scrie, cu avertisment dacă înlocuiește unul existent) și ce comenzi încă nu există (nu au fost importate încă) — nimic nu se scrie până nu apeși „Asociază AWB-urile". O comandă cu mai multe produse (mai multe rânduri, același comanda_id) primește AWB-ul pe toate rândurile deodată. Verificat de 2 ori cu PDF-ul real trimis (5 etichete): 1 comandă de test potrivită corect cu AWB-ul exact de pe etichetă, 4 negăsite corect semnalate, scrierea în bază + în memorie confirmată, inclusiv cazul „înlocuiește AWB existent"',date:'2026-09-05'},
   {n:289,text:'Dashboard — 4 retușuri pe redesign-ul de la #288, raportate direct pe o captură reală. (1-3) Conținutul paginii nu mai era plafonat la 1600px lățime — pe monitoare mai late lăsa spațiu gol în stânga/dreapta; acum folosește aceeași regulă ca restul aplicației (`.wrap{width:96%}`, fără plafon), la fel de „complet" ca oricare altă pagină. (2) Graficul de evoluție din „Vânzări pe canale" primește un cursor interactiv la trecerea mouse-ului (la fel ca graficul principal de deasupra) — arată data + valoarea RON și procentul din total pentru fiecare canal (Direct/eMAG/Trendyol) în punctul respectiv; funcția care desenează acest grafic e comună cu Raport vânzări, deci beneficiul apare pe ambele pagini deodată, fără cod duplicat. (4) „Liquid glass" pe toate cadrele Dashboard-ului (revenire cerută direct asupra variantei complet plate de la #288) — fundal cu degrade discret colorat, cadranele KPI + cardurile mari + mini-cardurile devin translucide cu blur, cu un contur fin luminos; scopat strict la Dashboard (`#page-dashboard`), Vânzări/Comenzi Platforme/Raport vânzări rămân exact ca înainte. Verificat de 2 ori: lățimea reală a paginii confirmată (96% din spațiul rămas după sidebar, nu 1600px fix), cursorul cu procentaj funcționează identic pe Dashboard ȘI pe Raport vânzări, glass vizibil doar pe Dashboard, toate cele 11 pagini + widget-urile globale rămân funcționale, fără erori consolă',date:'2026-09-05'},
   {n:288,text:'Dashboard — redesign vizual complet, stil SaaS modern (mockup + specificație detaliată primite direct). Sidebar nou în stânga (înlocuiește nav-ul orizontal de sus, pe toată aplicația) — logo, cele 11 pagini, „⚙️ Setări" fixat jos (găzduiește editorul de ordine a paginilor și editorul de culori, mutate din header ca să nu mai aglomereze ecranul; logica lor internă e neschimbată). O bandă subțire sus păstrează sincronizarea/clopoțelul/notița/zoom-ul, vizibile din orice pagină. Pe tabletă/mobil, sidebar-ul devine meniu retractabil (☰). Dashboard-ul propriu-zis: antet nou (titlu, căutare produs, selector perioadă, „+ Produs nou"), 10 cadrane KPI curate pe 2 rânduri (fără cel de-al 11-lea, „Epuizate la furnizor" — devine un mic indicator sub „Epuizate", ca să nu strice simetria 5+5), card mare „Vânzări & achiziții" cu mini-cadrane + grafic de evoluție (linie verde plină vs. linie gri punctată pentru comparație, comutator RON/Bucăți/Comenzi/Profit, granularitate), „Vânzări pe canale" și „Vânzări pe categorii" — rânduri/carduri cu bară de progres, FĂRĂ grafic circular (cerere explicită), „Top produse vândute" + „Produse cu stoc scăzut" (nou — alertă reală de stoc, nu doar contor), „Istoric lunar" cu click pe lună. Reutilizează integral stratul de date construit la „Raport vânzări" din această sesiune (dedupedSalesByDate, directSalesInRange, platformSalesInRange, profitInRange, productSalesInRange, categorySalesInRange, dailySeriesInRange, groupByGranularity, srMonthlyHistoryRows, srKpiCard ș.a.) — nicio formulă nouă, nicio sursă de date nouă, doar o stare de perioadă proprie dashboard-ului (separată de cea a paginii Raport vânzări, ca să nu se suprascrie una pe alta). „Achiziții pe furnizor", „Produse pe platforme" și „Activitate recentă" au fost scoase de pe Dashboard (confirmat direct) — nimic șters din aplicație, doar nu mai aglomerează pagina principală; codul devenit orfan a fost curățat. Verificat de 2 ori: toate cele 11 pagini + rutare pe hash + reordonare taburi + editor culori + widget-uri globale, toate funcționale; cifrele Dashboard-ului comparate direct cu Raport vânzări pentru aceeași perioadă — identice; responsive la 3 lățimi; fără erori consolă',date:'2026-09-04'},
@@ -14784,18 +14785,64 @@ async function extractPdfPagesText(file){
       const y=Math.round(it.transform[5]/3)*3;
       (rows[y]=rows[y]||[]).push(it);
     });
-    const lineText=Object.keys(rows).map(Number).sort((a,b)=>b-a)
-      .map(y=>rows[y].sort((a,b)=>a.transform[4]-b.transform[4]).map(it=>it.str).join(' ')).join('\n');
+    // Reconstrucție rând-cu-rând mai robustă decât un simplu join(' ') — găsit necesar direct pe
+    // etichete de curier reale (nu doar facturi, unde AI-ul tolera zgomotul). Două probleme reale,
+    // pe etichete diferite: (1) unele PDF-uri scriu fiecare literă ca un item separat, cu spațiu real
+    // între cuvinte dar aproape deloc între literele aceluiași cuvânt ("A W B :" ar deveni greșit
+    // "AWB:" doar dacă am insera mereu spațiu) — rezolvat mai jos prin prag de gol relativ la lățime,
+    // nu spațiu fix. (2) text îngroșat (bold fals, prin desenare dublă) produce un fragment SCURT
+    // (ex. un singur caracter, "4") aproape exact suprapus peste ÎNCEPUTUL unui fragment mai LUNG care
+    // conține deja acel caracter (ex. "4EMGLN184263343001") — NU sunt string-uri identice, deci o
+    // comparare simplă de egalitate rata cazul, dând "44EMGLN..." în loc de "4EMGLN...". Rezolvat prin
+    // „bufer”: când două fragmente se suprapun pozițional, se păstrează doar cel mai LUNG dintre ele.
+    const lineText=Object.keys(rows).map(Number).sort((a,b)=>b-a).map(y=>{
+      const sorted=rows[y].sort((a,b)=>a.transform[4]-b.transform[4]);
+      let line='',prevEnd=null,pending=null;
+      const commit=()=>{
+        if(!pending)return;
+        if(prevEnd!==null&&(pending.x-prevEnd)>pending.w*0.35)line+=' ';
+        line+=pending.str;
+        prevEnd=pending.x+pending.w;
+      };
+      sorted.forEach(it=>{
+        const x=it.transform[4],w=it.width||2;
+        if(pending&&Math.abs(x-pending.x)<Math.min(w,pending.w)*0.6){
+          if(it.str.length>pending.str.length)pending={str:it.str,x,w};
+          return;
+        }
+        commit();
+        pending={str:it.str,x,w};
+      });
+      commit();
+      return line;
+    }).join('\n');
     pages.push(lineText);
   }
   return pages;
 }
-// Asociază AWB-uri din etichetele de expediere ale curierului — cerere directă, verificat pe un
-// exemplu real (etichete FAN Courier pentru comenzi Trendyol): câmpul „Continut” de pe etichetă
-// conține exact comanda_id-ul Trendyol (confirmat direct pe date din platforma_comenzi) — nu e nevoie
-// de AI, doar un regex pe textul extras de PDF.js (rapid, gratuit, determinist). O pagină a PDF-ului
-// = o etichetă = o comandă. Nimic nu se scrie în bază până nu se apasă explicit „Asociază AWB-urile”.
+// Asociază AWB-uri din etichetele de expediere ale curierului — cerere directă, verificat pe exemple
+// reale, cu 2 formate diferite găsite până acum (un PDF de etichete poate amesteca ambele, o pagină =
+// o etichetă = o comandă):
+// 1) FAN Courier (Trendyol ȘI unele eMAG) — „AWB: X” + „Continut: Y”, Y = comanda_id exact (confirmat
+//    pe date reale din platforma_comenzi, pentru ambele platforme).
+// 2) Sameday/DELIVERY SOLUTIONS (eMAG, livrare easybox/locker) — un cod pe propriul rând, format
+//    „AWB_comandaId_altceva” (ex. „4EMGLN184263343001_501145696_252034091” — segmentul din mijloc,
+//    501145696, e exact comanda_id, confirmat pe date reale din platforma_comenzi).
+// Etichetele care nu se încadrează în niciun format cunoscut (ex. GLS — văzut pe un exemplu real: nu
+// are niciun AWB/număr de comandă tipărit, doar un cod de produs fără legătură cu comanda; sau Vinted —
+// platformă neconectată încă) sunt semnalate explicit, NU se ghicește o asociere nesigură.
+// Nu e nevoie de AI — doar regex pe textul extras de PDF.js (rapid, gratuit, determinist). Nimic nu se
+// scrie în bază până nu se apasă explicit „Asociază AWB-urile”.
 let awbParsed=[];
+let awbUnrecognizedPages=[];
+function parseAwbLabelText(text){
+  const awbM=text.match(/AWB:\s*(\d+)/);
+  const contM=text.match(/Continut:\s*(\d+)/);
+  if(awbM&&contM)return{awb:awbM[1],comandaId:contM[1]};
+  const sdM=text.match(/^([A-Za-z0-9]{8,25})_(\d{6,})_\d+$/m);
+  if(sdM)return{awb:sdM[1],comandaId:sdM[2]};
+  return null;
+}
 async function handleAwbPdfFile(ev){
   const file=ev.target.files[0];if(!file)return;
   const parsing=document.getElementById('pcmi-awb-parsing');
@@ -14805,12 +14852,12 @@ async function handleAwbPdfFile(ev){
   try{
     const pages=await extractPdfPagesText(file);
     const pairs=[];
-    pages.forEach(text=>{
-      const awbM=text.match(/AWB:\s*(\d+)/);
-      const contM=text.match(/Continut:\s*(\d+)/);
-      if(awbM&&contM)pairs.push({awb:awbM[1],comandaId:contM[1]});
+    awbUnrecognizedPages=[];
+    pages.forEach((text,i)=>{
+      const p=parseAwbLabelText(text);
+      if(p)pairs.push(p);else awbUnrecognizedPages.push(i+1);
     });
-    if(!pairs.length)throw new Error('Nu am găsit niciun AWB/comandă pe etichete — verifică formatul PDF-ului.');
+    if(!pairs.length&&!awbUnrecognizedPages.length)throw new Error('PDF-ul pare gol.');
     const results=[];
     for(const p of pairs){
       const rows=await dbGet(`platforma_comenzi?comanda_id=eq.${p.comandaId}&select=id,client_nume,produs_nume,awb`);
@@ -14827,13 +14874,15 @@ function renderAwbPreview(){
   const box=document.getElementById('pcmi-awb-preview');
   const matched=awbParsed.filter(p=>p.rows.length>0);
   const unmatched=awbParsed.filter(p=>p.rows.length===0);
-  box.innerHTML=awbParsed.map(p=>{
+  let html=awbParsed.map(p=>{
     if(!p.rows.length)return`<div class="inv-prev-row" style="color:var(--rd)">⚠️ Comanda ${esc(p.comandaId)} (AWB ${esc(p.awb)}) — negăsită încă în Comenzi Platforme</div>`;
     const nm=p.rows[0].client_nume||p.rows.map(r=>r.produs_nume).join(', ');
     const already=p.rows[0].awb;
     return`<div class="inv-prev-row">✓ Comanda ${esc(p.comandaId)} — ${esc(nm)} → AWB ${esc(p.awb)}${already?` <span style="color:var(--t3)">(înlocuiește ${esc(already)})</span>`:''}</div>`;
   }).join('');
-  document.getElementById('pcmi-awb-info').textContent=`${matched.length} găsite, ${unmatched.length} negăsite`;
+  if(awbUnrecognizedPages.length)html+=`<div class="inv-prev-row" style="color:var(--t3)">❔ Format nerecunoscut, sărite (fără AWB/comandă identificabile) — ${awbUnrecognizedPages.length>1?'paginile':'pagina'} ${esc(awbUnrecognizedPages.join(', '))}</div>`;
+  box.innerHTML=html;
+  document.getElementById('pcmi-awb-info').textContent=`${matched.length} găsite, ${unmatched.length} negăsite${awbUnrecognizedPages.length?`, ${awbUnrecognizedPages.length} nerecunoscute`:''}`;
   document.getElementById('pcmi-awb-apply-btn').disabled=!matched.length;
   document.getElementById('pcmi-awb-foot').style.display='flex';
 }
