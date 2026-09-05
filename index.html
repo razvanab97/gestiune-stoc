@@ -2392,6 +2392,27 @@ th{font-weight:800!important;color:var(--t3)!important}
         <div style="font-size:23px;color:var(--t3);margin-bottom:8px">Dacă un import a fost greșit (fișier greșit, dată greșită), îl poți șterge — liniile din „Profit"/„Total încasări" dispar și stocul scăzut la import e readăugat automat.</div>
         <div id="pcom-import-history" style="font-size:24px;color:var(--t3)">Se încarcă…</div>
       </div>
+      <div class="card" style="padding:1rem 1.25rem;margin-top:1rem">
+        <div class="sec" style="margin-top:0">📮 Asociază AWB-uri</div>
+        <div style="font-size:23px;color:var(--t3);margin-bottom:10px">
+          Încarcă PDF-ul cu etichetele de expediere primit de la curier (ex. FAN Courier, comenzi
+          Trendyol) — fiecare etichetă conține numărul comenzii (câmpul „Continut") și AWB-ul, citite
+          automat, fără AI. Se asociază la comenzile deja importate mai sus. Nimic nu se scrie până
+          nu apeși „Asociază AWB-urile".
+        </div>
+        <div class="frow">
+          <div class="fld">
+            <label>PDF etichete AWB</label>
+            <input type="file" id="pcmi-awb-file" accept=".pdf" onchange="handleAwbPdfFile(event)">
+          </div>
+        </div>
+        <div id="pcmi-awb-parsing" style="display:none;font-size:23px;color:var(--t3);margin:8px 0"><span class="spin"></span> Se citește PDF-ul…</div>
+        <div id="pcmi-awb-preview"></div>
+        <div id="pcmi-awb-foot" style="display:none;justify-content:space-between;align-items:center;margin-top:12px">
+          <span id="pcmi-awb-info" style="font-size:23px;color:var(--t3)"></span>
+          <button class="btn btn-sm btn-acc" id="pcmi-awb-apply-btn" onclick="applyAwbAssociation()" disabled>Asociază AWB-urile</button>
+        </div>
+      </div>
     </div>
 
     <div class="research-mode" id="pcom-mode-profit">
@@ -3166,6 +3187,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:290,text:'Comenzi Platforme — card nou „📮 Asociază AWB-uri" (Import comenzi). Încarci PDF-ul cu etichetele de expediere primit de la curier (verificat direct pe un exemplu real, FAN Courier/Trendyol) — fiecare etichetă are un câmp „Continut" care conține exact numărul comenzii Trendyol (confirmat pe date reale din platforma_comenzi), citit automat printr-un regex pe textul extras cu PDF.js (aceeași bibliotecă folosită deja la citirea facturilor) — fără AI, rapid și determinist. O previzualizare arată ce comenzi s-au găsit (→ AWB-ul care se va scrie, cu avertisment dacă înlocuiește unul existent) și ce comenzi încă nu există (nu au fost importate încă) — nimic nu se scrie până nu apeși „Asociază AWB-urile". O comandă cu mai multe produse (mai multe rânduri, același comanda_id) primește AWB-ul pe toate rândurile deodată. Verificat de 2 ori cu PDF-ul real trimis (5 etichete): 1 comandă de test potrivită corect cu AWB-ul exact de pe etichetă, 4 negăsite corect semnalate, scrierea în bază + în memorie confirmată, inclusiv cazul „înlocuiește AWB existent"',date:'2026-09-05'},
   {n:289,text:'Dashboard — 4 retușuri pe redesign-ul de la #288, raportate direct pe o captură reală. (1-3) Conținutul paginii nu mai era plafonat la 1600px lățime — pe monitoare mai late lăsa spațiu gol în stânga/dreapta; acum folosește aceeași regulă ca restul aplicației (`.wrap{width:96%}`, fără plafon), la fel de „complet" ca oricare altă pagină. (2) Graficul de evoluție din „Vânzări pe canale" primește un cursor interactiv la trecerea mouse-ului (la fel ca graficul principal de deasupra) — arată data + valoarea RON și procentul din total pentru fiecare canal (Direct/eMAG/Trendyol) în punctul respectiv; funcția care desenează acest grafic e comună cu Raport vânzări, deci beneficiul apare pe ambele pagini deodată, fără cod duplicat. (4) „Liquid glass" pe toate cadrele Dashboard-ului (revenire cerută direct asupra variantei complet plate de la #288) — fundal cu degrade discret colorat, cadranele KPI + cardurile mari + mini-cardurile devin translucide cu blur, cu un contur fin luminos; scopat strict la Dashboard (`#page-dashboard`), Vânzări/Comenzi Platforme/Raport vânzări rămân exact ca înainte. Verificat de 2 ori: lățimea reală a paginii confirmată (96% din spațiul rămas după sidebar, nu 1600px fix), cursorul cu procentaj funcționează identic pe Dashboard ȘI pe Raport vânzări, glass vizibil doar pe Dashboard, toate cele 11 pagini + widget-urile globale rămân funcționale, fără erori consolă',date:'2026-09-05'},
   {n:288,text:'Dashboard — redesign vizual complet, stil SaaS modern (mockup + specificație detaliată primite direct). Sidebar nou în stânga (înlocuiește nav-ul orizontal de sus, pe toată aplicația) — logo, cele 11 pagini, „⚙️ Setări" fixat jos (găzduiește editorul de ordine a paginilor și editorul de culori, mutate din header ca să nu mai aglomereze ecranul; logica lor internă e neschimbată). O bandă subțire sus păstrează sincronizarea/clopoțelul/notița/zoom-ul, vizibile din orice pagină. Pe tabletă/mobil, sidebar-ul devine meniu retractabil (☰). Dashboard-ul propriu-zis: antet nou (titlu, căutare produs, selector perioadă, „+ Produs nou"), 10 cadrane KPI curate pe 2 rânduri (fără cel de-al 11-lea, „Epuizate la furnizor" — devine un mic indicator sub „Epuizate", ca să nu strice simetria 5+5), card mare „Vânzări & achiziții" cu mini-cadrane + grafic de evoluție (linie verde plină vs. linie gri punctată pentru comparație, comutator RON/Bucăți/Comenzi/Profit, granularitate), „Vânzări pe canale" și „Vânzări pe categorii" — rânduri/carduri cu bară de progres, FĂRĂ grafic circular (cerere explicită), „Top produse vândute" + „Produse cu stoc scăzut" (nou — alertă reală de stoc, nu doar contor), „Istoric lunar" cu click pe lună. Reutilizează integral stratul de date construit la „Raport vânzări" din această sesiune (dedupedSalesByDate, directSalesInRange, platformSalesInRange, profitInRange, productSalesInRange, categorySalesInRange, dailySeriesInRange, groupByGranularity, srMonthlyHistoryRows, srKpiCard ș.a.) — nicio formulă nouă, nicio sursă de date nouă, doar o stare de perioadă proprie dashboard-ului (separată de cea a paginii Raport vânzări, ca să nu se suprascrie una pe alta). „Achiziții pe furnizor", „Produse pe platforme" și „Activitate recentă" au fost scoase de pe Dashboard (confirmat direct) — nimic șters din aplicație, doar nu mai aglomerează pagina principală; codul devenit orfan a fost curățat. Verificat de 2 ori: toate cele 11 pagini + rutare pe hash + reordonare taburi + editor culori + widget-uri globale, toate funcționale; cifrele Dashboard-ului comparate direct cu Raport vânzări pentru aceeași perioadă — identice; responsive la 3 lățimi; fără erori consolă',date:'2026-09-04'},
   {n:287,text:'Pagina de Staff (/staff) — a doua rundă de retușuri pe ecranul de împachetare (prima: #286), plus un restyling vizual complet „liquid glass" cerut direct. (1) „Stoc ERP" — micșorat (36→19px) și mutat în dreapta cantității comandate, ca să nu se mai confunde cele două cifre dintr-o privire. (2) Numele clientului mutat sub numărul comenzii (rând propriu), nu lângă el. (3) Anulare ÎMPACHETAT și după cele 5 secunde de undo, pentru comenzi cu un singur produs — ține apăsat (~0.7s) pe butonul verde ÎMPACHETAT ca să anulezi; un tap scurt nu face nimic, ca să nu se anuleze din greșeală; adăugat și în Legendă. (4) Toate zonele (card, produse, butoane de navigare) mărite/mai aerisite. (5) Restyling „liquid glass": fundal cu degrade discret (nuanțele violet/verde/portocaliu deja folosite în aplicație), toate suprafețele principale (card, bara de tab-uri, produsele, butoanele de navigare, listele, sheet-ul de raportare, notificarea de jos) devin translucide cu blur, cu un contur fin luminos — butonul mare ÎMPACHETAT rămâne opac/plin (acțiunea principală trebuie să rămână clară). Verificat de 2 ori cu o comandă de test dedicată (creată/ștearsă doar pentru test): tap scurt nu anulează, hold anulează corect (confirmat în bază), stocul ERP mai mic și în dreapta, numele clientului sub numărul comenzii, fără erori consolă',date:'2026-09-04'},
@@ -14738,6 +14760,101 @@ Ignoră total/TVA/transport/discount ca linii de produs separate, consolidează 
     toast('Eroare PDF: '+err.message+'. Încearcă CSV sau introdu manual.','err');
   }
   parsing.style.display='none';
+}
+// Extrage textul unui PDF, o pagină = un string (reconstruit rând-cu-rând ca la parsePDFWithAI de mai
+// sus, dar aici SEPARAT pe pagini — la etichetele de curier, o pagină = o etichetă = o comandă).
+async function extractPdfPagesText(file){
+  if(!window.pdfjsLib){
+    await new Promise((resolve,reject)=>{
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      s.onload=resolve;s.onerror=reject;
+      document.head.appendChild(s);
+    });
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+  const arrayBuffer=await file.arrayBuffer();
+  const pdf=await window.pdfjsLib.getDocument({data:arrayBuffer}).promise;
+  const pages=[];
+  for(let i=1;i<=pdf.numPages;i++){
+    const page=await pdf.getPage(i);
+    const content=await page.getTextContent();
+    const rows={};
+    content.items.forEach(it=>{
+      const y=Math.round(it.transform[5]/3)*3;
+      (rows[y]=rows[y]||[]).push(it);
+    });
+    const lineText=Object.keys(rows).map(Number).sort((a,b)=>b-a)
+      .map(y=>rows[y].sort((a,b)=>a.transform[4]-b.transform[4]).map(it=>it.str).join(' ')).join('\n');
+    pages.push(lineText);
+  }
+  return pages;
+}
+// Asociază AWB-uri din etichetele de expediere ale curierului — cerere directă, verificat pe un
+// exemplu real (etichete FAN Courier pentru comenzi Trendyol): câmpul „Continut” de pe etichetă
+// conține exact comanda_id-ul Trendyol (confirmat direct pe date din platforma_comenzi) — nu e nevoie
+// de AI, doar un regex pe textul extras de PDF.js (rapid, gratuit, determinist). O pagină a PDF-ului
+// = o etichetă = o comandă. Nimic nu se scrie în bază până nu se apasă explicit „Asociază AWB-urile”.
+let awbParsed=[];
+async function handleAwbPdfFile(ev){
+  const file=ev.target.files[0];if(!file)return;
+  const parsing=document.getElementById('pcmi-awb-parsing');
+  parsing.style.display='block';
+  document.getElementById('pcmi-awb-preview').innerHTML='';
+  document.getElementById('pcmi-awb-foot').style.display='none';
+  try{
+    const pages=await extractPdfPagesText(file);
+    const pairs=[];
+    pages.forEach(text=>{
+      const awbM=text.match(/AWB:\s*(\d+)/);
+      const contM=text.match(/Continut:\s*(\d+)/);
+      if(awbM&&contM)pairs.push({awb:awbM[1],comandaId:contM[1]});
+    });
+    if(!pairs.length)throw new Error('Nu am găsit niciun AWB/comandă pe etichete — verifică formatul PDF-ului.');
+    const results=[];
+    for(const p of pairs){
+      const rows=await dbGet(`platforma_comenzi?comanda_id=eq.${p.comandaId}&select=id,client_nume,produs_nume,awb`);
+      results.push({...p,rows});
+    }
+    awbParsed=results;
+    renderAwbPreview();
+  }catch(e){
+    toast('Eroare PDF: '+e.message,'err');
+  }
+  parsing.style.display='none';
+}
+function renderAwbPreview(){
+  const box=document.getElementById('pcmi-awb-preview');
+  const matched=awbParsed.filter(p=>p.rows.length>0);
+  const unmatched=awbParsed.filter(p=>p.rows.length===0);
+  box.innerHTML=awbParsed.map(p=>{
+    if(!p.rows.length)return`<div class="inv-prev-row" style="color:var(--rd)">⚠️ Comanda ${esc(p.comandaId)} (AWB ${esc(p.awb)}) — negăsită încă în Comenzi Platforme</div>`;
+    const nm=p.rows[0].client_nume||p.rows.map(r=>r.produs_nume).join(', ');
+    const already=p.rows[0].awb;
+    return`<div class="inv-prev-row">✓ Comanda ${esc(p.comandaId)} — ${esc(nm)} → AWB ${esc(p.awb)}${already?` <span style="color:var(--t3)">(înlocuiește ${esc(already)})</span>`:''}</div>`;
+  }).join('');
+  document.getElementById('pcmi-awb-info').textContent=`${matched.length} găsite, ${unmatched.length} negăsite`;
+  document.getElementById('pcmi-awb-apply-btn').disabled=!matched.length;
+  document.getElementById('pcmi-awb-foot').style.display='flex';
+}
+async function applyAwbAssociation(){
+  const matched=awbParsed.filter(p=>p.rows.length>0);
+  const btn=document.getElementById('pcmi-awb-apply-btn');
+  btn.disabled=true;
+  try{
+    for(const p of matched){
+      await dbPatch(`platforma_comenzi?comanda_id=eq.${p.comandaId}`,{awb:p.awb});
+      PCOM.filter(o=>o.comandaId===p.comandaId).forEach(o=>o.awb=p.awb);
+    }
+    toast(`${matched.length} AWB-uri asociate ✓`);
+    awbParsed=[];
+    document.getElementById('pcmi-awb-preview').innerHTML='';
+    document.getElementById('pcmi-awb-foot').style.display='none';
+    document.getElementById('pcmi-awb-file').value='';
+  }catch(e){
+    toast('Eroare la salvare: '+e.message,'err');
+    btn.disabled=false;
+  }
 }
 // Comenzi Maxy/Verk citite direct din poze/screenshot-uri ale paginii "Produse comandate"/"Ordered
 // items" — util când nu ai un export CSV/PDF la îndemână, doar poza paginii de confirmare comandă.
