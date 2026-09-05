@@ -89,6 +89,7 @@ button{font-family:var(--font);cursor:pointer}
 .awb-box{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 18px;background:linear-gradient(135deg,rgba(243,240,255,.75),rgba(255,255,255,.55));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(118,87,246,.25);border-radius:var(--r2)}
 .awb-lbl{font-size:14px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--acc2)}
 .awb-num{font-family:var(--mono);font-weight:800;font-size:28px;color:var(--t1);word-break:break-all}
+.awb-num-tail{font-size:40px;color:var(--acc);margin-left:2px}
 .awb-pending{color:var(--t3);font-size:16px;font-weight:600}
 
 .progress-mini{font-size:16px;color:var(--t3);font-weight:700}
@@ -223,6 +224,13 @@ async function sb(method,path,body){
 }
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function imgSrc(url){if(!url)return'';if(url.startsWith('data:'))return url;if(url.startsWith(SUPA_URL))return url;if(url.startsWith('http'))return'/api/img-proxy?url='+encodeURIComponent(url);return url;}
+// Ultimele 4 cifre cu accent — cerut direct, ca staff-ul să distingă rapid coletele când AWB-urile
+// se aseamănă la prima vedere (majoritatea au același prefix de curier/platformă).
+function awbBoxHtml(awb){
+  if(!awb)return'';
+  const s=esc(awb),head=s.slice(0,-4),tail=s.slice(-4);
+  return`<div class="awb-box"><div><div class="awb-lbl">AWB</div><div class="awb-num">${head}<span class="awb-num-tail">${tail}</span></div></div></div>`;
+}
 function td(){return new Date().toISOString().slice(0,10);}
 
 // Doar comenzile/vânzările de la această dată încolo intră în coadă — comenzile mai vechi decât
@@ -439,7 +447,7 @@ function renderPackTab(host){
       ${ord.clientNume?`<div class="ord-client">${esc(ord.clientNume)}</div>`:''}
     </div>
     <div id="lock-banner-slot"></div>
-    ${ord.awb?`<div class="awb-box"><div><div class="awb-lbl">AWB</div><div class="awb-num">${esc(ord.awb)}</div></div></div>`:(ord.platforma!=='direct'?`<div class="awb-box"><span class="awb-pending">AWB în așteptare</span></div>`:'')}
+    ${ord.awb?awbBoxHtml(ord.awb):(ord.platforma!=='direct'?`<div class="awb-box"><span class="awb-pending">AWB în așteptare</span></div>`:'')}
     ${multi?`<div class="progress-mini">${doneCount} / ${ord.lines.length} produse pregătite</div>`:''}
     <div class="lines">${linesHtml}</div>
     ${bigBtnHtml}
@@ -780,7 +788,7 @@ function renderWaitingTab(host){
       <span class="ord-waiting-badge">⏸ În așteptare</span>
     </div>
     <div id="lock-banner-slot"></div>
-    ${ord.awb?`<div class="awb-box"><div><div class="awb-lbl">AWB</div><div class="awb-num">${esc(ord.awb)}</div></div></div>`:''}
+    ${ord.awb?awbBoxHtml(ord.awb):''}
     <div class="lines">${linesHtml}</div>
     <button type="button" class="nav-btn" onclick="curKey=null;renderMain()">← Înapoi la listă</button>
   </div>`;
