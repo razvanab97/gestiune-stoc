@@ -1997,7 +1997,7 @@ th{font-weight:800!important;color:var(--t3)!important}
       <option value="supplier_oos">🚫 Epuizat la furnizor</option>
     </select>
     <button class="btn btn-acc" onclick="openModal()">+ Produs nou</button>
-    <button class="btn btn-sm" id="bulk-add-btn" onclick="bulkAddStock()" disabled title="Adaugă manual o cantitate de stoc la toate produsele bifate">📥 Adaugă stoc</button>
+    <button class="btn btn-sm" id="bulk-add-btn" onclick="bulkAddStock()" title="Adaugă manual o cantitate de stoc la toate produsele bifate — apasă fără nicio bifă pentru a vedea cum se selectează">📥 Adaugă stoc</button>
     <button class="btn btn-sm" id="bulk-archive-btn" onclick="bulkArchiveProd()" disabled title="Arhivează produsele bifate — ies din Inventar, dar rămân în rapoartele de stoc pentru contabilitate">🗄️ Arhivează selectate</button>
     <button class="btn btn-sm" id="bulk-del-btn" onclick="bulkDeleteProd()" disabled title="Șterge definitiv toate produsele bifate" style="color:var(--rd);border-color:var(--rd)">🗑 Șterge selectate</button>
   </div>
@@ -3187,6 +3187,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:299,text:'Inventar (Vânzări) — butonul „📥 Adaugă stoc" din bara de sus, raportat direct ca „nu mai avem zona să adăugăm stoc": era dezactivat (gri, fără reacție la click) până bifai cel puțin un produs din listă — comportament corect ca funcție, dar un buton dezactivat nu răspunde deloc la click, din browser, deci părea pur și simplu stricat/dispărut, nu doar needisponibil temporar. Acum butonul rămâne mereu apăsabil; dacă apeși fără nicio bifă, spune explicit ce trebuie făcut („Bifează întâi produsele din listă…") în loc să nu reacționeze deloc. Fluxul de bifare→adăugare cantitate/preț rămâne complet neschimbat. Verificat de 2 ori: click fără bifă→mesaj clar, bifare unui produs+click→stocul chiar crește cu cantitatea introdusă, fără erori consolă',date:'2026-09-07'},
   {n:298,text:'Comenzi Platforme (Import comenzi) — mesaj clarificat, raportat direct ca „nu recunoaște complet toate comenzile" pe un export real Trendyol cu 9 comenzi, din care doar 3 apăreau în previzualizare. Nu era un bug de recunoaștere: exporturile Trendyol/eMAG includ de obicei TOATE comenzile active, nu doar cele noi — la o reîncărcare zilnică, majoritatea liniilor sunt deja importate dintr-o zi anterioară, iar aplicația le omite corect din previzualizare, ca să nu creeze comenzi duplicate (verificat exact pe fișierul trimis: cele 6 comenzi „lipsă" existau deja în bază, importate anterior; doar 3 erau cu adevărat noi). Problema reală era doar tăcerea: nimic nu explica DE CE numărul era mai mic decât fișierul. Acum mesajul spune explicit „X linii noi detectate · Y deja importate anterior (ignorate)", iar dacă fișierul nu are nicio linie nouă, mesajul o spune direct, în loc de un rezultat gol neexplicat. Verificat de 2 ori cu fișierul real (9 comenzi, 6 deja existente, 3 noi) — mesaj corect de fiecare dată, fără erori consolă',date:'2026-09-07'},
   {n:297,text:'Sincronizare — toate listele lungi ale paginii (De listat pe eMAG, Discrepanțe de stoc, Activ pe eMAG/lipsă pe Trendyol, Produse eMAG lipsă din stoc) sunt acum restrânse implicit, cu buton „▾ Arată toate (N)" pentru fiecare, exact ca la „Mapări existente" (care avea deja acest tipar). Cerut direct: pagina ajunsese un derulaj nesfârșit — pe datele reale, listele au 59/192/246 produse, imposibil de citit dintr-o privire ca să-ți dai seama ce merită atenție. Acum fiecare secțiune arată doar primele câteva (6-8, în funcție de secțiune), iar restul apare doar la cerere, păstrat deschis până apeși „▴ Restrânge". Verificat de 2 ori cu datele reale: fiecare secțiune extinde/restrânge corect, fără erori consolă',date:'2026-09-06'},
   {n:296,text:'Comenzi Platforme — AWB-ul asociat („📮 Asociază AWB-uri") apare acum și direct pe cardul comenzii din previzualizarea de sus (lângă „✓ Comandă creată — vizibilă în Staff"), nu doar în Staff — două bug-uri reparate, raportate direct: (1) AWB-ul chiar se scria corect în bază, dar previzualizarea de sus rămânea cu ecranul vechi până la un re-render declanșat de altceva (ex. reîncărcarea paginii), părând că „nu a mers"; (2) fără un semnal vizibil imediat lângă comandă, era greu de verificat rapid dacă asocierea chiar a prins toate comenzile, mai ales cu mai multe comenzi deodată. Verificat de 2 ori cu PDF-ul real (4 comenzi): toate 4 arată AWB-ul corect imediat după asociere, fără reîncărcare, fără erori consolă',date:'2026-09-05'},
@@ -12216,7 +12217,10 @@ function toggleSelAll(checked){
 function updateBulkBtns(){
   const n=selProd.size;
   const ba=document.getElementById('bulk-add-btn'),bd=document.getElementById('bulk-del-btn'),bar=document.getElementById('bulk-archive-btn');
-  if(ba){ba.disabled=n===0;ba.textContent=`📥 Adaugă stoc${n?' ('+n+')':''}`;}
+  // "Adaugă stoc" rămâne mereu clicabil (nu se mai dezactivează la 0 bifate) — cerut direct, un buton
+  // dezactivat nu răspunde deloc la click (comportament de browser), părea „stricat"/dispărut, nu doar
+  // needisponibil momentan. Acum, apăsat fără nicio bifă, explică ce trebuie făcut (vezi bulkAddStock).
+  if(ba)ba.textContent=`📥 Adaugă stoc${n?' ('+n+')':''}`;
   if(bd){bd.disabled=n===0;bd.textContent=`🗑 Șterge selectate${n?' ('+n+')':''}`;}
   if(bar){bar.disabled=n===0;bar.textContent=`🗄️ Arhivează selectate${n?' ('+n+')':''}`;}
 }
@@ -12250,7 +12254,8 @@ async function applyStockIntake(products,add,newCost,orderNumber,source){
   }
 }
 async function bulkAddStock(){
-  const n=selProd.size;if(!n)return;
+  const n=selProd.size;
+  if(!n){toast('Bifează întâi produsele din listă (căsuța din stânga fiecărui rând) — apoi acest buton adaugă aceeași cantitate la toate deodată','err');return;}
   const v=prompt(`Câte bucăți adaugi la stocul fiecăruia dintre cele ${n} produse selectate?`,'');
   if(v===null)return;
   const add=parseQtyVal(v);
