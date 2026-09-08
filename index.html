@@ -1612,6 +1612,14 @@ textarea.listing-html-raw{width:100%;min-height:180px;box-sizing:border-box;resi
 .rsx-add{display:grid;grid-template-columns:1fr auto;gap:8px}
 .rsx-add textarea{min-height:64px;resize:vertical;font-family:var(--mono);font-size:24px;background:var(--surf);border:1px solid rgba(46,144,250,.35);border-radius:var(--r);padding:10px}
 .rsx-add textarea:focus{outline:none;border-color:var(--bl)}
+.rpas-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin-top:6px}
+.rpas-card{display:flex;flex-direction:column;gap:6px;background:var(--surf);border:1px solid var(--b1);border-radius:var(--r);padding:8px;font-size:19px}
+.rpas-card.rpas-added{opacity:.6}
+.rpas-img{width:100%;height:100px;object-fit:contain;border-radius:6px;background:var(--surf2)}
+.rpas-img-ph{width:100%;height:100px;display:flex;align-items:center;justify-content:center;font-size:34px;background:var(--surf2);border-radius:6px}
+.rpas-info{flex:1;min-width:0}
+.rpas-title{color:var(--t1);line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.rpas-price{color:var(--t3);font-weight:700;margin-top:2px}
 
 /* ── 7. Export PDF ── */
 .rsx-pdf-row{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:18px}
@@ -3189,6 +3197,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:302,text:'Comenzi Platforme (Import comenzi) — bug real reparat, raportat direct ca recurent: cantitatea corectă din Excel nu era mereu preluată corect în aplicație. Cauza: cantitatea se citea cu `Number(...)` direct, care întoarce `NaN` pentru orice cantitate cu virgulă zecimală (ex. „1,5" — format românesc de export, posibil la produse vândute la set/pachet parțial) — `NaN` era apoi „ascuns" tăcut de un fallback la 1, fără niciun avertisment, deci o comandă de 1,5 bucăți ieșea greșit ca 1 bucată, fără nicio urmă vizibilă a erorii. Acum folosește `parseQtyVal` (deja folosit la Importă factură/ajustări de stoc), care tratează corect virgula zecimală. Verificat de 2 ori cu un fișier real construit exact pentru acest caz (cantitate „1,5"): acum se preia corect 1,5, cantitățile întregi normale („3") rămân neschimbate',date:'2026-09-08'},
   {n:301,text:'Research — nou (backend gata, interfața urmează): browser headless (Chromium, `api/research-headless.js` — prima dependință npm din proiect, izolată acolo special ca să nu încetinească restul funcțiilor din api/) pentru linkuri de furnizor care azi eșuează la fetch simplu (Jumbo — 403 la nivel de server; Maxy — SPA cu HTML gol înainte de randare JS). Verificat direct, live: Maxy se randează corect (titlu + conținut real, unde înainte ieșea gol) — Jumbo rămâne blocat chiar și cu browser headless real + tehnici de stealth (blocare la nivel de rețea, nu doar fingerprint), cu eșec clar și fallback la fluxul manual, fără cost suplimentar dacă nu ajută. Nou și: acțiune `auto_search` — caută automat pe eMAG ȘI Trendyol după titlul produsului și întoarce candidați reali (poză, titlu, preț) — verificat direct: 20 candidați corecți pe o căutare reală, pe ambele platforme. Bug real găsit și reparat pe drum: HTML-ul randat de un browser real poate depăși limita de 4.5MB de răspuns a unei funcții Vercel (Maxy — 4.7MB doar markup) — rezolvat prin curățarea scripturilor/stilurilor irelevante înainte de a trimite răspunsul. Interfața (buton + listă de candidați + confirmare manuală, nimic nu se adaugă automat) urmează într-un update separat',date:'2026-09-08'},
   {n:300,text:'Dashboard — readuse „📄 Importă factură" și „📦 Preset CSV comandă" în bara de sus, lângă „+ Produs nou". Raportat direct: la redesign-ul Dashboard-ului (#288), aceste două butoane („sistemul de încărcare stoc prin PDF/poză") au rămas doar pe pagina Vânzări, fără să fie migrate și pe noul Dashboard, unde erau folosite ca acces rapid de pe prima pagină. Refolosesc exact aceleași funcții globale (openInvoice/openPresetCSV) — niciun cod nou, doar butoanele readăugate în topbar. Verificat de 2 ori: click pe „Importă factură" din Dashboard deschide corect modalul de extragere AI (PDF/CSV/Excel/poză), „Preset CSV comandă" deschide corect selectorul de fișier, fără duplicare de elemente în pagină, fără erori consolă',date:'2026-09-07'},
   {n:299,text:'Inventar (Vânzări) — butonul „📥 Adaugă stoc" din bara de sus, raportat direct ca „nu mai avem zona să adăugăm stoc": era dezactivat (gri, fără reacție la click) până bifai cel puțin un produs din listă — comportament corect ca funcție, dar un buton dezactivat nu răspunde deloc la click, din browser, deci părea pur și simplu stricat/dispărut, nu doar needisponibil temporar. Acum butonul rămâne mereu apăsabil; dacă apeși fără nicio bifă, spune explicit ce trebuie făcut („Bifează întâi produsele din listă…") în loc să nu reacționeze deloc. Fluxul de bifare→adăugare cantitate/preț rămâne complet neschimbat. Verificat de 2 ori: click fără bifă→mesaj clar, bifare unui produs+click→stocul chiar crește cu cantitatea introdusă, fără erori consolă',date:'2026-09-07'},
@@ -7885,6 +7894,13 @@ function renderResearchProjects(){
         <button class="rsx-btn rsx-btn-secondary acc rsx-btn-lg" onclick="addResearchProjectToInventar(${p.id})" title="Creează produsul în Inventar, cu numele/poza/costul din dosar">📦 Adaugă în Inventar</button>
       </div>
       <div class="rsx-add-zone">
+        <div class="rsx-add-zone-label">🔍 Caută automat concurență (eMAG + Trendyol)</div>
+        <div class="rsx-add">
+          <button class="rsx-btn rsx-btn-primary blue" id="rp-autosearch-btn-${p.id}" onclick="autoSearchResearchProject(${p.id})">🔍 Caută automat, după titlul dosarului</button>
+        </div>
+        <div id="rp-autosearch-results-${p.id}"></div>
+      </div>
+      <div class="rsx-add-zone">
         <div class="rsx-add-zone-label">🔗 Adaugă linkuri noi</div>
         <div class="rsx-add"><textarea id="rp-links-${p.id}" placeholder="Lipește până la 20 linkuri pentru acest dosar, câte unul pe linie"></textarea><button class="rsx-btn rsx-btn-primary blue" onclick="addResearchProjectLinks(${p.id})">+ Adaugă &amp; analizează</button></div>
       </div>
@@ -7922,6 +7938,10 @@ function renderResearchProjects(){
       ${collapsed?'':body}
     </div>`;
   }).join('');
+  // Restaurează panoul de auto-căutare (dacă exista unul, cu candidați ÎNCĂ neadăugați) după ce
+  // innerHTML de mai sus a fost rescris complet — altfel orice re-randare a listei (ex. schimbare
+  // verdict după alt link adăugat) ar șterge tăcut rezultatele unei căutări automate în curs.
+  for(const pid in researchAutoSearchState){if(document.getElementById('rp-autosearch-results-'+pid))renderAutoSearchResults(pid);}
 }
 // Jumbo/Maxy nu pot fi citite prin fetch (403 server / SPA fără HTML randat) — utilizatorul încarcă un
 // screenshot al paginii, AI-ul (vision, ca la analyzeImage) extrage titlu/preț/descriere din poză, iar
@@ -8168,6 +8188,73 @@ async function addResearchProjectLinks(projectId){
     toast(`Linkuri adăugate: ${a}${s?' · duplicate/skip: '+s:''}${f?' · posibile duplicate: '+f:''} ✓`);
     researchTranslateLinkTitles(data.added||[]);
   }catch(e){toast(e.message||'Eroare adăugare linkuri','err');}
+}
+// Auto-căutare eMAG/Trendyol prin browser headless (api/research-headless.js) — cerut direct, ca
+// să nu mai fie nevoie de „deschide tab, caută manual, copiază link" pentru fiecare concurent.
+// Nimic nu se scrie în bază la căutare — doar candidați de previzualizare; „+ Adaugă" pe un candidat
+// îl trimite prin ACELAȘI flux ca un link lipit manual (addResearchProjectLinks), ca să beneficieze
+// identic de deduplicare/scoring/status — nu un flux nou, paralel, de întreținut separat.
+// Cache pe proiect (rezultate + linkuri deja adăugate) — renderResearchProjects() reconstruiește
+// ÎNTREG DOM-ul listei de dosare (necesar, ca să reflecte noul link în KPI-uri/verdict), ceea ce ar
+// șterge tăcut panoul de rezultate din auto-căutare (inclusiv candidații ÎNCĂ neadăugați) după fiecare
+// „+ Adaugă" — bug real găsit la testare directă. Cache-ul permite re-randarea panoului după orice
+// refresh al listei, păstrând atât candidații rămași cât și starea „deja adăugat" a celor confirmați.
+let researchAutoSearchState={};
+async function autoSearchResearchProject(projectId){
+  const proj=researchProjects.find(p=>Number(p.id)===Number(projectId));
+  if(!proj?.title){toast('Dosarul nu are încă un titlu de căutat','err');return;}
+  const btn=document.getElementById('rp-autosearch-btn-'+projectId),box=document.getElementById('rp-autosearch-results-'+projectId);
+  if(btn){btn.disabled=true;btn.textContent='⏳ Caut…';}
+  if(box)box.innerHTML='<div style="font-size:22px;color:var(--t3);margin-top:8px"><span class="spin"></span> Caut pe eMAG și Trendyol…</div>';
+  try{
+    const data=await apiJson('/api/research-projects',{action:'auto_search',query:proj.title},60000);
+    researchAutoSearchState[projectId]={results:data.results||[],addedUrls:new Set()};
+    renderAutoSearchResults(projectId);
+  }catch(e){
+    if(box)box.innerHTML=`<div style="font-size:22px;color:var(--rd);margin-top:8px">Căutarea automată a eșuat — încearcă „🔗 Adaugă linkuri noi" manual, sau ${e.message||'reîncearcă'}</div>`;
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='🔍 Caută automat, după titlul dosarului';}
+  }
+}
+function renderAutoSearchResults(projectId){
+  const box=document.getElementById('rp-autosearch-results-'+projectId);if(!box)return;
+  const state=researchAutoSearchState[projectId];if(!state)return;
+  const plLabel={emag:'eMAG',trendyol:'Trendyol'};
+  const sections=state.results.map(r=>{
+    if(r.error)return`<div style="font-size:20px;color:var(--t3);margin-top:6px">${plLabel[r.platform]||r.platform}: nu am găsit nimic automat (${esc(r.error)})</div>`;
+    if(!r.candidates.length)return`<div style="font-size:20px;color:var(--t3);margin-top:6px">${plLabel[r.platform]||r.platform}: nicio potrivire găsită</div>`;
+    const cards=r.candidates.slice(0,8).map((c,i)=>{
+      const cid=`rpas-${projectId}-${r.platform}-${i}`;
+      const added=state.addedUrls.has(c.link);
+      const img=c.image?`<img src="${esc(imgSrc(c.image))}" class="rpas-img" ${imgErrAttr(c.image,'rpas')}>`:'<div class="rpas-img-ph">📦</div>';
+      const btn=added?`<button type="button" class="rsx-btn rsx-btn-sm" disabled>✓ Adăugat</button>`:`<button type="button" class="rsx-btn rsx-btn-sm" onclick="addAutoSearchCandidate(${projectId},'${esc(c.link).replace(/'/g,"\\'")}','${cid}')">+ Adaugă</button>`;
+      return`<div class="rpas-card${added?' rpas-added':''}" id="${cid}">${img}<div class="rpas-info"><div class="rpas-title">${esc(c.title)}</div>${c.price?`<div class="rpas-price">${esc(c.price)}</div>`:''}</div>${btn}</div>`;
+    }).join('');
+    return`<div style="margin-top:8px"><div class="rsx-add-zone-label" style="margin-bottom:4px">${plLabel[r.platform]||r.platform} (${r.candidates.length} găsite)</div><div class="rpas-grid">${cards}</div></div>`;
+  }).join('');
+  box.innerHTML=sections||'<div style="font-size:22px;color:var(--t3);margin-top:8px">Nimic găsit automat.</div>';
+}
+async function addAutoSearchCandidate(projectId,url,cardId){
+  const card=document.getElementById(cardId);
+  const btn=card?.querySelector('button');
+  if(btn){btn.disabled=true;btn.textContent='⏳ Adaug…';}
+  try{
+    const data=await apiJson('/api/research-projects',{action:'add_links',project_id:projectId,urls:[url]},60000);
+    const proj=researchProjects.find(p=>Number(p.id)===Number(projectId));
+    if(proj){proj.links=[...(proj.links||[]),...(data.added||[])];if(data.verdict)Object.assign(proj,data.verdict);}
+    if((data.added||[]).length){
+      researchAutoSearchState[projectId]?.addedUrls.add(url);
+      researchTranslateLinkTitles(data.added||[]);
+      renderResearchProjects();
+      toast('Comandă adăugată în dosar ✓');
+    }else{
+      if(btn){btn.disabled=false;btn.textContent='+ Adaugă';}
+      toast((data.skipped||[])[0]?.reason||'Deja există în dosar','err');
+    }
+  }catch(e){
+    if(btn){btn.disabled=false;btn.textContent='+ Adaugă';}
+    toast(e.message||'Eroare la adăugare','err');
+  }
 }
 // Titlurile linkurilor (furnizor/eMAG/Trendyol) vin uneori într-o altă limbă decât română — ex. Maxy
 // (engleză sau poloneză), Trendyol (turcă) — greu de urmărit rapid într-un tabel. Rulează în fundal,
@@ -13312,7 +13399,12 @@ async function handlePcomImportFile(ev){
           if(seenInBatch.has(key))continue;
           seenInBatch.add(key);
           const data=pcomParseDate(col.data>-1?r[col.data]:'')||td();
-          const cantitate=col.cantitate>-1?(Number(r[col.cantitate])||1):1;
+          // Bug real raportat direct: o cantitate corectă în Excel (ex. „1,5”, cu virgulă zecimală —
+          // format românesc, posibil și la un export cu cantități parțiale/set) ieșea totuși 1 în
+          // aplicație. Cauza: Number("1,5") e NaN în JS (virgula nu e separator zecimal valid), iar
+          // fallback-ul „||1” ascundea tăcut eroarea, fără niciun avertisment. parseQtyVal (deja
+          // folosit la Importă factură/ajustări de stoc) tratează corect virgula zecimală.
+          const cantitate=col.cantitate>-1?(parseQtyVal(r[col.cantitate],1)||1):1;
           let pretFaraTva,pretTotalCuTva;
           if(col.pretTotalFactura>-1&&col.pretFaraTva<0&&col.pretTotalCuTva<0){
             // Trendyol: nicio coloană fără/cu TVA separată — doar valoarea facturată pe toată linia
