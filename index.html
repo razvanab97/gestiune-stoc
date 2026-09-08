@@ -1615,6 +1615,7 @@ textarea.listing-html-raw{width:100%;min-height:180px;box-sizing:border-box;resi
 .rpas-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;margin-top:6px}
 .rpas-card{display:flex;flex-direction:column;gap:6px;background:var(--surf);border:1px solid var(--b1);border-radius:var(--r);padding:8px;font-size:19px}
 .rpas-card.rpas-added{opacity:.6}
+.rpas-card.rpas-rejected{opacity:.4}
 .rpas-img{width:100%;height:100px;object-fit:contain;border-radius:6px;background:var(--surf2)}
 .rpas-img-ph{width:100%;height:100px;display:flex;align-items:center;justify-content:center;font-size:34px;background:var(--surf2);border-radius:6px}
 .rpas-info{flex:1;min-width:0}
@@ -3197,6 +3198,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:303,text:'Research — evidență de decizii, bază pentru „AI care învață din decizii trecute" (idee discutată direct): fiecare candidat de auto-căutare confirmat/respins (buton nou „✕" lângă „+ Adaugă", ca semnal explicit de respingere, diferit de simpla inacțiune) și fiecare cadru de galerie aprobat/respins se loghează acum discret (`research_decisions`, tabelă nouă). Nimic autonom — doar date reale de revizuit periodic, în sesiuni viitoare, ca să identificăm tipare concrete (ce candidați se resping des, ce stiluri de galerie se aprobă) în loc de impresii. Necesită migrare manuală în Supabase (fără ea, aplicația funcționează neschimbat, doar fără evidența — degradare grațioasă, la fel ca alte funcții opționale): `create table if not exists research_decisions(id bigint primary key generated always as identity,created_at timestamptz default now(),type text not null,payload jsonb);alter table research_decisions disable row level security;grant select,insert,update,delete on research_decisions to anon,authenticated;`. Verificat de 2 ori: candidați confirmați/respinși marcați corect vizual, panoul supraviețuiește oricărei re-randări, fără erori consolă chiar și fără migrarea rulată',date:'2026-09-08'},
   {n:302,text:'Comenzi Platforme (Import comenzi) — bug real reparat, raportat direct ca recurent: cantitatea corectă din Excel nu era mereu preluată corect în aplicație. Cauza: cantitatea se citea cu `Number(...)` direct, care întoarce `NaN` pentru orice cantitate cu virgulă zecimală (ex. „1,5" — format românesc de export, posibil la produse vândute la set/pachet parțial) — `NaN` era apoi „ascuns" tăcut de un fallback la 1, fără niciun avertisment, deci o comandă de 1,5 bucăți ieșea greșit ca 1 bucată, fără nicio urmă vizibilă a erorii. Acum folosește `parseQtyVal` (deja folosit la Importă factură/ajustări de stoc), care tratează corect virgula zecimală. Verificat de 2 ori cu un fișier real construit exact pentru acest caz (cantitate „1,5"): acum se preia corect 1,5, cantitățile întregi normale („3") rămân neschimbate',date:'2026-09-08'},
   {n:301,text:'Research — nou (backend gata, interfața urmează): browser headless (Chromium, `api/research-headless.js` — prima dependință npm din proiect, izolată acolo special ca să nu încetinească restul funcțiilor din api/) pentru linkuri de furnizor care azi eșuează la fetch simplu (Jumbo — 403 la nivel de server; Maxy — SPA cu HTML gol înainte de randare JS). Verificat direct, live: Maxy se randează corect (titlu + conținut real, unde înainte ieșea gol) — Jumbo rămâne blocat chiar și cu browser headless real + tehnici de stealth (blocare la nivel de rețea, nu doar fingerprint), cu eșec clar și fallback la fluxul manual, fără cost suplimentar dacă nu ajută. Nou și: acțiune `auto_search` — caută automat pe eMAG ȘI Trendyol după titlul produsului și întoarce candidați reali (poză, titlu, preț) — verificat direct: 20 candidați corecți pe o căutare reală, pe ambele platforme. Bug real găsit și reparat pe drum: HTML-ul randat de un browser real poate depăși limita de 4.5MB de răspuns a unei funcții Vercel (Maxy — 4.7MB doar markup) — rezolvat prin curățarea scripturilor/stilurilor irelevante înainte de a trimite răspunsul. Interfața (buton + listă de candidați + confirmare manuală, nimic nu se adaugă automat) urmează într-un update separat',date:'2026-09-08'},
   {n:300,text:'Dashboard — readuse „📄 Importă factură" și „📦 Preset CSV comandă" în bara de sus, lângă „+ Produs nou". Raportat direct: la redesign-ul Dashboard-ului (#288), aceste două butoane („sistemul de încărcare stoc prin PDF/poză") au rămas doar pe pagina Vânzări, fără să fie migrate și pe noul Dashboard, unde erau folosite ca acces rapid de pe prima pagină. Refolosesc exact aceleași funcții globale (openInvoice/openPresetCSV) — niciun cod nou, doar butoanele readăugate în topbar. Verificat de 2 ori: click pe „Importă factură" din Dashboard deschide corect modalul de extragere AI (PDF/CSV/Excel/poză), „Preset CSV comandă" deschide corect selectorul de fișier, fără duplicare de elemente în pagină, fără erori consolă',date:'2026-09-07'},
@@ -4988,6 +4990,15 @@ const dbGet=(path)=>sb('GET',path);
 const dbPost=(table,body)=>sb('POST',table,body);
 const dbPatch=(path,body)=>sb('PATCH',path,body);
 const dbDelete=(path)=>sb('DELETE',path);
+// Evidență de decizii Research (candidați de concurență respinși, cadre de galerie aprobate/respinse)
+// — cerut direct, ca bază pentru identificarea de tipare reale în timp (ce se respinge des, ce stiluri
+// se aprobă), nu doar impresii. Best-effort: dacă tabela nu există încă (migrare nerulată), eșuează
+// silențios — NU trebuie să blocheze niciodată acțiunea principală (aprobare galerie, respingere
+// candidat) din cauza unei coloane/tabele lipsă, la fel ca restul funcțiilor opționale din aplicație.
+async function logResearchDecision(type,payload){
+  try{await dbPost('research_decisions',{type,payload,created_at:new Date().toISOString()});}
+  catch(e){/* tabela poate să nu existe încă — vezi migration_research_decisions.sql */}
+}
 
 // poze produse: upload direct în Supabase Storage (nu în coloana img ca base64 — vezi
 // migration_storage_product_images.sql). sb() nu se poate refolosi: alt prefix de path,
@@ -8208,7 +8219,7 @@ async function autoSearchResearchProject(projectId){
   if(box)box.innerHTML='<div style="font-size:22px;color:var(--t3);margin-top:8px"><span class="spin"></span> Caut pe eMAG și Trendyol…</div>';
   try{
     const data=await apiJson('/api/research-projects',{action:'auto_search',query:proj.title},60000);
-    researchAutoSearchState[projectId]={results:data.results||[],addedUrls:new Set()};
+    researchAutoSearchState[projectId]={results:data.results||[],addedUrls:new Set(),rejectedUrls:new Set()};
     renderAutoSearchResults(projectId);
   }catch(e){
     if(box)box.innerHTML=`<div style="font-size:22px;color:var(--rd);margin-top:8px">Căutarea automată a eșuat — încearcă „🔗 Adaugă linkuri noi" manual, sau ${e.message||'reîncearcă'}</div>`;
@@ -8225,10 +8236,17 @@ function renderAutoSearchResults(projectId){
     if(!r.candidates.length)return`<div style="font-size:20px;color:var(--t3);margin-top:6px">${plLabel[r.platform]||r.platform}: nicio potrivire găsită</div>`;
     const cards=r.candidates.slice(0,8).map((c,i)=>{
       const cid=`rpas-${projectId}-${r.platform}-${i}`;
-      const added=state.addedUrls.has(c.link);
+      const added=state.addedUrls.has(c.link),rejected=state.rejectedUrls.has(c.link);
       const img=c.image?`<img src="${esc(imgSrc(c.image))}" class="rpas-img" ${imgErrAttr(c.image,'rpas')}>`:'<div class="rpas-img-ph">📦</div>';
-      const btn=added?`<button type="button" class="rsx-btn rsx-btn-sm" disabled>✓ Adăugat</button>`:`<button type="button" class="rsx-btn rsx-btn-sm" onclick="addAutoSearchCandidate(${projectId},'${esc(c.link).replace(/'/g,"\\'")}','${cid}')">+ Adaugă</button>`;
-      return`<div class="rpas-card${added?' rpas-added':''}" id="${cid}">${img}<div class="rpas-info"><div class="rpas-title">${esc(c.title)}</div>${c.price?`<div class="rpas-price">${esc(c.price)}</div>`:''}</div>${btn}</div>`;
+      const linkJs=`'${esc(c.link).replace(/'/g,"\\'")}'`,titleJs=`'${esc(c.title).replace(/'/g,"\\'")}'`;
+      // Butonul „✕ Nu e potrivire” nu scrie nimic în dosar — doar loghează respingerea explicit (vezi
+      // logResearchDecision), ca semnal real pentru viitor („ce candidați se resping des”), diferit de
+      // simpla inacțiune (nu apeși nimic), care nu spune dacă ai văzut candidatul și l-ai respins sau
+      // pur și simplu n-ai ajuns la el încă.
+      const btns=added?`<button type="button" class="rsx-btn rsx-btn-sm" disabled>✓ Adăugat</button>`
+        :rejected?`<button type="button" class="rsx-btn rsx-btn-sm" disabled>✕ Respins</button>`
+        :`<div style="display:flex;gap:6px"><button type="button" class="rsx-btn rsx-btn-sm" onclick="addAutoSearchCandidate(${projectId},${linkJs},'${cid}')">+ Adaugă</button><button type="button" class="rsx-btn rsx-btn-sm" onclick="rejectAutoSearchCandidate(${projectId},${linkJs},${titleJs},'${r.platform}')" title="Nu e produsul căutat — doar semnalează, nu scrie nimic">✕</button></div>`;
+      return`<div class="rpas-card${added?' rpas-added':''}${rejected?' rpas-rejected':''}" id="${cid}">${img}<div class="rpas-info"><div class="rpas-title">${esc(c.title)}</div>${c.price?`<div class="rpas-price">${esc(c.price)}</div>`:''}</div>${btns}</div>`;
     }).join('');
     return`<div style="margin-top:8px"><div class="rsx-add-zone-label" style="margin-bottom:4px">${plLabel[r.platform]||r.platform} (${r.candidates.length} găsite)</div><div class="rpas-grid">${cards}</div></div>`;
   }).join('');
@@ -8244,6 +8262,7 @@ async function addAutoSearchCandidate(projectId,url,cardId){
     if(proj){proj.links=[...(proj.links||[]),...(data.added||[])];if(data.verdict)Object.assign(proj,data.verdict);}
     if((data.added||[]).length){
       researchAutoSearchState[projectId]?.addedUrls.add(url);
+      logResearchDecision('auto_search_candidate',{projectId,url,accepted:true,title:data.added[0]?.title||''});
       researchTranslateLinkTitles(data.added||[]);
       renderResearchProjects();
       toast('Comandă adăugată în dosar ✓');
@@ -8255,6 +8274,11 @@ async function addAutoSearchCandidate(projectId,url,cardId){
     if(btn){btn.disabled=false;btn.textContent='+ Adaugă';}
     toast(e.message||'Eroare la adăugare','err');
   }
+}
+function rejectAutoSearchCandidate(projectId,url,title,platform){
+  researchAutoSearchState[projectId]?.rejectedUrls.add(url);
+  logResearchDecision('auto_search_candidate',{projectId,platform,title,url,accepted:false});
+  renderAutoSearchResults(projectId);
 }
 // Titlurile linkurilor (furnizor/eMAG/Trendyol) vin uneori într-o altă limbă decât română — ex. Maxy
 // (engleză sau poloneză), Trendyol (turcă) — greu de urmărit rapid într-un tabel. Rulează în fundal,
@@ -10767,6 +10791,7 @@ function toggleGalleryApprove(projectId,i){
   const g=galleryFor(projectId);const f=g.plan[i];if(!f)return;
   f.approved=!f.approved;f.status=f.approved?'approved':'generated';
   if(f.dbId)dbPatch(`product_generated_images?id=eq.${f.dbId}`,{approved:f.approved,status:f.status}).catch(()=>{});
+  logResearchDecision('gallery_frame',{projectId,type:f.type||'',title:f.title||'',approved:f.approved,identityScore:f.identityScore||null});
   refreshGallery(projectId);
 }
 async function regenerateGalleryFrame(projectId,i){
