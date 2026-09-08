@@ -322,16 +322,49 @@ async function recalcProject(projectId){
   const rows=await supa('PATCH',`research_projects?id=eq.${projectId}`,{...v,updated_at:new Date().toISOString()});
   return{project:rows?.[0],links};
 }
-async function analyzeUrl(url){
+// Fetch simplu, rapid — funcționează pentru majoritatea linkurilor. Jumbo (403 la nivel de server)
+// și multe pagini Maxy (SPA, HTML gol fără randare JS) eșuează sigur aici.
+async function plainFetch(url){
   const headers={'user-agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120 Safari/537.36','accept':'text/html,application/xhtml+xml,*/*','accept-language':'ro-RO,ro;q=0.9,en;q=0.8'};
   const ctrl=new AbortController(),t=setTimeout(()=>ctrl.abort(),12000);
   try{
     const r=await fetch(url,{headers,signal:ctrl.signal,redirect:'follow'});clearTimeout(t);
     if(!r.ok)throw new Error(`HTTP ${r.status}`);
-    return extract((await r.text()).slice(0,MAX_HTML),url);
-  }catch(e){
-    clearTimeout(t);
-    return{url,normalized_url:normalizeUrl(url),platform:platformOf(url),pnk:pnkOf(url),title:'',price:0,currency:'RON',rating:0,review_count:0,images:[],specs:{},description:'',status:'eroare',error:e.message};
+    return(await r.text()).slice(0,MAX_HTML);
+  }finally{clearTimeout(t);}
+}
+// Fallback pe browser headless (api/research-headless.js) — DOAR când fetch-ul simplu de mai sus
+// eșuează. Izolat într-o funcție separată (vezi comentariul din research-headless.js despre de ce),
+// apelată aici prin fetch intern, nu importată direct — research-projects.js rulează mult mai des
+// și nu trebuie să care dependința grea de Chromium doar pentru liniile care oricum merg din prima.
+async function headlessFetch(url){
+  const base=process.env.VERCEL_URL?`https://${process.env.VERCEL_URL}`:'http://localhost:3000';
+  const r=await fetch(`${base}/api/research-headless`,{
+    method:'POST',headers:{'content-type':'application/json'},
+    body:JSON.stringify({action:'fetch_page',url}),
+  });
+  const data=await r.json().catch(()=>({}));
+  if(!r.ok||!data.html)throw new Error(data.error||`headless ${r.status}`);
+  // research-headless.js deja trimite HTML curățat (fără <script>/<style>, sub 4MB) — nu re-trunchia
+  // la MAX_HTML (2MB, gândit pentru fetch simplu) aici, altfel exact titlul/descrierea pentru care a
+  // fost construit tot fluxul (Maxy) pot cădea în afara segmentului păstrat (bug real găsit la testare).
+  return data.html;
+}
+async function analyzeUrl(url){
+  let plainErr=null,plainResult=null;
+  try{
+    plainResult=extract(await plainFetch(url),url);
+    // BUG real găsit la testare directă: Maxy (SPA) răspunde 200 OK, deci fetch-ul simplu nu ARUNCĂ
+    // nicio eroare — doar întoarce HTML aproape gol (înainte de randarea JS), iar extract() găsește
+    // corect ZERO titlu din el. Fallback-ul pe headless trebuia declanșat și aici, nu doar la eșec
+    // HTTP — altfel exact cazul pentru care a fost construit (Maxy) nu ajungea niciodată la el.
+    if(plainResult.title)return plainResult;
+  }catch(e){plainErr=e;}
+  try{
+    return extract(await headlessFetch(url),url);
+  }catch(e2){
+    if(plainResult)return plainResult;
+    return{url,normalized_url:normalizeUrl(url),platform:platformOf(url),pnk:pnkOf(url),title:'',price:0,currency:'RON',rating:0,review_count:0,images:[],specs:{},description:'',status:'eroare',error:e2.message||plainErr?.message};
   }
 }
 
@@ -537,6 +570,26 @@ module.exports=async function handler(req,res){
       await supa('PATCH',`research_projects?id=eq.${projectId}`,{updated_at:new Date().toISOString()});
       const verdict=await recalcProject(projectId);
       return res.status(200).json({added,skipped,flagged,verdict:verdict.project});
+    }
+    // Auto-căutare eMAG/Trendyol prin browser headless (api/research-headless.js) — cerut direct:
+    // azi găsirea concurenților e complet manuală (doar un tab de căutare, fără nicio extragere).
+    // Întoarce DOAR candidați (nimic nu se scrie în bază aici) — utilizatorul confirmă manual care
+    // e potrivirea corectă, la fel ca la orice altă asociere automată din aplicație (Comenzi
+    // Platforme, Sincronizare) — vezi toggle_link_include mai jos pentru pasul de confirmare reală.
+    if(body.action==='auto_search'){
+      const query=clean(body.query).slice(0,200);
+      if(!query)return res.status(400).json({error:'Lipsește termenul de căutare'});
+      const base=process.env.VERCEL_URL?`https://${process.env.VERCEL_URL}`:'http://localhost:3000';
+      const platforms=body.platform==='emag'||body.platform==='trendyol'?[body.platform]:['emag','trendyol'];
+      const results=await Promise.all(platforms.map(async platform=>{
+        try{
+          const r=await fetch(`${base}/api/research-headless`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'search',platform,query})});
+          const data=await r.json().catch(()=>({}));
+          if(!r.ok)throw new Error(data.error||`headless ${r.status}`);
+          return{platform,candidates:data.candidates||[],error:null};
+        }catch(e){return{platform,candidates:[],error:e.message};}
+      }));
+      return res.status(200).json({results});
     }
     if(body.action==='update_link_title'){
       // Titlu retradus în română de AI, client-side (vezi researchTranslateLinkTitles din index.html) —
