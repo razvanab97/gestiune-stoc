@@ -2061,17 +2061,23 @@ th{font-weight:800!important;color:var(--t3)!important}
       <button type="button" class="multi-btn" id="fsup-btn" onclick="toggleSupplierFilter()">Toți furnizorii <span>▾</span></button>
       <div class="multi-menu" id="fsup-menu"></div>
     </div>
-    <select id="fs" onchange="renderTable()">
-      <option value="">Toate statusurile</option>
-      <option value="ok">În stoc</option>
-      <option value="low">Scăzut</option>
-      <option value="out">Epuizat</option>
+    <div class="multi-filter" id="fst-wrap">
+      <button type="button" class="multi-btn" id="fst-btn" onclick="toggleStatusFilterMenu()">Toate statusurile <span>▾</span></button>
+      <div class="multi-menu" id="fst-menu">
+        <button type="button" class="multi-clear" onclick="clearStatusFilter(event)">Toate statusurile</button>
+        <label class="multi-opt"><input type="checkbox" value="ok" onchange="toggleStatusValue(this.value,this.checked)"> În stoc</label>
+        <label class="multi-opt"><input type="checkbox" value="low" onchange="toggleStatusValue(this.value,this.checked)"> Scăzut</label>
+        <label class="multi-opt"><input type="checkbox" value="out" onchange="toggleStatusValue(this.value,this.checked)"> Epuizat</label>
+        <label class="multi-opt"><input type="checkbox" value="transit" onchange="toggleStatusValue(this.value,this.checked)"> În tranzit</label>
+        <label class="multi-opt"><input type="checkbox" value="noimg" onchange="toggleStatusValue(this.value,this.checked)"> Fără imagine (de completat)</label>
+        <label class="multi-opt"><input type="checkbox" value="supplier_oos" onchange="toggleStatusValue(this.value,this.checked)"> 🚫 Epuizat la furnizor</label>
+      </div>
+    </div>
+    <select id="fsort" onchange="renderTable()">
+      <option value="">Sortare implicită</option>
       <option value="recent">Adăugate recent</option>
       <option value="stock_recent">Stoc adăugat recent</option>
-      <option value="transit">În tranzit</option>
       <option value="oldest">Cele mai vechi</option>
-      <option value="noimg">Fără imagine (de completat)</option>
-      <option value="supplier_oos">🚫 Epuizat la furnizor</option>
     </select>
     <button class="btn btn-acc" onclick="openModal()">+ Produs nou</button>
     <button class="btn btn-sm" id="bulk-add-btn" onclick="bulkAddStock()" title="Adaugă manual o cantitate de stoc la toate produsele bifate — apasă fără nicio bifă pentru a vedea cum se selectează">📥 Adaugă stoc</button>
@@ -3288,6 +3294,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:314,text:'Inventar — cerut direct: filtrul de status era un singur dropdown, deci puteai alege DOAR una dintre „În stoc"/„Scăzut"/„Epuizat"/etc. SAU o sortare ca „Adăugate recent", niciodată combinat (ex. „Epuizat" ȘI „Adăugate recent" în același timp). Acum sunt două controale separate: un filtru multi-select (checkbox-uri, ca la furnizori) pentru statusuri — „În stoc"/„Scăzut"/„Epuizat"/„În tranzit"/„Fără imagine"/„Epuizat la furnizor", combinabile liber între ele (SAU) — și un dropdown separat de sortare („Adăugate recent"/„Stoc adăugat recent"/„Cele mai vechi"), care funcționează simultan cu orice combinație de statusuri bifate. Verificat de 2 ori: sintaxă OK, testat cu Playwright — „Epuizat"+„Scăzut" bifate simultan arată corect exact acele produse (176, din care 173 epuizate + 3 scăzute), combinate cu sortarea „Adăugate recent" fără erori; linkul rapid din Dashboard („🚫 Epuizat la furnizor") funcționează neschimbat cu noul model',date:'2026-09-09'},
   {n:313,text:'Comenzi Platforme (Import comenzi) — bug real reparat, raportat direct pe o captură din Jurnal vânzări → Comenzi: „Cod produs" (coloana din fișierul eMAG/Trendyol, distinctă de PNK) era extrasă și salvată, dar NICIODATĂ folosită la potrivirea automată cu un produs din stoc — o linie cu exact SKU-ul unui produs existent rămânea „⚠ fără produs", deși Importă factură rezolvă exact acest caz de mult (verifică SKU-ul întâi). Acum codul produsului e verificat direct pe SKU/cod intern, înaintea potrivirii fuzzy după titlu (etichetă nouă „✓ Cod produs" când se potrivește așa). Pe drum, reparat și motivul pentru care asta era greu de observat: codul din fișier nu apărea deloc în previzualizarea de la import (doar mai târziu, în istoric) — acum apare mereu, inclusiv pe liniile nerezolvate, ca să se vadă imediat ce cod a citit sistemul. Verificat de 2 ori cu un fișier real construit exact pentru acest caz (un cod care se potrivește cu un produs existent + unul care nu se potrivește cu nimic): primul se asociază automat corect („✓ Cod produs"), al doilea rămâne corect nerezolvat dar arată acum codul citit, fără erori consolă',date:'2026-09-09'},
   {n:312,text:'Inventar — bug real reparat, raportat direct: „Adăugate recent" nu arăta produsele reaprovizionate azi prin import factură/Comenzi Platforme, ci doar produse create recent (indiferent dacă li s-a adăugat stoc vreodată) — un produs deja existent, restocat chiar azi, nu „mișca" deloc în listă, pentru că data lui de creare rămăsese veche. Cauza: sortarea folosea STRICT data de creare a produsului, ignorând complet ultima intrare de stoc. Acum „Adăugate recent" ține cont de orice activitate recentă — creare SAU ultima intrare de stoc, oricare e mai nouă — deci produsele reaprovizionate azi apar mereu primele, în ordine cronologică corectă, exact cum a fost cerut. Verificat de 2 ori, direct pe datele reale din Supabase: cele 10 produse cu stoc adăugat azi apar acum corect primele (înainte de produse create cu 2 zile în urmă, dar niciodată restocate), fără erori consolă',date:'2026-09-09'},
   {n:311,text:'„Preț privat" — două completări cerute direct. (1) Poza produsului nu mai vine doar din clipboard — două surse noi, „📁 Din fișier" (alegi o poză de pe calculator/telefon) și „🔗 Din link" (lipești URL-ul direct al unei imagini, fără să o descarci întâi) — recunoașterea AI e identică indiferent de sursă. (2) Popup-ul e acum redimensionabil manual (trage de colțul din dreapta-jos, ca la Notiță) — util când produsul recunoscut are un nume lung sau vrei mai mult loc pentru cifre. Verificat de 2 ori: sintaxă OK, testat cu Playwright — fișier real încărcat prin inputul ascuns → recunoaștere corectă; link confirmat trimite exact acel URL către AI (fără conversie la fișier); redimensionare reală prin drag pe colțul ferestrei (440×600 → 560×700), fără erori consolă',date:'2026-09-09'},
@@ -4988,8 +4995,8 @@ function goDashToSupplierOOS(){
   // nu naviga nicăieri. data-page nu depinde de eticheta afișată, deci nu se poate desincroniza la fel.
   const btn=document.querySelector('.h-tab[data-page="stoc"]');
   if(btn)goPage('stoc',btn);
-  const fs=document.getElementById('fs');
-  if(fs){fs.value='supplier_oos';renderTable();}
+  selStatus.clear();selStatus.add('supplier_oos');
+  renderTable();
 }
 function goDashToReorder(){
   const btn=document.querySelector('.h-tab[data-page="pcom"]');
@@ -5567,7 +5574,7 @@ function safeLocalSet(key,value){
   try{localStorage.setItem(key,value);}
   catch(e){console.warn('Nu s-a putut scrie în localStorage ('+key+'):',e);}
 }
-let P=[],TS={},JL=[],OI=[],editId=null,sCol='name',sDir=1,jMode='sales',curImg='',curImages=[],selProd=new Set(),selSuppliers=new Set(),savingProduct=false,invSourceName='',jMonthDefaulted=false;
+let P=[],TS={},JL=[],OI=[],editId=null,sCol='name',sDir=1,jMode='sales',curImg='',curImages=[],selProd=new Set(),selSuppliers=new Set(),selStatus=new Set(),savingProduct=false,invSourceName='',jMonthDefaulted=false;
 let compState={};
 let SYNCM=[],syncMapsLoaded=false,syncImpParsed=[],syncImpStockUpdates=[],syncImpDuplicates=[];
 let PLIPSA=[],pendingPlipsaCandidate=null;
@@ -12171,15 +12178,39 @@ function renderSupplierFilter(sups){
   menu.innerHTML=`<button type="button" class="multi-clear" onclick="clearSupplierFilter(event)">Toți furnizorii</button>`+
     sups.map(f=>`<label class="multi-opt"><input type="checkbox" value="${esc(f)}" ${selSuppliers.has(f)?'checked':''} onchange="toggleSupplierValue(this.value,this.checked)"> ${esc(f)}</label>`).join('');
 }
+// Filtrul de status — cerut direct: se putea alege DOAR UNA dintre În stoc/Scăzut/Epuizat/etc. sau
+// Adăugate recent, niciodată combinat (ex. „Epuizat" ȘI „Adăugate recent" simultan). Acum e un
+// multi-select (checkbox-uri, ca la furnizori) — statusurile se combină cu SAU (orice bifă se
+// potrivește), separate de sortarea (#fsort), care rămâne cu o singură alegere posibilă (nu are
+// sens „sortează și după recent ȘI după cele mai vechi" în același timp).
+const STATUS_FILTER_LABELS={ok:'În stoc',low:'Scăzut',out:'Epuizat',transit:'În tranzit',noimg:'Fără imagine',supplier_oos:'Epuizat la furnizor'};
+function toggleStatusFilterMenu(){document.getElementById('fst-wrap')?.classList.toggle('on');}
+function clearStatusFilter(ev){ev?.stopPropagation();selStatus.clear();renderTable();}
+document.addEventListener('click',ev=>{if(!ev.target.closest('#fst-wrap'))document.getElementById('fst-wrap')?.classList.remove('on');});
+function toggleStatusValue(v,checked){checked?selStatus.add(v):selStatus.delete(v);renderTable();}
+function matchesStatusFilters(p){
+  if(!selStatus.size)return true;
+  return[...selStatus].some(v=>{
+    if(v==='ok'||v==='low'||v==='out')return st(p)===v;
+    if(v==='transit')return parseQtyVal(p.incomingQty)>0;
+    if(v==='noimg')return!p.img;
+    if(v==='supplier_oos')return!!p.supplierOOS;
+    return false;
+  });
+}
+function renderStatusFilterBtn(){
+  const btn=document.getElementById('fst-btn');if(!btn)return;
+  btn.innerHTML=(selStatus.size?[...selStatus].map(v=>STATUS_FILTER_LABELS[v]||v).join(', '):'Toate statusurile')+' <span>▾</span>';
+  document.querySelectorAll('#fst-menu input[type=checkbox]').forEach(cb=>{cb.checked=selStatus.has(cb.value);});
+}
 function renderTable(){
   const q=(document.getElementById('search').value||'').trim();
   const cat=document.getElementById('fc').value;
-  const s=document.getElementById('fs').value;
-  const statusFilter=['ok','low','out'].includes(s)?s:'';
-  let list=P.filter(p=>{const m=prodMatchesSearch(p,q);return m&&!p.archived&&(!cat||p.category===cat)&&(!selSuppliers.size||selSuppliers.has(p.supplier||''))&&(!statusFilter||st(p)===statusFilter)&&(s!=='transit'||parseQtyVal(p.incomingQty)>0)&&(s!=='stock_recent'||stockAddedTime(p)>0)&&(s!=='noimg'||!p.img)&&(s!=='supplier_oos'||p.supplierOOS);});
-  if(s==='recent')list.sort((a,b)=>prodRecentActivityTime(b)-prodRecentActivityTime(a));
-  else if(s==='stock_recent')list.sort((a,b)=>stockAddedTime(b)-stockAddedTime(a));
-  else if(s==='oldest')list.sort((a,b)=>prodCreatedTime(a)-prodCreatedTime(b));
+  const sortMode=document.getElementById('fsort')?.value||'';
+  let list=P.filter(p=>{const m=prodMatchesSearch(p,q);return m&&!p.archived&&(!cat||p.category===cat)&&(!selSuppliers.size||selSuppliers.has(p.supplier||''))&&matchesStatusFilters(p)&&(sortMode!=='stock_recent'||stockAddedTime(p)>0);});
+  if(sortMode==='recent')list.sort((a,b)=>prodRecentActivityTime(b)-prodRecentActivityTime(a));
+  else if(sortMode==='stock_recent')list.sort((a,b)=>stockAddedTime(b)-stockAddedTime(a));
+  else if(sortMode==='oldest')list.sort((a,b)=>prodCreatedTime(a)-prodCreatedTime(b));
   else list.sort((a,b)=>{let av=sCol==='qty'?qty(a):(a[sCol]??'');let bv=sCol==='qty'?qty(b):(b[sCol]??'');if(typeof av==='string')av=av.toLowerCase();if(typeof bv==='string')bv=bv.toLowerCase();return av<bv?-sDir:av>bv?sDir:0;});
   const activeP=P.filter(p=>!p.archived);
   const tot=activeP.length,lowC=activeP.filter(p=>st(p)==='low').length,outC=activeP.filter(p=>st(p)==='out').length;
@@ -12197,6 +12228,7 @@ function renderTable(){
   sel.innerHTML='<option value="">Toate categoriile</option>'+cats.map(c=>`<option value="${esc(c)}"${c===pv?' selected':''}>${esc(c)}</option>`).join('');
   const sups=[...new Set(P.map(p=>p.supplier).filter(Boolean))].sort();
   renderSupplierFilter(sups);
+  renderStatusFilterBtn();
   const tb=document.getElementById('tbody');
   if(!list.length){tb.innerHTML=`<tr><td colspan="16" class="empty-row">Niciun produs</td></tr>`;const all=document.getElementById('chk-all');if(all){all.checked=false;all.indeterminate=false;}updateBulkBtns();return;}
   tb.innerHTML=list.map(p=>{
