@@ -3198,6 +3198,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:304,text:'Comenzi Platforme (Import comenzi) — cerut direct, cu captură: când titlul unei listări spune „Pachet 3”/„Set de 2”/„4 bucăți”, apare acum lângă cantitate un indiciu portocaliu „💡 Titlul sugerează N buc." cu buton „Aplică" — un click multiplică cantitatea din Excel (de obicei 1, câte LISTĂRI s-au cumpărat) cu mărimea pachetului găsită în titlu, ca stocul să se scadă pe bucăți fizice reale, nu pe listări. Doar sugestie, niciodată aplicată automat — riscul unui fals-pozitiv (ex. o cifră dintr-un cod) ar însemna scădere greșită de stoc. Recunoaștere strict pe cuvinte-cheie explicite („pachet”/„set”/„buc”/„bucăți”/„pcs”), nu orice cifră din titlu — testat explicit că NU se declanșează pe dimensiuni („60x40x40 cm”) sau coduri („AB0612324”). Indiciul dispare dacă atingi manual cantitatea (stepper sau câmp), ca să nu rămână o sugestie învechită după ce ai decis altceva. Verificat de 2 ori cu un fișier real construit exact pentru titlul din captură („Pachet 3 Cutii depozitare...") — sugestie corectă (3), aplicare corectă, fără fals-pozitive pe titluri fără pachet',date:'2026-09-09'},
   {n:303,text:'Research — evidență de decizii, bază pentru „AI care învață din decizii trecute" (idee discutată direct): fiecare candidat de auto-căutare confirmat/respins (buton nou „✕" lângă „+ Adaugă", ca semnal explicit de respingere, diferit de simpla inacțiune) și fiecare cadru de galerie aprobat/respins se loghează acum discret (`research_decisions`, tabelă nouă). Nimic autonom — doar date reale de revizuit periodic, în sesiuni viitoare, ca să identificăm tipare concrete (ce candidați se resping des, ce stiluri de galerie se aprobă) în loc de impresii. Necesită migrare manuală în Supabase (fără ea, aplicația funcționează neschimbat, doar fără evidența — degradare grațioasă, la fel ca alte funcții opționale): `create table if not exists research_decisions(id bigint primary key generated always as identity,created_at timestamptz default now(),type text not null,payload jsonb);alter table research_decisions disable row level security;grant select,insert,update,delete on research_decisions to anon,authenticated;`. Verificat de 2 ori: candidați confirmați/respinși marcați corect vizual, panoul supraviețuiește oricărei re-randări, fără erori consolă chiar și fără migrarea rulată',date:'2026-09-08'},
   {n:302,text:'Comenzi Platforme (Import comenzi) — bug real reparat, raportat direct ca recurent: cantitatea corectă din Excel nu era mereu preluată corect în aplicație. Cauza: cantitatea se citea cu `Number(...)` direct, care întoarce `NaN` pentru orice cantitate cu virgulă zecimală (ex. „1,5" — format românesc de export, posibil la produse vândute la set/pachet parțial) — `NaN` era apoi „ascuns" tăcut de un fallback la 1, fără niciun avertisment, deci o comandă de 1,5 bucăți ieșea greșit ca 1 bucată, fără nicio urmă vizibilă a erorii. Acum folosește `parseQtyVal` (deja folosit la Importă factură/ajustări de stoc), care tratează corect virgula zecimală. Verificat de 2 ori cu un fișier real construit exact pentru acest caz (cantitate „1,5"): acum se preia corect 1,5, cantitățile întregi normale („3") rămân neschimbate',date:'2026-09-08'},
   {n:301,text:'Research — nou (backend gata, interfața urmează): browser headless (Chromium, `api/research-headless.js` — prima dependință npm din proiect, izolată acolo special ca să nu încetinească restul funcțiilor din api/) pentru linkuri de furnizor care azi eșuează la fetch simplu (Jumbo — 403 la nivel de server; Maxy — SPA cu HTML gol înainte de randare JS). Verificat direct, live: Maxy se randează corect (titlu + conținut real, unde înainte ieșea gol) — Jumbo rămâne blocat chiar și cu browser headless real + tehnici de stealth (blocare la nivel de rețea, nu doar fingerprint), cu eșec clar și fallback la fluxul manual, fără cost suplimentar dacă nu ajută. Nou și: acțiune `auto_search` — caută automat pe eMAG ȘI Trendyol după titlul produsului și întoarce candidați reali (poză, titlu, preț) — verificat direct: 20 candidați corecți pe o căutare reală, pe ambele platforme. Bug real găsit și reparat pe drum: HTML-ul randat de un browser real poate depăși limita de 4.5MB de răspuns a unei funcții Vercel (Maxy — 4.7MB doar markup) — rezolvat prin curățarea scripturilor/stilurilor irelevante înainte de a trimite răspunsul. Interfața (buton + listă de candidați + confirmare manuală, nimic nu se adaugă automat) urmează într-un update separat',date:'2026-09-08'},
@@ -13318,6 +13319,17 @@ function pcomFindCol(hdrLower,keys){
   for(const k of keys){const i=hdrLower.indexOf(k);if(i>-1)return i;}
   return-1;
 }
+// Detectează dimensiunea unui pachet/set din titlul listării (ex. „Pachet 3 Cutii...”, „Set de 2...”,
+// „4 bucăți”) — regex STRICT, cu cuvinte-cheie explicite (pachet/set/buc/bucăți/pcs), nu orice cifră
+// din titlu (ar prinde fals dimensiuni „60x40x40 cm” sau coduri ca „AB0612324”). Interval 2-24 —
+// suficient pentru seturi comerciale reale, exclude cifre mari nerealiste (ani, coduri lungi).
+function pcomDetectPackSize(title){
+  const s=String(title||'');
+  const m=s.match(/\b(?:pachet|set)\s*(?:de\s*)?(\d{1,2})\b/i)||s.match(/\b(\d{1,2})\s*(?:buc\.?|bucăți|bucati|bucată|bucata|pcs|pieces?)\b/i);
+  if(!m)return null;
+  const n=parseInt(m[1],10);
+  return n>=2&&n<=24?n:null;
+}
 // Traduce automat titlurile scrise cu alt alfabet/limbă (bulgară/chirilică, maghiară, greacă), ca omul
 // care revizuiește previzualizarea să înțeleagă din prima la ce produs face referire, chiar înainte
 // de a se face vreo potrivire. Rulează în fundal (fără await la apel) — nu blochează previzualizarea inițială.
@@ -13462,7 +13474,14 @@ async function handlePcomImportFile(ev){
           // include pornește NEconfirmat (cerere directă) — chiar dacă produsul s-a potrivit automat,
           // scrierea comenzii (și apariția ei în Staff) se întâmplă abia la click pe „✓ Inclus”, nu
           // doar din încărcarea fișierului. Vezi togglePcomInclude/commitPcomLine mai jos.
-          pcImpParsed.push({platforma:filePlatforma,comandaId,pachetId,data,pnk,tara,codProdus,clientNume,titluExtern:titlu,cantitate,pretFaraTva,pretTotalCuTva,moneda,produsId,score,viaPnk,viaTitle,include:false});
+          // Cerut direct: titlul de pe platformă spune des „Pachet 3”/„Set 2” (comanda e pentru
+          // MULTIPACK-ul de pe listare), dar cantitatea din Excel reflectă câte LISTĂRI s-au cumpărat
+          // (de obicei 1), nu câte bucăți fizice ies din stoc — la fel ca „Set 6 organizatoare” de la
+          // Importă factură. Doar SUGERĂM (nu aplicăm automat) — omul confirmă cu un click, ca să nu
+          // riscăm o scădere de stoc greșită dintr-un fals-pozitiv (ex. un cod care conține o cifră).
+          const packSize=pcomDetectPackSize(titlu);
+          const suggestedCantitate=packSize&&packSize!==cantitate?Math.round(cantitate*packSize*100)/100:null;
+          pcImpParsed.push({platforma:filePlatforma,comandaId,pachetId,data,pnk,tara,codProdus,clientNume,titluExtern:titlu,cantitate,suggestedCantitate,pretFaraTva,pretTotalCuTva,moneda,produsId,score,viaPnk,viaTitle,include:false});
         }
       }catch(fileErr){
         console.warn('Fișier ignorat la import Comenzi Platforme:',file.name,fileErr);
@@ -13587,6 +13606,7 @@ function pcomOpenAddProductForLine(idx){
 function pcomAdjustQty(idx,delta){
   const it=pcImpParsed[idx];
   it.cantitate=Math.max(0.5,Math.round(((Number(it.cantitate)||1)+delta)*100)/100);
+  it.suggestedCantitate=null;
   renderPcomImportPreview();
 }
 // Cantitatea de stoc poate fi și zecimală (ex: 1,5) — util când o comandă de N bucăți dintr-un
@@ -13595,9 +13615,15 @@ function pcomSetQty(idx,val){
   const it=pcImpParsed[idx];
   const n=Number(String(val).replace(',','.'));
   it.cantitate=Math.max(0.5,Math.round((n||1)*100)/100);
+  it.suggestedCantitate=null;
   // amânat cu setTimeout: onchange rulează în timpul unui blur pe input-ul din DOM-ul pe care tocmai
   // îl înlocuim — dacă îl înlocuim sincron aici, browserul aruncă "node no longer a child" pe unele căi
   setTimeout(renderPcomImportPreview,0);
+}
+function applyPcomSuggestedQty(idx){
+  const it=pcImpParsed[idx];if(!it?.suggestedCantitate)return;
+  it.cantitate=it.suggestedCantitate;it.suggestedCantitate=null;
+  renderPcomImportPreview();
 }
 // Titlul care se pune pe AWB la expediere — cantitatea (corectată mai sus, poate diferi de cea din
 // comandă când eMAG vinde seturi/pachete cu altă granularitate decât stocul intern) + numele/SKU-ul
@@ -13729,6 +13755,9 @@ function pcomRowHtml(idx,showOwnAwb){
   // direct, după o comandă unde asocierea părea că nu ajunge până la Staff).
   const committedAwb=it._committedId?PCOM.find(o=>o.id===it._committedId)?.awb:'';
   const committedNote=it._committedId?`<div class="pcom-sel-meta" style="color:var(--gr);font-weight:700">✓ Comandă creată — vizibilă în Staff${committedAwb?` · 📮 AWB ${esc(committedAwb)}`:''}</div>`:'';
+  // Sugestie de cantitate din titlu („Pachet 3”/„Set 2”) — doar recomandare, un click de aplicat,
+  // nu modifică nimic singură (cerut explicit, ca să nu scadă stocul greșit dintr-un fals-pozitiv).
+  const packHint=it.suggestedCantitate?`<div class="pcom-sel-meta" style="color:var(--or)">💡 Titlul sugerează ${fmtQty(it.suggestedCantitate)} buc. <button type="button" class="btn btn-sm" style="padding:1px 8px;font-size:18px" onclick="applyPcomSuggestedQty(${idx})">Aplică</button></div>`:'';
   // Denumirea vizibilă din capul coloanei: numele produsului intern DACĂ e asociat; altfel, dacă avem
   // deja titlul original din comandă (it.titluExtern), îl arătăm PE ACELA (nu un „— fără produs
   // asociat —" mare, needitor) — statusul „fără produs" devine doar un badge mic, discret, dedesubt.
@@ -13740,7 +13769,7 @@ function pcomRowHtml(idx,showOwnAwb){
   // Coloana 1 — Produs selectat: poza + numele + PNK + cantitate×preț + client + status, în această
   // ordine (cerut explicit) — toate din date deja existente (p.sku/p.internalCode/p.supplier/
   // it.clientNume), nimic nou calculat.
-  const col1=`<div class="pcom-col pcom-col-product"><div class="pcom-col-lbl">Produs selectat</div>${rowImg}<div style="min-width:0"><div class="pcom-sel-nm">${primaryName}</div>${p&&(p.sku||p.internalCode)?`<div class="pcom-sel-meta">${p.sku?'SKU '+esc(p.sku):''}${p.sku&&p.internalCode?' · ':''}${p.internalCode?esc(p.internalCode):''}</div>`:''}${it.pnk?`<div class="pcom-sel-meta">PNK ${esc(it.pnk)}${it.tara?' ('+esc(it.tara)+')':''}</div>`:''}<div class="pcom-sel-meta">${priceInfoHtml}</div>${p&&p.supplier?`<div class="pcom-sel-meta">${esc(p.supplier)}</div>`:''}${it.clientNume?`<div class="pcom-sel-meta">👤 ${esc(it.clientNume)}</div>`:''}${noMatchBadge}${committedNote}${includeBadge}</div></div>`;
+  const col1=`<div class="pcom-col pcom-col-product"><div class="pcom-col-lbl">Produs selectat</div>${rowImg}<div style="min-width:0"><div class="pcom-sel-nm">${primaryName}</div>${p&&(p.sku||p.internalCode)?`<div class="pcom-sel-meta">${p.sku?'SKU '+esc(p.sku):''}${p.sku&&p.internalCode?' · ':''}${p.internalCode?esc(p.internalCode):''}</div>`:''}${it.pnk?`<div class="pcom-sel-meta">PNK ${esc(it.pnk)}${it.tara?' ('+esc(it.tara)+')':''}</div>`:''}<div class="pcom-sel-meta">${priceInfoHtml}</div>${packHint}${p&&p.supplier?`<div class="pcom-sel-meta">${esc(p.supplier)}</div>`:''}${it.clientNume?`<div class="pcom-sel-meta">👤 ${esc(it.clientNume)}</div>`:''}${noMatchBadge}${committedNote}${includeBadge}</div></div>`;
   // Coloana 2 — Titlul produsului încărcat: exact titlul din fișierul platformei, cu traducerea (dacă
   // există) și eticheta de potrivire — titlul de pe eMAG/Trendyol contează doar ca reper de căutare.
   const col2=`<div class="pcom-col pcom-col-title"><div class="pcom-col-lbl">Titlul produsului încărcat</div><div class="pcom-c2-title">${esc(it.titluExtern)}${it.titluRo?` <span class="pcom-platform-title-ro">🌐 ${esc(it.titluRo)}</span>`:''}</div><div class="pcom-c2-meta">${tag}${it.comandaId?' · #'+esc(it.comandaId):''}</div>${it.newProduct?pcomNewProductPromptHtml(idx):''}</div>`;
