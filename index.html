@@ -3217,6 +3217,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:307,text:'Importă factură (PDF) — bug real reparat, raportat direct cu eroarea exactă: „Eroare PDF: JSON Parse error: Expected \'}\'". Cauza: schema de extragere cere 9 câmpuri pe fiecare produs (inclusiv un warnings[]), iar apelul AI cerea doar 3000/2000 tokeni de răspuns — la o factură cu multe linii de produs, răspunsul se trunchia exact la mijlocul JSON-ului, înainte să se închidă. Plafonul global al proxy-ului (`api/openai.js`) fusese deja ridicat la 8000 pentru un bug similar la Galeria AI, dar apelul de-aici încă trimitea limita veche — ridicat acum și el la 8000. Pe drum, cerut separat: mesajele de eroare (toast roșu) stăteau pe ecran la fel de puțin ca cele normale (2,8s) — insuficient să citești un mesaj mai lung; acum erorile stau vizibile 6,5s, restul mesajelor neschimbate. Verificat de 2 ori: sintaxă OK, modalul Importă factură se deschide normal, toast normal dispare la ~2,8s, toast de eroare rămâne vizibil la 5s și dispare până la 7s, fără erori consolă',date:'2026-09-09'},
   {n:306,text:'„⚖️ Compară furnizori" — 3 retușuri, raportate direct pe o captură: (1) popup-ul era prea mic pentru conținut — mărit la aceeași lățime „wide" ca Importă factură (până la 1900px). (2) Produsul se poate alege acum și prin derulare, nu doar prin căutare text — lista arată implicit toate produsele din stoc (sortate alfabetic), nu doar rezultatele unei căutări tastate. (3) Buton nou „📷 Recunoaștere din imagine" — lipești o poză a unui produs DEJA existent în stoc (din clipboard), AI ghicește ce produs e și sugerează cele mai apropiate potriviri din inventar (același mecanism deja folosit la Sincronizare „📋 Caută din imagine"), diferit de „produs nou din poză" (acela e pentru un produs care încă NU e în stoc). Verificat de 2 ori: popup lat confirmat, lista de 200+ produse derulabilă apare imediat la deschidere, fără erori consolă',date:'2026-09-09'},
   {n:305,text:'Nou — „⚖️ Compară furnizori" (buton în Dashboard, lângă „+ Produs nou"): alegi un produs din stoc (căutare) sau adaugi unul nou dintr-o poză lipită din clipboard, apoi aduni prețuri de la mai mulți furnizori (RON sau EUR — se convertește automat la RON pentru comparație, cursul deja folosit peste tot în aplicație), cu evidențierea automată a celui mai ieftin. Fiecare rând poate fi completat manual SAU extras automat dintr-o captură de ecran (poză din clipboard cu pagina furnizorului) — AI citește furnizorul și prețul din poză, tu confirmi/corectezi. „Aplică" pe un rând scrie direct furnizorul + prețul pe produsul existent (cu istoric de preț și recalculare automată a prețurilor de vânzare, exact ca la o reaprovizionare normală) — pentru un produs nou, deschide formularul obișnuit de adăugare, pre-completat cu numele, poza, furnizorul și prețul alese. Nimic nu se persistă separat — doar o comparație de moment, fără tabelă nouă în bază. Verificat de 2 ori, ambele fluxuri (produs existent + produs nou din poză): căutare/selecție corectă, comparație RON/EUR corectă (8€ → 40,56 RON, evidențiat corect ca cel mai ieftin), aplicare pe produs existent confirmată direct în bază (furnizor + preț + istoric + prețuri recalculate), pre-completare corectă a formularului de produs nou, fără erori consolă',date:'2026-09-09'},
   {n:304,text:'Comenzi Platforme (Import comenzi) — cerut direct, cu captură: când titlul unei listări spune „Pachet 3”/„Set de 2”/„4 bucăți”, apare acum lângă cantitate un indiciu portocaliu „💡 Titlul sugerează N buc." cu buton „Aplică" — un click multiplică cantitatea din Excel (de obicei 1, câte LISTĂRI s-au cumpărat) cu mărimea pachetului găsită în titlu, ca stocul să se scadă pe bucăți fizice reale, nu pe listări. Doar sugestie, niciodată aplicată automat — riscul unui fals-pozitiv (ex. o cifră dintr-un cod) ar însemna scădere greșită de stoc. Recunoaștere strict pe cuvinte-cheie explicite („pachet”/„set”/„buc”/„bucăți”/„pcs”), nu orice cifră din titlu — testat explicit că NU se declanșează pe dimensiuni („60x40x40 cm”) sau coduri („AB0612324”). Indiciul dispare dacă atingi manual cantitatea (stepper sau câmp), ca să nu rămână o sugestie învechită după ce ai decis altceva. Verificat de 2 ori cu un fișier real construit exact pentru titlul din captură („Pachet 3 Cutii depozitare...") — sugestie corectă (3), aplicare corectă, fără fals-pozitive pe titluri fără pachet',date:'2026-09-09'},
@@ -15278,6 +15279,11 @@ async function parsePDFWithAI(file){
     parsing.innerHTML='<span class="spin"></span> Se analizează cu AI…';
 
     let resp='';
+    // maxTokens 3000→8000 (plafonul maxim acceptat de api/openai.js) — bug real raportat: facturi cu
+    // multe linii de produs (schema cere 9 câmpuri/linie, inclusiv warnings[]) treceau de 3000 tokeni
+    // înainte ca AI-ul să termine JSON-ul, ieșea trunchiat („JSON Parse error: Expected '}'"). Aceeași
+    // cauză ca la „Creeaza planul galeriei" (vezi comentariul din api/openai.js) — plafonul global fusese
+    // deja ridicat la 8000, dar apelul de-aici încă trimitea limita veche.
     if(pdfText&&pdfText.trim().length>50){
       // Send extracted text to OpenAI
       const prompt=`Ești expert în procesarea facturilor de la distribuitori en-gros. Extrage toate produsele.
@@ -15293,7 +15299,7 @@ Ignoră total/TVA/transport/discount ca linii de produs separate, consolidează 
 
       resp=await callAI([{role:'user',content:prompt}],
         'Ești expert procesare facturi. Extragi date structurate, exacte, validate matematic.',
-        3000,'analysis',INVOICE_EXTRACTION_SCHEMA,'invoice_extraction');
+        8000,'analysis',INVOICE_EXTRACTION_SCHEMA,'invoice_extraction');
     } else {
       // Fallback: send PDF as base64 document (PDF.js indisponibil sau text extras prea scurt)
       const b64=await new Promise(res=>{
@@ -15304,7 +15310,7 @@ Ignoră total/TVA/transport/discount ca linii de produs separate, consolidează 
       resp=await callAI([{role:'user',content:[
           {type:'document',source:{type:'base64',media_type:'application/pdf',data:b64}},
           {type:'text',text:`Extrage produsele din această factură/comandă și, dacă apare, numărul facturii/comenzii.\n\n${invoiceExtractionRules}`}
-        ]}],'Ești expert procesare facturi. Extragi date structurate, exacte, validate matematic.',2000,'analysis',INVOICE_EXTRACTION_SCHEMA,'invoice_extraction');
+        ]}],'Ești expert procesare facturi. Extragi date structurate, exacte, validate matematic.',8000,'analysis',INVOICE_EXTRACTION_SCHEMA,'invoice_extraction');
     }
 
     // Robust JSON parse — preferă formatul nou {invoiceNumber, items}, cu fallback pe array simplu.
@@ -17396,7 +17402,7 @@ function toast(m,type){
   const t=document.getElementById('toast');
   t.textContent=m;
   t.style.background=type==='err'?'var(--rd)':'var(--acc)';
-  t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),2800);
+  t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),type==='err'?6500:2800);
 }
 
 document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){closeModal();closeInvoice();}});
