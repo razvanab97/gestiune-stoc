@@ -3176,7 +3176,7 @@ th{font-weight:800!important;color:var(--t3)!important}
 </div>
 
 <div class="ov" id="ov-supplier-compare" onclick="if(event.target===this)closeSupplierCompare()">
-<div class="inv-modal" onclick="event.stopPropagation()">
+<div class="inv-modal wide" onclick="event.stopPropagation()">
   <div class="inv-head">
     <div>
       <h2>⚖️ Compară furnizori</h2>
@@ -3217,6 +3217,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:306,text:'„⚖️ Compară furnizori" — 3 retușuri, raportate direct pe o captură: (1) popup-ul era prea mic pentru conținut — mărit la aceeași lățime „wide" ca Importă factură (până la 1900px). (2) Produsul se poate alege acum și prin derulare, nu doar prin căutare text — lista arată implicit toate produsele din stoc (sortate alfabetic), nu doar rezultatele unei căutări tastate. (3) Buton nou „📷 Recunoaștere din imagine" — lipești o poză a unui produs DEJA existent în stoc (din clipboard), AI ghicește ce produs e și sugerează cele mai apropiate potriviri din inventar (același mecanism deja folosit la Sincronizare „📋 Caută din imagine"), diferit de „produs nou din poză" (acela e pentru un produs care încă NU e în stoc). Verificat de 2 ori: popup lat confirmat, lista de 200+ produse derulabilă apare imediat la deschidere, fără erori consolă',date:'2026-09-09'},
   {n:305,text:'Nou — „⚖️ Compară furnizori" (buton în Dashboard, lângă „+ Produs nou"): alegi un produs din stoc (căutare) sau adaugi unul nou dintr-o poză lipită din clipboard, apoi aduni prețuri de la mai mulți furnizori (RON sau EUR — se convertește automat la RON pentru comparație, cursul deja folosit peste tot în aplicație), cu evidențierea automată a celui mai ieftin. Fiecare rând poate fi completat manual SAU extras automat dintr-o captură de ecran (poză din clipboard cu pagina furnizorului) — AI citește furnizorul și prețul din poză, tu confirmi/corectezi. „Aplică" pe un rând scrie direct furnizorul + prețul pe produsul existent (cu istoric de preț și recalculare automată a prețurilor de vânzare, exact ca la o reaprovizionare normală) — pentru un produs nou, deschide formularul obișnuit de adăugare, pre-completat cu numele, poza, furnizorul și prețul alese. Nimic nu se persistă separat — doar o comparație de moment, fără tabelă nouă în bază. Verificat de 2 ori, ambele fluxuri (produs existent + produs nou din poză): căutare/selecție corectă, comparație RON/EUR corectă (8€ → 40,56 RON, evidențiat corect ca cel mai ieftin), aplicare pe produs existent confirmată direct în bază (furnizor + preț + istoric + prețuri recalculate), pre-completare corectă a formularului de produs nou, fără erori consolă',date:'2026-09-09'},
   {n:304,text:'Comenzi Platforme (Import comenzi) — cerut direct, cu captură: când titlul unei listări spune „Pachet 3”/„Set de 2”/„4 bucăți”, apare acum lângă cantitate un indiciu portocaliu „💡 Titlul sugerează N buc." cu buton „Aplică" — un click multiplică cantitatea din Excel (de obicei 1, câte LISTĂRI s-au cumpărat) cu mărimea pachetului găsită în titlu, ca stocul să se scadă pe bucăți fizice reale, nu pe listări. Doar sugestie, niciodată aplicată automat — riscul unui fals-pozitiv (ex. o cifră dintr-un cod) ar însemna scădere greșită de stoc. Recunoaștere strict pe cuvinte-cheie explicite („pachet”/„set”/„buc”/„bucăți”/„pcs”), nu orice cifră din titlu — testat explicit că NU se declanșează pe dimensiuni („60x40x40 cm”) sau coduri („AB0612324”). Indiciul dispare dacă atingi manual cantitatea (stepper sau câmp), ca să nu rămână o sugestie învechită după ce ai decis altceva. Verificat de 2 ori cu un fișier real construit exact pentru titlul din captură („Pachet 3 Cutii depozitare...") — sugestie corectă (3), aplicare corectă, fără fals-pozitive pe titluri fără pachet',date:'2026-09-09'},
   {n:303,text:'Research — evidență de decizii, bază pentru „AI care învață din decizii trecute" (idee discutată direct): fiecare candidat de auto-căutare confirmat/respins (buton nou „✕" lângă „+ Adaugă", ca semnal explicit de respingere, diferit de simpla inacțiune) și fiecare cadru de galerie aprobat/respins se loghează acum discret (`research_decisions`, tabelă nouă). Nimic autonom — doar date reale de revizuit periodic, în sesiuni viitoare, ca să identificăm tipare concrete (ce candidați se resping des, ce stiluri de galerie se aprobă) în loc de impresii. Necesită migrare manuală în Supabase (fără ea, aplicația funcționează neschimbat, doar fără evidența — degradare grațioasă, la fel ca alte funcții opționale): `create table if not exists research_decisions(id bigint primary key generated always as identity,created_at timestamptz default now(),type text not null,payload jsonb);alter table research_decisions disable row level security;grant select,insert,update,delete on research_decisions to anon,authenticated;`. Verificat de 2 ori: candidați confirmați/respinși marcați corect vizual, panoul supraviețuiește oricărei re-randări, fără erori consolă chiar și fără migrarea rulată',date:'2026-09-08'},
@@ -14945,10 +14946,11 @@ function renderSupplierCompare(){
     :scCompare.newImg
       ?`<div style="display:flex;align-items:center;gap:10px"><img src="${esc(scCompare.newImg)}" style="width:52px;height:52px;object-fit:cover;border-radius:8px;flex-shrink:0"><input type="text" placeholder="Nume produs nou" value="${esc(scCompare.newName)}" oninput="scCompare.newName=this.value" style="flex:1"><button type="button" class="btn btn-sm" onclick="scClearProduct()">✕</button></div>`
       :`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          <input type="text" id="sc-product-search" placeholder="Caută produs din stoc după nume/SKU…" oninput="scFilterProducts(this.value)" style="flex:1;min-width:200px">
+          <input type="text" id="sc-product-search" placeholder="Caută produs din stoc după nume/SKU, sau derulează lista de mai jos…" oninput="scFilterProducts(this.value)" style="flex:1;min-width:200px">
+          <button type="button" class="btn btn-sm" onclick="scRecognizeProductImage()" title="Lipește o poză din clipboard (poza produsului sau o captură) — AI recunoaște ce produs e și sugerează cea mai apropiată potrivire din stoc">📷 Recunoaștere din imagine</button>
           <button type="button" class="btn btn-sm" onclick="scPasteNewProductImage()">📋 Sau produs nou, din poză (clipboard)</button>
         </div>
-        <div id="sc-product-results" class="smi-pick-list" style="max-height:220px;overflow:auto;margin-top:6px"></div>`;
+        <div id="sc-product-results" class="smi-pick-list" style="max-height:340px;overflow:auto;margin-top:6px"></div>`;
   const rowsHtml=rowsWithRon.map(r=>{
     const isBest=minRon!=null&&r.ron===minRon&&r.furnizor.trim()&&r.ron>0;
     return`<div class="sc-row${isBest?' sc-row-best':''}">
@@ -14971,12 +14973,16 @@ function renderSupplierCompare(){
       <div class="sc-rows">${rowsHtml}</div>
       <button type="button" class="btn btn-sm" onclick="scAddRow()" style="margin-top:8px">+ Adaugă furnizor</button>
     </div>`;
+  // Populează imediat lista derulabilă cu toate produsele (cerut direct — selecție și prin scroll,
+  // nu doar prin căutare text), fără să aștepte prima literă tastată.
+  if(!prod&&!scCompare.newImg)scFilterProducts('');
 }
 function scFilterProducts(q){
   const box=document.getElementById('sc-product-results');if(!box)return;
   q=q.trim().toLowerCase();
-  if(!q){box.innerHTML='';return;}
-  const matches=P.filter(p=>!p.archived&&(p.name.toLowerCase().includes(q)||(p.sku&&p.sku.toLowerCase().includes(q)))).slice(0,20);
+  // Fără text de căutare, arată TOATE produsele (sortate alfabetic) — selectabile prin derulare,
+  // nu doar prin căutare — cerut direct.
+  const matches=(q?P.filter(p=>!p.archived&&(p.name.toLowerCase().includes(q)||(p.sku&&p.sku.toLowerCase().includes(q)))):P.filter(p=>!p.archived).slice().sort((a,b)=>a.name.localeCompare(b.name))).slice(0,q?20:200);
   box.innerHTML=matches.map(p=>{
     const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'sc')}>`:`<div class="smi-pick-th-ph">📦</div>`;
     return`<div class="smi-pick-item" onclick="scPickProduct(${p.id})">${th}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</span></div>`;
@@ -14993,6 +14999,37 @@ function scPickProduct(id){
   renderSupplierCompare();
 }
 function scClearProduct(){scCompare.produsId=null;scCompare.newImg='';scCompare.newName='';renderSupplierCompare();}
+// Recunoaștere produs EXISTENT din poză (clipboard) — cerut direct, ca alternativă la scroll/căutare
+// text: lipești o poză, AI ghicește ce produs e, apoi potrivim ghicitul fuzzy cu numele din inventar
+// (același mecanism ca „📋 Caută din imagine" de la Sincronizare) și arătăm candidații sortați după
+// scor, cel mai probabil primul — omul confirmă cu un click, nu se alege nimic automat.
+async function scRecognizeProductImage(){
+  if(!navigator.clipboard?.read){toast('Browserul nu suportă citirea directă din clipboard','err');return;}
+  try{
+    const items=await navigator.clipboard.read();
+    let blob=null;
+    for(const item of items){const type=item.types.find(t=>t.startsWith('image/'));if(type){blob=await item.getType(type);break;}}
+    if(!blob){toast('Nu am găsit nicio imagine în clipboard — fă un screenshot, apoi încearcă din nou','err');return;}
+    toast('Analizez poza…');
+    const rawDataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(blob);});
+    const dataUrl=await resizeImageDataUrl(rawDataUrl,1000,.8);
+    const mt=dataUrl.match(/data:(image\/\w+);/)?.[1]||'image/jpeg',b64=dataUrl.split(',')[1];
+    if(!b64||b64.length<100)throw new Error('Imagine invalidă sau coruptă');
+    const content=[{type:'image',source:{type:'base64',media_type:mt,data:b64}},{type:'text',text:'Ce produs apare în această imagine (poate fi o captură de pe un magazin online sau poza produsului)? Răspunde STRICT cu titlul scurt al produsului, în română, fără alte cuvinte, fără ghilimele, fără punct la final.'}];
+    const resp=await callAI([{role:'user',content}],'Ești expert în identificarea produselor din poze pentru un magazin online. Răspunzi STRICT cu titlul scurt al produsului, în română, fără alte cuvinte.',80,'analysis');
+    const query=resp.trim().replace(/^["']|["']$/g,'').replace(/\.$/,'');
+    if(!query){toast('AI nu a putut recunoaște produsul din poză','err');return;}
+    const scored=P.filter(p=>!p.archived).map(p=>({p,score:fuzzyMatch(query,productMatchText(p))})).filter(x=>x.score>=0.2).sort((a,b)=>b.score-a.score);
+    const search=document.getElementById('sc-product-search');if(search)search.value=query;
+    const box=document.getElementById('sc-product-results');
+    const list=scored.length?scored.slice(0,20).map(x=>x.p):P.filter(p=>!p.archived).slice(0,20);
+    if(box)box.innerHTML=list.map(p=>{
+      const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'sc')}>`:`<div class="smi-pick-th-ph">📦</div>`;
+      return`<div class="smi-pick-item" onclick="scPickProduct(${p.id})">${th}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</span></div>`;
+    }).join('');
+    toast(scored.length?`AI a recunoscut „${query}" — alege potrivirea corectă din listă`:`AI a recunoscut „${query}", dar nu am găsit nimic asemănător în stoc`,scored.length?undefined:'err');
+  }catch(e){toast('Eroare la analiza pozei: '+(e.message||e),'err');}
+}
 async function scPasteNewProductImage(){
   if(!navigator.clipboard?.read){toast('Browserul nu suportă citirea directă din clipboard — încarcă manual fișierul','err');return;}
   try{
