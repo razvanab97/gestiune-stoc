@@ -1621,6 +1621,11 @@ textarea.listing-html-raw{width:100%;min-height:180px;box-sizing:border-box;resi
 .rpas-info{flex:1;min-width:0}
 .rpas-title{color:var(--t1);line-height:1.3;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
 .rpas-price{color:var(--t3);font-weight:700;margin-top:2px}
+.sc-rows{display:flex;flex-direction:column;gap:8px}
+.sc-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:8px;border:1px solid var(--b1);border-radius:var(--r);background:var(--surf)}
+.sc-row input[type="text"]{flex:1;min-width:140px}
+.sc-row-best{border-color:var(--gr);background:var(--gr-bg)}
+.sc-best-badge{color:var(--gr);font-weight:800;font-size:19px;white-space:nowrap}
 
 /* ── 7. Export PDF ── */
 .rsx-pdf-row{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:18px}
@@ -1897,6 +1902,7 @@ th{font-weight:800!important;color:var(--t3)!important}
       </select>
       <button type="button" class="btn btn-sm" onclick="openInvoice()">📄 Importă factură</button>
       <button type="button" class="btn btn-sm" onclick="openPresetCSV()" title="Încarcă direct un CSV de comandă (ex. Jumbo) — format recunoscut automat">📦 Preset CSV comandă</button>
+      <button type="button" class="btn btn-sm" onclick="openSupplierCompare()" title="Compară prețul de la mai mulți furnizori pentru același produs">⚖️ Compară furnizori</button>
       <button type="button" class="btn btn-acc btn-sm" onclick="openModal()">+ Produs nou</button>
     </div>
   </div>
@@ -3169,6 +3175,19 @@ th{font-weight:800!important;color:var(--t3)!important}
 </div>
 </div>
 
+<div class="ov" id="ov-supplier-compare" onclick="if(event.target===this)closeSupplierCompare()">
+<div class="inv-modal" onclick="event.stopPropagation()">
+  <div class="inv-head">
+    <div>
+      <h2>⚖️ Compară furnizori</h2>
+      <div style="font-size:18px;color:#6B7280;font-weight:500;margin-top:2px">Alege un produs din stoc sau adaugă unul nou dintr-o poză, apoi compară prețuri de la mai mulți furnizori</div>
+    </div>
+    <button class="m-close" onclick="closeSupplierCompare()">×</button>
+  </div>
+  <div class="inv-body"><div id="sc-content"></div></div>
+</div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <div class="upd-widget">
@@ -3198,6 +3217,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:305,text:'Nou — „⚖️ Compară furnizori" (buton în Dashboard, lângă „+ Produs nou"): alegi un produs din stoc (căutare) sau adaugi unul nou dintr-o poză lipită din clipboard, apoi aduni prețuri de la mai mulți furnizori (RON sau EUR — se convertește automat la RON pentru comparație, cursul deja folosit peste tot în aplicație), cu evidențierea automată a celui mai ieftin. Fiecare rând poate fi completat manual SAU extras automat dintr-o captură de ecran (poză din clipboard cu pagina furnizorului) — AI citește furnizorul și prețul din poză, tu confirmi/corectezi. „Aplică" pe un rând scrie direct furnizorul + prețul pe produsul existent (cu istoric de preț și recalculare automată a prețurilor de vânzare, exact ca la o reaprovizionare normală) — pentru un produs nou, deschide formularul obișnuit de adăugare, pre-completat cu numele, poza, furnizorul și prețul alese. Nimic nu se persistă separat — doar o comparație de moment, fără tabelă nouă în bază. Verificat de 2 ori, ambele fluxuri (produs existent + produs nou din poză): căutare/selecție corectă, comparație RON/EUR corectă (8€ → 40,56 RON, evidențiat corect ca cel mai ieftin), aplicare pe produs existent confirmată direct în bază (furnizor + preț + istoric + prețuri recalculate), pre-completare corectă a formularului de produs nou, fără erori consolă',date:'2026-09-09'},
   {n:304,text:'Comenzi Platforme (Import comenzi) — cerut direct, cu captură: când titlul unei listări spune „Pachet 3”/„Set de 2”/„4 bucăți”, apare acum lângă cantitate un indiciu portocaliu „💡 Titlul sugerează N buc." cu buton „Aplică" — un click multiplică cantitatea din Excel (de obicei 1, câte LISTĂRI s-au cumpărat) cu mărimea pachetului găsită în titlu, ca stocul să se scadă pe bucăți fizice reale, nu pe listări. Doar sugestie, niciodată aplicată automat — riscul unui fals-pozitiv (ex. o cifră dintr-un cod) ar însemna scădere greșită de stoc. Recunoaștere strict pe cuvinte-cheie explicite („pachet”/„set”/„buc”/„bucăți”/„pcs”), nu orice cifră din titlu — testat explicit că NU se declanșează pe dimensiuni („60x40x40 cm”) sau coduri („AB0612324”). Indiciul dispare dacă atingi manual cantitatea (stepper sau câmp), ca să nu rămână o sugestie învechită după ce ai decis altceva. Verificat de 2 ori cu un fișier real construit exact pentru titlul din captură („Pachet 3 Cutii depozitare...") — sugestie corectă (3), aplicare corectă, fără fals-pozitive pe titluri fără pachet',date:'2026-09-09'},
   {n:303,text:'Research — evidență de decizii, bază pentru „AI care învață din decizii trecute" (idee discutată direct): fiecare candidat de auto-căutare confirmat/respins (buton nou „✕" lângă „+ Adaugă", ca semnal explicit de respingere, diferit de simpla inacțiune) și fiecare cadru de galerie aprobat/respins se loghează acum discret (`research_decisions`, tabelă nouă). Nimic autonom — doar date reale de revizuit periodic, în sesiuni viitoare, ca să identificăm tipare concrete (ce candidați se resping des, ce stiluri de galerie se aprobă) în loc de impresii. Necesită migrare manuală în Supabase (fără ea, aplicația funcționează neschimbat, doar fără evidența — degradare grațioasă, la fel ca alte funcții opționale): `create table if not exists research_decisions(id bigint primary key generated always as identity,created_at timestamptz default now(),type text not null,payload jsonb);alter table research_decisions disable row level security;grant select,insert,update,delete on research_decisions to anon,authenticated;`. Verificat de 2 ori: candidați confirmați/respinși marcați corect vizual, panoul supraviețuiește oricărei re-randări, fără erori consolă chiar și fără migrarea rulată',date:'2026-09-08'},
   {n:302,text:'Comenzi Platforme (Import comenzi) — bug real reparat, raportat direct ca recurent: cantitatea corectă din Excel nu era mereu preluată corect în aplicație. Cauza: cantitatea se citea cu `Number(...)` direct, care întoarce `NaN` pentru orice cantitate cu virgulă zecimală (ex. „1,5" — format românesc de export, posibil la produse vândute la set/pachet parțial) — `NaN` era apoi „ascuns" tăcut de un fallback la 1, fără niciun avertisment, deci o comandă de 1,5 bucăți ieșea greșit ca 1 bucată, fără nicio urmă vizibilă a erorii. Acum folosește `parseQtyVal` (deja folosit la Importă factură/ajustări de stoc), care tratează corect virgula zecimală. Verificat de 2 ori cu un fișier real construit exact pentru acest caz (cantitate „1,5"): acum se preia corect 1,5, cantitățile întregi normale („3") rămân neschimbate',date:'2026-09-08'},
@@ -14899,6 +14919,165 @@ const EUR_RON=5.07;
 function calcPrices(costRon){
   const p=pcAutomaticPricesFromGross(costRon,.21);
   return{sell:p.direct,emag:p.emag,trendyol:p.trendyol,rec:Math.round(p.direct*1.1*100)/100};
+}
+/* ── COMPARĂ FURNIZORI — cerut direct: alegi un produs din stoc (sau adaugi unul nou dintr-o poză
+   din clipboard, pentru un produs pe care încă nu îl ai), aduni prețuri de la mai mulți furnizori
+   (RON sau EUR, convertit la RON pentru comparație — același EUR_RON=5.07 folosit peste tot în
+   aplicație), și aplici direct furnizorul ales pe produs (sau, pentru un produs nou, pre-completează
+   formularul normal de adăugare) — fără tabelă nouă în bază, nimic persistat separat, doar o
+   comparație de moment care scrie direct pe produs când o confirmi. */
+let scCompare={produsId:null,newImg:'',newName:'',rows:[]};
+function openSupplierCompare(){
+  scCompare={produsId:null,newImg:'',newName:'',rows:[{furnizor:'',pret:0,moneda:'RON'},{furnizor:'',pret:0,moneda:'RON'}]};
+  document.getElementById('ov-supplier-compare').classList.add('on');
+  renderSupplierCompare();
+}
+function closeSupplierCompare(){document.getElementById('ov-supplier-compare').classList.remove('on');}
+function scRowRon(row){return row.moneda==='EUR'?Math.round((Number(row.pret)||0)*EUR_RON*100)/100:Number(row.pret)||0;}
+function renderSupplierCompare(){
+  const box=document.getElementById('sc-content');if(!box)return;
+  const prod=scCompare.produsId?P.find(x=>x.id===scCompare.produsId):null;
+  const rowsWithRon=scCompare.rows.map((r,i)=>({...r,ron:scRowRon(r),i}));
+  const validRows=rowsWithRon.filter(r=>r.furnizor.trim()&&r.ron>0);
+  const minRon=validRows.length?Math.min(...validRows.map(r=>r.ron)):null;
+  const productSection=prod
+    ?`<div style="display:flex;align-items:center;gap:10px">${prod.img?`<img src="${esc(imgSrc(prod.img))}" style="width:52px;height:52px;object-fit:cover;border-radius:8px;flex-shrink:0" ${imgErrAttr(prod.img,'sc')}>`:'<div class="smi-pick-th-ph" style="flex-shrink:0">📦</div>'}<div style="flex:1"><b>${esc(prod.name)}</b>${prod.priceBuyTTC?`<div style="font-size:20px;color:var(--t3)">Preț achiziție curent: ${Number(prod.priceBuyTTC).toFixed(2)} RON${prod.supplier?' · '+esc(prod.supplier):''}</div>`:''}</div><button type="button" class="btn btn-sm" onclick="scClearProduct()">✕ Schimbă</button></div>`
+    :scCompare.newImg
+      ?`<div style="display:flex;align-items:center;gap:10px"><img src="${esc(scCompare.newImg)}" style="width:52px;height:52px;object-fit:cover;border-radius:8px;flex-shrink:0"><input type="text" placeholder="Nume produs nou" value="${esc(scCompare.newName)}" oninput="scCompare.newName=this.value" style="flex:1"><button type="button" class="btn btn-sm" onclick="scClearProduct()">✕</button></div>`
+      :`<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <input type="text" id="sc-product-search" placeholder="Caută produs din stoc după nume/SKU…" oninput="scFilterProducts(this.value)" style="flex:1;min-width:200px">
+          <button type="button" class="btn btn-sm" onclick="scPasteNewProductImage()">📋 Sau produs nou, din poză (clipboard)</button>
+        </div>
+        <div id="sc-product-results" class="smi-pick-list" style="max-height:220px;overflow:auto;margin-top:6px"></div>`;
+  const rowsHtml=rowsWithRon.map(r=>{
+    const isBest=minRon!=null&&r.ron===minRon&&r.furnizor.trim()&&r.ron>0;
+    return`<div class="sc-row${isBest?' sc-row-best':''}">
+      <input type="text" placeholder="Furnizor" value="${esc(r.furnizor)}" oninput="scUpdateRow(${r.i},'furnizor',this.value)">
+      <input type="number" step="0.01" min="0" placeholder="Preț" value="${r.pret||''}" oninput="scUpdateRow(${r.i},'pret',this.value)" style="width:90px;flex:0">
+      <select onchange="scUpdateRow(${r.i},'moneda',this.value)" style="flex:0">
+        <option value="RON" ${r.moneda==='RON'?'selected':''}>RON</option>
+        <option value="EUR" ${r.moneda==='EUR'?'selected':''}>EUR</option>
+      </select>
+      ${r.moneda==='EUR'&&r.ron?`<span style="font-size:18px;color:var(--t3)">(${r.ron.toFixed(2)} RON)</span>`:''}
+      ${isBest?'<span class="sc-best-badge">✓ Cel mai ieftin</span>':''}
+      <button type="button" class="btn btn-sm" onclick="scPasteRowScreenshot(${r.i})" title="Extrage furnizor + preț dintr-o captură de ecran (clipboard)">📋 din captură</button>
+      <button type="button" class="btn btn-sm btn-acc" onclick="scApplyRow(${r.i})" ${!r.furnizor.trim()||!r.ron?'disabled':''}>Aplică</button>
+      <button type="button" class="btn btn-sm" onclick="scRemoveRow(${r.i})" title="Șterge acest rând">🗑</button>
+    </div>`;
+  }).join('');
+  box.innerHTML=`<div class="fld"><label>Produs</label>${productSection}</div>
+    <div class="fld" style="margin-top:14px">
+      <label>Furnizori și prețuri (RON sau EUR — se compară automat convertit în RON)</label>
+      <div class="sc-rows">${rowsHtml}</div>
+      <button type="button" class="btn btn-sm" onclick="scAddRow()" style="margin-top:8px">+ Adaugă furnizor</button>
+    </div>`;
+}
+function scFilterProducts(q){
+  const box=document.getElementById('sc-product-results');if(!box)return;
+  q=q.trim().toLowerCase();
+  if(!q){box.innerHTML='';return;}
+  const matches=P.filter(p=>!p.archived&&(p.name.toLowerCase().includes(q)||(p.sku&&p.sku.toLowerCase().includes(q)))).slice(0,20);
+  box.innerHTML=matches.map(p=>{
+    const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'sc')}>`:`<div class="smi-pick-th-ph">📦</div>`;
+    return`<div class="smi-pick-item" onclick="scPickProduct(${p.id})">${th}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</span></div>`;
+  }).join('')||`<div class="smi-pick-item" style="color:var(--t3);cursor:default">Niciun produs găsit</div>`;
+}
+function scPickProduct(id){
+  const p=P.find(x=>x.id===id);if(!p)return;
+  scCompare.produsId=id;scCompare.newImg='';scCompare.newName='';
+  // Precompletează primul rând gol cu furnizorul/prețul curent al produsului — altfel comparația
+  // ar ignora exact prețul de referință față de care vrei să compari alți furnizori.
+  if(p.supplier&&p.priceBuyTTC&&scCompare.rows[0]&&!scCompare.rows[0].furnizor){
+    scCompare.rows[0]={furnizor:p.supplier,pret:Number(p.priceBuyTTC),moneda:'RON'};
+  }
+  renderSupplierCompare();
+}
+function scClearProduct(){scCompare.produsId=null;scCompare.newImg='';scCompare.newName='';renderSupplierCompare();}
+async function scPasteNewProductImage(){
+  if(!navigator.clipboard?.read){toast('Browserul nu suportă citirea directă din clipboard — încarcă manual fișierul','err');return;}
+  try{
+    const items=await navigator.clipboard.read();
+    let blob=null;
+    for(const item of items){const type=item.types.find(t=>t.startsWith('image/'));if(type){blob=await item.getType(type);break;}}
+    if(!blob){toast('Nu am găsit nicio imagine în clipboard — fă un screenshot, apoi încearcă din nou','err');return;}
+    const dataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(blob);});
+    scCompare.produsId=null;scCompare.newImg=dataUrl;
+    renderSupplierCompare();
+    toast('Poză adăugată ✓');
+  }catch(e){toast('Eroare la citirea clipboard-ului: '+(e.message||e),'err');}
+}
+function scAddRow(){scCompare.rows.push({furnizor:'',pret:0,moneda:'RON'});renderSupplierCompare();}
+function scRemoveRow(i){scCompare.rows.splice(i,1);renderSupplierCompare();}
+function scUpdateRow(i,field,val){
+  const r=scCompare.rows[i];if(!r)return;
+  if(field==='pret')r.pret=Number(String(val).replace(',','.'))||0;
+  else r[field]=val;
+  renderSupplierCompare();
+}
+// Extrage furnizor+preț dintr-o captură de ecran (pagină de furnizor/catalog) prin AI vision —
+// cerut direct, ca alternativă la completarea manuală când ai deja poza cu prețul afișat.
+async function scPasteRowScreenshot(i){
+  if(!navigator.clipboard?.read){toast('Browserul nu suportă citirea directă din clipboard','err');return;}
+  try{
+    const items=await navigator.clipboard.read();
+    let blob=null;
+    for(const item of items){const type=item.types.find(t=>t.startsWith('image/'));if(type){blob=await item.getType(type);break;}}
+    if(!blob){toast('Nu am găsit nicio imagine în clipboard — fă un screenshot cu prețul vizibil','err');return;}
+    const dataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(blob);});
+    toast('Analizez captura…');
+    const mt=dataUrl.match(/data:(image\/\w+);/)?.[1]||'image/jpeg';
+    const b64=dataUrl.split(',')[1];
+    const content=[
+      {type:'image',source:{type:'base64',media_type:mt,data:b64}},
+      {type:'text',text:`Din această captură (pagină de furnizor/catalog online), extrage numele furnizorului/magazinului (dacă e vizibil clar, altfel string gol) și prețul produsului, cu moneda lui — RON sau EUR, dedusă din simbol/text ("lei"/"ron"→RON, "€"/"eur"→EUR); RON dacă nu e clar deloc. Răspunde STRICT cu JSON, fără text în plus: {"furnizor":"","pret":0,"moneda":"RON"}`}
+    ];
+    const resp=await callAI([{role:'user',content}],null,200,'simple');
+    const m=resp.match(/\{[\s\S]*\}/);
+    if(!m)throw new Error('Răspuns AI invalid');
+    const parsed=JSON.parse(m[0]);
+    const r=scCompare.rows[i];if(!r)return;
+    if(parsed.furnizor)r.furnizor=String(parsed.furnizor).slice(0,80);
+    if(parsed.pret)r.pret=Number(parsed.pret)||r.pret;
+    if(parsed.moneda==='EUR'||parsed.moneda==='RON')r.moneda=parsed.moneda;
+    renderSupplierCompare();
+    toast('Extras din captură ✓ — verifică și corectează dacă e nevoie');
+  }catch(e){toast('Eroare la extragere: '+(e.message||e),'err');}
+}
+// Aplică furnizorul ales: pe un produs existent, scrie direct (preț + furnizor, cu istoric de preț
+// și recalculare automată a prețurilor de vânzare); pe un produs nou (doar poză, fără produsId),
+// deschide formularul normal de adăugare, pre-completat — nu creează nimic pe ascuns.
+async function scApplyRow(i){
+  const r=scCompare.rows[i];if(!r||!r.furnizor.trim())return;
+  const ron=scRowRon(r);if(!ron)return;
+  if(scCompare.produsId){
+    const p=P.find(x=>x.id===scCompare.produsId);if(!p)return;
+    const oldCost=Number(p.priceBuyTTC)||0;
+    const data={...p,supplier:r.furnizor.trim(),priceBuyTTC:ron};
+    if(r.moneda==='EUR')data.priceBuyEur=Number(r.pret)||0;
+    if(oldCost>0&&Math.abs(oldCost-ron)>=0.005){data.priceBuyPrevTTC=oldCost;data.priceBuyChangedAt=new Date().toISOString();}
+    const prices=calcPrices(ron);
+    data.priceSell=prices.sell;data.priceEmag=prices.emag;data.priceTrendyol=prices.trendyol;data.priceRec=prices.rec;
+    try{
+      await saveProdToDb(data,p.id);
+      await logPriceChanges(p.id,p.name,p,data,'Compară furnizori');
+      Object.assign(p,data);
+      renderTable();
+      toast(`Furnizor „${r.furnizor.trim()}" aplicat la „${p.name}" ✓`);
+      closeSupplierCompare();
+    }catch(e){toast('Eroare la salvare: '+(e.message||e),'err');}
+  }else{
+    const furnizor=r.furnizor.trim(),newImg=scCompare.newImg,newName=scCompare.newName;
+    closeSupplierCompare();
+    openModal(null);
+    setTimeout(()=>{
+      document.getElementById('f-name').value=newName||'';
+      document.getElementById('f-sup').value=furnizor;
+      document.getElementById('f-pbuy-ttc').value=ron.toFixed(2);
+      syncAcqFields('ttc');
+      if(newImg){curImg=newImg;document.getElementById('f-imgurl').value='';showPrev(curImg);document.getElementById('ai-img-btn').disabled=false;}
+      toast('Completează restul detaliilor și salvează produsul nou');
+    },50);
+  }
 }
 // ── EXTRAGERE AI FACTURĂ — reproiectată la cerere directă: AI-ul nu mai e singura sursă de adevăr.
 // Schema de mai jos (trimisă ca structured output către OpenAI — vezi callAI/api/openai.js) obligă
