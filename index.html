@@ -3212,6 +3212,7 @@ th{font-weight:800!important;color:var(--t3)!important}
     <div class="invx-foot-stats" id="inv-info">Adaugă produse pentru previzualizare</div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-sm" id="inv-checklist-btn" onclick="generateInvChecklist()" disabled title="Listă printabilă — poză, titlu și cantitate pentru fiecare produs, cu bifă goală, de trimis la depozit ca să verifice recepția mărfii">🖨️ Listă verificare</button>
+      <button class="btn btn-sm" id="inv-mark-new-btn" onclick="markAllUnresolvedAsNew()" style="display:none" title="Liniile rămase nerezolvate nu au nicio potrivire în stoc (nici SKU, nici titlu asemănător) — le marchează pe toate ca produse noi dintr-un click, ca la butonul 🆕 de pe fiecare linie în parte">🆕 Marchează toate ca produse noi</button>
       <button class="btn btn-sm" id="inv-cancel-btn" onclick="closeInvoice()">Anulează</button>
       <button class="btn btn-sm btn-acc" id="inv-apply-btn" onclick="applyInvoice()" disabled>Importă în stoc</button>
     </div>
@@ -3294,6 +3295,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:315,text:'Importă factură — buton nou „🆕 Marchează toate ca produse noi", cerut direct pentru o factură reală cu multe produse genuin noi (nicio potrivire, nici SKU, nici titlu): în loc să apeși „🆕" pe fiecare linie nerezolvată în parte, un click marchează dintr-o dată TOATE liniile rămase nerezolvate ca produse noi — apoi „Importă în stoc" le creează cu titlul și SKU-ul exact din factură, exact cum a fost cerut. Nimic nu se creează fără acest click explicit — protecția împotriva duplicatelor (#134: o linie nesigură nu se transformă singură în produs nou) rămâne intactă, doar confirmarea manuală devine bulk, nu line-by-line. Butonul apare doar câtă vreme există linii nerezolvate, dispare automat după. Produsele create astfel apar corect la „Adăugate recent" (fix-ul din #312). Verificat de 2 ori, cu produse reale create/șterse în Supabase: butonul marchează corect doar liniile fără produs ales (le lasă neschimbate pe cele deja asociate), creează produsele la aplicare, acestea apar primele la „Adăugate recent", fără erori consolă',date:'2026-09-09'},
   {n:314,text:'Inventar — cerut direct: filtrul de status era un singur dropdown, deci puteai alege DOAR una dintre „În stoc"/„Scăzut"/„Epuizat"/etc. SAU o sortare ca „Adăugate recent", niciodată combinat (ex. „Epuizat" ȘI „Adăugate recent" în același timp). Acum sunt două controale separate: un filtru multi-select (checkbox-uri, ca la furnizori) pentru statusuri — „În stoc"/„Scăzut"/„Epuizat"/„În tranzit"/„Fără imagine"/„Epuizat la furnizor", combinabile liber între ele (SAU) — și un dropdown separat de sortare („Adăugate recent"/„Stoc adăugat recent"/„Cele mai vechi"), care funcționează simultan cu orice combinație de statusuri bifate. Verificat de 2 ori: sintaxă OK, testat cu Playwright — „Epuizat"+„Scăzut" bifate simultan arată corect exact acele produse (176, din care 173 epuizate + 3 scăzute), combinate cu sortarea „Adăugate recent" fără erori; linkul rapid din Dashboard („🚫 Epuizat la furnizor") funcționează neschimbat cu noul model',date:'2026-09-09'},
   {n:313,text:'Comenzi Platforme (Import comenzi) — bug real reparat, raportat direct pe o captură din Jurnal vânzări → Comenzi: „Cod produs" (coloana din fișierul eMAG/Trendyol, distinctă de PNK) era extrasă și salvată, dar NICIODATĂ folosită la potrivirea automată cu un produs din stoc — o linie cu exact SKU-ul unui produs existent rămânea „⚠ fără produs", deși Importă factură rezolvă exact acest caz de mult (verifică SKU-ul întâi). Acum codul produsului e verificat direct pe SKU/cod intern, înaintea potrivirii fuzzy după titlu (etichetă nouă „✓ Cod produs" când se potrivește așa). Pe drum, reparat și motivul pentru care asta era greu de observat: codul din fișier nu apărea deloc în previzualizarea de la import (doar mai târziu, în istoric) — acum apare mereu, inclusiv pe liniile nerezolvate, ca să se vadă imediat ce cod a citit sistemul. Verificat de 2 ori cu un fișier real construit exact pentru acest caz (un cod care se potrivește cu un produs existent + unul care nu se potrivește cu nimic): primul se asociază automat corect („✓ Cod produs"), al doilea rămâne corect nerezolvat dar arată acum codul citit, fără erori consolă',date:'2026-09-09'},
   {n:312,text:'Inventar — bug real reparat, raportat direct: „Adăugate recent" nu arăta produsele reaprovizionate azi prin import factură/Comenzi Platforme, ci doar produse create recent (indiferent dacă li s-a adăugat stoc vreodată) — un produs deja existent, restocat chiar azi, nu „mișca" deloc în listă, pentru că data lui de creare rămăsese veche. Cauza: sortarea folosea STRICT data de creare a produsului, ignorând complet ultima intrare de stoc. Acum „Adăugate recent" ține cont de orice activitate recentă — creare SAU ultima intrare de stoc, oricare e mai nouă — deci produsele reaprovizionate azi apar mereu primele, în ordine cronologică corectă, exact cum a fost cerut. Verificat de 2 ori, direct pe datele reale din Supabase: cele 10 produse cu stoc adăugat azi apar acum corect primele (înainte de produse create cu 2 zile în urmă, dar niciodată restocate), fără erori consolă',date:'2026-09-09'},
@@ -16309,6 +16311,18 @@ function pickInvNewProduct(){
   invPickIdx=null;
   renderInvPreview();
 }
+// Buton nou — cerut direct: liniile fără nicio potrivire (nici SKU, nici titlu asemănător — vezi
+// findExistingProduct) sunt des produse cu adevărat noi, nu produse existente ratate; confirmarea
+// manuală rămâne (nimic nu se creează fără click, exact ca la #134), dar un click bulk economisește
+// confirmarea line-by-line pentru facturi cu multe produse noi deodată. Exclude explicit liniile
+// „onlyExisting" (mod care interzice explicit crearea de produse noi pentru linia respectivă).
+function markAllUnresolvedAsNew(){
+  const idxs=invParsed.map((it,i)=>i).filter(i=>!invParsed[i].produsId&&!invParsed[i].newProduct&&!invParsed[i].onlyExisting);
+  if(!idxs.length){toast('Nu mai există linii nerezolvate','err');return;}
+  idxs.forEach(i=>{invParsed[i].produsId=null;invParsed[i].newProduct=true;});
+  renderInvPreview();
+  toast(`${idxs.length} linii marcate ca produse noi — verifică detaliile și apasă „Importă în stoc"`);
+}
 // Produsele marcate "produs nou" se creau înainte doar cu denumire+preț de achiziție, iar restul
 // (categorie/poză/preț de vânzare) trebuia completat separat, din altă pagină (Inventar → editare).
 // Cerere directă: să se poată completa direct aici, în previzualizare, înainte de "Importă în stoc" —
@@ -16516,6 +16530,8 @@ function renderInvPreview(){
   const totalPieces=invParsed.reduce((s,i)=>s+(Number(i.qty)||0)*(Number(i.piecesPerUnit)||1),0);
   const totalEstimatRon=Math.round(invParsed.reduce((s,i)=>s+(Number(i.costRon)||0)*(Number(i.qty)||0),0)*100)/100;
   document.getElementById('inv-info').innerHTML=`<span>${invParsed.length} produse</span><span><strong>${fmtQty(totalUnits)}</strong> unități comandate</span><span><strong>${fmtQty(totalPieces)}</strong> articole fizice</span><span class="invx-foot-total">${totalEstimatRon.toFixed(2)} RON</span>${missC?`<span style="color:var(--rd)">${missC} coduri negăsite</span>`:''}${unresolvedC?`<span style="color:var(--rd)">⚠ ${unresolvedC} fără produs ales</span>`:''}${receiptC?`<span>${fmtQty(receiptQty)} buc. recepționate din pe drum</span>`:''}`;
+  const markNewBtn=document.getElementById('inv-mark-new-btn');
+  if(markNewBtn)markNewBtn.style.display=unresolvedC?'':'none';
   document.getElementById('inv-apply-btn').disabled=false;
   document.getElementById('inv-checklist-btn').disabled=false;
   updateInvxStatus();
