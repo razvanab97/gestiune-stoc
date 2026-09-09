@@ -3288,6 +3288,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:313,text:'Comenzi Platforme (Import comenzi) — bug real reparat, raportat direct pe o captură din Jurnal vânzări → Comenzi: „Cod produs" (coloana din fișierul eMAG/Trendyol, distinctă de PNK) era extrasă și salvată, dar NICIODATĂ folosită la potrivirea automată cu un produs din stoc — o linie cu exact SKU-ul unui produs existent rămânea „⚠ fără produs", deși Importă factură rezolvă exact acest caz de mult (verifică SKU-ul întâi). Acum codul produsului e verificat direct pe SKU/cod intern, înaintea potrivirii fuzzy după titlu (etichetă nouă „✓ Cod produs" când se potrivește așa). Pe drum, reparat și motivul pentru care asta era greu de observat: codul din fișier nu apărea deloc în previzualizarea de la import (doar mai târziu, în istoric) — acum apare mereu, inclusiv pe liniile nerezolvate, ca să se vadă imediat ce cod a citit sistemul. Verificat de 2 ori cu un fișier real construit exact pentru acest caz (un cod care se potrivește cu un produs existent + unul care nu se potrivește cu nimic): primul se asociază automat corect („✓ Cod produs"), al doilea rămâne corect nerezolvat dar arată acum codul citit, fără erori consolă',date:'2026-09-09'},
   {n:312,text:'Inventar — bug real reparat, raportat direct: „Adăugate recent" nu arăta produsele reaprovizionate azi prin import factură/Comenzi Platforme, ci doar produse create recent (indiferent dacă li s-a adăugat stoc vreodată) — un produs deja existent, restocat chiar azi, nu „mișca" deloc în listă, pentru că data lui de creare rămăsese veche. Cauza: sortarea folosea STRICT data de creare a produsului, ignorând complet ultima intrare de stoc. Acum „Adăugate recent" ține cont de orice activitate recentă — creare SAU ultima intrare de stoc, oricare e mai nouă — deci produsele reaprovizionate azi apar mereu primele, în ordine cronologică corectă, exact cum a fost cerut. Verificat de 2 ori, direct pe datele reale din Supabase: cele 10 produse cu stoc adăugat azi apar acum corect primele (înainte de produse create cu 2 zile în urmă, dar niciodată restocate), fără erori consolă',date:'2026-09-09'},
   {n:311,text:'„Preț privat" — două completări cerute direct. (1) Poza produsului nu mai vine doar din clipboard — două surse noi, „📁 Din fișier" (alegi o poză de pe calculator/telefon) și „🔗 Din link" (lipești URL-ul direct al unei imagini, fără să o descarci întâi) — recunoașterea AI e identică indiferent de sursă. (2) Popup-ul e acum redimensionabil manual (trage de colțul din dreapta-jos, ca la Notiță) — util când produsul recunoscut are un nume lung sau vrei mai mult loc pentru cifre. Verificat de 2 ori: sintaxă OK, testat cu Playwright — fișier real încărcat prin inputul ascuns → recunoaștere corectă; link confirmat trimite exact acel URL către AI (fără conversie la fișier); redimensionare reală prin drag pe colțul ferestrei (440×600 → 560×700), fără erori consolă',date:'2026-09-09'},
   {n:310,text:'Trei retușuri, la cerere directă. (1) Popup-ul „Preț privat" — mai mare (360→440px) și restilizat premium: fundal „liquid glass" (translucid + blur, glow discret de accent — aceeași rețetă deja folosită la cadranele Dashboard), cost/preț minim/preț sugerat ca cadrane compacte cu etichetă+valoare (cadranul „Preț sugerat" evidențiat), secțiune „Profitabilitate extern" cu rezultat pe cadrane (Profit/Marjă separate, nu text pe un rând), nu doar câmpuri simple. (2) Bug real reparat, raportat direct: câmpul de preț extern reconstruia tot popup-ul la fiecare literă tastată (`oninput`→re-randare completă), distrugând și recreând inputul — se putea scrie o singură cifră înainte să trebuiască click din nou în câmp. Acum tastarea/ajustarea pragului actualizează direct doar valorile calculate, fără să mai reconstruiască inputurile — scris continuu, fără să sară cursorul. (3) Butonul „• Update" din josul stânga — raportat direct ca se aglomera vizual cu rândul „⚙️ Setări" fixat jos în sidebar; mutat mai sus (bottom 14px→90px), deasupra liniei separatoare de la Setări. Verificat de 2 ori: sintaxă OK, testat cu Playwright — tastare continuă multi-cifră confirmată (inputul rămâne focalizat, valoarea nu se mai trunchiază), prag/monedă actualizează corect fără reconstrucție, fără erori consolă',date:'2026-09-09'},
@@ -13782,7 +13783,7 @@ async function handlePcomImportFile(ev){
           }
           const moneda=col.moneda>-1?String(r[col.moneda]||'RON').trim().toUpperCase():'RON';
           const tara=filePlatforma==='emag'?pcomCountryFromCurrency(moneda,titlu):'';
-          let produsId=null,score=0,viaPnk=false,viaTitle=false;
+          let produsId=null,score=0,viaPnk=false,viaTitle=false,viaCode=false;
           if(pnk){
             const m=SYNCM.find(s=>s.platforma===filePlatforma&&s.confirmat&&s.idExtern===pnk);
             if(m){produsId=m.produsId;score=1;viaPnk=true;}
@@ -13793,6 +13794,17 @@ async function handlePcomImportFile(ev){
             const titleKey=titlu.toLowerCase().trim();
             const mt=SYNCM.find(s=>s.platforma===filePlatforma&&s.confirmat&&s.titluExtern.toLowerCase().trim()===titleKey);
             if(mt){produsId=mt.produsId;score=1;viaTitle=true;}
+          }
+          // Bug real raportat direct: codProdus (coloana „Cod produs”/„Cod de bare” din exportul
+          // platformei) era extras și afișat mai târziu în istoric, dar NICIODATĂ folosit la potrivire
+          // aici — linii care aveau exact SKU-ul unui produs existent rămâneau „fără produs”, deși
+          // Importă factură rezolvă exact acest caz (findExistingProduct verifică SKU-ul întâi). Acum
+          // codProdus e verificat direct pe sku/cod intern ÎNAINTE de fallback-ul pe titlu (mai sigur
+          // decât un scor fuzzy de 70%).
+          if(!produsId&&codProdus){
+            const codKey=codProdus.toLowerCase();
+            const byCode=P.find(x=>(x.sku&&x.sku.toLowerCase()===codKey)||(x.internalCode&&x.internalCode.toLowerCase()===codKey));
+            if(byCode){produsId=byCode.id;score=1;viaCode=true;}
           }
           if(!produsId){
             const match=findExistingProduct({name:titlu});
@@ -13808,7 +13820,7 @@ async function handlePcomImportFile(ev){
           // riscăm o scădere de stoc greșită dintr-un fals-pozitiv (ex. un cod care conține o cifră).
           const packSize=pcomDetectPackSize(titlu);
           const suggestedCantitate=packSize&&packSize!==cantitate?Math.round(cantitate*packSize*100)/100:null;
-          pcImpParsed.push({platforma:filePlatforma,comandaId,pachetId,data,pnk,tara,codProdus,clientNume,titluExtern:titlu,cantitate,suggestedCantitate,pretFaraTva,pretTotalCuTva,moneda,produsId,score,viaPnk,viaTitle,include:false});
+          pcImpParsed.push({platforma:filePlatforma,comandaId,pachetId,data,pnk,tara,codProdus,clientNume,titluExtern:titlu,cantitate,suggestedCantitate,pretFaraTva,pretTotalCuTva,moneda,produsId,score,viaPnk,viaTitle,viaCode,include:false});
         }
       }catch(fileErr){
         console.warn('Fișier ignorat la import Comenzi Platforme:',file.name,fileErr);
@@ -14062,6 +14074,7 @@ function pcomRowHtml(idx,showOwnAwb){
   if(it.newProduct)tag='<span class="inv-match new" title="Va fi creat un produs nou la aplicare">🆕 produs nou</span>';
   else if(it.viaPnk)tag='<span class="inv-match upd" title="Cod/PNK deja asociat">✓ Cod cunoscut</span>';
   else if(it.viaTitle)tag='<span class="inv-match upd" title="Titlu identic confirmat anterior">✓ Titlu cunoscut</span>';
+  else if(it.viaCode)tag='<span class="inv-match upd" title="Cod produs din fișier identic cu SKU-ul/codul intern al produsului">✓ Cod produs</span>';
   else if(it.produsId)tag=`<span class="inv-match upd" title="potrivire ${Math.round(it.score*100)}%">↑ ${Math.round(it.score*100)}%</span>`;
   else tag='<span class="inv-match miss" title="Nicio potrivire găsită — alege manual un produs sau marchează „produs nou", altfel linia NU se aplică la Aplică import">⚠ fără produs</span>';
   const qtyBtnStyle='width:19px;height:19px;padding:0;border:1px solid var(--b2);border-radius:3px;background:var(--surf);color:var(--t2);font-size:20px;line-height:1;cursor:pointer';
@@ -14096,7 +14109,12 @@ function pcomRowHtml(idx,showOwnAwb){
   // Coloana 1 — Produs selectat: poza + numele + PNK + cantitate×preț + client + status, în această
   // ordine (cerut explicit) — toate din date deja existente (p.sku/p.internalCode/p.supplier/
   // it.clientNume), nimic nou calculat.
-  const col1=`<div class="pcom-col pcom-col-product"><div class="pcom-col-lbl">Produs selectat</div>${rowImg}<div style="min-width:0"><div class="pcom-sel-nm">${primaryName}</div>${p&&(p.sku||p.internalCode)?`<div class="pcom-sel-meta">${p.sku?'SKU '+esc(p.sku):''}${p.sku&&p.internalCode?' · ':''}${p.internalCode?esc(p.internalCode):''}</div>`:''}${it.pnk?`<div class="pcom-sel-meta">PNK ${esc(it.pnk)}${it.tara?' ('+esc(it.tara)+')':''}</div>`:''}<div class="pcom-sel-meta">${priceInfoHtml}</div>${packHint}${p&&p.supplier?`<div class="pcom-sel-meta">${esc(p.supplier)}</div>`:''}${it.clientNume?`<div class="pcom-sel-meta">👤 ${esc(it.clientNume)}</div>`:''}${noMatchBadge}${committedNote}${includeBadge}</div></div>`;
+  // Cod produs (coloana „Cod produs”/„Cod de bare” din fișierul platformei) — arătat mereu când e
+  // extras, nu doar în istoric (bug real raportat direct: se folosea la potrivire abia mai jos, la
+  // salvare, dar nu apărea deloc aici la import, deci nu se vedea de ce o linie e/nu e rezolvată).
+  // Ascuns doar când e identic cu SKU-ul deja afișat mai sus (evită dublarea aceleiași informații).
+  const codProdusHtml=it.codProdus&&(!p||!p.sku||p.sku.toLowerCase()!==it.codProdus.toLowerCase())?`<div class="pcom-sel-meta">Cod produs ${esc(it.codProdus)}</div>`:'';
+  const col1=`<div class="pcom-col pcom-col-product"><div class="pcom-col-lbl">Produs selectat</div>${rowImg}<div style="min-width:0"><div class="pcom-sel-nm">${primaryName}</div>${p&&(p.sku||p.internalCode)?`<div class="pcom-sel-meta">${p.sku?'SKU '+esc(p.sku):''}${p.sku&&p.internalCode?' · ':''}${p.internalCode?esc(p.internalCode):''}</div>`:''}${codProdusHtml}${it.pnk?`<div class="pcom-sel-meta">PNK ${esc(it.pnk)}${it.tara?' ('+esc(it.tara)+')':''}</div>`:''}<div class="pcom-sel-meta">${priceInfoHtml}</div>${packHint}${p&&p.supplier?`<div class="pcom-sel-meta">${esc(p.supplier)}</div>`:''}${it.clientNume?`<div class="pcom-sel-meta">👤 ${esc(it.clientNume)}</div>`:''}${noMatchBadge}${committedNote}${includeBadge}</div></div>`;
   // Coloana 2 — Titlul produsului încărcat: exact titlul din fișierul platformei, cu traducerea (dacă
   // există) și eticheta de potrivire — titlul de pe eMAG/Trendyol contează doar ca reper de căutare.
   const col2=`<div class="pcom-col pcom-col-title"><div class="pcom-col-lbl">Titlul produsului încărcat</div><div class="pcom-c2-title">${esc(it.titluExtern)}${it.titluRo?` <span class="pcom-platform-title-ro">🌐 ${esc(it.titluRo)}</span>`:''}</div><div class="pcom-c2-meta">${tag}${it.comandaId?' · #'+esc(it.comandaId):''}</div>${it.newProduct?pcomNewProductPromptHtml(idx):''}</div>`;
