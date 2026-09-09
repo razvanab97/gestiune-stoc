@@ -1832,6 +1832,18 @@ th{font-weight:800!important;color:var(--t3)!important}
 .notepad-head-actions button{background:none;border:none;cursor:pointer;font-size:22px;padding:2px 7px;border-radius:6px;color:var(--t2);line-height:1.4}
 .notepad-head-actions button:hover{background:rgba(0,0,0,.08);color:var(--t1)}
 #notepad-text{flex:1;border:none;outline:none;resize:none;padding:12px;font-family:var(--font);font-size:21px;background:var(--surf);color:var(--t1);width:100%;line-height:1.5}
+/* PREȚ PRIVAT — pop-up mic lângă Notiță (aceeași logică de mutabil/independent), fără nicio
+   persistență în Supabase/localStorage — o verificare rapidă de moment, nu o dată de produs. */
+.pp-widget{display:none;flex-direction:column;position:fixed;top:340px;right:24px;width:360px;max-width:96vw;max-height:min(560px,80vh);background:var(--surf);border:1px solid var(--b2);border-radius:var(--r2);box-shadow:var(--sh2);z-index:190;overflow:auto}
+.pp-widget.on{display:flex}
+.pp-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:var(--surf2);border-bottom:1px solid var(--b1);cursor:move;font-size:22px;font-weight:800;color:var(--t2);flex-shrink:0;user-select:none}
+.pp-body{padding:14px;display:flex;flex-direction:column;gap:2px}
+.pp-pick-list{display:flex;flex-direction:column;max-height:220px;overflow:auto;border:1px solid var(--b1);border-radius:var(--r)}
+.pp-field{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:5px 0;font-size:20px}
+.pp-field span{color:var(--t3)}
+.pp-result{padding:10px;border-radius:var(--r);font-size:20px;margin-top:4px}
+.pp-result-good{background:var(--gr-bg);color:var(--gr)}
+.pp-result-bad{background:var(--rd-bg);color:var(--rd)}
 </style>
 </head>
 <body>
@@ -1868,6 +1880,7 @@ th{font-weight:800!important;color:var(--t3)!important}
     </div>
   </div>
   <button class="notif-bell" id="notepad-btn" style="margin-left:10px" onclick="toggleNotepad()" title="Notiță rapidă — scrie și copiază orice vrei să ții la îndemână">📝</button>
+  <button class="notif-bell" id="pp-btn" style="margin-left:10px" onclick="togglePretPrivat()" title="Preț privat — lipește o poză de produs și vezi rapid prețul minim + profitabilitatea pentru extern">🏷️</button>
   <div class="zoom-wrap" title="Mărește/micșorează afișarea">
     <button class="zoom-btn" onclick="zoomOut()" title="Micșorează (Zoom -)">−</button>
     <span class="zoom-level" id="zoom-level" onclick="zoomReset()" title="Click pentru a reseta la 100%">100%</span>
@@ -3206,6 +3219,17 @@ th{font-weight:800!important;color:var(--t3)!important}
   <textarea id="notepad-text" placeholder="Scrie aici orice vrei să ții la îndemână…" oninput="saveNotepadDebounced()"></textarea>
 </div>
 
+<div class="pp-widget" id="pp-widget">
+  <div class="pp-head" id="pp-head">
+    <span>🏷️ Preț privat</span>
+    <div class="notepad-head-actions">
+      <button type="button" onclick="ppReset()" title="Șterge și pornește din nou">↻</button>
+      <button type="button" onclick="closePretPrivat()" title="Închide">×</button>
+    </div>
+  </div>
+  <div class="pp-body" id="pp-body"></div>
+</div>
+
 <script>
 const SUPA_URL='https://nuvgwytanlgvcffxeahs.supabase.co';
 const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51dmd3eXRhbmxndmNmZnhlYWhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MDI0OTAsImV4cCI6MjA5NTI3ODQ5MH0.lSy1CUJA9xlVv1isAyfTIxGUAbGMUIS7c3TXQ-5pcEg';
@@ -3217,6 +3241,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:309,text:'Nou — buton „🏷️" în header, lângă Notiță: „Preț privat" — pop-up mic, independent (aceeași logică mutabilă ca Notița), pentru o verificare rapidă de moment. Lipești o poză de produs din clipboard, AI recunoaște produsul și îl caută în stoc (aceeași metodă deja folosită la „Compară furnizori"/Sincronizare) — dacă nu găsește nimic, alegi manual din listă sau introduci direct denumirea + costul. Arată costul de achiziție, un „preț minim" calculat (cost + marjă fixă 20%, aceeași „marjă de siguranță recomandată" deja folosită în Calculator profit) și un prag adăugat peste minim (implicit 5 RON/~1€, cu +/− ca să-l ajustezi). Separat, introduci un preț de vânzare pentru extern (RON sau EUR, convertit automat) și vezi imediat profitul brut și marja lui, cu avertisment clar dacă e sub prețul minim calculat. Niciun apel AI suplimentar față de recunoașterea din poză, nimic nu se salvează în bază — pur calcul de moment, ca la „Compară furnizori". Verificat de 2 ori: sintaxă OK, flux complet testat cu Playwright (recunoaștere din poză → alegere produs din listă → cost real din stoc → prag ajustabil → conversie EUR→RON corectă → avertisment sub-minim corect → traseu manual, fără produs în stoc → resetare → închidere), fără erori consolă',date:'2026-09-09'},
   {n:308,text:'Importă factură (PDF) — titlurile produselor se traduc acum automat în română, la extragere, dacă vin în altă limbă (frecvent la facturi Maxy/Verk — engleză, poloneză). Întrebat direct pe o captură reală (facturi Maxy cu titluri englezești, ex. „Wireless bluetooth keyboard for pc ipad mac..."): fluxul de la Importă factură nu avea niciun pas de traducere, diferit de restul aplicației (Comenzi Platforme, dosare Research, import produs după link, care deja traduc). Reparat direct în promptul AI care extrage produsele din factură — păstrează exact cifrele, dimensiunile, codurile de model și brandul, traduce doar partea descriptivă; un titlu deja românesc rămâne neschimbat. Niciun apel AI suplimentar — traducerea se face în același pas ca extragerea, nu costă timp/bani în plus. Nu am putut testa live traducerea efectivă (necesită cheia API reală, disponibilă doar pe Vercel) — verificat de 2 ori sintaxa și că promptul/schema rămân valide; testează cu o factură reală după deploy',date:'2026-09-09'},
   {n:307,text:'Importă factură (PDF) — bug real reparat, raportat direct cu eroarea exactă: „Eroare PDF: JSON Parse error: Expected \'}\'". Cauza: schema de extragere cere 9 câmpuri pe fiecare produs (inclusiv un warnings[]), iar apelul AI cerea doar 3000/2000 tokeni de răspuns — la o factură cu multe linii de produs, răspunsul se trunchia exact la mijlocul JSON-ului, înainte să se închidă. Plafonul global al proxy-ului (`api/openai.js`) fusese deja ridicat la 8000 pentru un bug similar la Galeria AI, dar apelul de-aici încă trimitea limita veche — ridicat acum și el la 8000. Pe drum, cerut separat: mesajele de eroare (toast roșu) stăteau pe ecran la fel de puțin ca cele normale (2,8s) — insuficient să citești un mesaj mai lung; acum erorile stau vizibile 6,5s, restul mesajelor neschimbate. Verificat de 2 ori: sintaxă OK, modalul Importă factură se deschide normal, toast normal dispare la ~2,8s, toast de eroare rămâne vizibil la 5s și dispare până la 7s, fără erori consolă',date:'2026-09-09'},
   {n:306,text:'„⚖️ Compară furnizori" — 3 retușuri, raportate direct pe o captură: (1) popup-ul era prea mic pentru conținut — mărit la aceeași lățime „wide" ca Importă factură (până la 1900px). (2) Produsul se poate alege acum și prin derulare, nu doar prin căutare text — lista arată implicit toate produsele din stoc (sortate alfabetic), nu doar rezultatele unei căutări tastate. (3) Buton nou „📷 Recunoaștere din imagine" — lipești o poză a unui produs DEJA existent în stoc (din clipboard), AI ghicește ce produs e și sugerează cele mai apropiate potriviri din inventar (același mecanism deja folosit la Sincronizare „📋 Caută din imagine"), diferit de „produs nou din poză" (acela e pentru un produs care încă NU e în stoc). Verificat de 2 ori: popup lat confirmat, lista de 200+ produse derulabilă apare imediat la deschidere, fără erori consolă',date:'2026-09-09'},
@@ -3560,6 +3585,161 @@ function saveNotepadDebounced(){
 (function initNotepad(){
   try{const v=localStorage.getItem(NPK),ta=document.getElementById('notepad-text');if(v&&ta)ta.value=v;}catch(e){}
   const widget=document.getElementById('notepad-widget'),head=document.getElementById('notepad-head');
+  if(!widget||!head)return;
+  let dragging=false,offX=0,offY=0;
+  head.addEventListener('pointerdown',e=>{
+    if(e.target.closest('button'))return;
+    const r=widget.getBoundingClientRect();
+    widget.style.left=r.left+'px';widget.style.top=r.top+'px';widget.style.right='auto';widget.style.bottom='auto';
+    offX=e.clientX-r.left;offY=e.clientY-r.top;
+    dragging=true;
+    head.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  head.addEventListener('pointermove',e=>{
+    if(!dragging)return;
+    const nx=Math.max(0,Math.min(window.innerWidth-widget.offsetWidth,e.clientX-offX));
+    const ny=Math.max(0,Math.min(window.innerHeight-widget.offsetHeight,e.clientY-offY));
+    widget.style.left=nx+'px';widget.style.top=ny+'px';
+  });
+  head.addEventListener('pointerup',()=>{dragging=false;});
+})();
+
+// ── PREȚ PRIVAT (buton 🏷️ din header) — lipești o poză de produs, AI recunoaște produsul din stoc,
+// aducem costul de achiziție și calculăm un preț minim (marjă fixă 20% — aceeași "marjă de siguranță
+// recomandată" folosită deja în Calculator profit), plus un prag ajustabil (implicit 5 RON, ~1€) peste
+// acest minim. Separat, introduci un preț de vânzare pentru extern (RON sau EUR) și vezi profitul brut
+// (preț − cost) și marja lui, fără comisioane/transport — nu cunoaștem platforma externă. Pur în
+// memorie, ca la „Compară furnizori" — nimic nu se salvează, e o verificare de moment.
+let ppState={mode:'empty',produsId:null,productName:'',productImg:'',query:'',candidates:[],cost:0,manualCost:0,threshold:5,externPret:0,externMoneda:'RON'};
+function togglePretPrivat(){
+  const w=document.getElementById('pp-widget');
+  const opening=!w.classList.contains('on');
+  w.classList.toggle('on');
+  if(opening)renderPretPrivat();
+}
+function closePretPrivat(){document.getElementById('pp-widget').classList.remove('on');}
+function ppReset(){
+  ppState={mode:'empty',produsId:null,productName:'',productImg:'',query:'',candidates:[],cost:0,manualCost:0,threshold:5,externPret:0,externMoneda:'RON'};
+  renderPretPrivat();
+}
+async function ppPasteImage(){
+  if(!navigator.clipboard?.read){toast('Browserul nu suportă citirea directă din clipboard','err');return;}
+  try{
+    const items=await navigator.clipboard.read();
+    let blob=null;
+    for(const item of items){const type=item.types.find(t=>t.startsWith('image/'));if(type){blob=await item.getType(type);break;}}
+    if(!blob){toast('Nu am găsit nicio imagine în clipboard — fă un screenshot, apoi încearcă din nou','err');return;}
+    toast('Analizez poza…');
+    const rawDataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(blob);});
+    const dataUrl=await resizeImageDataUrl(rawDataUrl,1000,.8);
+    const mt=dataUrl.match(/data:(image\/\w+);/)?.[1]||'image/jpeg',b64=dataUrl.split(',')[1];
+    if(!b64||b64.length<100)throw new Error('Imagine invalidă sau coruptă');
+    const content=[{type:'image',source:{type:'base64',media_type:mt,data:b64}},{type:'text',text:'Ce produs apare în această imagine (poate fi o captură de pe un magazin online sau poza produsului)? Răspunde STRICT cu titlul scurt al produsului, în română, fără alte cuvinte, fără ghilimele, fără punct la final.'}];
+    const resp=await callAI([{role:'user',content}],'Ești expert în identificarea produselor din poze pentru un magazin online. Răspunzi STRICT cu titlul scurt al produsului, în română, fără alte cuvinte.',80,'analysis');
+    const query=resp.trim().replace(/^["']|["']$/g,'').replace(/\.$/,'');
+    if(!query){toast('AI nu a putut recunoaște produsul din poză','err');return;}
+    const scored=P.filter(p=>!p.archived).map(p=>({p,score:fuzzyMatch(query,productMatchText(p))})).filter(x=>x.score>=0.2).sort((a,b)=>b.score-a.score);
+    ppState.mode='pick';ppState.query=query;ppState.productImg=dataUrl;
+    ppState.candidates=scored.length?scored.slice(0,10).map(x=>x.p):P.filter(p=>!p.archived).sort((a,b)=>a.name.localeCompare(b.name)).slice(0,20);
+    toast(scored.length?`AI a recunoscut „${query}" — alege potrivirea corectă din stoc`:`AI a recunoscut „${query}", dar nu am găsit nimic asemănător — alege manual sau introdu produsul`,scored.length?undefined:'err');
+    renderPretPrivat();
+  }catch(e){toast('Eroare la analiza pozei: '+(e.message||e),'err');}
+}
+function ppPickProduct(id){
+  const p=P.find(x=>x.id===id);if(!p)return;
+  ppState.mode='result';ppState.produsId=p.id;ppState.productName=p.name;
+  ppState.productImg=p.img||ppState.productImg;ppState.cost=Number(p.priceBuyTTC)||0;
+  renderPretPrivat();
+}
+function ppGoManual(){ppState.mode='manual';renderPretPrivat();}
+function ppSetManualName(v){ppState.productName=v;}
+function ppSetManualCost(v){ppState.manualCost=Number(String(v).replace(',','.'))||0;}
+function ppUseManual(){
+  ppState.mode='result';ppState.produsId=null;ppState.productImg='';
+  ppState.cost=ppState.manualCost;
+  renderPretPrivat();
+}
+function ppAdjustThreshold(delta){ppState.threshold=Math.max(0,Math.round((ppState.threshold+delta)*100)/100);renderPretPrivat();}
+function ppSetThreshold(v){ppState.threshold=Math.max(0,Number(String(v).replace(',','.'))||0);renderPretPrivat();}
+function ppSetExternPret(v){ppState.externPret=Number(String(v).replace(',','.'))||0;renderPretPrivat();}
+function ppSetExternMoneda(v){ppState.externMoneda=v;renderPretPrivat();}
+function renderPretPrivat(){
+  const body=document.getElementById('pp-body');if(!body)return;
+  if(ppState.mode==='empty'){
+    body.innerHTML=`<div style="text-align:center;padding:18px 6px">
+      <div style="font-size:40px;margin-bottom:8px">🏷️</div>
+      <div style="color:var(--t3);font-size:20px;margin-bottom:12px">Lipește o poză de produs din clipboard — recunoaștem produsul din stoc și calculăm rapid prețul minim și profitabilitatea pentru extern</div>
+      <button type="button" class="btn btn-acc" onclick="ppPasteImage()">📋 Lipește poză</button>
+    </div>`;
+    return;
+  }
+  if(ppState.mode==='pick'){
+    const th=ppState.productImg?`<img src="${esc(ppState.productImg)}" style="width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid var(--b1);flex-shrink:0">`:'';
+    body.innerHTML=`<div style="display:flex;gap:10px;align-items:center;margin-bottom:8px">${th}<div style="font-size:19px;color:var(--t3)">Alege potrivirea corectă din stoc:</div></div>
+      <div class="pp-pick-list">${ppState.candidates.map(p=>{
+        const pth=p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'pp')}>`:`<div class="smi-pick-th-ph">📦</div>`;
+        return`<div class="smi-pick-item" onclick="ppPickProduct(${p.id})">${pth}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</span></div>`;
+      }).join('')}</div>
+      <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="btn btn-sm" onclick="ppGoManual()">✎ Nu e în stoc — introdu manual</button>
+        <button type="button" class="btn btn-sm" onclick="ppReset()">↻ Altă poză</button>
+      </div>`;
+    return;
+  }
+  if(ppState.mode==='manual'){
+    body.innerHTML=`<div style="font-size:19px;color:var(--t3);margin-bottom:8px">Introdu manual denumirea și costul de achiziție:</div>
+      <input type="text" placeholder="Denumire produs" value="${esc(ppState.productName)}" oninput="ppSetManualName(this.value)" style="width:100%;margin-bottom:8px">
+      <input type="text" inputmode="decimal" placeholder="Cost achiziție (RON)" value="${ppState.manualCost||''}" oninput="ppSetManualCost(this.value)" style="width:100%;margin-bottom:8px">
+      <div style="display:flex;gap:8px">
+        <button type="button" class="btn btn-acc" onclick="ppUseManual()">Continuă</button>
+        <button type="button" class="btn btn-sm" onclick="ppReset()">↻ Altă poză</button>
+      </div>`;
+    return;
+  }
+  // mode === 'result'
+  const stepBtn='width:19px;height:19px;padding:0;border:1px solid var(--b2);border-radius:3px;background:var(--surf);color:var(--t2);font-size:20px;line-height:1;cursor:pointer';
+  const cost=ppState.cost||0;
+  const minPrice=cost>0?cost/(1-0.20):0;
+  const sugerat=minPrice+ppState.threshold;
+  const externRon=ppState.externMoneda==='EUR'?ppState.externPret*EUR_RON:ppState.externPret;
+  const profit=externRon-cost;
+  const marjaPct=externRon>0?profit/externRon*100:0;
+  const hasExtern=ppState.externPret>0;
+  const statusCls=externRon>=minPrice?'pp-result-good':'pp-result-bad';
+  const th=ppState.productImg?`<img src="${esc(ppState.productImg)}" style="width:52px;height:52px;object-fit:cover;border-radius:8px;border:1px solid var(--b1);flex-shrink:0">`:'<div class="smi-pick-th-ph" style="width:52px;height:52px;font-size:28px">📦</div>';
+  body.innerHTML=`
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:6px">${th}<div style="font-weight:700;font-size:21px">${esc(ppState.productName||'—')}</div></div>
+    <div class="pp-field"><span>Cost achiziție</span><strong>${cost.toFixed(2)} RON</strong></div>
+    <div class="pp-field"><span>Preț minim (marjă 20%)</span><strong>${minPrice.toFixed(2)} RON</strong></div>
+    <div class="pp-field">
+      <span>Prag adăugat (~1€)</span>
+      <span style="display:flex;align-items:center;gap:4px">
+        <button type="button" onclick="ppAdjustThreshold(-1)" style="${stepBtn}">−</button>
+        <input type="number" step="1" value="${ppState.threshold}" onchange="ppSetThreshold(this.value)" style="width:52px;text-align:center;font-family:var(--mono);font-size:19px;padding:2px;border:1px solid var(--b2);border-radius:3px;background:var(--surf);color:var(--t1)">
+        <button type="button" onclick="ppAdjustThreshold(1)" style="${stepBtn}">+</button>
+      </span>
+    </div>
+    <div class="pp-field" style="border-top:1px solid var(--b1);padding-top:8px"><span>Preț sugerat (minim + prag)</span><strong>${sugerat.toFixed(2)} RON</strong></div>
+    <div style="border-top:1px dashed var(--b1);margin-top:6px;padding-top:10px">
+      <div style="font-size:19px;color:var(--t3);margin-bottom:6px">Profitabilitate pentru extern:</div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+        <input type="text" inputmode="decimal" placeholder="Preț de vânzare" value="${ppState.externPret||''}" oninput="ppSetExternPret(this.value)" style="flex:1">
+        <select onchange="ppSetExternMoneda(this.value)" style="width:70px">
+          <option value="RON" ${ppState.externMoneda==='RON'?'selected':''}>RON</option>
+          <option value="EUR" ${ppState.externMoneda==='EUR'?'selected':''}>EUR</option>
+        </select>
+      </div>
+      ${hasExtern?`<div class="pp-result ${statusCls}">
+        Profit: <strong>${profit.toFixed(2)} RON</strong> · Marjă: <strong>${marjaPct.toFixed(1)}%</strong><br>
+        ${externRon>=minPrice?'✓ Peste prețul minim':'⚠ Sub prețul minim calculat'}
+      </div>`:''}
+    </div>
+    <button type="button" class="btn btn-sm" style="margin-top:8px" onclick="ppReset()">↻ Altă poză</button>
+  `;
+}
+(function initPretPrivat(){
+  const widget=document.getElementById('pp-widget'),head=document.getElementById('pp-head');
   if(!widget||!head)return;
   let dragging=false,offX=0,offY=0;
   head.addEventListener('pointerdown',e=>{
