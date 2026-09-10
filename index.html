@@ -3176,8 +3176,9 @@ th{font-weight:800!important;color:var(--t3)!important}
         <input type="text" id="inv-number" class="invx-summary-input" placeholder="ex: FAC-2026-00123">
       </div>
       <div class="invx-summary-card">
-        <div class="invx-summary-lbl">AI va extrage</div>
-        <div class="invx-summary-val muted">Produse, SKU/cod, cantitate, preț, total, furnizor</div>
+        <div class="invx-summary-lbl">Cost transport</div>
+        <input type="text" inputmode="decimal" id="inv-shipping" class="invx-summary-input" placeholder="0.00 RON" oninput="setInvShippingManual(this.value)">
+        <div class="invx-summary-val muted" id="inv-shipping-hint" style="font-size:15px"></div>
       </div>
       <div class="invx-summary-card">
         <div class="invx-summary-lbl">Status analiză AI</div>
@@ -3295,6 +3296,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:318,text:'Nou — Importă factură: costul de transport intră acum direct în prețul de achiziție al produselor, cerut explicit („costul real e până la urma cu tot cu transport"). AI-ul găsește linia de transport/livrare din factură (ex. „delivery" — deja era ignorată corect ca produs, dar valoarea ei se pierdea complet) și o împarte egal la toate bucățile comenzii — suma rezultată se adaugă la costul fiecărui produs ÎNAINTE să devină preț de achiziție (și, automat, prețurile de vânzare recalculate). Cardul nou „Cost transport" din Importă factură arată suma găsită (editabilă manual, dacă AI n-o prinde sau vrei s-o corectezi) și alocarea pe bucată; fiecare rând din previzualizare arată clar „X produs + Y transport", ca să se vadă exact ce intră în cost. Funcționează identic la PDF ȘI la poză/screenshot (aceeași extragere AI) — metoda voastră principală de import. Necesită o coloană nouă în Supabase (fără ea, totul funcționează la fel, doar costul de transport nu se ține minte în istoricul comenzii — degradare grațioasă, ca la alte funcții opționale): `alter table comenzi_stoc add column if not exists shipping_cost numeric default 0;`. Verificat de 2 ori, cu numerele reale dintr-o factură Maxy trimisă direct (transport 126 EUR, produse la 3,82 și 26,28 EUR): alocare corectă (638,82 RON ÷ 6 bucăți = 106,47 RON/buc), produse create real în Supabase cu costul exact „produs + transport" scris ca preț de achiziție, suprascriere manuală funcțională, fără erori consolă',date:'2026-09-10'},
   {n:317,text:'Comenzi Platforme — bug real reparat, raportat direct cu o captură a capului de tabel dintr-un export eMAG real: prețurile ieșeau 0.00 RON la Fără TVA/Cu TVA pentru TOATE liniile, deși coloanele existau clar în fișier („Price without VAT/Unit"/„Total price with VAT"). Cauza: `pcomFindCol` (recunoașterea coloanelor după denumire) căuta egalitate EXACTĂ a celulei cu un alias din listă, nu conținere — coloane cu denumiri scurte (Nume produs/Cod produs/PNK/Cantitate/Moneda) „mergeau" doar din coincidență, celula fiind deja identică cu alias-ul; coloanele de preț din acest export au text mai lung („.../Unit", „... with VAT"), niciodată exact egal cu alias-ul mai scurt, deci nu se găseau NICIODATĂ. Acum caută substring în fiecare celulă, cum era clar intenția listei de alias-uri — afectează TOATE coloanele (nu doar prețul), deci robustețe mai mare peste tot la recunoașterea formatelor. Verificat de 2 ori: sintaxă OK, testat cu Playwright folosind chiar capul de tabel real trimis (Price without VAT/Unit, Total price with VAT, EUR/RON) — prețurile ies acum corect (6.15/7.37 EUR, 35.32/42.74 RON), fără erori consolă',date:'2026-09-10'},
   {n:316,text:'„Preț privat" — bug real reparat, raportat direct: butonul de redimensionare (colțul din dreapta-jos) nu răspundea. Cauza: popup-ul avea `overflow:hidden` (ales pentru colțuri rotunjite curate), dar CSS-ul de redimensionare (`resize:both`) are nevoie de `overflow:auto`/`scroll` ca să-și arate și să-și activeze mânerul — exact stilul deja folosit, funcțional, la Notiță. Corectat la `overflow:auto`, identic cu Notița; vizual neschimbat (nu apare nicio bară de scroll în plus — conținutul e deja contain în interior). Verificat de 2 ori: sintaxă OK, testat cu Playwright — tragerea colțului chiar mărește popup-ul (440×600 → 593×723), fără erori consolă',date:'2026-09-10'},
   {n:315,text:'Importă factură — buton nou „🆕 Marchează toate ca produse noi", cerut direct pentru o factură reală cu multe produse genuin noi (nicio potrivire, nici SKU, nici titlu): în loc să apeși „🆕" pe fiecare linie nerezolvată în parte, un click marchează dintr-o dată TOATE liniile rămase nerezolvate ca produse noi — apoi „Importă în stoc" le creează cu titlul și SKU-ul exact din factură, exact cum a fost cerut. Nimic nu se creează fără acest click explicit — protecția împotriva duplicatelor (#134: o linie nesigură nu se transformă singură în produs nou) rămâne intactă, doar confirmarea manuală devine bulk, nu line-by-line. Butonul apare doar câtă vreme există linii nerezolvate, dispare automat după. Produsele create astfel apar corect la „Adăugate recent" (fix-ul din #312). Verificat de 2 ori, cu produse reale create/șterse în Supabase: butonul marchează corect doar liniile fără produs ales (le lasă neschimbate pe cele deja asociate), creează produsele la aplicare, acestea apar primele la „Adăugate recent", fără erori consolă',date:'2026-09-09'},
@@ -5488,7 +5490,7 @@ function pcomCountryFromCurrency(moneda,titlu){
 }
 function dbToStockOrder(r){
   return{id:r.id,createdAt:r.created_at||new Date().toISOString(),source:r.source||'Import stoc',
-    invoiceNumber:r.invoice_number||'',
+    invoiceNumber:r.invoice_number||'',shippingCost:Number(r.shipping_cost)||0,
     totalItems:r.total_items||0,totalQty:Number(r.total_qty)||0,totalValue:Number(r.total_value)||0,
     updatedCount:r.updated_count||0,createdCount:r.created_count||0,skippedCount:r.skipped_count||0,
     details:Array.isArray(r.details)?r.details:[]};
@@ -5497,6 +5499,7 @@ function stockOrderToDb(o){
   const d={source:o.source||'Import stoc',total_items:o.totalItems||0,total_qty:o.totalQty||0,total_value:o.totalValue||0,
     updated_count:o.updatedCount||0,created_count:o.createdCount||0,skipped_count:o.skippedCount||0,details:o.details||[]};
   if(o.invoiceNumber)d.invoice_number=o.invoiceNumber;
+  if(o.shippingCost)d.shipping_cost=o.shippingCost;
   return d;
 }
 function loadLocalStockOrders(){try{return JSON.parse(localStorage.getItem(OK)||'[]');}catch(e){return[];}}
@@ -5508,17 +5511,22 @@ function mergeStockOrders(...groups){
 }
 // Trimite o comandă (nouă sau reîncercată) în comenzi_stoc — extras separat din saveStockOrderHistory
 // ca să fie reutilizat și de resyncLocalOnlyStockOrders (aceeași logică, inclusiv fallback-ul pentru
-// coloana invoice_number lipsă, într-un singur loc, nu duplicată).
+// coloane opționale lipsă — invoice_number/shipping_cost — într-un singur loc, nu duplicată).
+// Coloanele opționale se elimină pe rând (nu doar prima găsită) — dacă lipsesc AMBELE migrații,
+// vechiul cod arunca la a doua coloană lipsă, chiar după ce reușea deja să scape de prima.
 async function trySyncStockOrderToDb(order){
   const sent=stockOrderToDb(order);
+  const optionalCols={invoice_number:'Numărul facturii a fost păstrat doar local. Pentru salvare în baza de date rulează migration_invoice_number.sql.',
+    shipping_cost:'Costul de transport a fost păstrat doar local. Pentru salvare în baza de date rulează: alter table comenzi_stoc add column if not exists shipping_cost numeric default 0;'};
   let rows;
-  try{rows=await dbPost('comenzi_stoc',sent);}
-  catch(e){
-    if(sent.invoice_number&&/Could not find the 'invoice_number' column/i.test(String(e.message||e))){
-      delete sent.invoice_number;
-      rows=await dbPost('comenzi_stoc',sent);
-      toast('Numărul facturii a fost păstrat doar local. Pentru salvare în baza de date rulează migration_invoice_number.sql.','err');
-    }else throw e;
+  for(;;){
+    try{rows=await dbPost('comenzi_stoc',sent);break;}
+    catch(e){
+      const col=Object.keys(optionalCols).find(c=>sent[c]!==undefined&&new RegExp(`Could not find the '${c}' column`,'i').test(String(e.message||e)));
+      if(!col)throw e;
+      delete sent[col];
+      toast(optionalCols[col],'err');
+    }
   }
   return rows?.[0]||null;
 }
@@ -5593,7 +5601,7 @@ let REORDER=[];
 const REORDER_KEY='reorder_list';
 const PCIK='sm6_pcom_import';
 const SMIK='sm6_sync_import';
-let invLines=[],invParsed=[],catSuggestTimer=null,lastNameForCat='';
+let invLines=[],invParsed=[],catSuggestTimer=null,lastNameForCat='',invShippingCostRon=0;
 let sbReady=false;
 let eFacturaEmagDate=localStorage.getItem(EFK)||'';
 let eFacturaEmagEdit=!eFacturaEmagDate;
@@ -15069,11 +15077,13 @@ function updCats(){document.querySelectorAll('.cat-g label').forEach(l=>l.classL
 
 /* INVOICE */
 function openInvoice(){
-  invLines=[];invParsed=[];invSourceName='Manual';invPickProds=null;invPickIdx=null;
+  invLines=[];invParsed=[];invSourceName='Manual';invPickProds=null;invPickIdx=null;invShippingCostRon=0;
   document.getElementById('inv-lines').innerHTML='';
   document.getElementById('inv-preview').innerHTML='';
   document.getElementById('inv-file').value='';
   document.getElementById('inv-number').value='';
+  const shipEl=document.getElementById('inv-shipping');if(shipEl){shipEl.value='';delete shipEl.dataset.manual;}
+  const shipHint=document.getElementById('inv-shipping-hint');if(shipHint)shipHint.textContent='';
   document.getElementById('inv-parsing').style.display='none';
   document.getElementById('inv-info').textContent='Adaugă produse pentru previzualizare';
   document.getElementById('inv-apply-btn').disabled=true;
@@ -15283,6 +15293,31 @@ function priceDeltaHtml(oldPrice,newPrice){
   return`<span class="price-delta ${d.up?'up':'down'}">${d.up?'▲':'▼'} ${Math.abs(d.diff).toFixed(2)} RON (${Math.abs(d.pct).toFixed(1)}%) față de ${oldPrice.toFixed(2)}</span>`;
 }
 const EUR_RON=5.07;
+// Cost transport alocat pe bucată — cerut direct: costul real al unui produs adus prin Importă
+// factură include și partea lui de transport, nu doar prețul de achiziție. Împarte costul TOTAL de
+// transport al facturii curente (invShippingCostRon) la toate bucățile comenzii curente (nu doar la
+// o linie) — o alocare simplă, egală pe bucată, nu proporțională cu prețul produsului.
+function invTransportPerUnit(){
+  const totalUnits=invParsed.reduce((s,i)=>s+(Number(i.qty)||0),0);
+  return totalUnits>0?Math.round((invShippingCostRon/totalUnits)*100)/100:0;
+}
+// Citește shippingCost/shippingCurrency din răspunsul AI (parsePDFWithAI/parseOrderScreenshots,
+// aceeași schemă) și le convertește în invShippingCostRon — sursa de adevăr pentru
+// invTransportPerUnit(). Nu suprascrie o valoare deja introdusă manual de utilizator în acest import.
+function setInvShippingManual(val){
+  const el=document.getElementById('inv-shipping');
+  if(el)el.dataset.manual='1';
+  invShippingCostRon=Math.max(0,Number(String(val).replace(',','.'))||0);
+  renderInvPreview();
+}
+function applyParsedShipping(parsed){
+  if(document.getElementById('inv-shipping')?.dataset.manual==='1')return;
+  const raw=parsed?.shippingCost;
+  if(raw==null||!isFinite(Number(raw))){invShippingCostRon=0;return;}
+  const cur=parsed.shippingCurrency==='EUR'?'EUR':'RON';
+  invShippingCostRon=cur==='EUR'?Math.round(Number(raw)*EUR_RON*100)/100:Math.round(Number(raw)*100)/100;
+  const el=document.getElementById('inv-shipping');if(el)el.value=invShippingCostRon?invShippingCostRon.toFixed(2):'';
+}
 function calcPrices(costRon){
   const p=pcAutomaticPricesFromGross(costRon,.21);
   return{sell:p.direct,emag:p.emag,trendyol:p.trendyol,rec:Math.round(p.direct*1.1*100)/100};
@@ -15491,6 +15526,8 @@ const INVOICE_EXTRACTION_SCHEMA={
   type:'object',
   properties:{
     invoiceNumber:{type:['string','null'],description:'Numărul facturii/comenzii găsit în document, sau null'},
+    shippingCost:{type:['number','null'],description:'Valoarea TOTALĂ a liniei de transport/livrare a facturii (ex. "delivery"/"shipping"/"transport"/"livrare"/"shipping fee" — o linie separată de produse, fără cod de produs real). NU e un produs, nu apare în items. null dacă nu găsești nicio linie de transport pe document.'},
+    shippingCurrency:{type:['string','null'],description:'"EUR" sau "RON" — moneda lui shippingCost. null dacă shippingCost e null.'},
     items:{
       type:'array',
       items:{
@@ -15511,7 +15548,7 @@ const INVOICE_EXTRACTION_SCHEMA={
       }
     }
   },
-  required:['invoiceNumber','items'],
+  required:['invoiceNumber','shippingCost','shippingCurrency','items'],
   additionalProperties:false
 };
 const invoiceExtractionRules=`Detectează automat formatul documentului:
@@ -15536,6 +15573,15 @@ qty×priceBuy≈lineTotal înainte de a răspunde; dacă nu se verifică, corect
 REGULĂ CRITICĂ — nu confunda totalul unui produs cu:
 subtotalul facturii, totalul comenzii, transport, TVA, discount, cupon, comision platformă — lineTotal
 e STRICT valoarea acelei linii de produs.
+
+REGULĂ CRITICĂ — cost transport/livrare (cerut direct — costul real al unui produs adus prin factură
+include partea lui de transport, nu doar prețul de achiziție):
+Caută o linie separată de transport/livrare pe document (ex. "delivery", "shipping", "shipping fee",
+"transport", "livrare" — o linie FĂRĂ cod de produs/EAN real, de obicei ultima linie a facturii sau
+afișată separat lângă total). NU o pune în items (rămâne exclusă, ca la orice altă cheltuială care nu
+e produs), dar raportează valoarea ei TOTALĂ (dacă sunt mai multe linii de transport, suma lor) în
+shippingCost, cu moneda ei în shippingCurrency. Dacă nu găsești nicio linie de transport pe document,
+shippingCost=null, shippingCurrency=null — nu ghici, nu inventa o valoare.
 
 REGULĂ CRITICĂ — traducere titlu:
 Dacă denumirea produsului NU e deja în română (ex. engleză, poloneză, turcă, alte limbi — frecvent la
@@ -15693,7 +15739,7 @@ Ignoră total/TVA/transport/discount ca linii de produs separate, consolidează 
     if(objMatch){
       try{
         const parsed=JSON.parse(objMatch[0]);
-        if(Array.isArray(parsed.items)){rawItems=parsed.items;invoiceNumberDetected=String(parsed.invoiceNumber||'').trim();}
+        if(Array.isArray(parsed.items)){rawItems=parsed.items;invoiceNumberDetected=String(parsed.invoiceNumber||'').trim();applyParsedShipping(parsed);}
       }catch(e){}
     }
     if(!rawItems.length){
@@ -15913,7 +15959,7 @@ ${invoiceExtractionRules}`}];
     if(objMatch){
       try{
         const parsed=JSON.parse(objMatch[0]);
-        if(Array.isArray(parsed.items)){rawItems=parsed.items;invoiceNumberDetected=String(parsed.invoiceNumber||'').trim();}
+        if(Array.isArray(parsed.items)){rawItems=parsed.items;invoiceNumberDetected=String(parsed.invoiceNumber||'').trim();applyParsedShipping(parsed);}
       }catch(e){}
     }
     if(!rawItems.length){
@@ -16430,15 +16476,15 @@ function invxRowHtml(idx){
     nm=item.name||item.sku||'Produs necunoscut';
   }
   const oldPrice=p?.priceBuyTTC||0;
-  const delta=p&&item.costRon>0?priceDeltaHtml(oldPrice,item.costRon):'';
+  const delta=p&&item._landedCost>0?priceDeltaHtml(oldPrice,item._landedCost):'';
   const stockPlan=p?stockImportPlan(p,item.qty):null;
   const stockInfo=stockPlan?`<div class="invx-code" style="margin-top:5px">Stoc: ${fmtQty(stockPlan.before)} + ${fmtQty(stockPlan.add)} = ${fmtQty(stockPlan.after)}${stockPlan.compensated>0?' · compensează minus '+fmtQty(stockPlan.compensated):''}</div>`:'';
   // Plasă de siguranță suplimentară, independentă de promptul AI — dacă bug-ul total/cantitate
   // reapare din orice motiv, o creștere de preț de acest calibru tot ajunge vizibilă, apăsat, înainte
   // de aplicare. Semnul cel mai clar: raportul noul_preț/preț_vechi e aproape identic cu cantitatea.
   let extremeWarn='';
-  if(p&&oldPrice>0&&item.costRon>0){
-    const ratio=item.costRon/oldPrice;
+  if(p&&oldPrice>0&&item._landedCost>0){
+    const ratio=item._landedCost/oldPrice;
     if(ratio>=2.5){
       const looksLikeQtyBug=item.qty>1&&ratio>=item.qty*0.5&&ratio<=item.qty*2;
       extremeWarn=`<div class="invx-warn-line">⚠️ Creștere foarte mare de preț${looksLikeQtyBug?` — pare prețul TOTAL pentru ${fmtQty(item.qty)} buc.`:' — verifică prețul.'}${looksLikeQtyBug?` <button type="button" class="btn btn-sm" style="padding:2px 8px;font-size:14px" onclick="fixInvItemPriceDivision(${idx})">➗ Împarte la ${fmtQty(item.qty)}</button>`:''}</div>`;
@@ -16451,13 +16497,17 @@ function invxRowHtml(idx){
   const rowImg=p&&p.img?`<img src="${esc(imgSrc(p.img))}" class="pcom-row-img" ${imgErrAttr(p.img,'pcomrow')}>`:(item.newProduct&&item.img?`<img src="${esc(imgSrc(item.img))}" class="pcom-row-img" ${imgErrAttr(item.img,'pcomrow')}>`:`<div class="pcom-row-img-ph">📦</div>`);
   const newProdForm=item.newProduct?invNewProductFormHtml(idx):'';
   const totalPieces=Math.round(item.qty*item.piecesPerUnit*100)/100;
-  const lineTotalRon=Math.round(item.costRon*item.qty*100)/100;
+  const landedCost=item._landedCost!=null?item._landedCost:item.costRon;
+  const lineTotalRon=Math.round(landedCost*item.qty*100)/100;
+  // Cerut direct: costul real al produsului include transportul alocat, nu doar prețul de achiziție —
+  // afișat mereu ca sumă (produs + transport), ca să se vadă exact ce se scrie ca priceBuyTTC la aplicare.
+  const shippingLine=landedCost!==item.costRon?`<div class="invx-price-ron">${item.costRon.toFixed(2)} produs + ${(landedCost-item.costRon).toFixed(2)} transport</div>`:'';
   const col1=`<div class="invx-col invx-prod"><div>${rowImg}</div><div style="min-width:0"><div class="invx-prod-nm">${esc(nm)}</div><div class="invx-prod-tags">${tag}</div>${stockInfo}${extremeWarn}${aiWarnLines}${newProdForm}</div></div>`;
   const col2=`<div class="invx-col"><div class="invx-col-lbl">SKU / Cod</div><div class="invx-code">${item.sku?esc(item.sku):'—'}</div></div>`;
   const col3=`<div class="invx-col"><div class="invx-col-lbl">Cantitate</div><div class="invx-qty-step"><button type="button" onclick="adjustInvQty(${idx},-1)" title="Scade cantitatea">−</button><input type="number" min="1" step="1" value="${item.qty}" onchange="setInvQty(${idx},this.value)" title="Cantitatea comandată"><button type="button" onclick="adjustInvQty(${idx},1)" title="Crește cantitatea">+</button></div></div>`;
   const col4=`<div class="invx-col"><div class="invx-col-lbl">Buc./set</div><div class="invx-pieces" title="${item.piecesPerUnit>1?totalPieces+' piese fizice în total ('+item.qty+' × '+item.piecesPerUnit+')':'1 piesă per exemplar comandat'}">${item.piecesPerUnit>1?item.piecesPerUnit+' → '+totalPieces+' buc.':'—'}</div></div>`;
   const col5=`<div class="invx-col"><div class="invx-col-lbl">Preț unitar original</div><input type="number" min="0" step="0.01" class="invx-price-input" value="${item.priceBuy.toFixed(2)}" onchange="setInvUnitPriceOriginal(${idx},this.value)" title="Preț pe exemplar comandat, în moneda facturii">${item.currency==='EUR'?'<div class="invx-price-ron">EUR</div>':''}${item.calculatedFromTotal?'<div class="invx-calc-badge">Calculat din total ÷ cantitate</div>':''}</div>`;
-  const col6=`<div class="invx-col"><div class="invx-col-lbl">Preț unitar RON</div><div class="invx-total" style="font-size:17px">${item.costRon.toFixed(2)} RON</div>${delta}</div>`;
+  const col6=`<div class="invx-col"><div class="invx-col-lbl">Preț unitar RON</div><div class="invx-total" style="font-size:17px">${landedCost.toFixed(2)} RON</div>${shippingLine}${delta}</div>`;
   const col7=`<div class="invx-col"><div class="invx-col-lbl">Total</div><div class="invx-total">${lineTotalRon.toFixed(2)} RON</div>${item.lineTotalOriginal!=null?`<div class="invx-price-ron">${item.lineTotalOriginal.toFixed(2)} ${item.currency}</div>`:''}</div>`;
   const col8=`<div class="invx-col"><div class="invx-col-lbl">Încredere</div>${invxConfBadgeHtml(item)}</div>`;
   const col9=`<div class="invx-col invx-actions"><div class="invx-col-lbl">Acțiuni</div><div class="smi-pick" id="invpick-${idx}">${invPickBtnHtml(idx)}</div><button type="button" class="invx-del-btn" onclick="removeInvParsedLine(${idx})" title="Elimină definitiv această linie">🗑 Șterge</button></div>`;
@@ -16504,6 +16554,16 @@ function renderInvPreview(){
   // _normalized (setat de normalizeInvoiceItem la parsare AI) protejează liniile venite din AI de-a
   // fi re-derivate aici — liniile CSV/manuale, care nu trec prin normalizeInvoiceItem, primesc aceleași
   // câmpuri noi (piecesPerUnit/aiConfidence/warnings), o singură dată, cu valori implicite neutre.
+  // Cost transport alocat pe bucată (cerut direct: costul real al unui produs include transportul,
+  // nu doar prețul de achiziție) — o singură valoare, calculată din costul TOTAL de transport al
+  // facturii (invShippingCostRon, din AI sau introdus manual) împărțit la toate bucățile comenzii.
+  // Recalculat la fiecare randare, ca schimbarea cantității/costului de transport să se reflecte imediat.
+  const transportPerUnit=invTransportPerUnit();
+  const shipHintEl=document.getElementById('inv-shipping-hint');
+  if(shipHintEl){
+    const totalUnits=invParsed.reduce((s,i)=>s+(Number(i.qty)||0),0);
+    shipHintEl.textContent=invShippingCostRon>0&&totalUnits>0?`→ ${transportPerUnit.toFixed(2)} RON/buc (${fmtQty(totalUnits)} buc.)`:'';
+  }
   invParsed.forEach(item=>{
     if(!item._normalized){
       item.piecesPerUnit=Math.max(1,Number(item.piecesPerUnit)||1);
@@ -16521,7 +16581,8 @@ function renderInvPreview(){
     if(item.produsId===undefined&&item.newProduct===undefined){
       item.produsId=match?match.product.id:null;
     }
-    const prices=calcPrices(item.costRon);
+    item._landedCost=Math.round((item.costRon+transportPerUnit)*100)/100;
+    const prices=calcPrices(item._landedCost);
     item._sell=prices.sell;
     item._rec=prices.rec;
   });
@@ -16601,8 +16662,10 @@ async function applyInvoice(){
   let updated=0,created=0,skipped=0,receivedLines=0,receivedQty=0,extraQty=0,unresolved=0;
   const stockStamp=new Date().toISOString();
   const orderDetails=[];
+  const transportPerUnit=invTransportPerUnit();
   for(const item of invParsed){
-    const costRon=item.costRon||0;
+    const productCost=item.costRon||0;
+    const costRon=Math.round((productCost+transportPerUnit)*100)/100;
     const prices=calcPrices(costRon);
     // Sursa de adevăr e alegerea din picker (produsId/newProduct, vezi renderInvPreview) — NU se
     // recalculează findExistingProduct aici, ca să nu suprascrie o corecție manuală a utilizatorului.
@@ -16633,7 +16696,7 @@ async function applyInvoice(){
         await saveProdToDb(P[idx],P[idx].id);
         await logMove('in',P[idx].name,item.qty,invSourceName||'Import factură',P[idx].id);
         await logPriceChanges(P[idx].id,P[idx].name,priceBefore,P[idx],invSourceName||'Import factură');
-        orderDetails.push({status:'actualizat',sku:item.sku||P[idx].sku||'',productId:P[idx].id,name:P[idx].name,qty:item.qty,price:costRon,value:Math.round((item.qty||0)*costRon*100)/100,oldPrice:oldCostBefore,stockBefore:stockPlan.before,stockAfter:stockPlan.after,negativeCompensated:stockPlan.compensated});
+        orderDetails.push({status:'actualizat',sku:item.sku||P[idx].sku||'',productId:P[idx].id,name:P[idx].name,qty:item.qty,price:costRon,productCost,shippingAlloc:transportPerUnit,value:Math.round((item.qty||0)*costRon*100)/100,oldPrice:oldCostBefore,stockBefore:stockPlan.before,stockAfter:stockPlan.after,negativeCompensated:stockPlan.compensated});
         updated++;
       }
     } else if(item.newProduct){
@@ -16652,7 +16715,7 @@ async function applyInvoice(){
       await saveProdToDb(newP,null);
       const newId=P[P.length-1]?.id||null;
       await logMove('in',newP.name,item.qty,invSourceName||'Import factură · produs nou',newId);
-      orderDetails.push({status:'produs nou',sku:item.sku||'',productId:newId,name:newP.name,qty:item.qty,price:costRon,value:Math.round((item.qty||0)*costRon*100)/100,img:newP.img});
+      orderDetails.push({status:'produs nou',sku:item.sku||'',productId:newId,name:newP.name,qty:item.qty,price:costRon,productCost,shippingAlloc:transportPerUnit,value:Math.round((item.qty||0)*costRon*100)/100,img:newP.img});
       created++;
     } else {
       // Nici produs ales, nici "produs nou" confirmat — linie nerezolvată, se SARE la aplicare (nu se
@@ -16668,6 +16731,7 @@ async function applyInvoice(){
     await saveStockOrderHistory({
       source:invSourceName||'Import stoc',
       invoiceNumber:document.getElementById('inv-number')?.value.trim()||'',
+      shippingCost:invShippingCostRon,
       totalItems:orderDetails.length,
       totalQty:orderDetails.reduce((s,i)=>s+parseQtyVal(i.qty),0),
       totalValue:Math.round(orderDetails.reduce((s,i)=>s+(Number(i.value)||0),0)*100)/100,
