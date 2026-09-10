@@ -221,7 +221,21 @@ const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJ
 async function sb(method,path,body){
   const opts={method,headers:{'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=representation'}};
   if(body)opts.body=JSON.stringify(body);
-  const r=await fetch(SUPA_URL+'/rest/v1/'+path,opts);
+  // Fără timeout, o cerere pe o conexiune căzută/instabilă (WiFi de depozit, tabletă ieșită din sleep)
+  // putea rămâne agățată la infinit, fără eroare — ecranul rămânea blocat. La 20s fără răspuns, se
+  // anulează explicit, ca restul aplicației (deja pregătită cu try/catch) să poată reacționa normal.
+  const ctrl=new AbortController();
+  const timeoutId=setTimeout(()=>ctrl.abort(),20000);
+  opts.signal=ctrl.signal;
+  let r;
+  try{
+    r=await fetch(SUPA_URL+'/rest/v1/'+path,opts);
+  }catch(e){
+    if(e.name==='AbortError')throw new Error('Conexiune Supabase blocată (fără răspuns 20s) — verifică internetul');
+    throw e;
+  }finally{
+    clearTimeout(timeoutId);
+  }
   const d=await r.json();
   if(!r.ok)throw new Error(JSON.stringify(d));
   return d;
