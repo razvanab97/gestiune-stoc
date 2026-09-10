@@ -3038,7 +3038,10 @@ th{font-weight:800!important;color:var(--t3)!important}
               <div class="fld"><label>SKU / Cod extern</label><input id="f-sku" type="text" placeholder="CAF-001"></div>
               <div class="fld"><label>Furnizor</label><input id="f-sup" type="text" placeholder="SC Produse SRL"></div>
             </div>
-            <div class="fld"><label>Cod intern unic</label><input id="f-internal-code" type="text" placeholder="Se generează automat la salvare" readonly style="background:#F3F4F6;color:#475467;font-family:var(--mono)"></div>
+            <div class="pe-two">
+              <div class="fld"><label>EAN</label><input id="f-ean" type="text" inputmode="numeric" placeholder="5900779945500" title="Codul de bare EAN/GTIN — folosit ca potrivire prioritară la Importă factură (mai stabil decât codul propriu al furnizorului între reaprovizionări)"></div>
+              <div class="fld"><label>Cod intern unic</label><input id="f-internal-code" type="text" placeholder="Se generează automat la salvare" readonly style="background:#F3F4F6;color:#475467;font-family:var(--mono)"></div>
+            </div>
           </div>
           <div class="pe-section" id="m-emag-countries"></div>
         </div>
@@ -3068,7 +3071,10 @@ th{font-weight:800!important;color:var(--t3)!important}
     <div class="pe-pane" data-pe-pane="prices">
       <div class="pe-pricing-grid">
         <div class="pe-section">
-          <div class="sec">Achiziție</div>
+          <div class="sec" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <span>Achiziție</span>
+            <button type="button" class="btn btn-sm" style="font-weight:600" onclick="pasteProdCostFromClipboard()" title="Rezervă — pentru când Importă factură nu recunoaște corect o factură: lipești o poză cu prețul (factură, pagină furnizor, catalog) și AI-ul completează câmpul potrivit">📋 Extrage preț din poză</button>
+          </div>
           <div class="fld"><label>Preț achiziție EUR fără TVA</label><input id="f-pbuy-eur" type="number" min="0" step="0.01" placeholder="ex: 3.75" oninput="syncAcqFromEur()"></div>
           <div style="font-size:15px;color:#667085;margin:-6px 0 12px">furnizor extern · curs 5,07 RON/€ · se convertește mai jos, fără TVA</div>
           <div class="fld"><label>Preț achiziție cu TVA</label><input id="f-pbuy-ttc" type="number" min="0" step="0.01" placeholder="0.00" oninput="syncAcqFields('ttc')"></div>
@@ -3296,6 +3302,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:319,text:'Trei completări la Importă factură/editare produs, cerute direct pe o factură Maxy reală. (1) Potrivire prioritară după EAN (cod de bare) — codul propriu al furnizorului („Code") se poate schimba între reaprovizionări ale ACELUIAȘI produs, dar EAN-ul e constant; produsul nou EAN se completează și în formularul de editare (câmp nou, lângă Cod intern), și se reține automat pe produsele deja asociate din facturi viitoare, chiar dacă acum sunt asociate prin SKU/nume. (2) Bug real reparat: textul facturii trimis către AI era tăiat la 10.000 caractere — pe o factură de 2 pagini/33 produse, linia de transport (ultimul rând, lângă total) cădea mereu în afara acelei limite, deci „Cost transport" ieșea gol, exact cum a fost raportat. Ridicat la 40.000 caractere. (3) Rezervă nouă — buton „📋 Extrage preț din poză" în formularul de editare produs (secțiunea Achiziție): pentru facturi pe care Importă factură nu le citește corect, lipești o poză cu prețul (factură, pagină furnizor, catalog) direct acolo, fără să mai treci prin import. Necesită o coloană nouă în Supabase (fără ea, totul merge la fel, doar EAN-ul nu se ține minte încă — degradare grațioasă): `alter table produse add column if not exists ean text; create unique index if not exists idx_produse_ean_unique on produse(ean) where ean is not null and ean <> \'\';`. Verificat de 2 ori, inclusiv direct pe producție (fără migrare rulată încă): aplicația se încarcă normal (372 produse, fallback automat la coloana lipsă), potrivire EAN confirmată corect chiar cu SKU/nume complet diferite, câmpul EAN salvează local chiar fără coloana în bază, butonul de extragere preț din poză completează corect câmpul EUR/RON, fără erori consolă',date:'2026-09-10'},
   {n:318,text:'Nou — Importă factură: costul de transport intră acum direct în prețul de achiziție al produselor, cerut explicit („costul real e până la urma cu tot cu transport"). AI-ul găsește linia de transport/livrare din factură (ex. „delivery" — deja era ignorată corect ca produs, dar valoarea ei se pierdea complet) și o împarte egal la toate bucățile comenzii — suma rezultată se adaugă la costul fiecărui produs ÎNAINTE să devină preț de achiziție (și, automat, prețurile de vânzare recalculate). Cardul nou „Cost transport" din Importă factură arată suma găsită (editabilă manual, dacă AI n-o prinde sau vrei s-o corectezi) și alocarea pe bucată; fiecare rând din previzualizare arată clar „X produs + Y transport", ca să se vadă exact ce intră în cost. Funcționează identic la PDF ȘI la poză/screenshot (aceeași extragere AI) — metoda voastră principală de import. Necesită o coloană nouă în Supabase (fără ea, totul funcționează la fel, doar costul de transport nu se ține minte în istoricul comenzii — degradare grațioasă, ca la alte funcții opționale): `alter table comenzi_stoc add column if not exists shipping_cost numeric default 0;`. Verificat de 2 ori, cu numerele reale dintr-o factură Maxy trimisă direct (transport 126 EUR, produse la 3,82 și 26,28 EUR): alocare corectă (638,82 RON ÷ 6 bucăți = 106,47 RON/buc), produse create real în Supabase cu costul exact „produs + transport" scris ca preț de achiziție, suprascriere manuală funcțională, fără erori consolă',date:'2026-09-10'},
   {n:317,text:'Comenzi Platforme — bug real reparat, raportat direct cu o captură a capului de tabel dintr-un export eMAG real: prețurile ieșeau 0.00 RON la Fără TVA/Cu TVA pentru TOATE liniile, deși coloanele existau clar în fișier („Price without VAT/Unit"/„Total price with VAT"). Cauza: `pcomFindCol` (recunoașterea coloanelor după denumire) căuta egalitate EXACTĂ a celulei cu un alias din listă, nu conținere — coloane cu denumiri scurte (Nume produs/Cod produs/PNK/Cantitate/Moneda) „mergeau" doar din coincidență, celula fiind deja identică cu alias-ul; coloanele de preț din acest export au text mai lung („.../Unit", „... with VAT"), niciodată exact egal cu alias-ul mai scurt, deci nu se găseau NICIODATĂ. Acum caută substring în fiecare celulă, cum era clar intenția listei de alias-uri — afectează TOATE coloanele (nu doar prețul), deci robustețe mai mare peste tot la recunoașterea formatelor. Verificat de 2 ori: sintaxă OK, testat cu Playwright folosind chiar capul de tabel real trimis (Price without VAT/Unit, Total price with VAT, EUR/RON) — prețurile ies acum corect (6.15/7.37 EUR, 35.32/42.74 RON), fără erori consolă',date:'2026-09-10'},
   {n:316,text:'„Preț privat" — bug real reparat, raportat direct: butonul de redimensionare (colțul din dreapta-jos) nu răspundea. Cauza: popup-ul avea `overflow:hidden` (ales pentru colțuri rotunjite curate), dar CSS-ul de redimensionare (`resize:both`) are nevoie de `overflow:auto`/`scroll` ca să-și arate și să-și activeze mânerul — exact stilul deja folosit, funcțional, la Notiță. Corectat la `overflow:auto`, identic cu Notița; vizual neschimbat (nu apare nicio bară de scroll în plus — conținutul e deja contain în interior). Verificat de 2 ori: sintaxă OK, testat cu Playwright — tragerea colțului chiar mărește popup-ul (440×600 → 593×723), fără erori consolă',date:'2026-09-10'},
@@ -5356,7 +5363,7 @@ async function uploadProductImageToStorage(dataUrl){
 
 // ── MAP DB ↔ APP ──
 function dbToP(r){
-  return{id:r.id,name:r.name,sku:r.sku||'',internalCode:r.internal_code||productInternalCode(r.created_at,r.id),category:r.category||'',supplier:r.supplier||'',
+  return{id:r.id,name:r.name,sku:r.sku||'',ean:r.ean||'',internalCode:r.internal_code||productInternalCode(r.created_at,r.id),category:r.category||'',supplier:r.supplier||'',
     bought:r.bought||0,incomingQty:r.incoming_qty||0,sold:r.sold||0,minQty:r.min_qty||0,
     priceBuyTTC:r.price_buy_ttc||0,priceBuyPrevTTC:r.price_buy_prev_ttc||0,priceBuyChangedAt:r.price_buy_changed_at||'',priceBuyEur:r.price_buy_eur||0,tvaAcq:r.tva_acq??0.21,
     stockAddedAt:r.stock_added_at||'',lastStockAddedQty:r.last_stock_added_qty||0,
@@ -5379,6 +5386,7 @@ function pToDb(p){
     archived:!!p.archived,archived_at:p.archivedAt||null,
     easybox_l:p.easyboxL||0,easybox_w:p.easyboxW||0,easybox_t:p.easyboxT||0};
   if(p.internalCode)d.internal_code=p.internalCode;
+  if(p.ean)d.ean=p.ean;
   return d;
 }
 function dbSavedProductMatches(row,sent){
@@ -5389,7 +5397,7 @@ function dbSavedProductMatches(row,sent){
 }
 function missingProductColumn(err){return String(err?.message||err).match(/Could not find the '([^']+)' column of 'produse'/i)?.[1]||'';}
 function missingProductValues(data,missing){
-  const map={incoming_qty:'incomingQty',price_emag:'priceEmag',price_trendyol:'priceTrendyol',tva_acq:'tvaAcq',internal_code:'internalCode',price_buy_prev_ttc:'priceBuyPrevTTC',price_buy_changed_at:'priceBuyChangedAt',price_buy_eur:'priceBuyEur',stock_added_at:'stockAddedAt',last_stock_added_qty:'lastStockAddedQty',
+  const map={incoming_qty:'incomingQty',price_emag:'priceEmag',price_trendyol:'priceTrendyol',tva_acq:'tvaAcq',internal_code:'internalCode',ean:'ean',price_buy_prev_ttc:'priceBuyPrevTTC',price_buy_changed_at:'priceBuyChangedAt',price_buy_eur:'priceBuyEur',stock_added_at:'stockAddedAt',last_stock_added_qty:'lastStockAddedQty',
     supplier_oos:'supplierOOS',supplier_oos_since:'supplierOOSSince',supplier_restock_eta:'supplierRestockEta',supplier_notify:'supplierNotify',supplier_notified:'supplierNotified',
     archived:'archived',archived_at:'archivedAt',
     easybox_l:'easyboxL',easybox_w:'easyboxW',easybox_t:'easyboxT'};
@@ -5709,14 +5717,21 @@ async function load(){
     // pe tot tabelul ajunge la zeci de MB — suficient să depășească timeout-ul sau să fie prea
     // lent pe o conexiune slabă, blocând TOT inventarul doar din cauza pozelor. Datele care chiar
     // contează pentru gestiune (stoc, prețuri, nume) se încarcă separat de poze, garantat rapid.
-    const prodCols='id,name,sku,internal_code,category,supplier,bought,incoming_qty,sold,min_qty,price_buy_ttc,price_buy_prev_ttc,price_buy_changed_at,tva_acq,stock_added_at,last_stock_added_qty,price_sell,price_emag,price_trendyol,price_rec,colors,sizes,material,dims,notes,description,images,created_at,updated_at,supplier_oos,supplier_oos_since,supplier_restock_eta,supplier_notify,supplier_notified,archived,archived_at,easybox_l,easybox_w,easybox_t';
+    const prodCols='id,name,sku,ean,internal_code,category,supplier,bought,incoming_qty,sold,min_qty,price_buy_ttc,price_buy_prev_ttc,price_buy_changed_at,tva_acq,stock_added_at,last_stock_added_qty,price_sell,price_emag,price_trendyol,price_rec,colors,sizes,material,dims,notes,description,images,created_at,updated_at,supplier_oos,supplier_oos_since,supplier_restock_eta,supplier_notify,supplier_notified,archived,archived_at,easybox_l,easybox_w,easybox_t';
     const today=td();
     showLoading('Se încarcă datele din Supabase…');
     // Toate cererile independente pornesc DEODATĂ, nu una după alta — 8 cereri secvențiale își
     // însumau timpii de rundă-trip unul peste altul (raportat direct: delay mare mai ales la prima
     // intrare, cu cache local rece). Fiecare cerere „soft" (care are oricum un fallback local dacă
     // migrarea ei nu a rulat) își prinde propria eroare imediat, ca restul să nu aștepte după ea.
-    const prodPromise=dbGet(`produse?select=${prodCols}&order=id.asc`);
+    // ean e coloană nouă (potrivire EAN la Importă factură) — spre deosebire de restul coloanelor
+    // opționale (care se degradează per-produs, la PATCH), o coloană lipsă în select() ar rupe ÎNTREG
+    // încărcarea produselor (query eșuat), nu doar un câmp — de-aia are propria reîncercare aici,
+    // înainte ca migrarea să fi rulat, fără de care restul aplicației ar rămâne fără niciun produs afișat.
+    const prodPromise=dbGet(`produse?select=${prodCols}&order=id.asc`).catch(e=>{
+      if(/column produse\.ean does not exist/i.test(String(e.message||e)))return dbGet(`produse?select=${prodCols.replace(',ean','')}&order=id.asc`);
+      throw e;
+    });
     const todayPromise=dbGet(`vanzari_zilnice?data=eq.${today}&select=*`);
     const jurnalPromise=dbGet('jurnal?select=*&order=data.desc');
     const stockOrdersPromise=dbGet('comenzi_stoc?select=*&order=created_at.desc').catch(e=>({__err:e}));
@@ -12485,7 +12500,7 @@ function readProdFormData(){
   const oldCost=Number(existing?.priceBuyTTC)||0;
   const priceChanged=oldCost>0&&newCost>0&&Math.abs(oldCost-newCost)>=0.005;
   return{
-    name:document.getElementById('f-name').value.trim(),sku:document.getElementById('f-sku').value.trim(),internalCode:existing?.internalCode||'',
+    name:document.getElementById('f-name').value.trim(),sku:document.getElementById('f-sku').value.trim(),ean:document.getElementById('f-ean').value.trim(),internalCode:existing?.internalCode||'',
     supplier:document.getElementById('f-sup').value.trim(),
     colors:document.getElementById('f-colors').value.trim(),
     sizes:document.getElementById('f-sizes').value.trim(),
@@ -12547,6 +12562,7 @@ function openModal(id){
   renderMergeBox();
   document.getElementById('f-name').value=p?.name||'';
   document.getElementById('f-sku').value=p?.sku||'';
+  document.getElementById('f-ean').value=p?.ean||'';
   document.getElementById('f-internal-code').value=p?.internalCode||'';
   document.getElementById('f-sup').value=p?.supplier||'';
   document.getElementById('f-colors').value=p?.colors||'';
@@ -15260,6 +15276,14 @@ function productMatchText(p){
   return[p.name,p.dims,p.material,p.colors,p.sizes].filter(Boolean).join(' ');
 }
 function findExistingProduct(item){
+  // EAN întâi — cerut direct, pentru Maxy: codul propriu Maxy („Code") se poate schimba între
+  // reaprovizionări ale ACELUIAȘI produs fizic, dar EAN-ul (codul de bare global) rămâne constant.
+  // Verificat doar dacă produsul are deja un EAN salvat (câmp nou, gol pe majoritatea produselor
+  // vechi) — pentru restul, se cade pe SKU, exact ca până acum.
+  if(item.ean){
+    const byEan=P.find(p=>p.ean&&p.ean===item.ean);
+    if(byEan)return{product:byEan,confidence:'ean',score:1};
+  }
   if(item.sku){
     const bySku=P.find(p=>p.sku&&p.sku.toLowerCase()===item.sku.toLowerCase());
     if(bySku)return{product:bySku,confidence:'sku',score:1};
@@ -15454,6 +15478,42 @@ function scUpdateRow(i,field,val){
 }
 // Extrage furnizor+preț dintr-o captură de ecran (pagină de furnizor/catalog) prin AI vision —
 // cerut direct, ca alternativă la completarea manuală când ai deja poza cu prețul afișat.
+// Rezervă la editarea unui produs — cerut direct, pentru cazul în care Importă factură nu
+// recunoaște corect o factură (linie ratată, preț greșit etc.): lipești o poză cu prețul (factură,
+// pagină furnizor, catalog) direct din formularul de editare, fără să mai treci prin fluxul de import.
+// Manual (typing direct în câmp) funcționează deja fără nimic nou — asta acoperă doar varianta „din poză".
+async function pasteProdCostFromClipboard(){
+  if(!navigator.clipboard?.read){toast('Browserul nu suportă citirea directă din clipboard','err');return;}
+  try{
+    const items=await navigator.clipboard.read();
+    let blob=null;
+    for(const item of items){const type=item.types.find(t=>t.startsWith('image/'));if(type){blob=await item.getType(type);break;}}
+    if(!blob){toast('Nu am găsit nicio imagine în clipboard — fă un screenshot cu prețul vizibil','err');return;}
+    toast('Extrag prețul din poză…');
+    const dataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(blob);});
+    const mt=dataUrl.match(/data:(image\/\w+);/)?.[1]||'image/jpeg';
+    const b64=dataUrl.split(',')[1];
+    if(!b64||b64.length<100)throw new Error('Imagine invalidă sau coruptă');
+    const content=[
+      {type:'image',source:{type:'base64',media_type:mt,data:b64}},
+      {type:'text',text:'Din această captură (factură, pagină de furnizor sau catalog), extrage prețul de achiziție al produsului (cu TVA inclus, dacă apare așa) și moneda lui — RON sau EUR, dedusă din simbol/text ("lei"/"ron"→RON, "€"/"eur"→EUR); RON dacă nu e clar deloc. Răspunde STRICT cu JSON, fără text în plus: {"pret":0,"moneda":"RON"}'}
+    ];
+    const resp=await callAI([{role:'user',content}],null,150,'simple');
+    const m=resp.match(/\{[\s\S]*\}/);
+    if(!m)throw new Error('Răspuns AI invalid');
+    const parsed=JSON.parse(m[0]);
+    const pret=Number(parsed.pret)||0;
+    if(!pret){toast('Nu am putut recunoaște niciun preț în poză','err');return;}
+    if(parsed.moneda==='EUR'){
+      document.getElementById('f-pbuy-eur').value=pret.toFixed(2);
+      syncAcqFromEur();
+    }else{
+      document.getElementById('f-pbuy-ttc').value=pret.toFixed(2);
+      syncAcqFields('ttc');
+    }
+    toast(`Preț extras: ${pret.toFixed(2)} ${parsed.moneda==='EUR'?'EUR':'RON'} ✓ — verifică și corectează dacă e nevoie`);
+  }catch(e){toast('Eroare la extragerea prețului: '+(e.message||e),'err');}
+}
 async function scPasteRowScreenshot(i){
   if(!navigator.clipboard?.read){toast('Browserul nu suportă citirea directă din clipboard','err');return;}
   try{
@@ -15535,6 +15595,7 @@ const INVOICE_EXTRACTION_SCHEMA={
         properties:{
           name:{type:'string',description:'Denumirea COMPLETĂ a produsului (brand, model, variantă, culoare, dimensiune, capacitate, cod model) — nu scurta, nu inventa ce nu apare. Tradusă în română dacă nu e deja română (vezi regula de traducere de mai jos)'},
           sku:{type:['string','null'],description:'SKU/cod produs — NU numărul comenzii/facturii/AWB/EAN. null dacă nu apare'},
+          ean:{type:['string','null'],description:'Codul de bare EAN/GTIN al produsului — coloană separată, de obicei numită „Barcode EAN"/„EAN"/„GTIN"/„Barcode" (13 cifre, uneori 8). NU e același lucru cu SKU/Code. null dacă nu apare'},
           qty:{type:'number',description:'Cantitatea COMANDATĂ (dintr-o coloană explicită Quantity/Qty/Cantitate dacă există) — NU un număr din denumirea produsului (ex. "Set de 6" nu înseamnă qty=6)'},
           piecesPerUnit:{type:'number',description:'Câte piese/bucăți conține UN singur exemplar comandat (ex. "Set de 6" → 6). 1 dacă produsul nu e un set/pachet sau nu se poate determina sigur'},
           priceBuy:{type:['number','null'],description:'Preț PE EXEMPLAR COMANDAT, în moneda facturii — dacă nu apare explicit dar există lineTotal, calculează lineTotal/qty. null dacă nu se poate determina deloc'},
@@ -15543,7 +15604,7 @@ const INVOICE_EXTRACTION_SCHEMA={
           confidence:{type:'number',description:'0-100, cât de sigur ești de TOATE câmpurile de mai sus împreună — sub 70 dacă orice e ambiguu'},
           warnings:{type:'array',items:{type:'string'},description:'Motive scurte de nesiguranță, ex. "cantitate ambiguă", "preț neclar", "SKU nesigur" — listă goală dacă nimic e neclar'}
         },
-        required:['name','sku','qty','piecesPerUnit','priceBuy','lineTotal','currency','confidence','warnings'],
+        required:['name','sku','ean','qty','piecesPerUnit','priceBuy','lineTotal','currency','confidence','warnings'],
         additionalProperties:false
       }
     }
@@ -15592,6 +15653,10 @@ brand — tradu doar partea descriptivă. Dacă denumirea e deja română, înto
 SKU — prioritate: SKU explicit, apoi Item Code/Product Code/Symbol/Model. NU folosi numărul comenzii,
 facturii, AWB sau EAN ca SKU. null dacă nu apare deloc, nu inventa.
 
+EAN — coloană SEPARATĂ de SKU/Code, chiar dacă ambele apar pe același rând (frecvent la Maxy: „Code"
+și „Barcode EAN" sunt două coloane distincte). Extrage-l în câmpul ean, NU în sku, chiar dacă „Code"
+lipsește. null dacă nu apare.
+
 Dacă orice e nesigur (cantitate, preț, produs neclar), NU ghici — scade confidence și adaugă un warning
 scurt care explică exact ce trebuie verificat manual.`;
 function normalizeInvoiceItem(raw){
@@ -15636,6 +15701,7 @@ function normalizeInvoiceItem(raw){
   return{
     name:raw.name||'',
     sku:raw.sku||null,
+    ean:raw.ean||null,
     qty,
     priceBuy,
     currency,
@@ -15703,10 +15769,17 @@ async function parsePDFWithAI(file){
     // deja ridicat la 8000, dar apelul de-aici încă trimitea limita veche.
     if(pdfText&&pdfText.trim().length>50){
       // Send extracted text to OpenAI
+      // TEXT FACTURĂ trunchiat la 10000→40000 caractere — bug real raportat: pe o factură reală de
+      // 2 pagini/33 produse (Maxy), linia de transport (ultimul rând, pe pagina 2, lângă totaluri)
+      // nu mai apărea DELOC în shippingCost — se pierdea tăcut la slice(0,10000), înainte să apuce
+      // să ajungă la AI, pentru că paginile anterioare (30 de produse + antet bancar/date firmă)
+      // umpleau deja aproape tot plafonul vechi. 40000 caractere ≈ 10000 tokeni, mult sub contextul
+      // real al modelului — acoperă facturi mult mai lungi fără riscul de a tăia exact rândurile de
+      // la finalul documentului (transport, total, TVA), unde apar cel mai des informațiile astea.
       const prompt=`Ești expert în procesarea facturilor de la distribuitori en-gros. Extrage toate produsele.
 
 TEXT FACTURĂ:
-${pdfText.slice(0,10000)}
+${pdfText.slice(0,40000)}
 
 ${invoiceExtractionRules}
 
@@ -16459,7 +16532,7 @@ function invxRowHtml(idx){
   let tag,nm;
   if(p){
     const isAuto=item._match&&item._match.product.id===p.id;
-    const conf=isAuto?(item._match.confidence==='sku'?'SKU exact':`sugestie automată, nume ${Math.round(item._match.score*100)}%`):'ales manual';
+    const conf=isAuto?(item._match.confidence==='ean'?'EAN exact':item._match.confidence==='sku'?'SKU exact':`sugestie automată, nume ${Math.round(item._match.score*100)}%`):'ales manual';
     const receipt=invoiceReceiptPlan(p,item.qty);
     tag=receipt.fromIncoming>0
       ?`<span class="inv-match upd" title="${conf}">✓ recepționează ${fmtQty(receipt.fromIncoming)} din pe drum${receipt.incomingAfter>0?' · rămân '+fmtQty(receipt.incomingAfter):''}${receipt.extra>0?' + '+fmtQty(receipt.extra)+' extra':''}</span>`
@@ -16503,7 +16576,7 @@ function invxRowHtml(idx){
   // afișat mereu ca sumă (produs + transport), ca să se vadă exact ce se scrie ca priceBuyTTC la aplicare.
   const shippingLine=landedCost!==item.costRon?`<div class="invx-price-ron">${item.costRon.toFixed(2)} produs + ${(landedCost-item.costRon).toFixed(2)} transport</div>`:'';
   const col1=`<div class="invx-col invx-prod"><div>${rowImg}</div><div style="min-width:0"><div class="invx-prod-nm">${esc(nm)}</div><div class="invx-prod-tags">${tag}</div>${stockInfo}${extremeWarn}${aiWarnLines}${newProdForm}</div></div>`;
-  const col2=`<div class="invx-col"><div class="invx-col-lbl">SKU / Cod</div><div class="invx-code">${item.sku?esc(item.sku):'—'}</div></div>`;
+  const col2=`<div class="invx-col"><div class="invx-col-lbl">SKU / Cod</div><div class="invx-code">${item.sku?esc(item.sku):'—'}</div>${item.ean?`<div class="invx-code" title="EAN — folosit prioritar la potrivire">EAN ${esc(item.ean)}</div>`:''}</div>`;
   const col3=`<div class="invx-col"><div class="invx-col-lbl">Cantitate</div><div class="invx-qty-step"><button type="button" onclick="adjustInvQty(${idx},-1)" title="Scade cantitatea">−</button><input type="number" min="1" step="1" value="${item.qty}" onchange="setInvQty(${idx},this.value)" title="Cantitatea comandată"><button type="button" onclick="adjustInvQty(${idx},1)" title="Crește cantitatea">+</button></div></div>`;
   const col4=`<div class="invx-col"><div class="invx-col-lbl">Buc./set</div><div class="invx-pieces" title="${item.piecesPerUnit>1?totalPieces+' piese fizice în total ('+item.qty+' × '+item.piecesPerUnit+')':'1 piesă per exemplar comandat'}">${item.piecesPerUnit>1?item.piecesPerUnit+' → '+totalPieces+' buc.':'—'}</div></div>`;
   const col5=`<div class="invx-col"><div class="invx-col-lbl">Preț unitar original</div><input type="number" min="0" step="0.01" class="invx-price-input" value="${item.priceBuy.toFixed(2)}" onchange="setInvUnitPriceOriginal(${idx},this.value)" title="Preț pe exemplar comandat, în moneda facturii">${item.currency==='EUR'?'<div class="invx-price-ron">EUR</div>':''}${item.calculatedFromTotal?'<div class="invx-calc-badge">Calculat din total ÷ cantitate</div>':''}</div>`;
@@ -16676,6 +16749,10 @@ async function applyInvoice(){
       if(idx>=0){
         const oldCostBefore=Number(P[idx].priceBuyTTC)||0;
         const priceBefore={priceBuyTTC:P[idx].priceBuyTTC,priceSell:P[idx].priceSell,priceEmag:P[idx].priceEmag,priceTrendyol:P[idx].priceTrendyol};
+        // Completare EAN pe drum — cerut direct: produsele vechi n-au EAN salvat deloc; de fiecare
+        // dată când o factură îl aduce pentru un produs deja asociat (potrivit prin SKU/nume, nu EAN),
+        // îl reținem, ca potrivirile viitoare prin EAN să prindă tot mai mulți produși cu timpul.
+        if(item.ean&&!P[idx].ean)P[idx].ean=item.ean;
         const stockPlan=stockImportPlan(P[idx],item.qty);
         const receipt=invoiceReceiptPlan(P[idx],item.qty);
         P[idx].bought=(P[idx].bought||0)+item.qty;
@@ -16705,7 +16782,7 @@ async function applyInvoice(){
       // prin Inventar după import.
       const newP={
         name:item.name||item.sku||'Produs nou',
-        sku:item.sku||null,
+        sku:item.sku||null,ean:item.ean||null,
         bought:item.qty,sold:0,minQty:0,
         stockAddedAt:stockStamp,lastStockAddedQty:item.qty,
         priceBuyTTC:costRon,priceBuyEur:item.currency==='EUR'?item.priceBuy||0:0,tvaAcq:0.21,
