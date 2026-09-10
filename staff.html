@@ -118,8 +118,8 @@ button{font-family:var(--font);cursor:pointer}
 .line-issue{margin-top:4px;font-size:16px;color:var(--rd);font-weight:700}
 .line-check{align-self:flex-start;display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;border:2px solid var(--b2);background:var(--surf);font-size:17px;font-weight:700;color:var(--t2);margin-top:6px}
 .line-check.on{background:var(--gr);border-color:var(--gr);color:#fff}
-/* Pre-împachetare — culoare distinctă (portocaliu) de „normal" (mov) și „gata" (verde), ca statusul
-   să se recunoască din priviri: „nu mai trebuie verificat, doar confirmă și lipește AWB". */
+/* Folosit doar de tab-ul separat „🏷️ Pre-împachetate" (butonul Confirmă din listă) — fluxul normal
+   de împachetare nu are nicio ramură/culoare specială pentru pre-împachetare, intenționat. */
 .line-check.prepacked{background:var(--or-bg);border-color:var(--or);color:#92400e}
 
 .big-pack-btn{width:100%;padding:26px 16px;border-radius:var(--r3);border:none;background:var(--acc);color:#fff;font-size:26px;font-weight:800;box-shadow:0 10px 26px rgba(118,87,246,.35),inset 0 1px 0 rgba(255,255,255,.35);letter-spacing:.02em;min-height:80px}
@@ -127,8 +127,6 @@ button{font-family:var(--font);cursor:pointer}
 .big-pack-btn:disabled{background:var(--b2);color:var(--t3);box-shadow:none;cursor:default}
 .big-pack-btn.done{background:var(--gr);box-shadow:0 10px 26px rgba(18,183,106,.3),inset 0 1px 0 rgba(255,255,255,.35);font-size:21px}
 .big-pack-btn.done:active{background:#0e9c5c}
-.big-pack-btn.prepacked{background:var(--or);box-shadow:0 10px 26px rgba(247,144,9,.32),inset 0 1px 0 rgba(255,255,255,.35);font-size:21px}
-.big-pack-btn.prepacked:active{background:#c2660a}
 
 .nav-row{display:flex;gap:12px;margin-top:10px;flex-wrap:wrap}
 .nav-btn{flex:1;padding:20px;border-radius:var(--r2);border:1px solid var(--glass-bd);background:var(--glass-strong);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);font-size:20px;font-weight:700;color:var(--t1);min-height:72px}
@@ -205,6 +203,7 @@ button{font-family:var(--font);cursor:pointer}
     <button class="tab-btn" data-tab="finalized" onclick="setTab('finalized')"><span class="ic">✓</span>Finalizate azi</button>
     <button class="tab-btn" data-tab="search" onclick="setTab('search')"><span class="ic">🔍</span>Căutare</button>
     <button class="tab-btn" data-tab="legend" onclick="setTab('legend')"><span class="ic">ⓘ</span>Legendă</button>
+    <button class="tab-btn" data-tab="prepack" onclick="setTab('prepack')"><span class="ic">🏷️</span>Pre-împachetate<span class="tab-badge" id="prepack-badge" style="display:none"></span></button>
   </div>
 
   <div id="main-area"></div>
@@ -358,6 +357,9 @@ function renderProgress(){
   const wc=waitingQueue().length;
   const badge=document.getElementById('waiting-badge');
   if(wc){badge.style.display='inline-block';badge.textContent=wc;}else{badge.style.display='none';}
+  const pc=prepackEligibleLines().length;
+  const pbadge=document.getElementById('prepack-badge');
+  if(pbadge){if(pc){pbadge.style.display='inline-block';pbadge.textContent=pc;}else{pbadge.style.display='none';}}
 }
 
 function setTab(tab){
@@ -394,6 +396,7 @@ function renderMain(){
   if(activeTab==='finalized')return renderFinalizedTab(host);
   if(activeTab==='search')return renderSearchTab(host);
   if(activeTab==='legend')return renderLegendTab(host);
+  if(activeTab==='prepack')return renderPrepackTab(host);
 }
 
 function lineThumbHtml(l){
@@ -411,11 +414,7 @@ function lineInfoHtml(l,showCheck){
   const p=findProdus(l.produs_id);
   const lk=lineKey(l);
   const issueHtml=l.staff_blocked?`<div class="line-issue">⛔ ${esc(ISSUE_LABELS[l.staff_issue_type]||'Problemă raportată')}</div>`:'';
-  const prepackCodes=linePrepackCodes(l);
-  const prepackReady=!l.impachetat&&prepackCodes.length>=(Number(l.cantitate)||0);
-  const checkHtml=!showCheck?'':prepackReady
-    ?`<button type="button" class="line-check prepacked" ${lineBusy[lk]?'disabled':''} onclick="confirmPrepacked('${lk}')">✓ Deja împachetat · cod ${esc(prepackCodes[0].cod)} — Confirmă</button>`
-    :`<button type="button" class="line-check ${l.impachetat?'on':''}" ${lineBusy[lk]?'disabled':''} onclick="toggleLineCheck('${lk}')">${l.impachetat?'✓ Confirmat':'Confirmă produs'}</button>`;
+  const checkHtml=showCheck?`<button type="button" class="line-check ${l.impachetat?'on':''}" ${lineBusy[lk]?'disabled':''} onclick="toggleLineCheck('${lk}')">${l.impachetat?'✓ Confirmat':'Confirmă produs'}</button>`:'';
   const stock=p?(Number(p.bought)||0)-(Number(p.sold)||0):null;
   const stockCls=stock===null?'':stock<=0?'zero':stock<Number(l.cantitate)?'low':'';
   const stockHtml=stock===null?'':`<div class="line-stock-box"><div class="line-qty-lbl">Stoc ERP</div><div class="line-stock ${stockCls}">${stock} BUC.</div></div>`;
@@ -450,15 +449,11 @@ function renderPackTab(host){
   const allChecked=ord.lines.every(l=>l.impachetat||l.staff_blocked);
   const singleLine=!multi?ord.lines[0]:null;
   const singleLk=singleLine?lineKey(singleLine):null;
-  const singlePrepackCodes=singleLine?linePrepackCodes(singleLine):[];
-  const singlePrepackReady=singleLine&&!singleLine.impachetat&&linePrepackReady(singleLine);
   const bigBtnHtml=multi
     ?`<button type="button" class="big-pack-btn" ${allChecked&&!lineBusy['order_'+ord.key]?'':'disabled'} onclick="finalizeOrder('${ord.key}')">✓ ÎMPACHETAT${!allChecked?` (${doneCount}/${ord.lines.length})`:''}</button>`
     :singleLine.impachetat
       ?`<button type="button" class="big-pack-btn done" ${lineBusy[singleLk]?'disabled':''} onpointerdown="startHoldUnpack('${singleLk}')" onpointerup="cancelHoldUnpack()" onpointerleave="cancelHoldUnpack()" onpointercancel="cancelHoldUnpack()">✓ ÎMPACHETAT · ține apăsat pentru anulare</button>`
-      :singlePrepackReady
-        ?`<button type="button" class="big-pack-btn prepacked" ${lineBusy[singleLk]?'disabled':''} onclick="confirmPrepacked('${singleLk}')">✓ Deja împachetat · cod ${esc(singlePrepackCodes[0].cod)} — Confirmă</button>`
-        :`<button type="button" class="big-pack-btn" ${lineBusy[singleLk]?'disabled':''} onclick="packSingleLine('${singleLk}','${ord.key}')">✓ ÎMPACHETAT</button>`;
+      :`<button type="button" class="big-pack-btn" ${lineBusy[singleLk]?'disabled':''} onclick="packSingleLine('${singleLk}','${ord.key}')">✓ ÎMPACHETAT</button>`;
   host.innerHTML=`<div class="card">
     <div class="ord-hdr">
       <div class="ord-hdr-row1">
@@ -605,6 +600,38 @@ async function confirmPrepacked(lk){
   }
   lineBusy[lk]=false;
   renderMain();
+}
+// Tab dedicat „🏷️ Pre-împachetate" — cerut explicit ca ecran SEPARAT de fluxul normal „Împachetare"
+// (nu ca buton/culoare specială pe cardul obișnuit): o listă plată, peste toate comenzile active,
+// cu fiecare linie care are deja cod disponibil. Odată confirmată de aici, linia devine „impachetat=true"
+// exact ca o bifare manuală — dispare din lista asta și, în „Împachetare", arată identic cu orice
+// altă linie bifată manual, fără nicio distincție vizuală.
+function prepackEligibleLines(){
+  const out=[];
+  ORDERS.forEach(o=>{
+    if(o.finalized)return;
+    o.lines.forEach(l=>{if(!l.impachetat&&linePrepackReady(l))out.push({line:l,order:o});});
+  });
+  return out;
+}
+function renderPrepackTab(host){
+  const items=prepackEligibleLines();
+  if(!items.length){host.innerHTML=`<div class="empty"><div class="big">🏷️</div><div>Nicio linie cu cod pre-împachetat disponibil acum.</div></div>`;return;}
+  host.innerHTML=`<div class="search-page-list">${items.map(({line:l,order:o})=>{
+    const p=findProdus(l.produs_id);
+    const lk=lineKey(l);
+    const codes=linePrepackCodes(l);
+    const img=p&&p.img?`<img class="list-item-th" src="${esc(imgSrc(p.img))}" onerror="this.style.display='none'">`:`<div class="list-item-th-ph">📦</div>`;
+    const plLabel=o.platforma==='emag'?'eMAG':o.platforma==='trendyol'?'Trendyol':'Extra';
+    return`<div class="list-item" style="cursor:default">
+      ${img}
+      <div class="list-item-main">
+        <div class="list-item-nm">${esc(l.produs_nume||p?.name||'')}</div>
+        <div class="list-item-meta">${plLabel}${o.comandaId?' · #'+esc(o.comandaId):''} · ${l.cantitate} buc · cod ${esc(codes[0]?.cod||'')}</div>
+      </div>
+      <button type="button" class="line-check prepacked" style="align-self:center" ${lineBusy[lk]?'disabled':''} onclick="confirmPrepacked('${lk}')">Confirmă</button>
+    </div>`;
+  }).join('')}</div>`;
 }
 async function patchLine(l,body){
   await sb('PATCH',`${l._table}?id=eq.${l.id}`,body);
@@ -962,6 +989,9 @@ function renderLegendTab(host){
       <div class="legend-row"><b>Undo</b><span>5 secunde după ÎMPACHETAT sau o problemă raportată, poți anula acțiunea din mesajul care apare jos</span></div>
       <div class="legend-row"><b>Anulare mai târziu</b><span>La o comandă cu un singur produs, chiar și după cele 5 secunde — ține apăsat pe butonul ÎMPACHETAT (verde) ca să anulezi</span></div>
       <div class="legend-row"><b>Raportează problemă</b><span>Deschide o listă de motive — alege ce s-a întâmplat cu produsul</span></div>
+    </div>
+    <div class="legend-sec"><h3>Pre-împachetate</h3>
+      <div class="legend-row"><b>🏷️ Pre-împachetate</b><span>Linii din comenzi active al căror produs a fost deja pregătit din timp (etichete generate din Inventar) — confirmă direct de aici, fără să mai treci prin verificarea normală</span></div>
     </div>`;
 }
 
