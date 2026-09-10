@@ -118,12 +118,17 @@ button{font-family:var(--font);cursor:pointer}
 .line-issue{margin-top:4px;font-size:16px;color:var(--rd);font-weight:700}
 .line-check{align-self:flex-start;display:flex;align-items:center;gap:8px;padding:10px 16px;border-radius:999px;border:2px solid var(--b2);background:var(--surf);font-size:17px;font-weight:700;color:var(--t2);margin-top:6px}
 .line-check.on{background:var(--gr);border-color:var(--gr);color:#fff}
+/* Pre-împachetare — culoare distinctă (portocaliu) de „normal" (mov) și „gata" (verde), ca statusul
+   să se recunoască din priviri: „nu mai trebuie verificat, doar confirmă și lipește AWB". */
+.line-check.prepacked{background:var(--or-bg);border-color:var(--or);color:#92400e}
 
 .big-pack-btn{width:100%;padding:26px 16px;border-radius:var(--r3);border:none;background:var(--acc);color:#fff;font-size:26px;font-weight:800;box-shadow:0 10px 26px rgba(118,87,246,.35),inset 0 1px 0 rgba(255,255,255,.35);letter-spacing:.02em;min-height:80px}
 .big-pack-btn:active{background:var(--acc2)}
 .big-pack-btn:disabled{background:var(--b2);color:var(--t3);box-shadow:none;cursor:default}
 .big-pack-btn.done{background:var(--gr);box-shadow:0 10px 26px rgba(18,183,106,.3),inset 0 1px 0 rgba(255,255,255,.35);font-size:21px}
 .big-pack-btn.done:active{background:#0e9c5c}
+.big-pack-btn.prepacked{background:var(--or);box-shadow:0 10px 26px rgba(247,144,9,.32),inset 0 1px 0 rgba(255,255,255,.35);font-size:21px}
+.big-pack-btn.prepacked:active{background:#c2660a}
 
 .nav-row{display:flex;gap:12px;margin-top:10px;flex-wrap:wrap}
 .nav-btn{flex:1;padding:20px;border-radius:var(--r2);border:1px solid var(--glass-bd);background:var(--glass-strong);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);font-size:20px;font-weight:700;color:var(--t1);min-height:72px}
@@ -239,7 +244,7 @@ function td(){return new Date().toISOString().slice(0,10);}
 const CUTOFF_DATE='2026-08-27';
 const ISSUE_LABELS={stoc_zero:'Stoc zero',cantitate_insuficienta:'Cantitate insuficientă',produs_deteriorat:'Produs deteriorat',produs_gresit:'Produs greșit',nu_gasesc:'Nu găsesc produsul',alta:'Altă problemă'};
 
-let PRODUSE=[],COMENZI=[],JURNAL=[],ORDERS=[],curKey=null,activeTab='pack',activeImg={};
+let PRODUSE=[],COMENZI=[],JURNAL=[],ORDERS=[],PREPACK=[],curKey=null,activeTab='pack',activeImg={};
 let sheetCtx=null; // {lk} sau {lk,type:'stoc_redus'} — comanda/linia pentru care e deschis sheet-ul de probleme
 let pendingUndo=null; // {orderKey,lines:[{table,id,prev}],timeoutId,type}
 let lineBusy={}; // lk -> true cât timp o cerere e în curs (protecție dublu-tap)
@@ -406,7 +411,11 @@ function lineInfoHtml(l,showCheck){
   const p=findProdus(l.produs_id);
   const lk=lineKey(l);
   const issueHtml=l.staff_blocked?`<div class="line-issue">⛔ ${esc(ISSUE_LABELS[l.staff_issue_type]||'Problemă raportată')}</div>`:'';
-  const checkHtml=showCheck?`<button type="button" class="line-check ${l.impachetat?'on':''}" ${lineBusy[lk]?'disabled':''} onclick="toggleLineCheck('${lk}')">${l.impachetat?'✓ Confirmat':'Confirmă produs'}</button>`:'';
+  const prepackCodes=linePrepackCodes(l);
+  const prepackReady=!l.impachetat&&prepackCodes.length>=(Number(l.cantitate)||0);
+  const checkHtml=!showCheck?'':prepackReady
+    ?`<button type="button" class="line-check prepacked" ${lineBusy[lk]?'disabled':''} onclick="confirmPrepacked('${lk}')">✓ Deja împachetat · cod ${esc(prepackCodes[0].cod)} — Confirmă</button>`
+    :`<button type="button" class="line-check ${l.impachetat?'on':''}" ${lineBusy[lk]?'disabled':''} onclick="toggleLineCheck('${lk}')">${l.impachetat?'✓ Confirmat':'Confirmă produs'}</button>`;
   const stock=p?(Number(p.bought)||0)-(Number(p.sold)||0):null;
   const stockCls=stock===null?'':stock<=0?'zero':stock<Number(l.cantitate)?'low':'';
   const stockHtml=stock===null?'':`<div class="line-stock-box"><div class="line-qty-lbl">Stoc ERP</div><div class="line-stock ${stockCls}">${stock} BUC.</div></div>`;
@@ -441,11 +450,15 @@ function renderPackTab(host){
   const allChecked=ord.lines.every(l=>l.impachetat||l.staff_blocked);
   const singleLine=!multi?ord.lines[0]:null;
   const singleLk=singleLine?lineKey(singleLine):null;
+  const singlePrepackCodes=singleLine?linePrepackCodes(singleLine):[];
+  const singlePrepackReady=singleLine&&!singleLine.impachetat&&linePrepackReady(singleLine);
   const bigBtnHtml=multi
     ?`<button type="button" class="big-pack-btn" ${allChecked&&!lineBusy['order_'+ord.key]?'':'disabled'} onclick="finalizeOrder('${ord.key}')">✓ ÎMPACHETAT${!allChecked?` (${doneCount}/${ord.lines.length})`:''}</button>`
     :singleLine.impachetat
       ?`<button type="button" class="big-pack-btn done" ${lineBusy[singleLk]?'disabled':''} onpointerdown="startHoldUnpack('${singleLk}')" onpointerup="cancelHoldUnpack()" onpointerleave="cancelHoldUnpack()" onpointercancel="cancelHoldUnpack()">✓ ÎMPACHETAT · ține apăsat pentru anulare</button>`
-      :`<button type="button" class="big-pack-btn" ${lineBusy[singleLk]?'disabled':''} onclick="packSingleLine('${singleLk}','${ord.key}')">✓ ÎMPACHETAT</button>`;
+      :singlePrepackReady
+        ?`<button type="button" class="big-pack-btn prepacked" ${lineBusy[singleLk]?'disabled':''} onclick="confirmPrepacked('${singleLk}')">✓ Deja împachetat · cod ${esc(singlePrepackCodes[0].cod)} — Confirmă</button>`
+        :`<button type="button" class="big-pack-btn" ${lineBusy[singleLk]?'disabled':''} onclick="packSingleLine('${singleLk}','${ord.key}')">✓ ÎMPACHETAT</button>`;
   host.innerHTML=`<div class="card">
     <div class="ord-hdr">
       <div class="ord-hdr-row1">
@@ -558,6 +571,41 @@ function stopLockHeartbeat(){
   clearInterval(lockHeartbeatTimer);lockHeartbeatTimer=null;lockHeartbeatKey=null;
 }
 
+// ── PRE-ÎMPACHETARE (coduri generate din index.html → Inventar → 🏷️ Pre-împachetează) ──
+// Verificare pur locală (PREPACK, reîmprospătat la fiecare 25s ca restul comenzilor) — dacă există
+// destule coduri nefolosite pentru produsul liniei ca să acopere TOATĂ cantitatea cerută pe linia
+// asta, arătăm „deja împachetat" în loc de pașii normali. Per LINIE (produs), nu per comandă întreagă
+// — o comandă cu mai multe produse diferite poate arăta mixt (o linie gata, alta de împachetat normal).
+function linePrepackCodes(l){
+  if(l.impachetat)return[];
+  return PREPACK.filter(c=>c.produs_id===l.produs_id);
+}
+function linePrepackReady(l){return linePrepackCodes(l).length>=(Number(l.cantitate)||0);}
+async function confirmPrepacked(lk){
+  if(lineBusy[lk])return;
+  const l=findLineByKey(lk);if(!l)return;
+  const codes=linePrepackCodes(l).slice(0,Number(l.cantitate)||0);
+  if(codes.length<(Number(l.cantitate)||0)){
+    showToast('Codurile nu mai sunt disponibile — reîmprospătez');
+    await refreshData();
+    return;
+  }
+  lineBusy[lk]=true;renderMain();
+  const ord=orderOfLine(l);
+  try{
+    await sb('PATCH',`pre_impachetate?id=in.(${codes.map(c=>c.id).join(',')})`,{folosit_la:new Date().toISOString(),comanda_key:ord?.key||null});
+    const usedIds=new Set(codes.map(c=>c.id));
+    PREPACK=PREPACK.filter(c=>!usedIds.has(c.id));
+    await patchLine(l,{impachetat:true,impachetat_at:new Date().toISOString()});
+    logActivity('impachetat_prepacked',l,codes.map(c=>c.cod).join(','));
+    computeOrders();
+  }catch(e){
+    showToast('Eroare la confirmare — încearcă din nou');
+    console.error(e);
+  }
+  lineBusy[lk]=false;
+  renderMain();
+}
 async function patchLine(l,body){
   await sb('PATCH',`${l._table}?id=eq.${l.id}`,body);
   Object.assign(l,body);
@@ -853,7 +901,13 @@ function matchOrder(o,q){
   if((o.comandaId||'').toLowerCase().includes(s))return true;
   if((o.clientNume||'').toLowerCase().includes(s))return true;
   if((o.awb||'').toLowerCase().includes(s))return true;
-  return o.lines.some(l=>(l.produs_nume||l.titlu_extern||'').toLowerCase().includes(s)||(findProdus(l.produs_id)?.sku||'').toLowerCase().includes(s));
+  // Bug real găsit pe drum: placeholder-ul căutării promitea deja „...SKU sau cod intern", dar
+  // codul intern (internalCode) nu era de fapt verificat — util mai ales acum, la pre-împachetare,
+  // ca eticheta tipărită (care arată codul intern) să poată fi găsită manual când nu ai cameră.
+  return o.lines.some(l=>{
+    const p=findProdus(l.produs_id);
+    return(l.produs_nume||l.titlu_extern||'').toLowerCase().includes(s)||(p?.sku||'').toLowerCase().includes(s)||(p?.internalCode||'').toLowerCase().includes(s);
+  });
 }
 function renderSearchTab(host){
   host.innerHTML=`<div class="search-row search-drop" style="margin-bottom:14px">
@@ -926,11 +980,12 @@ function startPolling(){
 
 async function refreshData(){
   try{
-    const [comRows,jurnalRows]=await Promise.all([
+    const [comRows,jurnalRows,prepackRows]=await Promise.all([
       sb('GET',`platforma_comenzi?select=*&created_at=gte.${CUTOFF_DATE}&order=created_at.asc`),
-      sb('GET',`jurnal?select=*&data=gte.${CUTOFF_DATE}&order=data.asc`).catch(()=>JURNAL)
+      sb('GET',`jurnal?select=*&data=gte.${CUTOFF_DATE}&order=data.asc`).catch(()=>JURNAL),
+      sb('GET','pre_impachetate?select=*&folosit_la=is.null&order=created_at.asc').catch(()=>PREPACK)
     ]);
-    COMENZI=comRows;JURNAL=jurnalRows;
+    COMENZI=comRows;JURNAL=jurnalRows;PREPACK=prepackRows;
     document.getElementById('sync-dot').className='sync-dot ok';
     computeOrders();
     renderMain();
@@ -943,12 +998,14 @@ async function refreshData(){
 async function load(){
   renderStaffNameBadge();
   try{
-    const [prodRows,comRows]=await Promise.all([
+    const [prodRows,comRows,prepackRows]=await Promise.all([
       sb('GET','produse?select=id,name,sku,internal_code,img,images,bought,sold&order=id.asc'),
       sb('GET',`platforma_comenzi?select=*&created_at=gte.${CUTOFF_DATE}&order=created_at.asc`),
+      sb('GET','pre_impachetate?select=*&folosit_la=is.null&order=created_at.asc').catch(e=>{console.warn('pre_impachetate indisponibil:',e);return[];}),
     ]);
     PRODUSE=prodRows.map(p=>({...p,internalCode:p.internal_code}));
     COMENZI=comRows;
+    PREPACK=prepackRows;
     try{
       JURNAL=await sb('GET',`jurnal?select=*&data=gte.${CUTOFF_DATE}&order=data.asc`);
     }catch(e){

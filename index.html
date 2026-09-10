@@ -1205,6 +1205,19 @@ function buildRaportCats(){
   .invchk-sku{font-size:11px;color:#666}
   .invchk-qty{font-weight:700;font-size:15px;color:#000;white-space:nowrap}
 }
+/* Etichete pre-împachetare (Inventar → 🏷️ Pre-împachetează) — același mecanism de print ca lista de
+   verificare de mai sus (container ascuns normal, arătat doar la print), grilă de etichete decupabile
+   în loc de o listă simplă — fiecare cu QR (căutat automat la Staff) + codul intern al produsului
+   (rezervă lizibilă, pentru căutare manuală când nu e cameră la îndemână — cerut explicit). */
+#pk-print{display:none}
+@media print{
+  body.printing-pk>*:not(#pk-print){display:none!important}
+  body.printing-pk #pk-print{display:grid!important;grid-template-columns:repeat(3,1fr);gap:8px;padding:10px}
+  .pk-label{border:1px dashed #999;border-radius:6px;padding:10px 6px;display:flex;flex-direction:column;align-items:center;gap:4px;page-break-inside:avoid;text-align:center}
+  .pk-label-qr{width:110px;height:110px}
+  .pk-label-nm{font-size:11px;color:#000;line-height:1.25;max-height:2.5em;overflow:hidden}
+  .pk-label-code{font-family:var(--mono);font-weight:800;font-size:14px;color:#000;letter-spacing:.03em}
+}
 /* Export PDF „Raport vânzări" — același mecanism ca #inv-checklist-print: bloc simplu, dedicat
    printului, NU o rasterizare a paginii interactive (graficul SVG/carduri nu se pretează la print
    direct) — doar un rezumat tabelar (KPI + istoric lunar), la fel ca celelalte exporturi PDF din
@@ -1626,6 +1639,12 @@ textarea.listing-html-raw{width:100%;min-height:180px;box-sizing:border-box;resi
 .sc-row input[type="text"]{flex:1;min-width:140px}
 .sc-row-best{border-color:var(--gr);background:var(--gr-bg)}
 .sc-best-badge{color:var(--gr);font-weight:800;font-size:19px;white-space:nowrap}
+
+.pk-rows{display:flex;flex-direction:column;gap:8px}
+.pk-row{display:flex;align-items:center;gap:12px;padding:10px 12px;border:1px solid var(--b1);border-radius:var(--r);background:var(--surf)}
+.pk-row-nm{flex:1;font-weight:700;font-size:22px}
+.pk-row-meta{font-size:17px;color:var(--t3);font-weight:500;margin-top:2px}
+.pk-row input[type="number"]{width:90px;font-family:var(--mono);text-align:center}
 
 /* ── 7. Export PDF ── */
 .rsx-pdf-row{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:18px}
@@ -2081,6 +2100,7 @@ th{font-weight:800!important;color:var(--t3)!important}
     </select>
     <button class="btn btn-acc" onclick="openModal()">+ Produs nou</button>
     <button class="btn btn-sm" id="bulk-add-btn" onclick="bulkAddStock()" title="Adaugă manual o cantitate de stoc la toate produsele bifate — apasă fără nicio bifă pentru a vedea cum se selectează">📥 Adaugă stoc</button>
+    <button class="btn btn-sm" id="bulk-prepack-btn" onclick="openPrepack()" title="Generează etichete cu cod QR pentru produsele bifate, de lipit pe cutii deja împachetate — la o comandă reală, Staff recunoaște automat produsul și sare peste verificare">🏷️ Pre-împachetează</button>
     <button class="btn btn-sm" id="bulk-archive-btn" onclick="bulkArchiveProd()" disabled title="Arhivează produsele bifate — ies din Inventar, dar rămân în rapoartele de stoc pentru contabilitate">🗄️ Arhivează selectate</button>
     <button class="btn btn-sm" id="bulk-del-btn" onclick="bulkDeleteProd()" disabled title="Șterge definitiv toate produsele bifate" style="color:var(--rd);border-color:var(--rd)">🗑 Șterge selectate</button>
   </div>
@@ -3228,6 +3248,7 @@ th{font-weight:800!important;color:var(--t3)!important}
 </div>
 
 <div id="inv-checklist-print"></div>
+<div id="pk-print"></div>
 <div id="sr-print"></div>
 
 <div class="ov" id="ov-emag-guide" onclick="if(event.target===this)closeEmagGuide()">
@@ -3259,6 +3280,25 @@ th{font-weight:800!important;color:var(--t3)!important}
     <button class="m-close" onclick="closeSupplierCompare()">×</button>
   </div>
   <div class="inv-body"><div id="sc-content"></div></div>
+</div>
+</div>
+
+<div class="ov" id="ov-prepack" onclick="if(event.target===this)closePrepack()">
+<div class="inv-modal" onclick="event.stopPropagation()">
+  <div class="inv-head">
+    <div>
+      <h2>🏷️ Pre-împachetează</h2>
+      <div style="font-size:18px;color:#6B7280;font-weight:500;margin-top:2px">Generează etichete cu cod QR pentru produsele bifate — lipești eticheta pe cutia deja împachetată, iar la o comandă reală Staff sare automat peste verificare</div>
+    </div>
+    <button class="m-close" onclick="closePrepack()">×</button>
+  </div>
+  <div class="inv-body">
+    <div id="pk-rows" class="pk-rows"></div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-sm" onclick="closePrepack()">Anulează</button>
+      <button class="btn btn-acc" onclick="generatePrepackLabels()">🖨️ Generează și tipărește etichetele</button>
+    </div>
+  </div>
 </div>
 </div>
 
@@ -3302,6 +3342,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:321,text:'Nou — Pre-împachetare cu coduri QR, idee propusă direct pentru produsele care se pot pregăti din timp, înainte să existe o comandă. În Inventar, bifezi produsele + „🏷️ Pre-împachetează": alegi câte bucăți din fiecare (implicit stocul curent), se generează câte un cod unic per bucată (QR + cod intern lizibil dedesubt, pentru când nu e cameră la îndemână) și se deschide direct fereastra de tipărire — etichetele se lipesc pe cutii. În Staff, când apare o comandă reală pe un produs cu bucăți deja pre-împachetate, linia arată direct „✓ Deja împachetat · cod XXXXXXXX — Confirmă" în loc de fluxul normal de verificare — un singur click asociază automat primul cod disponibil comenzii (PATCH cu data + numărul comenzii) și trece linia mai departe ca împachetată; codurile rămân în istoric, marcate „folosit", nu se șterg. Pe drum, reparat și un bug mic la căutarea din Staff: căutarea zicea că se face „după cod intern", dar verifica de fapt doar SKU-ul — acum verifică ambele. Necesită un tabel nou în Supabase (dat separat în chat). Verificat de 2 ori, cu date reale în Supabase (produs de test creat/șters complet la final, din toate tabelele atinse): generarea a creat corect codurile în bază cu produsul potrivit, etichetele au ieșit cu QR funcțional + codul intern vizibil, confirmarea din Staff a marcat exact numărul corect de coduri ca folosite (restul au rămas disponibile), căutarea după cod intern confirmată funcțională, fără erori consolă',date:'2026-09-10'},
   {n:320,text:'Staff (pagina de împachetat, /staff) — trei schimbări cerute direct. (1) Bug real reparat: coada activă de împachetat (packQueue/navQueue) se umfla la nesfârșit din CUTOFF_DATE încoace, fără niciun „reset" zilnic — o comandă din 4 septembrie tot apărea pe 10 septembrie, amestecată cu cele de azi (raportat exact așa: „de ce apar în continuare toate comenzile"). Bara de progres de sus fusese deja scopată la ziua cea mai recentă din date (fix anterior), dar coada propriu-zisă rămăsese neschimbată — acum ambele arată consistent DOAR ziua curentă. O comandă mai veche, încă neterminată, NU dispare din bază — rămâne găsibilă din „Căutare", doar nu mai aglomerează fluxul zilnic; comenzile blocate (probleme raportate) rămân vizibile în „În așteptare" indiferent de zi. (2) Redenumit — „Împachetare comenzi" → „Comenzi de împachetat". (3) Stil vizual „mai premium, mai minimalist": font nou (Manrope, ca-n restul aplicației, în loc de DM Sans), fundal cu o singură nuanță discretă de glow în loc de trei culori competitive (mov/verde/portocaliu), blur de sticlă redus (22→14px) și umbră mai difuză pe carduri — păstrează stilul „liquid glass" deja cerut anterior, doar mai calm. Verificat de 2 ori, direct pe date reale: comanda veche (4 septembrie) confirmat scoasă din coada activă, tot găsibilă prin căutare, bara de progres și numărătoarea cardurilor arată acum același număr, fără erori consolă',date:'2026-09-10'},
   {n:319,text:'Trei completări la Importă factură/editare produs, cerute direct pe o factură Maxy reală. (1) Potrivire prioritară după EAN (cod de bare) — codul propriu al furnizorului („Code") se poate schimba între reaprovizionări ale ACELUIAȘI produs, dar EAN-ul e constant; produsul nou EAN se completează și în formularul de editare (câmp nou, lângă Cod intern), și se reține automat pe produsele deja asociate din facturi viitoare, chiar dacă acum sunt asociate prin SKU/nume. (2) Bug real reparat: textul facturii trimis către AI era tăiat la 10.000 caractere — pe o factură de 2 pagini/33 produse, linia de transport (ultimul rând, lângă total) cădea mereu în afara acelei limite, deci „Cost transport" ieșea gol, exact cum a fost raportat. Ridicat la 40.000 caractere. (3) Rezervă nouă — buton „📋 Extrage preț din poză" în formularul de editare produs (secțiunea Achiziție): pentru facturi pe care Importă factură nu le citește corect, lipești o poză cu prețul (factură, pagină furnizor, catalog) direct acolo, fără să mai treci prin import. Necesită o coloană nouă în Supabase (fără ea, totul merge la fel, doar EAN-ul nu se ține minte încă — degradare grațioasă): `alter table produse add column if not exists ean text; create unique index if not exists idx_produse_ean_unique on produse(ean) where ean is not null and ean <> \'\';`. Verificat de 2 ori, inclusiv direct pe producție (fără migrare rulată încă): aplicația se încarcă normal (372 produse, fallback automat la coloana lipsă), potrivire EAN confirmată corect chiar cu SKU/nume complet diferite, câmpul EAN salvează local chiar fără coloana în bază, butonul de extragere preț din poză completează corect câmpul EUR/RON, fără erori consolă',date:'2026-09-10'},
   {n:318,text:'Nou — Importă factură: costul de transport intră acum direct în prețul de achiziție al produselor, cerut explicit („costul real e până la urma cu tot cu transport"). AI-ul găsește linia de transport/livrare din factură (ex. „delivery" — deja era ignorată corect ca produs, dar valoarea ei se pierdea complet) și o împarte egal la toate bucățile comenzii — suma rezultată se adaugă la costul fiecărui produs ÎNAINTE să devină preț de achiziție (și, automat, prețurile de vânzare recalculate). Cardul nou „Cost transport" din Importă factură arată suma găsită (editabilă manual, dacă AI n-o prinde sau vrei s-o corectezi) și alocarea pe bucată; fiecare rând din previzualizare arată clar „X produs + Y transport", ca să se vadă exact ce intră în cost. Funcționează identic la PDF ȘI la poză/screenshot (aceeași extragere AI) — metoda voastră principală de import. Necesită o coloană nouă în Supabase (fără ea, totul funcționează la fel, doar costul de transport nu se ține minte în istoricul comenzii — degradare grațioasă, ca la alte funcții opționale): `alter table comenzi_stoc add column if not exists shipping_cost numeric default 0;`. Verificat de 2 ori, cu numerele reale dintr-o factură Maxy trimisă direct (transport 126 EUR, produse la 3,82 și 26,28 EUR): alocare corectă (638,82 RON ÷ 6 bucăți = 106,47 RON/buc), produse create real în Supabase cu costul exact „produs + transport" scris ca preț de achiziție, suprascriere manuală funcțională, fără erori consolă',date:'2026-09-10'},
@@ -6912,6 +6953,18 @@ async function ensureXLSX(){
     document.head.appendChild(s);
   });
   return window.XLSX;
+}
+// Generare cod QR pe etichetele de pre-împachetare — librărie mică, fără dependințe, randează direct
+// într-un element dat (canvas), exact tiparul de care avem nevoie pentru etichetele printabile.
+async function ensureQRCode(){
+  if(window.QRCode)return window.QRCode;
+  await new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js';
+    s.onload=resolve;s.onerror=reject;
+    document.head.appendChild(s);
+  });
+  return window.QRCode;
 }
 function getResearchHistory(){return JSON.parse(localStorage.getItem(RESEARCH_HK)||'[]');}
 function saveResearchToHistory(item){
@@ -12759,6 +12812,74 @@ async function applyStockIntake(products,add,newCost,orderNumber,source){
     });
   }
 }
+// ── PRE-ÎMPACHETARE (etichete QR, tabela pre_impachetate) — plan complet stabilit prin /grill-me,
+// vezi .tmp/grill-me/staff-pre-impachetare-coduri.md. Rezumat: generezi etichete pentru produse deja
+// împachetate fizic, ÎNAINTE să existe o comandă reală pentru ele; la o comandă reală, Staff detectează
+// automat (după produs, FIFO) un cod nefolosit și sare peste verificare. Stocul NU se atinge aici —
+// pre-împachetarea e o evidență complet separată (decizie explicită, ca să nu completice calculul de
+// stoc existent nicăieri în aplicație).
+let pkState={rows:[]};
+function openPrepack(){
+  if(!selProd.size){toast('Bifează întâi produsele din listă (căsuța din stânga fiecărui rând)','err');return;}
+  pkState.rows=[...selProd].map(id=>{
+    const p=P.find(x=>x.id===id);
+    if(!p)return null;
+    const stock=Math.max(0,Math.floor(qty(p)));
+    return{produsId:p.id,name:p.name,internalCode:p.internalCode||'',stock,qty:stock};
+  }).filter(Boolean);
+  renderPrepack();
+  document.getElementById('ov-prepack').classList.add('on');
+}
+function closePrepack(){document.getElementById('ov-prepack').classList.remove('on');}
+function setPrepackQty(idx,val){
+  const row=pkState.rows[idx];if(!row)return;
+  row.qty=Math.max(0,Math.round(Number(String(val).replace(',','.'))||0));
+}
+function renderPrepack(){
+  const box=document.getElementById('pk-rows');if(!box)return;
+  box.innerHTML=pkState.rows.map((r,idx)=>`<div class="pk-row">
+    <div class="pk-row-nm">${esc(r.name)}<div class="pk-row-meta">Cod intern ${esc(r.internalCode||'—')} · Stoc actual ${fmtQty(r.stock)}</div></div>
+    <input type="number" min="0" step="1" value="${r.qty}" onchange="setPrepackQty(${idx},this.value)">
+  </div>`).join('');
+}
+// Cod unic per unitate pre-împachetată — 8 caractere alfanumerice, suficientă entropie (36^8) ca să nu
+// coliziune în interiorul aceluiași lot, plus constrângerea unique din bază, ca plasă de siguranță.
+function genPrepackCode(){return Math.random().toString(36).slice(2,10).toUpperCase();}
+async function generatePrepackLabels(){
+  const targets=pkState.rows.filter(r=>r.qty>0);
+  if(!targets.length){toast('Introdu cel puțin o cantitate mai mare ca 0','err');return;}
+  const totalLabels=targets.reduce((s,r)=>s+r.qty,0);
+  if(totalLabels>200&&!confirm(`Generezi ${totalLabels} etichete deodată — sigur?`))return;
+  showLoading(`Se generează ${totalLabels} coduri…`);
+  try{
+    const insertRows=[];
+    targets.forEach(r=>{for(let i=0;i<r.qty;i++)insertRows.push({cod:genPrepackCode(),produs_id:r.produsId});});
+    const created=await dbPost('pre_impachetate',insertRows);
+    hideLoading();
+    closePrepack();
+    await printPrepackLabels(created,targets);
+    toast(`${created.length} etichete generate ✓ — se deschide fereastra de tipărire`);
+  }catch(e){
+    hideLoading();
+    console.error('generatePrepackLabels error:',e);
+    toast('Eroare la generarea codurilor: '+(e.message||e),'err');
+  }
+}
+async function printPrepackLabels(createdRows,targets){
+  await ensureQRCode();
+  const byProduct={};targets.forEach(r=>{byProduct[r.produsId]=r;});
+  const box=document.getElementById('pk-print');
+  box.innerHTML=createdRows.map((row,i)=>{
+    const info=byProduct[row.produs_id]||{};
+    return`<div class="pk-label"><div class="pk-label-qr" id="pk-qr-${i}"></div><div class="pk-label-nm">${esc(info.name||'')}</div><div class="pk-label-code">${esc(info.internalCode||'')}</div></div>`;
+  }).join('');
+  createdRows.forEach((row,i)=>{
+    new QRCode(document.getElementById('pk-qr-'+i),{text:row.cod,width:110,height:110,correctLevel:QRCode.CorrectLevel.M});
+  });
+  document.body.classList.add('printing-pk');
+  window.print();
+}
+window.addEventListener('afterprint',()=>document.body.classList.remove('printing-pk'));
 async function bulkAddStock(){
   const n=selProd.size;
   if(!n){toast('Bifează întâi produsele din listă (căsuța din stânga fiecărui rând) — apoi acest buton adaugă aceeași cantitate la toate deodată','err');return;}
