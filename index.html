@@ -3394,6 +3394,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:326,text:'Comenzi Platforme — cerut direct: la un import mixt eMAG+Trendyol cu multe linii, bifarea „✓ Inclus" una câte una pe fiecare produs era greoaie. Fiecare secțiune de platformă (linia despărțitoare „🛒 eMAG"/„🛍️ Trendyol") are acum propriul buton „✓ Include tot (N)" — include dintr-un click DOAR liniile din acea platformă, neincluse încă (N = câte mai sunt); butonul dispare automat când nu mai e nimic de inclus. Fiecare linie trece prin exact același proces ca la bifarea manuală (scrie comanda, apare imediat în Staff) — nimic din logica de asociere/comitere nu s-a schimbat. Verificat de 2 ori, cu Playwright pe date sintetice (2 linii eMAG + 3 Trendyol, mix de incluse/neincluse): fiecare buton arată numărul corect, clic pe „Include tot" la eMAG afectează DOAR liniile eMAG (Trendyol neatins), butonul dispare după ce nu mai rămâne nimic de inclus, fără erori consolă',date:'2026-09-11'},
   {n:325,text:'Bug real reparat, raportat direct cu o captură: la importul comenzilor Trendyol, numele clientului arăta „Prima comandă"/„Comandă recurentă" în loc de nume real. Cauza: coloana de „client" era detectată printr-un alias generic („client"), nicicând verificat pe un export Trendyol real (documentat așa în cod de la introducere) — de fapt se potrivea cu o coloană de tip status ("Tip Client"), nu cu numele. Acum, înainte de a folosi coloana găsită, se verifică dacă are prea puține valori distincte pe un eșantion (sub 3 valori diferite pe minim 6 rânduri) — semn clar că e o coloană de status/categorie, nu de nume — caz în care se ignoră, revenind la „fără nume afișat" (starea sigură, documentată deja pentru coloană lipsă), nu la unul greșit. Numele real al clientului tot nu apare încă la Trendyol (nu știu care e coloana corectă din exportul vostru) — trimite-mi/spune-mi textul exact al header-ului cu numele, ca să-l adaug la lista de alias-uri. Verificat de 2 ori, cu fișiere XLSX sintetice reale, prin Playwright, direct pe codul din aplicație (nu o reimplementare): fișierul cu coloana „Tip Client" (bug reprodus exact) acum vine cu nume gol, nu cu statusul; un fișier cu o coloană reală de nume distincte continuă să funcționeze corect, fără regresie; fără erori consolă',date:'2026-09-11'},
   {n:324,text:'Nou — „Produs nou": import din screenshot, pentru magazinele/furnizorii pe care „Adaugă produs din link" nu-i poate citi automat (ex. Maxy, Jumbo — server care blochează accesul, la fel ca la Research). Sub linkul de import, buton „📷 Din screenshot" (încarci una sau mai multe poze, max 5) sau „📋 Lipește din clipboard" — AI (vision) citește poza și completează titlul (tradus în română), codul/SKU (doar dacă e etichetat explicit pe pagină), categoria, furnizorul, materialul/dimensiunile/culorile, descrierea și prețul de achiziție (RON sau EUR, cu conversie automată la fel ca la import din link). Poza produsului rămâne de adăugat separat — o captură de pagină nu e o poză de produs utilizabilă. Verificat de 2 ori: sintaxă OK pe ambele fișiere, butoanele/inputul de fișier confirmate prin Playwright că apar corect în modal și pornesc funcția corectă, traseul complet testat cu o poză de test (validarea „poză prea mică" a prins-o corect) — extragerea AI propriu-zisă nu poate fi testată local (necesită /api/openai, disponibil doar pe Vercel, cum e documentat)',date:'2026-09-11'},
   {n:323,text:'Nou — Mesaje/task-uri către Staff, cerut direct: buton „📨" nou în header-ul din Admin, lângă Notiță/Preț privat — compui unul sau mai multe mesaje ori task-uri (cu tip separat: 💬 Mesaj sau ✅ Task) și le trimiți dintr-un click; sub formular, un istoric arată dacă au fost rezolvate și de cine. Pe tableta de Staff, mesajele nerezolvate apar automat, deschis mare, ca pop-up — dacă nu e de rezolvat chiar atunci, se poate minimiza („Minimizează — rezolv mai târziu"), rămânând un buton flotant 📨 jos-dreapta cu numărul celor nerezolvate, până le confirmă cineva; un mesaj nou forțează redeschiderea mare, chiar dacă anterior era minimizat. Necesită un tabel nou în Supabase (dat separat în chat — RLS dezactivat explicit, la fel ca la toate celelalte tabele); fără el, ambele aplicații funcționează neschimbat, doar butonul/pop-up-ul nu au ce arăta (degradare grațioasă, testată explicit). Verificat de 2 ori: sintaxă OK pe ambele fișiere, cu tabelul încă nelipsit la prima verificare — eroarea a fost prinsă corect, fără crash, pe ambele părți',date:'2026-09-11'},
@@ -14669,6 +14670,17 @@ async function togglePcomInclude(idx){
   renderPcomImportPreview();
   await syncPcomLineCommitState(idx);
 }
+// Cerut direct — pe un import mixt eMAG+Trendyol cu multe linii, bifarea „✓ Inclus” una câte una pe
+// fiecare produs era greoaie. Un click include tot ce mai e neinclus DOAR din secțiunea acelei
+// platforme (nu tot importul) — fiecare linie trece prin exact același commit ca la bifarea manuală.
+async function includeAllPcomPlatform(plat){
+  const idxs=pcImpParsed.map((x,i)=>i).filter(i=>pcImpParsed[i].platforma===plat&&!pcImpParsed[i].include);
+  if(!idxs.length)return;
+  idxs.forEach(i=>{pcImpParsed[i].include=true;});
+  renderPcomImportPreview();
+  for(const i of idxs)await syncPcomLineCommitState(i);
+  renderPcomImportPreview();
+}
 function renderPcomImportPreview(){
   const prev=document.getElementById('pcmi-preview');
   pcomComputeGroups();
@@ -14683,8 +14695,11 @@ function renderPcomImportPreview(){
     const plat=pcImpParsed[idxs[0]].platforma;
     if(multiPlatform&&plat!==lastPlat){
       lastPlat=plat;
-      const count=pcImpParsed.filter(x=>x.platforma===plat).length;
-      divider=`<div class="pcom-platform-divider"><span>${plat==='trendyol'?'🛍️ Trendyol':'🛒 eMAG'}</span><span class="pcom-platform-divider-count">${count} linii</span></div>`;
+      const platLines=pcImpParsed.filter(x=>x.platforma===plat);
+      const count=platLines.length;
+      const notIncluded=platLines.filter(x=>!x.include).length;
+      const includeAllHtml=notIncluded?`<button type="button" class="pcom-include-toggle" onclick="includeAllPcomPlatform('${plat}')">✓ Include tot (${notIncluded})</button>`:'';
+      divider=`<div class="pcom-platform-divider"><span>${plat==='trendyol'?'🛍️ Trendyol':'🛒 eMAG'}</span><span class="pcom-platform-divider-count">${count} linii</span>${includeAllHtml}</div>`;
     }
     if(idxs.length<=1)return divider+pcomRowHtml(idxs[0],true);
     const linesHtml=idxs.map(i=>pcomRowHtml(i,false)).join('');
