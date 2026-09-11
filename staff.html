@@ -173,6 +173,25 @@ button{font-family:var(--font);cursor:pointer}
 .toast-undo{background:rgba(255,255,255,.15);border:none;color:#fff;font-weight:800;padding:6px 14px;border-radius:999px;flex-shrink:0}
 .toast-undo:active{background:rgba(255,255,255,.28)}
 
+/* Mesaje/task-uri de la Admin (tabela staff_mesaje) — pop-up mare implicit, dar minimizabil: dacă nu
+   e de rezolvat chiar atunci, rămâne un buton flotant accesibil oricând, până e bifat rezolvat. */
+.msg-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:260;display:none;align-items:center;justify-content:center;padding:20px}
+.msg-overlay.on{display:flex}
+.msg-modal{background:var(--glass-strong);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);border:1px solid var(--glass-bd);border-radius:var(--r3);box-shadow:0 20px 60px rgba(16,24,40,.25);width:100%;max-width:560px;max-height:88vh;overflow-y:auto;padding:26px}
+.msg-modal-title{font-size:26px;font-weight:800;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.msg-item{padding:18px;border-radius:var(--r2);border:1px solid var(--b1);background:var(--surf);margin-bottom:14px}
+.msg-item-tip{font-size:14px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;color:var(--acc);margin-bottom:6px}
+.msg-item-tip.task{color:var(--or)}
+.msg-item-txt{font-size:20px;font-weight:600;line-height:1.4;margin-bottom:6px}
+.msg-item-time{font-size:14px;color:var(--t3);margin-bottom:12px}
+.msg-item-done-btn{width:100%;padding:14px;border-radius:var(--r2);border:none;background:var(--gr);color:#fff;font-size:18px;font-weight:800}
+.msg-item-done-btn:active{background:#0e9c5c}
+.msg-modal-actions{display:flex;gap:10px;margin-top:6px}
+.msg-modal-min{flex:1;padding:16px;border-radius:var(--r2);border:1px solid var(--b2);background:var(--surf);font-size:17px;font-weight:700;color:var(--t2)}
+.msg-badge-btn{position:fixed;right:20px;bottom:20px;z-index:240;background:var(--acc);color:#fff;border:none;border-radius:999px;padding:14px 20px;font-size:18px;font-weight:800;box-shadow:0 10px 26px rgba(118,87,246,.35);display:none;align-items:center;gap:8px}
+.msg-badge-btn.on{display:flex}
+.msg-badge-count{background:rgba(255,255,255,.25);border-radius:999px;padding:2px 9px;font-size:15px}
+
 @media(max-width:600px){
   .line{flex-direction:column;align-items:center;text-align:center}
   .line-img-wrap{width:100%;display:flex;justify-content:center}
@@ -214,6 +233,17 @@ button{font-family:var(--font);cursor:pointer}
 </div>
 
 <div class="toast" id="toast"></div>
+
+<div class="msg-overlay" id="msg-overlay">
+  <div class="msg-modal">
+    <div class="msg-modal-title">📨 Mesaje de la Admin</div>
+    <div id="msg-list"></div>
+    <div class="msg-modal-actions">
+      <button type="button" class="msg-modal-min" onclick="minimizeMsgPopup()">Minimizează — rezolv mai târziu</button>
+    </div>
+  </div>
+</div>
+<button type="button" class="msg-badge-btn" id="msg-badge-btn" onclick="openMsgPopup()">📨 <span class="msg-badge-count" id="msg-badge-count"></span></button>
 
 <script>
 const SUPA_URL='https://nuvgwytanlgvcffxeahs.supabase.co';
@@ -257,7 +287,7 @@ function td(){return new Date().toISOString().slice(0,10);}
 const CUTOFF_DATE='2026-08-27';
 const ISSUE_LABELS={stoc_zero:'Stoc zero',cantitate_insuficienta:'Cantitate insuficientă',produs_deteriorat:'Produs deteriorat',produs_gresit:'Produs greșit',nu_gasesc:'Nu găsesc produsul',alta:'Altă problemă'};
 
-let PRODUSE=[],COMENZI=[],JURNAL=[],ORDERS=[],PREPACK=[],curKey=null,activeTab='pack',activeImg={};
+let PRODUSE=[],COMENZI=[],JURNAL=[],ORDERS=[],PREPACK=[],STAFFMSG=[],curKey=null,activeTab='pack',activeImg={};
 let sheetCtx=null; // {lk} sau {lk,type:'stoc_redus'} — comanda/linia pentru care e deschis sheet-ul de probleme
 let pendingUndo=null; // {orderKey,lines:[{table,id,prev}],timeoutId,type}
 let lineBusy={}; // lk -> true cât timp o cerere e în curs (protecție dublu-tap)
@@ -1006,7 +1036,54 @@ function renderLegendTab(host){
     </div>
     <div class="legend-sec"><h3>Pre-împachetate</h3>
       <div class="legend-row"><b>🏷️ Pre-împachetate</b><span>Linii din comenzi active al căror produs a fost deja pregătit din timp (etichete generate din Inventar) — confirmă direct de aici, fără să mai treci prin verificarea normală</span></div>
+    </div>
+    <div class="legend-sec"><h3>Mesaje de la Admin</h3>
+      <div class="legend-row"><b>📨 Mesaje/task-uri</b><span>Apar automat, deschis mare, când Admin trimite ceva nou — un task chiar trebuie făcut, un mesaj e doar informativ</span></div>
+      <div class="legend-row"><b>Minimizează</b><span>Dacă nu e de rezolvat chiar atunci, se poate minimiza — rămâne un buton 📨 flotant jos-dreapta, cu numărul celor nerezolvate, până le confirmi</span></div>
     </div>`;
+}
+
+/* ── Mesaje/task-uri de la Admin (tabela staff_mesaje) ── */
+let msgPopupMinimized=false,seenMsgIds=new Set();
+function renderMsgPopup(){
+  const pending=STAFFMSG.filter(m=>!m.rezolvat);
+  const badgeBtn=document.getElementById('msg-badge-btn');
+  if(!pending.length){
+    document.getElementById('msg-overlay').classList.remove('on');
+    badgeBtn.classList.remove('on');
+    return;
+  }
+  document.getElementById('msg-badge-count').textContent=pending.length;
+  badgeBtn.classList.add('on');
+  // Un mesaj nou (necunoscut până acum) forțează redeschiderea mare, chiar dacă anterior era minimizat —
+  // minimizarea ține doar cât timp NU apare nimic nou de citit.
+  if(pending.some(m=>!seenMsgIds.has(m.id)))msgPopupMinimized=false;
+  document.getElementById('msg-overlay').classList.toggle('on',!msgPopupMinimized);
+  document.getElementById('msg-list').innerHTML=pending.map(m=>`<div class="msg-item">
+    <div class="msg-item-tip ${m.tip==='task'?'task':''}">${m.tip==='task'?'✅ TASK':'💬 MESAJ'}</div>
+    <div class="msg-item-txt">${esc(m.text)}</div>
+    <div class="msg-item-time">acum ${esc(timeAgo(m.created_at))}</div>
+    <button type="button" class="msg-item-done-btn" ${lineBusy['msg_'+m.id]?'disabled':''} onclick="resolveMsg(${m.id})">${m.tip==='task'?'✓ Rezolvat':'✓ Am înțeles'}</button>
+  </div>`).join('');
+  pending.forEach(m=>seenMsgIds.add(m.id));
+}
+function openMsgPopup(){msgPopupMinimized=false;renderMsgPopup();}
+function minimizeMsgPopup(){msgPopupMinimized=true;renderMsgPopup();}
+async function resolveMsg(id){
+  const key='msg_'+id;
+  if(lineBusy[key])return;
+  const m=STAFFMSG.find(x=>x.id===id);if(!m)return;
+  lineBusy[key]=true;renderMsgPopup();
+  try{
+    await sb('PATCH',`staff_mesaje?id=eq.${id}`,{rezolvat:true,rezolvat_at:new Date().toISOString(),rezolvat_by:staffName||null});
+    m.rezolvat=true;
+    logActivity('mesaj_rezolvat',null,{id,text:m.text});
+  }catch(e){
+    showToast('Eroare la salvare — încearcă din nou');
+    console.error(e);
+  }
+  lineBusy[key]=false;
+  renderMsgPopup();
 }
 
 document.addEventListener('click',ev=>{
@@ -1024,15 +1101,17 @@ function startPolling(){
 
 async function refreshData(){
   try{
-    const [comRows,jurnalRows,prepackRows]=await Promise.all([
+    const [comRows,jurnalRows,prepackRows,msgRows]=await Promise.all([
       sb('GET',`platforma_comenzi?select=*&created_at=gte.${CUTOFF_DATE}&order=created_at.asc`),
       sb('GET',`jurnal?select=*&data=gte.${CUTOFF_DATE}&order=data.asc`).catch(()=>JURNAL),
-      sb('GET','pre_impachetate?select=*&folosit_la=is.null&order=created_at.asc').catch(()=>PREPACK)
+      sb('GET','pre_impachetate?select=*&folosit_la=is.null&order=created_at.asc').catch(()=>PREPACK),
+      sb('GET','staff_mesaje?select=*&rezolvat=is.false&order=created_at.asc').catch(()=>STAFFMSG)
     ]);
-    COMENZI=comRows;JURNAL=jurnalRows;PREPACK=prepackRows;
+    COMENZI=comRows;JURNAL=jurnalRows;PREPACK=prepackRows;STAFFMSG=msgRows;
     document.getElementById('sync-dot').className='sync-dot ok';
     computeOrders();
     renderMain();
+    renderMsgPopup();
   }catch(e){
     document.getElementById('sync-dot').className='sync-dot err';
     console.warn('refresh eșuat:',e);
@@ -1042,14 +1121,16 @@ async function refreshData(){
 async function load(){
   renderStaffNameBadge();
   try{
-    const [prodRows,comRows,prepackRows]=await Promise.all([
+    const [prodRows,comRows,prepackRows,msgRows]=await Promise.all([
       sb('GET','produse?select=id,name,sku,internal_code,img,images,bought,sold&order=id.asc'),
       sb('GET',`platforma_comenzi?select=*&created_at=gte.${CUTOFF_DATE}&order=created_at.asc`),
       sb('GET','pre_impachetate?select=*&folosit_la=is.null&order=created_at.asc').catch(e=>{console.warn('pre_impachetate indisponibil:',e);return[];}),
+      sb('GET','staff_mesaje?select=*&rezolvat=is.false&order=created_at.asc').catch(e=>{console.warn('staff_mesaje indisponibil:',e);return[];}),
     ]);
     PRODUSE=prodRows.map(p=>({...p,internalCode:p.internal_code}));
     COMENZI=comRows;
     PREPACK=prepackRows;
+    STAFFMSG=msgRows;
     try{
       JURNAL=await sb('GET',`jurnal?select=*&data=gte.${CUTOFF_DATE}&order=data.asc`);
     }catch(e){
@@ -1060,6 +1141,7 @@ async function load(){
     computeOrders();
     pickInitialOrder(packQueue());
     renderMain();
+    renderMsgPopup();
     startPolling();
   }catch(e){
     document.getElementById('sync-dot').className='sync-dot err';

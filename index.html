@@ -1646,6 +1646,20 @@ textarea.listing-html-raw{width:100%;min-height:180px;box-sizing:border-box;resi
 .pk-row-meta{font-size:17px;color:var(--t3);font-weight:500;margin-top:2px}
 .pk-row input[type="number"]{width:90px;font-family:var(--mono);text-align:center}
 
+.smsg-rows{display:flex;flex-direction:column;gap:10px}
+.smsg-row{display:flex;gap:8px;align-items:flex-start;padding:10px 12px;border:1px solid var(--b1);border-radius:var(--r);background:var(--surf)}
+.smsg-row select{font-size:17px;padding:9px 8px;border:1.5px solid var(--b2);border-radius:var(--r);background:var(--surf);color:var(--t1);font-family:var(--font);flex-shrink:0}
+.smsg-row textarea{flex:1;font-family:var(--font);font-size:19px;padding:9px 11px;border:1.5px solid var(--b2);border-radius:var(--r);resize:vertical;min-height:48px}
+.smsg-row-rm{background:none;border:none;font-size:24px;color:var(--t3);cursor:pointer;padding:2px 6px;line-height:1}
+.smsg-row-rm:hover{color:var(--rd)}
+.smsg-hist{display:flex;flex-direction:column;gap:8px}
+.smsg-hist-item{padding:10px 14px;border:1px solid var(--b1);border-radius:var(--r);background:var(--surf);font-size:17px}
+.smsg-hist-txt{font-weight:600;color:var(--t1)}
+.smsg-hist-meta{font-size:14px;color:var(--t3);margin-top:3px}
+.smsg-hist-status{font-weight:700}
+.smsg-hist-status.done{color:var(--gr)}
+.smsg-hist-status.pending{color:var(--or)}
+
 /* ── 7. Export PDF ── */
 .rsx-pdf-row{display:flex;gap:9px;flex-wrap:wrap;margin-bottom:18px}
 
@@ -1947,6 +1961,7 @@ th{font-weight:800!important;color:var(--t3)!important}
   </div>
   <button class="notif-bell" id="notepad-btn" style="margin-left:10px" onclick="toggleNotepad()" title="Notiță rapidă — scrie și copiază orice vrei să ții la îndemână">📝</button>
   <button class="notif-bell" id="pp-btn" style="margin-left:10px" onclick="togglePretPrivat()" title="Preț privat — lipește o poză de produs și vezi rapid prețul minim + profitabilitatea pentru extern">🏷️</button>
+  <button class="notif-bell" id="smsg-btn" style="margin-left:10px" onclick="openStaffMsg()" title="Mesaje pentru Staff — trimite mesaje sau task-uri către angajați, apar direct pe tableta lor">📨</button>
   <div class="zoom-wrap" title="Mărește/micșorează afișarea">
     <button class="zoom-btn" onclick="zoomOut()" title="Micșorează (Zoom -)">−</button>
     <span class="zoom-level" id="zoom-level" onclick="zoomReset()" title="Click pentru a reseta la 100%">100%</span>
@@ -2993,6 +3008,17 @@ th{font-weight:800!important;color:var(--t3)!important}
                 <button class="btn btn-sm btn-acc" onclick="importFromUrl()" id="import-url-btn" style="min-width:90px">↓ Importă</button>
               </div>
               <div id="import-url-status" style="font-size:15px;color:#667085">Completează automat numele, codul, categoria, poza, descrierea, caracteristicile, prețul și o galerie de imagini tematice.</div>
+              <div style="display:flex;align-items:center;gap:8px;margin:12px 0 8px">
+                <div style="flex:1;height:1px;background:#EEF2F6"></div>
+                <span style="font-size:13px;color:#98A2B3;font-weight:700">sau, dacă linkul nu merge</span>
+                <div style="flex:1;height:1px;background:#EEF2F6"></div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px">
+                <input type="file" accept="image/*" multiple id="f-product-shot" style="display:none" onchange="handleProductScreenshotFile(this)">
+                <button type="button" class="btn btn-sm" onclick="document.getElementById('f-product-shot').click()">📷 Din screenshot (max 5)</button>
+                <button type="button" class="btn btn-sm" onclick="pasteProductScreenshotFromClipboard()" title="Lipește un screenshot copiat (Cmd/Ctrl+V) al paginii de produs a furnizorului">📋 Lipește din clipboard</button>
+              </div>
+              <div style="font-size:13px;color:#98A2B3;margin-top:4px">Util când magazinul blochează accesul automat (ex. Maxy, Jumbo) — extrage titlu, cod, preț de achiziție și caracteristici direct din poză</div>
             </div>
             <div id="img-gallery-wrap" style="display:none;margin:0 0 1rem">
               <div style="font-size:16px;font-weight:800;color:#344054;margin-bottom:8px">Galerie imagini tematice</div>
@@ -3302,6 +3328,32 @@ th{font-weight:800!important;color:var(--t3)!important}
 </div>
 </div>
 
+<div class="ov" id="ov-staffmsg" onclick="if(event.target===this)closeStaffMsg()">
+<div class="inv-modal" onclick="event.stopPropagation()">
+  <div class="inv-head">
+    <div>
+      <h2>📨 Mesaje pentru Staff</h2>
+      <div style="font-size:18px;color:#6B7280;font-weight:500;margin-top:2px">Trimite unul sau mai multe mesaje ori task-uri — apar imediat, deschis mare, pe tableta de Staff</div>
+    </div>
+    <button class="m-close" onclick="closeStaffMsg()">×</button>
+  </div>
+  <div class="inv-body">
+    <div id="smsg-rows" class="smsg-rows"></div>
+    <div style="display:flex;gap:8px;margin-top:12px">
+      <button class="btn btn-sm" onclick="addStaffMsgRow()">+ Adaugă alt mesaj</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-sm" onclick="closeStaffMsg()">Anulează</button>
+      <button class="btn btn-acc" onclick="sendStaffMsg()">📤 Trimite la Staff</button>
+    </div>
+    <div style="margin-top:26px;padding-top:20px;border-top:1px solid var(--b1)">
+      <div style="font-weight:700;font-size:20px;margin-bottom:10px">Trimise recent</div>
+      <div id="smsg-hist" class="smsg-hist"></div>
+    </div>
+  </div>
+</div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <div class="upd-widget">
@@ -3342,6 +3394,8 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:324,text:'Nou — „Produs nou": import din screenshot, pentru magazinele/furnizorii pe care „Adaugă produs din link" nu-i poate citi automat (ex. Maxy, Jumbo — server care blochează accesul, la fel ca la Research). Sub linkul de import, buton „📷 Din screenshot" (încarci una sau mai multe poze, max 5) sau „📋 Lipește din clipboard" — AI (vision) citește poza și completează titlul (tradus în română), codul/SKU (doar dacă e etichetat explicit pe pagină), categoria, furnizorul, materialul/dimensiunile/culorile, descrierea și prețul de achiziție (RON sau EUR, cu conversie automată la fel ca la import din link). Poza produsului rămâne de adăugat separat — o captură de pagină nu e o poză de produs utilizabilă. Verificat de 2 ori: sintaxă OK pe ambele fișiere, butoanele/inputul de fișier confirmate prin Playwright că apar corect în modal și pornesc funcția corectă, traseul complet testat cu o poză de test (validarea „poză prea mică" a prins-o corect) — extragerea AI propriu-zisă nu poate fi testată local (necesită /api/openai, disponibil doar pe Vercel, cum e documentat)',date:'2026-09-11'},
+  {n:323,text:'Nou — Mesaje/task-uri către Staff, cerut direct: buton „📨" nou în header-ul din Admin, lângă Notiță/Preț privat — compui unul sau mai multe mesaje ori task-uri (cu tip separat: 💬 Mesaj sau ✅ Task) și le trimiți dintr-un click; sub formular, un istoric arată dacă au fost rezolvate și de cine. Pe tableta de Staff, mesajele nerezolvate apar automat, deschis mare, ca pop-up — dacă nu e de rezolvat chiar atunci, se poate minimiza („Minimizează — rezolv mai târziu"), rămânând un buton flotant 📨 jos-dreapta cu numărul celor nerezolvate, până le confirmă cineva; un mesaj nou forțează redeschiderea mare, chiar dacă anterior era minimizat. Necesită un tabel nou în Supabase (dat separat în chat — RLS dezactivat explicit, la fel ca la toate celelalte tabele); fără el, ambele aplicații funcționează neschimbat, doar butonul/pop-up-ul nu au ce arăta (degradare grațioasă, testată explicit). Verificat de 2 ori: sintaxă OK pe ambele fișiere, cu tabelul încă nelipsit la prima verificare — eroarea a fost prinsă corect, fără crash, pe ambele părți',date:'2026-09-11'},
   {n:322,text:'Bug real reparat, raportat direct cu o captură: ecranul „Se încarcă datele din Supabase…" rămânea blocat la nesfârșit, fără nicio eroare afișată. Cauza: funcția de bază prin care aplicația vorbește cu Supabase (`sb()`, folosită aproape peste tot — Inventar, Jurnal, Staff etc.) nu avea niciun timeout — pe o conexiune căzută sau instabilă (WiFi de moment, tabletă/laptop ieșit din sleep cu o conexiune moartă), cererea nu se mai rezolva NICIODATĂ, deci nici mecanismul de eroare/fallback deja existent nu mai apuca să pornească. Acum, după 20 de secunde fără răspuns, cererea se anulează automat și trece pe fallback-ul deja pregătit (mesaj de eroare + date locale, dacă există) — corectat în ambele aplicații (index.html și Staff). Verificat de 2 ori: încărcarea normală rămâne la fel de rapidă (nicio întârziere adăugată), iar cu o conexiune simulată ca „moartă" (cerere reținută artificial, fără răspuns), ambele aplicații ies din starea blocată exact la 20 de secunde, fără erori consolă',date:'2026-09-10'},
   {n:321,text:'Nou — Pre-împachetare cu coduri QR, idee propusă direct pentru produsele care se pot pregăti din timp, înainte să existe o comandă. În Inventar, bifezi produsele + „🏷️ Pre-împachetează": alegi câte bucăți din fiecare (implicit stocul curent), se generează câte un cod unic per bucată (QR + cod intern lizibil dedesubt, pentru când nu e cameră la îndemână) și se deschide direct fereastra de tipărire — etichetele se lipesc pe cutii. În Staff, tab nou dedicat „🏷️ Pre-împachetate" (ultimul din bara de jos, cu numărătoare) — o listă separată cu toate liniile din comenzile active care au deja un cod disponibil pentru produsul lor; un click pe „Confirmă” asociază automat primul cod comenzii (PATCH cu data + numărul comenzii) și marchează linia împachetată. Important, cerut explicit: fluxul normal „Împachetare" rămâne 100% neschimbat — o linie confirmată din tab-ul nou apare acolo exact ca o bifare manuală obișnuită, fără nicio culoare/etichetă specială; pre-împachetarea e o funcție complet separată, nu o variantă a celei vechi. Codurile folosite rămân în istoric, marcate „folosit", nu se șterg. Pe drum, reparat și un bug mic la căutarea din Staff: căutarea zicea că se face „după cod intern", dar verifica de fapt doar SKU-ul — acum verifică ambele. Necesită un tabel nou în Supabase (dat separat în chat, inclusiv corecția ulterioară — RLS trebuia dezactivat explicit, la fel ca la toate celelalte tabele). Verificat de 2 ori, cu date reale în Supabase (produs de test creat/șters complet la final, din toate tabelele atinse): generarea a creat corect codurile în bază cu produsul potrivit, etichetele au ieșit cu QR funcțional + codul intern vizibil, tab-ul nou arată corect liniile eligibile și numărătoarea, confirmarea a marcat exact numărul corect de coduri ca folosite (restul au rămas disponibile), fluxul „Împachetare" verificat neschimbat (zero elemente vizuale noi), click-through pe toate cele 6 taburi cu date reale de producție, căutarea după cod intern confirmată funcțională, fără erori consolă',date:'2026-09-10'},
   {n:320,text:'Staff (pagina de împachetat, /staff) — trei schimbări cerute direct. (1) Bug real reparat: coada activă de împachetat (packQueue/navQueue) se umfla la nesfârșit din CUTOFF_DATE încoace, fără niciun „reset" zilnic — o comandă din 4 septembrie tot apărea pe 10 septembrie, amestecată cu cele de azi (raportat exact așa: „de ce apar în continuare toate comenzile"). Bara de progres de sus fusese deja scopată la ziua cea mai recentă din date (fix anterior), dar coada propriu-zisă rămăsese neschimbată — acum ambele arată consistent DOAR ziua curentă. O comandă mai veche, încă neterminată, NU dispare din bază — rămâne găsibilă din „Căutare", doar nu mai aglomerează fluxul zilnic; comenzile blocate (probleme raportate) rămân vizibile în „În așteptare" indiferent de zi. (2) Redenumit — „Împachetare comenzi" → „Comenzi de împachetat". (3) Stil vizual „mai premium, mai minimalist": font nou (Manrope, ca-n restul aplicației, în loc de DM Sans), fundal cu o singură nuanță discretă de glow în loc de trei culori competitive (mov/verde/portocaliu), blur de sticlă redus (22→14px) și umbră mai difuză pe carduri — păstrează stilul „liquid glass" deja cerut anterior, doar mai calm. Verificat de 2 ori, direct pe date reale: comanda veche (4 septembrie) confirmat scoasă din coada activă, tot găsibilă prin căutare, bara de progres și numărătoarea cardurilor arată acum același număr, fără erori consolă',date:'2026-09-10'},
@@ -6556,6 +6610,109 @@ Răspunde STRICT cu JSON:
   
   btn.disabled=false;
   btn.innerHTML='↓ Importă';
+}
+
+// Import din screenshot — pentru magazine care blochează accesul automat (Maxy, Jumbo etc., ca la
+// „Research" → poze de link) sau când pur și simplu nu există un link, doar o captură de pe telefon.
+// AI (vision) citește poza și completează ACELEAȘI câmpuri ca „Importă din link" (mai puțin poza produsului,
+// care rămâne de adăugat manual/separat — o captură de pagină nu e o poză de produs utilizabilă).
+const PRODSHOT_MAX=5;
+async function handleProductScreenshotFile(inputEl){
+  const files=[...(inputEl?.files||[])];if(!files.length)return;
+  try{
+    const rawDataUrls=await Promise.all(files.map(f=>new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(f);})));
+    await importFromScreenshot(rawDataUrls);
+  }finally{if(inputEl)inputEl.value='';}
+}
+async function pasteProductScreenshotFromClipboard(){
+  if(!navigator.clipboard?.read){toast('Browserul nu suportă citirea directă din clipboard — încarcă manual fișierul cu „📷 Din screenshot"','err');return;}
+  try{
+    const items=await navigator.clipboard.read();
+    const rawDataUrls=[];
+    for(const item of items){
+      const type=item.types.find(t=>t.startsWith('image/'));
+      if(!type)continue;
+      const blob=await item.getType(type);
+      rawDataUrls.push(await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(blob);}));
+    }
+    if(!rawDataUrls.length){toast('Nu am găsit nicio imagine în clipboard — fă întâi un screenshot, apoi încearcă din nou','err');return;}
+    await importFromScreenshot(rawDataUrls);
+  }catch(e){
+    toast('Eroare la citirea clipboard-ului: '+(e.message||e),'err');
+  }
+}
+async function importFromScreenshot(rawDataUrls){
+  if(!rawDataUrls.length)return;
+  if(rawDataUrls.length>PRODSHOT_MAX){toast(`Maxim ${PRODSHOT_MAX} poze odată`,'err');return;}
+  const status=document.getElementById('import-url-status');
+  status.innerHTML=`<span class="spin"></span> Analizez ${rawDataUrls.length>1?rawDataUrls.length+' poze':'poza'}…`;
+  try{
+    const dataUrls=await Promise.all(rawDataUrls.map(u=>resizeImageDataUrl(u,1400,.8)));
+    const imgContent=dataUrls.map(u=>{
+      const mt=u.match(/data:(image\/\w+);/)?.[1]||'image/jpeg';
+      const b64=u.split(',')[1];
+      if(!b64||b64.length<100)throw new Error('O poză e prea mică sau coruptă');
+      return{type:'image',source:{type:'base64',media_type:mt,data:b64}};
+    });
+    const prompt=`${dataUrls.length>1?`Acestea sunt ${dataUrls.length} poze ale ACELEIAȘI pagini de produs de la un furnizor (posibil capturi din scroll succesiv) — combină informația din toate și extrage:`:'Citește acest screenshot al unei pagini de produs de la un furnizor și extrage:'}
+1. Titlul complet al produsului (tradus în ROMÂNĂ, cu sens, nu cuvânt cu cuvânt)
+2. Codul SKU / cod produs / cod articol / model NUMAI dacă apare explicit etichetat pe pagină (ex. "Product code", "Cod produs", "SKU", "Model", "Art. no.") — altfel null
+3. Categoria cea mai potrivită, EXACT din lista: ${CATS.join(', ')}
+4. Prețul de achiziție afișat (numărul curent/final, ignoră preț vechi tăiat) și moneda (RON/EUR/etc.)
+5. Furnizorul/brandul/producătorul, dacă apare pe pagină
+6. Materialul, dimensiunile, culorile disponibile, dacă apar
+7. O descriere scurtă a produsului
+
+Nu inventa valori care nu apar în poze. Disponibilitatea (stoc/produs indisponibil) nu contează — extrage datele oricum.
+
+Răspunde STRICT cu JSON, fără text suplimentar, fără markdown:
+{"title":"<titlu tradus>","sku":"<cod sau null>","category":"<categorie sau null>","price":<număr sau null>,"currency":"<RON/EUR/etc sau null>","supplier":"<furnizor/brand sau null>","material":"<material sau null>","dimensions":"<dimensiuni sau null>","colors":"<culori sau null>","description":"<descriere scurtă sau null>"}`;
+
+    const responseText=await callAI([{role:'user',content:[...imgContent,{type:'text',text:prompt}]}],null,3000,'analysis');
+    if(!responseText)throw new Error('Nu am primit răspuns de la AI');
+    const jsonMatch=responseText.match(/\{[\s\S]*\}/);
+    if(!jsonMatch)throw new Error('Nu am putut extrage datele din poză');
+    const d=JSON.parse(jsonMatch[0]);
+
+    if(d.title){document.getElementById('f-name').value=d.title;status.innerHTML=`<span style="color:var(--gr)">✓ Titlu: ${esc(d.title)}</span>`;}
+    else status.innerHTML='';
+    if(d.sku&&d.sku!=='null'){document.getElementById('f-sku').value=d.sku;status.innerHTML+=`<br><span style="color:var(--gr)">✓ SKU: ${esc(d.sku)}</span>`;}
+    if(d.supplier&&d.supplier!=='null')document.getElementById('f-sup').value=d.supplier;
+    if(d.category&&d.category!=='null'){
+      const cat=String(d.category).trim();
+      if(cat&&!CATS.includes(cat))addCustomCategory(cat);
+      if(cat)selectCat(cat);
+      status.innerHTML+=`<br><span style="color:var(--gr)">✓ Categorie: ${esc(cat)}</span>`;
+    }else if(d.title)suggestCatFromName();
+    const setImported=(id,val)=>{if(val&&val!=='null')document.getElementById(id).value=val;};
+    setImported('f-material',d.material);
+    setImported('f-dims',d.dimensions);
+    setImported('f-colors',d.colors);
+    setImported('f-description',d.description);
+
+    const price=typeof d.price==='number'?d.price:parseFloat(String(d.price||'').replace(',','.'));
+    const currency=String(d.currency||'RON').toUpperCase();
+    if(price>0&&currency==='RON'){
+      document.getElementById('f-tva-acq').value='0.21';
+      document.getElementById('f-pbuy-ttc').value=price.toFixed(2);
+      syncAcqFields('ttc');
+      status.innerHTML+=`<br><span style="color:var(--gr)">✓ Preț achiziție: ${price.toFixed(2)} RON cu TVA</span>`;
+    }else if(price>0&&currency==='EUR'){
+      document.getElementById('f-pbuy-eur').value=price.toFixed(2);
+      syncAcqFromEur();
+      const priceRon=Math.round(price*EUR_RON*100)/100;
+      status.innerHTML+=`<br><span style="color:var(--gr)">✓ Preț achiziție: ${price.toFixed(2)} € → ${priceRon.toFixed(2)} RON fără TVA (furnizor extern, curs ${EUR_RON})</span>`;
+    }else if(price>0){
+      status.innerHTML+=`<br><span style="color:var(--or)">⚠ Preț găsit: ${price.toFixed(2)} ${esc(currency)} (nu a fost completat automat)</span>`;
+    }else{
+      status.innerHTML+=`<br><span style="color:var(--or)">⚠ Prețul nu a putut fi citit din poză — completează-l manual</span>`;
+    }
+
+    toast('Date extrase din screenshot ✓ — adaugă și poza produsului manual');
+  }catch(err){
+    console.error('importFromScreenshot error:',err);
+    status.innerHTML=`<span style="color:var(--rd)">⚠️ ${esc(err.message||'Eroare la analiza screenshot-ului')}</span>`;
+  }
 }
 
 /* PRICE CALCULATOR TABS */
@@ -12896,6 +13053,72 @@ async function printPrepackLabels(createdRows,targets){
   window.print();
 }
 window.addEventListener('afterprint',()=>document.body.classList.remove('printing-pk'));
+
+// ── MESAJE / TASK-URI CĂTRE STAFF (tabela staff_mesaje) — pop-up mare pe tableta de Staff (staff.html),
+// se poate minimiza acolo dacă nu e de rezolvat chiar atunci, dar rămâne accesibil (buton flotant) până
+// e bifat rezolvat. Aici, în admin, doar compunere + trimitere + un istoric simplu al statusului.
+let smsgDraft=[{text:'',tip:'mesaj'}];
+function openStaffMsg(){
+  smsgDraft=[{text:'',tip:'mesaj'}];
+  renderStaffMsgDraft();
+  document.getElementById('smsg-hist').innerHTML='Se încarcă…';
+  document.getElementById('ov-staffmsg').classList.add('on');
+  loadStaffMsgHistory();
+}
+function closeStaffMsg(){document.getElementById('ov-staffmsg').classList.remove('on');}
+function addStaffMsgRow(){smsgDraft.push({text:'',tip:'mesaj'});renderStaffMsgDraft();}
+function removeStaffMsgRow(idx){smsgDraft.splice(idx,1);if(!smsgDraft.length)smsgDraft=[{text:'',tip:'mesaj'}];renderStaffMsgDraft();}
+function setStaffMsgText(idx,v){if(smsgDraft[idx])smsgDraft[idx].text=v;}
+function setStaffMsgTip(idx,v){if(smsgDraft[idx])smsgDraft[idx].tip=v;renderStaffMsgDraft();}
+function renderStaffMsgDraft(){
+  const box=document.getElementById('smsg-rows');if(!box)return;
+  box.innerHTML=smsgDraft.map((r,idx)=>`<div class="smsg-row">
+    <select onchange="setStaffMsgTip(${idx},this.value)">
+      <option value="mesaj" ${r.tip==='mesaj'?'selected':''}>💬 Mesaj</option>
+      <option value="task" ${r.tip==='task'?'selected':''}>✅ Task</option>
+    </select>
+    <textarea placeholder="${r.tip==='task'?'Ce trebuie făcut…':'Ce vrei să transmiți…'}" oninput="setStaffMsgText(${idx},this.value)">${esc(r.text)}</textarea>
+    ${smsgDraft.length>1?`<button type="button" class="smsg-row-rm" onclick="removeStaffMsgRow(${idx})" title="Șterge">×</button>`:''}
+  </div>`).join('');
+}
+async function sendStaffMsg(){
+  const rows=smsgDraft.filter(r=>r.text.trim()).map(r=>({text:r.text.trim(),tip:r.tip}));
+  if(!rows.length){toast('Scrie cel puțin un mesaj','err');return;}
+  showLoading('Se trimite…');
+  try{
+    await dbPost('staff_mesaje',rows);
+    hideLoading();
+    toast(`${rows.length} ${rows.length===1?'mesaj trimis':'mesaje trimise'} către Staff ✓`);
+    smsgDraft=[{text:'',tip:'mesaj'}];
+    renderStaffMsgDraft();
+    loadStaffMsgHistory();
+  }catch(e){
+    hideLoading();
+    console.error('sendStaffMsg error:',e);
+    toast('Eroare la trimitere: '+(e.message||e),'err');
+  }
+}
+async function loadStaffMsgHistory(){
+  const box=document.getElementById('smsg-hist');if(!box)return;
+  try{
+    const rows=await dbGet('staff_mesaje?order=created_at.desc&limit=30');
+    if(!rows.length){box.innerHTML='<div style="color:var(--t3);font-size:16px">Niciun mesaj trimis încă.</div>';return;}
+    box.innerHTML=rows.map(r=>{
+      const when=new Date(r.created_at).toLocaleString('ro-RO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+      const statusHtml=r.rezolvat
+        ?`<span class="smsg-hist-status done">✓ Rezolvat${r.rezolvat_by?' de '+esc(r.rezolvat_by):''}</span>`
+        :`<span class="smsg-hist-status pending">⏳ În așteptare</span>`;
+      return`<div class="smsg-hist-item">
+        <div class="smsg-hist-txt">${r.tip==='task'?'✅':'💬'} ${esc(r.text)}</div>
+        <div class="smsg-hist-meta">${esc(when)} · ${statusHtml}</div>
+      </div>`;
+    }).join('');
+  }catch(e){
+    box.innerHTML='<div style="color:var(--rd);font-size:16px">Eroare la încărcare — tabela staff_mesaje există în Supabase?</div>';
+    console.error('loadStaffMsgHistory error:',e);
+  }
+}
+
 async function bulkAddStock(){
   const n=selProd.size;
   if(!n){toast('Bifează întâi produsele din listă (căsuța din stânga fiecărui rând) — apoi acest buton adaugă aceeași cantitate la toate deodată','err');return;}
