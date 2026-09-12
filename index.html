@@ -828,6 +828,9 @@ tr:hover td{background:var(--surf2)}
 .pcom-row-img-ph{background:var(--surf2);display:flex;align-items:center;justify-content:center;font-size:29px}
 .pcom-c1-img,.pcom-c1-img-ph{width:44px;height:44px;border-radius:10px;object-fit:cover;border:1px solid rgba(148,163,184,.22);flex-shrink:0;background:rgba(255,255,255,.6)}
 .pcom-c1-img-ph{display:flex;align-items:center;justify-content:center;font-size:21px}
+/* Captura Vinted originală, cât timp linia n-are încă produs potrivit — mai mare decât poza normală
+   de produs (44px), ca să fie de fapt lizibilă ca reper vizual, nu doar o pată mică. */
+.pcom-c1-img-vinted-src{width:76px;height:76px;border:2px solid var(--acc-light)}
 .pcom-prev-nm{white-space:normal;overflow:visible;text-overflow:clip;padding-top:1px}
 .pcom-sel-nm{font-size:22px;font-weight:600;color:#172033;line-height:1.35}
 .pcom-sel-meta{font-size:19px;color:#6B7280;font-family:inherit;margin-top:4px;line-height:1.55;font-variant-numeric:tabular-nums}
@@ -2519,7 +2522,7 @@ th{font-weight:800!important;color:var(--t3)!important}
         </div>
         <div id="pcmi-vinted-lot-fld" style="display:none">
           <div class="sec" style="margin-top:20px;font-size:24px">➕ Vinted — adaugă mai multe produse deodată (lot)</div>
-          <div style="font-size:20px;color:var(--t3);margin:2px 0 10px">Pentru o expediere cu mai multe articole grupate — adaugi manual produsele, cu un singur cumpărător și un singur cod, deodată. Se completează automat cu spații goale când o captură arată „Grupează N articole”.</div>
+          <div style="font-size:20px;color:var(--t3);margin:2px 0 10px">Doar pentru o comandă fără nicio captură deloc — adaugi manual produsele, cu un singur cumpărător și un singur cod, deodată. O captură cu „Grupează N articole” generează liniile direct în previzualizarea de mai sus, nu aici.</div>
           <div id="vinted-lot-rows"></div>
           <button type="button" class="btn btn-sm" style="margin-top:6px" onclick="vintedLotAddRow()">➕ Adaugă rând produs</button>
           <div class="frow" style="margin-top:10px">
@@ -3419,6 +3422,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:330,text:'Comenzi Platforme → import Vinted, trei corecturi cerute direct pe capturi reale. (1) Rândurile „Grupează N articole" (fără nume de produs individual) nu mai duc la formularul separat de jos — generează acum N linii goale DIRECT în previzualizarea de sus, grupate sub ACEEAȘI comandă („📦 Comandă #X · N produse — se expediază împreună"), exact ca un pachet multi-produs eMAG/Trendyol, gata de „— alege produs —" pe fiecare. (2) Potrivirea automată a produsului nu se mai oprește brusc la pragul strict de 70% (Vinted n-are PNK/SKU ca eMAG/Trendyol, deci prea multe rânduri ieșeau „fără produs" fără nicio sugestie) — sub prag, arată totuși cea mai bună potrivire găsită, ca punct de plecare editabil, nu un rând complet gol; AI e instruit acum să completeze titlul cu detalii vizuale din poză (culoare, material, formă) când titlul de pe Vinted e prea generic, ca să ajute la potrivire. (3) Rândurile fără produs potrivit nu mai arată o pictogramă generică fără sens — arată chiar captura originală lipită/încărcată (poza reală a articolului), mai mare decât poza normală de produs și clic-abilă pentru mărire — dispare automat de îndată ce se alege produsul real, care își arată propria poză din stoc. Verificat de 2 ori, cu Playwright și un produs real de test: potrivire exactă (100%) confirmată corect, produs fără nicio potrivire în stoc arată corect captura originală ca reper vizual, lot de 3 articole a generat corect 3 linii grupate sub aceeași comandă (preț total împărțit egal, cumpărător/cod aplicate pe toate 3), inclusiv scrierea reală în Supabase la „✓ Inclus", fără erori consolă',date:'2026-09-12'},
   {n:329,text:'Comenzi Platforme → import Vinted, redesenat complet, cerut direct („nu e deloc intuitiv așa și nici funcțional, trebuie să fie câte o coloană pe fiecare produs, să se comporte ca la import comenzi eMAG și Trendyol"). Înainte, fiecare produs recunoscut dintr-o captură deschidea propriul formular-card, într-o listă lungă needitoare cu restul aplicației, cu buton separat „✓ Adaugă comanda" per produs. Acum fiecare produs recunoscut intră DIRECT în aceeași previzualizare cu grid pe 5 coloane folosită la eMAG/Trendyol (linia despărțitoare „👕 Vinted"), cu potrivirea automată de produs identică (aceeași funcție, prag de încredere 70%) — se confirmă la fel, cu „✓ Inclus"/„Include tot", nu mai există buton separat de adăugat. Mici modificări față de eMAG/Trendyol, unde are sens: preț+monedă și cumpărător devin editabile direct în rând (citite dintr-o captură AI, nu dintr-un export sigur ca la eMAG/Trendyol), iar coloana „AWB" devine „Cod" la Vinted, editabilă la fel, cu codul scurt de expediere (nu titlul de AWB calculat, care n-are sens acolo). Verificat de 2 ori, cu Playwright și un produs real de test creat/șters la final: o captură cu 2 produse + 1 lot de 3 articole — produsul cu potrivire bună auto-asociat corect, cel fără potrivire arată „⚠ fără produs" (ca la eMAG/Trendyol), lotul a pregătit corect 3 spații goale, cod/cumpărător nu s-au atașat greșit cu 2 produse noi (au mers pe formularul de lot); separat, o captură cu UN SINGUR produs nou — cod/cumpărător s-au atașat automat pe acela, prețul editat direct în rând (45,5→60 RON) s-a reflectat corect în Financiar, iar „✓ Inclus" a creat comanda reală în Supabase cu prețul editat, cumpărătorul și codul corecte, stocul neatins încă (cum trebuie, până la „Aplică import") — fără erori consolă',date:'2026-09-12'},
   {n:328,text:'Nou — Comenzi Platforme prinde și Vinted, cerut direct („da mi o idee de varianta"). Totul e integrat în ACELAȘI card de sus, „Încarcă fișierul de comenzi" — dropdown-ul de platformă are acum eMAG/Trendyol/Vinted, plus „mixte" pentru oricare combinație (inclusiv toate 3 deodată); la Vinted (sau mixt) apare un input de capturi — poți alege MAI MULTE poze deodată sau lipi una din clipboard — procesate pe rând de AI. AI recunoaște acum și o captură cu LISTA de vânzări (mai multe articole deodată, nu doar unul) — fiecare produs individual devine o comandă propusă (produs auto-potrivit din stoc, editabilă înainte de adăugare — preț, monedă, cumpărător, cod), afișată sub formă de listă cu „✓ Adaugă comanda” pe fiecare + „✓ Adaugă toate valide” pentru tot odată. Rândurile de tip „Grupează N articole într-un lot” (fără nume de produs individual, cazul raportat direct cu o captură reală) sunt recunoscute separat — nu se transformă în comandă ghicită, ci pregătesc automat N spații goale în formularul de „adaugă mai multe produse deodată” de mai jos, gata de ales fiecare produs prin căutare. Codul scurt de pe eticheta de expediere Vinted („Folosește acest cod:”) ține loc de AWB — se preia automat dacă apare în aceeași captură, sau se completează oricând manual. Comenzile Vinted trec prin exact același „Aplică import”/„Asociază AWB” ca eMAG/Trendyol, apar la fel în Staff (etichetă verde „Vinted”), în „Profit vânzări” (filtru nou) și „Total încasări” (card propriu); calculul de profit folosește motorul de „vânzare directă” (Vinted n-are comision de canal configurat separat încă). Verificat de 2 ori, cu Playwright și produse reale de test create/șterse la final, folosind chiar structura din capturile reale trimise (3 produse individuale + 2 rânduri „Grupează N articole”, într-o singură imagine): toate cele 3 produse individuale corect recunoscute și auto-potrivite din stoc, cele 2 loturi au pregătit corect 3+5=5 spații goale, „Adaugă toate valide” a creat corect comenzile rămase, completarea manuală a unui spațiu de lot a creat comanda cu clientul/codul introduse, încărcare simultană a 2 capturi (multi-fișier) confirmată procesată secvențial, fără erori consolă',date:'2026-09-12'},
   {n:327,text:'„Preț privat" — cerut direct: pe lângă recunoașterea din poză, produsul se poate găsi acum și tastând denumirea lui, fără nicio poză. Câmp nou de căutare direct pe ecranul inițial („sau caută produsul după denumire") — caută live după nume, SKU sau cod intern, cu poza reală a produsului în listă; alegerea unui rezultat duce direct la calculul de cost/preț minim/profitabilitate, exact ca la recunoașterea din poză. Verificat de 2 ori, cu Playwright: căutare sub 2 caractere corect ignorată (fără rezultate premature), căutare reală („Dozator") găsește produsul corect din stoc cu costul lui real, alegerea unui rezultat trece corect în ecranul de calcul, căutare fără potrivire arată „Niciun produs găsit", fără erori consolă',date:'2026-09-12'},
@@ -14622,7 +14626,12 @@ function pcomRowHtml(idx,showOwnAwb){
         :(it.awb?`<div class="pcom-sel-meta" style="font-family:var(--mono)">${esc(it.awb)}</div>`:''))
     :(it.newProduct?'':(showOwnAwb?pcomAwbTitleHtml(idx):''));
   const p=it.produsId?P.find(x=>x.id===it.produsId):null;
-  const rowImg=p&&p.img?`<img src="${esc(imgSrc(p.img))}" class="pcom-c1-img" ${imgErrAttr(p.img,'pcomc1')}>`:`<div class="pcom-c1-img-ph">${it.newProduct?'🆕':'📦'}</div>`;
+  // Vinted, fără produs potrivit încă: nu arătăm un pictogramă generică fără sens — arătăm chiar
+  // captura originală (poza reală a articolului, cerut direct: „sa incearca sistemul sa preia poza”),
+  // mai mare decât poza normală de produs (ca să fie de fapt lizibilă) și clic-abilă pentru mărire.
+  const rowImg=p&&p.img?`<img src="${esc(imgSrc(p.img))}" class="pcom-c1-img" ${imgErrAttr(p.img,'pcomc1')}>`
+    :(it.vintedImg?`<a href="${esc(it.vintedImg)}" target="_blank" title="Captura originală — click pentru mărire"><img src="${esc(it.vintedImg)}" class="pcom-c1-img pcom-c1-img-vinted-src"></a>`
+    :`<div class="pcom-c1-img-ph">${it.newProduct?'🆕':'📦'}</div>`);
   // "Inclus" — bifă/badge mic, discret (NU mai colorează tot cardul, cerut explicit) — click tot pe
   // togglePcomInclude, neschimbat; doar stilul e altul (badge, nu buton mare cu contur). Click pe
   // „Inclus” scrie ACUM comanda (vezi commitPcomLine) — apare imediat în Staff, fără să aștepte
@@ -14807,7 +14816,7 @@ const VINTED_EXTRACTION_SCHEMA={
         type:'object',
         properties:{
           tip:{type:'string',description:'"produs" — rând cu un articol individual, nume propriu de produs vizibil. "lot" — rând de tipul „Grupează N articole într-un lot”, FĂRĂ niciun nume de produs individual pe acel rând.'},
-          produs:{type:['string','null'],description:'Numele/titlul produsului — obligatoriu (non-null) când tip="produs". null când tip="lot".'},
+          produs:{type:['string','null'],description:'Numele/titlul produsului — obligatoriu (non-null) când tip="produs". Dacă titlul de pe Vinted e scurt/generic, completează-l cu detalii vizuale distinctive din poza produsului (culoare, material, formă, model) — se folosește la potrivirea cu produsele din stoc, deci contează orice detaliu real observabil în imagine. null când tip="lot".'},
           articole:{type:['number','null'],description:'Numărul N din „Grupează N articole” — obligatoriu (non-null) când tip="lot". null când tip="produs".'},
           pret:{type:['number','null'],description:'Prețul afișat pe acel rând — doar numărul, fără monedă. null dacă nu apare.'},
           moneda:{type:['string','null'],description:'"RON" sau "EUR", dedusă din simbol/text. null dacă neclar.'}
@@ -14839,24 +14848,42 @@ async function vintedRunRecognition(imageContent,previewSrc){
     const produsRows=randuri.filter(r=>r.tip==='produs'&&r.produs);
     const lotRows=randuri.filter(r=>r.tip==='lot'&&r.articole>1);
     const newIdxs=[];
-    // findExistingProduct — exact potrivirea folosită la eMAG/Trendyol/Importă factură (EAN→SKU→scor
-    // fuzzy ≥70%), nu propriul scor separat de dinainte — profită și de titlurile deja învățate.
     produsRows.forEach(r=>{
-      const match=findExistingProduct({name:r.produs});
+      // findExistingProduct — potrivirea exactă (EAN/SKU/scor fuzzy ≥70%) folosită și la eMAG/Trendyol —
+      // dar Vinted n-are PNK/SKU, deci pragul strict de-acolo lăsa gol prea des (raportat direct: „2 din
+      // 4 fără produs"). Sub prag, arătăm totuși cea mai bună potrivire găsită — un punct de plecare
+      // editabil, NU auto-bifat — mai util decât un rând complet gol, care oricum ar trebui corectat manual.
+      const exact=findExistingProduct({name:r.produs});
+      let produsId=exact?.product.id||null,score=exact?.score||0;
+      if(!produsId){
+        let best=null,bestScore=0;
+        for(const p of P){if(p.archived)continue;const s=fuzzyMatch(r.produs,productMatchText(p));if(s>bestScore){bestScore=s;best=p;}}
+        if(bestScore>=0.35){produsId=best.id;score=bestScore;}
+      }
       const pretTotalCuTva=Number(r.pret)||0,moneda=(r.moneda||'RON').toUpperCase();
       pcImpParsed.push({platforma:'vinted',comandaId:'VNT-'+Date.now().toString(36).toUpperCase()+Math.random().toString(36).slice(2,5).toUpperCase(),
-        pachetId:'',data:td(),pnk:'',tara:'',codProdus:'',clientNume:'',titluExtern:r.produs,
+        pachetId:'',data:td(),pnk:'',tara:'',codProdus:'',clientNume:'',titluExtern:r.produs,vintedImg:previewSrc||'',
         cantitate:1,suggestedCantitate:0,pretFaraTva:Math.round(pretTotalCuTva/1.21*100)/100,pretTotalCuTva,moneda,
-        produsId:match?.product.id||null,score:match?.score||0,viaPnk:false,viaTitle:false,viaCode:false,
+        produsId,score,viaPnk:false,viaTitle:false,viaCode:false,
         include:false,awb:''});
       newIdxs.push(pcImpParsed.length-1);
     });
-    // „Grupează N articole” — nu are nume de produs individual, deci nu poate intra ca linie normală;
-    // pregătește N spații goale în formularul de lot manual (cerut direct), gata de ales produsul.
+    // „Grupează N articole” — fără nume de produs individual, deci imposibil de ghicit automat — dar
+    // cerut direct ca liniile să apară SUS, în același grid ca eMAG/Trendyol, nu într-un formular
+    // separat: N linii goale, cu ACELAȘI comandaId/pachetId (se grupează vizual ca un singur pachet,
+    // exact ca la eMAG/Trendyol — vezi pcomComputeGroups), gata de ales fiecare produs prin „— alege
+    // produs —”. Prețul total al lotului se împarte egal pe linii, ca punct de plecare editabil.
     lotRows.forEach(r=>{
-      for(let i=0;i<r.articole;i++)vintedLotAddRow();
-      if(parsed.cumparator){const el=document.getElementById('vinted-lot-client');if(el)el.value=parsed.cumparator;}
-      if(parsed.cod){const el=document.getElementById('vinted-lot-awb');if(el)el.value=parsed.cod;}
+      const lotComandaId='VNT-'+Date.now().toString(36).toUpperCase()+Math.random().toString(36).slice(2,5).toUpperCase();
+      const moneda=(r.moneda||'RON').toUpperCase();
+      const perItem=r.articole>0?Math.round(((Number(r.pret)||0)/r.articole)*100)/100:0;
+      for(let i=0;i<r.articole;i++){
+        pcImpParsed.push({platforma:'vinted',comandaId:lotComandaId,pachetId:lotComandaId,data:td(),pnk:'',tara:'',codProdus:'',
+          clientNume:parsed.cumparator||'',titluExtern:`Produs ${i+1} din lot Vinted (${r.articole} articole) — alege mai jos`,vintedImg:previewSrc||'',
+          cantitate:1,suggestedCantitate:0,pretFaraTva:Math.round(perItem/1.21*100)/100,pretTotalCuTva:perItem,moneda,
+          produsId:null,score:0,viaPnk:false,viaTitle:false,viaCode:false,include:false,awb:parsed.cod||''});
+        newIdxs.push(pcImpParsed.length-1);
+      }
     });
     // Cod/cumpărător fără rând de produs în ACEEAȘI captură (ecran de expediere lipit separat) — se
     // atașează la ultima linie Vinted din previzualizare care încă n-are cod, cea mai probabilă
@@ -14864,7 +14891,7 @@ async function vintedRunRecognition(imageContent,previewSrc){
     if(newIdxs.length===1&&(parsed.cod||parsed.cumparator)){
       if(parsed.cod)pcImpParsed[newIdxs[0]].awb=parsed.cod;
       if(parsed.cumparator)pcImpParsed[newIdxs[0]].clientNume=parsed.cumparator;
-    }else if(!newIdxs.length&&lotRows.length===0&&(parsed.cod||parsed.cumparator)){
+    }else if(!newIdxs.length&&(parsed.cod||parsed.cumparator)){
       for(let i=pcImpParsed.length-1;i>=0;i--){
         if(pcImpParsed[i].platforma==='vinted'&&!pcImpParsed[i].awb){
           if(parsed.cod)pcImpParsed[i].awb=parsed.cod;
@@ -14876,8 +14903,8 @@ async function vintedRunRecognition(imageContent,previewSrc){
     renderPcomImportPreview();
     const msgParts=[];
     if(produsRows.length)msgParts.push(`${produsRows.length} ${produsRows.length===1?'produs':'produse'}`);
-    if(lotRows.length)msgParts.push(`${lotRows.length} ${lotRows.length===1?'lot':'loturi'} (spații pregătite mai jos, la „adaugă mai multe produse deodată”)`);
-    toast(msgParts.length?`Captură analizată — ${msgParts.join(' + ')} — verifică datele în previzualizare, apoi „✓ Inclus"`:'Captură analizată — completează manual mai jos');
+    if(lotRows.length){const totalLotLines=lotRows.reduce((s,r)=>s+r.articole,0);msgParts.push(`${totalLotLines} ${totalLotLines===1?'linie de lot':'linii de lot'}`);}
+    toast(msgParts.length?`Captură analizată — ${msgParts.join(' + ')} — verifică/alege produsul în previzualizarea de mai sus, apoi „✓ Inclus"`:'Captură analizată — completează manual mai jos');
   }catch(e){toast('Eroare la analiza capturii: '+(e.message||e),'err');}
   finally{box.style.display='none';}
 }
@@ -14902,9 +14929,11 @@ async function vintedFromFiles(ev){
   }
 }
 
-// Adăugare manuală, pentru un colet Vinted cu mai multe articole grupate (lot) — fiecare produs
-// devine o linie proprie în platforma_comenzi, toate cu ACELAȘI comandaId sintetic, ca să se grupeze
-// vizual la fel ca un „pachet” eMAG/Trendyol (vezi pcomComputeGroups/pachetId).
+// Adăugare manuală, pentru un colet Vinted cu mai multe articole DE MÂNĂ, fără nicio captură (cerut
+// separat, ca rezervă) — un „Grupează N articole” detectat automat dintr-o captură nu mai trece pe-aici,
+// generează direct N linii goale în previzualizarea de sus (vezi vintedRunRecognition), la fel ca
+// eMAG/Trendyol. Fiecare produs devine o linie proprie în platforma_comenzi, toate cu ACELAȘI
+// comandaId sintetic, ca să se grupeze vizual la fel ca un „pachet” eMAG/Trendyol (pcomComputeGroups/pachetId).
 let vintedLotRows=[];
 function vintedLotAddRow(){vintedLotRows.push({produsId:null,productName:'',qty:1,pret:0});renderVintedLotRows();}
 function vintedLotRemoveRow(idx){vintedLotRows.splice(idx,1);renderVintedLotRows();}
