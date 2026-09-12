@@ -3556,6 +3556,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:339,text:'Comenzi Platforme → Import comenzi — bug real reparat, raportat direct: „informația nu rămâne salvată" la reîncărcare, deși exista deja un mecanism care ar fi trebuit s-o păstreze (până apeși „Resetează pagina"). Cauza: fiecare linie Vinted recunoscută dintr-o captură ține și captura originală (un data-URL base64 întreg, de ordinul sutelor de KB — chiar și după micșorare) — la câteva comenzi recunoscute într-o sesiune, tot JSON-ul depășea cota de localStorage (~5MB/origine, partajată cu restul cache-urilor aplicației), scrierea eșua SILENȚIOS (era doar logată în consolă, nimeni n-o vedea), iar la următoarea reîncărcare previzualizarea apărea complet goală — nu pentru că ai apăsat Resetează, ci pentru că nu apucase să se salveze deloc. Captura originală nu se mai include în ce se salvează în localStorage (rămâne doar în memorie, pe durata sesiunii curente — e strict un reper vizual pentru tine, nu o dată reală) — tot ce contează cu adevărat (produs asociat, cantitate, preț, cumpărător, cod/AWB, status inclus) tot se salvează, la fiecare rând, neschimbat. Dacă totuși scrierea eșuează pentru un import cu adevărat uriaș, apare acum un avertisment vizibil, o singură dată — nu tăcut, ca înainte. Verificat de 2 ori, cu Playwright: reprodus exact bugul pe codul dinainte de reparație (3 comenzi cu poze mari → salvare eșuată → reîncărcare → previzualizare goală, confirmat), apoi confirmat că același scenariu, după reparație, supraviețuiește complet unei reîncărcări reale de pagină (produsul asociat, cantitatea, prețul — toate corecte); „Resetează pagina" tot golește totul corect; re-testat separat dropdown-ul de alegere produs și cele 4 taburi — neatinse, fără erori consolă',date:'2026-09-13'},
   {n:338,text:'Comenzi Platforme → redesign „Import comenzi" (#333/#334/#337) — două retușuri cerute direct. (1) Numărul comenzii și numele cumpărătorului din antetul cardului — mult prea mici față de restul, greu de citit dintr-o privire — acum 20px, îngroșate (numărul comenzii pe fontul mono, cu greutate 700; numele cumpărătorului 600), culoare mai închisă (var(--t1) în loc de var(--t2)). (2) „nu uita de butonul de inclus" — butonul „Neinclus"/„✓ Inclus" de pe fiecare linie de produs era tehnic clickabil, dar arăta doar ca o etichetă colorată, fără contur — ușor de confundat cu un simplu status, nu cu o acțiune. Acum e un `<button>` real, cu contur vizibil (gri când neinclus, verde când inclus) și un mic efect la hover — badge-ul din antetul cardului (rezumatul agregat pe toată comanda, needitabil) rămâne neschimbat, ca să nu se confunde cele două. Verificat de 2 ori, cu Playwright, cu date reale: font-size/greutate corecte pe număr comandă și cumpărător (inclusiv un nume foarte lung, fără să se taie urât), click real pe butonul de inclus scrie corect comanda (produsId corect, include:true, buton devine „✓ Inclus" cu contur verde); re-testat separat dropdown-ul de alegere produs și cele 4 taburi — neatinse, fără erori consolă',date:'2026-09-13'},
   {n:337,text:'Comenzi Platforme → redesign „Import comenzi" (#333/#334) — două retușuri cerute direct pe o captură reală. (1) O comandă FĂRĂ produs asociat lăsa un gol mare, needitor, în mijlocul cardului — coloana Financiar (cost/profit/stoc) nu are ce arăta încă acolo, dar rezerva oricum spațiul ei în grid. Acum, când linia n-are nimic de arătat la Financiar, coloana dispare complet din grid, iar restul (nume produs/potrivire/cantitate/preț/cumpărător) se lățește să umple locul — o comandă potrivită păstrează exact aspectul de dinainte (4 coloane), neatins. (2) „adaugă culoare + liquid glass" — fiecare card de comandă are acum un fundal translucid+blur (aceeași rețetă deja folosită la Comenzi Platforme, #267/#310) cu un glow discret în culoarea platformei — mov pentru eMAG, portocaliu pentru Trendyol, verde pentru Vinted (exact culorile deja folosite la insigna platformei, nimic nou inventat) — conturul de 2px rămas puternic (cerut anterior, #334) nu s-a atins, culoarea/glass-ul e strict fundalul. Verificat de 2 ori, cu Playwright, cu comenzi reale de test pe toate 3 platformele (eMAG/Trendyol/Vinted) + o linie neasociată: fundalul translucid și glow-ul de culoare se aplică corect per platformă, linia fără produs ocupă acum tot spațiul disponibil (fără gol), o linie cu produs asociat arată identic ca înainte (4 coloane, Financiar complet); re-testat separat, tot cu Playwright: dropdown-ul de alegere produs (fix #334) și cele 4 taburi (Import/Profit/Total încasări/Produse de comandat) rămân neatinse, fără erori consolă',date:'2026-09-13'},
   {n:336,text:'„Preț privat" — buton nou „⤢" cerut direct, lângă ↻/✕ din antetul popup-ului: mărește popup-ul instant, dintr-un click (440×600 → ~980×90vh), fără să mai fie nevoie să tragi manual de colțul din dreapta-jos de fiecare dată (acel resize manual, #311/#316, rămâne disponibil neatins, pentru un control fin suplimentar). Un al doilea click („⤡") revine exact la mărimea de dinainte. Verificat de 2 ori, cu Playwright: click pe ⤢ mărește corect popup-ul, click din nou revine exact la 440×600, fără erori consolă',date:'2026-09-13'},
@@ -15256,8 +15257,29 @@ function renderPcomImportPreview(){
 }
 // Previzualizarea neaplicată nu mai dispare la schimbarea paginii sau la reîncărcare — rămâne exact
 // cum ai lăsat-o (linii, cantități, asocieri) până o aplici sau apeși „Resetează pagina" explicit.
+// Bug real reparat, raportat direct („informația nu rămâne salvată"): fiecare linie Vinted recunoscută
+// dintr-o captură ține și captura originală (vintedImg, un data-URL base64 întreg) — la câteva comenzi
+// recunoscute într-o sesiune, JSON-ul depășea cota de localStorage (~5MB/origine, partajată cu restul
+// cache-urilor aplicației), scrierea eșua SILENȚIOS (safeLocalSet doar loga un console.warn), iar la
+// următoarea reîncărcare previzualizarea apărea goală — nu pentru că ai apăsat Resetează, ci pentru că
+// nu apucase să se salveze deloc. Captura originală nu se mai salvează în localStorage (rămâne doar în
+// memorie, pe durata sesiunii curente — dispare la reîncărcare, dar e doar un reper vizual, nu o dată
+// reală); tot ce contează cu adevărat (produs asociat, cantitate, preț, cumpărător, cod/AWB, status
+// inclus) tot se salvează, la fiecare rând. Dacă totuși scrierea eșuează (import foarte mare), utilizatorul
+// e avertizat direct, o singură dată, nu tăcut ca înainte.
+let pcomSaveFailWarned=false;
 function savePcomImportState(){
-  safeLocalSet(PCIK,JSON.stringify({platforma:pcImpPlatforma,parsed:pcImpParsed}));
+  const toSave=pcImpParsed.map(it=>it.vintedImg?{...it,vintedImg:''}:it);
+  try{
+    localStorage.setItem(PCIK,JSON.stringify({platforma:pcImpPlatforma,parsed:toSave}));
+    pcomSaveFailWarned=false;
+  }catch(e){
+    console.warn('Nu s-a putut salva automat previzualizarea Comenzi Platforme:',e);
+    if(!pcomSaveFailWarned){
+      pcomSaveFailWarned=true;
+      toast('⚠ Nu s-a putut salva automat progresul (prea multe date în previzualizare) — aplică importul curând, ca să nu-l pierzi la reîncărcare','err');
+    }
+  }
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
@@ -15608,7 +15630,7 @@ function resetPcomImportPage(){
   const pendingCommitted=pcImpParsed.filter(x=>x._committedId);
   const warn=pendingCommitted.length?` ATENȚIE: ${pendingCommitted.length} comenzi deja confirmate (vizibile în Staff) nu au încă stoc/Jurnal aplicat — golind previzualizarea, rămân în Staff dar stocul NU li se va mai scădea automat.`:'';
   if(pcImpParsed.length&&!confirm('Golești previzualizarea curentă? Liniile neaplicate încă se pierd (cele deja aplicate rămân salvate, neatinse).'+warn))return;
-  pcImpParsed=[];pcImpBatchIds={};
+  pcImpParsed=[];pcImpBatchIds={};pcomSaveFailWarned=false;
   localStorage.removeItem(PCIK);
   document.getElementById('pcmi-preview').innerHTML='';
   document.getElementById('pcmi-foot').style.display='none';
