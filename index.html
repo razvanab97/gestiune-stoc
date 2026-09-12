@@ -3394,6 +3394,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:327,text:'„Preț privat" — cerut direct: pe lângă recunoașterea din poză, produsul se poate găsi acum și tastând denumirea lui, fără nicio poză. Câmp nou de căutare direct pe ecranul inițial („sau caută produsul după denumire") — caută live după nume, SKU sau cod intern, cu poza reală a produsului în listă; alegerea unui rezultat duce direct la calculul de cost/preț minim/profitabilitate, exact ca la recunoașterea din poză. Verificat de 2 ori, cu Playwright: căutare sub 2 caractere corect ignorată (fără rezultate premature), căutare reală („Dozator") găsește produsul corect din stoc cu costul lui real, alegerea unui rezultat trece corect în ecranul de calcul, căutare fără potrivire arată „Niciun produs găsit", fără erori consolă',date:'2026-09-12'},
   {n:326,text:'Comenzi Platforme — cerut direct: la un import mixt eMAG+Trendyol cu multe linii, bifarea „✓ Inclus" una câte una pe fiecare produs era greoaie. Fiecare secțiune de platformă (linia despărțitoare „🛒 eMAG"/„🛍️ Trendyol") are acum propriul buton „✓ Include tot (N)" — include dintr-un click DOAR liniile din acea platformă, neincluse încă (N = câte mai sunt); butonul dispare automat când nu mai e nimic de inclus. Fiecare linie trece prin exact același proces ca la bifarea manuală (scrie comanda, apare imediat în Staff) — nimic din logica de asociere/comitere nu s-a schimbat. Verificat de 2 ori, cu Playwright pe date sintetice (2 linii eMAG + 3 Trendyol, mix de incluse/neincluse): fiecare buton arată numărul corect, clic pe „Include tot" la eMAG afectează DOAR liniile eMAG (Trendyol neatins), butonul dispare după ce nu mai rămâne nimic de inclus, fără erori consolă',date:'2026-09-11'},
   {n:325,text:'Bug real reparat, raportat direct cu o captură: la importul comenzilor Trendyol, numele clientului arăta „Prima comandă"/„Comandă recurentă" în loc de nume real. Cauza: coloana de „client" era detectată printr-un alias generic („client"), nicicând verificat pe un export Trendyol real (documentat așa în cod de la introducere) — de fapt se potrivea cu o coloană de tip status ("Tip Client"), nu cu numele. Acum, înainte de a folosi coloana găsită, se verifică dacă are prea puține valori distincte pe un eșantion (sub 3 valori diferite pe minim 6 rânduri) — semn clar că e o coloană de status/categorie, nu de nume — caz în care se ignoră, revenind la „fără nume afișat" (starea sigură, documentată deja pentru coloană lipsă), nu la unul greșit. Numele real al clientului tot nu apare încă la Trendyol (nu știu care e coloana corectă din exportul vostru) — trimite-mi/spune-mi textul exact al header-ului cu numele, ca să-l adaug la lista de alias-uri. Verificat de 2 ori, cu fișiere XLSX sintetice reale, prin Playwright, direct pe codul din aplicație (nu o reimplementare): fișierul cu coloana „Tip Client" (bug reprodus exact) acum vine cu nume gol, nu cu statusul; un fișier cu o coloană reală de nume distincte continuă să funcționeze corect, fără regresie; fără erori consolă',date:'2026-09-11'},
   {n:324,text:'Nou — „Produs nou": import din screenshot, pentru magazinele/furnizorii pe care „Adaugă produs din link" nu-i poate citi automat (ex. Maxy, Jumbo — server care blochează accesul, la fel ca la Research). Sub linkul de import, buton „📷 Din screenshot" (încarci una sau mai multe poze, max 5) sau „📋 Lipește din clipboard" — AI (vision) citește poza și completează titlul (tradus în română), codul/SKU (doar dacă e etichetat explicit pe pagină), categoria, furnizorul, materialul/dimensiunile/culorile, descrierea și prețul de achiziție (RON sau EUR, cu conversie automată la fel ca la import din link). Poza produsului rămâne de adăugat separat — o captură de pagină nu e o poză de produs utilizabilă. Verificat de 2 ori: sintaxă OK pe ambele fișiere, butoanele/inputul de fișier confirmate prin Playwright că apar corect în modal și pornesc funcția corectă, traseul complet testat cu o poză de test (validarea „poză prea mică" a prins-o corect) — extragerea AI propriu-zisă nu poate fi testată local (necesită /api/openai, disponibil doar pe Vercel, cum e documentat)',date:'2026-09-11'},
@@ -3845,6 +3846,20 @@ function ppFromUrlConfirm(){
   if(!/^https?:\/\//i.test(url)){toast('Linkul trebuie să înceapă cu http:// sau https://','err');return;}
   ppRunRecognition({type:'image',source:{type:'url',url}},url);
 }
+// Cerut direct — pe lângă recunoașterea din poză, produsul se poate găsi și tastând denumirea lui,
+// fără nicio poză. Căutare simplă, locală (substring pe nume/SKU, ca la restul căutărilor rapide din
+// aplicație) — rezultatul, odată ales, trece prin exact ppPickProduct(), neschimbat.
+function ppSearchByName(v){
+  const box=document.getElementById('pp-search-results');if(!box)return;
+  const q=v.trim().toLowerCase();
+  if(q.length<2){box.innerHTML='';box.style.display='none';return;}
+  box.style.display='flex';
+  const results=P.filter(p=>!p.archived&&(p.name.toLowerCase().includes(q)||(p.sku||'').toLowerCase().includes(q)||(p.internalCode||'').toLowerCase().includes(q))).slice(0,12);
+  box.innerHTML=results.length?results.map(p=>{
+    const pth=p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'pp')}>`:`<div class="smi-pick-th-ph">📦</div>`;
+    return`<div class="smi-pick-item" onclick="ppPickProduct(${p.id})">${pth}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</span></div>`;
+  }).join(''):`<div class="pp-hint" style="padding:6px 2px">Niciun produs găsit</div>`;
+}
 function ppPickProduct(id){
   const p=P.find(x=>x.id===id);if(!p)return;
   ppState.mode='result';ppState.produsId=p.id;ppState.productName=p.name;
@@ -3913,6 +3928,9 @@ function renderPretPrivat(){
         <button type="button" class="btn btn-sm" onclick="ppFromUrlConfirm()">OK</button>
       </div>
       <input type="file" id="pp-file-input" accept="image/*" style="display:none" onchange="ppFromFile(event)">
+      <div class="pp-hint" style="margin-top:14px">sau caută produsul după denumire:</div>
+      <input type="text" id="pp-search-input" placeholder="Denumire sau SKU/cod intern…" oninput="ppSearchByName(this.value)" style="width:100%">
+      <div class="pp-pick-list" id="pp-search-results" style="display:none;margin-top:8px"></div>
     </div>`;
     return;
   }
