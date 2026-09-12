@@ -3424,6 +3424,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:332,text:'Comenzi Platforme → Vinted — bug real reparat, raportat direct cu o captură a calculului: un lot „Grupează 3 articole" arăta un calcul consolidat cu PROFIT NEGATIV (−12,19 RON) în loc de profit real. Cauza: prețul consolidat (#331, „total pe prima linie") era aplicat doar la EDITAREA manuală a prețului — la GENERAREA automată a liniilor din „Grupează N articole", prețul total încă se împărțea egal pe toate N liniile (ca înainte de #331), deci calculul consolidat vedea doar 1/N din venitul real (ex. 45,70 RON dintr-un total de 137,11 RON), în timp ce costul de achiziție însumat era pe toate produsele — profit fals negativ. Corectat la sursă: prețul total intră direct pe prima linie de la generare, exact ca la editare manuală. Pe drum, separat corect fluxul de mai jos, „adaugă mai multe produse deodată" (preț real, propriu, introdus manual per produs) — acolo fiecare linie își păstrează propriul preț și propriul calcul individual, NU se consolidează (doar „Grupează N articole" o face, unde AI-ul oricum nu poate ști niciodată prețul real per produs, doar totalul). Verificat de 2 ori, cu Playwright, folosind exact numerele din captura raportată (total 137,11 RON/3 articole): calculul consolidat arată acum corect venitul total (137,11 RON) și un profit pozitiv; lotul manual, testat separat, confirmă că fiecare linie își arată propriul preț real și propriul calcul, neconsolidat, fără erori consolă',date:'2026-09-12'},
   {n:331,text:'Comenzi Platforme → import Vinted (comenzi multi-produs), cerut direct pe o captură reală. Delimitarea dintre comenzi e mai clară (contur/umbră mai puternice pe cardul „📦 Comandă #X"). În interiorul aceleiași comenzi: codul (AWB) apare acum o singură dată, pe prima linie — restul liniilor nu-l mai repetă; prețul la fel — TOTAL, o singură dată, pe prima linie (liniile 2+ arată „preț pe linia 1", nu un preț împărțit artificial pe fiecare). Pe măsură ce alegi produsele din grup, coloana Financiar arată acum un calcul CONSOLIDAT (cost de achiziție însumat pe toate produsele alese + prețul total de pe prima linie → profit/marjă finale pentru toată comanda), nu câte un calcul separat, fără sens, pe fiecare linie goală. Editarea prețului/codului pe prima linie se propagă automat pe toate liniile comenzii (fiecare rămâne propriul rând în Supabase la aplicare, dar toate țin cod/preț sincronizate corect). Verificat de 2 ori, cu Playwright și 2 produse reale de test: prima linie arată input de preț/cod + calculul consolidat corect (cost însumat pe 2 produse, profit calculat pe prețul total), linia a doua arată corect „preț pe linia 1" fără input repetat; editarea prețului pe prima linie a lăsat linia a doua la 0 (nu dublează suma la Total încasări); editarea codului pe prima linie s-a propagat corect pe ambele linii, confirmat direct în Supabase după „✓ Inclus", fără erori consolă',date:'2026-09-12'},
   {n:330,text:'Comenzi Platforme → import Vinted, trei corecturi cerute direct pe capturi reale. (1) Rândurile „Grupează N articole" (fără nume de produs individual) nu mai duc la formularul separat de jos — generează acum N linii goale DIRECT în previzualizarea de sus, grupate sub ACEEAȘI comandă („📦 Comandă #X · N produse — se expediază împreună"), exact ca un pachet multi-produs eMAG/Trendyol, gata de „— alege produs —" pe fiecare. (2) Potrivirea automată a produsului nu se mai oprește brusc la pragul strict de 70% (Vinted n-are PNK/SKU ca eMAG/Trendyol, deci prea multe rânduri ieșeau „fără produs" fără nicio sugestie) — sub prag, arată totuși cea mai bună potrivire găsită, ca punct de plecare editabil, nu un rând complet gol; AI e instruit acum să completeze titlul cu detalii vizuale din poză (culoare, material, formă) când titlul de pe Vinted e prea generic, ca să ajute la potrivire. (3) Rândurile fără produs potrivit nu mai arată o pictogramă generică fără sens — arată chiar captura originală lipită/încărcată (poza reală a articolului), mai mare decât poza normală de produs și clic-abilă pentru mărire — dispare automat de îndată ce se alege produsul real, care își arată propria poză din stoc. Verificat de 2 ori, cu Playwright și un produs real de test: potrivire exactă (100%) confirmată corect, produs fără nicio potrivire în stoc arată corect captura originală ca reper vizual, lot de 3 articole a generat corect 3 linii grupate sub aceeași comandă (preț total împărțit egal, cumpărător/cod aplicate pe toate 3), inclusiv scrierea reală în Supabase la „✓ Inclus", fără erori consolă',date:'2026-09-12'},
   {n:329,text:'Comenzi Platforme → import Vinted, redesenat complet, cerut direct („nu e deloc intuitiv așa și nici funcțional, trebuie să fie câte o coloană pe fiecare produs, să se comporte ca la import comenzi eMAG și Trendyol"). Înainte, fiecare produs recunoscut dintr-o captură deschidea propriul formular-card, într-o listă lungă needitoare cu restul aplicației, cu buton separat „✓ Adaugă comanda" per produs. Acum fiecare produs recunoscut intră DIRECT în aceeași previzualizare cu grid pe 5 coloane folosită la eMAG/Trendyol (linia despărțitoare „👕 Vinted"), cu potrivirea automată de produs identică (aceeași funcție, prag de încredere 70%) — se confirmă la fel, cu „✓ Inclus"/„Include tot", nu mai există buton separat de adăugat. Mici modificări față de eMAG/Trendyol, unde are sens: preț+monedă și cumpărător devin editabile direct în rând (citite dintr-o captură AI, nu dintr-un export sigur ca la eMAG/Trendyol), iar coloana „AWB" devine „Cod" la Vinted, editabilă la fel, cu codul scurt de expediere (nu titlul de AWB calculat, care n-are sens acolo). Verificat de 2 ori, cu Playwright și un produs real de test creat/șters la final: o captură cu 2 produse + 1 lot de 3 articole — produsul cu potrivire bună auto-asociat corect, cel fără potrivire arată „⚠ fără produs" (ca la eMAG/Trendyol), lotul a pregătit corect 3 spații goale, cod/cumpărător nu s-au atașat greșit cu 2 produse noi (au mers pe formularul de lot); separat, o captură cu UN SINGUR produs nou — cod/cumpărător s-au atașat automat pe acela, prețul editat direct în rând (45,5→60 RON) s-a reflectat corect în Financiar, iar „✓ Inclus" a creat comanda reală în Supabase cu prețul editat, cumpărătorul și codul corecte, stocul neatins încă (cum trebuie, până la „Aplică import") — fără erori consolă',date:'2026-09-12'},
@@ -14481,12 +14482,17 @@ function pcomVintedGroupSiblings(idx){
 function pcomSetVintedPret(idx,val){
   const it=pcImpParsed[idx];if(!it)return;
   const pret=Number(String(val).replace(',','.'))||0,faraTva=Math.round(pret/1.21*100)/100;
-  // Prețul consolidat stă doar pe prima linie a grupului (cerut direct) — restul liniilor rămân 0,
-  // ca produsele adiționale din același colet să nu se numere de două ori la Total încasări.
-  pcomVintedGroupSiblings(idx).forEach((i,pos)=>{
-    pcImpParsed[i].pretTotalCuTva=pos===0?pret:0;
-    pcImpParsed[i].pretFaraTva=pos===0?faraTva:0;
-  });
+  if(it.pretConsolidated){
+    // Preț consolidat („Grupează N articole") — stă doar pe prima linie a grupului (cerut direct),
+    // restul rămân 0, ca produsele adiționale din același colet să nu se numere de două ori la
+    // Total încasări. NU se aplică lotului manual (fiecare linie are prețul ei real, propriu).
+    pcomVintedGroupSiblings(idx).forEach((i,pos)=>{
+      pcImpParsed[i].pretTotalCuTva=pos===0?pret:0;
+      pcImpParsed[i].pretFaraTva=pos===0?faraTva:0;
+    });
+  }else{
+    it.pretTotalCuTva=pret;it.pretFaraTva=faraTva;
+  }
   setTimeout(renderPcomImportPreview,0);
 }
 function pcomSetVintedMoneda(idx,val){
@@ -14637,11 +14643,16 @@ async function removePcomLine(idx){
 }
 function pcomRowHtml(idx,showOwnAwb){
   const it=pcImpParsed[idx];
-  // Grup Vinted multi-produs (aceeași comandă) — preț/cod se arată/editează DOAR pe prima linie,
-  // cerut direct; liniile 2+ arată un rezumat scurt, fără să repete inputuri identice pe fiecare rând.
+  // Grup Vinted multi-produs (aceeași comandă) — cod/cumpărător se arată DOAR pe prima linie, cerut
+  // direct, INDIFERENT de sursă (sunt oricum identice pe tot grupul, în ambele fluxuri de mai jos).
+  // Prețul e diferit: consolidat (total doar pe prima linie) NUMAI când liniile vin dintr-un „Grupează
+  // N articole" detectat automat (it.pretConsolidated — vezi vintedRunRecognition), unde AI-ul nu știe
+  // niciodată prețul REAL per produs, doar totalul lotului. La formularul manual de mai jos (fiecare
+  // produs cu prețul lui real, introdus de om), fiecare linie își arată/editează propriul preț normal.
   const vintedGroupIdxs=pcomVintedGroupSiblings(idx);
   const isVintedMultiLine=it.platforma==='vinted'&&vintedGroupIdxs.length>1;
   const isVintedGroupFirst=!isVintedMultiLine||vintedGroupIdxs[0]===idx;
+  const isVintedPriceConsolidated=isVintedMultiLine&&!!it.pretConsolidated;
   let tag;
   if(it.newProduct)tag='<span class="inv-match new" title="Va fi creat un produs nou la aplicare">🆕 produs nou</span>';
   else if(it.viaPnk)tag='<span class="inv-match upd" title="Cod/PNK deja asociat">✓ Cod cunoscut</span>';
@@ -14654,9 +14665,9 @@ function pcomRowHtml(idx,showOwnAwb){
   // Vinted, cât timp linia nu e încă confirmată: prețul/moneda vin din citirea AI a unei capturi, nu
   // dintr-un export autoritar ca la eMAG/Trendyol — trebuie corectabile direct aici, nu doar cantitatea.
   const isVintedPending=it.platforma==='vinted'&&!it._committedId;
-  // Într-un grup Vinted multi-produs, preț/cumpărător/cod se arată DOAR pe prima linie (cerut direct) —
-  // liniile 2+ arată un rezumat scurt spre linia 1, nu inputuri goale/redundante repetate pe fiecare rând.
-  const priceDisplay=(isVintedMultiLine&&!isVintedGroupFirst)
+  // Preț consolidat (vezi comentariul de mai sus) — DOAR liniile dintr-un „Grupează N articole" arată
+  // rezumatul spre linia 1; liniile din lotul manual (preț real, propriu, per produs) rămân normale.
+  const priceDisplay=(isVintedPriceConsolidated&&!isVintedGroupFirst)
     ?`<span style="color:var(--t3)">preț pe linia 1</span>`
     :isVintedPending
       ?`<input type="text" inputmode="decimal" value="${it.pretTotalCuTva||''}" onchange="pcomSetVintedPret(${idx},this.value)" style="width:64px;font-family:var(--mono);font-size:20px;padding:2px 6px;border:1px solid var(--b2);border-radius:3px;background:var(--surf);color:var(--t1)"> <select onchange="pcomSetVintedMoneda(${idx},this.value)" style="font-size:20px;padding:2px 4px;border:1px solid var(--b2);border-radius:3px;background:var(--surf);color:var(--t1)"><option value="RON"${it.moneda==='RON'?' selected':''}>RON</option><option value="EUR"${it.moneda==='EUR'?' selected':''}>EUR</option></select>${it.moneda!=='RON'?' ('+pcomToRon(it.pretTotalCuTva,it.moneda).toFixed(2)+' RON)':''}`
@@ -14719,11 +14730,13 @@ function pcomRowHtml(idx,showOwnAwb){
   // există) și eticheta de potrivire — titlul de pe eMAG/Trendyol contează doar ca reper de căutare.
   const col2=`<div class="pcom-col pcom-col-title"><div class="pcom-col-lbl">Titlul produsului încărcat</div><div class="pcom-c2-title">${esc(it.titluExtern)}${it.titluRo?` <span class="pcom-platform-title-ro">🌐 ${esc(it.titluRo)}</span>`:''}</div><div class="pcom-c2-meta">${tag}${it.comandaId?' · #'+esc(it.comandaId):''}</div>${it.newProduct?pcomNewProductPromptHtml(idx):''}</div>`;
   // Coloana 3 — Financiar: pcomFinancialsHtml/pcomStockWarningHtml neatinse pentru linii normale, doar
-  // mutate aici. La un grup Vinted multi-produs, calculul per-linie n-ar avea sens (venitul e 0 pe toate
-  // liniile în afară de prima) — arătăm în schimb calculul CONSOLIDAT (cerut direct), doar pe prima linie;
-  // avertismentul de stoc rămâne per-linie peste tot (e despre stocul ACELUI produs, nu despre bani).
+  // mutate aici. La un grup cu preț CONSOLIDAT („Grupează N articole"), calculul per-linie n-ar avea
+  // sens (venitul e 0 pe toate liniile în afară de prima) — arătăm în schimb calculul CONSOLIDAT (cerut
+  // direct), doar pe prima linie. Lotul manual (preț real, propriu, per produs) păstrează calculul
+  // normal pe fiecare linie — fiecare are venitul lui real, un calcul individual e corect acolo.
+  // Avertismentul de stoc rămâne per-linie peste tot (e despre stocul ACELUI produs, nu despre bani).
   const col3Financial=it.newProduct?''
-    :isVintedMultiLine
+    :isVintedPriceConsolidated
       ?(isVintedGroupFirst?pcomVintedGroupFinancialsHtml(vintedGroupIdxs):'')
       :pcomFinancialsHtml(idx);
   const col3=`<div class="pcom-col pcom-col-financial"><div class="pcom-col-lbl">Financiar</div>${col3Financial}${it.newProduct?'':pcomStockWarningHtml(idx)}</div>`;
@@ -14930,15 +14943,18 @@ async function vintedRunRecognition(imageContent,previewSrc){
     // cerut direct ca liniile să apară SUS, în același grid ca eMAG/Trendyol, nu într-un formular
     // separat: N linii goale, cu ACELAȘI comandaId/pachetId (se grupează vizual ca un singur pachet,
     // exact ca la eMAG/Trendyol — vezi pcomComputeGroups), gata de ales fiecare produs prin „— alege
-    // produs —”. Prețul total al lotului se împarte egal pe linii, ca punct de plecare editabil.
+    // produs —”. Prețul TOTAL al lotului stă doar pe prima linie (nu împărțit pe linii, cerut direct —
+    // vezi și pcomSetVintedPret/pcomRowHtml, ACEEAȘI regulă) — altfel calculul consolidat de mai jos
+    // (pcomVintedGroupFinancialsHtml) ar vedea doar o fracțiune din venitul real pe prima linie.
     lotRows.forEach(r=>{
       const lotComandaId='VNT-'+Date.now().toString(36).toUpperCase()+Math.random().toString(36).slice(2,5).toUpperCase();
       const moneda=(r.moneda||'RON').toUpperCase();
-      const perItem=r.articole>0?Math.round(((Number(r.pret)||0)/r.articole)*100)/100:0;
+      const totalPret=Number(r.pret)||0;
       for(let i=0;i<r.articole;i++){
+        const pretTotalCuTva=i===0?totalPret:0;
         pcImpParsed.push({platforma:'vinted',comandaId:lotComandaId,pachetId:lotComandaId,data:td(),pnk:'',tara:'',codProdus:'',
           clientNume:parsed.cumparator||'',titluExtern:`Produs ${i+1} din lot Vinted (${r.articole} articole) — alege mai jos`,vintedImg:previewSrc||'',
-          cantitate:1,suggestedCantitate:0,pretFaraTva:Math.round(perItem/1.21*100)/100,pretTotalCuTva:perItem,moneda,
+          cantitate:1,suggestedCantitate:0,pretFaraTva:Math.round(pretTotalCuTva/1.21*100)/100,pretTotalCuTva,moneda,pretConsolidated:true,
           produsId:null,score:0,viaPnk:false,viaTitle:false,viaCode:false,include:false,awb:parsed.cod||''});
         newIdxs.push(pcImpParsed.length-1);
       }
