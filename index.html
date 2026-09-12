@@ -2505,6 +2505,31 @@ th{font-weight:800!important;color:var(--t3)!important}
           </div>
         </div>
       </div>
+      <div class="card" style="padding:1rem 1.25rem;margin-top:1rem">
+        <div class="sec" style="margin-top:0">👕 Vinted (din captură)</div>
+        <div style="font-size:23px;color:var(--t3);margin-bottom:10px">
+          Vinted nu are export de fișier ca eMAG/Trendyol — lipești sau încarci o captură cu vânzarea
+          (produs, preț, cumpărător) și AI o adaugă direct mai jos, în aceeași previzualizare de mai sus.
+          Poți lipi și captura etichetei de expediere separat, oricând — codul de-acolo („Folosește acest
+          cod:") ține loc de AWB.
+        </div>
+        <div class="pp-source-actions">
+          <button type="button" class="btn btn-acc" onclick="vintedPasteImage()">📋 Din clipboard</button>
+          <button type="button" class="btn btn-sm" onclick="document.getElementById('vinted-file-input').click()">📁 Din fișier</button>
+        </div>
+        <input type="file" id="vinted-file-input" accept="image/*" style="display:none" onchange="vintedFromFile(event)">
+        <div id="vinted-parsing" style="display:none;font-size:23px;color:var(--t3);margin:8px 0"><span class="spin"></span> Analizez captura…</div>
+        <div id="vinted-single-form"></div>
+        <div class="sec" style="margin-top:20px;font-size:24px">➕ Adaugă mai multe produse deodată (lot)</div>
+        <div style="font-size:20px;color:var(--t3);margin:2px 0 10px">Pentru o expediere cu mai multe articole grupate — adaugi manual produsele, cu un singur cumpărător și un singur cod, deodată.</div>
+        <div id="vinted-lot-rows"></div>
+        <button type="button" class="btn btn-sm" style="margin-top:6px" onclick="vintedLotAddRow()">➕ Adaugă rând produs</button>
+        <div class="frow" style="margin-top:10px">
+          <div class="fld"><label>Cumpărător</label><input type="text" id="vinted-lot-client" placeholder="Nume cumpărător"></div>
+          <div class="fld"><label>Cod (în loc de AWB)</label><input type="text" id="vinted-lot-awb" placeholder="ex. 7UHX8VP"></div>
+        </div>
+        <button type="button" class="btn btn-sm btn-acc" style="margin-top:10px" onclick="vintedLotSubmit()">Adaugă lotul în Comenzi</button>
+      </div>
       <div class="card" style="padding:1rem 1.25rem">
         <div class="sec" style="margin-top:0">📮 Asociază AWB-uri</div>
         <div style="font-size:23px;color:var(--t3);margin-bottom:10px">
@@ -2542,6 +2567,7 @@ th{font-weight:800!important;color:var(--t3)!important}
               <option value="all">Toate</option>
               <option value="emag">eMAG</option>
               <option value="trendyol">Trendyol</option>
+              <option value="vinted">Vinted</option>
             </select>
           </div>
           <div class="fld">
@@ -3394,6 +3420,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:328,text:'Nou — Comenzi Platforme prinde și Vinted, cerut direct („da mi o idee de varianta"). Vinted n-are export de fișier ca eMAG/Trendyol, deci nu intră prin importul de mai sus — card nou „👕 Vinted (din captură)": lipești/încarci o captură cu vânzarea (produs, preț, cumpărător), AI o citește și o adaugă direct în aceeași previzualizare, cu propria linie despărțitoare; poți lipi separat și captura etichetei de expediere — codul scurt de-acolo („Folosește acest cod:") ține loc de AWB clasic, se salvează automat pe comandă. Pentru un colet cu mai multe articole grupate (lot), un formular manual la finalul cardului adaugă mai multe produse deodată, cu un singur cumpărător și cod, ca un singur pachet. Comenzile Vinted trec prin exact același „Aplică import"/„Asociază AWB" ca eMAG/Trendyol, apar la fel în Staff (etichetă verde „Vinted"), în „Profit vânzări" (filtru nou) și „Total încasări" (card propriu). Calculul de profit foloseste motorul de „vânzare directă" (Vinted n-are comision de canal configurat separat încă). Verificat de 2 ori, cu Playwright, cu produse reale de test create/șterse la final: extragere din captură (AI simulat) → produs auto-potrivit → comandă reală creată în Supabase cu codul salvat corect; lot manual cu 2 produse → o singură comandă grupată, cantitate/preț corecte; filtrul „Vinted" din Profit vânzări și cardul din Total încasări arată sumele corecte; eticheta „Vinted" apare corect și în Staff, cu codul în caseta AWB, fără erori consolă',date:'2026-09-12'},
   {n:327,text:'„Preț privat" — cerut direct: pe lângă recunoașterea din poză, produsul se poate găsi acum și tastând denumirea lui, fără nicio poză. Câmp nou de căutare direct pe ecranul inițial („sau caută produsul după denumire") — caută live după nume, SKU sau cod intern, cu poza reală a produsului în listă; alegerea unui rezultat duce direct la calculul de cost/preț minim/profitabilitate, exact ca la recunoașterea din poză. Verificat de 2 ori, cu Playwright: căutare sub 2 caractere corect ignorată (fără rezultate premature), căutare reală („Dozator") găsește produsul corect din stoc cu costul lui real, alegerea unui rezultat trece corect în ecranul de calcul, căutare fără potrivire arată „Niciun produs găsit", fără erori consolă',date:'2026-09-12'},
   {n:326,text:'Comenzi Platforme — cerut direct: la un import mixt eMAG+Trendyol cu multe linii, bifarea „✓ Inclus" una câte una pe fiecare produs era greoaie. Fiecare secțiune de platformă (linia despărțitoare „🛒 eMAG"/„🛍️ Trendyol") are acum propriul buton „✓ Include tot (N)" — include dintr-un click DOAR liniile din acea platformă, neincluse încă (N = câte mai sunt); butonul dispare automat când nu mai e nimic de inclus. Fiecare linie trece prin exact același proces ca la bifarea manuală (scrie comanda, apare imediat în Staff) — nimic din logica de asociere/comitere nu s-a schimbat. Verificat de 2 ori, cu Playwright pe date sintetice (2 linii eMAG + 3 Trendyol, mix de incluse/neincluse): fiecare buton arată numărul corect, clic pe „Include tot" la eMAG afectează DOAR liniile eMAG (Trendyol neatins), butonul dispare după ce nu mai rămâne nimic de inclus, fără erori consolă',date:'2026-09-11'},
   {n:325,text:'Bug real reparat, raportat direct cu o captură: la importul comenzilor Trendyol, numele clientului arăta „Prima comandă"/„Comandă recurentă" în loc de nume real. Cauza: coloana de „client" era detectată printr-un alias generic („client"), nicicând verificat pe un export Trendyol real (documentat așa în cod de la introducere) — de fapt se potrivea cu o coloană de tip status ("Tip Client"), nu cu numele. Acum, înainte de a folosi coloana găsită, se verifică dacă are prea puține valori distincte pe un eșantion (sub 3 valori diferite pe minim 6 rânduri) — semn clar că e o coloană de status/categorie, nu de nume — caz în care se ignoră, revenind la „fără nume afișat" (starea sigură, documentată deja pentru coloană lipsă), nu la unul greșit. Numele real al clientului tot nu apare încă la Trendyol (nu știu care e coloana corectă din exportul vostru) — trimite-mi/spune-mi textul exact al header-ului cu numele, ca să-l adaug la lista de alias-uri. Verificat de 2 ori, cu fișiere XLSX sintetice reale, prin Playwright, direct pe codul din aplicație (nu o reimplementare): fișierul cu coloana „Tip Client" (bug reprodus exact) acum vine cu nume gol, nu cu statusul; un fișier cu o coloană reală de nume distincte continuă să funcționeze corect, fără regresie; fără erori consolă',date:'2026-09-11'},
@@ -5575,6 +5602,9 @@ function pcomToRon(price,currency){
 // bucată), cu setările implicite de comision/transport ale canalului. Compară și cu pragul minim
 // configurat pe produs (priceEmag/priceTrendyol) — dacă am vândut sub el, marchează vizual.
 function pcomChannelFor(platforma){return platforma==='trendyol'?'trendyol':platforma==='emag'?'emag':'direct';}
+// Etichetă de afișare pentru orice platformă din platforma_comenzi — Vinted calculează financiar pe
+// canalul 'direct' (vezi pcomChannelFor), dar tot merită eticheta ei proprie, nu „eMAG”/„Trendyol” greșit.
+function pcomPlatLabel(platforma){return platforma==='trendyol'?'Trendyol':platforma==='vinted'?'Vinted':'eMAG';}
 function pcomSaleFinancials(p,it,platforma){
   const ch=pcomChannelFor(platforma);
   const tvaAcq=p.tvaAcq??0.21;
@@ -13958,7 +13988,7 @@ function pcomMode(mode){
     document.getElementById('pcom-tab-'+m)?.classList.toggle('on',m===mode);
     document.getElementById('pcom-mode-'+m)?.classList.toggle('on',m===mode);
   });
-  if(mode==='import')renderPcomImportHistory();
+  if(mode==='import'){renderPcomImportHistory();renderVintedLotRows();renderVintedSingleForm();}
   if(mode==='profit')renderPcomProfit();
   if(mode==='totals')renderPcomTotals();
   if(mode==='reorder')renderReorderList();
@@ -13989,7 +14019,7 @@ function renderPcomImportHistory(){
     // fișier, uneori o zi mai veche) — la fel ca în Jurnal/Vânzări azi, unde se aplică aceeași regulă.
     const dates=[...b.dates].sort();
     const dateLabel=b.createdAt?b.createdAt.slice(0,10):(dates.length===1?dates[0]:`${dates[0]} → ${dates[dates.length-1]}`);
-    const plLabel=b.platforma==='emag'?'eMAG':'Trendyol';
+    const plLabel=pcomPlatLabel(b.platforma);
     return`<div class="pcom-batch-row">
       <div class="pcom-batch-info"><b>${esc(plLabel)}</b> · ${esc(dateLabel)} · ${b.count} linii · ${b.total.toFixed(2)} RON</div>
       ${b.batchId?`<button type="button" class="btn btn-sm" style="color:var(--rd);border-color:var(--rd)" onclick="deletePcomBatch('${esc(b.batchId)}')">🗑️ Șterge</button>`:'<span style="font-size:20px;color:var(--t3)">import vechi, fără grupare</span>'}
@@ -14035,7 +14065,7 @@ async function deletePcomBatch(batchId){
         p.sold=Math.max(0,(p.sold||0)-o.cantitate);
         try{await dbPatch(`produse?id=eq.${p.id}`,{sold:p.sold});}catch(e){console.warn('Nu am putut readăuga stocul pentru',p.name,e);}
         await reverseJurnalEcho(o.produsId,o.createdAt,o.cantitate);
-        await logMove('in',p.name,o.cantitate,`Anulare import ${o.platforma==='emag'?'eMAG':'Trendyol'} (comandă ${o.comandaId||'—'})`,p.id);
+        await logMove('in',p.name,o.cantitate,`Anulare import ${pcomPlatLabel(o.platforma)} (comandă ${o.comandaId||'—'})`,p.id);
       }
     }
     PCOM=PCOM.filter(o=>o.importBatchId!==batchId);
@@ -14637,6 +14667,16 @@ async function commitPcomLine(idx){
       it._committedId=inserted[0].id;
       PCOM.unshift(dbToPcom(inserted[0]));
     }
+    // Vinted nu are AWB clasic la creare (vine separat, din eticheta de expediere) — dacă linia are deja
+    // un cod (introdus manual sau extras dintr-o captură a etichetei), îl scriem direct acum. `it.awb`
+    // nu există niciodată pe liniile din import XLSX eMAG/Trendyol (setat doar mai târziu, prin Asociază
+    // AWB-uri/setPcomAwb), deci acest pas nu are niciun efect asupra fluxului lor existent.
+    if(it.awb&&it._committedId){
+      try{
+        await dbPatch(`platforma_comenzi?id=eq.${it._committedId}`,{awb:it.awb});
+        const created=PCOM.find(o=>o.id===it._committedId);if(created)created.awb=it.awb;
+      }catch(e){console.warn('Nu am putut salva codul/AWB la creare:',e);}
+    }
     // Învață asocierea — omul tocmai a confirmat că potrivirea e corectă, la fel ca la Aplică import.
     if(it.pnk&&!SYNCM.some(s=>s.platforma===platforma&&s.idExtern===it.pnk)){
       try{
@@ -14699,6 +14739,194 @@ async function includeAllPcomPlatform(plat){
   for(const i of idxs)await syncPcomLineCommitState(i);
   renderPcomImportPreview();
 }
+
+/* ── Vinted (din captură) — cerut direct: Vinted nu are export de fișier ca eMAG/Trendyol, deci nu
+   poate intra prin fluxul XLSX de mai sus. Se adaugă direct în ACELAȘI pcImpParsed/commitPcomLine —
+   apare imediat în aceeași previzualizare (linia despărțitoare „👕 Vinted”) și trece prin „Aplică
+   import” la fel ca orice altă linie, fără cod nou de aplicat efecte de stoc/Jurnal. ──*/
+const VINTED_EXTRACTION_SCHEMA={
+  type:'object',
+  properties:{
+    produs:{type:['string','null'],description:'Denumirea produsului vândut, exact ca în captură (titlul anunțului). null dacă nu apare deloc în imagine (ex. captura arată doar eticheta de expediere, fără nume de produs).'},
+    pret:{type:['number','null'],description:'Prețul de vânzare al produsului — doar numărul, fără simbol de monedă. null dacă nu apare.'},
+    moneda:{type:['string','null'],description:'"RON" sau "EUR", dedusă din simbol/text ("lei"→RON, "€"→EUR). null dacă neclar.'},
+    cumparator:{type:['string','null'],description:'Numele cumpărătorului/destinatarului, dacă apare (ex. lângă „Destinatar”). null dacă nu apare.'},
+    cod:{type:['string','null'],description:'Codul scurt de expediere Vinted, de lângă textul „Nu se scanează? Folosește acest cod:” — un cod alfanumeric scurt, NU un AWB clasic de curier. null dacă nu apare.'},
+  },
+  required:['produs','pret','moneda','cumparator','cod'],
+  additionalProperties:false
+};
+let vintedSingle=null; // {titluExtern,pret,moneda,clientNume,awb,produsId,productImg,candidates}
+async function vintedRunRecognition(imageContent,previewSrc){
+  const box=document.getElementById('vinted-parsing');box.style.display='block';
+  try{
+    const content=[imageContent,{type:'text',text:'Această captură e din aplicația Vinted — fie confirmarea unei vânzări (produs, preț, cumpărător), fie ecranul de expediere (cod, transportator, destinatar). Extrage exact ce apare, fără să inventezi ce lipsește.'}];
+    const resp=await callAI([{role:'user',content}],'Ești expert în citirea capturilor de ecran din aplicația Vinted. Extragi STRICT ce apare în imagine.',400,'analysis',VINTED_EXTRACTION_SCHEMA,'vinted_extraction');
+    const parsed=JSON.parse(resp);
+    if(!parsed.produs&&!parsed.cod){toast('Nu am găsit nimic util în această captură','err');return;}
+    vintedSingle=vintedSingle||{titluExtern:'',pret:0,moneda:'RON',clientNume:'',awb:'',produsId:null,productImg:'',candidates:[]};
+    if(parsed.produs){
+      const scored=P.filter(p=>!p.archived).map(p=>({p,score:fuzzyMatch(parsed.produs,productMatchText(p))})).filter(x=>x.score>=0.2).sort((a,b)=>b.score-a.score);
+      vintedSingle.titluExtern=parsed.produs;
+      vintedSingle.produsId=scored[0]?.p.id||vintedSingle.produsId;
+      vintedSingle.candidates=scored.slice(0,8).map(x=>x.p);
+    }
+    if(parsed.pret>0){vintedSingle.pret=Number(parsed.pret)||0;vintedSingle.moneda=(parsed.moneda||'RON').toUpperCase();}
+    if(parsed.cumparator)vintedSingle.clientNume=parsed.cumparator;
+    if(parsed.cod)vintedSingle.awb=parsed.cod;
+    if(previewSrc&&!vintedSingle.productImg)vintedSingle.productImg=previewSrc;
+    renderVintedSingleForm();
+    toast('Captură analizată — verifică datele înainte de a adăuga');
+  }catch(e){toast('Eroare la analiza capturii: '+(e.message||e),'err');}
+  finally{box.style.display='none';}
+}
+async function vintedPasteImage(){
+  if(!navigator.clipboard?.read){toast('Browserul nu suportă citirea directă din clipboard','err');return;}
+  try{
+    const items=await navigator.clipboard.read();
+    let blob=null;
+    for(const item of items){const type=item.types.find(t=>t.startsWith('image/'));if(type){blob=await item.getType(type);break;}}
+    if(!blob){toast('Nu am găsit nicio imagine în clipboard — fă un screenshot, apoi încearcă din nou','err');return;}
+    const{dataUrl,mt,b64}=await ppImageBase64FromBlob(blob);
+    await vintedRunRecognition({type:'image',source:{type:'base64',media_type:mt,data:b64}},dataUrl);
+  }catch(e){toast('Eroare la analiza capturii: '+(e.message||e),'err');}
+}
+async function vintedFromFile(ev){
+  const f=ev.target.files?.[0];ev.target.value='';if(!f)return;
+  try{
+    const{dataUrl,mt,b64}=await ppImageBase64FromBlob(f);
+    await vintedRunRecognition({type:'image',source:{type:'base64',media_type:mt,data:b64}},dataUrl);
+  }catch(e){toast('Eroare la citirea fișierului: '+(e.message||e),'err');}
+}
+function vintedSinglePick(id){
+  if(!vintedSingle)return;
+  vintedSingle.produsId=id;
+  const p=P.find(x=>x.id===id);
+  if(p&&!vintedSingle.titluExtern)vintedSingle.titluExtern=p.name;
+  renderVintedSingleForm();
+}
+function vintedSingleSearch(v){
+  const box=document.getElementById('vs-search-results');if(!box)return;
+  const q=v.trim().toLowerCase();
+  if(q.length<2){box.innerHTML='';box.style.display='none';return;}
+  box.style.display='flex';
+  const results=P.filter(p=>!p.archived&&(p.name.toLowerCase().includes(q)||(p.sku||'').toLowerCase().includes(q))).slice(0,10);
+  box.innerHTML=results.length?results.map(p=>{
+    const pth=p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'vs')}>`:`<div class="smi-pick-th-ph">📦</div>`;
+    return`<div class="smi-pick-item" onclick="vintedSinglePick(${p.id})">${pth}<span class="smi-pick-item-nm">${esc(p.name)}</span></div>`;
+  }).join(''):`<div class="pp-hint" style="padding:6px 2px">Niciun produs găsit</div>`;
+}
+function renderVintedSingleForm(){
+  const box=document.getElementById('vinted-single-form');if(!box)return;
+  if(!vintedSingle){box.innerHTML='';return;}
+  const th=vintedSingle.productImg?`<img src="${esc(vintedSingle.productImg)}" class="pp-product-th">`:'';
+  const pickHtml=vintedSingle.candidates?.length?`<div class="pp-pick-list" style="margin:8px 0">${vintedSingle.candidates.map(p=>{
+    const pth=p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'vs')}>`:`<div class="smi-pick-th-ph">📦</div>`;
+    const sel=vintedSingle.produsId===p.id;
+    return`<div class="smi-pick-item${sel?' on':''}" onclick="vintedSinglePick(${p.id})">${pth}<span class="smi-pick-item-nm">${esc(p.name)}${sel?' · ✓ ales':''}</span></div>`;
+  }).join('')}</div>`:'';
+  box.innerHTML=`<div class="card" style="padding:12px 14px;margin-top:10px;background:var(--surf2)">
+    <div class="pp-product-head">${th}<div class="pp-product-name">${esc(vintedSingle.titluExtern||'— fără produs identificat —')}</div></div>
+    ${pickHtml}
+    <div class="frow" style="margin-top:8px">
+      <div class="fld"><label>Caută produs manual</label><input type="text" id="vs-search" placeholder="Denumire sau SKU…" oninput="vintedSingleSearch(this.value)"></div>
+      <div class="fld"><label>Preț vânzare</label><input type="text" inputmode="decimal" value="${vintedSingle.pret||''}" oninput="vintedSingle.pret=Number(this.value.replace(',','.'))||0"></div>
+      <div class="fld">
+        <label>Monedă</label>
+        <select onchange="vintedSingle.moneda=this.value">
+          <option value="RON" ${vintedSingle.moneda==='RON'?'selected':''}>RON</option>
+          <option value="EUR" ${vintedSingle.moneda==='EUR'?'selected':''}>EUR</option>
+        </select>
+      </div>
+    </div>
+    <div id="vs-search-results" class="pp-pick-list" style="display:none;margin-top:6px"></div>
+    <div class="frow">
+      <div class="fld"><label>Cumpărător</label><input type="text" value="${esc(vintedSingle.clientNume)}" oninput="vintedSingle.clientNume=this.value"></div>
+      <div class="fld"><label>Cod (în loc de AWB)</label><input type="text" value="${esc(vintedSingle.awb)}" oninput="vintedSingle.awb=this.value"></div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:10px">
+      <button type="button" class="btn btn-acc" onclick="vintedSingleSubmit()">✓ Adaugă comanda</button>
+      <button type="button" class="btn btn-sm" onclick="vintedSingle=null;renderVintedSingleForm()">✕ Anulează</button>
+    </div>
+  </div>`;
+}
+async function vintedSingleSubmit(){
+  if(!vintedSingle)return;
+  if(!vintedSingle.produsId){toast('Alege întâi produsul — din listă sau prin căutare','err');return;}
+  if(!(vintedSingle.pret>0)){toast('Introdu prețul de vânzare','err');return;}
+  const p=P.find(x=>x.id===vintedSingle.produsId);if(!p){toast('Produsul nu mai există','err');return;}
+  const gross=vintedSingle.pret,net=Math.round(gross/1.21*100)/100;
+  const idx=pcImpParsed.length;
+  pcImpParsed.push({platforma:'vinted',comandaId:'VNT-'+Date.now().toString(36).toUpperCase(),pachetId:'',
+    data:td(),pnk:'',tara:'',codProdus:'',clientNume:vintedSingle.clientNume||'',
+    titluExtern:vintedSingle.titluExtern||p.name,cantitate:1,suggestedCantitate:0,
+    pretFaraTva:net,pretTotalCuTva:gross,moneda:vintedSingle.moneda||'RON',
+    produsId:p.id,score:1,viaPnk:false,viaTitle:true,viaCode:false,include:true,awb:vintedSingle.awb||''});
+  await syncPcomLineCommitState(idx);
+  vintedSingle=null;
+  renderVintedSingleForm();
+  renderPcomImportPreview();
+  toast('Comandă Vinted adăugată ✓ — vizibilă în Staff, stocul se scade la „Aplică import”');
+}
+
+// Adăugare manuală, pentru un colet Vinted cu mai multe articole grupate (lot) — fiecare produs
+// devine o linie proprie în platforma_comenzi, toate cu ACELAȘI comandaId sintetic, ca să se grupeze
+// vizual la fel ca un „pachet” eMAG/Trendyol (vezi pcomComputeGroups/pachetId).
+let vintedLotRows=[];
+function vintedLotAddRow(){vintedLotRows.push({produsId:null,productName:'',qty:1,pret:0});renderVintedLotRows();}
+function vintedLotRemoveRow(idx){vintedLotRows.splice(idx,1);renderVintedLotRows();}
+function vintedLotSetQty(idx,v){vintedLotRows[idx].qty=Math.max(1,Math.round(Number(String(v).replace(',','.'))||1));}
+function vintedLotSetPret(idx,v){vintedLotRows[idx].pret=Number(String(v).replace(',','.'))||0;}
+function vintedLotSearch(idx,v){
+  const box=document.getElementById('vinted-lot-search-'+idx);if(!box)return;
+  const q=v.trim().toLowerCase();
+  if(q.length<2){box.innerHTML='';box.style.display='none';return;}
+  box.style.display='flex';
+  const results=P.filter(p=>!p.archived&&(p.name.toLowerCase().includes(q)||(p.sku||'').toLowerCase().includes(q))).slice(0,8);
+  box.innerHTML=results.length?results.map(p=>`<div class="smi-pick-item" onclick="vintedLotPick(${idx},${p.id})"><span class="smi-pick-item-nm">${esc(p.name)}</span></div>`).join(''):`<div class="pp-hint" style="padding:6px 2px">Niciun produs găsit</div>`;
+}
+function vintedLotPick(idx,id){
+  const p=P.find(x=>x.id===id);if(!p)return;
+  vintedLotRows[idx].produsId=id;vintedLotRows[idx].productName=p.name;
+  if(!vintedLotRows[idx].pret)vintedLotRows[idx].pret=Number(p.priceSell)||0;
+  renderVintedLotRows();
+}
+function renderVintedLotRows(){
+  const box=document.getElementById('vinted-lot-rows');if(!box)return;
+  box.innerHTML=vintedLotRows.map((r,idx)=>`<div class="frow" style="align-items:flex-end">
+    <div class="fld" style="flex:2">
+      <label>Produs ${idx+1}</label>
+      <input type="text" placeholder="Caută denumire sau SKU…" value="${esc(r.productName)}" oninput="vintedLotSearch(${idx},this.value)">
+      <div class="pp-pick-list" id="vinted-lot-search-${idx}" style="display:none;margin-top:4px"></div>
+    </div>
+    <div class="fld" style="max-width:90px"><label>Buc.</label><input type="number" min="1" step="1" value="${r.qty}" onchange="vintedLotSetQty(${idx},this.value)"></div>
+    <div class="fld" style="max-width:140px"><label>Preț (${r.qty>1?'total linie':'buc.'})</label><input type="text" inputmode="decimal" value="${r.pret||''}" oninput="vintedLotSetPret(${idx},this.value)"></div>
+    <button type="button" class="btn btn-sm" style="color:var(--rd);border-color:var(--rd)" onclick="vintedLotRemoveRow(${idx})">✕</button>
+  </div>`).join('')||'<div class="pp-hint">Niciun produs adăugat încă — apasă „➕ Adaugă rând produs”</div>';
+}
+async function vintedLotSubmit(){
+  const valid=vintedLotRows.filter(r=>r.produsId&&r.pret>0);
+  if(!valid.length){toast('Adaugă cel puțin un produs cu preț valid','err');return;}
+  const client=document.getElementById('vinted-lot-client').value.trim();
+  const awb=document.getElementById('vinted-lot-awb').value.trim();
+  const comandaId='VNT-'+Date.now().toString(36).toUpperCase();
+  const startIdx=pcImpParsed.length;
+  valid.forEach(r=>{
+    const p=P.find(x=>x.id===r.produsId);
+    const gross=r.pret,net=Math.round(gross/1.21*100)/100;
+    pcImpParsed.push({platforma:'vinted',comandaId,pachetId:comandaId,data:td(),pnk:'',tara:'',codProdus:'',
+      clientNume:client,titluExtern:p?.name||r.productName,cantitate:r.qty,suggestedCantitate:0,
+      pretFaraTva:net,pretTotalCuTva:gross,moneda:'RON',produsId:r.produsId,score:1,viaPnk:false,viaTitle:true,viaCode:false,
+      include:true,awb});
+  });
+  for(let i=startIdx;i<pcImpParsed.length;i++)await syncPcomLineCommitState(i);
+  vintedLotRows=[];
+  document.getElementById('vinted-lot-client').value='';
+  document.getElementById('vinted-lot-awb').value='';
+  renderVintedLotRows();
+  renderPcomImportPreview();
+  toast(valid.length===1?'1 produs adăugat ca lot Vinted ✓':`${valid.length} produse adăugate ca un singur lot Vinted ✓`);
+}
 function renderPcomImportPreview(){
   const prev=document.getElementById('pcmi-preview');
   pcomComputeGroups();
@@ -14711,13 +14939,17 @@ function renderPcomImportPreview(){
   const groupsHtml=pcomGroups.map((idxs,gIdx)=>{
     let divider='';
     const plat=pcImpParsed[idxs[0]].platforma;
-    if(multiPlatform&&plat!==lastPlat){
+    // Vinted arată mereu propria linie despărțitoare, chiar și fără alt import XLSX în paralel (single
+    // platformă) — altfel liniile Vinted n-ar avea NICIUN indiciu vizual de platformă (pcomRowHtml nu
+    // arată platforma per rând, doar linia despărțitoare o face).
+    if((multiPlatform||plat==='vinted')&&plat!==lastPlat){
       lastPlat=plat;
       const platLines=pcImpParsed.filter(x=>x.platforma===plat);
       const count=platLines.length;
       const notIncluded=platLines.filter(x=>!x.include).length;
       const includeAllHtml=notIncluded?`<button type="button" class="pcom-include-toggle" onclick="includeAllPcomPlatform('${plat}')">✓ Include tot (${notIncluded})</button>`:'';
-      divider=`<div class="pcom-platform-divider"><span>${plat==='trendyol'?'🛍️ Trendyol':'🛒 eMAG'}</span><span class="pcom-platform-divider-count">${count} linii</span>${includeAllHtml}</div>`;
+      const platLabel=plat==='trendyol'?'🛍️ Trendyol':plat==='vinted'?'👕 Vinted':'🛒 eMAG';
+      divider=`<div class="pcom-platform-divider"><span>${platLabel}</span><span class="pcom-platform-divider-count">${count} linii</span>${includeAllHtml}</div>`;
     }
     if(idxs.length<=1)return divider+pcomRowHtml(idxs[0],true);
     const linesHtml=idxs.map(i=>pcomRowHtml(i,false)).join('');
@@ -14740,6 +14972,7 @@ function savePcomImportState(){
   safeLocalSet(PCIK,JSON.stringify({platforma:pcImpPlatforma,parsed:pcImpParsed}));
 }
 function loadPcomImportState(){
+  renderVintedLotRows();renderVintedSingleForm();
   try{
     const raw=localStorage.getItem(PCIK);
     if(!raw)return;
@@ -14988,7 +15221,7 @@ async function applyPcomImport(){
         // scade stocul — o vânzare reală s-a produs
         p.sold=(p.sold||0)+it.cantitate;
         await dbPatch(`produse?id=eq.${p.id}`,{sold:p.sold});
-        await logMove('out',p.name,it.cantitate,`Vânzare ${platforma==='emag'?'eMAG':'Trendyol'} (comandă ${it.comandaId||'—'})`,p.id);
+        await logMove('out',p.name,it.cantitate,`Vânzare ${pcomPlatLabel(platforma)} (comandă ${it.comandaId||'—'})`,p.id);
         // Cerință explicită: vânzarea trebuie să apară în Jurnal ȘI în "Vânzări azi" exact în ziua în
         // care se face importul (indiferent de data reală a comenzii pe eMAG/Trendyol) — ca omul să
         // urmărească evoluția stocului pe zilele lui de lucru, nu pe datele originale ale comenzilor.
@@ -15070,7 +15303,7 @@ function renderPcomProfitOrders(rows){
   const sorted=[...rows].sort((a,b)=>String(b.createdAt||b.data).localeCompare(String(a.createdAt||a.data)));
   if(!sorted.length){host.innerHTML='<div class="empty-row">Nicio comandă importată încă</div>';return;}
   host.innerHTML=sorted.map(o=>{
-    const plLabel=o.platforma==='emag'?'eMAG':'Trendyol';
+    const plLabel=pcomPlatLabel(o.platforma);
     const packBadge=o.impachetat?'<span class="bdg bdg-ok">📦 Împachetat</span>':o.faraStoc?'<span class="bdg bdg-out">❌ Stoc zero</span>':(o.staffBlocked?'<span class="bdg bdg-low">⛔ Problemă raportată</span>':'');
     const awbBtn=`<button type="button" class="btn btn-sm" style="flex-shrink:0" onclick="setPcomAwb(${o.id})" title="Completează manual AWB — apare apoi și în pagina de Staff">${o.awb?'📦 AWB '+esc(o.awb):'✏️ AWB'}</button>`;
     return`<div class="pcom-batch-row">
@@ -15112,7 +15345,7 @@ async function deletePcomOrder(id){
       p.sold=Math.max(0,(p.sold||0)-o.cantitate);
       try{await dbPatch(`produse?id=eq.${p.id}`,{sold:p.sold});}catch(e){console.warn('Nu am putut readăuga stocul pentru',p.name,e);}
       await reverseJurnalEcho(o.produsId,o.createdAt,o.cantitate);
-      await logMove('in',p.name,o.cantitate,`Anulare comandă ${o.platforma==='emag'?'eMAG':'Trendyol'} (comandă ${o.comandaId||'—'})`,p.id);
+      await logMove('in',p.name,o.cantitate,`Anulare comandă ${pcomPlatLabel(o.platforma)} (comandă ${o.comandaId||'—'})`,p.id);
     }
     PCOM=PCOM.filter(x=>x.id!==id);
     renderPcomProfit();renderPcomImportHistory();renderPcomTotals();renderTable();renderToday();renderDashboard();
@@ -15125,13 +15358,16 @@ function renderPcomTotals(){
   const grid=document.getElementById('pcom-totals-grid');
   if(!grid)return;
   const period=document.getElementById('pct-period')?.value||'all';
-  const emagRows=pcomFilteredRows('emag',period),trendyolRows=pcomFilteredRows('trendyol',period);
+  const emagRows=pcomFilteredRows('emag',period),trendyolRows=pcomFilteredRows('trendyol',period),vintedRows=pcomFilteredRows('vinted',period);
   const emagTotal=emagRows.reduce((a,o)=>a+o.pretTotalCuTvaRon,0);
   const trendyolTotal=trendyolRows.reduce((a,o)=>a+o.pretTotalCuTvaRon,0);
+  const vintedTotal=vintedRows.reduce((a,o)=>a+o.pretTotalCuTvaRon,0);
+  const combinedTotal=emagTotal+trendyolTotal+vintedTotal,combinedCount=emagRows.length+trendyolRows.length+vintedRows.length;
   grid.innerHTML=`
     <div class="dash-plat-card"><div class="dash-plat-ic">🛒</div><div class="dash-plat-name">eMAG</div><div class="dash-plat-val">${emagTotal.toFixed(2)} RON</div><div class="dash-plat-note">${emagRows.length} comenzi</div></div>
     <div class="dash-plat-card"><div class="dash-plat-ic">🛍️</div><div class="dash-plat-name">Trendyol</div><div class="dash-plat-val">${trendyolTotal.toFixed(2)} RON</div><div class="dash-plat-note">${trendyolRows.length} comenzi</div></div>
-    <div class="dash-plat-card"><div class="dash-plat-ic">Σ</div><div class="dash-plat-name">Combinat</div><div class="dash-plat-val">${(emagTotal+trendyolTotal).toFixed(2)} RON</div><div class="dash-plat-note">${emagRows.length+trendyolRows.length} comenzi</div></div>`;
+    <div class="dash-plat-card"><div class="dash-plat-ic">👕</div><div class="dash-plat-name">Vinted</div><div class="dash-plat-val">${vintedTotal.toFixed(2)} RON</div><div class="dash-plat-note">${vintedRows.length} comenzi</div></div>
+    <div class="dash-plat-card"><div class="dash-plat-ic">Σ</div><div class="dash-plat-name">Combinat</div><div class="dash-plat-val">${combinedTotal.toFixed(2)} RON</div><div class="dash-plat-note">${combinedCount} comenzi</div></div>`;
 }
 function fillSyncProdSelect(){
   smProdPickList=null;
