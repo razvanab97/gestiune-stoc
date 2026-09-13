@@ -3602,6 +3602,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:344,text:'Research → „🔗 Link public produs" (pagina de la /produs/{id}, lipită în eMAG la „Adaugă produs cu URL") — completată cu ce lipsea, cerut direct („gândește URL-ul produsului astfel încât să fie complet încărcat în eMAG"). (1) Preț — pagina nu arăta NICIUN preț până acum; acum arată prețul de vânzare (cu și fără TVA), plus `og:price:amount`/`product:price:amount` și blocul `offers` din JSON-LD (schema.org), pe care eMAG îl citește la import. Calculul e EXACT cel din „Ghid completare eMAG" (piață + marjă) — nu un calcul nou, dus în server. (2) ID produs/Cod produs — aceleași coduri din „Ghid completare eMAG" (schema AB HOMES: contor zilnic + dată), acum vizibile și pe pagina publică (`product:retailer_part_no` + text vizibil), nu doar în ghidul manual. (3) Dimensiuni/greutate — aceleași reguli deja folosite la exportul eMAG (din EasyBox sau din specificațiile text „Dimensiuni: ...cm") apar acum ca rânduri de specificații pe pagina publică. (4) Plafonul de poze urcat de la 10 la 14, aliniat cu `factoryImages()` (folosită la exportul XLSX), ca pagina publică să nu arate mai puține poze decât are efectiv anunțul. Totul se calculează o singură dată, client-side, la apăsarea „🔗 Link public produs" (exact ca ID-ul/EAN-ul deja existente) și se SALVEAZĂ pe listare — `api/product-page.js` (serverul) doar citește ce e deja calculat, nicio logică de preț dusă acolo. EAN NU se alocă automat aici — vine dintr-o bancă de coduri finită, consumată doar explicit din „Ghid completare eMAG", ca să nu se irosească coduri la fiecare click pe link. Câmpurile lipsă (fără preț calculat încă, fără ID alocat) rămân pur și simplu absente de pe pagină — nu se inventează date. Verificat de 2 ori: sintaxă OK pe ambele fișiere; test dedicat pe `api/product-page.js` (Supabase simulat) — o listare completă arată corect prețul/codurile/dimensiunile peste tot (vizibil, meta og:, JSON-LD), o listare minimală (fără aceste date) nu inventează nimic; test dedicat pe fluxul client („🔗 Link public produs") — confirmă că ID-ul/prețul/dimensiunile ajung corect calculate în payload-ul salvat, cu prețul net mai mic decât cel cu TVA, cum trebuie',date:'2026-09-13'},
   {n:343,text:'Research → Galerie AI produs — îmbunătățit promptul de plan al galeriei, cerut direct („galeria nu mă ajută deloc"). (1) Sursa de fapte reale pentru poze — funcția care alimenta planul cu context de piață aducea DOAR titlu+preț de la eMAG/Trendyol și ignora complet linkul de furnizor (de obicei chiar pagina originală a produsului, cea mai bogată sursă de specificații). Acum aduce descriere+specificații+brand de la furnizor, plus descrierea (nu doar titlul) de la concurenții CONFIRMAȚI — AI-ul are acum din ce extrage `overlay_bullets` (beneficii/specificații reale afișate pe poze) în loc să aibă aproape nimic de lucru. Linkurile neconfirmate rămân excluse (nu li se ia descrierea drept sigură). (2) Cadrul HERO (prima poză, cea mai importantă — decide dacă un cumpărător intră pe anunț) avea o singură linie vagă de instrucțiuni („fundal curat, fără text"); acum e mult mai concret: produs centrat, 70-80% din cadru, fundal simplu și curat (alb/nuanță foarte deschisă, fără decor care distrage), lumină de studio moale, umbră discretă, unghi flatant, compoziție premium. NIMIC din pipeline (Visual DNA, generarea propriu-zisă prin /api/ai-image, overlay-ul canvas cu text pe imagine) nu s-a schimbat — strict promptul trimis la planificare. Verificat de 2 ori, cu Playwright, interceptând cererea reală către AI (fără cost, fără cheie OpenAI necesară pentru verificare): promptul conține corect noua descriere HERO, secțiunea de furnizor cu descrierea/specificațiile/brandul reale, descrierea concurentului confirmat — și EXCLUDE corect descrierea unui concurent neconfirmat. Calitatea efectivă a imaginilor generate (partea AI propriu-zisă) nu poate fi verificată local — necesită testare live, pe Vercel, cu cheia OpenAI reală',date:'2026-09-13'},
   {n:342,text:'Research — bug real reparat, raportat direct: un link eMAG/Trendyol adăugat cu succes (toast „Linkuri adăugate: 1 ✓" confirmat, vizibil imediat în tabel) „dispărea" la o reîncărcare ulterioară a paginii. Cauza NU era scrierea — rândul rămânea perfect intact în Supabase. Cauza reală: lista principală de dosare aduce linkurile în loturi de câte 10 dosare deodată (`api/research-projects.js`); dacă interogarea pentru UN singur lot eșua (blip tranzitoriu de rețea, sau un dosar cu foarte multe linkuri/descrieri lungi care depășea limita), codul întorcea tăcut listă GOALĂ pentru TOATE cele până la 10 dosare din acel lot — nu doar pentru cel problematic, ci și pentru celelalte 9, sănătoase — arătând exact ca „mi-a dispărut linkul", deși nimic nu lipsea din bază (variantă a unui bug similar, fixat parțial mai demult, cu pozele grele din research_links). Acum: un lot care eșuează se reîncearcă o dată (majoritatea eșecurilor sunt blipuri tranzitorii, se rezolvă simplu la a doua încercare); dacă tot eșuează, fiecare dosar din lot se aduce individual, izolat — un singur dosar cu adevărat problematic nu mai ia cu el datele celorlalte 9. Verificat de 2 ori, cu un test dedicat (Supabase simulat): reprodus exact bugul pe codul dinainte de reparație (12 dosare, un lot cu eșec tranzitoriu → toate cele 12 dosare arătau 0 linkuri, deși aveau date reale); confirmat că după reparație, aceleași 12 dosare recuperează corect linkurile — 9 sănătoase prin izolare individuală, 2 prin reîncercare simplă — doar dosarul simulat ca genuin corupt rămâne fără linkuri (degradare așteptată, documentată, nu pierdere tăcută în masă)',date:'2026-09-13'},
   {n:341,text:'Comenzi Platforme → redesign „Import comenzi" (#333/#334/#337/#338/#340) — al treilea val de retușuri, cerute direct pe capturi reale. (1) Text +20% pe toată zona cardurilor de comandă (antet + linie de produs) — badge platformă, număr comandă, cumpărător, poză miniatură (30→40px), preț/profit, coduri, buton alege produs. (2) Linie subțire, discretă, între cele 3 zone ale unei linii (info/financiar/acțiuni) — mai ușor de urmărit unde se termină o zonă și începe alta. (3) SKU și PNK au acum propriul buton mic de copiere (⧉) — nu mai trebuie selectat manual textul. (4) Textul original din comandă (titlul de pe eMAG/Trendyol/Vinted) și numărul comenzii au acum o culoare distinctă (albastru) — se disting dintr-o privire de restul textului neutru. (5) Secțiunea AWB (butonul „copiază titlul pentru etichetă") s-a mutat din linia extinsă direct în capul cardului, sub numărul comenzii/cumpărător — vizibilă chiar și cu cardul restrâns, nu mai trebuie deschisă fiecare comandă ca să vezi/copiezi AWB-ul; pentru un pachet cu mai multe produse (același „Nr. pachet"), arată un singur AWB pentru tot pachetul (reutilizează pcomGroupAwbTitle/copyPcomGroupAwbTitle, deja existente la legacy). Secțiunea ÎNTREAGĂ (nu doar butonul mic) rămâne bifată verde, permanent, după prima copiere — nu doar fulgerul de 1.8s de dinainte. Click pe butonul de copiere NU mai deschide/închide cardul (stopPropagation explicit, cardul-cap fiind el însuși clickabil pentru expandare). Vinted nu are acest concept (rămâne cu „Cod", manual, neatins). NIMIC din calcul/copiere nu s-a reimplementat — doar prezentare + reutilizarea acelorași funcții pure/existente. Verificat de 2 ori, cu Playwright, pe eMAG (comandă simplă), Trendyol (pachet cu 2 produse) și Vinted: AWB-ul de grup marchează corect toate liniile ca „deja copiat", click pe AWB nu extinde/restrânge cardul din greșeală, cardul restrâns tot arată AWB-ul, copy pe SKU funcționează cu flash vizual; re-testat separat, neatinse: dropdown-ul de alegere produs, cele 4 taburi, persistarea previzualizării și „Resetează pagina" — toate funcționale, fără erori consolă',date:'2026-09-13'},
@@ -10247,6 +10248,37 @@ async function downloadEmagNewProductPreset(){
     toast('Preset eMAG (produs nou) descărcat ✓');
   }catch(e){toast('Eroare export preset eMAG: '+(e.message||e),'err');}
 }
+// Preț + fizic (greutate/dimensiuni), pentru pagina publică de produs — cerut direct („preturile,
+// vezi tot ce se poate pune"). NU reimplementează niciun calcul — cheamă EXACT aceleași funcții pure
+// deja folosite de emagNewProductRow/emagManualGuideData (researchCalcPrices/researchPlatformStats/
+// pcAutomaticPricesFromGross/emagNetPriceFromGross/parseDimsMM) — doar extrase separat, ca rezultatul
+// să poată fi SALVAT pe listare (l.sale_price_gross/l.sale_price_net/l.weight_g/l.dims_mm), nu doar
+// afișat temporar într-un ghid. api/product-page.js (server) doar CITEȘTE aceste câmpuri deja calculate
+// — nicio logică de preț/business dusă în serverless, unde ar deveni o a doua sursă de adevăr.
+function computeListingPriceAndPhysical(l,proj){
+  const acq=Number(proj?.acquisition_price)||0;
+  const prc=proj&&acq?researchCalcPrices(proj,researchPlatformStats(proj)):null;
+  const zero=acq?pcAutomaticPricesFromGross(acq,.21):null;
+  const saleGross=prc?.rec.emag||zero?.emag||0;
+  const p=P.find(x=>(l?.ean&&String(x.sku||'').replace(/\D/g,'')===String(l.ean).replace(/\D/g,''))||researchNorm(x.name)===researchNorm(proj?.title||l?.title||''));
+  const mm=v=>v?Math.round(v*10):0;
+  let dims={l:mm(p?.easyboxL),w:mm(p?.easyboxW),h:mm(p?.easyboxT)};
+  if(!dims.l&&!dims.w&&!dims.h){
+    const specs=l?.specs||{};
+    dims=parseDimsMM(specs.Dimensiuni||specs['Dimensiuni produs'])||parseDimsMM(l?.title)||dims;
+  }
+  let weightG=0;
+  const gTxt=String((l?.specs||{}).Greutate||(l?.specs||{})['Greutate/Dimensiuni']||'');
+  const gm=gTxt.match(/([\d.,]+)\s*kg/i),ggm=gTxt.match(/([\d.,]+)\s*g\b/i);
+  if(gm)weightG=Math.round(parseFloat(gm[1].replace(',','.'))*1000);
+  else if(ggm)weightG=Math.round(parseFloat(ggm[1].replace(',','.')));
+  return{
+    sale_price_gross:saleGross?Math.round(saleGross*100)/100:0,
+    sale_price_net:saleGross?Math.round(emagNetPriceFromGross(saleGross)*100)/100:0,
+    dims_mm:(dims.l||dims.w||dims.h)?dims:null,
+    weight_g:weightG||0,
+  };
+}
 // Link public de produs — pagină servită de api/product-page.js la /produs/{id_dosar}, cu
 // meta og: + JSON-LD schema.org/Product, gata de lipit în eMAG Seller Center la „Adaugă produs
 // cu URL", ca eMAG să extragă singur nume/imagini/descriere/EAN/brand. Are nevoie de un dosar
@@ -10264,6 +10296,16 @@ async function openPublicProductLink(){
   // (bug real raportat: „nu mai merge pe Safari" — Chrome e mai permisiv, de-aia funcționa acolo).
   try{await navigator.clipboard.writeText(url);}catch(e){toast('Eroare copiere link','err');return;}
   try{
+    // ID produs/Cod produs (l.emag_id) + preț/greutate/dimensiuni — calculate și salvate PE listare
+    // aici, o singură dată per apăsare, ca pagina publică (api/product-page.js) să le poată doar CITI,
+    // fără nicio logică de business dusă în serverless (cerut direct: „adaugă cod produs, id produs,
+    // EAN — se preiau din Ghid completare eMAG" + „prețurile, vezi tot ce se poate pune"). EAN NU se
+    // alocă automat aici — vine dintr-o bancă de coduri FINITĂ (consumă un cod real la fiecare alocare,
+    // vezi ensureListingEan) — s-ar consuma silențios la fiecare click, chiar dacă omul doar re-copiază
+    // linkul; pagina publică arată EAN-ul doar dacă a fost deja alocat explicit, din „Ghid completare eMAG".
+    await ensureListingEmagId(l);
+    const proj=researchProjects.find(p=>Number(p.id)===Number(listingProjectId));
+    Object.assign(l,computeListingPriceAndPhysical(l,proj));
     // salvăm anunțul curent după — pagina publică să reflecte mereu ultima variantă — dar link-ul
     // e deja copiat corect, indiferent dacă salvarea de mai jos reușește sau nu.
     await apiJson('/api/research-projects',{action:'save_listing',project_id:listingProjectId,status:'generat',listing:l},30000);
