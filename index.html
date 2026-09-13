@@ -1594,7 +1594,7 @@ textarea.listing-html-raw{width:100%;min-height:180px;box-sizing:border-box;resi
 .rsx-mkt-count{font-size:19px;color:var(--t3)!important;font-weight:600!important}
 .rsx-mkt-stats-line{font-size:20px;color:var(--t3);margin-bottom:7px}
 .rsx-mkt-stats-line strong{font-family:var(--mono);font-weight:700;color:var(--t1)}
-.rsx-mkt-hero{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.rsx-mkt-hero{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}
 .rsx-mkt-hero-cell{background:var(--surf);border:1px solid var(--b1);border-radius:var(--r);padding:7px 10px}
 .rsx-mkt-hero-cell span{display:block;font-size:17px;text-transform:uppercase;letter-spacing:.03em;color:var(--t3)!important;font-weight:700!important;margin-bottom:2px}
 .rsx-mkt-hero-cell strong{font-family:var(--mono);font-size:23px;color:var(--t1)}
@@ -3603,6 +3603,8 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:348,text:'Research → Galerie AI produs — bug real reparat, raportat direct de mai multe ori: „The image data you provided does not represent a valid image" apărea repetat, chiar și pe dosare cu poze reale selectate. Cauza: pozele de referință (candidați scraped din research_links — poze de concurent/furnizor) se trimiteau CRUDE, directe, către OpenAI, care încearcă să le descarce chiar EA, de pe serverele ei — exact genul de link cu hotlink protection pentru care există deja api/img-proxy.js (setează Referer corect; multe CDN-uri de eMAG/concurenți refuză altfel cererea). Thumbnail-urile din UI foloseau deja proxy-ul corect (de-asta se vedeau normal pe ecran) — doar apelurile către AI (Visual DNA, validarea imaginilor generate, plus alte 5 fluxuri cu același tipar: Preț privat din link, recunoaștere poză produs, import produs din URL, căutare AI queries, verificare AI potrivire link) ocoleau proxy-ul. Acum toate trec printr-o funcție unică (aiSafeImageUrl) care proxiază orice URL extern înainte să-l trimită la AI — URL-urile deja proprii (din /api/ai-image) rămân neatinse, doar făcute absolute. NIMIC din logica de analiză/generare nu s-a schimbat — strict URL-ul trimis la AI. Verificat de 2 ori, interceptând cererea reală către AI (fără cost): confirmat că payload-ul conține acum URL-ul proxiat, absolut, pentru poze externe, și URL-ul propriu neschimbat pentru poze deja generate de noi, fără erori consolă',date:'2026-09-13'},
+  {n:347,text:'Research — „Preț recomandat" trece de la media top 5 (cele mai mici prețuri, #345/#346) la media TUTUROR prețurilor găsite pe piață, cerut direct, după ce am verificat împreună pe un produs real cu 15 prețuri eMAG: media pe toate (120.51 RON) reflectă piața mult mai fidel decât media top 5 (79.66 RON, trasă în jos de doar 2-3 oferte foarte ieftine), fără să fie denaturată de un singur outlier de sus sau de jos. Pe drum, reașezare cerută direct: acum sunt 3 valori clar separate și etichetate — „Preț minim găsit" (reper, cel mai mic preț de pe piață), „Prag minim de profit" (break-even din costul de achiziție) și „Preț recomandat" (media prețurilor, dar niciodată sub prag) — înainte, cutia „Preț minim" din cadranul eMAG/Trendyol arăta de fapt pragul de profit, nu minimul de piață (care era ascuns doar în linia mică de text de deasupra) — confuzie reală, corectată acum cu 3 cutii distincte. Aceeași schimbare la profitul/verdictul din lista principală de dosare (server). Verificat de 2 ori, cu exact prețurile din produsul real testat: media (120.51 RON) e acum peste pragul minim de profit (100.07 RON), deci „Preț recomandat" arată corect un preț bazat pe piață (120.01 RON), nu mai cade pe prag ca înainte; verdictul dosarului trece de la „profit fals-negativ" la „profit real 11.36 RON/11.4% marjă" — sub pragul de 20% al aplicației, deci tot atenționează corect să nu cumperi la orice preț, dar cu numere reale, nu denaturate',date:'2026-09-13'},
   {n:346,text:'Research — verificare directă, pe un produs real („Ruhhy 27084"), a corecturii de preț de la #345. Calculul era deja corect (verificat cu cele 15 prețuri eMAG reale din captură: media celor mai mici 5 = 79.66 RON), dar „Preț recomandat" ieșea identic cu „Preț minim" (100.07 RON amândouă) — nu pentru că logica nouă n-ar rula, ci pentru că media pieței (79.66 RON) e sub pragul minim de profit al acestui produs (100.07 RON, la costul de achiziție de 52.22 RON): sistemul refuză corect să recomande o vânzare în pierdere și arată pragul minim în schimb. Doar că nimic din UI nu explica DE CE cele două valori coincid — arăta ca și cum calculul nou n-ar face nimic. Acum, când se întâmplă asta, apare o notă vizibilă („⚠ Media top 5 preț e sub pragul minim de profit — arătăm pragul minim în schimb"), atât în cadranul eMAG/Trendyol al dosarului, cât și în „Ghid completare eMAG" (care arată acum și „Medie top 5 piață", nu doar minim/maxim/recomandat). Hint-ul vechi de la „Preț recomandat" din ghid, rămas din era „coborât sub minimul pieței" (#345), actualizat să descrie corect noua logică. NIMIC din calcul nu s-a schimbat — strict o explicație vizibilă pentru un rezultat care era deja corect. Verificat de 2 ori: cu exact prețurile din captura reală (nota apare, cu numerele corecte: 79.66/100.07 RON) și cu un caz sănătos (piață peste prag) — nota NU apare când nu e nevoie de ea, fără erori consolă',date:'2026-09-13'},
   {n:345,text:'Research — cinci corecturi cerute direct pe capturi reale, la calculul de preț/profit și la generarea anunțului. (1) Preț recomandat — nu se mai calculează la CEL MAI MIC preț găsit pe piață (un singur concurent, des un outlier/o greșeală de listare, care putea duce profitul/marja în minus, cum s-a și întâmplat — vezi captura cu „-21.38 RON / -38.21%"); acum se calculează la MEDIA celor mai mici 5 prețuri găsite (cu mai puțin de 5 disponibile, media pe câte sunt). Prețul minim rămâne afișat separat, ca reper („cât de jos a coborât cineva"), dar nu mai stă la baza niciunui calcul — exact cum a fost cerut. (2) Aceeași schimbare, la profitul/marja/verdictul dosarului din lista principală (server, `projectVerdict`) — nu doar la cadranul eMAG/Trendyol din interiorul unui dosar. (3) Poți adăuga acum până la 25 de linkuri per dosar (era 20). (4) La „Generează anunț din dosar", informația nu se mai ia din TOATE linkurile urmărite — se curată la top 10: 7 eMAG (ordonate după „Performanță eMAG" — Superhot peste Hot peste Standard peste Cold peste Supercold, apreciere manuală deja existentă) + 3 Trendyol (ordonate după scorul de potrivire, Trendyol neavând conceptul de performanță). Furnizorul (sursa de cost) trece neatins, necapat — curatarea e strict despre concurență. (5) Pagina publică de produs (#344) arată acum prețul RECOMANDAT FĂRĂ TVA ca preț principal — inclusiv în tot ce citește eMAG automat la import (JSON-LD/meta), nu doar vizual — pentru că exact acela e câmpul pe care eMAG îl așteaptă („Preț vânzare — fără TVA" din Ghid completare eMAG), nu prețul cu TVA folosit înainte. NIMIC din formula de profit (calcProfit/pcAutomaticPricesFromGross) nu s-a schimbat — strict REFERINȚA de preț de piață folosită ca intrare în ea. Verificat de 2 ori: test dedicat pe server (Supabase simulat) — reprodus exact scenariul din captură (un singur preț 67.72 RON → profit -21.38 RON/-38.21%, identic), apoi confirmat că, cu mai multe prețuri disponibile (un outlier 67.72 + 5 prețuri reale 150-190), media top 5 (145.54 RON) transformă un profit fals-negativ într-unul real, pozitiv (+25.26 RON/21%); test dedicat client-side — curatarea de linkuri alege corect 7 eMAG (ordonate exact Superhot→Cold) + 3 Trendyol (ordonate după scor), furnizorul neatins; pagina publică arată corect prețul fără TVA peste tot unde ar trebui, fără erori consolă',date:'2026-09-13'},
   {n:344,text:'Research → „🔗 Link public produs" (pagina de la /produs/{id}, lipită în eMAG la „Adaugă produs cu URL") — completată cu ce lipsea, cerut direct („gândește URL-ul produsului astfel încât să fie complet încărcat în eMAG"). (1) Preț — pagina nu arăta NICIUN preț până acum; acum arată prețul de vânzare (cu și fără TVA), plus `og:price:amount`/`product:price:amount` și blocul `offers` din JSON-LD (schema.org), pe care eMAG îl citește la import. Calculul e EXACT cel din „Ghid completare eMAG" (piață + marjă) — nu un calcul nou, dus în server. (2) ID produs/Cod produs — aceleași coduri din „Ghid completare eMAG" (schema AB HOMES: contor zilnic + dată), acum vizibile și pe pagina publică (`product:retailer_part_no` + text vizibil), nu doar în ghidul manual. (3) Dimensiuni/greutate — aceleași reguli deja folosite la exportul eMAG (din EasyBox sau din specificațiile text „Dimensiuni: ...cm") apar acum ca rânduri de specificații pe pagina publică. (4) Plafonul de poze urcat de la 10 la 14, aliniat cu `factoryImages()` (folosită la exportul XLSX), ca pagina publică să nu arate mai puține poze decât are efectiv anunțul. Totul se calculează o singură dată, client-side, la apăsarea „🔗 Link public produs" (exact ca ID-ul/EAN-ul deja existente) și se SALVEAZĂ pe listare — `api/product-page.js` (serverul) doar citește ce e deja calculat, nicio logică de preț dusă acolo. EAN NU se alocă automat aici — vine dintr-o bancă de coduri finită, consumată doar explicit din „Ghid completare eMAG", ca să nu se irosească coduri la fiecare click pe link. Câmpurile lipsă (fără preț calculat încă, fără ID alocat) rămân pur și simplu absente de pe pagină — nu se inventează date. Verificat de 2 ori: sintaxă OK pe ambele fișiere; test dedicat pe `api/product-page.js` (Supabase simulat) — o listare completă arată corect prețul/codurile/dimensiunile peste tot (vizibil, meta og:, JSON-LD), o listare minimală (fără aceste date) nu inventează nimic; test dedicat pe fluxul client („🔗 Link public produs") — confirmă că ID-ul/prețul/dimensiunile ajung corect calculate în payload-ul salvat, cu prețul net mai mic decât cel cu TVA, cum trebuie',date:'2026-09-13'},
@@ -4077,7 +4079,7 @@ function ppFromUrlConfirm(){
   const url=(document.getElementById('pp-url-input')?.value||'').trim();
   if(!url){toast('Introdu un link către imagine','err');return;}
   if(!/^https?:\/\//i.test(url)){toast('Linkul trebuie să înceapă cu http:// sau https://','err');return;}
-  ppRunRecognition({type:'image',source:{type:'url',url}},url);
+  ppRunRecognition({type:'image',source:{type:'url',url:aiSafeImageUrl(url)}},url);
 }
 // Cerut direct — pe lângă recunoașterea din poză, produsul se poate găsi și tastând denumirea lui,
 // fără nicio poză. Căutare simplă, locală (substring pe nume/SKU, ca la restul căutărilor rapide din
@@ -6613,7 +6615,7 @@ async function analyzeImage(){
       if(!b64||b64.length<100){throw new Error('Imagine prea mică sau coruptă');}
       imgContent={type:'image',source:{type:'base64',media_type:mt,data:b64}};
     } else if(curImg.startsWith('http')){
-      imgContent={type:'image',source:{type:'url',url:curImg}};
+      imgContent={type:'image',source:{type:'url',url:aiSafeImageUrl(curImg)}};
     } else {
       throw new Error('Format imagine nesuportat');
     }
@@ -6748,7 +6750,7 @@ Răspunde STRICT cu JSON:
 {"title":"<titlu tradus în română>","image":"<URL complet imagine>","sku":"<cod sau null>","sku_evidence":"<eticheta și codul exact din pagină sau null>","category":"<categorie generală sau null>","price":<număr sau null>,"currency":"<RON/EUR/etc sau null>","supplier":"<magazin/furnizor sau null>","material":"<material sau null>","dimensions":"<dimensiuni sau null>","colors":"<culori sau null>","description":"<descriere scurtă sau null>"}`;
 
     const importContent=pageImgCandidate
-      ?[{type:'image',source:{type:'url',url:pageImgCandidate}},{type:'text',text:importPrompt}]
+      ?[{type:'image',source:{type:'url',url:aiSafeImageUrl(pageImgCandidate)}},{type:'text',text:importPrompt}]
       :importPrompt;
 
     const responseText=await callAI([{role:'user',content:importContent}],null,3000,'analysis');
@@ -7841,7 +7843,7 @@ Răspunde STRICT cu JSON: {"emag":["q1","q2","q3","q4"],"trendyol":["q1","q2"]}`
           const mt=img.match(/data:(image\/\w+);/)?.[1]||'image/jpeg',b64=img.split(',')[1];
           if(b64&&b64.length>=100)content.unshift({type:'image',source:{type:'base64',media_type:mt,data:b64}});
         }else if(/^https?:\/\//i.test(img)){
-          content.unshift({type:'image',source:{type:'url',url:img}});
+          content.unshift({type:'image',source:{type:'url',url:aiSafeImageUrl(img)}});
         }
       }
       const resp=await callAI([{role:'user',content}],'Ești expert în marketplace-uri românești. Răspunzi DOAR cu JSON valid, fără markdown.',400,'analysis');
@@ -7939,7 +7941,7 @@ Răspunde STRICT cu JSON: {"verdict":"match"|"no_match"|"uncertain","reason":"<m
         const mt=img.match(/data:(image\/\w+);/)?.[1]||'image/jpeg',b64=img.split(',')[1];
         if(b64&&b64.length>=100)content.push({type:'image',source:{type:'base64',media_type:mt,data:b64}});
       }else if(/^https?:\/\//i.test(img)){
-        content.push({type:'image',source:{type:'url',url:img}});
+        content.push({type:'image',source:{type:'url',url:aiSafeImageUrl(img)}});
       }
     });
     const resp=await callAI([{role:'user',content}],'Ești expert în identificarea produselor identice pe marketplace-uri românești. Răspunzi DOAR cu JSON valid, fără markdown.',300,'analysis');
@@ -7957,33 +7959,28 @@ Răspunde STRICT cu JSON: {"verdict":"match"|"no_match"|"uncertain","reason":"<m
     if(btn){btn.disabled=false;btn.textContent='🎯 Verifică AI';}
   }
 }
-// Media celor mai mici N prețuri găsite (implicit 5) — cerut direct: raportarea la UN SINGUR preț minim
-// (des un outlier/o greșeală de listare a unui concurent) denatura profitul/marja, uneori până în minus,
-// deși piața reală era mult mai sus. Cu mai puțin de N prețuri disponibile, face media pe câte sunt.
-function topNAvg(prices,n=5){
-  const sorted=(prices||[]).filter(x=>x>0).sort((a,b)=>a-b).slice(0,n);
-  return sorted.length?sorted.reduce((s,x)=>s+x,0)/sorted.length:0;
-}
 function researchPlatformStats(p){
   const links=(p.links||[]).filter(l=>l.include_in_listing!==false&&l.status!=='eroare'&&Number(l.price)>0);
   const out={};
   ['emag','trendyol'].forEach(k=>{
     const prices=links.filter(l=>l.platform===k).map(l=>pcomToRon(l.price,l.currency)).filter(Boolean);
-    out[k]=prices.length?{min:Math.min(...prices),max:Math.max(...prices),avg:prices.reduce((s,x)=>s+x,0)/prices.length,top5avg:topNAvg(prices,5),count:prices.length}:null;
+    out[k]=prices.length?{min:Math.min(...prices),max:Math.max(...prices),avg:prices.reduce((s,x)=>s+x,0)/prices.length,count:prices.length}:null;
   });
   return out;
 }
-// Preț minim = break-even calculat cu Calculatorul (pcAutomaticPricesFromGross) din costul de achiziție —
-// rămâne afișat separat, doar ca reper („cât de jos putem merge"), NU ca bază de calcul.
-// Preț recomandat = chiar sub MEDIA celor mai mici 5 prețuri de pe piață (nu sub cel mai mic preț găsit,
-// cerut direct — un singur preț minim poate fi un outlier), dar niciodată sub pragul de profit minim.
+// Trei valori distincte, cerute direct: „preț minim găsit" (reper — cât de jos a coborât cineva),
+// „prag minim de profit" (break-even, calculat cu Calculatorul din costul de achiziție) și „preț
+// recomandat" = media TUTUROR prețurilor găsite pe piață (nu doar cele mai mici — un test direct pe
+// un produs real a arătat că limitarea la top 5 sub-estima piața când erau puține prețuri joase și
+// multe mai mari), dar niciodată sub pragul de profit minim — dacă media pieței ar însemna vânzare în
+// pierdere, se arată pragul minim în schimb (vezi nota din UI, researchPlatAggHtml/emgMarketPriceGuideRows).
 function researchCalcPrices(p,stats){
   const acq=Number(p.acquisition_price)||0;
   if(!acq)return null;
   const zero=pcAutomaticPricesFromGross(acq,.21);
   const rec={};
   ['emag','trendyol'].forEach(k=>{
-    const floor=zero[k]||0,marketRef=stats[k]?.top5avg||0;
+    const floor=zero[k]||0,marketRef=stats[k]?.avg||0;
     rec[k]=marketRef?Math.max(floor,Math.round((marketRef-0.5)*100)/100):floor;
   });
   return{zero,rec};
@@ -7995,12 +7992,13 @@ function researchPlatAggHtml(p){
     const s=stats[k];
     return`<div class="rsx-mkt">
       <div class="rsx-mkt-head"><span class="rsx-mkt-name">${labels[k]}</span><span class="rsx-mkt-count">${s?s.count+' listări urmărite':'fără listări urmărite'}</span></div>
-      <div class="rsx-mkt-stats-line">Min <strong>${s?s.min.toFixed(2):'—'}</strong> · Max <strong>${s?s.max.toFixed(2):'—'}</strong> · Medie <strong>${s?s.avg.toFixed(2):'—'}</strong>${s&&s.count>1?` · Medie top 5 <strong>${s.top5avg.toFixed(2)}</strong>`:''} RON</div>
+      <div class="rsx-mkt-stats-line">Max <strong>${s?s.max.toFixed(2):'—'}</strong> · Medie <strong>${s?s.avg.toFixed(2):'—'}</strong> RON</div>
       <div class="rsx-mkt-hero">
-        <div class="rsx-mkt-hero-cell min"><span>Preț minim (doar reper — nu se calculează la el)</span><strong>${prc?prc.zero[k].toFixed(2)+' RON':'—'}</strong></div>
-        <div class="rsx-mkt-hero-cell rec"><span>Preț recomandat (din media top 5 piață)</span><strong>${prc?prc.rec[k].toFixed(2)+' RON':'—'}</strong></div>
+        <div class="rsx-mkt-hero-cell"><span>Preț minim găsit (reper — nu se calculează la el)</span><strong>${s?s.min.toFixed(2)+' RON':'—'}</strong></div>
+        <div class="rsx-mkt-hero-cell"><span>Prag minim de profit</span><strong>${prc?prc.zero[k].toFixed(2)+' RON':'—'}</strong></div>
+        <div class="rsx-mkt-hero-cell rec"><span>Preț recomandat (media prețurilor)</span><strong>${prc?prc.rec[k].toFixed(2)+' RON':'—'}</strong></div>
       </div>
-      ${s&&prc&&prc.rec[k]<=prc.zero[k]+0.001?`<div class="rsx-mkt-note">⚠ Media top 5 preț (${s.top5avg.toFixed(2)} RON) e sub pragul minim de profit — arătăm pragul minim în schimb, ca să nu recomandăm o vânzare în pierdere.</div>`:''}
+      ${s&&prc&&prc.rec[k]<=prc.zero[k]+0.001?`<div class="rsx-mkt-note">⚠ Media prețurilor (${s.avg.toFixed(2)} RON) e sub pragul minim de profit — arătăm pragul minim în schimb, ca să nu recomandăm o vânzare în pierdere.</div>`:''}
     </div>`;
   }).join('');
   return`<div class="rsx-mkt-grid">${panels}</div>`;
@@ -10029,10 +10027,10 @@ function emgMarketPriceGuideRows(proj){
   if(!proj)return'';
   const stats=researchPlatformStats(proj),s=stats.emag,prc=researchCalcPrices(proj,stats);
   const fellBackToFloor=s&&prc&&prc.rec.emag<=prc.zero.emag+0.001;
-  return emgGuideRow('Preț minim piață (eMAG)',s?s.min.toFixed(2)+' RON':null,{hint:s?`din ${s.count} listări urmărite în dosar — doar reper, nu stă la baza calculului`:'Nu ai încă linkuri eMAG urmărite în dosar'})
-    +emgGuideRow('Preț maxim piață (eMAG)',s?s.max.toFixed(2)+' RON':null)
-    +(s&&s.count>1?emgGuideRow('Medie top 5 piață (eMAG)',s.top5avg.toFixed(2)+' RON',{hint:'Media celor mai mici 5 prețuri găsite — baza reală a prețului recomandat de mai jos'}):'')
-    +emgGuideRow('Preț recomandat (calculat)',prc?prc.rec.emag.toFixed(2)+' RON':null,{hint:fellBackToFloor?'Media top 5 piață e sub pragul minim de profit — arătăm pragul minim în schimb, ca să nu recomandăm o vânzare în pierdere':'Chiar sub media top 5 piață, dar niciodată sub pragul minim de profit — la fel ca „Preț recomandat" din cadranul eMAG al dosarului'});
+  return emgGuideRow('Preț minim găsit (eMAG)',s?s.min.toFixed(2)+' RON':null,{hint:s?`din ${s.count} listări urmărite în dosar — doar reper, nu stă la baza calculului`:'Nu ai încă linkuri eMAG urmărite în dosar'})
+    +emgGuideRow('Preț maxim găsit (eMAG)',s?s.max.toFixed(2)+' RON':null)
+    +emgGuideRow('Prag minim de profit (eMAG)',prc?prc.zero.emag.toFixed(2)+' RON':null,{hint:'Break-even din costul de achiziție + marja minimă — sub el, nu se recomandă vânzarea'})
+    +emgGuideRow('Preț recomandat (calculat)',prc?prc.rec.emag.toFixed(2)+' RON':null,{hint:fellBackToFloor?'Media prețurilor e sub pragul minim de profit — arătăm pragul minim în schimb, ca să nu recomandăm o vânzare în pierdere':`Chiar sub media prețurilor de piață (${s?s.avg.toFixed(2):'—'} RON), dar niciodată sub pragul minim de profit — la fel ca „Preț recomandat" din cadranul eMAG al dosarului`});
 }
 async function openEmagManualGuide(){
   const l=listingData||researchData?.listing||{};
@@ -10397,6 +10395,21 @@ function renderListingAnalysis(a,pages){
 }
 // Proxy imagini prin Vercel — bypass hotlink protection
 function proxyImg(url){return url?'/api/img-proxy?url='+encodeURIComponent(url):'';}
+// Bug real reparat, raportat direct: „The image data you provided does not represent a valid image"
+// apărea repetat la Galerie AI produs (computeVisualDna/validateGalleryImage) — pozele de referință
+// (candidați din research_links, poze de concurent/furnizor scraped) se trimiteau CRUDE, directe, către
+// OpenAI, care încearcă să le descarce chiar EA, de pe serverele ei — exact genul de link cu hotlink
+// protection pentru care există img-proxy.js (setează Referer corect, altfel multe CDN-uri de eMAG/
+// concurenți refuză cererea) — OpenAI nu trece prin proxy-ul nostru, deci lovea direct în protecție și
+// nu putea „vedea" o imagine validă. Thumbnail-urile din UI foloseau deja proxyImg() corect (de-asta
+// se vedeau normal pe ecran) — doar apelurile către AI ocoleau proxy-ul. URL-urile deja proprii
+// (/api/ai-image, generate de noi) NU mai trebuie re-proxy-ate, doar făcute absolute.
+function aiSafeImageUrl(u){
+  if(!u)return u;
+  if(u.startsWith('/'))return location.origin+u;
+  if(u.startsWith(location.origin))return u;
+  return location.origin+proxyImg(u);
+}
 function downloadImg(url){return url?'/api/img-proxy?url='+encodeURIComponent(url)+'&download=1':'';}
 // Returnează sursa potrivită pt <img src>: proxy pt http(s), direct pt data: URLs
 function imgSrc(url){if(!url)return'';if(url.startsWith('data:'))return url;if(url.startsWith(SUPA_URL))return url;if(url.startsWith('http'))return proxyImg(url);return url;}
@@ -11329,7 +11342,7 @@ async function computeVisualDna(projectId){
   try{
     const refSlice=g.refImages.slice(0,6);
     const content=[
-      ...refSlice.map(u=>({type:'image',source:{type:'url',url:u}})),
+      ...refSlice.map(u=>({type:'image',source:{type:'url',url:aiSafeImageUrl(u)}})),
       {type:'text',text:`Analizează aceste fotografii ale ACELUIAȘI produs fizic și descrie exact ce vezi — acesta va fi „Product Visual DNA", folosit ca reper obligatoriu la generarea altor fotografii ale produsului, ca AI-ul să nu inventeze/schimbe nimic din aspectul real.
 Titlu produs: ${l.title||pr?.title||''}
 Descriere: ${String(l.description||'').slice(0,600)}
@@ -11698,9 +11711,10 @@ async function validateGalleryImage(projectId,f){
   if(!f.url)return;
   try{
     const content=[
-      ...g.refImages.slice(0,3).map(u=>({type:'image',source:{type:'url',url:u}})),
+      ...g.refImages.slice(0,3).map(u=>({type:'image',source:{type:'url',url:aiSafeImageUrl(u)}})),
       // f.rawUrl (fără text suprapus, dacă exista overlay) — comparăm produsul real, nu banda de text.
-      {type:'image',source:{type:'url',url:f.rawUrl||f.url}},
+      // Deja URL propriu (din /api/ai-image), nu are nevoie de proxy — doar aiSafeImageUrl îl face absolut.
+      {type:'image',source:{type:'url',url:aiSafeImageUrl(f.rawUrl||f.url)}},
       {type:'text',text:`Primele imagini sunt fotografii ORIGINALE ale produsului real. Ultima imagine este o variantă generată de AI, pornind de la Product Visual DNA de mai jos. Compară-le și verifică dacă produsul din imaginea generată e IDENTIC cu cel din pozele originale (nu doar similar).
 Visual DNA: ${JSON.stringify(g.dna||{})}
 Elemente critice de verificat: ${(g.dna?.must_preserve||[]).join(', ')}
