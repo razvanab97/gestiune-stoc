@@ -1771,6 +1771,9 @@ textarea.listing-html-raw{width:100%;min-height:180px;box-sizing:border-box;resi
 .rsx-pnk{display:inline-flex;align-items:center;gap:4px;font-family:var(--mono);font-size:21px;color:#175CD3;background:#EFF4FF;border:1px solid transparent;border-radius:999px;padding:4px 10px;white-space:nowrap;cursor:pointer;transition:all .15s}
 .rsx-pnk:hover{background:#DCE9FF;border-color:#B2CCFF}
 .rsx-pnk:active{transform:scale(.96)}
+/* Marcaj persistent „am apăsat deja copy" pe butoanele de copiere din Research (cerut direct) — rămâne
+   până la următoarea re-randare a acelei zone (schimbare dosar, regenerare etc.), nu dispare singur. */
+.rsx-copied{background:var(--gr-bg)!important;border-color:var(--gr)!important;color:var(--gr)!important}
 .rsx-confirm{display:inline-flex;align-items:center;gap:5px;cursor:pointer;color:var(--gr)!important;font-weight:700!important;font-size:24px!important;white-space:nowrap}
 .rsx-perf-select{border-radius:999px;padding:5px 10px;font-size:21px;font-weight:800;border:1px solid var(--b2);background:var(--surf2);color:var(--t2);cursor:pointer}
 .rsx-perf-select.rsx-perf-supercold{background:#EFF6FF;border-color:#1d4ed8;color:#1d4ed8}
@@ -3652,6 +3655,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:351,text:'Research — toate butoanele de „Copiază" (titlu, HTML descriere, specificații, EAN, PNK, link poză din galerie, link direct dosar, copiere în masă) rămân vizual marcate (fundal/text verde, exact stilul deja folosit la AWB-uri în Comenzi Platforme) DUPĂ ce ai apăsat pe ele — cerut direct, ca să se vadă dintr-o privire ce ai copiat deja, mai ales când treci pe rând prin mai multe câmpuri/poze de copiat manual. Marcajul rămâne (nu dispare singur pe un timer, ca vechiul flash de 1.2s de la AWB) — dispare doar dacă zona respectivă se re-randează din alt motiv (schimbi dosarul, regenerezi anunțul etc.), ceea ce e comportamentul așteptat. Strict UI — nicio funcție de copiere/logica de business nu s-a schimbat, doar un marcaj vizual adăugat pe butonul apăsat. Scopat STRICT la Research (butoanele de copy din Comenzi Platforme, Sincronizare, Stoc, import factură etc. — neatinse, unele au deja propriul mecanism de marcare, cu un tipar diferit). Verificat de 2 ori: suită Playwright dedicată — click real pe 6 tipuri diferite de buton (titlu, card din galeria de poze, rând de specificație, „Copiază toate specificațiile", bară de acțiuni în masă) confirmă marcajul corect, DOAR pe butonul apăsat (nu pe toate rândurile identice), persistent la 1.5s după click (peste vechiul prag de 1.2s), clipboard cu conținutul corect; plus suita completă de regresie de la #350, tot verde, fără erori consolă',date:'2026-09-13'},
   {n:350,text:'Research → Generator anunțuri — redesign STRICT scopat pe secțiunea „Poze selectate (X) — gata de încărcat pe eMAG", cerut direct cu specificație detaliată + mockup: înainte era o coloană îngustă unde linkul complet al fiecărei poze se afișa ca text brut și rupea layout-ul vertical; acum e o grilă de carduri compacte, responsive (5/rând pe desktop mare ≥1850px, 4/rând pe desktop normal 1300-1849px — inclusiv 1366/1440px, cele mai comune rezoluții de laptop, 3/rând 900-1299px, 2/rând 560-899px, 1/rând sub 560px), fiecare card cu checkbox de selecție + index (#1, #2...) peste imagine, badge de rezoluție verde/galben/roșu (checkImgDims, logica EXACTĂ neschimbată — doar repoziționat vizual peste imagine), imaginea centrată cu object-fit:contain (întreagă, necropată), badge de tip (Principală/Detaliu/Specificații/Lifestyle/Suplimentară — direct din rolul deja calculat de AI, nicio categorie inventată) și un rând de descriere trunchiat pe 2 linii. Linkul complet NU se mai afișează nicăieri vizual, dar rămâne disponibil de copiat. 3 acțiuni rămân mereu vizibile, doar icon (🔗/↓/+, cu tooltip): Copiază link, Salvează, + În descriere — refolosesc EXACT funcțiile vechi (copyText/downloadImg/insertImageIntoDescriptionFromPool); Recreează cu AI și Blochează s-au mutat într-un meniu „···" (details/summary, fără JS nou de open/close), pentru carduri curate. Checkbox pe fiecare poză → bară de acțiuni în masă când e selectat ≥1 (Copiază linkurile/Salvează/+ În descriere/Recreează cu AI/Blochează), care NU repetă N popup-uri de confirmare — o singură orchestrare per lot, peste aceleași funcții/endpoint-uri existente. Filtru pe tip (Toate/Principală/Detaliu/Lifestyle/Specificații/Suplimentară) apare doar dacă sunt ≥2 tipuri distincte în poze, instant, client-side. Titlul secțiunii, legenda verde/galben/roșu și TOATE butoanele globale din dreapta (+ Adaugă poză externă, Lipește din clipboard, Copiază toate linkurile, Descarcă toate) rămân identice, neatinse. Secțiunea „Poze folosite în descriere" (vecină, dar cu markup/funcții separate) — neatinsă. Selectarea unei poze sau schimbarea filtrului NU mai re-randează toată secțiunea de listing (actualizare DOM țintită, doar bara de acțiuni/grila de carduri). Verificat de minim 2 ori: suită completă de regresie cu Playwright (click real, nu apel direct de funcție) — checkbox/index/badge rezoluție/filtrare/copiere link/„+ Descriere"/meniu „···"/acțiuni în masă toate funcționează, secțiunea „Poze folosite în descriere" byte-identică cu înainte, titlul secțiunii confirmat neschimbat, zero erori consolă; plus un sweep dedicat pe 18 lățimi de viewport (400-1900px) care a confirmat exact pragurile 5/4/3/2/1 coloane cerute, inclusiv la 1366/1440px (rezoluții foarte comune de laptop, unde inițial grila organică (auto-fill) cădea greșit pe 3 coloane) — corectat cu praguri explicite pe lățime',date:'2026-09-13'},
   {n:349,text:'Research — notiță scurtă, liberă, pe fiecare dosar, cerută direct pe o captură reală care arăta zona goală din capul cardului. Apare ca o pastilă mică, în stil post-it, lângă „Achiziție"/„Min. concurență" — vizibilă chiar și cu dosarul restrâns, nu doar desfăcut. Click pe ea (fără să desfacă/închidă dosarul) deschide un mic prompt de editare; gol = șterge notița. Distinctă de câmpul `notes` existent, care e text generat/suprascris automat de sistem la fiecare recalculare a verdictului — o notiță manuală acolo ar fi dispărut tăcut la următoarea reanalizare a dosarului. Necesită `migration_research_user_note.sql` în Supabase (dat separat în chat) — fără el, notițele nu se salvează încă, dar restul aplicației funcționează neschimbat (degradare grațioasă, testată explicit, la fel ca la celelalte coloane opționale din Research). Verificat de 2 ori: sintaxă OK; test dedicat pe server — salvare reușește, ștergere cu text gol funcționează, eroare clară (nu un crash) dacă migrarea nu a rulat încă; test dedicat client, cu interacțiune reală (click + prompt, nu apel direct de funcție) — pastila pornește „+ Notiță", devine „📝 <text>" după salvare, click pe ea NU deschide/închide cardul din greșeală, fără erori consolă',date:'2026-09-13'},
   {n:348,text:'Research → Galerie AI produs — bug real reparat, raportat direct de mai multe ori: „The image data you provided does not represent a valid image" apărea repetat, chiar și pe dosare cu poze reale selectate. Cauza: pozele de referință (candidați scraped din research_links — poze de concurent/furnizor) se trimiteau CRUDE, directe, către OpenAI, care încearcă să le descarce chiar EA, de pe serverele ei — exact genul de link cu hotlink protection pentru care există deja api/img-proxy.js (setează Referer corect; multe CDN-uri de eMAG/concurenți refuză altfel cererea). Thumbnail-urile din UI foloseau deja proxy-ul corect (de-asta se vedeau normal pe ecran) — doar apelurile către AI (Visual DNA, validarea imaginilor generate, plus alte 5 fluxuri cu același tipar: Preț privat din link, recunoaștere poză produs, import produs din URL, căutare AI queries, verificare AI potrivire link) ocoleau proxy-ul. Acum toate trec printr-o funcție unică (aiSafeImageUrl) care proxiază orice URL extern înainte să-l trimită la AI — URL-urile deja proprii (din /api/ai-image) rămân neatinse, doar făcute absolute. NIMIC din logica de analiză/generare nu s-a schimbat — strict URL-ul trimis la AI. Verificat de 2 ori, interceptând cererea reală către AI (fără cost): confirmat că payload-ul conține acum URL-ul proxiat, absolut, pentru poze externe, și URL-ul propriu neschimbat pentru poze deja generate de noi, fără erori consolă',date:'2026-09-13'},
@@ -5707,6 +5711,12 @@ function resetUiCustomizations(){
 // ── COPY FUNCTIONS ──
 function copyText(text){
   navigator.clipboard.writeText(text).then(()=>toast('Copiat ✓'),()=>toast('Eroare copiere','err'));
+}
+// Folosit STRICT de butoanele de copy din Research (cerut direct) — marchează vizual butonul apăsat
+// (clasa .rsx-copied) ca să rămână evident, la o privire, ce a fost deja copiat; nu dispare pe timer.
+function rsxCopy(text,btn){
+  copyText(text);
+  if(btn)btn.classList.add('rsx-copied');
 }
 function copyProductName(id){
   const p=P.find(x=>x.id===id);
@@ -8733,8 +8743,8 @@ function renderResearchProjects(){
       // Tot cadranul e butonul de copy acum (nu doar iconița ⧉ de lângă text) — și fără cuvântul
       // „PNK" afișat, doar codul propriu-zis; tooltip-ul păstrează contextul (PNK vs. cod furnizor).
       const pnkHtml=l.platform==='furnizor'
-        ?(l.product_code?`<button class="rsx-pnk" onclick="copyText(${esc(JSON.stringify(String(l.product_code)))})" title="Cod produs la furnizor — click pentru copiere">${esc(l.product_code)} ⧉</button>`:'<span class="rsx-cell-sub">—</span>')
-        :(l.pnk?`<button class="rsx-pnk" onclick="copyText(${esc(JSON.stringify(String(l.pnk)))})" title="PNK eMAG — click pentru copiere">${esc(l.pnk)} ⧉</button>`:'<span class="rsx-cell-sub">—</span>');
+        ?(l.product_code?`<button class="rsx-pnk" onclick="rsxCopy(${esc(JSON.stringify(String(l.product_code)))},this)" title="Cod produs la furnizor — click pentru copiere">${esc(l.product_code)} ⧉</button>`:'<span class="rsx-cell-sub">—</span>')
+        :(l.pnk?`<button class="rsx-pnk" onclick="rsxCopy(${esc(JSON.stringify(String(l.pnk)))},this)" title="PNK eMAG — click pentru copiere">${esc(l.pnk)} ⧉</button>`:'<span class="rsx-cell-sub">—</span>');
       // Performanță eMAG (Target Zone) — apreciere MANUALĂ, pe baza analizei/căutărilor proprii, nu
       // calculată automat de sistem. Doar pentru linkuri eMAG (conceptul nu există pe Trendyol/furnizor).
       const emgPerfHtml=l.platform==='emag'
@@ -8858,7 +8868,7 @@ function renderResearchProjects(){
             <div style="display:flex;align-items:center;gap:6px">
               <div class="rsx-head-title">${esc(p.title)}</div>
               <button class="rsx-title-edit" onclick="editResearchProjectTitle(${p.id},event)" title="Editează titlul dosarului">✏️</button>
-              <button class="rsx-title-edit" onclick="event.stopPropagation();copyText(location.origin+'/#research/${p.id}')" title="Copiază link direct către acest dosar — îl poți deschide într-un tab Safari separat, fără să sară la un alt dosar deja deschis">🔗</button>
+              <button class="rsx-title-edit" onclick="event.stopPropagation();rsxCopy(location.origin+'/#research/${p.id}',this)" title="Copiază link direct către acest dosar — îl poți deschide într-un tab Safari separat, fără să sară la un alt dosar deja deschis">🔗</button>
             </div>
             <div class="rsx-head-meta"><span class="rsx-head-chevron">${collapsed?'▸':'▾'}</span>#${p.id} · ${new Date(p.updated_at||p.created_at).toLocaleDateString('ro-RO')} ${p.supplier?'· '+esc(p.supplier):''}${collapsed?' · '+links.length+' linkuri':''}
               ${p.acquisition_price?`<span class="rsx-head-price" title="Preț de achiziție (furnizor)">Achiziție ${Number(p.acquisition_price).toFixed(2)} RON</span>`:''}
@@ -9566,7 +9576,7 @@ function renderEanPoolList(){
   if(!eanPoolCodes.length){el.innerHTML='<div style="font-size:23px;color:var(--t3);padding:8px 4px">Nu mai ai coduri EAN disponibile.</div>';return;}
   // Butonul de copy la stânga (cerut direct — la îndemână, primul lucru pe care dai click, nu ultimul).
   el.innerHTML=eanPoolCodes.map(c=>`<div class="ean-pool-row" id="ean-pool-row-${c.id}" style="justify-content:flex-start;gap:8px">
-    <button class="btn btn-sm" style="flex-shrink:0" onclick="copyText(${esc(JSON.stringify(c.ean))})" title="Copiază codul EAN">📋 Copiază</button>
+    <button class="btn btn-sm" style="flex-shrink:0" onclick="rsxCopy(${esc(JSON.stringify(c.ean))},this)" title="Copiază codul EAN">📋 Copiază</button>
     <label style="width:auto;flex:1;min-width:0"><input type="checkbox" onchange="markEanCodeUsed(${c.id},this)"> <span style="font-family:var(--mono)">${esc(c.ean)}</span></label>
   </div>`).join('');
 }
@@ -9915,6 +9925,7 @@ async function allocateAndCopyEan(){
   if(row)row.innerHTML=listingEanRowHtml(l);
   if(!ean)return;// mesajul de eroare a fost deja arătat în ensureListingEan
   copyText(ean);
+  row?.querySelector('button')?.classList.add('rsx-copied');
   if(!hadEan)toast('Cod EAN alocat și copiat ✓');
 }
 // proj = dosarul Research (research_projects) din care vine anunțul curent, dacă există (vezi
@@ -10091,7 +10102,7 @@ function emgGuideRow(label,value,opts){
   opts=opts||{};
   const has=value!==undefined&&value!==null&&value!==''&&!(typeof value==='number'&&isNaN(value));
   const display=has?esc(String(value)):'<span style="color:var(--t3)">— completează manual, nu generăm date fictive</span>';
-  const copyBtn=has?`<button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(String(value)))})">📋 Copiază</button>`:'';
+  const copyBtn=has?`<button class="btn btn-sm" onclick="rsxCopy(${esc(JSON.stringify(String(value)))},this)">📋 Copiază</button>`:'';
   return`<div class="emg-guide-row"><div class="emg-guide-k">${esc(label)}${opts.hint?`<div style="font-size:21px;color:var(--t3);font-weight:400">${esc(opts.hint)}</div>`:''}</div><div class="emg-guide-v">${display}</div><div>${copyBtn}</div></div>`;
 }
 function emgGuideSec(title){return`<div class="sec" style="margin-top:18px">${esc(title)}</div>`;}
@@ -10128,7 +10139,7 @@ async function openEmagManualGuide(){
     <div style="font-size:24px;color:var(--t3);margin-bottom:8px">Valorile noastre — potrivește-le manual cu atributul eMAG corect din categorie (multe sunt restrictive, cu listă fixă de opțiuni; nu avem acces la taxonomia eMAG ca să le mapăm automat).</div>
     ${d.characteristics.length?d.characteristics.map(([k,v])=>emgGuideRow(k,v)).join(''):'<div style="color:var(--t3);font-size:24px">Nicio caracteristică extrasă încă în acest anunț.</div>'}
     ${emgGuideSec('3. Descriere')}
-    <div class="emg-guide-row"><div class="emg-guide-k">Descriere</div><div class="emg-guide-v" style="font-size:23px;line-height:1.4">${esc((d.descPlain||'').slice(0,240))}${(d.descPlain||'').length>240?'…':''}</div><div><button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(d.descHtml||d.descPlain||''))})">📋 Copiază HTML</button></div></div>
+    <div class="emg-guide-row"><div class="emg-guide-k">Descriere</div><div class="emg-guide-v" style="font-size:23px;line-height:1.4">${esc((d.descPlain||'').slice(0,240))}${(d.descPlain||'').length>240?'…':''}</div><div><button class="btn btn-sm" onclick="rsxCopy(${esc(JSON.stringify(d.descHtml||d.descPlain||''))},this)">📋 Copiază HTML</button></div></div>
     ${emgGuideRow('Avertizări de siguranță',EMAG_DEFAULT_SAFETY_TEXT,{hint:'Sugestia implicită eMAG (o completează automat dacă lași câmpul gol) — înlocuiește-o dacă produsul chiar are avertizări reale, specifice'})}
     ${emgGuideSec('4. Detalii ofertă — Preț')}
     ${emgMarketPriceGuideRows(proj)}
@@ -10174,7 +10185,7 @@ function emagPnkCandidatesHtml(proj){
   // Numărul explicit (cerut direct) — cât de multe linkuri din dosar au deja un PNK extras, ca reper
   // rapid câte asocieri ai de făcut din acest dosar, nu doar o listă fără context de amploare.
   return`<div style="font-size:24px;color:var(--t3);margin-bottom:8px"><strong style="color:var(--t1)">${links.length}</strong> PNK-uri eMAG găsite în linkurile din acest dosar — alege-l pe cel cu care asociezi oferta:</div>
-    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">${links.map(l=>`<div class="emg-guide-row"><div class="emg-guide-k" style="font-size:23px;font-weight:400">${esc((l.title||l.url||'').slice(0,90))}${l.brand?`<div style="font-size:21px;color:var(--acc2);font-weight:800;margin-top:3px">🏷 ${esc(l.brand)}</div>`:''}</div><div class="emg-guide-v">${esc(l.pnk)}</div><div><button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(String(l.pnk)))})">📋 Copiază</button></div></div>`).join('')}</div>`;
+    <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">${links.map(l=>`<div class="emg-guide-row"><div class="emg-guide-k" style="font-size:23px;font-weight:400">${esc((l.title||l.url||'').slice(0,90))}${l.brand?`<div style="font-size:21px;color:var(--acc2);font-weight:800;margin-top:3px">🏷 ${esc(l.brand)}</div>`:''}</div><div class="emg-guide-v">${esc(l.pnk)}</div><div><button class="btn btn-sm" onclick="rsxCopy(${esc(JSON.stringify(String(l.pnk)))},this)">📋 Copiază</button></div></div>`).join('')}</div>`;
 }
 // „ID produs" (cifre) și „Cod produs" (AB+cifre) — aceeași convenție ca „🏷 Bancă de coduri produs":
 // 2 piese direct-copiabile (click PE text), nu un buton generic alăturat. Cerut direct: după ce AMBELE
@@ -10636,7 +10647,7 @@ function renderListingResult(l,pages){
     <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;margin-bottom:8px">
       <div class="sec" style="margin:0;color:var(--acc)">✨ Anunț generat</div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
-        <button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(l.title||''))})">Copiază titlu</button>
+        <button class="btn btn-sm" onclick="rsxCopy(${esc(JSON.stringify(l.title||''))},this)">Copiază titlu</button>
         <button class="btn btn-sm btn-acc" onclick="applyListingToProduct()">Aplică în produs</button>
         <button class="btn btn-sm" onclick="downloadEmagOfferPreset()" title="Produs deja existent în catalogul eMAG (ai un PNK de potrivit)">📄 Preset eMAG ERP</button>
         <button class="btn btn-sm" onclick="downloadEmagNewProductPreset()" title="Produs NOU pe eMAG — nu există încă în catalog, trimiți toate detaliile">📄 Preset eMAG (produs nou)</button>
@@ -10647,13 +10658,13 @@ function renderListingResult(l,pages){
     <div class="listing-title">${esc(l.title||researchData?.name||'')}</div>
     ${l.short_title?`<div style="font-size:24px;color:var(--t3);margin-bottom:4px">Titlu scurt: ${esc(l.short_title)}</div>`:''}
     <div id="listing-ean-row" style="margin-bottom:6px">${listingEanRowHtml(l)}</div>
-    ${l.title_trendyol?`<div class="listing-trendyol-sec"><span style="font-size:21px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.04em">Titlu Trendyol</span><div style="font-size:25px;margin-top:4px">${esc(l.title_trendyol)}<button class="btn btn-sm" style="margin-left:8px;font-size:21px" onclick="copyText(${esc(JSON.stringify(l.title_trendyol))})">Copiază</button></div></div>`:''}
+    ${l.title_trendyol?`<div class="listing-trendyol-sec"><span style="font-size:21px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.04em">Titlu Trendyol</span><div style="font-size:25px;margin-top:4px">${esc(l.title_trendyol)}<button class="btn btn-sm" style="margin-left:8px;font-size:21px" onclick="rsxCopy(${esc(JSON.stringify(l.title_trendyol))},this)">Copiază</button></div></div>`:''}
     ${categoryRow}
     ${imgs.length?`<div class="listing-imgs">${imgs.slice(0,10).map((u,i)=>`<div class="listing-img-thumb"><img src="${esc(proxyImg(u))}" onerror="this.src='${esc(u)}'" onload="checkImgDims(this)" alt="" title="${i===0?'Prima imagine (impact)':'Imagine '+(i+1)}" style="${i===0?'border:2px solid var(--acc);width:89px;height:89px;object-fit:contain;border-radius:8px;background:var(--surf2)':'width:89px;height:89px;object-fit:contain;border:1px solid var(--b1);border-radius:8px;background:var(--surf2)'}"><a class="dl-btn" href="${esc(downloadImg(u))}" target="_blank" title="Descarcă imagine">↓ Salvează</a></div>`).join('')}</div>`:''}
     ${hasHtml?`<div style="margin:10px 0 4px"><div class="listing-preview-toggle">
       <button id="listing-html-btn-preview" class="listing-preview-btn on" onclick="toggleListingHtmlView('preview')">Preview</button>
       <button id="listing-html-btn-raw" class="listing-preview-btn" onclick="toggleListingHtmlView('raw')">HTML brut</button>
-      <button class="btn btn-sm" style="margin-left:auto" onclick="copyText(${esc(JSON.stringify(l.description_html||''))})">Copiază HTML</button>
+      <button class="btn btn-sm" style="margin-left:auto" onclick="rsxCopy(${esc(JSON.stringify(l.description_html||''))},this)">Copiază HTML</button>
     </div>
     <div id="listing-html-preview" class="listing-html-preview on">${proxyHtmlImgs(l.description_html||'')}</div>
     <div id="listing-html-raw" class="listing-html-raw">${esc(l.description_html||'')}</div></div>`
@@ -10682,7 +10693,7 @@ function specsCopyText(specs){return specEntries(specs).map(([k,v])=>`${k}: ${v}
 function renderSpecTable(specs){
   const rows=specEntries(specs);
   if(!rows.length)return'';
-  return`<div style="margin-top:14px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><strong style="font-size:25px">Specificații copiable</strong><button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(specsCopyText(specs)))})">Copiază toate specificațiile</button></div><div class="listing-spec-table">${rows.map(([k,v])=>`<div class="listing-spec-row"><div class="listing-spec-k">${esc(k)}</div><div class="listing-spec-v">${esc(v)}</div><button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(`${k}: ${v}`))})">Copiază</button></div>`).join('')}</div></div>`;
+  return`<div style="margin-top:14px"><div style="display:flex;justify-content:space-between;gap:8px;align-items:center"><strong style="font-size:25px">Specificații copiable</strong><button class="btn btn-sm" onclick="rsxCopy(${esc(JSON.stringify(specsCopyText(specs)))},this)">Copiază toate specificațiile</button></div><div class="listing-spec-table">${rows.map(([k,v])=>`<div class="listing-spec-row"><div class="listing-spec-k">${esc(k)}</div><div class="listing-spec-v">${esc(v)}</div><button class="btn btn-sm" onclick="rsxCopy(${esc(JSON.stringify(`${k}: ${v}`))},this)">Copiază</button></div>`).join('')}</div></div>`;
 }
 // Bug real găsit: citea dintr-un câmp „image_recommendations" pe care nimic nu-l populează
 // niciodată — AI-ul întoarce de fapt best_images (url/role/reason, vezi factoryImages mai sus),
@@ -11086,7 +11097,7 @@ function poolCardHtml(u,i,imgRec){
       ${roleLabel?`<div class="pool-card-role">${esc(roleLabel)}</div>`:''}
       ${r.reason?`<div class="pool-card-reason" title="${esc(r.reason)}">${esc(r.reason)}</div>`:''}
       <div class="pool-card-actions">
-        <button type="button" onclick="copyText(${esc(JSON.stringify(u))})" title="Copiază link-ul acestei poze">🔗</button>
+        <button type="button" onclick="rsxCopy(${esc(JSON.stringify(u))},this)" title="Copiază link-ul acestei poze">🔗</button>
         <a href="${esc(downloadImg(u))}" target="_blank" title="Salvează poza">↓</a>
         <button type="button" onclick="insertImageIntoDescriptionFromPool(${esc(JSON.stringify(u))})" title="Adaugă direct în descriere, la final">+</button>
         <details class="pool-card-menu">
@@ -11124,7 +11135,7 @@ function renderPoolBulkBarHtml(){
   return`<div class="pool-bulk-bar">
     <b>${n} ${n===1?'imagine selectată':'imagini selectate'}</b>
     <button type="button" onclick="poolBulkSave()">↓ Salvează</button>
-    <button type="button" onclick="poolBulkCopyLinks()">🔗 Copiază linkurile</button>
+    <button type="button" onclick="poolBulkCopyLinks(this)">🔗 Copiază linkurile</button>
     <button type="button" onclick="poolBulkAddToDescription()">+ În descriere</button>
     <button type="button" onclick="poolBulkRecreateWithAI()">🎨 Recreează cu AI</button>
     <button type="button" style="color:var(--rd);border-color:var(--rd)" onclick="poolBulkBlock()">🚫 Blochează</button>
@@ -11141,7 +11152,7 @@ function renderPoolGalleryHtml(imgs,imgRec){
         <div style="display:flex;gap:6px;flex-wrap:wrap">
           <button class="btn btn-sm btn-acc" onclick="addExternalImage()">+ Adaugă poză externă</button>
           <button class="btn btn-sm btn-blue" onclick="pasteImageFromClipboard()" title="Fă un screenshot direct pe pagina produsului (Cmd/Ctrl+Shift+4 pe Mac, sau orice unealtă de captură) — apoi apasă aici, fără să salvezi fișierul local">📋 Lipește din clipboard</button>
-          ${imgs.length?`<button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(imgs.join('\n')))})">Copiază toate linkurile</button>`:''}
+          ${imgs.length?`<button class="btn btn-sm" onclick="rsxCopy(${esc(JSON.stringify(imgs.join('\n')))},this)">Copiază toate linkurile</button>`:''}
           ${imgs.length?`<button class="btn btn-sm" onclick="downloadAllListingImagesAsPng()" title="O singură arhivă ZIP, toate pozele curente (externe sau încărcate/generate) convertite la PNG">⬇ Descarcă toate ca PNG</button>`:''}
         </div>
       </div>
@@ -11196,10 +11207,11 @@ async function poolBulkSave(){
     await new Promise(r=>setTimeout(r,250));
   }
 }
-function poolBulkCopyLinks(){
+function poolBulkCopyLinks(btn){
   const urls=[...poolSelectedImgs];
   if(!urls.length)return;
   copyText(urls.join('\n'));
+  if(btn)btn.classList.add('rsx-copied');
 }
 async function poolBulkAddToDescription(){
   const urls=[...poolSelectedImgs];
@@ -11274,7 +11286,7 @@ function renderListingFactoryResult(l,pages,allImages=[]){
     <details class="listing-trendyol-sec" style="margin-top:8px">
       <summary style="cursor:pointer;font-size:21px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.04em">🛍 Referință Trendyol (secundar)</summary>
       <div style="margin-top:6px">
-        ${l.title_trendyol?`<div style="font-size:25px">${esc(l.title_trendyol)}<button class="btn btn-sm" style="margin-left:8px;font-size:21px" onclick="copyText(${esc(JSON.stringify(l.title_trendyol))})">Copiază</button></div>`:''}
+        ${l.title_trendyol?`<div style="font-size:25px">${esc(l.title_trendyol)}<button class="btn btn-sm" style="margin-left:8px;font-size:21px" onclick="rsxCopy(${esc(JSON.stringify(l.title_trendyol))},this)">Copiază</button></div>`:''}
         ${l.category_trendyol?`<span class="listing-category-chip" style="margin-top:6px;display:inline-block">🛍 ${esc(l.category_trendyol)}</span>`:''}
       </div>
     </details>`:'';
@@ -11284,7 +11296,7 @@ function renderListingFactoryResult(l,pages,allImages=[]){
     <div style="display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:16px">
       <div class="sec" style="margin:0;color:var(--acc)">✨ Anunț eMAG</div>
       <div style="display:flex;gap:9px;flex-wrap:wrap;justify-content:flex-end">
-        <button class="btn btn-sm" onclick="copyText(${esc(JSON.stringify(l?.title||''))})">Copiază titlu</button>
+        <button class="btn btn-sm" onclick="rsxCopy(${esc(JSON.stringify(l?.title||''))},this)">Copiază titlu</button>
         <button class="btn btn-sm btn-acc" onclick="applyListingToProduct()">Aplică în produs</button>
         <button class="btn btn-sm" onclick="openEmagManualGuide()" title="Toate câmpurile, în ordinea din formularul de creare produs eMAG, cu buton de copiere la fiecare">📋 Ghid completare eMAG</button>
         <button class="btn btn-sm btn-amber" onclick="openEmagPnkGuide()" title="Produs care EXISTĂ deja în catalogul eMAG — te asociezi la un PNK, doar oferta ta: preț, stoc, identificare">🔑 eMAG PNK</button>
@@ -11304,7 +11316,7 @@ function renderListingFactoryResult(l,pages,allImages=[]){
       <input type="file" accept="image/*" id="desc-img-upload" style="display:none" onchange="uploadImageIntoDescription(event)">
       <label for="desc-img-upload" class="btn btn-sm" style="cursor:pointer" title="Alege o poză direct de pe calculator (fișier personal), fără link extern">📁 Din calculator</label>
       <button class="btn btn-sm btn-acc" onclick="saveDescriptionEdit()">💾 Salvează descrierea</button>
-      <button class="btn btn-sm" style="margin-left:auto" onclick="copyText(${esc(JSON.stringify(l?.description_html||''))})">Copiază HTML</button>
+      <button class="btn btn-sm" style="margin-left:auto" onclick="rsxCopy(${esc(JSON.stringify(l?.description_html||''))},this)">Copiază HTML</button>
     </div>
     <div id="listing-html-preview" class="listing-html-preview on">${l?.description_html?proxyHtmlImgs(l.description_html):l?.description?esc(l.description):'<span style="color:var(--t3)">Nicio descriere încă — scrie una în „Editează HTML" și salvează</span>'}</div>
     <textarea id="listing-html-raw" class="listing-html-raw">${esc(l?.description_html||l?.description||'')}</textarea>
@@ -12388,7 +12400,7 @@ async function analyzeCompetitorLab(){
 }
 function arrList(items){return Array.isArray(items)&&items.length?`<ul>${items.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>`:'<div style="font-size:24px;color:var(--t3)">—</div>';}
 function pnkBadge(pnk){
-  return pnk?`<button type="button" class="rsx-pnk" onclick="copyText(${esc(JSON.stringify(String(pnk)))})" title="Copiază PNK">PNK ${esc(pnk)} ⧉</button>`:'<div class="scorecard-row-meta">PNK —</div>';
+  return pnk?`<button type="button" class="rsx-pnk" onclick="rsxCopy(${esc(JSON.stringify(String(pnk)))},this)" title="Copiază PNK">PNK ${esc(pnk)} ⧉</button>`:'<div class="scorecard-row-meta">PNK —</div>';
 }
 function renderCompetitionLab(data){
   const out=document.getElementById('competition-result');if(!out)return;
@@ -12474,7 +12486,7 @@ function renderProductDecision(){
       <div class="scorecard-section"><h4>Checklist decizie</h4>${arrList(checks)}</div>
       <div class="scorecard-section"><h4>Ce reconfirmi manual</h4>${arrList(a.toVerify||['dacă produsul este identic','cost real transport/retur','calitatea pozelor și dimensiunile'])}</div>
       <div class="scorecard-section"><h4>Acțiuni recomandate</h4>${arrList(a.recommendations||['completează research produs','adaugă 3-5 linkuri concurente','generează anunț AB HOMES'])}</div>
-      <div class="scorecard-section"><h4>PNK-uri eMAG</h4>${pnkRows.length?`<ul>${pnkRows.map(x=>`<li><button class="btn btn-sm" style="font-size:21px;margin-right:6px" onclick="copyText('${esc(x.pnk)}')">Copy</button><span style="font-family:var(--mono)">${esc(x.pnk)}</span> · ${esc(x.title).slice(0,90)}</li>`).join('')}</ul>`:'<div style="font-size:24px;color:var(--t3)">Nu am găsit PNK-uri eMAG în linkuri.</div>'}</div>
+      <div class="scorecard-section"><h4>PNK-uri eMAG</h4>${pnkRows.length?`<ul>${pnkRows.map(x=>`<li><button class="btn btn-sm" style="font-size:21px;margin-right:6px" onclick="rsxCopy('${esc(x.pnk)}',this)">Copy</button><span style="font-family:var(--mono)">${esc(x.pnk)}</span> · ${esc(x.title).slice(0,90)}</li>`).join('')}</ul>`:'<div style="font-size:24px;color:var(--t3)">Nu am găsit PNK-uri eMAG în linkuri.</div>'}</div>
     </div>
   </div>`;
 }
