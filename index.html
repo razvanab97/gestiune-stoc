@@ -3602,6 +3602,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:345,text:'Research — cinci corecturi cerute direct pe capturi reale, la calculul de preț/profit și la generarea anunțului. (1) Preț recomandat — nu se mai calculează la CEL MAI MIC preț găsit pe piață (un singur concurent, des un outlier/o greșeală de listare, care putea duce profitul/marja în minus, cum s-a și întâmplat — vezi captura cu „-21.38 RON / -38.21%"); acum se calculează la MEDIA celor mai mici 5 prețuri găsite (cu mai puțin de 5 disponibile, media pe câte sunt). Prețul minim rămâne afișat separat, ca reper („cât de jos a coborât cineva"), dar nu mai stă la baza niciunui calcul — exact cum a fost cerut. (2) Aceeași schimbare, la profitul/marja/verdictul dosarului din lista principală (server, `projectVerdict`) — nu doar la cadranul eMAG/Trendyol din interiorul unui dosar. (3) Poți adăuga acum până la 25 de linkuri per dosar (era 20). (4) La „Generează anunț din dosar", informația nu se mai ia din TOATE linkurile urmărite — se curată la top 10: 7 eMAG (ordonate după „Performanță eMAG" — Superhot peste Hot peste Standard peste Cold peste Supercold, apreciere manuală deja existentă) + 3 Trendyol (ordonate după scorul de potrivire, Trendyol neavând conceptul de performanță). Furnizorul (sursa de cost) trece neatins, necapat — curatarea e strict despre concurență. (5) Pagina publică de produs (#344) arată acum prețul RECOMANDAT FĂRĂ TVA ca preț principal — inclusiv în tot ce citește eMAG automat la import (JSON-LD/meta), nu doar vizual — pentru că exact acela e câmpul pe care eMAG îl așteaptă („Preț vânzare — fără TVA" din Ghid completare eMAG), nu prețul cu TVA folosit înainte. NIMIC din formula de profit (calcProfit/pcAutomaticPricesFromGross) nu s-a schimbat — strict REFERINȚA de preț de piață folosită ca intrare în ea. Verificat de 2 ori: test dedicat pe server (Supabase simulat) — reprodus exact scenariul din captură (un singur preț 67.72 RON → profit -21.38 RON/-38.21%, identic), apoi confirmat că, cu mai multe prețuri disponibile (un outlier 67.72 + 5 prețuri reale 150-190), media top 5 (145.54 RON) transformă un profit fals-negativ într-unul real, pozitiv (+25.26 RON/21%); test dedicat client-side — curatarea de linkuri alege corect 7 eMAG (ordonate exact Superhot→Cold) + 3 Trendyol (ordonate după scor), furnizorul neatins; pagina publică arată corect prețul fără TVA peste tot unde ar trebui, fără erori consolă',date:'2026-09-13'},
   {n:344,text:'Research → „🔗 Link public produs" (pagina de la /produs/{id}, lipită în eMAG la „Adaugă produs cu URL") — completată cu ce lipsea, cerut direct („gândește URL-ul produsului astfel încât să fie complet încărcat în eMAG"). (1) Preț — pagina nu arăta NICIUN preț până acum; acum arată prețul de vânzare (cu și fără TVA), plus `og:price:amount`/`product:price:amount` și blocul `offers` din JSON-LD (schema.org), pe care eMAG îl citește la import. Calculul e EXACT cel din „Ghid completare eMAG" (piață + marjă) — nu un calcul nou, dus în server. (2) ID produs/Cod produs — aceleași coduri din „Ghid completare eMAG" (schema AB HOMES: contor zilnic + dată), acum vizibile și pe pagina publică (`product:retailer_part_no` + text vizibil), nu doar în ghidul manual. (3) Dimensiuni/greutate — aceleași reguli deja folosite la exportul eMAG (din EasyBox sau din specificațiile text „Dimensiuni: ...cm") apar acum ca rânduri de specificații pe pagina publică. (4) Plafonul de poze urcat de la 10 la 14, aliniat cu `factoryImages()` (folosită la exportul XLSX), ca pagina publică să nu arate mai puține poze decât are efectiv anunțul. Totul se calculează o singură dată, client-side, la apăsarea „🔗 Link public produs" (exact ca ID-ul/EAN-ul deja existente) și se SALVEAZĂ pe listare — `api/product-page.js` (serverul) doar citește ce e deja calculat, nicio logică de preț dusă acolo. EAN NU se alocă automat aici — vine dintr-o bancă de coduri finită, consumată doar explicit din „Ghid completare eMAG", ca să nu se irosească coduri la fiecare click pe link. Câmpurile lipsă (fără preț calculat încă, fără ID alocat) rămân pur și simplu absente de pe pagină — nu se inventează date. Verificat de 2 ori: sintaxă OK pe ambele fișiere; test dedicat pe `api/product-page.js` (Supabase simulat) — o listare completă arată corect prețul/codurile/dimensiunile peste tot (vizibil, meta og:, JSON-LD), o listare minimală (fără aceste date) nu inventează nimic; test dedicat pe fluxul client („🔗 Link public produs") — confirmă că ID-ul/prețul/dimensiunile ajung corect calculate în payload-ul salvat, cu prețul net mai mic decât cel cu TVA, cum trebuie',date:'2026-09-13'},
   {n:343,text:'Research → Galerie AI produs — îmbunătățit promptul de plan al galeriei, cerut direct („galeria nu mă ajută deloc"). (1) Sursa de fapte reale pentru poze — funcția care alimenta planul cu context de piață aducea DOAR titlu+preț de la eMAG/Trendyol și ignora complet linkul de furnizor (de obicei chiar pagina originală a produsului, cea mai bogată sursă de specificații). Acum aduce descriere+specificații+brand de la furnizor, plus descrierea (nu doar titlul) de la concurenții CONFIRMAȚI — AI-ul are acum din ce extrage `overlay_bullets` (beneficii/specificații reale afișate pe poze) în loc să aibă aproape nimic de lucru. Linkurile neconfirmate rămân excluse (nu li se ia descrierea drept sigură). (2) Cadrul HERO (prima poză, cea mai importantă — decide dacă un cumpărător intră pe anunț) avea o singură linie vagă de instrucțiuni („fundal curat, fără text"); acum e mult mai concret: produs centrat, 70-80% din cadru, fundal simplu și curat (alb/nuanță foarte deschisă, fără decor care distrage), lumină de studio moale, umbră discretă, unghi flatant, compoziție premium. NIMIC din pipeline (Visual DNA, generarea propriu-zisă prin /api/ai-image, overlay-ul canvas cu text pe imagine) nu s-a schimbat — strict promptul trimis la planificare. Verificat de 2 ori, cu Playwright, interceptând cererea reală către AI (fără cost, fără cheie OpenAI necesară pentru verificare): promptul conține corect noua descriere HERO, secțiunea de furnizor cu descrierea/specificațiile/brandul reale, descrierea concurentului confirmat — și EXCLUDE corect descrierea unui concurent neconfirmat. Calitatea efectivă a imaginilor generate (partea AI propriu-zisă) nu poate fi verificată local — necesită testare live, pe Vercel, cu cheia OpenAI reală',date:'2026-09-13'},
   {n:342,text:'Research — bug real reparat, raportat direct: un link eMAG/Trendyol adăugat cu succes (toast „Linkuri adăugate: 1 ✓" confirmat, vizibil imediat în tabel) „dispărea" la o reîncărcare ulterioară a paginii. Cauza NU era scrierea — rândul rămânea perfect intact în Supabase. Cauza reală: lista principală de dosare aduce linkurile în loturi de câte 10 dosare deodată (`api/research-projects.js`); dacă interogarea pentru UN singur lot eșua (blip tranzitoriu de rețea, sau un dosar cu foarte multe linkuri/descrieri lungi care depășea limita), codul întorcea tăcut listă GOALĂ pentru TOATE cele până la 10 dosare din acel lot — nu doar pentru cel problematic, ci și pentru celelalte 9, sănătoase — arătând exact ca „mi-a dispărut linkul", deși nimic nu lipsea din bază (variantă a unui bug similar, fixat parțial mai demult, cu pozele grele din research_links). Acum: un lot care eșuează se reîncearcă o dată (majoritatea eșecurilor sunt blipuri tranzitorii, se rezolvă simplu la a doua încercare); dacă tot eșuează, fiecare dosar din lot se aduce individual, izolat — un singur dosar cu adevărat problematic nu mai ia cu el datele celorlalte 9. Verificat de 2 ori, cu un test dedicat (Supabase simulat): reprodus exact bugul pe codul dinainte de reparație (12 dosare, un lot cu eșec tranzitoriu → toate cele 12 dosare arătau 0 linkuri, deși aveau date reale); confirmat că după reparație, aceleași 12 dosare recuperează corect linkurile — 9 sănătoase prin izolare individuală, 2 prin reîncercare simplă — doar dosarul simulat ca genuin corupt rămâne fără linkuri (degradare așteptată, documentată, nu pierdere tăcută în masă)',date:'2026-09-13'},
@@ -7376,7 +7377,7 @@ let listingProjectId=null;
 let genInProgress=new Set(),genStatusProjectId=null;
 let listingFactoryData=null,competitionLabData=null;
 let researchProjects=[],researchProjectFilter='all',researchProjectsLoaded=false,researchProjectsLoading=false,researchShowFinalized=false;
-const MAX_RESEARCH_LINKS=20;
+const MAX_RESEARCH_LINKS=25;
 async function ensureXLSX(){
   if(window.XLSX)return window.XLSX;
   await new Promise((resolve,reject)=>{
@@ -7954,25 +7955,34 @@ Răspunde STRICT cu JSON: {"verdict":"match"|"no_match"|"uncertain","reason":"<m
     if(btn){btn.disabled=false;btn.textContent='🎯 Verifică AI';}
   }
 }
+// Media celor mai mici N prețuri găsite (implicit 5) — cerut direct: raportarea la UN SINGUR preț minim
+// (des un outlier/o greșeală de listare a unui concurent) denatura profitul/marja, uneori până în minus,
+// deși piața reală era mult mai sus. Cu mai puțin de N prețuri disponibile, face media pe câte sunt.
+function topNAvg(prices,n=5){
+  const sorted=(prices||[]).filter(x=>x>0).sort((a,b)=>a-b).slice(0,n);
+  return sorted.length?sorted.reduce((s,x)=>s+x,0)/sorted.length:0;
+}
 function researchPlatformStats(p){
   const links=(p.links||[]).filter(l=>l.include_in_listing!==false&&l.status!=='eroare'&&Number(l.price)>0);
   const out={};
   ['emag','trendyol'].forEach(k=>{
     const prices=links.filter(l=>l.platform===k).map(l=>pcomToRon(l.price,l.currency)).filter(Boolean);
-    out[k]=prices.length?{min:Math.min(...prices),max:Math.max(...prices),avg:prices.reduce((s,x)=>s+x,0)/prices.length,count:prices.length}:null;
+    out[k]=prices.length?{min:Math.min(...prices),max:Math.max(...prices),avg:prices.reduce((s,x)=>s+x,0)/prices.length,top5avg:topNAvg(prices,5),count:prices.length}:null;
   });
   return out;
 }
-// Preț minim = break-even calculat cu Calculatorul (pcAutomaticPricesFromGross) din costul de achiziție.
-// Preț recomandat = chiar sub cel mai mic preț găsit pe piață, dar niciodată sub pragul de profit minim.
+// Preț minim = break-even calculat cu Calculatorul (pcAutomaticPricesFromGross) din costul de achiziție —
+// rămâne afișat separat, doar ca reper („cât de jos putem merge"), NU ca bază de calcul.
+// Preț recomandat = chiar sub MEDIA celor mai mici 5 prețuri de pe piață (nu sub cel mai mic preț găsit,
+// cerut direct — un singur preț minim poate fi un outlier), dar niciodată sub pragul de profit minim.
 function researchCalcPrices(p,stats){
   const acq=Number(p.acquisition_price)||0;
   if(!acq)return null;
   const zero=pcAutomaticPricesFromGross(acq,.21);
   const rec={};
   ['emag','trendyol'].forEach(k=>{
-    const floor=zero[k]||0,marketMin=stats[k]?.min||0;
-    rec[k]=marketMin?Math.max(floor,Math.round((marketMin-0.5)*100)/100):floor;
+    const floor=zero[k]||0,marketRef=stats[k]?.top5avg||0;
+    rec[k]=marketRef?Math.max(floor,Math.round((marketRef-0.5)*100)/100):floor;
   });
   return{zero,rec};
 }
@@ -7983,10 +7993,10 @@ function researchPlatAggHtml(p){
     const s=stats[k];
     return`<div class="rsx-mkt">
       <div class="rsx-mkt-head"><span class="rsx-mkt-name">${labels[k]}</span><span class="rsx-mkt-count">${s?s.count+' listări urmărite':'fără listări urmărite'}</span></div>
-      <div class="rsx-mkt-stats-line">Min <strong>${s?s.min.toFixed(2):'—'}</strong> · Max <strong>${s?s.max.toFixed(2):'—'}</strong> · Medie <strong>${s?s.avg.toFixed(2):'—'}</strong> RON</div>
+      <div class="rsx-mkt-stats-line">Min <strong>${s?s.min.toFixed(2):'—'}</strong> · Max <strong>${s?s.max.toFixed(2):'—'}</strong> · Medie <strong>${s?s.avg.toFixed(2):'—'}</strong>${s&&s.count>1?` · Medie top 5 <strong>${s.top5avg.toFixed(2)}</strong>`:''} RON</div>
       <div class="rsx-mkt-hero">
-        <div class="rsx-mkt-hero-cell min"><span>Preț minim (calc.)</span><strong>${prc?prc.zero[k].toFixed(2)+' RON':'—'}</strong></div>
-        <div class="rsx-mkt-hero-cell rec"><span>Preț recomandat</span><strong>${prc?prc.rec[k].toFixed(2)+' RON':'—'}</strong></div>
+        <div class="rsx-mkt-hero-cell min"><span>Preț minim (doar reper — nu se calculează la el)</span><strong>${prc?prc.zero[k].toFixed(2)+' RON':'—'}</strong></div>
+        <div class="rsx-mkt-hero-cell rec"><span>Preț recomandat (din media top 5 piață)</span><strong>${prc?prc.rec[k].toFixed(2)+' RON':'—'}</strong></div>
       </div>
     </div>`;
   }).join('');
@@ -8755,7 +8765,7 @@ function renderResearchProjects(){
       </div>
       <div class="rsx-add-zone">
         <div class="rsx-add-zone-label">🔗 Adaugă linkuri noi</div>
-        <div class="rsx-add"><textarea id="rp-links-${p.id}" placeholder="Lipește până la 20 linkuri pentru acest dosar, câte unul pe linie"></textarea><button class="rsx-btn rsx-btn-primary blue" onclick="addResearchProjectLinks(${p.id})">+ Adaugă &amp; analizează</button></div>
+        <div class="rsx-add"><textarea id="rp-links-${p.id}" placeholder="Lipește până la 25 linkuri pentru acest dosar, câte unul pe linie"></textarea><button class="rsx-btn rsx-btn-primary blue" onclick="addResearchProjectLinks(${p.id})">+ Adaugă &amp; analizează</button></div>
       </div>
       <div class="rsx-pdf-row" title="Dacă nu găsești nimic automat pe eMAG/Trendyol: strânge screenshot-uri ale rezultatelor căutării în PDF-uri (poți selecta mai multe deodată) și încarcă-le aici — AI extrage fiecare anunț găsit (fără poze)">
         <input type="file" accept="application/pdf" multiple id="rppdf-emag-${p.id}" style="display:none" onchange="uploadResearchPdfFile(${p.id},'emag',this)">
@@ -9249,13 +9259,27 @@ function showSavedProjectListing(projectId){
   renderListingFactoryResult(pr.listing,[],[]);
   toast('Anunț salvat încărcat ✓');
 }
+// Selecție curată de linkuri competitor pentru generarea anunțului — cerut direct: „top 10 linkuri,
+// 7 de la eMAG + 3 de la Trendyol, raportate la performanță". Furnizorul (sursa de cost) și orice altă
+// platformă trec neatinse, necapate aici — curatarea e strict despre CONCURENȚĂ (eMAG/Trendyol), nu
+// despre sursa de cost. eMAG se ordonează după „Performanță eMAG" (Superhot→Supercold, apreciere
+// manuală, vezi EMG_PERF_LEVELS — indexul din array E rangul, nu trebuie dus separat); Trendyol nu are
+// conceptul de performanță (doar pe eMAG, vezi #154), deci se ordonează după scorul de potrivire deja
+// calculat (l.score) — cel mai bun match primul.
+function curateCompetitorLinksForListing(tracked){
+  const perfRank=v=>Math.max(0,EMG_PERF_LEVELS.findIndex(p=>p.v===(v||'')));
+  const other=tracked.filter(l=>l.platform!=='emag'&&l.platform!=='trendyol');
+  const emagTop=tracked.filter(l=>l.platform==='emag').sort((a,b)=>perfRank(b.emag_performance)-perfRank(a.emag_performance)).slice(0,7);
+  const trendyolTop=tracked.filter(l=>l.platform==='trendyol').sort((a,b)=>(Number(b.score)||0)-(Number(a.score)||0)).slice(0,3);
+  return[...other,...emagTop,...trendyolTop];
+}
 async function buildListingFromProject(projectId){
   const pr=researchProjects.find(p=>Number(p.id)===Number(projectId));
   if(!pr){toast('Dosarul nu există în listă','err');return;}
   // Asigură pozele reale (nu doar [] din lista generală) înainte de eMAG Listing Readiness — de obicei
   // deja s-au încărcat cât timp dosarul a fost deschis, dar așteptăm explicit, ca să nu depindem de timing.
   await hydrateResearchProjectImages(projectId);
-  const tracked=(pr.links||[]).filter(l=>l.include_in_listing!==false&&l.status!=='eroare'&&l.status!=='aștept screenshot');
+  const tracked=curateCompetitorLinksForListing((pr.links||[]).filter(l=>l.include_in_listing!==false&&l.status!=='eroare'&&l.status!=='aștept screenshot'));
   // Linkurile din screenshot/PDF nu au un URL fetch-abil — textul deja extras de AI se trimite direct
   // ca extraPages, în loc să încerce serverul un fetch care oricum ar eșua (Jumbo 403, pdf-import:// fals).
   const urls=[...new Set(tracked.filter(l=>/^https?:\/\//i.test(l.url||'')&&l.source!=='screenshot').map(l=>l.url||l.normalized_url))].slice(0,MAX_RESEARCH_LINKS);
@@ -12172,7 +12196,7 @@ function addCompUrl(key){
   const url=(inp?.value||'').trim();
   if(!url||!url.startsWith('http')){toast('URL invalid');return;}
   if(cs.urls.includes(url)){toast('URL deja adăugat');return;}
-  if(cs.urls.length>=MAX_RESEARCH_LINKS){toast('Ai deja 20 linkuri în această secțiune');return;}
+  if(cs.urls.length>=MAX_RESEARCH_LINKS){toast(`Ai deja ${MAX_RESEARCH_LINKS} linkuri în această secțiune`);return;}
   const idx=cs.urls.length;
   cs.urls.push(url);cs.items.push({url,loading:true,title:'',price:0,rating:0,reviewCount:0,imageCount:0,hasBullets:false,hasSpecs:false,badges:[],error:null});
   if(inp)inp.value='';

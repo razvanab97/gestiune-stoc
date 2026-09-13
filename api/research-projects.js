@@ -1,7 +1,7 @@
 const SUPA_URL=process.env.SUPABASE_URL||'https://nuvgwytanlgvcffxeahs.supabase.co';
 const SUPA_KEY=process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.SUPABASE_ANON_KEY||'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51dmd3eXRhbmxndmNmZnhlYWhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MDI0OTAsImV4cCI6MjA5NTI3ODQ5MH0.lSy1CUJA9xlVv1isAyfTIxGUAbGMUIS7c3TXQ-5pcEg';
 const MAX_HTML=2*1024*1024;
-const VAT=.21,COMMISSION=.20,FIXED_COSTS=23,MIN_PROFIT=10,MIN_MARGIN=20,MAX_LINKS=20;
+const VAT=.21,COMMISSION=.20,FIXED_COSTS=23,MIN_PROFIT=10,MIN_MARGIN=20,MAX_LINKS=25;
 // Curs aproximativ de conversie în RON — la fel ca EUR_RON hardcodat în index.html pentru prețurile din Inventar.
 // Fără asta, un link de furnizor în PLN/EUR era tratat ca RON direct, denaturând profitul/marja calculate.
 const FX_TO_RON={RON:1,LEI:1,EUR:5.07,PLN:1.15,USD:4.65,GBP:5.9};
@@ -274,6 +274,13 @@ function median(nums){
   const a=nums.filter(x=>x>0).sort((x,y)=>x-y);
   return a.length?a[Math.floor(a.length/2)]:0;
 }
+// Media celor mai mici N prețuri (implicit 5) — vezi topNAvg din index.html, aceeași logică, port
+// server-side pentru că profitul/marja proiectului (afișate în lista de dosare) se calculează aici,
+// nu client-side. Cu mai puțin de N prețuri disponibile, face media pe câte sunt.
+function topNAvg(nums,n=5){
+  const a=(nums||[]).filter(x=>x>0).sort((x,y)=>x-y).slice(0,n);
+  return a.length?a.reduce((s,x)=>s+x,0)/a.length:0;
+}
 function riskFlags(project,links,marketMin,minZero){
   const text=clean([project.title,project.notes,...links.map(l=>`${l.title||''} ${l.description||''}`)].join(' ')).toLowerCase();
   const flags=[];
@@ -290,16 +297,20 @@ function projectVerdict(project,links){
   const valid=links.filter(l=>l.platform!=='furnizor'&&Number(l.price)>0&&l.status!=='eroare'&&l.include_in_listing!==false);
   const prices=valid.map(l=>toRon(l.price,l.currency)).filter(Boolean);
   const convertedCount=valid.filter(l=>String(l.currency||'RON').toUpperCase()!=='RON'&&String(l.currency||'RON').toUpperCase()!=='LEI').length;
-  const buy=Number(project.acquisition_price)||0,marketMin=prices.length?Math.min(...prices):0,marketMedian=median(prices);
+  const buy=Number(project.acquisition_price)||0,marketMin=prices.length?Math.min(...prices):0,marketMedian=median(prices),marketTop5Avg=topNAvg(prices,5);
   const reviewMax=Math.max(0,...valid.map(l=>Number(l.review_count)||0));
   if(!buy)return{verdict:'Date insuficiente',profit_estimated:0,margin_estimated:0,max_buy_price:0,notes:'Lipsește prețul de achiziție.'};
   if(!marketMin)return{verdict:'Date insuficiente',profit_estimated:0,margin_estimated:0,max_buy_price:0,notes:'Lipsește un preț competitor valid (linkurile de furnizor nu contează ca preț de piață).'};
-  const ref=marketMin,profit=calcProfit(buy,ref),maxBuy=maxBuyForSale(ref),minZero=minSaleForBuy(buy,0,0),flags=riskFlags(project,valid,marketMin,minZero);
+  // Referința de profit/marjă e media celor mai mici 5 prețuri găsite, NU cel mai mic preț unic — cerut
+  // direct: un singur preț minim (des un outlier/greșeală de listare a unui concurent) denatura profitul,
+  // uneori până în minus, deși piața reală era mult mai sus. marketMin rămâne calculat și afișat mai jos
+  // (reper „cât de jos a coborât cineva"), doar nu mai stă la baza niciunui calcul.
+  const ref=marketTop5Avg,profit=calcProfit(buy,ref),maxBuy=maxBuyForSale(ref),minZero=minSaleForBuy(buy,0,0),flags=riskFlags(project,valid,marketMin,minZero);
   const profitable=profit.profit>=MIN_PROFIT&&profit.margin>=MIN_MARGIN;
   let verdict='Date insuficiente',notes=[];
   if(!profitable){
     verdict=maxBuy>0?`Cumpără doar sub ${maxBuy.toFixed(2)} lei`:'Evită';
-    notes.push(`La prețul pieței ${ref.toFixed(2)} RON, profitul estimat este ${profit.profit.toFixed(2)} RON și marja ${profit.margin.toFixed(2)}%.`);
+    notes.push(`La media top 5 prețuri de piață (${ref.toFixed(2)} RON), profitul estimat este ${profit.profit.toFixed(2)} RON și marja ${profit.margin.toFixed(2)}%.`);
   }else if(flags.length){
     verdict='Testează 3-5 bucăți';
     notes.push('Profitabil, dar blocat de risc: '+flags.join('; ')+'.');
@@ -310,7 +321,7 @@ function projectVerdict(project,links){
     verdict='Testează 3-5 bucăți';
     notes.push(reviewMax<10?'Profitabil, dar fără suficiente review-uri; se testează, nu se blochează.':'Profitabil, dar datele de piață sunt încă limitate.');
   }
-  notes.push(`Referință piață: minim ${marketMin.toFixed(2)} RON, mediană ${marketMedian?marketMedian.toFixed(2):'—'} RON. Prag zero profit estimat: ${minZero.toFixed(2)} RON.`);
+  notes.push(`Referință piață: minim ${marketMin.toFixed(2)} RON (doar reper, nu se calculează la el), medie top 5 ${marketTop5Avg.toFixed(2)} RON, mediană ${marketMedian?marketMedian.toFixed(2):'—'} RON. Prag zero profit estimat: ${minZero.toFixed(2)} RON.`);
   if(convertedCount)notes.push(`${convertedCount} preț(uri) convertite automat în RON (curs aproximativ) — verifică manual dacă decizia e la limită.`);
   return{verdict,profit_estimated:profit.profit,margin_estimated:profit.margin,max_buy_price:maxBuy,notes:notes.join(' ')};
 }
