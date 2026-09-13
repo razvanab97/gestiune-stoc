@@ -1558,6 +1558,12 @@ textarea.listing-html-raw{width:100%;min-height:180px;box-sizing:border-box;resi
 .rsx-head-meta{font-size:25px;color:var(--t3);font-family:var(--mono);margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 .rsx-head-chevron{color:var(--t3);font-size:24px;flex-shrink:0;margin-top:3px}
 .rsx-head-price{font-family:var(--mono);font-size:21px;font-weight:800;padding:2px 8px;border-radius:999px;background:var(--surf2);border:1px solid var(--b1);color:var(--t2)!important;white-space:nowrap}
+/* Notiță scurtă, liberă, per dosar — cerut direct, în zona disponibilă din capul cardului. Goală =
+   pastilă discretă, punctată, care invită să adaugi una; completată = fundal galben-deschis, ca un
+   post-it, se distinge clar de restul pastilelor (preț/achiziție), fără să domine cardul. */
+.rsx-head-note{font-size:20px;font-weight:600;padding:2px 9px;border-radius:999px;background:none;border:1.5px dashed var(--b2);color:var(--t3);cursor:pointer;white-space:nowrap;max-width:260px;overflow:hidden;text-overflow:ellipsis;font-family:var(--font);transition:all .12s}
+.rsx-head-note:hover{border-color:var(--acc);color:var(--acc)}
+.rsx-head-note.has{border:1px solid #F2C94C;background:#FFFBEA;color:#8A6D1D}
 .rsx-head-r{display:flex;gap:8px;align-items:center;flex-shrink:0}
 .rsx-verdict{border-radius:999px;padding:7px 14px;font-size:25px;font-weight:800;white-space:nowrap;background:var(--surf2)}
 .rsx-del{background:var(--surf);border:1px solid var(--b1);color:var(--rd);border-radius:var(--r);cursor:pointer;padding:7px 10px;font-size:25px;line-height:1}
@@ -3603,6 +3609,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:349,text:'Research — notiță scurtă, liberă, pe fiecare dosar, cerută direct pe o captură reală care arăta zona goală din capul cardului. Apare ca o pastilă mică, în stil post-it, lângă „Achiziție"/„Min. concurență" — vizibilă chiar și cu dosarul restrâns, nu doar desfăcut. Click pe ea (fără să desfacă/închidă dosarul) deschide un mic prompt de editare; gol = șterge notița. Distinctă de câmpul `notes` existent, care e text generat/suprascris automat de sistem la fiecare recalculare a verdictului — o notiță manuală acolo ar fi dispărut tăcut la următoarea reanalizare a dosarului. Necesită `migration_research_user_note.sql` în Supabase (dat separat în chat) — fără el, notițele nu se salvează încă, dar restul aplicației funcționează neschimbat (degradare grațioasă, testată explicit, la fel ca la celelalte coloane opționale din Research). Verificat de 2 ori: sintaxă OK; test dedicat pe server — salvare reușește, ștergere cu text gol funcționează, eroare clară (nu un crash) dacă migrarea nu a rulat încă; test dedicat client, cu interacțiune reală (click + prompt, nu apel direct de funcție) — pastila pornește „+ Notiță", devine „📝 <text>" după salvare, click pe ea NU deschide/închide cardul din greșeală, fără erori consolă',date:'2026-09-13'},
   {n:348,text:'Research → Galerie AI produs — bug real reparat, raportat direct de mai multe ori: „The image data you provided does not represent a valid image" apărea repetat, chiar și pe dosare cu poze reale selectate. Cauza: pozele de referință (candidați scraped din research_links — poze de concurent/furnizor) se trimiteau CRUDE, directe, către OpenAI, care încearcă să le descarce chiar EA, de pe serverele ei — exact genul de link cu hotlink protection pentru care există deja api/img-proxy.js (setează Referer corect; multe CDN-uri de eMAG/concurenți refuză altfel cererea). Thumbnail-urile din UI foloseau deja proxy-ul corect (de-asta se vedeau normal pe ecran) — doar apelurile către AI (Visual DNA, validarea imaginilor generate, plus alte 5 fluxuri cu același tipar: Preț privat din link, recunoaștere poză produs, import produs din URL, căutare AI queries, verificare AI potrivire link) ocoleau proxy-ul. Acum toate trec printr-o funcție unică (aiSafeImageUrl) care proxiază orice URL extern înainte să-l trimită la AI — URL-urile deja proprii (din /api/ai-image) rămân neatinse, doar făcute absolute. NIMIC din logica de analiză/generare nu s-a schimbat — strict URL-ul trimis la AI. Verificat de 2 ori, interceptând cererea reală către AI (fără cost): confirmat că payload-ul conține acum URL-ul proxiat, absolut, pentru poze externe, și URL-ul propriu neschimbat pentru poze deja generate de noi, fără erori consolă',date:'2026-09-13'},
   {n:347,text:'Research — „Preț recomandat" trece de la media top 5 (cele mai mici prețuri, #345/#346) la media TUTUROR prețurilor găsite pe piață, cerut direct, după ce am verificat împreună pe un produs real cu 15 prețuri eMAG: media pe toate (120.51 RON) reflectă piața mult mai fidel decât media top 5 (79.66 RON, trasă în jos de doar 2-3 oferte foarte ieftine), fără să fie denaturată de un singur outlier de sus sau de jos. Pe drum, reașezare cerută direct: acum sunt 3 valori clar separate și etichetate — „Preț minim găsit" (reper, cel mai mic preț de pe piață), „Prag minim de profit" (break-even din costul de achiziție) și „Preț recomandat" (media prețurilor, dar niciodată sub prag) — înainte, cutia „Preț minim" din cadranul eMAG/Trendyol arăta de fapt pragul de profit, nu minimul de piață (care era ascuns doar în linia mică de text de deasupra) — confuzie reală, corectată acum cu 3 cutii distincte. Aceeași schimbare la profitul/verdictul din lista principală de dosare (server). Verificat de 2 ori, cu exact prețurile din produsul real testat: media (120.51 RON) e acum peste pragul minim de profit (100.07 RON), deci „Preț recomandat" arată corect un preț bazat pe piață (120.01 RON), nu mai cade pe prag ca înainte; verdictul dosarului trece de la „profit fals-negativ" la „profit real 11.36 RON/11.4% marjă" — sub pragul de 20% al aplicației, deci tot atenționează corect să nu cumperi la orice preț, dar cu numere reale, nu denaturate',date:'2026-09-13'},
   {n:346,text:'Research — verificare directă, pe un produs real („Ruhhy 27084"), a corecturii de preț de la #345. Calculul era deja corect (verificat cu cele 15 prețuri eMAG reale din captură: media celor mai mici 5 = 79.66 RON), dar „Preț recomandat" ieșea identic cu „Preț minim" (100.07 RON amândouă) — nu pentru că logica nouă n-ar rula, ci pentru că media pieței (79.66 RON) e sub pragul minim de profit al acestui produs (100.07 RON, la costul de achiziție de 52.22 RON): sistemul refuză corect să recomande o vânzare în pierdere și arată pragul minim în schimb. Doar că nimic din UI nu explica DE CE cele două valori coincid — arăta ca și cum calculul nou n-ar face nimic. Acum, când se întâmplă asta, apare o notă vizibilă („⚠ Media top 5 preț e sub pragul minim de profit — arătăm pragul minim în schimb"), atât în cadranul eMAG/Trendyol al dosarului, cât și în „Ghid completare eMAG" (care arată acum și „Medie top 5 piață", nu doar minim/maxim/recomandat). Hint-ul vechi de la „Preț recomandat" din ghid, rămas din era „coborât sub minimul pieței" (#345), actualizat să descrie corect noua logică. NIMIC din calcul nu s-a schimbat — strict o explicație vizibilă pentru un rezultat care era deja corect. Verificat de 2 ori: cu exact prețurile din captura reală (nota apare, cu numerele corecte: 79.66/100.07 RON) și cu un caz sănătos (piață peste prag) — nota NU apare când nu e nevoie de ea, fără erori consolă',date:'2026-09-13'},
@@ -8417,6 +8424,30 @@ async function createResearchProject(){
 // event.stopPropagation() e obligatoriu — butonul stă în header-ul cardului, care are propriul
 // onclick de restrângere/extindere (toggleResearchProjectCard); fără el, editarea ar mai și
 // restrânge/extinde cardul din greșeală la fiecare click pe ✏️.
+// Notiță scurtă, liberă, per dosar — cerut direct, în zona disponibilă din capul cardului (lângă
+// Achiziție/Min. concurență, vizibilă chiar și restrâns). Distinctă de p.notes (text AI, suprascris
+// la fiecare recalcProject) — aceasta e a utilizatorului, nu se atinge decât aici. String gol = șterge.
+async function editResearchProjectNote(id,event){
+  event?.stopPropagation();
+  const proj=researchProjects.find(p=>Number(p.id)===Number(id));
+  if(!proj)return;
+  const next=prompt('Notiță scurtă pentru acest dosar (max 300 caractere, gol = șterge):',proj.user_note||'');
+  if(next==null)return;
+  const userNote=next.trim().slice(0,300);
+  if(userNote===(proj.user_note||''))return;
+  const prev=proj.user_note;
+  proj.user_note=userNote;// optimist — feedback instant, fără să aștepți răspunsul serverului
+  renderResearchProjects();
+  try{
+    const data=await apiJson('/api/research-projects',{action:'update_project_note',project_id:id,userNote},20000);
+    if(data.project)proj.user_note=data.project.user_note||'';
+    toast(userNote?'Notiță salvată ✓':'Notiță ștearsă ✓');
+  }catch(e){
+    proj.user_note=prev;// revert — salvarea reală a eșuat, nu lăsăm starea locală să mintă
+    toast(e.message||'Eroare salvare notiță','err');
+  }
+  renderResearchProjects();
+}
 async function editResearchProjectTitle(id,event){
   event?.stopPropagation();
   const proj=researchProjects.find(p=>Number(p.id)===Number(id));
@@ -8788,6 +8819,7 @@ function renderResearchProjects(){
             <div class="rsx-head-meta"><span class="rsx-head-chevron">${collapsed?'▸':'▾'}</span>#${p.id} · ${new Date(p.updated_at||p.created_at).toLocaleDateString('ro-RO')} ${p.supplier?'· '+esc(p.supplier):''}${collapsed?' · '+links.length+' linkuri':''}
               ${p.acquisition_price?`<span class="rsx-head-price" title="Preț de achiziție (furnizor)">Achiziție ${Number(p.acquisition_price).toFixed(2)} RON</span>`:''}
               ${competitorMin?`<span class="rsx-head-price" style="color:${verdictColor(p.verdict)};border-color:${verdictColor(p.verdict)}" title="Cel mai mic preț găsit la concurență pe eMAG/Trendyol">Min. concurență ${competitorMin.toFixed(2)} RON</span>`:''}
+              <button type="button" class="rsx-head-note${p.user_note?' has':''}" onclick="editResearchProjectNote(${p.id},event)" title="${p.user_note?'Editează notița':'Adaugă o notiță scurtă pentru acest dosar'}">${p.user_note?'📝 '+esc(p.user_note):'+ Notiță'}</button>
             </div>
           </div>
         </div>

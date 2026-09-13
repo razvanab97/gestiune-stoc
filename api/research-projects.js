@@ -396,6 +396,15 @@ module.exports=async function handler(req,res){
           projects.forEach(p=>{p.finalizat=finalMap.get(p.id)||false;});
         }catch(e){projects.forEach(p=>{p.finalizat=false;});}
       }
+      // user_note — la fel, coloană nouă (migration_research_user_note.sql), fallback silențios pe gol
+      // dacă migrarea nu a fost încă rulată.
+      if(projects.length){
+        try{
+          const noteRows=await supa('GET',`research_projects?select=id,user_note&id=in.(${projects.map(p=>p.id).join(',')})`);
+          const noteMap=new Map((noteRows||[]).map(r=>[r.id,r.user_note||'']));
+          projects.forEach(p=>{p.user_note=noteMap.get(p.id)||'';});
+        }catch(e){projects.forEach(p=>{p.user_note='';});}
+      }
       const ids=projects.map(p=>p.id);
       const LINK_LIST_COLUMNS='id,project_id,url,normalized_url,platform,pnk,title,price,currency,rating,review_count,specs,description,duplicate_of,duplicate_type,include_in_listing,status,error,created_at,updated_at,source,score,score_zone,brand,seller,ean,ai_match_verdict,ai_match_reason,ai_search_queries';
       const CHUNK=10;
@@ -470,6 +479,23 @@ module.exports=async function handler(req,res){
       if(!title)return res.status(400).json({error:'Titlul dosarului este obligatoriu'});
       const rows=await supa('POST','research_projects',{title,acquisition_price:Number(body.acquisition_price)||0,supplier:clean(body.supplier),verdict:'Date insuficiente',listing_status:'negenerat'});
       return res.status(200).json({project:rows?.[0]});
+    }
+    if(body.action==='update_project_note'){
+      // Notiță scurtă, liberă, a utilizatorului — cerut direct („in zona asta disponibila sa putem sa
+      // punem notite mici"), pe fiecare dosar, vizibilă chiar și restrâns. Distinctă de `notes` (text
+      // AI, generat/suprascris la fiecare recalcProject — o notiță manuală acolo ar fi ștearsă tăcut la
+      // următoarea reanalizare). Acceptă string gol (șterge notița), spre deosebire de titlu.
+      const projectId=Number(body.project_id);
+      const userNote=clean(body.userNote).slice(0,300);
+      if(!projectId)return res.status(400).json({error:'Lipsește dosarul'});
+      try{
+        const rows=await supa('PATCH',`research_projects?id=eq.${projectId}`,{user_note:userNote,updated_at:new Date().toISOString()});
+        const project=rows?.[0];
+        if(!project)return res.status(404).json({error:'Dosarul nu a fost găsit'});
+        return res.status(200).json({project});
+      }catch(e){
+        return res.status(500).json({error:'Coloana user_note lipsește încă — rulează migration_research_user_note.sql în Supabase'});
+      }
     }
     if(body.action==='update_project_title'){
       // Editare manuală a titlului dosarului (ex. traducerea automată de la creare nu a ieșit perfect,
