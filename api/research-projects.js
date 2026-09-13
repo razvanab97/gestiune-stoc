@@ -397,10 +397,34 @@ module.exports=async function handler(req,res){
       const CHUNK=10;
       const chunks=[];
       for(let i=0;i<ids.length;i+=CHUNK)chunks.push(ids.slice(i,i+CHUNK));
-      const linkResults=await Promise.all(chunks.map(async chunk=>{
-        try{return await supa('GET',`research_links?project_id=in.(${chunk.join(',')})&select=${LINK_LIST_COLUMNS}&order=created_at.desc`);}
-        catch(e){console.error('research_links chunk failed',e.message);return[];}
-      }));
+      // BUG real găsit, raportat direct: un link eMAG/Trendyol adăugat cu succes (toast confirmat)
+      // „dispărea” la un refresh ulterior de pagină. Cauza NU era scrierea (research_links.POST
+      // reușea, rândul rămânea intact în bază) — era exact acest catch: dacă interogarea pentru UN
+      // chunk de până la 10 dosare eșua (timeout tranzitoriu, răspuns prea mare la un dosar cu multe
+      // linkuri/descrieri lungi etc.), întorcea tăcut listă GOALĂ pentru TOATE cele până la 10 dosare
+      // din acel chunk — inclusiv cele 9 „sănătoase”, nu doar cel problematic — arătând ca pierdere de
+      // date, deși totul era intact în Supabase (același tipar ca bug-ul de imagini fixat mai devreme,
+      // vezi comentariul de la endpoint-ul GET). Acum: reîncercăm chunk-ul o dată (majoritatea eșecurilor
+      // sunt blipuri tranzitorii de rețea), iar dacă tot eșuează, izolăm fiecare dosar individual — un
+      // singur dosar cu adevărat problematic nu mai ia cu el datele celorlalte 9 din chunk.
+      async function fetchLinksChunk(chunk){
+        try{
+          return await supa('GET',`research_links?project_id=in.(${chunk.join(',')})&select=${LINK_LIST_COLUMNS}&order=created_at.desc`);
+        }catch(e){
+          console.error('research_links chunk failed, retrying once:',e.message);
+          try{
+            return await supa('GET',`research_links?project_id=in.(${chunk.join(',')})&select=${LINK_LIST_COLUMNS}&order=created_at.desc`);
+          }catch(e2){
+            console.error('research_links chunk failed twice, isolating per project:',e2.message);
+            const perProject=await Promise.all(chunk.map(async id=>{
+              try{return await supa('GET',`research_links?project_id=eq.${id}&select=${LINK_LIST_COLUMNS}&order=created_at.desc`);}
+              catch(e3){console.error('research_links fetch failed for project_id='+id+':',e3.message);return[];}
+            }));
+            return perProject.flat();
+          }
+        }
+      }
+      const linkResults=await Promise.all(chunks.map(fetchLinksChunk));
       const links=linkResults.flat().map(l=>({...l,images:[]}));
       // product_code e o coloană nouă (migration_link_product_code.sql) — cerută separat, cu fallback
       // silențios dacă migrarea nu a fost încă rulată, ca lista principală (linkurile din fiecare dosar)
