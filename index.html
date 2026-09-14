@@ -2099,6 +2099,8 @@ button.pcx-include-btn.included{border-color:var(--gr)}
 .pcx-code-copy{flex-shrink:0;width:20px;height:20px;border:1px solid var(--b2);border-radius:5px;background:var(--surf);cursor:pointer;font-size:11px;line-height:1;color:var(--t3);padding:0}
 .pcx-code-copy:hover{border-color:var(--acc);color:var(--acc)}
 .pcx-code-copy.copied{background:var(--gr-bg);border-color:var(--gr);color:var(--gr)}
+.pcx-translate-btn{flex-shrink:0;border:1px solid var(--b2);border-radius:999px;background:var(--surf);cursor:pointer;font-size:17px;font-style:normal;line-height:1;color:var(--acc);padding:3px 9px;font-family:var(--font)}
+.pcx-translate-btn:hover{border-color:var(--acc);background:var(--acc-light)}
 /* Cantitate — zonă alungită, nu doar cifra mărită (cerut direct): control tip „pastilă", capete rotunjite. */
 .pcx-qty-stepper{display:inline-flex;align-items:stretch;border:1.5px solid var(--b2);border-radius:999px;overflow:hidden;background:var(--surf);vertical-align:middle}
 .pcx-qty-stepper button{width:30px;border:none;background:transparent;cursor:pointer;font-size:20px;color:var(--t2);line-height:1}
@@ -3655,6 +3657,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:354,text:'Comenzi Platforme — trei corecturi cerute direct, pe capturi reale. (1) Titlu netradus reparat: „ai uitat să traduci acest titlu" (titlu bulgăresc rămas netradus, pe o comandă eMAG fără produs asociat) — cauza: traducerea automată de fundal de la import (pcomTranslateForeignTitles, rulează fără așteptare, ca să nu blocheze previzualizarea) poate eșua tăcut pe o linie (apel AI eșuat, prins doar în consolă, fără niciun semnal vizibil), MAI ALES pe linii fără produs asociat, unde titlul brut ajunge să fie chiar numele afișat — acolo butonul de traducere lipsea complet din markup, nu doar traducerea eșuase. Acum orice titlu scris cu alt alfabet (bulgară/maghiară/greacă) și încă netradus arată un buton „🌐 Traduce" — manual, cu răspuns imediat de succes/eroare (spre deosebire de varianta de fundal, tăcută) — atât pe linii cu produs asociat, cât și pe cele fără. (2) „Cod intern" și „Cod produs" — nu aveau buton de copiere, deși SKU și PNK de lângă ele aveau deja (cerut direct: „nu avem buton de copy pentru ceea ce am adăugat pe fiecare produs") — acum toate 4 (SKU/Cod intern/PNK/Cod produs) au același buton ⧉, reutilizează exact aceeași funcție (pcxCopyCode). (3) Vinted nu arăta deloc caseta de copiere din capul cardului (cerut direct: „la Vinted lipsește secțiunea de copy, adaugă-o și acolo") — exclusă intenționat inițial („Vinted nu are conceptul de AWB"), dar caseta oferă text generic util (cantitate × nume produs + SKU) pentru orice etichetă/curier propriu, nu doar AWB eMAG/Trendyol — eliminată excluderea, Vinted arată acum aceeași casetă, cu aceeași logică de copiere/marcare permanentă „copiat", neschimbată. Verificat de 2 ori: test dedicat — comandă Vinted cu produs asociat arată acum caseta, click real copiază textul corect în clipboard și rămâne marcată verde; SKU/Cod intern/PNK/Cod produs arată toate cele 4 butoane de copiere, click pe „Cod intern" copiază exact codul corect; titlu bulgăresc fără produs asociat arată „🌐 Traduce", click îl traduce și înlocuiește butonul cu textul tradus (verificat separat și scenariul opus — produs asociat cu titlu original diferit — funcționează neschimbat, fără duplicare); plus suitele complete de regresie de la Research (#350-#353), tot verzi, fără erori consolă',date:'2026-09-14'},
   {n:353,text:'Research → „Poze selectate" — două corecturi cerute direct, după ce plafonul de 14 poze s-a dovedit prea strâns. (1) Plafon ridicat de la 14 la 40 — 14 nu era o limită reală eMAG (nimic din exportul XLSX o folosea), doar un număr ales arbitrar; tăia silențios poza adăugată manual („+ Adaugă poză externă"/„Lipește din clipboard") de fiecare dată când poolul ajungea deja la 14 — acum poți adăuga mult mai mult înainte să lovești vreun plafon. (2) Buton nou „🗑 Șterge din galerie", pe fiecare poză (meniul „···") și în bara de acțiuni în masă — spre deosebire de „🚫 Blochează definitiv" (existent, dar GLOBAL: exclude poza de la TOATE produsele viitoare, cu avertisment pe măsură), Ștergerea e locală, doar pentru produsul curent, fără nicio confirmare — poza rămâne disponibilă oriunde altundeva, se poate re-adăuga manual dacă e nevoie. Persistă pe listare (câmp nou `removed_pool_images`, salvat ca parte din JSON-ul existent al anunțului — fără nicio migrare SQL), ca poza ștearsă să nu reapară la refresh. Verificat de 2 ori: test dedicat — 30 de poze furnizate ies acum toate (înainte tăiate la 14); 50 de poze se opresc corect la noul plafon de 40; o poză adăugată manual peste un pool deja plin de 14 nu mai dispare; ștergerea unei poze (click real, din meniul „···") scade corect numărul de carduri, apelul save_listing conține `removed_pool_images`, iar la re-randare poza ștearsă NU reapare; ștergerea în masă (checkbox + „🗑 Șterge" din bara de acțiuni) funcționează identic; plus suitele complete de regresie de la #350-#352, tot verzi, fără erori consolă',date:'2026-09-14'},
   {n:352,text:'Research → Galerie AI produs — două corecturi cerute direct la planul de cadre/prompturi. (1) Cadrele cu beneficii/caracteristici (overlay_bullets, textul suprapus pe poză) încep acum de la poziția 3, nu de la 4 — doar cadrele 1 (Hero) și 2 (Lifestyle) rămân pur fotografice, fără text; de la 3 încolo overlay_bullets e acum OBLIGATORIU nevid (înainte putea ieși gol chiar și pentru cadre informative). Schimbat consecvent în toate cele 3 locuri unde exista acest prag: planul inițial (createGalleryPlan), regenerarea unui singur cadru (regenerateFramePlan) și structura orientativă din promptul AI. (2) Promptul de generare a imaginii (buildGalleryFramePrompt, exact ce vezi și la „📋 Copiază prompt") descrie acum produsul mai complet — pe lângă lista scurtă „must_preserve", include și tipul de produs, culorile, forma, materialele și branding-ul din Visual DNA (calculate deja la „Analizează poze produs", dar nefolosite până acum în promptul efectiv trimis la generare — rămâneau doar în JSON-ul intern) — cerut direct, ca pozele generate să fie 1 la 1 cu produsul real, nu doar „similare". Poziționat DUPĂ instrucțiunea de scenă, nu înainte — păstrează exact ordinea care a reparat bug-ul anterior cu cadre identice (#vezi comentariul din cod), doar conținutul identității e mai bogat. generation_prompt-ul scris de AI la planificare crește de la max 300 la max 400 de caractere (cu buget de tokeni verificat să nu retrunchieze planul, ca la bug-ul reparat anterior) și primește explicit cerința să fie coerent cu scene_description/camera_angle/background, nu contradictoriu. Verificat de 2 ori: test dedicat care interceptează promptul real trimis la AI (fără cost) — confirmă pragul nou de 2/3, „max 400 caractere" și cerința de coerență în promptul de plan; test dedicat pe buildGalleryFramePrompt cu Visual DNA simulat — identitatea bogată (tip/culoare/formă/material/branding) apare corect în prompt, DUPĂ instrucțiunea de scenă, must_preserve intact; plus suitele complete de regresie de la #350/#351, tot verzi, fără erori consolă',date:'2026-09-13'},
   {n:351,text:'Research — toate butoanele de „Copiază" (titlu, HTML descriere, specificații, EAN, PNK, link poză din galerie, link direct dosar, copiere în masă) rămân vizual marcate (fundal/text verde, exact stilul deja folosit la AWB-uri în Comenzi Platforme) DUPĂ ce ai apăsat pe ele — cerut direct, ca să se vadă dintr-o privire ce ai copiat deja, mai ales când treci pe rând prin mai multe câmpuri/poze de copiat manual. Marcajul rămâne (nu dispare singur pe un timer, ca vechiul flash de 1.2s de la AWB) — dispare doar dacă zona respectivă se re-randează din alt motiv (schimbi dosarul, regenerezi anunțul etc.), ceea ce e comportamentul așteptat. Strict UI — nicio funcție de copiere/logica de business nu s-a schimbat, doar un marcaj vizual adăugat pe butonul apăsat. Scopat STRICT la Research (butoanele de copy din Comenzi Platforme, Sincronizare, Stoc, import factură etc. — neatinse, unele au deja propriul mecanism de marcare, cu un tipar diferit). Verificat de 2 ori: suită Playwright dedicată — click real pe 6 tipuri diferite de buton (titlu, card din galeria de poze, rând de specificație, „Copiază toate specificațiile", bară de acțiuni în masă) confirmă marcajul corect, DOAR pe butonul apăsat (nu pe toate rândurile identice), persistent la 1.5s după click (peste vechiul prag de 1.2s), clipboard cu conținutul corect; plus suita completă de regresie de la #350, tot verde, fără erori consolă',date:'2026-09-13'},
@@ -14819,6 +14822,28 @@ Răspunde STRICT cu JSON, fără markdown: {"translations":[{"index":<index>,"ro
     console.warn('Traducere titluri comenzi eșuată:',err);
   }
 }
+// Traducere manuală, pentru O SINGURĂ linie — plasă de siguranță dacă traducerea automată de fundal
+// (pcomTranslateForeignTitles, de mai sus, rulează fără await la import) a eșuat tăcut pe o linie —
+// apel AI eșuat/răspuns netrunchiat corect, prins doar în consolă, fără niciun semnal vizibil — raportat
+// direct, un titlu bulgăresc rămas netradus. Diferă de varianta de fundal: AWAIT + toast explicit de
+// succes/eroare, ca utilizatorul să știe sigur dacă a mers sau nu, nu doar să spere.
+async function pcomTranslateOneTitle(idx){
+  const it=pcImpParsed[idx];if(!it||!it.titluExtern)return;
+  toast('Traduc titlul…');
+  try{
+    const prompt=`Traduce în română titlul de produs de mai jos (comandă eMAG/Trendyol din Bulgaria/Ungaria/Grecia — bulgară, maghiară sau greacă). Traducere scurtă, ca să se înțeleagă imediat despre ce produs e vorba.
+Titlu: ${it.titluExtern}
+Răspunde STRICT cu JSON, fără markdown: {"ro":"<traducere scurtă în română>"}`;
+    const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert bulgară/maghiară/greacă→română pentru titluri de produse. Răspunzi DOAR cu JSON valid.',400,'simple');
+    const m=resp.match(/\{[\s\S]*\}/);
+    if(!m)throw new Error('Răspuns AI invalid');
+    const parsed=JSON.parse(m[0]);
+    if(!parsed.ro)throw new Error('Traducere lipsă în răspuns');
+    it.titluRo=String(parsed.ro).trim();
+    renderPcomImportPreview();
+    toast('Titlu tradus ✓');
+  }catch(e){toast('Eroare la traducere: '+(e.message||e),'err');}
+}
 function updPcmiPlatformaHint(){
   const hint=document.getElementById('pcmi-platforma-hint');
   const hints={
@@ -15948,6 +15973,14 @@ function pcxLineHtml(idx,groupIdxs){
     :(it.vintedImg?`<a href="${esc(it.vintedImg)}" target="_blank" title="Captura originală — click pentru mărire"><img src="${esc(it.vintedImg)}" class="pcx-line-img"></a>`
     :`<div class="pcx-line-img-ph">${it.newProduct?'🆕':'📦'}</div>`);
   const nm=p?esc(p.name):(it.newProduct?'Produs nou — de adăugat':(it.titluExtern?esc(it.titluExtern):'— fără produs asociat —'));
+  // Titlu netradus (bulgară/maghiară/greacă) — bug real raportat: traducerea de fundal de la import
+  // (pcomTranslateForeignTitles) poate eșua tăcut pe o linie (apel AI eșuat, prins doar în consolă),
+  // mai ales pe linii FĂRĂ produs asociat, unde titlul brut ajunge să fie chiar `nm` (nu mai apare deloc
+  // în .pcx-line-orig, care se afișează DOAR când diferă de `nm`) — deci butonul de traducere manuală
+  // trebuie atașat direct la `nm` în acel caz, nu doar în blocul de mai jos.
+  const isRawTitleAsName=!p&&!it.newProduct&&!!it.titluExtern;
+  const foreignUntranslated=!it.titluRo&&it.titluExtern&&pcomDetectScript(it.titluExtern)!=='latin';
+  const translateChip=foreignUntranslated?` <button type="button" class="pcx-translate-btn" onclick="pcomTranslateOneTitle(${idx})" title="Traducere automată a eșuat la import — încearcă din nou">🌐 Traduce</button>`:(it.titluRo?` <span style="color:var(--acc);font-weight:400;font-style:normal">🌐 ${esc(it.titluRo)}</span>`:'');
   let matchTag;
   if(it.newProduct)matchTag=`<span style="color:var(--or);font-weight:700">🆕 produs nou</span>`;
   else if(it.viaPnk)matchTag=`<span style="color:var(--gr);font-weight:700">✓ Cod cunoscut</span>`;
@@ -15959,9 +15992,9 @@ function pcxLineHtml(idx,groupIdxs){
   // singur rând cu " · " ca înainte; SKU și PNK au acum și propriul buton de copiere (cerut direct).
   const codeLines=[];
   if(p&&p.sku)codeLines.push(`SKU ${esc(p.sku)} <button type="button" class="pcx-code-copy" onclick="pcxCopyCode(this,'${esc(p.sku)}')" title="Copiază SKU">⧉</button>`);
-  if(p&&p.internalCode)codeLines.push(`Cod intern ${esc(p.internalCode)}`);
+  if(p&&p.internalCode)codeLines.push(`Cod intern ${esc(p.internalCode)} <button type="button" class="pcx-code-copy" onclick="pcxCopyCode(this,'${esc(p.internalCode)}')" title="Copiază codul intern">⧉</button>`);
   if(it.pnk)codeLines.push(`PNK ${esc(it.pnk)}${it.tara?' ('+esc(it.tara)+')':''} <button type="button" class="pcx-code-copy" onclick="pcxCopyCode(this,'${esc(it.pnk)}')" title="Copiază PNK">⧉</button>`);
-  if(it.codProdus&&(!p||!p.sku||p.sku.toLowerCase()!==it.codProdus.toLowerCase()))codeLines.push(`Cod produs ${esc(it.codProdus)}`);
+  if(it.codProdus&&(!p||!p.sku||p.sku.toLowerCase()!==it.codProdus.toLowerCase()))codeLines.push(`Cod produs ${esc(it.codProdus)} <button type="button" class="pcx-code-copy" onclick="pcxCopyCode(this,'${esc(it.codProdus)}')" title="Copiază codul produsului">⧉</button>`);
   const codesHtml=codeLines.length?`<div class="pcx-line-codes">${codeLines.map(c=>`<div>${c}</div>`).join('')}</div>`:'';
   const vintedGroupIdxs=groupIdxs||pcomVintedGroupSiblings(idx);
   const isVintedMultiLine=it.platforma==='vinted'&&vintedGroupIdxs.length>1;
@@ -16002,9 +16035,9 @@ function pcxLineHtml(idx,groupIdxs){
   return`<div class="pcx-line${hasFin?'':' pcx-line-3col'}">
     ${img}
     <div class="pcx-line-info">
-      <div class="pcx-line-nm">${nm}</div>
+      <div class="pcx-line-nm">${nm}${isRawTitleAsName?translateChip:''}</div>
       ${codesHtml}
-      ${(!nm||it.titluExtern&&it.titluExtern!==nm)?`<div class="pcx-line-orig">${esc(it.titluExtern||'')}${it.titluRo?` <span style="color:var(--acc);font-style:normal">🌐 ${esc(it.titluRo)}</span>`:''}</div>`:''}
+      ${(!nm||it.titluExtern&&it.titluExtern!==nm)?`<div class="pcx-line-orig">${esc(it.titluExtern||'')}${isRawTitleAsName?'':translateChip}</div>`:''}
       <div class="pcx-line-meta">${matchTag}</div>
       <div class="pcx-line-meta">${qtyHtml} · ${priceHtml}</div>
       <div class="pcx-line-meta">${buyerHtml}${buyerHtml&&codHtml?' · ':''}${codHtml}</div>
@@ -16040,10 +16073,12 @@ function pcxOrderCardHtml(idxs,gIdx){
   const platLabel=pcomPlatLabel(platform);
   const platCls=platform==='trendyol'?'trendyol':platform==='vinted'?'vinted':'emag';
   // Cutia „copiază titlul pentru AWB" — mutată în capul cardului (cerut direct), sub numărul comenzii/
-  // cumpărător, vizibilă chiar și cu cardul restrâns. Vinted nu are acest concept (folosește „Cod",
-  // manual, în interiorul liniei) — rămâne neatins. Pachet cu mai multe produse → varianta de grup
-  // (un singur AWB pentru tot pachetul), exact ca la legacy („Copiază tot pachetul").
-  const awbChipHtml=platform==='vinted'?'':(multi?pcxGroupAwbChipHtml(gIdx):pcxAwbBoxHtml(idxs[0]));
+  // cumpărător, vizibilă chiar și cu cardul restrâns. Inclusă acum și la Vinted (cerut direct — „lipsește
+  // secțiunea de copy, adaugă-o și acolo"): utilă pentru orice etichetă/curier propriu, nu doar AWB
+  // eMAG/Trendyol — reutilizează exact același text (cantitate x nume + SKU), fără nimic specific eMAG.
+  // Pachet cu mai multe produse → varianta de grup (un singur AWB pentru tot pachetul), exact ca la legacy
+  // („Copiază tot pachetul").
+  const awbChipHtml=multi?pcxGroupAwbChipHtml(gIdx):pcxAwbBoxHtml(idxs[0]);
   return`<div class="pcx-order pcx-order-${platCls}${open?' open':''}${anyIncluded?' pcx-order-included':''}">
     <div class="pcx-order-hd" onclick="pcxToggleExpand('${esc(key)}')">
       <span class="pcx-badge pcx-badge-${platCls}">${platLabel}</span>
