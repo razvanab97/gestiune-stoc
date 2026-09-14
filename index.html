@@ -3657,6 +3657,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:362,text:'Comenzi Platforme — unealtă nouă „🧹 Verifică duplicate", cerută direct pe o captură reală cu Jurnalul unei zile arătând 24 de produse, cu cantități absurd de mari (7-26 buc fiecare, 296 buc/9727 RON total) — efectul acumulat al bug-ului de la #361 (reîncercări repetate la recunoașterea Vinted, înainte de reparația la sursă), pe multe produse deodată, nu doar unul. Ștergerea manuală, produs cu produs, ar fi însemnat 24 de căutări separate — nefezabil. Unealta nouă (Comenzi Platforme → Istoric importuri) găsește, pentru o zi aleasă, TOATE grupurile de comenzi deja aplicate cu același produs + preț identic (semnul aproape sigur al aceleiași comenzi aplicate de mai multe ori) — le arată clar, cu numărul găsit și intervalul orar, ȘI NU ȘTERGE NIMIC AUTOMAT: pentru fiecare grup, omul alege câte să păstreze (implicit 1, editabil — păstrează mereu cele mai VECHI, cel mai probabil comanda originală reală) și apasă explicit „Șterge restul", cu o confirmare finală care arată exact ce se întâmplă. Fiecare ștergere reutilizează EXACT aceeași logică sigură, deja existentă și testată, de la ștergerea individuală a unei comenzi (deletePcomOrderCore, extras din deletePcomOrder fără nicio schimbare de comportament) — readaugă stocul corect, anulează ecoul din Jurnal, șterge comanda din Profit/Total încasări — doar aplicată o dată per comandă din grup, nu reimplementată. Produse cu preț diferit sau din altă zi nu sunt atinse. Verificat de 2 ori, cu TOATE apelurile Supabase simulate (nicio scriere reală, fără risc pe producție): 5 comenzi identice + 1 cu preț diferit + 1 din altă zi + 1 neaplicată încă — detectate corect DOAR cele 5; „păstrează 2, șterge 3" → șterge exact cele mai recente 3, păstrează cele mai vechi 2, stocul produsului scade corect cu exact 3 (nu 5, nu greșit), celelalte comenzi neatinse; refuzarea confirmării → zero ștergeri, zero cereri DELETE trimise; plus toate suitele de regresie Comenzi Platforme de la #354-#361, tot verzi, fără erori consolă',date:'2026-09-14'},
   {n:361,text:'Comenzi Platforme → recunoaștere Vinted — bug real, grav, reparat, raportat direct pe un stoc rămas negativ (-22, „vândute azi 27" pe un singur produs). Cauza: spre deosebire de eMAG/Trendyol (care au un număr real de comandă, verificat automat ca să nu se importe de două ori), Vinted nu are NICIUN identificator din platformă — fiecare captură procesată crea o linie complet nouă, fără nicio legătură cu cele anterioare. Dacă aceeași captură se lipea/procesa de mai multe ori (reîncercări, mai ales plauzibile înainte de reparația „Aplică import" de la #359, când nu exista niciun feedback vizual și părea firesc să încerci din nou), fiecare încercare adăuga o comandă în plus — și, cu upload-ul aditiv de la #356, toate se adunau în loc să se înlocuiască. Acum, înainte să adauge o linie nouă, verifică dacă ACELAȘI produs + preț par deja prezente azi — fie în previzualizarea curentă, fie deja aplicate (chiar dacă între timp au dispărut din previzualizare) — și, dacă da, ÎNTREABĂ explicit înainte să adauge („...pare deja adăugat azi — posibil aceeași captură procesată de două ori. Adaugi oricum o comandă NOUĂ?") — nu blochează silențios (ar putea fi chiar o a doua comandă reală, identică din întâmplare), doar pune omul să decidă, cu context clar. Produse diferite sau prețuri diferite trec neîntrerupt, fără nicio întrebare. NIMIC din potrivirea de produs/calculul de preț nu s-a schimbat — strict o verificare nouă, înainte de a adăuga linia. Verificat de 2 ori: test dedicat pe funcția de detecție — același produs+preț → duplicat detectat; preț diferit sau nume diferit → nu; comandă deja aplicată AZI (nu doar cea din previzualizare) → tot detectată; comandă din altă zi → nu (corect, nu blochează comenzi normale din zile diferite); test end-to-end, cu AI simulat (fără cost) — două recunoașteri identice, refuzi întrebarea → rămâne 1 linie (nu 2); aceleași două, accepți → 2 linii (comandă reală dublă, respectată); două produse diferite într-o singură captură → ambele intră, fără nicio întrebare; plus suitele complete de regresie Comenzi Platforme de la #354-#360, tot verzi, fără erori consolă',date:'2026-09-14'},
   {n:360,text:'Comenzi Platforme — previzualizarea de import (Importă comenzi) primește acum și un backup în cloud (Supabase, setari_app — aceeași tabelă/API deja folosită la lista de poze blocate), pe lângă cel local existent, cerut direct: „în caz că se blochează sau ceva sistemul, să putem reintra sau da refresh... chiar de pe alt browser". Până acum previzualizarea se salva DOAR în localStorage — local unui singur browser/calculator; dacă se bloca Safari-ul sau schimbai calculatorul, previzualizarea era inaccesibilă (chiar dacă tehnic nu era ștearsă). Acum, la 2 secunde după ultima schimbare (nu la fiecare bifă/cantitate ajustată — ar fi însemnat un request Supabase la fiecare click), previzualizarea se salvează și în cloud. La încărcarea paginii: dacă există date locale (cazul normal, același browser), se folosesc alea, RAPID, fără niciun apel de rețea suplimentar; DOAR dacă localStorage e gol (browser nou, curățat, sau blocat) se încearcă recuperarea din cloud — cu un mesaj clar când se întâmplă. Backup-ul din cloud se curăță automat la aplicare completă cu succes, la ștergerea ultimei linii rămase sau la „Resetează pagina" explicit — un draft vechi/deja-aplicat nu rămâne oferit din greșeală la o recuperare ulterioară. Bonus găsit pe drum, reparat cu aceeași ocazie: butonul „🗑 Șterge" de pe o linie individuală avea EXACT același bug ca „Aplică import" de mai devreme (#359) — ștergerea ultimei linii rămase actualiza doar widget-urile vechi, lăsând cardul din redesign vizibil, stale; unificat prin aceeași funcție (renderPcomImportPreview). Verificat de 2 ori, inclusiv sub Safari real (motorul WebKit, nu doar Chrome) — butonul „Aplică import" funcționează identic sub WebKit (click real prin mouse, nu doar apel direct de funcție: buton vizibil, neacoperit de nimic, clic funcționează, stocul crește, cardul dispare); test dedicat pentru backup cloud — o schimbare nu ajunge imediat în „cloud" (confirmat la 300ms încă gol), ci după debounce-ul de 2s; ștergerea localStorage-ului + reîncărcare (simulează alt browser) recuperează corect previzualizarea din cloud, cu mesaj vizibil; cu localStorage prezent, reîncărcarea NU mai interoghează cloud-ul deloc (0 apeluri, confirmat separat de celelalte chei de setări neafectate); aplicare completă cu succes curăță imediat backup-ul din cloud; plus toate suitele de regresie Comenzi Platforme de la #354-#359, tot verzi, fără erori consolă',date:'2026-09-14'},
   {n:359,text:'Comenzi Platforme — bug real reparat, raportat direct: „apăs pe Aplică import și nu merge". Cauza, în redesign (USE_PCOM_REDESIGN=true, activ implicit): butonul VIZIBIL pe ecran (#pcx-apply-btn) nu primea NICIUN feedback la click — codul actualiza „Se aplică…"/disabled doar pe butonul vechi, ascuns (#pcmi-apply-btn, display:none, existent în DOM dar niciodată văzut) — părea că apăsarea nu face nimic. A doua jumătate a aceluiași bug: dacă TOATE liniile selectate se aplicau cu succes, codul golea doar widget-urile vechi — cardurile din redesign (#pcx-orders-list) rămâneau afișate neschimbate, cu „Neinclus" etc., deși stocul/Jurnalul chiar fuseseră scrise — părea că importul n-a făcut nimic, deși datele erau corecte pe fundal. Ambele reparate: acum ambele butoane (vechi + redesign) primesc starea corectă, iar golirea previzualizării după succes total actualizează corect AMBELE interfețe (o singură funcție unificată, renderPcomImportPreview, în loc de manipulare manuală doar pe elementele vechi). NIMIC din logica de scădere stoc/scriere Jurnal/profit nu s-a schimbat — strict feedback vizual și refresh după aplicare. Verificat de 2 ori: test dedicat, cu TOATE apelurile Supabase interceptate/simulate (nicio scriere reală, fără risc pe producție) — aplicare completă (1 linie, succes 100%): butonul arată corect „Se aplică…"/disabled în timpul operației și revine la normal după, bara de acțiuni și cardurile se golesc corect (fără carduri fantomă), stocul produsului chiar crește (confirmă că datele oricum se aplicaseră corect, doar UI-ul nu reflecta); aplicare parțială (1 linie potrivită + 1 „produs nou" fără produs ales): linia potrivită dispare, linia rămasă e vizibilă corect, bara de acțiuni rămâne vizibilă; plus suitele complete de regresie Comenzi Platforme de la #354/#357/#358, tot verzi, fără erori consolă',date:'2026-09-14'},
@@ -16320,6 +16321,15 @@ function renderPcomRedesign(){
         <div style="font-size:16px;color:var(--t3);margin:4px 0 8px">Dacă un import a fost greșit, îl poți șterge — liniile din „Profit"/„Total încasări" dispar și stocul scăzut la import e readăugat automat.</div>
         <div id="pcx-history-slot"></div>
       </div>
+      <div class="pcx-card pcx-card-compact">
+        <div class="pcx-card-title">🧹 Verifică duplicate</div>
+        <div style="font-size:16px;color:var(--t3);margin:4px 0 8px">Găsește comenzi APLICATE deja (produs+preț identice, aceeași zi) — utilă dacă un import a fost dus la capăt de mai multe ori din greșeală (ex. „Aplică import" apăsat repetat pe aceeași linie). Nu șterge nimic automat — arată grupurile găsite, tu decizi ce rămâne.</div>
+        <div class="frow" style="align-items:flex-end;gap:8px;margin-bottom:8px">
+          <div class="fld" style="max-width:190px;margin:0"><label style="font-size:14px">Ziua verificată</label><input type="date" id="pcom-dupe-date"></div>
+          <button type="button" class="pcx-btn" onclick="scanPcomDuplicates()">🔍 Caută duplicate</button>
+        </div>
+        <div id="pcom-dupe-results"></div>
+      </div>
     </div>
     <div class="pcx-stickybar" id="pcx-stickybar" style="display:none">
       <span id="pcx-stickybar-info"></span>
@@ -16727,26 +16737,94 @@ async function setPcomAwb(id){
     console.error(e);
   }
 }
+// Șterge o comandă deja APLICATĂ (stoc/Jurnal deja atinse) — readaugă stocul, anulează ecoul din
+// Jurnal. Extras separat din deletePcomOrder (mai jos) ca să poată fi refolosit și de curățarea în
+// masă a duplicatelor (deletePcomDuplicateCluster) — fără confirm/toast/re-render per comandă, alea
+// rămân responsabilitatea apelantului (unul singur la ștergere individuală, unul singur per LOT la
+// curățare în masă, nu N popup-uri/re-randări la N comenzi identice).
+async function deletePcomOrderCore(o){
+  await dbDelete(`platforma_comenzi?id=eq.${o.id}`);
+  const p=P.find(x=>x.id===o.produsId);
+  if(p){
+    p.sold=Math.max(0,(p.sold||0)-o.cantitate);
+    try{await dbPatch(`produse?id=eq.${p.id}`,{sold:p.sold});}catch(e){console.warn('Nu am putut readăuga stocul pentru',p.name,e);}
+    await reverseJurnalEcho(o.produsId,o.createdAt,o.cantitate);
+    await logMove('in',p.name,o.cantitate,`Anulare comandă ${pcomPlatLabel(o.platforma)} (comandă ${o.comandaId||'—'})`,p.id);
+  }
+  PCOM=PCOM.filter(x=>x.id!==o.id);
+}
 async function deletePcomOrder(id){
   const o=PCOM.find(x=>x.id===id);
   if(!o)return;
   if(!confirm(`Ștergi comanda „${o.produsNume||o.titluExtern}" (${o.cantitate}× · ${o.pretTotalCuTvaRon.toFixed(2)} RON)? Stocul scăzut la import va fi readăugat.`))return;
   if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
   try{
-    await dbDelete(`platforma_comenzi?id=eq.${id}`);
-    const p=P.find(x=>x.id===o.produsId);
-    if(p){
-      p.sold=Math.max(0,(p.sold||0)-o.cantitate);
-      try{await dbPatch(`produse?id=eq.${p.id}`,{sold:p.sold});}catch(e){console.warn('Nu am putut readăuga stocul pentru',p.name,e);}
-      await reverseJurnalEcho(o.produsId,o.createdAt,o.cantitate);
-      await logMove('in',p.name,o.cantitate,`Anulare comandă ${pcomPlatLabel(o.platforma)} (comandă ${o.comandaId||'—'})`,p.id);
-    }
-    PCOM=PCOM.filter(x=>x.id!==id);
+    await deletePcomOrderCore(o);
     renderPcomProfit();renderPcomImportHistory();renderPcomTotals();renderTable();renderToday();renderDashboard();
     toast('Comandă ștearsă — stoc corectat ✓');
   }catch(err){
     toast('Eroare la ștergere: '+err.message,'err');
   }
+}
+// Grupează comenzile APLICATE (efecteAplicate!==false, la fel ca Istoric importuri) dintr-o zi pe
+// platformă+produs+preț — un grup de 2+ comenzi IDENTICE e aproape sigur aceeași comandă aplicată de
+// mai multe ori (bug real raportat direct, pe un stoc rămas negativ — vezi #361 pentru reparația la
+// SURSĂ, la recunoașterea Vinted; asta e unealta de CURĂȚARE a ce s-a acumulat deja, înainte de ea).
+// Ordonăm comenzile din fiecare grup după creare — păstrăm implicit cele mai VECHI (cel mai probabil
+// comanda originală reală, nu o reîncercare ulterioară), omul poate schimba câte să păstreze.
+function findPcomDuplicateClusters(dateStr){
+  const clusters={};
+  PCOM.forEach(o=>{
+    if(o.efecteAplicate===false)return;
+    if(dateStr&&o.data!==dateStr)return;
+    const priceKey=Math.round((o.pretTotalCuTvaRon||0)*100);
+    const key=`${o.platforma}|${o.produsId||o.titluExtern}|${priceKey}`;
+    (clusters[key]||(clusters[key]={key,platforma:o.platforma,produsNume:o.produsNume||o.titluExtern,pretTotalCuTvaRon:o.pretTotalCuTvaRon,orders:[]})).orders.push(o);
+  });
+  return Object.values(clusters).filter(c=>c.orders.length>1).map(c=>{
+    c.orders.sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));
+    return c;
+  }).sort((a,b)=>b.orders.length-a.orders.length);
+}
+let pcomDupeClusters=[];
+function scanPcomDuplicates(){
+  const dateInput=document.getElementById('pcom-dupe-date');
+  if(dateInput&&!dateInput.value)dateInput.value=td();
+  pcomDupeClusters=findPcomDuplicateClusters(dateInput?.value||td());
+  renderPcomDupeResults();
+}
+function renderPcomDupeResults(){
+  const host=document.getElementById('pcom-dupe-results');if(!host)return;
+  if(!pcomDupeClusters.length){host.innerHTML='<div style="font-size:16px;color:var(--t3)">Niciun grup de comenzi identice găsit pentru ziua aleasă ✓</div>';return;}
+  const totalExtra=pcomDupeClusters.reduce((s,c)=>s+c.orders.length-1,0);
+  host.innerHTML=`<div style="font-size:16px;color:var(--rd);font-weight:700;margin-bottom:8px">⚠ ${pcomDupeClusters.length} grup${pcomDupeClusters.length===1?'':'uri'} găsit${pcomDupeClusters.length===1?'':'e'} — ${totalExtra} comenzi în plus, dacă toate sunt duplicate reale</div>${
+    pcomDupeClusters.map((c,i)=>`<div style="border:1px solid var(--b1);border-radius:var(--r);padding:10px 12px;margin-bottom:8px">
+      <div style="font-size:17px;font-weight:700">${esc(c.produsNume)} <span style="font-weight:400;color:var(--t3)">· ${pcomPlatLabel(c.platforma)} · ${c.pretTotalCuTvaRon.toFixed(2)} RON/comandă</span></div>
+      <div style="font-size:15px;color:var(--t3);margin:4px 0">${c.orders.length} comenzi identice, create între ${esc(String(c.orders[0].createdAt||'').slice(11,16))} și ${esc(String(c.orders[c.orders.length-1].createdAt||'').slice(11,16))}</div>
+      <div class="frow" style="align-items:center;gap:8px">
+        <label style="font-size:15px">Păstrează (cele mai vechi):</label>
+        <input type="number" min="1" max="${c.orders.length}" value="1" id="pcom-dupe-keep-${i}" style="width:60px;padding:4px 6px;border:1px solid var(--b2);border-radius:6px">
+        <button type="button" class="pcx-btn" style="border-color:var(--rd);color:var(--rd)" onclick="deletePcomDuplicateCluster(${i})">🗑 Șterge restul</button>
+      </div>
+    </div>`).join('')
+  }`;
+}
+async function deletePcomDuplicateCluster(i){
+  const c=pcomDupeClusters[i];if(!c)return;
+  const keepInput=document.getElementById(`pcom-dupe-keep-${i}`);
+  const keep=Math.max(0,Math.min(c.orders.length,Math.round(Number(keepInput?.value)||1)));
+  const toDelete=c.orders.slice(keep);
+  if(!toDelete.length){toast('Nimic de șters — păstrezi toate comenzile din acest grup');return;}
+  if(!confirm(`Ștergi ${toDelete.length} din cele ${c.orders.length} comenzi „${c.produsNume}" (${c.pretTotalCuTvaRon.toFixed(2)} RON fiecare)? Stocul scăzut la fiecare va fi readăugat. Rămân cele mai vechi ${keep}.`))return;
+  if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
+  let ok=0,failed=0;
+  for(const o of toDelete){
+    try{await deletePcomOrderCore(o);ok++;}
+    catch(e){console.warn('Nu am putut șterge comanda duplicat',o.id,e);failed++;}
+  }
+  renderPcomProfit();renderPcomImportHistory();renderPcomTotals();renderTable();renderToday();renderDashboard();
+  scanPcomDuplicates();
+  toast(`${ok} comenzi duplicat șterse, stoc corectat ✓${failed?` · ${failed} au eșuat`:''}`,failed?'err':undefined);
 }
 function renderPcomTotals(){
   const grid=document.getElementById('pcom-totals-grid');
