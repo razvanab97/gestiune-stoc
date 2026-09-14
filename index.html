@@ -979,7 +979,13 @@ function buildRaportCats(){
 .jp-th-ph{width:65px;height:65px;border-radius:5px;background:var(--surf2);display:flex;align-items:center;justify-content:center;font-size:43px;flex-shrink:0}
 .jp-nm{flex:1;font-size:27px;font-weight:500}
 .jp-cat{font-size:25px;color:var(--t3)}
-.jp-qty{font-family:var(--mono);font-size:30px;font-weight:500;color:var(--acc);min-width:50px;text-align:right}
+.jp-qty{font-family:var(--mono);font-size:30px;font-weight:500;color:var(--acc);min-width:50px;text-align:right;display:flex;align-items:center;gap:4px;justify-content:flex-end}
+.jq-edit-btn{background:transparent;border:none;cursor:pointer;font-size:20px;padding:2px;opacity:.55;flex-shrink:0}
+.jq-edit-btn:hover{opacity:1}
+.jq-edit-input{width:64px;font-family:var(--mono);font-size:24px;padding:3px 6px;border:1px solid var(--b2);border-radius:6px;text-align:right}
+.jq-edit-ok,.jq-edit-cancel{background:transparent;border:1px solid var(--b2);border-radius:4px;width:28px;height:28px;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.jq-edit-ok{color:var(--gr);border-color:var(--gr)}
+.jq-edit-cancel{color:var(--t3)}
 .jp-val{font-family:var(--mono);font-size:26px;color:var(--t3);min-width:90px;text-align:right}
 .jp-meta{font-size:24px;color:var(--t3);font-family:var(--mono);margin-top:3px}
 .jrnl-empty{text-align:center;padding:4rem;color:var(--t3)}
@@ -3657,6 +3663,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:363,text:'Jurnal vânzări — editare directă a cantității pe fiecare rând, cerută direct ca alternativă mai rapidă la „🧹 Verifică duplicate" (#362): acolo trebuie căutat produs cu produs în Comenzi Platforme, aici numărul greșit e deja vizibil, direct, pe ecran. Fiecare rând are acum un ✏️ lângă cantitate — click deschide un câmp editabil, cu „✓ Salvează"/„✕ Anulează". La SALVARE: dacă noua cantitate e mai MICĂ (cazul obișnuit — corectarea unui import dublat), aplicația șterge automat comenzile în plus din Comenzi Platforme pentru exact acel produs+zi (păstrează cele mai vechi — cel mai probabil comenzile reale originale), folosind EXACT aceeași logică sigură de la #362 (deletePcomOrderCore) — readaugă stocul, corectează Profit/Total încasări, NU doar Jurnalul, exact cum a fost cerut („să apară peste tot în sistem aceeași informație"). Dacă vânzarea nu vine (integral) din Comenzi Platforme (ex. parte manuală, din „Vânzări azi"), diferența rămasă se corectează direct, fără să inventeze o comandă de platformă. La creștere (corecție manuală, rar) — ajustare directă a Jurnalului și stocului. Bug real găsit și reparat pe drum, în timp ce construiam asta: ziua deschisă din Jurnal (click pe antet, „▼") se ÎNCHIDEA instant la orice acțiune (editare sau chiar ștergerea deja existentă a unei vânzări), pentru că randarea reconstruia tot HTML-ul fără să țină minte ce era deschis — acum starea de deschis/închis se reține separat și supraviețuiește oricărei re-randări. Verificat de 2 ori, cu TOATE apelurile Supabase simulate: scădere cu comenzi disponibile (26→2, cu 26 comenzi identice) — șterge exact 24, stocul scade exact la 2, Jurnalul arată 2; scădere cu acoperire parțială (10→4, doar 3 comenzi disponibile) — șterge cele 3 disponibile, corectează direct diferența rămasă de 3, ajunge exact la 4; creștere pură (5→8) — doar Jurnal+stoc, nicio comandă atinsă; aceeași valoare introdusă — nicio schimbare, niciun dialog; plus suitele complete de regresie Comenzi Platforme de la #354-#362, tot verzi, fără erori consolă',date:'2026-09-14'},
   {n:362,text:'Comenzi Platforme — unealtă nouă „🧹 Verifică duplicate", cerută direct pe o captură reală cu Jurnalul unei zile arătând 24 de produse, cu cantități absurd de mari (7-26 buc fiecare, 296 buc/9727 RON total) — efectul acumulat al bug-ului de la #361 (reîncercări repetate la recunoașterea Vinted, înainte de reparația la sursă), pe multe produse deodată, nu doar unul. Ștergerea manuală, produs cu produs, ar fi însemnat 24 de căutări separate — nefezabil. Unealta nouă (Comenzi Platforme → Istoric importuri) găsește, pentru o zi aleasă, TOATE grupurile de comenzi deja aplicate cu același produs + preț identic (semnul aproape sigur al aceleiași comenzi aplicate de mai multe ori) — le arată clar, cu numărul găsit și intervalul orar, ȘI NU ȘTERGE NIMIC AUTOMAT: pentru fiecare grup, omul alege câte să păstreze (implicit 1, editabil — păstrează mereu cele mai VECHI, cel mai probabil comanda originală reală) și apasă explicit „Șterge restul", cu o confirmare finală care arată exact ce se întâmplă. Fiecare ștergere reutilizează EXACT aceeași logică sigură, deja existentă și testată, de la ștergerea individuală a unei comenzi (deletePcomOrderCore, extras din deletePcomOrder fără nicio schimbare de comportament) — readaugă stocul corect, anulează ecoul din Jurnal, șterge comanda din Profit/Total încasări — doar aplicată o dată per comandă din grup, nu reimplementată. Produse cu preț diferit sau din altă zi nu sunt atinse. Verificat de 2 ori, cu TOATE apelurile Supabase simulate (nicio scriere reală, fără risc pe producție): 5 comenzi identice + 1 cu preț diferit + 1 din altă zi + 1 neaplicată încă — detectate corect DOAR cele 5; „păstrează 2, șterge 3" → șterge exact cele mai recente 3, păstrează cele mai vechi 2, stocul produsului scade corect cu exact 3 (nu 5, nu greșit), celelalte comenzi neatinse; refuzarea confirmării → zero ștergeri, zero cereri DELETE trimise; plus toate suitele de regresie Comenzi Platforme de la #354-#361, tot verzi, fără erori consolă',date:'2026-09-14'},
   {n:361,text:'Comenzi Platforme → recunoaștere Vinted — bug real, grav, reparat, raportat direct pe un stoc rămas negativ (-22, „vândute azi 27" pe un singur produs). Cauza: spre deosebire de eMAG/Trendyol (care au un număr real de comandă, verificat automat ca să nu se importe de două ori), Vinted nu are NICIUN identificator din platformă — fiecare captură procesată crea o linie complet nouă, fără nicio legătură cu cele anterioare. Dacă aceeași captură se lipea/procesa de mai multe ori (reîncercări, mai ales plauzibile înainte de reparația „Aplică import" de la #359, când nu exista niciun feedback vizual și părea firesc să încerci din nou), fiecare încercare adăuga o comandă în plus — și, cu upload-ul aditiv de la #356, toate se adunau în loc să se înlocuiască. Acum, înainte să adauge o linie nouă, verifică dacă ACELAȘI produs + preț par deja prezente azi — fie în previzualizarea curentă, fie deja aplicate (chiar dacă între timp au dispărut din previzualizare) — și, dacă da, ÎNTREABĂ explicit înainte să adauge („...pare deja adăugat azi — posibil aceeași captură procesată de două ori. Adaugi oricum o comandă NOUĂ?") — nu blochează silențios (ar putea fi chiar o a doua comandă reală, identică din întâmplare), doar pune omul să decidă, cu context clar. Produse diferite sau prețuri diferite trec neîntrerupt, fără nicio întrebare. NIMIC din potrivirea de produs/calculul de preț nu s-a schimbat — strict o verificare nouă, înainte de a adăuga linia. Verificat de 2 ori: test dedicat pe funcția de detecție — același produs+preț → duplicat detectat; preț diferit sau nume diferit → nu; comandă deja aplicată AZI (nu doar cea din previzualizare) → tot detectată; comandă din altă zi → nu (corect, nu blochează comenzi normale din zile diferite); test end-to-end, cu AI simulat (fără cost) — două recunoașteri identice, refuzi întrebarea → rămâne 1 linie (nu 2); aceleași două, accepți → 2 linii (comandă reală dublă, respectată); două produse diferite într-o singură captură → ambele intră, fără nicio întrebare; plus suitele complete de regresie Comenzi Platforme de la #354-#360, tot verzi, fără erori consolă',date:'2026-09-14'},
   {n:360,text:'Comenzi Platforme — previzualizarea de import (Importă comenzi) primește acum și un backup în cloud (Supabase, setari_app — aceeași tabelă/API deja folosită la lista de poze blocate), pe lângă cel local existent, cerut direct: „în caz că se blochează sau ceva sistemul, să putem reintra sau da refresh... chiar de pe alt browser". Până acum previzualizarea se salva DOAR în localStorage — local unui singur browser/calculator; dacă se bloca Safari-ul sau schimbai calculatorul, previzualizarea era inaccesibilă (chiar dacă tehnic nu era ștearsă). Acum, la 2 secunde după ultima schimbare (nu la fiecare bifă/cantitate ajustată — ar fi însemnat un request Supabase la fiecare click), previzualizarea se salvează și în cloud. La încărcarea paginii: dacă există date locale (cazul normal, același browser), se folosesc alea, RAPID, fără niciun apel de rețea suplimentar; DOAR dacă localStorage e gol (browser nou, curățat, sau blocat) se încearcă recuperarea din cloud — cu un mesaj clar când se întâmplă. Backup-ul din cloud se curăță automat la aplicare completă cu succes, la ștergerea ultimei linii rămase sau la „Resetează pagina" explicit — un draft vechi/deja-aplicat nu rămâne oferit din greșeală la o recuperare ulterioară. Bonus găsit pe drum, reparat cu aceeași ocazie: butonul „🗑 Șterge" de pe o linie individuală avea EXACT același bug ca „Aplică import" de mai devreme (#359) — ștergerea ultimei linii rămase actualiza doar widget-urile vechi, lăsând cardul din redesign vizibil, stale; unificat prin aceeași funcție (renderPcomImportPreview). Verificat de 2 ori, inclusiv sub Safari real (motorul WebKit, nu doar Chrome) — butonul „Aplică import" funcționează identic sub WebKit (click real prin mouse, nu doar apel direct de funcție: buton vizibil, neacoperit de nimic, clic funcționează, stocul crește, cardul dispare); test dedicat pentru backup cloud — o schimbare nu ajunge imediat în „cloud" (confirmat la 300ms încă gol), ci după debounce-ul de 2s; ștergerea localStorage-ului + reîncărcare (simulează alt browser) recuperează corect previzualizarea din cloud, cu mesaj vizibil; cu localStorage prezent, reîncărcarea NU mai interoghează cloud-ul deloc (0 apeluri, confirmat separat de celelalte chei de setări neafectate); aplicare completă cu succes curăță imediat backup-ul din cloud; plus toate suitele de regresie Comenzi Platforme de la #354-#359, tot verzi, fără erori consolă',date:'2026-09-14'},
@@ -19960,8 +19967,14 @@ function renderJurnal(){
     gQ+=dQ;gV+=dV;
     const dlbl=new Date(day.date+'T12:00:00').toLocaleDateString('ro-RO',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
     const id='jd'+day.date;
-    return`<div class="jd-card"><div class="jd-head" onclick="togJ('${id}')"><span class="jd-date">${dlbl}</span><div class="jd-stats"><span><strong>${fmtQty(dQ)}</strong> buc</span><span><strong>${dV.toFixed(2)}</strong> RON</span><span>${ent.length} produse</span></div><span class="jd-chev" id="${id}-c">▼</span></div>
-      <div class="jd-body" id="${id}">${ent.map(en=>{const th=en.img?`<img src="${esc(imgSrc(en.img))}" class="jp-th click-edit" loading="lazy" onclick="openModal(${en.id})" title="Editează produs" ${imgErrAttr(en.img)}>`:`<div class="jp-th-ph click-edit" onclick="openModal(${en.id})" title="Editează produs">📦</div>`;return`<div class="jp-row">${th}<div class="jp-nm">${esc(en.name)}<br><span class="jp-cat">${esc(en.category||'—')}</span></div><div class="jp-qty">× ${fmtQty(en.qty)}</div><div class="jp-val">${en.priceSell>0?(en.qty*en.priceSell).toFixed(2)+' RON':'—'}</div><button class="jp-del" onclick="deleteJournalEntry('${day.date}',${en.id},${en.qty})" title="Șterge vânzare">×</button></div>`;}).join('')}</div></div>`;
+    const dayOpen=jurnalOpenDays.has(day.date)?' op':'';
+    return`<div class="jd-card"><div class="jd-head" onclick="togJ('${id}')"><span class="jd-date">${dlbl}</span><div class="jd-stats"><span><strong>${fmtQty(dQ)}</strong> buc</span><span><strong>${dV.toFixed(2)}</strong> RON</span><span>${ent.length} produse</span></div><span class="jd-chev${dayOpen}" id="${id}-c">▼</span></div>
+      <div class="jd-body${dayOpen}" id="${id}">${ent.map(en=>{const th=en.img?`<img src="${esc(imgSrc(en.img))}" class="jp-th click-edit" loading="lazy" onclick="openModal(${en.id})" title="Editează produs" ${imgErrAttr(en.img)}>`:`<div class="jp-th-ph click-edit" onclick="openModal(${en.id})" title="Editează produs">📦</div>`;
+      const isEditing=jurnalEditingKey===day.date+'|'+en.id;
+      const qtyHtml=isEditing
+        ?`<div class="jp-qty"><input type="number" class="jq-edit-input" id="jq-edit-input" min="0" step="1" value="${en.qty}" onkeydown="if(event.key==='Enter')saveJurnalQtyEdit('${day.date}',${en.id});if(event.key==='Escape')toggleJurnalQtyEdit('${day.date}',${en.id})"><button type="button" class="jq-edit-ok" onclick="saveJurnalQtyEdit('${day.date}',${en.id})" title="Salvează">✓</button><button type="button" class="jq-edit-cancel" onclick="toggleJurnalQtyEdit('${day.date}',${en.id})" title="Anulează">✕</button></div>`
+        :`<div class="jp-qty">× ${fmtQty(en.qty)}<button type="button" class="jq-edit-btn" onclick="toggleJurnalQtyEdit('${day.date}',${en.id})" title="Corectează cantitatea">✏️</button></div>`;
+      return`<div class="jp-row">${th}<div class="jp-nm">${esc(en.name)}<br><span class="jp-cat">${esc(en.category||'—')}</span></div>${qtyHtml}<div class="jp-val">${en.priceSell>0?(en.qty*en.priceSell).toFixed(2)+' RON':'—'}</div><button class="jp-del" onclick="deleteJournalEntry('${day.date}',${en.id},${en.qty})" title="Șterge vânzare">×</button></div>`;}).join('')}</div></div>`;
   }).join('');
   document.getElementById('jtotal').textContent=`Total: ${fmtQty(gQ)} buc · ${gV.toFixed(2)} RON`;
 }
@@ -19987,7 +20000,16 @@ function renderStockOrders(){
   }).join('');
   document.getElementById('jtotal').textContent=`Total comenzi: ${rows.length} · ${fmtQty(gQ)} buc · ${gV.toFixed(2)} RON · ${gI} linii`;
 }
-function togJ(id){document.getElementById(id)?.classList.toggle('op');document.getElementById(id+'-c')?.classList.toggle('op');}
+// Zilele deschise se rețin separat (nu doar clasa .op pe DOM) — bug real găsit lucrând la editarea
+// directă a cantității: renderJurnal() reconstruiește tot HTML-ul la orice modificare (editare/ștergere),
+// iar fără această stare, ziua se ÎNCHIDEA instant la fiecare acțiune — inclusiv chiar în timpul
+// deschiderii editorului de cantitate, ascunzând câmpul înainte să apuci să-l folosești.
+let jurnalOpenDays=new Set();
+function togJ(id){
+  const isOpen=document.getElementById(id)?.classList.toggle('op');
+  document.getElementById(id+'-c')?.classList.toggle('op');
+  if(id.startsWith('jd')){const date=id.slice(2);if(isOpen)jurnalOpenDays.add(date);else jurnalOpenDays.delete(date);}
+}
 function exportCSV(){
   if(jMode==='orders'){exportStockOrdersCSV();return;}
   const mo=document.getElementById('jm').value;
@@ -20004,6 +20026,89 @@ function exportStockOrdersCSV(){
   const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);a.download='comenzi-stoc'+(mo?'-'+mo:'')+'.csv';a.click();
 }
 
+// Corecteaz\u0103 direct cantitatea unei v\u00E2nz\u0103ri din Jurnal \u2014 cerut direct, ca alternativ\u0103 mai rapid\u0103 la
+// \u201E\uD83E\uDDF9 Verific\u0103 duplicate" din Comenzi Platforme (acolo trebuie c\u0103utat produs cu produs; aici num\u0103rul
+// gre\u0219it e deja vizibil, direct, pe fiecare r\u00E2nd). \u201Edate|productId" identific\u0103 unic r\u00E2ndul aflat \u00EEn
+// editare (un singur r\u00E2nd deodat\u0103, la fel ca alte edit\u0103ri inline din aplica\u021Bie).
+let jurnalEditingKey=null;
+function toggleJurnalQtyEdit(date,productId){
+  const key=date+'|'+productId;
+  jurnalEditingKey=jurnalEditingKey===key?null:key;
+  renderJurnal();
+  if(jurnalEditingKey===key){
+    const inp=document.getElementById('jq-edit-input');
+    if(inp){inp.focus();inp.select();}
+  }
+}
+// Ajustare direct\u0103 Jurnal+stoc, F\u0102R\u0102 nicio comand\u0103 platforma_comenzi implicat\u0103 \u2014 folosit\u0103 fie pentru
+// cre\u0219tere (corec\u021Bie manual\u0103, nu se poate \u201Einventa" o comand\u0103 de platform\u0103), fie pentru restul unei
+// sc\u0103deri care nu mai are nicio comand\u0103 platforma_comenzi de \u0219ters (parte din v\u00E2nzare venea din alt\u0103
+// surs\u0103, ex. \u201EV\u00E2nz\u0103ri azi" manual). delta poate fi pozitiv sau negativ.
+async function adjustJurnalQtyDirect(date,productId,p,delta){
+  if(!delta)return;
+  p.sold=Math.max(0,(p.sold||0)+delta);
+  try{await dbPatch(`produse?id=eq.${p.id}`,{sold:p.sold});}catch(e){console.warn('Nu am putut actualiza stocul:',e);}
+  const jd=JL.find(d=>d.date===date);
+  const en=jd?.entries.find(e=>e.id===productId);
+  const newQty=Math.max(0,(en?.qty??0)+delta);
+  try{
+    const rows=await dbGet(`jurnal?data=eq.${date}&product_id=eq.${productId}&select=id,qty`);
+    if(rows?.[0]){
+      if(newQty>0)await dbPatch(`jurnal?id=eq.${rows[0].id}`,{qty:newQty});
+      else await dbDelete(`jurnal?id=eq.${rows[0].id}`);
+    }
+  }catch(e){console.warn('Nu am putut actualiza Jurnalul:',e);}
+  if(en){
+    en.qty=newQty;
+    if(en.qty<=0&&jd){jd.entries=jd.entries.filter(e=>e!==en);if(!jd.entries.length)JL=JL.filter(d=>d!==jd);}
+  }
+}
+// La SC\u0102DERE: \u0219terge comenzi platforma_comenzi \u00EEn plus pentru exact acest produs+zi (cele mai vechi
+// p\u0103strate, aceea\u0219i func\u021Bie/logic\u0103 ca la \u201EVerific\u0103 duplicate" \u2014 deletePcomOrderCore, care reverseaz\u0103
+// deja stocul+Jurnalul per comand\u0103 \u2014 NU corect\u0103m Jurnalul separat pentru partea acoperit\u0103 de comenzi
+// \u0219terse, ar \u00EEnsemna sc\u0103dere dubl\u0103), ca \u201EIstoric importuri"/Profit din Comenzi Platforme s\u0103 r\u0103m\u00E2n\u0103
+// consistente cu noul num\u0103r, nu doar Jurnalul. Comenzi cu cantitate mai mare dec\u00E2t diferen\u021Ba r\u0103mas\u0103 NU
+// se taie par\u021Bial (risc de corupere) \u2014 r\u0103m\u00E2n neatinse, diferen\u021Ba nedus\u0103 la cap\u0103t se corecteaz\u0103 direct
+// (adjustJurnalQtyDirect). La CRE\u0218TERE: ajustare direct\u0103, f\u0103r\u0103 nicio comand\u0103 de \u0219ters.
+async function saveJurnalQtyEdit(date,productId){
+  const input=document.getElementById('jq-edit-input');
+  if(!input)return;
+  const newQty=Math.max(0,Math.round(Number(String(input.value).replace(',','.'))||0));
+  const jd=JL.find(d=>d.date===date);
+  const en=jd?.entries.find(e=>e.id===productId);
+  if(!en){jurnalEditingKey=null;renderJurnal();return;}
+  const oldQty=en.qty;
+  if(newQty===oldQty){jurnalEditingKey=null;renderJurnal();return;}
+  const p=P.find(x=>x.id===productId);
+  if(!p){toast('Produs neg\u0103sit','err');return;}
+  if(!sbReady){toast('Necesit\u0103 conexiune Supabase activ\u0103','err');return;}
+  const needsReduce=newQty<oldQty;
+  const msg=needsReduce
+    ?`Corectezi cantitatea pentru \u201E${p.name}" pe ${date} de la ${oldQty} la ${newQty}? Se vor \u0219terge comenzile \u00EEn plus (dac\u0103 exist\u0103) din Comenzi Platforme \u0219i se va read\u0103uga stocul corespunz\u0103tor.`
+    :`Corectezi cantitatea pentru \u201E${p.name}" pe ${date} de la ${oldQty} la ${newQty}? Se va sc\u0103dea stocul suplimentar (${newQty-oldQty} buc).`;
+  if(!confirm(msg))return;
+  try{
+    if(needsReduce){
+      let toRemove=oldQty-newQty;
+      const todaysOrders=PCOM.filter(o=>o.produsId===productId&&o.data===date&&o.efecteAplicate!==false)
+        .sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));
+      for(const o of todaysOrders){
+        if(toRemove<=0)break;
+        if(o.cantitate<=toRemove){await deletePcomOrderCore(o);toRemove-=o.cantitate;}
+      }
+      if(toRemove>0)await adjustJurnalQtyDirect(date,productId,p,-toRemove);
+    }else{
+      await adjustJurnalQtyDirect(date,productId,p,newQty-oldQty);
+    }
+  }catch(e){
+    toast('Eroare la corectare: '+(e.message||e),'err');
+    jurnalEditingKey=null;renderJurnal();
+    return;
+  }
+  jurnalEditingKey=null;
+  renderPcomProfit();renderPcomImportHistory();renderPcomTotals();renderTable();renderToday();renderDashboard();renderJurnal();
+  toast(`Cantitate corectat\u0103: ${oldQty} \u2192 ${newQty} \u2713 \u2014 actualizat peste tot (stoc, Jurnal, Comenzi Platforme)`);
+}
 async function deleteJournalEntry(date, productId, qty){
   if(!confirm('Ștergi această vânzare din jurnal?'))return;
   
