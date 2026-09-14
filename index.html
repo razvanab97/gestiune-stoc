@@ -3663,6 +3663,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:365,text:'Raport vânzări / Dashboard — Vinted adăugat la statisticile pe canale, cerut direct („la statistică adaugă mai nou și Vinted"). Bug real, mai grav decât o simplă lipsă din UI, găsit investigând: în dedupedSalesByDate() (funcția care desparte vânzările pe canale pentru TOATE statisticile), orice comandă care NU era „trendyol" cădea automat pe „emag" — Vinted nu doar lipsea din „Vânzări pe canale", vânzările lui erau CONTABILIZATE GREȘIT la eMAG, umflând artificial acel canal. Reparat la sursă (acum Vinted are propriul bucket, cu propria culoare — roz, ca să nu se confunde cu verdele deja folosit de Direct), apoi propagat peste tot unde lipsea: cardul „Vânzări pe canale" (al 4-lea card, cu bară/procent/trend proprii), graficul „Evoluție vânzări pe canale" (a patra linie + legendă + tooltip), KPI-urile „Vânzări totale"/„Produse vândute"/„Valoare medie comandă" (nu mai subraportau, lipsea complet valoarea Vinted din sumă), „Istoric lunar" (aceeași reparație, pe fiecare lună), și exportul CSV/Excel al raportului. Bonus găsit pe drum: eticheta „Comenzi (eMAG+Trendyol)" era doar greșit denumită — calculul de dedesubt (comenziSeriesInRange) număra deja Vinted corect, doar textul mințea; redenumită „Comenzi (platforme)". Verificat de 2 ori: test dedicat cu 3 comenzi reale (eMAG 100 RON, Trendyol 50 RON, Vinted 150 RON, aceeași zi) — dedupedSalesByDate le separă corect pe cele 3 (nu 250 RON grămadă la eMAG), seria combinată „all" arată corect 300 RON, cardul „Vânzări pe canale" arată 4 carduri (Direct/eMAG/Trendyol/Vinted) cu Vinted la 150 RON, legenda graficului include Vinted, KPI-ul „Vânzări totale" arată corect 300 RON (nu 150, cum ar fi ieșit înainte); plus toate suitele de regresie Comenzi Platforme/Jurnal de la #354-#364, tot verzi, fără erori consolă',date:'2026-09-14'},
   {n:364,text:'Jurnal vânzări / Comenzi Platforme — bug real reparat, raportat direct: „am cerut expres ca modificările aduse în Jurnal vânzări, la Vânzări azi, să se aplice și în restul proiectului — nu se întâmplă asta". Cauza: „Vânzări azi" (TS/vanzari_zilnice, citit de cardul rapid de vânzare și de tqp()) e un CACHE SEPARAT de Jurnal (JL) — orice corecție de azi (editarea de cantitate de la #363, curățarea de duplicate de la #362, sau chiar butonul EXISTENT „🗑 Șterge vânzare" din Jurnal, care avea exact același bug dinainte de sesiunea asta) actualiza corect stocul și Jurnalul, dar NIMIC nu mai sincroniza și „Vânzări azi" — rămânea cu numărul vechi, „fantomă". Reparat central, în reverseJurnalEcho (funcția deja folosită de toate ștergerile de comenzi) și în adjustJurnalQtyDirect (partea de la #363 care nu trece prin ea) — dacă ziua corectată e AZI, „Vânzări azi" se recalculează și se salvează automat, exact ca restul sistemului; zilele din trecut nu sunt atinse (TS ține evidența strict pentru azi). Verificat de 2 ori, cu TOATE apelurile Supabase simulate: corectare de azi prin editare directă (26→2) — „Vânzări azi" ajunge corect la 2, nu rămâne la 26; creștere directă (5→8) — ajunge corect la 8; corectare pe o zi din TRECUT — „Vânzări azi" rămâne complet neatins (0 apeluri de sincronizare, cum trebuie); ștergerea unei vânzări de AZI cu butonul existent „🗑" (bug pre-existent, nu doar cel nou) — „Vânzări azi" ajunge acum corect la 0, nu mai rămâne cu numărul vechi; plus toate suitele de regresie Comenzi Platforme/Jurnal de la #354-#363, tot verzi, fără erori consolă',date:'2026-09-14'},
   {n:363,text:'Jurnal vânzări — editare directă a cantității pe fiecare rând, cerută direct ca alternativă mai rapidă la „🧹 Verifică duplicate" (#362): acolo trebuie căutat produs cu produs în Comenzi Platforme, aici numărul greșit e deja vizibil, direct, pe ecran. Fiecare rând are acum un ✏️ lângă cantitate — click deschide un câmp editabil, cu „✓ Salvează"/„✕ Anulează". La SALVARE: dacă noua cantitate e mai MICĂ (cazul obișnuit — corectarea unui import dublat), aplicația șterge automat comenzile în plus din Comenzi Platforme pentru exact acel produs+zi (păstrează cele mai vechi — cel mai probabil comenzile reale originale), folosind EXACT aceeași logică sigură de la #362 (deletePcomOrderCore) — readaugă stocul, corectează Profit/Total încasări, NU doar Jurnalul, exact cum a fost cerut („să apară peste tot în sistem aceeași informație"). Dacă vânzarea nu vine (integral) din Comenzi Platforme (ex. parte manuală, din „Vânzări azi"), diferența rămasă se corectează direct, fără să inventeze o comandă de platformă. La creștere (corecție manuală, rar) — ajustare directă a Jurnalului și stocului. Bug real găsit și reparat pe drum, în timp ce construiam asta: ziua deschisă din Jurnal (click pe antet, „▼") se ÎNCHIDEA instant la orice acțiune (editare sau chiar ștergerea deja existentă a unei vânzări), pentru că randarea reconstruia tot HTML-ul fără să țină minte ce era deschis — acum starea de deschis/închis se reține separat și supraviețuiește oricărei re-randări. Verificat de 2 ori, cu TOATE apelurile Supabase simulate: scădere cu comenzi disponibile (26→2, cu 26 comenzi identice) — șterge exact 24, stocul scade exact la 2, Jurnalul arată 2; scădere cu acoperire parțială (10→4, doar 3 comenzi disponibile) — șterge cele 3 disponibile, corectează direct diferența rămasă de 3, ajunge exact la 4; creștere pură (5→8) — doar Jurnal+stoc, nicio comandă atinsă; aceeași valoare introdusă — nicio schimbare, niciun dialog; plus suitele complete de regresie Comenzi Platforme de la #354-#362, tot verzi, fără erori consolă',date:'2026-09-14'},
   {n:362,text:'Comenzi Platforme — unealtă nouă „🧹 Verifică duplicate", cerută direct pe o captură reală cu Jurnalul unei zile arătând 24 de produse, cu cantități absurd de mari (7-26 buc fiecare, 296 buc/9727 RON total) — efectul acumulat al bug-ului de la #361 (reîncercări repetate la recunoașterea Vinted, înainte de reparația la sursă), pe multe produse deodată, nu doar unul. Ștergerea manuală, produs cu produs, ar fi însemnat 24 de căutări separate — nefezabil. Unealta nouă (Comenzi Platforme → Istoric importuri) găsește, pentru o zi aleasă, TOATE grupurile de comenzi deja aplicate cu același produs + preț identic (semnul aproape sigur al aceleiași comenzi aplicate de mai multe ori) — le arată clar, cu numărul găsit și intervalul orar, ȘI NU ȘTERGE NIMIC AUTOMAT: pentru fiecare grup, omul alege câte să păstreze (implicit 1, editabil — păstrează mereu cele mai VECHI, cel mai probabil comanda originală reală) și apasă explicit „Șterge restul", cu o confirmare finală care arată exact ce se întâmplă. Fiecare ștergere reutilizează EXACT aceeași logică sigură, deja existentă și testată, de la ștergerea individuală a unei comenzi (deletePcomOrderCore, extras din deletePcomOrder fără nicio schimbare de comportament) — readaugă stocul corect, anulează ecoul din Jurnal, șterge comanda din Profit/Total încasări — doar aplicată o dată per comandă din grup, nu reimplementată. Produse cu preț diferit sau din altă zi nu sunt atinse. Verificat de 2 ori, cu TOATE apelurile Supabase simulate (nicio scriere reală, fără risc pe producție): 5 comenzi identice + 1 cu preț diferit + 1 din altă zi + 1 neaplicată încă — detectate corect DOAR cele 5; „păstrează 2, șterge 3" → șterge exact cele mai recente 3, păstrează cele mai vechi 2, stocul produsului scade corect cu exact 3 (nu 5, nu greșit), celelalte comenzi neatinse; refuzarea confirmării → zero ștergeri, zero cereri DELETE trimise; plus toate suitele de regresie Comenzi Platforme de la #354-#361, tot verzi, fără erori consolă',date:'2026-09-14'},
@@ -4437,15 +4438,15 @@ function renderDashAnalytics(){
 
 function renderDashMiniKpis(cur,cmp){
   const host=document.getElementById('dash-mini-kpis');if(!host)return;
-  const direct=directSalesInRange(cur.from,cur.to),emag=platformSalesInRange(cur.from,cur.to,'emag'),trendyol=platformSalesInRange(cur.from,cur.to,'trendyol');
-  const totalVal=direct.value+emag.value+trendyol.value;
-  const platformVal=emag.value+trendyol.value;
+  const direct=directSalesInRange(cur.from,cur.to),emag=platformSalesInRange(cur.from,cur.to,'emag'),trendyol=platformSalesInRange(cur.from,cur.to,'trendyol'),vinted=platformSalesInRange(cur.from,cur.to,'vinted');
+  const totalVal=direct.value+emag.value+trendyol.value+vinted.value;
+  const platformVal=emag.value+trendyol.value+vinted.value;
   const purch=purchasesInRangeSimple(cur.from,cur.to);
   const profit=profitInRange(cur.from,cur.to);
   let c=null;
   if(cmp){
-    const cDirect=directSalesInRange(cmp.from,cmp.to),cEmag=platformSalesInRange(cmp.from,cmp.to,'emag'),cTrendyol=platformSalesInRange(cmp.from,cmp.to,'trendyol');
-    c={totalVal:cDirect.value+cEmag.value+cTrendyol.value,direct:cDirect.value,platform:cEmag.value+cTrendyol.value,purch:purchasesInRangeSimple(cmp.from,cmp.to).value,profit:profitInRange(cmp.from,cmp.to)};
+    const cDirect=directSalesInRange(cmp.from,cmp.to),cEmag=platformSalesInRange(cmp.from,cmp.to,'emag'),cTrendyol=platformSalesInRange(cmp.from,cmp.to,'trendyol'),cVinted=platformSalesInRange(cmp.from,cmp.to,'vinted');
+    c={totalVal:cDirect.value+cEmag.value+cTrendyol.value+cVinted.value,direct:cDirect.value,platform:cEmag.value+cTrendyol.value+cVinted.value,purch:purchasesInRangeSimple(cmp.from,cmp.to).value,profit:profitInRange(cmp.from,cmp.to)};
   }
   const fmtRon=v=>v.toLocaleString('ro-RO',{maximumFractionDigits:0})+' RON';
   const hasCmp=!!cmp;
@@ -4540,6 +4541,7 @@ function renderDashChannelSection(cur,cmp){
     {key:'direct',lbl:'Direct',ic:'🛍️',bar:'var(--dash-sales)',bg:'var(--gr-bg)',cur:directSalesInRange(cur.from,cur.to),prev:cmp?directSalesInRange(cmp.from,cmp.to):null},
     {key:'emag',lbl:'eMAG',ic:'🛒',bar:'var(--bl)',bg:'var(--bl-bg)',cur:platformSalesInRange(cur.from,cur.to,'emag'),prev:cmp?platformSalesInRange(cmp.from,cmp.to,'emag'):null},
     {key:'trendyol',lbl:'Trendyol',ic:'🛍',bar:'var(--dash-purch)',bg:'var(--or-bg)',cur:platformSalesInRange(cur.from,cur.to,'trendyol'),prev:cmp?platformSalesInRange(cmp.from,cmp.to,'trendyol'):null},
+    {key:'vinted',lbl:'Vinted',ic:'👕',bar:'var(--pk)',bg:'var(--pk-bg)',cur:platformSalesInRange(cur.from,cur.to,'vinted'),prev:cmp?platformSalesInRange(cmp.from,cmp.to,'vinted'):null},
   ];
   const total=channels.reduce((s,c)=>s+c.cur.value,0);
   if(total<=0)return`<div class="sr-section-title">Vânzări pe canale</div><div class="dash-empty">Nicio vânzare în această perioadă.</div>`;
@@ -4717,11 +4719,14 @@ function platformCoveredByDay(){
 }
 function dedupedSalesByDate(){
   const out={};
-  const ensure=d=>out[d]||(out[d]={direct:{qty:0,value:0},emag:{qty:0,value:0},trendyol:{qty:0,value:0}});
+  const ensure=d=>out[d]||(out[d]={direct:{qty:0,value:0},emag:{qty:0,value:0},trendyol:{qty:0,value:0},vinted:{qty:0,value:0}});
   const covered=platformCoveredByDay();
   PCOM.forEach(o=>{
     const day=String(o.createdAt||o.data||'').slice(0,10);if(!day)return;
-    const b=ensure(day),ch=o.platforma==='trendyol'?'trendyol':'emag';
+    // Bug real găsit, raportat direct („la statistică adaugă și Vinted") — Vinted nu doar lipsea din
+    // statistici, era CONTABILIZAT GREȘIT la eMAG (orice platformă diferită de „trendyol" cădea automat
+    // în „emag") — umfla artificial canalul eMAG cu vânzările Vinted, nu doar o lipsă de afișare.
+    const b=ensure(day),ch=o.platforma==='trendyol'?'trendyol':(o.platforma==='vinted'?'vinted':'emag');
     b[ch].qty+=Number(o.cantitate)||0;b[ch].value+=Number(o.pretTotalCuTvaRon)||0;
   });
   JL.forEach(day=>{
@@ -4852,7 +4857,7 @@ function dailySeriesInRange(from,to,channel,metric){
   for(let i=0;i<n&&i<3660;i++){
     const d=addDaysISO(from,i);
     let v=0;
-    const chs=channel==='all'?['direct','emag','trendyol']:[channel];
+    const chs=channel==='all'?['direct','emag','trendyol','vinted']:[channel];
     chs.forEach(ch=>{const b=dedup[d]?.[ch];if(b)v+=metric==='qty'?b.qty:b.value;});
     out.push({date:d,value:v});
   }
@@ -4988,9 +4993,9 @@ function srKpiCard(lbl,curVal,cmpVal,fmt,hasCmp){
 }
 function renderSrKpis(cur,cmp){
   const host=document.getElementById('sr-kpis');if(!host)return;
-  const direct=directSalesInRange(cur.from,cur.to),emag=platformSalesInRange(cur.from,cur.to,'emag'),trendyol=platformSalesInRange(cur.from,cur.to,'trendyol');
-  const totalVal=direct.value+emag.value+trendyol.value,totalQty=direct.qty+emag.qty+trendyol.qty;
-  const platformVal=emag.value+trendyol.value;
+  const direct=directSalesInRange(cur.from,cur.to),emag=platformSalesInRange(cur.from,cur.to,'emag'),trendyol=platformSalesInRange(cur.from,cur.to,'trendyol'),vinted=platformSalesInRange(cur.from,cur.to,'vinted');
+  const totalVal=direct.value+emag.value+trendyol.value+vinted.value,totalQty=direct.qty+emag.qty+trendyol.qty+vinted.qty;
+  const platformVal=emag.value+trendyol.value+vinted.value;
   const purch=purchasesInRangeSimple(cur.from,cur.to);
   const profit=profitInRange(cur.from,cur.to);
   const margin=totalVal>0?profit/totalVal*100:0;
@@ -5000,10 +5005,10 @@ function renderSrKpis(cur,cmp){
 
   let c=null;
   if(cmp){
-    const cDirect=directSalesInRange(cmp.from,cmp.to),cEmag=platformSalesInRange(cmp.from,cmp.to,'emag'),cTrendyol=platformSalesInRange(cmp.from,cmp.to,'trendyol');
-    const cPlatformVal=cEmag.value+cTrendyol.value,cComenzi=sumSeries(comenziSeriesInRange(cmp.from,cmp.to,'all'));
-    const cTotalVal=cDirect.value+cEmag.value+cTrendyol.value,cProfit=profitInRange(cmp.from,cmp.to);
-    c={totalVal:cTotalVal,totalQty:cDirect.qty+cEmag.qty+cTrendyol.qty,comenzi:cComenzi,avgOrder:cComenzi>0?cPlatformVal/cComenzi:0,
+    const cDirect=directSalesInRange(cmp.from,cmp.to),cEmag=platformSalesInRange(cmp.from,cmp.to,'emag'),cTrendyol=platformSalesInRange(cmp.from,cmp.to,'trendyol'),cVinted=platformSalesInRange(cmp.from,cmp.to,'vinted');
+    const cPlatformVal=cEmag.value+cTrendyol.value+cVinted.value,cComenzi=sumSeries(comenziSeriesInRange(cmp.from,cmp.to,'all'));
+    const cTotalVal=cDirect.value+cEmag.value+cTrendyol.value+cVinted.value,cProfit=profitInRange(cmp.from,cmp.to);
+    c={totalVal:cTotalVal,totalQty:cDirect.qty+cEmag.qty+cTrendyol.qty+cVinted.qty,comenzi:cComenzi,avgOrder:cComenzi>0?cPlatformVal/cComenzi:0,
       purch:purchasesInRangeSimple(cmp.from,cmp.to).value,profit:cProfit,margin:cTotalVal>0?cProfit/cTotalVal*100:0};
   }
   const fmtRon=v=>v.toLocaleString('ro-RO',{maximumFractionDigits:0})+' RON';
@@ -5011,7 +5016,7 @@ function renderSrKpis(cur,cmp){
   host.innerHTML=[
     srKpiCard('Vânzări totale',totalVal,c?.totalVal??0,fmtRon,hasCmp),
     srKpiCard('Produse vândute',totalQty,c?.totalQty??0,v=>fmtQty(v)+' buc.',hasCmp),
-    srKpiCard('Comenzi (eMAG+Trendyol)',comenzi,c?.comenzi??0,v=>fmtQty(v),hasCmp),
+    srKpiCard('Comenzi (platforme)',comenzi,c?.comenzi??0,v=>fmtQty(v),hasCmp),
     srKpiCard('Valoare medie/comandă',avgOrder,c?.avgOrder??0,fmtRon,hasCmp),
     srKpiCard('Achiziții',purch.value,c?.purch??0,fmtRon,hasCmp),
     srKpiCard('Profit estimat',profit,c?.profit??0,fmtRon,hasCmp),
@@ -5160,6 +5165,7 @@ function renderSrChannelSection(cur,cmp){
     {key:'direct',lbl:'Direct',ic:'🛍️',bar:'var(--dash-sales)',bg:'var(--gr-bg)',cur:directSalesInRange(cur.from,cur.to),prev:cmp?directSalesInRange(cmp.from,cmp.to):null},
     {key:'emag',lbl:'eMAG',ic:'🛒',bar:'var(--bl)',bg:'var(--bl-bg)',cur:platformSalesInRange(cur.from,cur.to,'emag'),prev:cmp?platformSalesInRange(cmp.from,cmp.to,'emag'):null},
     {key:'trendyol',lbl:'Trendyol',ic:'🛍',bar:'var(--dash-purch)',bg:'var(--or-bg)',cur:platformSalesInRange(cur.from,cur.to,'trendyol'),prev:cmp?platformSalesInRange(cmp.from,cmp.to,'trendyol'):null},
+    {key:'vinted',lbl:'Vinted',ic:'👕',bar:'var(--pk)',bg:'var(--pk-bg)',cur:platformSalesInRange(cur.from,cur.to,'vinted'),prev:cmp?platformSalesInRange(cmp.from,cmp.to,'vinted'):null},
   ];
   const total=channels.reduce((s,c)=>s+c.cur.value,0);
   if(total<=0)return`<div class="sr-section-title">Vânzări pe canale</div><div class="dash-empty">Nicio vânzare în această perioadă.</div>`;
@@ -5190,11 +5196,12 @@ function renderSrChannelChartSvg(cur,gran){
   const directSeries=groupByGranularity(dailySeriesInRange(cur.from,cur.to,'direct','value'),gran);
   const emagSeries=groupByGranularity(dailySeriesInRange(cur.from,cur.to,'emag','value'),gran);
   const trendyolSeries=groupByGranularity(dailySeriesInRange(cur.from,cur.to,'trendyol','value'),gran);
-  const n=Math.max(directSeries.length,emagSeries.length,trendyolSeries.length);
+  const vintedSeries=groupByGranularity(dailySeriesInRange(cur.from,cur.to,'vinted','value'),gran);
+  const n=Math.max(directSeries.length,emagSeries.length,trendyolSeries.length,vintedSeries.length);
   if(n<1)return'<div class="dash-empty">Nicio dată în această perioadă.</div>';
   const W=1000,H=220,padL=52,padR=16,padT=16,padB=30;
   const plotW=W-padL-padR,plotH=H-padT-padB;
-  const maxV=Math.max(1,...directSeries.map(p=>p.value),...emagSeries.map(p=>p.value),...trendyolSeries.map(p=>p.value));
+  const maxV=Math.max(1,...directSeries.map(p=>p.value),...emagSeries.map(p=>p.value),...trendyolSeries.map(p=>p.value),...vintedSeries.map(p=>p.value));
   const xFor=i=>padL+(n<=1?plotW/2:plotW*i/(n-1));
   const yFor=v=>padT+plotH-(v/maxV*plotH);
   const pathFor=series=>series.map((p,i)=>`${i===0?'M':'L'}${xFor(i).toFixed(1)},${yFor(p.value).toFixed(1)}`).join(' ');
@@ -5209,31 +5216,33 @@ function renderSrChannelChartSvg(cur,gran){
   const hitRects=Array.from({length:n},(_,i)=>{
     const x0=i===0?padL:(xFor(i-1)+xFor(i))/2;
     const x1=i===n-1?W-padR:(xFor(i)+xFor(i+1))/2;
-    const dv=directSeries[i]?.value||0,emv=emagSeries[i]?.value||0,tv=trendyolSeries[i]?.value||0;
-    const lbl=directSeries[i]?.lbl||emagSeries[i]?.lbl||trendyolSeries[i]?.lbl||'';
-    return`<rect x="${x0.toFixed(1)}" y="${padT}" width="${Math.max(1,x1-x0).toFixed(1)}" height="${plotH}" fill="transparent" onmouseenter="srChannelChartHover(event,'${esc(lbl)}',${dv.toFixed(2)},${emv.toFixed(2)},${tv.toFixed(2)})" onmouseleave="srChannelChartHoverOut(event)"/>`;
+    const dv=directSeries[i]?.value||0,emv=emagSeries[i]?.value||0,tv=trendyolSeries[i]?.value||0,vv=vintedSeries[i]?.value||0;
+    const lbl=directSeries[i]?.lbl||emagSeries[i]?.lbl||trendyolSeries[i]?.lbl||vintedSeries[i]?.lbl||'';
+    return`<rect x="${x0.toFixed(1)}" y="${padT}" width="${Math.max(1,x1-x0).toFixed(1)}" height="${plotH}" fill="transparent" onmouseenter="srChannelChartHover(event,'${esc(lbl)}',${dv.toFixed(2)},${emv.toFixed(2)},${tv.toFixed(2)},${vv.toFixed(2)})" onmouseleave="srChannelChartHoverOut(event)"/>`;
   }).join('');
   return`<svg viewBox="0 0 ${W} ${H}" style="width:100%;height:220px;font-family:var(--font);display:block">
     ${gridLines}
     <path d="${pathFor(trendyolSeries)}" fill="none" stroke="var(--dash-purch)" stroke-width="2"/>
     <path d="${pathFor(emagSeries)}" fill="none" stroke="var(--bl)" stroke-width="2"/>
+    <path d="${pathFor(vintedSeries)}" fill="none" stroke="var(--pk)" stroke-width="2"/>
     <path d="${pathFor(directSeries)}" fill="none" stroke="var(--dash-sales)" stroke-width="2.5"/>
-    ${dotsFor(trendyolSeries,'var(--dash-purch)')}${dotsFor(emagSeries,'var(--bl)')}${dotsFor(directSeries,'var(--dash-sales)')}
+    ${dotsFor(trendyolSeries,'var(--dash-purch)')}${dotsFor(emagSeries,'var(--bl)')}${dotsFor(vintedSeries,'var(--pk)')}${dotsFor(directSeries,'var(--dash-sales)')}
     ${xLabels}${hitRects}
   </svg><div class="sr-chart-tooltip"></div>
   <div class="sr-chart-legend">
     <span class="sr-chart-legend-item"><span class="sr-chart-legend-line" style="border-color:var(--dash-sales)"></span>Direct</span>
     <span class="sr-chart-legend-item"><span class="sr-chart-legend-line" style="border-color:var(--bl)"></span>eMAG</span>
     <span class="sr-chart-legend-item"><span class="sr-chart-legend-line" style="border-color:var(--dash-purch)"></span>Trendyol</span>
+    <span class="sr-chart-legend-item"><span class="sr-chart-legend-line" style="border-color:var(--pk)"></span>Vinted</span>
   </div>`;
 }
-function srChannelChartHover(domEv,lbl,dv,emv,tv){
+function srChannelChartHover(domEv,lbl,dv,emv,tv,vv){
   const wrap=domEv.target.closest('.sr-chart-wrap');if(!wrap)return;
   const tt=wrap.querySelector('.sr-chart-tooltip');if(!tt)return;
-  const total=dv+emv+tv;
+  const total=dv+emv+tv+vv;
   const pct=v=>total>0?Math.round(v/total*100):0;
   const fmt=v=>v.toLocaleString('ro-RO',{maximumFractionDigits:0});
-  tt.innerHTML=`<b>${esc(lbl)}</b><br><span style="color:var(--dash-sales)">●</span> Direct: ${fmt(dv)} RON (${pct(dv)}%)<br><span style="color:var(--bl)">●</span> eMAG: ${fmt(emv)} RON (${pct(emv)}%)<br><span style="color:var(--dash-purch)">●</span> Trendyol: ${fmt(tv)} RON (${pct(tv)}%)`;
+  tt.innerHTML=`<b>${esc(lbl)}</b><br><span style="color:var(--dash-sales)">●</span> Direct: ${fmt(dv)} RON (${pct(dv)}%)<br><span style="color:var(--bl)">●</span> eMAG: ${fmt(emv)} RON (${pct(emv)}%)<br><span style="color:var(--dash-purch)">●</span> Trendyol: ${fmt(tv)} RON (${pct(tv)}%)<br><span style="color:var(--pk)">●</span> Vinted: ${fmt(vv)} RON (${pct(vv)}%)`;
   tt.classList.add('on');
   const wrapRect=wrap.getBoundingClientRect();
   const evtRect=domEv.target.getBoundingClientRect();
@@ -5323,8 +5332,8 @@ function srMonthlyHistoryRows(n){
   }
   return months.map((ym,idx)=>{
     const from=ym+'-01',to=monthEndISO(ym);
-    const direct=directSalesInRange(from,to),emag=platformSalesInRange(from,to,'emag'),trendyol=platformSalesInRange(from,to,'trendyol');
-    const val=direct.value+emag.value+trendyol.value,qty=direct.qty+emag.qty+trendyol.qty;
+    const direct=directSalesInRange(from,to),emag=platformSalesInRange(from,to,'emag'),trendyol=platformSalesInRange(from,to,'trendyol'),vinted=platformSalesInRange(from,to,'vinted');
+    const val=direct.value+emag.value+trendyol.value+vinted.value,qty=direct.qty+emag.qty+trendyol.qty+vinted.qty;
     const comenzi=sumSeries(comenziSeriesInRange(from,to,'all'));
     const purch=purchasesInRangeSimple(from,to).value;
     const profit=profitInRange(from,to);
@@ -5333,8 +5342,8 @@ function srMonthlyHistoryRows(n){
     let trendPct=null;
     if(prevYm){
       const pFrom=prevYm+'-01',pTo=monthEndISO(prevYm);
-      const pDirect=directSalesInRange(pFrom,pTo),pEmag=platformSalesInRange(pFrom,pTo,'emag'),pTrendyol=platformSalesInRange(pFrom,pTo,'trendyol');
-      trendPct=srPctDelta(val,pDirect.value+pEmag.value+pTrendyol.value);
+      const pDirect=directSalesInRange(pFrom,pTo),pEmag=platformSalesInRange(pFrom,pTo,'emag'),pTrendyol=platformSalesInRange(pFrom,pTo,'trendyol'),pVinted=platformSalesInRange(pFrom,pTo,'vinted');
+      trendPct=srPctDelta(val,pDirect.value+pEmag.value+pTrendyol.value+pVinted.value);
     }
     return{ym,label:monthLabelRo(ym),val,qty,comenzi,purch,profit,margin,trendPct};
   });
@@ -5370,8 +5379,8 @@ function renderSrMoreSections(cur,cmp){
 function srExportKpiSummary(){
   const cur=srCurrentRange();
   const cmp=srCompareKey==='none'?null:resolveComparePreset(srCompareKey,cur.from,cur.to);
-  const direct=directSalesInRange(cur.from,cur.to),emag=platformSalesInRange(cur.from,cur.to,'emag'),trendyol=platformSalesInRange(cur.from,cur.to,'trendyol');
-  const totalVal=direct.value+emag.value+trendyol.value,totalQty=direct.qty+emag.qty+trendyol.qty;
+  const direct=directSalesInRange(cur.from,cur.to),emag=platformSalesInRange(cur.from,cur.to,'emag'),trendyol=platformSalesInRange(cur.from,cur.to,'trendyol'),vinted=platformSalesInRange(cur.from,cur.to,'vinted');
+  const totalVal=direct.value+emag.value+trendyol.value+vinted.value,totalQty=direct.qty+emag.qty+trendyol.qty+vinted.qty;
   const purch=purchasesInRangeSimple(cur.from,cur.to).value;
   const profit=profitInRange(cur.from,cur.to);
   const margin=totalVal>0?profit/totalVal*100:0;
@@ -5379,7 +5388,7 @@ function srExportKpiSummary(){
   return{cur,cmp,rows:[
     {lbl:'Vânzări totale',val:totalVal.toFixed(2)+' RON'},
     {lbl:'Produse vândute',val:fmtQty(totalQty)+' buc.'},
-    {lbl:'Comenzi (eMAG+Trendyol)',val:fmtQty(comenzi)},
+    {lbl:'Comenzi (platforme)',val:fmtQty(comenzi)},
     {lbl:'Achiziții',val:purch.toFixed(2)+' RON'},
     {lbl:'Profit estimat',val:profit.toFixed(2)+' RON'},
     {lbl:'Marjă estimată',val:margin.toFixed(1)+'%'},
