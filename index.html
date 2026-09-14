@@ -3663,6 +3663,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:364,text:'Jurnal vânzări / Comenzi Platforme — bug real reparat, raportat direct: „am cerut expres ca modificările aduse în Jurnal vânzări, la Vânzări azi, să se aplice și în restul proiectului — nu se întâmplă asta". Cauza: „Vânzări azi" (TS/vanzari_zilnice, citit de cardul rapid de vânzare și de tqp()) e un CACHE SEPARAT de Jurnal (JL) — orice corecție de azi (editarea de cantitate de la #363, curățarea de duplicate de la #362, sau chiar butonul EXISTENT „🗑 Șterge vânzare" din Jurnal, care avea exact același bug dinainte de sesiunea asta) actualiza corect stocul și Jurnalul, dar NIMIC nu mai sincroniza și „Vânzări azi" — rămânea cu numărul vechi, „fantomă". Reparat central, în reverseJurnalEcho (funcția deja folosită de toate ștergerile de comenzi) și în adjustJurnalQtyDirect (partea de la #363 care nu trece prin ea) — dacă ziua corectată e AZI, „Vânzări azi" se recalculează și se salvează automat, exact ca restul sistemului; zilele din trecut nu sunt atinse (TS ține evidența strict pentru azi). Verificat de 2 ori, cu TOATE apelurile Supabase simulate: corectare de azi prin editare directă (26→2) — „Vânzări azi" ajunge corect la 2, nu rămâne la 26; creștere directă (5→8) — ajunge corect la 8; corectare pe o zi din TRECUT — „Vânzări azi" rămâne complet neatins (0 apeluri de sincronizare, cum trebuie); ștergerea unei vânzări de AZI cu butonul existent „🗑" (bug pre-existent, nu doar cel nou) — „Vânzări azi" ajunge acum corect la 0, nu mai rămâne cu numărul vechi; plus toate suitele de regresie Comenzi Platforme/Jurnal de la #354-#363, tot verzi, fără erori consolă',date:'2026-09-14'},
   {n:363,text:'Jurnal vânzări — editare directă a cantității pe fiecare rând, cerută direct ca alternativă mai rapidă la „🧹 Verifică duplicate" (#362): acolo trebuie căutat produs cu produs în Comenzi Platforme, aici numărul greșit e deja vizibil, direct, pe ecran. Fiecare rând are acum un ✏️ lângă cantitate — click deschide un câmp editabil, cu „✓ Salvează"/„✕ Anulează". La SALVARE: dacă noua cantitate e mai MICĂ (cazul obișnuit — corectarea unui import dublat), aplicația șterge automat comenzile în plus din Comenzi Platforme pentru exact acel produs+zi (păstrează cele mai vechi — cel mai probabil comenzile reale originale), folosind EXACT aceeași logică sigură de la #362 (deletePcomOrderCore) — readaugă stocul, corectează Profit/Total încasări, NU doar Jurnalul, exact cum a fost cerut („să apară peste tot în sistem aceeași informație"). Dacă vânzarea nu vine (integral) din Comenzi Platforme (ex. parte manuală, din „Vânzări azi"), diferența rămasă se corectează direct, fără să inventeze o comandă de platformă. La creștere (corecție manuală, rar) — ajustare directă a Jurnalului și stocului. Bug real găsit și reparat pe drum, în timp ce construiam asta: ziua deschisă din Jurnal (click pe antet, „▼") se ÎNCHIDEA instant la orice acțiune (editare sau chiar ștergerea deja existentă a unei vânzări), pentru că randarea reconstruia tot HTML-ul fără să țină minte ce era deschis — acum starea de deschis/închis se reține separat și supraviețuiește oricărei re-randări. Verificat de 2 ori, cu TOATE apelurile Supabase simulate: scădere cu comenzi disponibile (26→2, cu 26 comenzi identice) — șterge exact 24, stocul scade exact la 2, Jurnalul arată 2; scădere cu acoperire parțială (10→4, doar 3 comenzi disponibile) — șterge cele 3 disponibile, corectează direct diferența rămasă de 3, ajunge exact la 4; creștere pură (5→8) — doar Jurnal+stoc, nicio comandă atinsă; aceeași valoare introdusă — nicio schimbare, niciun dialog; plus suitele complete de regresie Comenzi Platforme de la #354-#362, tot verzi, fără erori consolă',date:'2026-09-14'},
   {n:362,text:'Comenzi Platforme — unealtă nouă „🧹 Verifică duplicate", cerută direct pe o captură reală cu Jurnalul unei zile arătând 24 de produse, cu cantități absurd de mari (7-26 buc fiecare, 296 buc/9727 RON total) — efectul acumulat al bug-ului de la #361 (reîncercări repetate la recunoașterea Vinted, înainte de reparația la sursă), pe multe produse deodată, nu doar unul. Ștergerea manuală, produs cu produs, ar fi însemnat 24 de căutări separate — nefezabil. Unealta nouă (Comenzi Platforme → Istoric importuri) găsește, pentru o zi aleasă, TOATE grupurile de comenzi deja aplicate cu același produs + preț identic (semnul aproape sigur al aceleiași comenzi aplicate de mai multe ori) — le arată clar, cu numărul găsit și intervalul orar, ȘI NU ȘTERGE NIMIC AUTOMAT: pentru fiecare grup, omul alege câte să păstreze (implicit 1, editabil — păstrează mereu cele mai VECHI, cel mai probabil comanda originală reală) și apasă explicit „Șterge restul", cu o confirmare finală care arată exact ce se întâmplă. Fiecare ștergere reutilizează EXACT aceeași logică sigură, deja existentă și testată, de la ștergerea individuală a unei comenzi (deletePcomOrderCore, extras din deletePcomOrder fără nicio schimbare de comportament) — readaugă stocul corect, anulează ecoul din Jurnal, șterge comanda din Profit/Total încasări — doar aplicată o dată per comandă din grup, nu reimplementată. Produse cu preț diferit sau din altă zi nu sunt atinse. Verificat de 2 ori, cu TOATE apelurile Supabase simulate (nicio scriere reală, fără risc pe producție): 5 comenzi identice + 1 cu preț diferit + 1 din altă zi + 1 neaplicată încă — detectate corect DOAR cele 5; „păstrează 2, șterge 3" → șterge exact cele mai recente 3, păstrează cele mai vechi 2, stocul produsului scade corect cu exact 3 (nu 5, nu greșit), celelalte comenzi neatinse; refuzarea confirmării → zero ștergeri, zero cereri DELETE trimise; plus toate suitele de regresie Comenzi Platforme de la #354-#361, tot verzi, fără erori consolă',date:'2026-09-14'},
   {n:361,text:'Comenzi Platforme → recunoaștere Vinted — bug real, grav, reparat, raportat direct pe un stoc rămas negativ (-22, „vândute azi 27" pe un singur produs). Cauza: spre deosebire de eMAG/Trendyol (care au un număr real de comandă, verificat automat ca să nu se importe de două ori), Vinted nu are NICIUN identificator din platformă — fiecare captură procesată crea o linie complet nouă, fără nicio legătură cu cele anterioare. Dacă aceeași captură se lipea/procesa de mai multe ori (reîncercări, mai ales plauzibile înainte de reparația „Aplică import" de la #359, când nu exista niciun feedback vizual și părea firesc să încerci din nou), fiecare încercare adăuga o comandă în plus — și, cu upload-ul aditiv de la #356, toate se adunau în loc să se înlocuiască. Acum, înainte să adauge o linie nouă, verifică dacă ACELAȘI produs + preț par deja prezente azi — fie în previzualizarea curentă, fie deja aplicate (chiar dacă între timp au dispărut din previzualizare) — și, dacă da, ÎNTREABĂ explicit înainte să adauge („...pare deja adăugat azi — posibil aceeași captură procesată de două ori. Adaugi oricum o comandă NOUĂ?") — nu blochează silențios (ar putea fi chiar o a doua comandă reală, identică din întâmplare), doar pune omul să decidă, cu context clar. Produse diferite sau prețuri diferite trec neîntrerupt, fără nicio întrebare. NIMIC din potrivirea de produs/calculul de preț nu s-a schimbat — strict o verificare nouă, înainte de a adăuga linia. Verificat de 2 ori: test dedicat pe funcția de detecție — același produs+preț → duplicat detectat; preț diferit sau nume diferit → nu; comandă deja aplicată AZI (nu doar cea din previzualizare) → tot detectată; comandă din altă zi → nu (corect, nu blochează comenzi normale din zile diferite); test end-to-end, cu AI simulat (fără cost) — două recunoașteri identice, refuzi întrebarea → rămâne 1 linie (nu 2); aceleași două, accepți → 2 linii (comandă reală dublă, respectată); două produse diferite într-o singură captură → ambele intră, fără nicio întrebare; plus suitele complete de regresie Comenzi Platforme de la #354-#360, tot verzi, fără erori consolă',date:'2026-09-14'},
@@ -14740,6 +14741,14 @@ async function reverseJurnalEcho(productId,createdAt,qty){
         if(!jd.entries.length)JL=JL.filter(d=>d!==jd);
       }
     }
+    // „Vânzări azi” (TS/vanzari_zilnice) e un cache SEPARAT de Jurnal, citit de tqp()/renderToday() —
+    // bug real raportat direct: orice corecție de AZI (ștergere comandă, curățare duplicate #362,
+    // editare directă din Jurnal #363) corecta Jurnalul/stocul, dar „Vânzări azi” rămânea cu numărul
+    // vechi, „fantomă” — pentru că nimic din acest fir nu-l atingea.
+    if(day===td()){
+      TS[productId]=Math.max(0,(TS[productId]||0)-qty);
+      try{await saveTodaySale(productId,TS[productId]);}catch(e){console.warn('Nu am putut actualiza „Vânzări azi”:',e);}
+    }
   }catch(e){console.warn('Nu am putut anula ecoul din Jurnal pentru produsul',productId,e);}
 }
 async function deletePcomBatch(batchId){
@@ -20062,6 +20071,12 @@ async function adjustJurnalQtyDirect(date,productId,p,delta){
     en.qty=newQty;
     if(en.qty<=0&&jd){jd.entries=jd.entries.filter(e=>e!==en);if(!jd.entries.length)JL=JL.filter(d=>d!==jd);}
   }
+  // \u201EV\u00E2nz\u0103ri azi\u201D (TS) \u2014 cache separat de Jurnal, altfel r\u0103m\u00E2ne cu num\u0103rul vechi pentru ziua curent\u0103
+  // (aceea\u0219i repara\u021Bie ca \u00EEn reverseJurnalEcho, pentru partea care NU trece prin ea).
+  if(date===td()){
+    TS[productId]=newQty;
+    try{await saveTodaySale(productId,TS[productId]);}catch(e){console.warn('Nu am putut actualiza \u201EV\u00E2nz\u0103ri azi\u201D:',e);}
+  }
 }
 // La SC\u0102DERE: \u0219terge comenzi platforma_comenzi \u00EEn plus pentru exact acest produs+zi (cele mai vechi
 // p\u0103strate, aceea\u0219i func\u021Bie/logic\u0103 ca la \u201EVerific\u0103 duplicate" \u2014 deletePcomOrderCore, care reverseaz\u0103
@@ -20132,8 +20147,17 @@ async function deleteJournalEntry(date, productId, qty){
         if(!day.entries.length)JL=JL.filter(d=>d.date!==date);
       }
 
+      // „Vânzări azi” (TS) — cache separat de Jurnal, altfel rămâne cu numărul vechi pentru ziua
+      // curentă (bug real raportat direct — aceeași reparație aplicată și la #363).
+      if(date===td()){
+        TS[productId]=Math.max(0,(TS[productId]||0)-qty);
+        try{await saveTodaySale(productId,TS[productId]);}catch(e){console.warn('Nu am putut actualiza „Vânzări azi”:',e);}
+      }
+
       renderJurnal();
       renderTable();
+      renderToday();
+      renderDashboard();
       toast('Vânzare ștearsă ✓');
     }catch(e){
       toast('Eroare la ștergere','err');
