@@ -3657,6 +3657,9 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:359,text:'Comenzi Platforme — bug real reparat, raportat direct: „apăs pe Aplică import și nu merge". Cauza, în redesign (USE_PCOM_REDESIGN=true, activ implicit): butonul VIZIBIL pe ecran (#pcx-apply-btn) nu primea NICIUN feedback la click — codul actualiza „Se aplică…"/disabled doar pe butonul vechi, ascuns (#pcmi-apply-btn, display:none, existent în DOM dar niciodată văzut) — părea că apăsarea nu face nimic. A doua jumătate a aceluiași bug: dacă TOATE liniile selectate se aplicau cu succes, codul golea doar widget-urile vechi — cardurile din redesign (#pcx-orders-list) rămâneau afișate neschimbate, cu „Neinclus" etc., deși stocul/Jurnalul chiar fuseseră scrise — părea că importul n-a făcut nimic, deși datele erau corecte pe fundal. Ambele reparate: acum ambele butoane (vechi + redesign) primesc starea corectă, iar golirea previzualizării după succes total actualizează corect AMBELE interfețe (o singură funcție unificată, renderPcomImportPreview, în loc de manipulare manuală doar pe elementele vechi). NIMIC din logica de scădere stoc/scriere Jurnal/profit nu s-a schimbat — strict feedback vizual și refresh după aplicare. Verificat de 2 ori: test dedicat, cu TOATE apelurile Supabase interceptate/simulate (nicio scriere reală, fără risc pe producție) — aplicare completă (1 linie, succes 100%): butonul arată corect „Se aplică…"/disabled în timpul operației și revine la normal după, bara de acțiuni și cardurile se golesc corect (fără carduri fantomă), stocul produsului chiar crește (confirmă că datele oricum se aplicaseră corect, doar UI-ul nu reflecta); aplicare parțială (1 linie potrivită + 1 „produs nou" fără produs ales): linia potrivită dispare, linia rămasă e vizibilă corect, bara de acțiuni rămâne vizibilă; plus suitele complete de regresie Comenzi Platforme de la #354/#357/#358, tot verzi, fără erori consolă',date:'2026-09-14'},
+  {n:358,text:'Comenzi Platforme — copierea titlului AWB (buton „📋" din caseta din capul cardului) marchează acum automat linia „Inclus" (era „Neinclus"), cerut direct: „atunci când se apasă copy pe denumirea produsul[ui] - să se schimbe automat și statusul din neinclus în inclus". Motivare: copiezi titlul AWB exact când chiar procesezi/expediezi comanda — a mai apăsa separat „Neinclus"→„Inclus" era un pas manual redundant. Reutilizează EXACT aceeași funcție ca la click manual pe status (syncPcomLineCommitState/commitPcomLine) — comanda reală se scrie în Staff identic, nu doar o bifă vizuală; stocul/Jurnalul rămân neatinse până la „Aplică import", ca înainte. Aplicat la ambele variante: linie singură ȘI pachet cu mai multe produse (un singur AWB pentru tot grupul — toate liniile din pachet trec „Inclus" deodată). Dacă linia era deja inclusă, nimic nu se schimbă în plus (idempotent). Verificat de 2 ori, cu TOATE apelurile Supabase interceptate/simulate: copierea AWB pe o linie singură trece „Neinclus"→„✓ Inclus" și scrie comanda reală (cerere POST confirmată, mocked); copierea AWB de grup (2 produse, un pachet) trece AMBELE linii pe „Inclus", ambele comenzi scrise; plus suita completă de regresie Comenzi Platforme de la #354/#357, tot verde, fără erori consolă',date:'2026-09-14'},
+  {n:357,text:'Comenzi Platforme → import Trendyol — reparație parțială, raportată din nou, cu poză, pe același bug de la #128: numele clientului lipsea, arătând în schimb „Prima comandă"/„Comandă recurentă" (o coloană de STATUS, nu de nume). Plasa de siguranță deja existentă (respinge coloana „client" dacă are prea puține valori distincte pentru un eșantion decent — un nume real diferă aproape mereu de la un rând la altul) cerea minim 6 comenzi în eșantion ca să se declanșeze — pe un import mic (sub 6 comenzi, cazul din captură), pragul nu apuca niciodată să se activeze, coloana greșită trecea nerespinsă. Coborât la minim 3. Acum „Prima comandă"/„Comandă recurentă" NU mai apare deloc în locul numelui (revine la „—", comportamentul documentat, corect, de când coloana lipsește) — dar numele REAL tot nu apare încă, pentru că nu știu exact cum se numește coloana adevărată de nume din exportul Trendyol real (nu e în lista de aliasuri încercate până acum, care rămâne neverificată pe un export real, per comentariul din cod). Am nevoie de textul EXACT al headerului acelei coloane din fișier ca să completez alias-ul corect — o modificare izolată, de îndată ce îl am. Verificat de 2 ori: test dedicat, cu un fișier Trendyol de 3 comenzi (exact dimensiunea din captură) și o coloană „Tip client" cu doar 2 valori posibile — toate 3 liniile ies acum cu numele gol, nu cu eticheta de status; plus suitele complete de regresie Comenzi Platforme de la #354/#356, tot verzi, fără erori consolă',date:'2026-09-14'},
   {n:356,text:'Comenzi Platforme → „Importă comenzi" — încărcarea unui fișier/captură nou devine ADITIVĂ, nu înlocuire, cerut direct pe o captură reală cu dialogul blocant: „să putem adăuga linkuri/fișiere și după ce deja s-au încărcat o parte din comenzi, și doar să se actualizeze, fără să modifice structura actuală a paginii". Înainte, ORICE fișier nou golea complet previzualizarea (pcImpParsed=[]) și trebuia un avertisment explicit „Ai N comenzi deja confirmate... continui oricum?" ca să nu se piardă tăcut liniile deja confirmate (✓ Inclus, cu comandă reală în Staff, dar stoc încă neaplicat) — asta bloca exact fluxul de „mai adaug câteva comenzi pe parcursul zilei". Acum fișierul nou se ADAUGĂ la ce era deja în previzualizare (liniile vechi, inclusiv cele confirmate, rămân neatinse), iar liniile care se suprapun cu ce era deja încărcat (sau deja importate anterior, ca înainte) sunt ignorate automat, fără duplicate — avertismentul blocant nu mai are motiv să apară și a fost eliminat. Reset complet rămâne disponibil, neschimbat, din „↻ Resetează pagina". Structura paginii neatinsă — nicio schimbare de layout, doar comportamentul la al doilea+ fișier încărcat. Verificat de 2 ori: test dedicat, cu fișiere XLSX reale construite și parsate prin fluxul complet de import (nu simulare) — a doua încărcare adaugă corect linia nouă, ignoră corect linia deja existentă (fără duplicat), linia deja marcată „confirmată" din prima încărcare supraviețuiește neatinsă, ZERO dialog de confirmare declanșat; a doua încărcare 100% suprapusă cu prima nu adaugă nimic și arată mesajul corect „nicio linie nouă"; plus suita completă de regresie Comenzi Platforme de la #354, tot verde, fără erori consolă',date:'2026-09-14'},
   {n:355,text:'Research → Generator anunțuri — trei corecturi cerute direct, legate de descriere/poze pentru eMAG. (1) Inserare poză UNDE VREI în descriere, nu doar la final: butonul „+ În descriere" de pe fiecare poză din „Poze selectate" inserează acum EXACT la poziția cursorului, dacă „✏️ Editează HTML" e deschis (rămâne în ciornă, ca la „🔗 Inserează din URL" — apeși separat „💾 Salvează descrierea"); dacă editorul nu e deschis, comportamentul vechi rămâne neschimbat (adaugă direct la final, salvează imediat). (2) Pagina publică de produs (`/produs/{id}`, cea lipită în eMAG la „Adaugă produs cu URL") — descrierea citită automat de eMAG (câmpul `description`/`og:description`) păstrează acum STRUCTURA reală (paragrafe pe linii separate, beneficii cu „• " în față), nu mai vine ca un singur bloc de text lipit — înainte, orice tag era smuls și tot conținutul rămânea pe un singur rând continuu, greu de citit pentru orice tool automat. (3) Aceeași pagină publică respectă acum „🗑 Șterge din galerie" (#353, poze scoase local dintr-un produs) — o poză ștearsă din Research nu mai apare nici pe pagina pe care eMAG chiar o citește la import (înainte, pagina publică avea propriul calcul de imagini, complet separat, care nu știa nimic despre ștergeri); plafonul de poze de-acolo crescut de la 14 la 40, aliniat cu #353. Bonus găsit și reparat pe drum, neintenționat, nu cerut: `api/product-page.js` avea 4 byte-uri NUL corupte (rămase probabil dintr-o problemă de encoding mai veche) exact în mecanismul de placeholder al sanitizării HTML — funcționa din întâmplare (ambele părți foloseau același delimitator NUL), dar bloca uneltele de căutare text pe fișier; înlocuite cu spații normale, verificat că sanitizarea funcționează identic. Verificat de 2 ori: test dedicat client — inserare poză la cursor (text ciornă, NEsalvat până la „Salvează descrierea") vs. editor închis (comportament vechi neschimbat, salvează imediat); test dedicat server (Node, fără Vercel) — descriere cu paragrafe+listă+poză inline iese structurată corect în JSON-LD (linii separate, bullete), fără spații lipsă la joncțiuni; poză din `removed_pool_images` exclusă corect din galerie/meta/JSON-LD; descriere fără HTML (doar text simplu) rămâne neschimbată; produs inexistent tot 404; plus suitele complete de regresie de la #350-#354, tot verzi, fără erori consolă',date:'2026-09-14'},
   {n:354,text:'Comenzi Platforme — trei corecturi cerute direct, pe capturi reale. (1) Titlu netradus reparat: „ai uitat să traduci acest titlu" (titlu bulgăresc rămas netradus, pe o comandă eMAG fără produs asociat) — cauza: traducerea automată de fundal de la import (pcomTranslateForeignTitles, rulează fără așteptare, ca să nu blocheze previzualizarea) poate eșua tăcut pe o linie (apel AI eșuat, prins doar în consolă, fără niciun semnal vizibil), MAI ALES pe linii fără produs asociat, unde titlul brut ajunge să fie chiar numele afișat — acolo butonul de traducere lipsea complet din markup, nu doar traducerea eșuase. Acum orice titlu scris cu alt alfabet (bulgară/maghiară/greacă) și încă netradus arată un buton „🌐 Traduce" — manual, cu răspuns imediat de succes/eroare (spre deosebire de varianta de fundal, tăcută) — atât pe linii cu produs asociat, cât și pe cele fără. (2) „Cod intern" și „Cod produs" — nu aveau buton de copiere, deși SKU și PNK de lângă ele aveau deja (cerut direct: „nu avem buton de copy pentru ceea ce am adăugat pe fiecare produs") — acum toate 4 (SKU/Cod intern/PNK/Cod produs) au același buton ⧉, reutilizează exact aceeași funcție (pcxCopyCode). (3) Vinted nu arăta deloc caseta de copiere din capul cardului (cerut direct: „la Vinted lipsește secțiunea de copy, adaugă-o și acolo") — exclusă intenționat inițial („Vinted nu are conceptul de AWB"), dar caseta oferă text generic util (cantitate × nume produs + SKU) pentru orice etichetă/curier propriu, nu doar AWB eMAG/Trendyol — eliminată excluderea, Vinted arată acum aceeași casetă, cu aceeași logică de copiere/marcare permanentă „copiat", neschimbată. Verificat de 2 ori: test dedicat — comandă Vinted cu produs asociat arată acum caseta, click real copiază textul corect în clipboard și rămâne marcată verde; SKU/Cod intern/PNK/Cod produs arată toate cele 4 butoane de copiere, click pe „Cod intern" copiază exact codul corect; titlu bulgăresc fără produs asociat arată „🌐 Traduce", click îl traduce și înlocuiește butonul cu textul tradus (verificat separat și scenariul opus — produs asociat cu titlu original diferit — funcționează neschimbat, fără duplicare); plus suitele complete de regresie de la Research (#350-#353), tot verzi, fără erori consolă',date:'2026-09-14'},
@@ -14939,7 +14942,10 @@ async function handlePcomImportFile(ev){
         // comportamentul documentat de când coloana lipsește (fără nume afișat, nu unul greșit).
         if(col.client>-1){
           const sample=rows.slice(headerRowIdx+1,headerRowIdx+1+30).map(r=>String(r[col.client]||'').trim()).filter(Boolean);
-          if(sample.length>=6&&new Set(sample).size<=2)col.client=-1;
+          // Prag coborât de la 6 la 3 (raportat direct, din nou, pe un import Trendyol mic — sub 6
+          // comenzi, deci pragul vechi nu apuca să se declanșeze niciodată, coloana greșită trecea
+          // nerespinsă) — 3+ comenzi cu doar 1-2 valori distincte tot nu pot fi nume reale de clienți.
+          if(sample.length>=3&&new Set(sample).size<=2)col.client=-1;
         }
         // La platforma „both" (eMAG+Trendyol încărcate deodată), platforma fiecărui fișier se
         // detectează din forma coloanelor găsite — același semnal deja folosit mai jos pentru deducerea
@@ -15255,13 +15261,22 @@ function pcomAwbTitleHtml(idx){
   const justCopied=!!pcomAwbFlash['r'+idx];
   return`<div class="pcom-awb-box"><div><span class="pcom-awb-label">AWB</span><div class="pcom-awb-title" title="Titlu pentru AWB">${esc(title)}</div></div><div class="pcom-awb-actions"><button type="button" class="btn ${justCopied?'pcom-awb-copy copied':'btn-acc pcom-awb-copy'}" onclick="copyPcomAwbTitle(${idx})">${justCopied?'✓ Copiat':'📋 Copiază'}</button>${everCopied&&!justCopied?'<span class="pcom-awb-seen" title="Copiat anterior">✓</span>':''}</div></div>`;
 }
-function copyPcomAwbTitle(idx){
+// Copierea titlului AWB înseamnă, în practică, „chiar procesez/expediez comanda asta acum" — cerut
+// direct, ca statusul să treacă automat „Neinclus" → „Inclus" în același moment (nu doar bifă vizuală:
+// syncPcomLineCommitState scrie comanda reală, vizibilă în Staff, EXACT ca la un click manual pe
+// „Neinclus"). Dacă linia era deja inclusă, nu se schimbă nimic în plus (idempotent).
+async function copyPcomAwbTitle(idx){
   const title=pcomAwbTitle(idx);
   if(!title)return;
   copyText(title);
-  if(pcImpParsed[idx])pcImpParsed[idx].awbCopied=true;
+  const it=pcImpParsed[idx];
+  if(it){
+    it.awbCopied=true;
+    if(!it.include)it.include=true;
+  }
   pcomAwbFlash['r'+idx]=true;
   renderPcomImportPreview();
+  await syncPcomLineCommitState(idx);
   setTimeout(()=>{delete pcomAwbFlash['r'+idx];renderPcomImportPreview();},1800);
 }
 // Fără TVA / cu TVA / profit — vezi pcomSaleFinancials mai sus. Dacă am vândut sub pragul minim
@@ -15298,13 +15313,17 @@ function pcomGroupAwbTitle(gIdx){
   const idxs=pcomGroups[gIdx]||[];
   return idxs.map(i=>pcomAwbTitle(i)).filter(Boolean).join(' + ');
 }
-function copyPcomGroupAwbTitle(gIdx){
+// Aceeași auto-includere ca la copyPcomAwbTitle (copiat AWB = procesez comanda acum), aplicată
+// TUTUROR liniilor din pachet (un singur AWB pentru tot grupul).
+async function copyPcomGroupAwbTitle(gIdx){
   const title=pcomGroupAwbTitle(gIdx);
   if(!title)return;
   copyText(title);
-  (pcomGroups[gIdx]||[]).forEach(i=>{if(pcImpParsed[i])pcImpParsed[i].awbCopied=true;});
+  const idxs=pcomGroups[gIdx]||[];
+  idxs.forEach(i=>{const it=pcImpParsed[i];if(it){it.awbCopied=true;if(!it.include)it.include=true;}});
   pcomAwbFlash['g'+gIdx]=true;
   renderPcomImportPreview();
+  for(const i of idxs)await syncPcomLineCommitState(i);
   setTimeout(()=>{delete pcomAwbFlash['g'+gIdx];renderPcomImportPreview();},1800);
 }
 // Elimină definitiv o linie din import — cerere explicită: să putem șterge o comandă selectată,
@@ -16436,8 +16455,16 @@ async function applyPcomImport(){
     if(amanateCount||newProductCount||unmatchedCount)toast(`Nimic de aplicat acum${amanateCount?` · ${amanateCount} amânate`:''}${newProductCount?` · ${newProductCount} produse noi de adăugat mai întâi`:''}${unmatchedCount?` · ${unmatchedCount} linii fără produs — alege manual mai jos`:''}`);
     return;
   }
+  // Bug real raportat direct („apăs pe Aplică import și nu merge"): butonul VIZIBIL în redesign
+  // (#pcx-apply-btn, activ implicit — USE_PCOM_REDESIGN=true) nu primea NICIUN feedback la click —
+  // codul actualiza doar butonul vechi, ascuns (#pcmi-apply-btn, display:none), care există în DOM dar
+  // nu se vede niciodată. Rezultatul: click pe „Aplică import” nu arăta „Se aplică…”/disabled, părea
+  // că butonul nu face nimic (chiar dacă importul chiar rula pe fundal). Actualizăm acum AMBELE butoane,
+  // oricare există — corect indiferent de USE_PCOM_REDESIGN.
   const btn=document.getElementById('pcmi-apply-btn');
-  btn.disabled=true;btn.textContent='Se aplică…';
+  const btnRedesign=document.getElementById('pcx-apply-btn');
+  if(btn){btn.disabled=true;btn.textContent='Se aplică…';}
+  if(btnRedesign){btnRedesign.disabled=true;btnRedesign.textContent='Se aplică…';}
   let ok=0,failed=0;
   const succeeded=new Set();
   try{
@@ -16538,17 +16565,18 @@ async function applyPcomImport(){
     // reușite dispar. Înainte, liniile fără potrivire (unmatchedCount) dispăreau tăcut aici, fără să
     // fi fost salvate nicăieri și fără nicio menționare — bug real, găsit verificând producția.
     pcImpParsed=pcImpParsed.filter(x=>!succeeded.has(x));
-    if(pcImpParsed.length){renderPcomImportPreview();}
-    else{
-      document.getElementById('pcmi-preview').innerHTML='';
-      document.getElementById('pcmi-foot').style.display='none';
-      document.getElementById('pcmi-ai-btn').style.display='none';
-      localStorage.removeItem(PCIK);
-    }
+    // Bug real raportat direct, a doua jumătate a aceluiași fir: ramura „totul aplicat cu succes” golea
+    // DOAR widget-urile vechi (#pcmi-preview/#pcmi-foot), nu și cardurile din redesign (#pcx-orders-list/
+    // #pcx-stickybar) — după un „Aplică import” 100% reușit, cardurile vechi (cu „Neinclus” etc.) rămâneau
+    // vizibile neschimbate pe ecran, deși stocul/Jurnalul chiar fuseseră scrise — părea că nu s-a întâmplat
+    // nimic. renderPcomImportPreview() actualizează corect AMBELE interfețe, gol sau nu (verificat mai jos).
+    renderPcomImportPreview();
+    if(!pcImpParsed.length)localStorage.removeItem(PCIK);
     renderPcomImportHistory();renderTable();renderToday();renderDashboard();
     toast(`${ok} linii importate ✓${failed?` · ${failed} au eșuat`:''}${amanateCount?` · ${amanateCount} amânate (fără stoc)`:''}${newProductCount?` · ${newProductCount} produse noi de adăugat`:''}${unmatchedCount?` · ⚠ ${unmatchedCount} linii fără produs — alege manual mai jos`:''}`,(failed&&!ok)||unmatchedCount?'err':undefined);
   }finally{
-    btn.disabled=false;btn.textContent='Aplică import';
+    if(btn){btn.disabled=false;btn.textContent='Aplică import';}
+    if(btnRedesign){btnRedesign.disabled=false;btnRedesign.textContent='Aplică import';}
   }
 }
 /* PROFIT VÂNZĂRI / TOTAL ÎNCASĂRI (agregări peste platforma_comenzi) */
