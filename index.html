@@ -3657,6 +3657,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:360,text:'Comenzi Platforme — previzualizarea de import (Importă comenzi) primește acum și un backup în cloud (Supabase, setari_app — aceeași tabelă/API deja folosită la lista de poze blocate), pe lângă cel local existent, cerut direct: „în caz că se blochează sau ceva sistemul, să putem reintra sau da refresh... chiar de pe alt browser". Până acum previzualizarea se salva DOAR în localStorage — local unui singur browser/calculator; dacă se bloca Safari-ul sau schimbai calculatorul, previzualizarea era inaccesibilă (chiar dacă tehnic nu era ștearsă). Acum, la 2 secunde după ultima schimbare (nu la fiecare bifă/cantitate ajustată — ar fi însemnat un request Supabase la fiecare click), previzualizarea se salvează și în cloud. La încărcarea paginii: dacă există date locale (cazul normal, același browser), se folosesc alea, RAPID, fără niciun apel de rețea suplimentar; DOAR dacă localStorage e gol (browser nou, curățat, sau blocat) se încearcă recuperarea din cloud — cu un mesaj clar quand se întâmplă. Backup-ul din cloud se curăță automat la aplicare completă cu succes, la ștergerea ultimei linii rămase sau la „Resetează pagina" explicit — un draft vechi/deja-aplicat nu rămâne oferit din greșeală la o recuperare ulterioară. Bonus găsit pe drum, reparat cu aceeași ocazie: butonul „🗑 Șterge" de pe o linie individuală avea EXACT același bug ca „Aplică import" de mai devreme (#359) — ștergerea ultimei linii rămase actualiza doar widget-urile vechi, lăsând cardul din redesign vizibil, stale; unificat prin aceeași funcție (renderPcomImportPreview). Verificat de 2 ori, inclusiv sub Safari real (motorul WebKit, nu doar Chrome) — butonul „Aplică import" funcționează identic sub WebKit (click real prin mouse, nu doar apel direct de funcție: buton vizibil, neacoperit de nimic, clic funcționează, stocul crește, cardul dispare); test dedicat pentru backup cloud — o schimbare nu ajunge imediat în „cloud" (confirmat la 300ms încă gol), ci după debounce-ul de 2s; ștergerea localStorage-ului + reîncărcare (simulează alt browser) recuperează corect previzualizarea din cloud, cu mesaj vizibil; cu localStorage prezent, reîncărcarea NU mai interoghează cloud-ul deloc (0 apeluri, confirmat separat de celelalte chei de setări neafectate); aplicare completă cu succes curăță imediat backup-ul din cloud; plus toate suitele de regresie Comenzi Platforme de la #354-#359, tot verzi, fără erori consolă',date:'2026-09-14'},
   {n:359,text:'Comenzi Platforme — bug real reparat, raportat direct: „apăs pe Aplică import și nu merge". Cauza, în redesign (USE_PCOM_REDESIGN=true, activ implicit): butonul VIZIBIL pe ecran (#pcx-apply-btn) nu primea NICIUN feedback la click — codul actualiza „Se aplică…"/disabled doar pe butonul vechi, ascuns (#pcmi-apply-btn, display:none, existent în DOM dar niciodată văzut) — părea că apăsarea nu face nimic. A doua jumătate a aceluiași bug: dacă TOATE liniile selectate se aplicau cu succes, codul golea doar widget-urile vechi — cardurile din redesign (#pcx-orders-list) rămâneau afișate neschimbate, cu „Neinclus" etc., deși stocul/Jurnalul chiar fuseseră scrise — părea că importul n-a făcut nimic, deși datele erau corecte pe fundal. Ambele reparate: acum ambele butoane (vechi + redesign) primesc starea corectă, iar golirea previzualizării după succes total actualizează corect AMBELE interfețe (o singură funcție unificată, renderPcomImportPreview, în loc de manipulare manuală doar pe elementele vechi). NIMIC din logica de scădere stoc/scriere Jurnal/profit nu s-a schimbat — strict feedback vizual și refresh după aplicare. Verificat de 2 ori: test dedicat, cu TOATE apelurile Supabase interceptate/simulate (nicio scriere reală, fără risc pe producție) — aplicare completă (1 linie, succes 100%): butonul arată corect „Se aplică…"/disabled în timpul operației și revine la normal după, bara de acțiuni și cardurile se golesc corect (fără carduri fantomă), stocul produsului chiar crește (confirmă că datele oricum se aplicaseră corect, doar UI-ul nu reflecta); aplicare parțială (1 linie potrivită + 1 „produs nou" fără produs ales): linia potrivită dispare, linia rămasă e vizibilă corect, bara de acțiuni rămâne vizibilă; plus suitele complete de regresie Comenzi Platforme de la #354/#357/#358, tot verzi, fără erori consolă',date:'2026-09-14'},
   {n:358,text:'Comenzi Platforme — copierea titlului AWB (buton „📋" din caseta din capul cardului) marchează acum automat linia „Inclus" (era „Neinclus"), cerut direct: „atunci când se apasă copy pe denumirea produsul[ui] - să se schimbe automat și statusul din neinclus în inclus". Motivare: copiezi titlul AWB exact când chiar procesezi/expediezi comanda — a mai apăsa separat „Neinclus"→„Inclus" era un pas manual redundant. Reutilizează EXACT aceeași funcție ca la click manual pe status (syncPcomLineCommitState/commitPcomLine) — comanda reală se scrie în Staff identic, nu doar o bifă vizuală; stocul/Jurnalul rămân neatinse până la „Aplică import", ca înainte. Aplicat la ambele variante: linie singură ȘI pachet cu mai multe produse (un singur AWB pentru tot grupul — toate liniile din pachet trec „Inclus" deodată). Dacă linia era deja inclusă, nimic nu se schimbă în plus (idempotent). Verificat de 2 ori, cu TOATE apelurile Supabase interceptate/simulate: copierea AWB pe o linie singură trece „Neinclus"→„✓ Inclus" și scrie comanda reală (cerere POST confirmată, mocked); copierea AWB de grup (2 produse, un pachet) trece AMBELE linii pe „Inclus", ambele comenzi scrise; plus suita completă de regresie Comenzi Platforme de la #354/#357, tot verde, fără erori consolă',date:'2026-09-14'},
   {n:357,text:'Comenzi Platforme → import Trendyol — reparație parțială, raportată din nou, cu poză, pe același bug de la #128: numele clientului lipsea, arătând în schimb „Prima comandă"/„Comandă recurentă" (o coloană de STATUS, nu de nume). Plasa de siguranță deja existentă (respinge coloana „client" dacă are prea puține valori distincte pentru un eșantion decent — un nume real diferă aproape mereu de la un rând la altul) cerea minim 6 comenzi în eșantion ca să se declanșeze — pe un import mic (sub 6 comenzi, cazul din captură), pragul nu apuca niciodată să se activeze, coloana greșită trecea nerespinsă. Coborât la minim 3. Acum „Prima comandă"/„Comandă recurentă" NU mai apare deloc în locul numelui (revine la „—", comportamentul documentat, corect, de când coloana lipsește) — dar numele REAL tot nu apare încă, pentru că nu știu exact cum se numește coloana adevărată de nume din exportul Trendyol real (nu e în lista de aliasuri încercate până acum, care rămâne neverificată pe un export real, per comentariul din cod). Am nevoie de textul EXACT al headerului acelei coloane din fișier ca să completez alias-ul corect — o modificare izolată, de îndată ce îl am. Verificat de 2 ori: test dedicat, cu un fișier Trendyol de 3 comenzi (exact dimensiunea din captură) și o coloană „Tip client" cu doar 2 valori posibile — toate 3 liniile ies acum cu numele gol, nu cu eticheta de status; plus suitele complete de regresie Comenzi Platforme de la #354/#356, tot verzi, fără erori consolă',date:'2026-09-14'},
@@ -6054,6 +6055,11 @@ function pcImpBatchIdFor(pl){return pcImpBatchIds[pl]||(pcImpBatchIds[pl]=Date.n
 let REORDER=[];
 const REORDER_KEY='reorder_list';
 const PCIK='sm6_pcom_import';
+// Backup în cloud (setari_app, aceeași tabelă/API ca BLOCKED_IMAGES_KEY) pentru previzualizarea de
+// import — cerut direct: „în caz că se blochează sau ceva sistemul, să putem reintra sau da refresh...
+// chiar de pe alt browser". localStorage (PCIK) e local unui singur browser/dispozitiv — nu ajută dacă
+// se blochează Safari-ul sau schimbi calculatorul. Vezi savePcomImportState/loadPcomImportState mai jos.
+const PCOM_DRAFT_SETTINGS_KEY='pcom_import_draft';
 const SMIK='sm6_sync_import';
 let invLines=[],invParsed=[],catSuggestTimer=null,lastNameForCat='',invShippingCostRon=0;
 let sbReady=false;
@@ -15343,13 +15349,11 @@ async function removePcomLine(idx){
     catch(e){console.warn('Nu s-a putut șterge comanda deja confirmată:',e);toast('Eroare la ștergerea comenzii — încearcă din nou','err');return;}
   }
   pcImpParsed.splice(idx,1);
-  if(pcImpParsed.length){renderPcomImportPreview();}
-  else{
-    document.getElementById('pcmi-preview').innerHTML='';
-    document.getElementById('pcmi-foot').style.display='none';
-    document.getElementById('pcmi-ai-btn').style.display='none';
-    localStorage.removeItem(PCIK);
-  }
+  // Aceeași unificare ca la applyPcomImport (#359) — renderPcomImportPreview() actualizează corect
+  // AMBELE interfețe (legacy + redesign), gol sau nu; ramura manuală veche golea doar widget-urile
+  // vechi, lăsând cardul din redesign vizibil, stale, când tocmai ștergeai ULTIMA linie rămasă.
+  renderPcomImportPreview();
+  if(!pcImpParsed.length){localStorage.removeItem(PCIK);clearPcomCloudDraft();}
 }
 function pcomRowHtml(idx,showOwnAwb){
   const it=pcImpParsed[idx];
@@ -15838,6 +15842,30 @@ function savePcomImportState(){
       toast('⚠ Nu s-a putut salva automat progresul (prea multe date în previzualizare) — aplică importul curând, ca să nu-l pierzi la reîncărcare','err');
     }
   }
+  schedulePcomCloudDraftSave(toSave);
+}
+// Salvare în cloud, cu debounce (2s după ultima schimbare) — nu la fiecare randare (ar însemna un
+// request Supabase la fiecare bifă/cantitate ajustată, pe un import de zeci de linii). localStorage
+// (mai sus) rămâne sursa RAPIDĂ, sincronă, pe browser-ul curent; cloud-ul e strict plasa de siguranță
+// pentru „s-a blocat browser-ul"/„vreau să continui de pe alt calculator" — eșuează tăcut (doar
+// console.warn) dacă nu merge, ca să nu blocheze fluxul normal cu erori pentru o funcție de backup.
+let pcomCloudDraftTimer=null;
+function schedulePcomCloudDraftSave(toSave){
+  clearTimeout(pcomCloudDraftTimer);
+  pcomCloudDraftTimer=setTimeout(()=>savePcomImportStateToCloud(toSave),2000);
+}
+async function savePcomImportStateToCloud(toSave){
+  try{
+    const value=toSave.length?JSON.stringify({platforma:pcImpPlatforma,parsed:toSave,savedAt:Date.now()}):'';
+    await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:PCOM_DRAFT_SETTINGS_KEY,value})});
+  }catch(e){console.warn('Nu am putut salva previzualizarea Comenzi Platforme în cloud (rămâne salvată local):',e);}
+}
+// Curăță explicit backup-ul din cloud — apelat la aplicare completă cu succes sau la „Resetează
+// pagina", ca un draft vechi/aplicat deja să nu fie oferit din greșeală la recuperare pe alt browser.
+async function clearPcomCloudDraft(){
+  clearTimeout(pcomCloudDraftTimer);
+  try{await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:PCOM_DRAFT_SETTINGS_KEY,value:''})});}
+  catch(e){console.warn('Nu am putut curăța backup-ul din cloud:',e);}
 }
 
 /* ══════════════════════════════════════════════════════════════════════════════════════════
@@ -16287,20 +16315,39 @@ function renderPcomRedesign(){
   pcxRenderOrders();
 }
 
-function loadPcomImportState(){
+// Aplică un draft (local sau din cloud) pe starea live a paginii — extras separat, ca ambele surse
+// (loadPcomImportState) să treacă prin EXACT aceeași logică, nu una duplicată/putând să diveargă.
+function applyPcomImportDraft(saved){
+  pcImpParsed=saved.parsed;
+  pcImpPlatforma=saved.platforma||'emag';
+  const sel=document.getElementById('pcmi-platforma');if(sel)sel.value=pcImpPlatforma;
+  updPcmiPlatformaHint();
+  renderPcomImportPreview();
+  const noMatch=pcImpParsed.filter(x=>!x.produsId&&!x.newProduct).length;
+  const aiBtn=document.getElementById('pcmi-ai-btn');if(aiBtn)aiBtn.style.display=noMatch?'':'none';
+}
+async function fetchPcomCloudDraft(){
+  try{
+    const r=await fetch('/api/settings?key='+encodeURIComponent(PCOM_DRAFT_SETTINGS_KEY));
+    const data=await r.json();
+    return data?.value?JSON.parse(data.value):null;
+  }catch(e){console.warn('Nu am putut verifica backup-ul din cloud pentru Comenzi Platforme:',e);return null;}
+}
+async function loadPcomImportState(){
   renderVintedLotRows();updPcmiPlatformaHint();
   try{
     const raw=localStorage.getItem(PCIK);
-    if(!raw)return;
-    const saved=JSON.parse(raw);
-    if(saved&&Array.isArray(saved.parsed)&&saved.parsed.length){
-      pcImpParsed=saved.parsed;
-      pcImpPlatforma=saved.platforma||'emag';
-      const sel=document.getElementById('pcmi-platforma');if(sel)sel.value=pcImpPlatforma;
-      updPcmiPlatformaHint();
-      renderPcomImportPreview();
-      const noMatch=pcImpParsed.filter(x=>!x.produsId&&!x.newProduct).length;
-      const aiBtn=document.getElementById('pcmi-ai-btn');if(aiBtn)aiBtn.style.display=noMatch?'':'none';
+    const local=raw?JSON.parse(raw):null;
+    if(local&&Array.isArray(local.parsed)&&local.parsed.length){
+      applyPcomImportDraft(local);
+      return;
+    }
+    // Niciun draft local (browser/dispozitiv nou, localStorage golit, sau un browser care s-a blocat) —
+    // încearcă recuperarea din cloud (cerut direct: „chiar de pe alt browser").
+    const cloud=await fetchPcomCloudDraft();
+    if(cloud&&Array.isArray(cloud.parsed)&&cloud.parsed.length){
+      applyPcomImportDraft(cloud);
+      toast(`↻ Previzualizare recuperată din cloud (${cloud.parsed.length} linii) — salvată automat, posibil de pe alt browser/dispozitiv`);
     }
   }catch(e){console.warn('Nu s-a putut reîncărca previzualizarea Comenzi Platforme:',e);}
 }
@@ -16310,6 +16357,7 @@ function resetPcomImportPage(){
   if(pcImpParsed.length&&!confirm('Golești previzualizarea curentă? Liniile neaplicate încă se pierd (cele deja aplicate rămân salvate, neatinse).'+warn))return;
   pcImpParsed=[];pcImpBatchIds={};pcomSaveFailWarned=false;
   localStorage.removeItem(PCIK);
+  clearPcomCloudDraft();
   document.getElementById('pcmi-preview').innerHTML='';
   document.getElementById('pcmi-foot').style.display='none';
   document.getElementById('pcmi-ai-btn').style.display='none';
@@ -16571,7 +16619,7 @@ async function applyPcomImport(){
     // vizibile neschimbate pe ecran, deși stocul/Jurnalul chiar fuseseră scrise — părea că nu s-a întâmplat
     // nimic. renderPcomImportPreview() actualizează corect AMBELE interfețe, gol sau nu (verificat mai jos).
     renderPcomImportPreview();
-    if(!pcImpParsed.length)localStorage.removeItem(PCIK);
+    if(!pcImpParsed.length){localStorage.removeItem(PCIK);clearPcomCloudDraft();}
     renderPcomImportHistory();renderTable();renderToday();renderDashboard();
     toast(`${ok} linii importate ✓${failed?` · ${failed} au eșuat`:''}${amanateCount?` · ${amanateCount} amânate (fără stoc)`:''}${newProductCount?` · ${newProductCount} produse noi de adăugat`:''}${unmatchedCount?` · ⚠ ${unmatchedCount} linii fără produs — alege manual mai jos`:''}`,(failed&&!ok)||unmatchedCount?'err':undefined);
   }finally{
