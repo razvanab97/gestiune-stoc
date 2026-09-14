@@ -3657,6 +3657,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:356,text:'Comenzi Platforme → „Importă comenzi" — încărcarea unui fișier/captură nou devine ADITIVĂ, nu înlocuire, cerut direct pe o captură reală cu dialogul blocant: „să putem adăuga linkuri/fișiere și după ce deja s-au încărcat o parte din comenzi, și doar să se actualizeze, fără să modifice structura actuală a paginii". Înainte, ORICE fișier nou golea complet previzualizarea (pcImpParsed=[]) și trebuia un avertisment explicit „Ai N comenzi deja confirmate... continui oricum?" ca să nu se piardă tăcut liniile deja confirmate (✓ Inclus, cu comandă reală în Staff, dar stoc încă neaplicat) — asta bloca exact fluxul de „mai adaug câteva comenzi pe parcursul zilei". Acum fișierul nou se ADAUGĂ la ce era deja în previzualizare (liniile vechi, inclusiv cele confirmate, rămân neatinse), iar liniile care se suprapun cu ce era deja încărcat (sau deja importate anterior, ca înainte) sunt ignorate automat, fără duplicate — avertismentul blocant nu mai are motiv să apară și a fost eliminat. Reset complet rămâne disponibil, neschimbat, din „↻ Resetează pagina". Structura paginii neatinsă — nicio schimbare de layout, doar comportamentul la al doilea+ fișier încărcat. Verificat de 2 ori: test dedicat, cu fișiere XLSX reale construite și parsate prin fluxul complet de import (nu simulare) — a doua încărcare adaugă corect linia nouă, ignoră corect linia deja existentă (fără duplicat), linia deja marcată „confirmată" din prima încărcare supraviețuiește neatinsă, ZERO dialog de confirmare declanșat; a doua încărcare 100% suprapusă cu prima nu adaugă nimic și arată mesajul corect „nicio linie nouă"; plus suita completă de regresie Comenzi Platforme de la #354, tot verde, fără erori consolă',date:'2026-09-14'},
   {n:355,text:'Research → Generator anunțuri — trei corecturi cerute direct, legate de descriere/poze pentru eMAG. (1) Inserare poză UNDE VREI în descriere, nu doar la final: butonul „+ În descriere" de pe fiecare poză din „Poze selectate" inserează acum EXACT la poziția cursorului, dacă „✏️ Editează HTML" e deschis (rămâne în ciornă, ca la „🔗 Inserează din URL" — apeși separat „💾 Salvează descrierea"); dacă editorul nu e deschis, comportamentul vechi rămâne neschimbat (adaugă direct la final, salvează imediat). (2) Pagina publică de produs (`/produs/{id}`, cea lipită în eMAG la „Adaugă produs cu URL") — descrierea citită automat de eMAG (câmpul `description`/`og:description`) păstrează acum STRUCTURA reală (paragrafe pe linii separate, beneficii cu „• " în față), nu mai vine ca un singur bloc de text lipit — înainte, orice tag era smuls și tot conținutul rămânea pe un singur rând continuu, greu de citit pentru orice tool automat. (3) Aceeași pagină publică respectă acum „🗑 Șterge din galerie" (#353, poze scoase local dintr-un produs) — o poză ștearsă din Research nu mai apare nici pe pagina pe care eMAG chiar o citește la import (înainte, pagina publică avea propriul calcul de imagini, complet separat, care nu știa nimic despre ștergeri); plafonul de poze de-acolo crescut de la 14 la 40, aliniat cu #353. Bonus găsit și reparat pe drum, neintenționat, nu cerut: `api/product-page.js` avea 4 byte-uri NUL corupte (rămase probabil dintr-o problemă de encoding mai veche) exact în mecanismul de placeholder al sanitizării HTML — funcționa din întâmplare (ambele părți foloseau același delimitator NUL), dar bloca uneltele de căutare text pe fișier; înlocuite cu spații normale, verificat că sanitizarea funcționează identic. Verificat de 2 ori: test dedicat client — inserare poză la cursor (text ciornă, NEsalvat până la „Salvează descrierea") vs. editor închis (comportament vechi neschimbat, salvează imediat); test dedicat server (Node, fără Vercel) — descriere cu paragrafe+listă+poză inline iese structurată corect în JSON-LD (linii separate, bullete), fără spații lipsă la joncțiuni; poză din `removed_pool_images` exclusă corect din galerie/meta/JSON-LD; descriere fără HTML (doar text simplu) rămâne neschimbată; produs inexistent tot 404; plus suitele complete de regresie de la #350-#354, tot verzi, fără erori consolă',date:'2026-09-14'},
   {n:354,text:'Comenzi Platforme — trei corecturi cerute direct, pe capturi reale. (1) Titlu netradus reparat: „ai uitat să traduci acest titlu" (titlu bulgăresc rămas netradus, pe o comandă eMAG fără produs asociat) — cauza: traducerea automată de fundal de la import (pcomTranslateForeignTitles, rulează fără așteptare, ca să nu blocheze previzualizarea) poate eșua tăcut pe o linie (apel AI eșuat, prins doar în consolă, fără niciun semnal vizibil), MAI ALES pe linii fără produs asociat, unde titlul brut ajunge să fie chiar numele afișat — acolo butonul de traducere lipsea complet din markup, nu doar traducerea eșuase. Acum orice titlu scris cu alt alfabet (bulgară/maghiară/greacă) și încă netradus arată un buton „🌐 Traduce" — manual, cu răspuns imediat de succes/eroare (spre deosebire de varianta de fundal, tăcută) — atât pe linii cu produs asociat, cât și pe cele fără. (2) „Cod intern" și „Cod produs" — nu aveau buton de copiere, deși SKU și PNK de lângă ele aveau deja (cerut direct: „nu avem buton de copy pentru ceea ce am adăugat pe fiecare produs") — acum toate 4 (SKU/Cod intern/PNK/Cod produs) au același buton ⧉, reutilizează exact aceeași funcție (pcxCopyCode). (3) Vinted nu arăta deloc caseta de copiere din capul cardului (cerut direct: „la Vinted lipsește secțiunea de copy, adaugă-o și acolo") — exclusă intenționat inițial („Vinted nu are conceptul de AWB"), dar caseta oferă text generic util (cantitate × nume produs + SKU) pentru orice etichetă/curier propriu, nu doar AWB eMAG/Trendyol — eliminată excluderea, Vinted arată acum aceeași casetă, cu aceeași logică de copiere/marcare permanentă „copiat", neschimbată. Verificat de 2 ori: test dedicat — comandă Vinted cu produs asociat arată acum caseta, click real copiază textul corect în clipboard și rămâne marcată verde; SKU/Cod intern/PNK/Cod produs arată toate cele 4 butoane de copiere, click pe „Cod intern" copiază exact codul corect; titlu bulgăresc fără produs asociat arată „🌐 Traduce", click îl traduce și înlocuiește butonul cu textul tradus (verificat separat și scenariul opus — produs asociat cu titlu original diferit — funcționează neschimbat, fără duplicare); plus suitele complete de regresie de la Research (#350-#353), tot verzi, fără erori consolă',date:'2026-09-14'},
   {n:353,text:'Research → „Poze selectate" — două corecturi cerute direct, după ce plafonul de 14 poze s-a dovedit prea strâns. (1) Plafon ridicat de la 14 la 40 — 14 nu era o limită reală eMAG (nimic din exportul XLSX o folosea), doar un număr ales arbitrar; tăia silențios poza adăugată manual („+ Adaugă poză externă"/„Lipește din clipboard") de fiecare dată când poolul ajungea deja la 14 — acum poți adăuga mult mai mult înainte să lovești vreun plafon. (2) Buton nou „🗑 Șterge din galerie", pe fiecare poză (meniul „···") și în bara de acțiuni în masă — spre deosebire de „🚫 Blochează definitiv" (existent, dar GLOBAL: exclude poza de la TOATE produsele viitoare, cu avertisment pe măsură), Ștergerea e locală, doar pentru produsul curent, fără nicio confirmare — poza rămâne disponibilă oriunde altundeva, se poate re-adăuga manual dacă e nevoie. Persistă pe listare (câmp nou `removed_pool_images`, salvat ca parte din JSON-ul existent al anunțului — fără nicio migrare SQL), ca poza ștearsă să nu reapară la refresh. Verificat de 2 ori: test dedicat — 30 de poze furnizate ies acum toate (înainte tăiate la 14); 50 de poze se opresc corect la noul plafon de 40; o poză adăugată manual peste un pool deja plin de 14 nu mai dispare; ștergerea unei poze (click real, din meniul „···") scade corect numărul de carduri, apelul save_listing conține `removed_pool_images`, iar la re-randare poza ștearsă NU reapare; ștergerea în masă (checkbox + „🗑 Șterge" din bara de acțiuni) funcționează identic; plus suitele complete de regresie de la #350-#352, tot verzi, fără erori consolă',date:'2026-09-14'},
@@ -14880,28 +14881,30 @@ function updPcmiPlatformaHint(){
 }
 async function handlePcomImportFile(ev){
   const files=[...(ev.target.files||[])];if(!files.length)return;
-  // O linie deja confirmată („✓ Inclus”) are ACUM o comandă reală, vizibilă în Staff — dar stocul/
-  // Jurnalul ei se aplică abia la „Aplică import”. Încărcarea unui fișier nou golește previzualizarea
-  // (pcImpParsed=[] mai jos) — fără avertisment, comenzile astea ar rămâne „agățate” în Staff, fără să
-  // li se mai scadă vreodată stocul (linia dispare din pcImpParsed, deci applyPcomImport n-ar mai ști
-  // de ea). Avertizăm explicit înainte, doar dacă există cu adevărat asemenea linii.
-  const pendingCommitted=pcImpParsed.filter(x=>x._committedId);
-  if(pendingCommitted.length&&!confirm(`Ai ${pendingCommitted.length} comenzi deja confirmate (vizibile în Staff), dar stocul/Jurnalul nu li s-a aplicat încă — apasă „Aplică import” pentru ele înainte de a încărca alt fișier. Continui oricum? (comenzile rămân în Staff, dar stocul NU li se va mai scădea automat)`))return;
+  // ADITIV, nu înlocuire (cerut direct: „să putem adăuga linkuri/fișiere și după ce deja s-au încărcat
+  // o parte din comenzi, doar să se actualizeze") — un fișier nou ADAUGĂ la previzualizarea existentă,
+  // nu o mai golește. Înainte, orice încărcare ulterioară făcea pcImpParsed=[], ștergând tăcut liniile
+  // deja aduse (inclusiv cele confirmate „✓ Inclus”, cu comandă reală în Staff, dar stoc încă neaplicat)
+  // — de-aici avertismentul blocant de mai jos, acum inutil, pentru că nimic nu se mai pierde. Reset
+  // complet rămâne disponibil explicit, din „↻ Resetează pagina” (resetPcomImportPage, neschimbat).
+  const preExistingCount=pcImpParsed.length;
   const platforma=pcImpPlatforma=document.getElementById('pcmi-platforma').value;
   const parsing=document.getElementById('pcmi-parsing');
   parsing.style.display='block';
   parsing.innerHTML=files.length>1?`<span class="spin"></span> Se procesează ${files.length} fișiere…`:'<span class="spin"></span> Se procesează fișierul…';
-  document.getElementById('pcmi-preview').innerHTML='';
-  document.getElementById('pcmi-foot').style.display='none';
   document.getElementById('pcmi-ai-btn').style.display='none';
-  pcImpParsed=[];pcImpBatchIds={};
   // Câteva fișiere deodată (ex. exporturi pe zile separate, sau eMAG+Trendyol deodată, cu platformă
   // „both") — la cerere directă. existingKeys se calculează o singură dată (nu se schimbă între
   // fișiere), dar seenInBatch trebuie să fie comun TUTUROR fișierelor din acest upload, altfel același
   // rând (ex. aceeași comandă apărută din greșeală în două exporturi suprapuse) ar intra de două ori
   // în listă. Cheile includ platforma (nu doar comandă+cod) ca să nu se amestece eMAG cu Trendyol la
-  // modul combinat — un nr. de comandă poate coincide accidental între cele două platforme.
-  const existingKeys=new Set(PCOM.map(o=>o.platforma+'|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern)));
+  // modul combinat — un nr. de comandă poate coincide accidental între cele două platforme. Include
+  // acum și liniile DEJA din previzualizare (preExisting), altfel un fișier care se suprapune parțial
+  // cu ce era deja încărcat ar duplica rânduri, nu doar adăuga cele chiar noi.
+  const existingKeys=new Set([
+    ...PCOM.map(o=>o.platforma+'|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern)),
+    ...pcImpParsed.map(x=>x.platforma+'|'+x.comandaId+'|'+(x.pnk||x.codProdus||x.titluExtern)),
+  ]);
   const seenInBatch=new Set();
   const failedFiles=[];
   // Exporturile Trendyol/eMAG includ de obicei TOATE comenzile active, nu doar cele noi de la ultimul
@@ -15022,13 +15025,16 @@ async function handlePcomImportFile(ev){
       }
     }
     parsing.style.display='none';
-    if(!pcImpParsed.length){
-      toast(failedFiles.length?'Niciun fișier n-a putut fi citit: '+failedFiles.join(', '):alreadyImportedCount?`Nicio linie nouă — toate cele ${alreadyImportedCount} comenzi din fișier există deja (importate anterior)`:'Nicio linie nouă de importat (fișierele sunt goale)','err');
+    const newlyAddedCount=pcImpParsed.length-preExistingCount;
+    if(!newlyAddedCount){
+      toast(failedFiles.length?'Niciun fișier n-a putut fi citit: '+failedFiles.join(', '):alreadyImportedCount?`Nicio linie nouă — toate cele ${alreadyImportedCount} comenzi din fișier există deja (importate anterior sau deja în previzualizare)`:'Nicio linie nouă de importat (fișierele sunt goale)','err');
       return;
     }
     // La „both", grupează liniile pe platformă (eMAG întâi, apoi Trendyol) indiferent de ordinea în
     // care au fost alese fișierele — sortare stabilă, păstrează ordinea originală în interiorul
-    // fiecărei platforme — ca previzualizarea să arate secțiuni curate, separate de o linie.
+    // fiecărei platforme — ca previzualizarea să arate secțiuni curate, separate de o linie. Rulează pe
+    // TOATĂ previzualizarea (inclusiv liniile de dinainte), ca gruparea să rămână corectă și după
+    // adăugări succesive.
     if(platforma==='both'||platforma==='all3'){
       const ord={emag:0,trendyol:1,vinted:2};
       pcImpParsed.sort((a,b)=>(ord[a.platforma]??3)-(ord[b.platforma]??3));
@@ -15036,7 +15042,7 @@ async function handlePcomImportFile(ev){
     renderPcomImportPreview();
     const noMatch=pcImpParsed.filter(x=>!x.produsId).length;
     document.getElementById('pcmi-ai-btn').style.display=noMatch?'':'none';
-    toast(`${pcImpParsed.length} linii noi detectate${files.length>1?' din '+files.length+' fișiere':''} · ${pcImpParsed.length-noMatch} cu produs asociat ✓${alreadyImportedCount?` · ${alreadyImportedCount} deja importate anterior (ignorate)`:''}${failedFiles.length?' · '+failedFiles.length+' fișiere ignorate: '+failedFiles.join(', '):''}`);
+    toast(`${newlyAddedCount} linii noi adăugate${files.length>1?' din '+files.length+' fișiere':''} (total ${pcImpParsed.length} în previzualizare) · ${pcImpParsed.length-noMatch} cu produs asociat ✓${alreadyImportedCount?` · ${alreadyImportedCount} deja importate anterior/în previzualizare (ignorate)`:''}${failedFiles.length?' · '+failedFiles.length+' fișiere ignorate: '+failedFiles.join(', '):''}`);
     pcomTranslateForeignTitles();
   }catch(err){
     parsing.style.display='none';
