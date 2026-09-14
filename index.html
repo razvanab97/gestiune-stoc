@@ -3655,6 +3655,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:353,text:'Research → „Poze selectate" — două corecturi cerute direct, după ce plafonul de 14 poze s-a dovedit prea strâns. (1) Plafon ridicat de la 14 la 40 — 14 nu era o limită reală eMAG (nimic din exportul XLSX o folosea), doar un număr ales arbitrar; tăia silențios poza adăugată manual („+ Adaugă poză externă"/„Lipește din clipboard") de fiecare dată când poolul ajungea deja la 14 — acum poți adăuga mult mai mult înainte să lovești vreun plafon. (2) Buton nou „🗑 Șterge din galerie", pe fiecare poză (meniul „···") și în bara de acțiuni în masă — spre deosebire de „🚫 Blochează definitiv" (existent, dar GLOBAL: exclude poza de la TOATE produsele viitoare, cu avertisment pe măsură), Ștergerea e locală, doar pentru produsul curent, fără nicio confirmare — poza rămâne disponibilă oriunde altundeva, se poate re-adăuga manual dacă e nevoie. Persistă pe listare (câmp nou `removed_pool_images`, salvat ca parte din JSON-ul existent al anunțului — fără nicio migrare SQL), ca poza ștearsă să nu reapară la refresh. Verificat de 2 ori: test dedicat — 30 de poze furnizate ies acum toate (înainte tăiate la 14); 50 de poze se opresc corect la noul plafon de 40; o poză adăugată manual peste un pool deja plin de 14 nu mai dispare; ștergerea unei poze (click real, din meniul „···") scade corect numărul de carduri, apelul save_listing conține `removed_pool_images`, iar la re-randare poza ștearsă NU reapare; ștergerea în masă (checkbox + „🗑 Șterge" din bara de acțiuni) funcționează identic; plus suitele complete de regresie de la #350-#352, tot verzi, fără erori consolă',date:'2026-09-14'},
   {n:352,text:'Research → Galerie AI produs — două corecturi cerute direct la planul de cadre/prompturi. (1) Cadrele cu beneficii/caracteristici (overlay_bullets, textul suprapus pe poză) încep acum de la poziția 3, nu de la 4 — doar cadrele 1 (Hero) și 2 (Lifestyle) rămân pur fotografice, fără text; de la 3 încolo overlay_bullets e acum OBLIGATORIU nevid (înainte putea ieși gol chiar și pentru cadre informative). Schimbat consecvent în toate cele 3 locuri unde exista acest prag: planul inițial (createGalleryPlan), regenerarea unui singur cadru (regenerateFramePlan) și structura orientativă din promptul AI. (2) Promptul de generare a imaginii (buildGalleryFramePrompt, exact ce vezi și la „📋 Copiază prompt") descrie acum produsul mai complet — pe lângă lista scurtă „must_preserve", include și tipul de produs, culorile, forma, materialele și branding-ul din Visual DNA (calculate deja la „Analizează poze produs", dar nefolosite până acum în promptul efectiv trimis la generare — rămâneau doar în JSON-ul intern) — cerut direct, ca pozele generate să fie 1 la 1 cu produsul real, nu doar „similare". Poziționat DUPĂ instrucțiunea de scenă, nu înainte — păstrează exact ordinea care a reparat bug-ul anterior cu cadre identice (#vezi comentariul din cod), doar conținutul identității e mai bogat. generation_prompt-ul scris de AI la planificare crește de la max 300 la max 400 de caractere (cu buget de tokeni verificat să nu retrunchieze planul, ca la bug-ul reparat anterior) și primește explicit cerința să fie coerent cu scene_description/camera_angle/background, nu contradictoriu. Verificat de 2 ori: test dedicat care interceptează promptul real trimis la AI (fără cost) — confirmă pragul nou de 2/3, „max 400 caractere" și cerința de coerență în promptul de plan; test dedicat pe buildGalleryFramePrompt cu Visual DNA simulat — identitatea bogată (tip/culoare/formă/material/branding) apare corect în prompt, DUPĂ instrucțiunea de scenă, must_preserve intact; plus suitele complete de regresie de la #350/#351, tot verzi, fără erori consolă',date:'2026-09-13'},
   {n:351,text:'Research — toate butoanele de „Copiază" (titlu, HTML descriere, specificații, EAN, PNK, link poză din galerie, link direct dosar, copiere în masă) rămân vizual marcate (fundal/text verde, exact stilul deja folosit la AWB-uri în Comenzi Platforme) DUPĂ ce ai apăsat pe ele — cerut direct, ca să se vadă dintr-o privire ce ai copiat deja, mai ales când treci pe rând prin mai multe câmpuri/poze de copiat manual. Marcajul rămâne (nu dispare singur pe un timer, ca vechiul flash de 1.2s de la AWB) — dispare doar dacă zona respectivă se re-randează din alt motiv (schimbi dosarul, regenerezi anunțul etc.), ceea ce e comportamentul așteptat. Strict UI — nicio funcție de copiere/logica de business nu s-a schimbat, doar un marcaj vizual adăugat pe butonul apăsat. Scopat STRICT la Research (butoanele de copy din Comenzi Platforme, Sincronizare, Stoc, import factură etc. — neatinse, unele au deja propriul mecanism de marcare, cu un tipar diferit). Verificat de 2 ori: suită Playwright dedicată — click real pe 6 tipuri diferite de buton (titlu, card din galeria de poze, rând de specificație, „Copiază toate specificațiile", bară de acțiuni în masă) confirmă marcajul corect, DOAR pe butonul apăsat (nu pe toate rândurile identice), persistent la 1.5s după click (peste vechiul prag de 1.2s), clipboard cu conținutul corect; plus suita completă de regresie de la #350, tot verde, fără erori consolă',date:'2026-09-13'},
   {n:350,text:'Research → Generator anunțuri — redesign STRICT scopat pe secțiunea „Poze selectate (X) — gata de încărcat pe eMAG", cerut direct cu specificație detaliată + mockup: înainte era o coloană îngustă unde linkul complet al fiecărei poze se afișa ca text brut și rupea layout-ul vertical; acum e o grilă de carduri compacte, responsive (5/rând pe desktop mare ≥1850px, 4/rând pe desktop normal 1300-1849px — inclusiv 1366/1440px, cele mai comune rezoluții de laptop, 3/rând 900-1299px, 2/rând 560-899px, 1/rând sub 560px), fiecare card cu checkbox de selecție + index (#1, #2...) peste imagine, badge de rezoluție verde/galben/roșu (checkImgDims, logica EXACTĂ neschimbată — doar repoziționat vizual peste imagine), imaginea centrată cu object-fit:contain (întreagă, necropată), badge de tip (Principală/Detaliu/Specificații/Lifestyle/Suplimentară — direct din rolul deja calculat de AI, nicio categorie inventată) și un rând de descriere trunchiat pe 2 linii. Linkul complet NU se mai afișează nicăieri vizual, dar rămâne disponibil de copiat. 3 acțiuni rămân mereu vizibile, doar icon (🔗/↓/+, cu tooltip): Copiază link, Salvează, + În descriere — refolosesc EXACT funcțiile vechi (copyText/downloadImg/insertImageIntoDescriptionFromPool); Recreează cu AI și Blochează s-au mutat într-un meniu „···" (details/summary, fără JS nou de open/close), pentru carduri curate. Checkbox pe fiecare poză → bară de acțiuni în masă când e selectat ≥1 (Copiază linkurile/Salvează/+ În descriere/Recreează cu AI/Blochează), care NU repetă N popup-uri de confirmare — o singură orchestrare per lot, peste aceleași funcții/endpoint-uri existente. Filtru pe tip (Toate/Principală/Detaliu/Lifestyle/Specificații/Suplimentară) apare doar dacă sunt ≥2 tipuri distincte în poze, instant, client-side. Titlul secțiunii, legenda verde/galben/roșu și TOATE butoanele globale din dreapta (+ Adaugă poză externă, Lipește din clipboard, Copiază toate linkurile, Descarcă toate) rămân identice, neatinse. Secțiunea „Poze folosite în descriere" (vecină, dar cu markup/funcții separate) — neatinsă. Selectarea unei poze sau schimbarea filtrului NU mai re-randează toată secțiunea de listing (actualizare DOM țintită, doar bara de acțiuni/grila de carduri). Verificat de minim 2 ori: suită completă de regresie cu Playwright (click real, nu apel direct de funcție) — checkbox/index/badge rezoluție/filtrare/copiere link/„+ Descriere"/meniu „···"/acțiuni în masă toate funcționează, secțiunea „Poze folosite în descriere" byte-identică cu înainte, titlul secțiunii confirmat neschimbat, zero erori consolă; plus un sweep dedicat pe 18 lățimi de viewport (400-1900px) care a confirmat exact pragurile 5/4/3/2/1 coloane cerute, inclusiv la 1366/1440px (rezoluții foarte comune de laptop, unde inițial grila organică (auto-fill) cădea greșit pe 3 coloane) — corectat cu praguri explicite pe lățime',date:'2026-09-13'},
@@ -10683,7 +10684,13 @@ function factoryImages(l,pages){
   const bestUrls=(l?.best_images||[]).map(x=>typeof x==='string'?x:x?.url).filter(Boolean);
   const fromListing=[l?.main_image,...(l?.images||[]),...bestUrls,...(l?.image_urls||[])];
   const fromPages=(pages||[]).flatMap(p=>p.images||[]);
-  return[...new Set([...fromListing,...fromPages].filter(Boolean))].slice(0,14);
+  // Plafon ridicat de la 14 la 40, cerut direct ("să putem adăuga cât de multe din care putem selecta")
+  // — 14 nu era o limită reală eMAG (nimic din exportul XLSX o folosea), doar un număr ales arbitrar
+  // aici; tăia silențios pozele adăugate manual (+ Adaugă poză externă / Lipește din clipboard) când
+  // poolul deja avea 14. removed_pool_images = poze scoase manual DOAR din acest produs (removePoolImage/
+  // poolBulkDelete), nu blocajul global (BLOCKED_IMAGES_KEY, verificat separat, la sursă, în listing-builder).
+  const removed=new Set(l?.removed_pool_images||[]);
+  return[...new Set([...fromListing,...fromPages].filter(Boolean))].filter(u=>!removed.has(u)).slice(0,40);
 }
 function specEntries(specs){
   const pref=['Brand','Tip produs','Material','Culoare','Dimensiuni','Capacitate/Greutate','Utilizare','Caracteristici','Conținut pachet','Întreținere','Compatibilitate','Alte detalii'];
@@ -11105,6 +11112,7 @@ function poolCardHtml(u,i,imgRec){
           <summary title="Mai multe acțiuni">···</summary>
           <div class="pool-card-menu-list">
             ${secondaryBtn}
+            <button type="button" style="color:var(--rd)" onclick="removePoolImage(${esc(JSON.stringify(u))})" title="Scoate poza din galeria ACESTUI produs — rămâne disponibilă în altă parte, poți re-adăuga manual dacă te răzgândești">🗑 Șterge din galerie</button>
             <button type="button" style="color:var(--rd)" onclick="blockImage(${esc(JSON.stringify(u))})" title="Nu o mai arăta niciodată, la niciun anunț">🚫 Blochează definitiv</button>
           </div>
         </details>
@@ -11139,6 +11147,7 @@ function renderPoolBulkBarHtml(){
     <button type="button" onclick="poolBulkCopyLinks(this)">🔗 Copiază linkurile</button>
     <button type="button" onclick="poolBulkAddToDescription()">+ În descriere</button>
     <button type="button" onclick="poolBulkRecreateWithAI()">🎨 Recreează cu AI</button>
+    <button type="button" style="color:var(--rd);border-color:var(--rd)" onclick="poolBulkDelete()" title="Scoate din galeria acestui produs — rămân disponibile în altă parte">🗑 Șterge</button>
     <button type="button" style="color:var(--rd);border-color:var(--rd)" onclick="poolBulkBlock()">🚫 Blochează</button>
     <button type="button" style="margin-left:auto" onclick="clearPoolSelection()">✕ Anulează selecția</button>
   </div>`;
@@ -11269,6 +11278,28 @@ async function poolBulkBlock(){
   poolSelectedImgs.clear();
   renderListingFactoryResult(l,listingFactoryData?.pages||[],listingFactoryData?.allImages||[]);
   toast(`${urls.length} poze blocate definitiv ✓`);
+}
+// Scoate poze DOAR din galeria acestui produs (spre deosebire de blockImage/poolBulkBlock, care sunt
+// globale, pentru TOATE produsele viitoare, cu avertisment pe măsură) — curățare rapidă a candidaților,
+// fără nicio confirmare (poza rămâne disponibilă oriunde altundeva, se poate re-adăuga manual din nou
+// dacă e nevoie). Persistă pe listare (l.removed_pool_images, citit de factoryImages), ca să nu reapară
+// la refresh — cerut direct, alături de ridicarea plafonului de poze din factoryImages().
+async function poolBulkDelete(){
+  const urls=[...poolSelectedImgs];
+  if(!urls.length)return;
+  const l=listingData||listingFactoryData?.listing;
+  if(!l)return;
+  l.removed_pool_images=[...new Set([...(l.removed_pool_images||[]),...urls])];
+  if(listingProjectId){
+    try{
+      await apiJson('/api/research-projects',{action:'save_listing',project_id:listingProjectId,status:'generat',listing:l},30000);
+      const local=researchProjects.find(p=>Number(p.id)===Number(listingProjectId));
+      if(local){local.listing_status='generat';local.listing=l;}
+    }catch(e){toast('Pozele au fost scoase, dar nu s-au salvat în dosar: '+(e.message||e),'err');}
+  }
+  poolSelectedImgs.clear();
+  renderListingFactoryResult(l,listingFactoryData?.pages||[],listingFactoryData?.allImages||[]);
+  toast(`${urls.length} poze scoase din galerie ✓`);
 }
 function renderListingFactoryResult(l,pages,allImages=[]){
   const out=document.getElementById('listing-result');if(!out)return;
@@ -12306,6 +12337,25 @@ async function blockImage(url){
     renderListingFactoryResult(l,listingFactoryData?.pages||[],listingFactoryData?.allImages||[]);
   }
   toast('Poză blocată definitiv ✓ — nu va mai apărea la niciun anunț viitor');
+}
+// Scoate o poză DOAR din galeria acestui produs (spre deosebire de blockImage, care e global, pentru
+// TOATE produsele viitoare, cu avertisment pe măsură) — curățare rapidă a candidaților, fără nicio
+// confirmare (poza rămâne disponibilă oriunde altundeva, se poate re-adăuga manual din nou dacă e
+// nevoie). Persistă pe listare (l.removed_pool_images, citit de factoryImages), ca să nu reapară la
+// refresh — cerut direct, alături de ridicarea plafonului de poze din factoryImages().
+async function removePoolImage(url){
+  const l=listingData||listingFactoryData?.listing;
+  if(!l)return;
+  l.removed_pool_images=[...(l.removed_pool_images||[]),url];
+  if(listingProjectId){
+    try{
+      await apiJson('/api/research-projects',{action:'save_listing',project_id:listingProjectId,status:'generat',listing:l},30000);
+      const local=researchProjects.find(p=>Number(p.id)===Number(listingProjectId));
+      if(local){local.listing_status='generat';local.listing=l;}
+    }catch(e){toast('Poza a fost scoasă, dar nu s-a salvat în dosar: '+(e.message||e),'err');}
+  }
+  renderListingFactoryResult(l,listingFactoryData?.pages||[],listingFactoryData?.allImages||[]);
+  toast('Poză scoasă din galerie ✓');
 }
 function applyListingToProduct(){
   const l=listingData||researchData?.listing;if(!l){toast('Nu există anunț generat');return;}
