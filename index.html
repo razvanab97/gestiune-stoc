@@ -2346,6 +2346,7 @@ button.pcx-include-btn.included{border-color:var(--gr)}
     <button class="btn btn-acc" onclick="openModal()">+ Produs nou</button>
     <button class="btn btn-sm" id="bulk-add-btn" onclick="bulkAddStock()" title="Adaugă manual o cantitate de stoc la toate produsele bifate — apasă fără nicio bifă pentru a vedea cum se selectează">📥 Adaugă stoc</button>
     <button class="btn btn-sm" id="bulk-prepack-btn" onclick="openPrepack()" title="Generează etichete cu cod QR pentru produsele bifate, de lipit pe cutii deja împachetate — la o comandă reală, Staff recunoaște automat produsul și sare peste verificare">🏷️ Pre-împachetează</button>
+    <button class="btn btn-sm" onclick="clearProductImageCache()" title="Șterge doar copiile locale ale imaginilor. Imaginile originale rămân în Supabase.">🖼️ Golește cache poze</button>
     <button class="btn btn-sm" id="bulk-archive-btn" onclick="bulkArchiveProd()" disabled title="Arhivează produsele bifate — ies din Inventar, dar rămân în rapoartele de stoc pentru contabilitate">🗄️ Arhivează selectate</button>
     <button class="btn btn-sm" id="bulk-del-btn" onclick="bulkDeleteProd()" disabled title="Șterge definitiv toate produsele bifate" style="color:var(--rd);border-color:var(--rd)">🗑 Șterge selectate</button>
   </div>
@@ -3653,8 +3654,8 @@ button.pcx-include-btn.included{border-color:var(--gr)}
 </div>
 
 <script>
-const SUPA_URL='https://nuvgwytanlgvcffxeahs.supabase.co';
-const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51dmd3eXRhbmxndmNmZnhlYWhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MDI0OTAsImV4cCI6MjA5NTI3ODQ5MH0.lSy1CUJA9xlVv1isAyfTIxGUAbGMUIS7c3TXQ-5pcEg';
+const SUPA_URL='https://cbpavtvrfpkbaeueexlw.supabase.co';
+const SUPA_KEY='sb_publishable_m7_oRHyxmrrvuGpudY9V1g_LM85ubbr';
 
 // Detectare Safari (nu Chrome/Edge pe iOS, care includ tot "Safari" în user agent) — folosită doar
 // pentru compensări vizuale punctuale unde Safari randează altfel decât Chrome la același CSS
@@ -3663,6 +3664,8 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:366,text:'Optimizare egress — încărcarea inițială a Inventarului nu mai descarcă imaginea principală, galeria sau descrierea tuturor produselor. Miniaturile rămân vizibile peste tot: se încarcă doar când produsul intră în viewport sau este deschis, apoi sunt păstrate persistent în Cache Storage, deduplicate pe produs+versiune. La următoarea sesiune, o imagine deja văzută este servită local, inclusiv offline. Butonul „Golește cache poze” șterge doar copiile browserului, niciodată imaginile originale. Staff nu mai suprapune sincronizări și oprește pollingul când tabul este ascuns, reluând o singură sincronizare la revenire. Pregătit separat SQL neexecutat pentru Staff Queue; partea de coadă/realtime rămâne intenționat neactivată până la aprobarea și rularea manuală a migrării.',date:'2026-09-15'},
+  {n:308,text:'Audit calculator + stoc: reparat un bug real prin care Calculatorul din fișa produsului putea păstra costuri/prețuri din produsul deschis anterior. La selectarea sau deschiderea unui produs, toate cele 3 canale preiau acum costul curent și prețurile proprii (Direct/eMAG/Trendyol), cu fallback la prețul recomandat când un canal nu are încă preț salvat. Reparat și calculul eMAG Non-Genius: transportul nu mai era introdus ca un cost separat, ceea ce putea supraestima profitul; câmpul „Transport real plătit” este acum vizibil și inclus în calcul. Verificat pe scenarii controlate pentru sincronizarea celor 3 canale, profit 0 și profit cu impozit pe profit, plus în browser pe Calculator.',date:'2026-09-15'},
   {n:307,text:'Comenzi Platforme — importul Excel detectează acum automat platforma din antetele reale ale fișierului, chiar dacă selectorul a rămas pe platforma folosită anterior. Bug reparat pe exportul Trendyol primit: avea antetele specifice „Valoarea facturii” și nu avea coloane separate cu/fără TVA, dar dacă pagina rămânea pe eMAG era importat greșit ca eMAG și deduplicarea devenea confuză. Acum acel fișier este recunoscut obligatoriu ca Trendyol, iar aplicația arată un mesaj clar când corectează selecția. Verificat direct pe cele 4 comenzi din exportul primit (ID-uri distincte) și separat pe semnătura unui export eMAG: Trendyol nu mai ajunge în eMAG, eMAG nu ajunge în Trendyol.',date:'2026-09-15'},
   {n:365,text:'Raport vânzări / Dashboard — Vinted adăugat la statisticile pe canale, cerut direct („la statistică adaugă mai nou și Vinted"). Bug real, mai grav decât o simplă lipsă din UI, găsit investigând: în dedupedSalesByDate() (funcția care desparte vânzările pe canale pentru TOATE statisticile), orice comandă care NU era „trendyol" cădea automat pe „emag" — Vinted nu doar lipsea din „Vânzări pe canale", vânzările lui erau CONTABILIZATE GREȘIT la eMAG, umflând artificial acel canal. Reparat la sursă (acum Vinted are propriul bucket, cu propria culoare — roz, ca să nu se confunde cu verdele deja folosit de Direct), apoi propagat peste tot unde lipsea: cardul „Vânzări pe canale" (al 4-lea card, cu bară/procent/trend proprii), graficul „Evoluție vânzări pe canale" (a patra linie + legendă + tooltip), KPI-urile „Vânzări totale"/„Produse vândute"/„Valoare medie comandă" (nu mai subraportau, lipsea complet valoarea Vinted din sumă), „Istoric lunar" (aceeași reparație, pe fiecare lună), și exportul CSV/Excel al raportului. Bonus găsit pe drum: eticheta „Comenzi (eMAG+Trendyol)" era doar greșit denumită — calculul de dedesubt (comenziSeriesInRange) număra deja Vinted corect, doar textul mințea; redenumită „Comenzi (platforme)". Verificat de 2 ori: test dedicat cu 3 comenzi reale (eMAG 100 RON, Trendyol 50 RON, Vinted 150 RON, aceeași zi) — dedupedSalesByDate le separă corect pe cele 3 (nu 250 RON grămadă la eMAG), seria combinată „all" arată corect 300 RON, cardul „Vânzări pe canale" arată 4 carduri (Direct/eMAG/Trendyol/Vinted) cu Vinted la 150 RON, legenda graficului include Vinted, KPI-ul „Vânzări totale" arată corect 300 RON (nu 150, cum ar fi ieșit înainte); plus toate suitele de regresie Comenzi Platforme/Jurnal de la #354-#364, tot verzi, fără erori consolă',date:'2026-09-14'},
   {n:364,text:'Jurnal vânzări / Comenzi Platforme — bug real reparat, raportat direct: „am cerut expres ca modificările aduse în Jurnal vânzări, la Vânzări azi, să se aplice și în restul proiectului — nu se întâmplă asta". Cauza: „Vânzări azi" (TS/vanzari_zilnice, citit de cardul rapid de vânzare și de tqp()) e un CACHE SEPARAT de Jurnal (JL) — orice corecție de azi (editarea de cantitate de la #363, curățarea de duplicate de la #362, sau chiar butonul EXISTENT „🗑 Șterge vânzare" din Jurnal, care avea exact același bug dinainte de sesiunea asta) actualiza corect stocul și Jurnalul, dar NIMIC nu mai sincroniza și „Vânzări azi" — rămânea cu numărul vechi, „fantomă". Reparat central, în reverseJurnalEcho (funcția deja folosită de toate ștergerile de comenzi) și în adjustJurnalQtyDirect (partea de la #363 care nu trece prin ea) — dacă ziua corectată e AZI, „Vânzări azi" se recalculează și se salvează automat, exact ca restul sistemului; zilele din trecut nu sunt atinse (TS ține evidența strict pentru azi). Verificat de 2 ori, cu TOATE apelurile Supabase simulate: corectare de azi prin editare directă (26→2) — „Vânzări azi" ajunge corect la 2, nu rămâne la 26; creștere directă (5→8) — ajunge corect la 8; corectare pe o zi din TRECUT — „Vânzări azi" rămâne complet neatins (0 apeluri de sincronizare, cum trebuie); ștergerea unei vânzări de AZI cu butonul existent „🗑" (bug pre-existent, nu doar cel nou) — „Vânzări azi" ajunge acum corect la 0, nu mai rămâne cu numărul vechi; plus toate suitele de regresie Comenzi Platforme/Jurnal de la #354-#363, tot verzi, fără erori consolă',date:'2026-09-14'},
@@ -5828,7 +5831,7 @@ function dbToP(r){
     stockAddedAt:r.stock_added_at||'',lastStockAddedQty:r.last_stock_added_qty||0,
     priceSell:r.price_sell||0,priceEmag:r.price_emag||0,priceTrendyol:r.price_trendyol||0,priceRec:r.price_rec||0,img:r.img||'',
     colors:r.colors||'',sizes:r.sizes||'',material:r.material||'',dims:r.dims||'',notes:r.notes||'',
-    description:r.description||'',images:Array.isArray(r.images)?r.images:[],createdAt:r.created_at||'',updatedAt:r.updated_at||'',
+    description:r.description||'',images:Array.isArray(r.images)?r.images:[],_detailsLoaded:Object.prototype.hasOwnProperty.call(r,'description')||Object.prototype.hasOwnProperty.call(r,'images'),createdAt:r.created_at||'',updatedAt:r.updated_at||'',
     supplierOOS:!!r.supplier_oos,supplierOOSSince:r.supplier_oos_since||'',supplierRestockEta:r.supplier_restock_eta||'',supplierNotify:!!r.supplier_notify,supplierNotified:!!r.supplier_notified,
     archived:!!r.archived,archivedAt:r.archived_at||'',
     easyboxL:r.easybox_l||0,easyboxW:r.easybox_w||0,easyboxT:r.easybox_t||0};
@@ -5838,12 +5841,15 @@ function pToDb(p){
     bought:p.bought||0,incoming_qty:p.incomingQty||0,sold:p.sold||0,min_qty:p.minQty||0,
     price_buy_ttc:p.priceBuyTTC||0,price_buy_prev_ttc:p.priceBuyPrevTTC||0,price_buy_changed_at:p.priceBuyChangedAt||null,price_buy_eur:p.priceBuyEur||0,tva_acq:p.tvaAcq??0.21,
     stock_added_at:p.stockAddedAt||null,last_stock_added_qty:p.lastStockAddedQty||0,
-    price_sell:p.priceSell||0,price_emag:p.priceEmag||0,price_trendyol:p.priceTrendyol||0,price_rec:p.priceRec||0,img:p.img||'',
-    colors:p.colors||'',sizes:p.sizes||'',material:p.material||'',dims:p.dims||'',notes:p.notes||'',
-    description:p.description||'',images:p.images||[],
+    price_sell:p.priceSell||0,price_emag:p.priceEmag||0,price_trendyol:p.priceTrendyol||0,price_rec:p.priceRec||0,
+    colors:p.colors||'',sizes:p.sizes||'',material:p.material||'',dims:p.dims||'',notes:p.notes||'',updated_at:new Date().toISOString(),
     supplier_oos:!!p.supplierOOS,supplier_oos_since:p.supplierOOSSince||null,supplier_restock_eta:p.supplierRestockEta||null,supplier_notify:!!p.supplierNotify,supplier_notified:!!p.supplierNotified,
     archived:!!p.archived,archived_at:p.archivedAt||null,
     easybox_l:p.easyboxL||0,easybox_w:p.easyboxW||0,easybox_t:p.easyboxT||0};
+  // Detaliile grele sunt absente din lista inițială. Nu le trimitem goale la
+  // actualizările rapide de stoc/preț, ca să nu ștergem datele deja din DB.
+  if(p._detailsLoaded!==false){d.description=p.description||'';d.images=p.images||[];}
+  if(!String(p.img||'').startsWith('lazy-product://'))d.img=p.img||'';
   if(p.internalCode)d.internal_code=p.internalCode;
   if(p.ean)d.ean=p.ean;
   return d;
@@ -6189,7 +6195,7 @@ async function load(){
     // pe tot tabelul ajunge la zeci de MB — suficient să depășească timeout-ul sau să fie prea
     // lent pe o conexiune slabă, blocând TOT inventarul doar din cauza pozelor. Datele care chiar
     // contează pentru gestiune (stoc, prețuri, nume) se încarcă separat de poze, garantat rapid.
-    const prodCols='id,name,sku,ean,internal_code,category,supplier,bought,incoming_qty,sold,min_qty,price_buy_ttc,price_buy_prev_ttc,price_buy_changed_at,tva_acq,stock_added_at,last_stock_added_qty,price_sell,price_emag,price_trendyol,price_rec,colors,sizes,material,dims,notes,description,images,created_at,updated_at,supplier_oos,supplier_oos_since,supplier_restock_eta,supplier_notify,supplier_notified,archived,archived_at,easybox_l,easybox_w,easybox_t';
+    const prodCols='id,name,sku,ean,internal_code,category,supplier,bought,incoming_qty,sold,min_qty,price_buy_ttc,price_buy_prev_ttc,price_buy_changed_at,tva_acq,stock_added_at,last_stock_added_qty,price_sell,price_emag,price_trendyol,price_rec,colors,sizes,material,dims,notes,created_at,updated_at,supplier_oos,supplier_oos_since,supplier_restock_eta,supplier_notify,supplier_notified,archived,archived_at,easybox_l,easybox_w,easybox_t';
     const today=td();
     showLoading('Se încarcă datele din Supabase…');
     // Toate cererile independente pornesc DEODATĂ, nu una după alta — 8 cereri secvențiale își
@@ -6205,7 +6211,7 @@ async function load(){
       throw e;
     });
     const todayPromise=dbGet(`vanzari_zilnice?data=eq.${today}&select=*`);
-    const jurnalPromise=dbGet('jurnal?select=*&order=data.desc');
+    const jurnalPromise=dbGet('jurnal?select=data,product_id,product_name,category,price_sell,qty&order=data.desc');
     const stockOrdersPromise=dbGet('comenzi_stoc?select=*&order=created_at.desc').catch(e=>({__err:e}));
     const activityPromise=dbGet('activitate_stoc?select=*&order=created_at.desc&limit=100').catch(e=>({__err:e}));
     const priceHistPromise=dbGet('istoric_preturi?select=*&order=created_at.desc&limit=200').catch(e=>({__err:e}));
@@ -6213,8 +6219,7 @@ async function load(){
     const reorderPromise=fetch('/api/settings?key='+REORDER_KEY).then(r=>r.json()).catch(e=>({__err:e}));
 
     const rows=await prodPromise;
-    P=rows.map(r=>dbToP({...r,img:''}));
-    loadProductImagesBatched();
+    P=rows.map(r=>dbToP({...r,img:lazyProductImageRef(r.id)}));
 
     // today sales
     const todayRows=await todayPromise;
@@ -6227,7 +6232,7 @@ async function load(){
     const jMap={};
     jRows.forEach(r=>{
       if(!jMap[r.data])jMap[r.data]={date:r.data,entries:[]};
-      jMap[r.data].entries.push({id:r.product_id,name:r.product_name,category:r.category||'',priceSell:r.price_sell||0,img:r.img||'',qty:r.qty});
+      jMap[r.data].entries.push({id:r.product_id,name:r.product_name,category:r.category||'',priceSell:r.price_sell||0,img:lazyProductImageRef(r.product_id),qty:r.qty});
     });
     JL=Object.values(jMap).sort((a,b)=>b.date.localeCompare(a.date));
 
@@ -6309,31 +6314,105 @@ async function load(){
   }
 }
 
-// Poze încărcate separat de restul produsului, în loturi mici — dacă un lot pică (poze base64
-// vechi, mari, neîncă migrate în Storage) sau e lent pe o conexiune slabă, doar acel lot rămâne
-// fără poze deocamdată; restul inventarului (deja încărcat de load()) nu e afectat deloc.
-async function loadProductImagesBatched(){
-  const BATCH=15;
-  let batchesSinceRender=0;
-  for(let offset=0;offset<P.length;offset+=BATCH){
+// Imaginile nu mai sunt citite în masă la pornire. Se folosesc doar când intră
+// în viewport sau când se deschide produsul, iar copia binară rămâne persistent
+// în Cache Storage. Cheia conține updated_at: orice salvare de produs produce o
+// versiune nouă, fără cache-busting aleator la fiecare randare.
+const PRODUCT_IMAGE_CACHE='sm6-product-images-v1';
+const PRODUCT_IMAGE_CACHE_LIMIT=400;
+const PRODUCT_IMAGE_PLACEHOLDER='data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="0 0 80 80"%3E%3Crect width="80" height="80" fill="%2321262f"/%3E%3Cpath d="M16 58l17-18 12 11 8-8 11 15H16z" fill="%23555f70"/%3E%3Ccircle cx="29" cy="27" r="7" fill="%23555f70"/%3E%3C/svg%3E';
+const productImageRequests=new Map(),productImageUrls=new Map();
+let productImageObserver=null;
+function productImageVersion(p){return encodeURIComponent(String(p?.updatedAt||p?.createdAt||'0'));}
+function lazyProductImageRef(id){return'lazy-product://'+id;}
+function productImageCacheKey(p){return location.origin+'/__sm6_product_image__/'+p.id+'?v='+productImageVersion(p);}
+async function trimProductImageCache(cache){
+  const keys=await cache.keys();
+  if(keys.length<=PRODUCT_IMAGE_CACHE_LIMIT)return;
+  const old=keys.sort((a,b)=>String(new URL(a.url).searchParams.get('v')||'').localeCompare(String(new URL(b.url).searchParams.get('v')||'')))
+    .slice(0,keys.length-PRODUCT_IMAGE_CACHE_LIMIT);
+  await Promise.all(old.map(key=>cache.delete(key)));
+}
+function productImageObjectUrl(p,blob){
+  const key=String(p.id)+'|'+productImageVersion(p),old=productImageUrls.get(key);
+  if(old)return old;
+  const url=URL.createObjectURL(blob);productImageUrls.set(key,url);return url;
+}
+async function ensureProductImage(p){
+  if(!p)return'';
+  const key=String(p.id)+'|'+productImageVersion(p);
+  if(productImageUrls.has(key))return productImageUrls.get(key);
+  if(productImageRequests.has(key))return productImageRequests.get(key);
+  const task=(async()=>{
     try{
-      const batch=await dbGet(`produse?select=id,img&order=id.asc&limit=${BATCH}&offset=${offset}`);
-      batch.forEach(r=>{const p=P.find(x=>x.id===r.id);if(p)p.img=r.img||'';});
-      batchesSinceRender++;
-      // Randare progresivă, dar NU la fiecare lot — cu un inventar mare (ex. 271 produse → 19 loturi),
-      // un re-render complet al tabelului/dashboard-ului la fiecare lot recreează de la zero TOATE
-      // tag-urile <img> din pagină (nu doar cele din lotul curent), retrimițând prin proxy imagini
-      // deja randate la loturile anterioare — bug real găsit la profilare, cauza principală a
-      // delay-ului mare raportat direct de la prima intrare (2000+ cereri de imagine la un singur
-      // load, mai ales cu cache-ul de imagini rece). Randăm din 5 în 5 loturi, plus mereu la final.
-      if(batchesSinceRender>=5||offset+BATCH>=P.length){
-        renderTable();renderRaport();renderDashboard();
-        batchesSinceRender=0;
+      const cache=await caches.open(PRODUCT_IMAGE_CACHE),cacheKey=productImageCacheKey(p);
+      let response=await cache.match(cacheKey);
+      if(!response){
+        let source=p._imageSource||'';
+        if(!p._imageSourceLoaded){
+          const rows=await dbGet(`produse?id=eq.${p.id}&select=img`);
+          source=rows?.[0]?.img||'';p._imageSource=source;p._imageSourceLoaded=true;
+        }
+        if(!source){p._imageLoaded=true;return'';}
+        if(source.startsWith('data:')){
+          const blob=await (await fetch(source)).blob();
+          response=new Response(blob,{headers:{'content-type':blob.type||'image/jpeg'}});
+        }else{
+          const sourceResponse=await fetch(imgSrc(source));
+          if(!sourceResponse.ok)throw new Error('Imagine indisponibilă');
+          response=await sourceResponse.blob().then(blob=>new Response(blob,{headers:{'content-type':blob.type||'image/jpeg'}}));
+        }
+        await cache.put(cacheKey,response.clone());
+        trimProductImageCache(cache).catch(e=>console.warn('Nu am putut curăța cache-ul imaginilor',e));
       }
-    }catch(e){
-      console.warn('Lot de poze eșuat (offset '+offset+'), continui cu următorul:',e);
-    }
-  }
+      const url=productImageObjectUrl(p,await response.blob());
+      p._imageLoaded=true;updateProductImageElements(p.id,url);return url;
+    }catch(e){console.warn('Nu am putut încărca imaginea produsului '+p.id,e);return'';}
+    finally{productImageRequests.delete(key);}
+  })();
+  productImageRequests.set(key,task);return task;
+}
+function updateProductImageElements(id,url){
+  document.querySelectorAll(`[data-product-image="${id}"]`).forEach(el=>{el.src=url||PRODUCT_IMAGE_PLACEHOLDER;});
+}
+function productImageTag(p,className,attrs){
+  const cached=productImageUrls.get(String(p.id)+'|'+productImageVersion(p));
+  return`<img src="${esc(cached||PRODUCT_IMAGE_PLACEHOLDER)}" data-product-image="${p.id}" class="${esc(className||'')}" loading="lazy" ${attrs||''}>`;
+}
+function observeProductImages(root){
+  if(!('IntersectionObserver'in window))return;
+  if(!productImageObserver)productImageObserver=new IntersectionObserver(entries=>{
+    entries.forEach(entry=>{if(!entry.isIntersecting)return;productImageObserver.unobserve(entry.target);const p=P.find(x=>String(x.id)===entry.target.dataset.productImage);ensureProductImage(p);});
+  },{rootMargin:'240px 0px'});
+  (root||document).querySelectorAll('[data-product-image]').forEach(el=>productImageObserver.observe(el));
+}
+let productImageMutationObserver=null;
+function startProductImageObservation(){
+  if(productImageMutationObserver||!document.body)return;
+  productImageMutationObserver=new MutationObserver(mutations=>mutations.forEach(m=>m.addedNodes.forEach(node=>{
+    if(node.nodeType!==1)return;
+    if(node.matches?.('[data-product-image]'))observeProductImages(node.parentElement);
+    else if(node.querySelector?.('[data-product-image]'))observeProductImages(node);
+  })));
+  productImageMutationObserver.observe(document.body,{childList:true,subtree:true});
+  observeProductImages(document);
+}
+async function clearProductImageCache(){
+  try{await caches.delete(PRODUCT_IMAGE_CACHE);productImageUrls.forEach(u=>URL.revokeObjectURL(u));productImageUrls.clear();P.forEach(p=>{p.img=lazyProductImageRef(p.id);p._imageLoaded=false;});renderTable();renderToday();toast('Cache-ul local al imaginilor a fost golit ✓');}
+  catch(e){toast('Nu am putut goli cache-ul imaginilor','err');}
+}
+async function ensureProductDetails(p){
+  if(!p||p._detailsLoaded)return p;
+  const rows=await dbGet(`produse?id=eq.${p.id}&select=description,images`);
+  const d=rows?.[0]||{};
+  p.description=d.description||'';p.images=Array.isArray(d.images)?d.images:[];p._detailsLoaded=true;
+  return p;
+}
+async function ensureProductImageSource(p){
+  if(!p||p._imageSourceLoaded)return p?._imageSource||'';
+  const rows=await dbGet(`produse?id=eq.${p.id}&select=img`);
+  p._imageSource=rows?.[0]?.img||'';p._imageSourceLoaded=true;
+  return p._imageSource;
 }
 function loadLocalFallback(){
   try{const r=localStorage.getItem(K);if(r)P=JSON.parse(r);}catch(e){}
@@ -7085,7 +7164,7 @@ const PC_FIELDS={
 };
 let pcChannel='direct',pcTax='profit',pcState={emag:{},trendyol:{},direct:{}},pcRecommendation=null,offerPriceManual={direct:false,emag:false,trendyol:false};
 Object.entries(PC_FIELDS).forEach(([ch,fields])=>fields.forEach(([id,,def])=>pcState[ch][id]=def));
-let emagCalc={pretEur:0,curs:5,pretLei:0,tvaAch:0,pretV:0,tvaV:21,comision:20,tipLivr:'nongenius',transCl:0,transReal:0,contab:2,consum:1,alte:0,impozit:'profit',targetMargin:20,open:{achizitie:true,vanzare:true,transport:true,cheltuieli:true}};
+let emagCalc={pretEur:0,curs:5,pretLei:0,tvaAch:0,pretV:0,tvaV:21,comision:20,tipLivr:'nongenius',transCl:0,transReal:20,contab:2,consum:1,alte:0,impozit:'profit',targetMargin:20,open:{achizitie:true,vanzare:true,transport:true,cheltuieli:true}};
 let trendyolCalc={pretEur:0,curs:5,pretLei:0,tvaAch:0,pretV:0,tvaV:21,comision:15,transReal:10,autoTransport:1,greutate:1,curier:'FAN',ruta:'RO-RO',clientPlateste:0,contab:2,consum:1,alte:0,returnRate:7,returnShip:36,campaign:0,importTax:0,impozit:'profit',targetMargin:20,open:{achizitie:true,vanzare:true,cheltuieli:true}};
 // Tarife transport Trendyol (RON) — FAN Courier / DPD, pe kg, RO-RO/RO-GR/RO-BG
 const TY_FAN_RO=[[1,11.48],[2,11.48],[3,11.48],[4,12.41],[5,13.34],[6,14.27],[7,15.19],[8,17.00],[9,18.54],[10,19.88],[11,19.88],[12,19.88],[13,22.66],[14,22.66],[15,22.66],[16,32.45],[17,32.45],[18,32.45],[19,32.45],[20,32.45],[21,34.51],[22,34.51],[23,34.51],[24,34.51],[25,34.51],[26,38.63],[27,38.63],[28,38.63],[29,38.63],[30,38.63],[31,44.81],[32,44.81],[33,44.81],[34,44.81],[35,44.81],[36,51.00],[37,51.00],[38,51.00],[39,51.00],[40,51.00]];
@@ -7186,7 +7265,9 @@ function computeEmag(s){
   const pCuTVA=pV*(1+tvaV),tCl=s.tipLivr==='acasa'?(+s.transCl||0):0;
   const comBrut=(pCuTVA+tCl*(1+tvaV))*(+s.comision||0)/100,comNet=tvaV>0?comBrut/(1+tvaV):comBrut;
   const gC=s.tipLivr==='genius'?geniusContrib(pCuTVA):0;
-  const costTrans=s.tipLivr==='acasa'?(+s.transReal||0):gC;
+  // Non-Genius nu înseamnă transport gratuit pentru vânzător. Clientul nu îl plătește separat,
+  // însă costul curierului rămâne un cost real și trebuie inclus în profit.
+  const costTrans=s.tipLivr==='genius'?gC:(+s.transReal||0);
   const venit=pV+tCl,tvaCol=pV*tvaV+tCl*tvaV,tvaDed=comNet*tvaV,tvaVir=tvaCol-tvaDed;
   const costuri=pAch+comNet+costTrans+(+s.contab||0)+(+s.consum||0)+(+s.alte||0);
   const profBrut=venit-costuri,imp=s.impozit==='micro'?Math.max(0,venit)*0.01:Math.max(0,profBrut)*0.16;
@@ -7256,7 +7337,7 @@ function emagRender(){
   const sHd=(k,lbl)=>`<div class="emag-sec-hd" onclick="emagToggleSec('${k}')"><span class="emag-sec-arr">${s.open[k]?'▼':'▶'}</span>${lbl}</div>`;
   const achB=s.open.achizitie?`<div class="emag-sec-body"><div class="calc-acq-row">${inp('pretEur','EUR')}${inp('curs','Curs EUR/RON')}${inp('pretLei','RON (net)')}${sel('tvaAch','TVA ach.',[['0','0%'],['9','9%'],['19','19%'],['21','21%']])}</div><div class="emag-derived-row">Preț ach. cu TVA: <strong>${emMoney((+s.pretLei||0)*(1+(+s.tvaAch||0)/100))}</strong></div></div>`:'';
   const vB=s.open.vanzare?`<div class="emag-sec-body"><div class="pc-grid">${inp('pretV','Preț vânzare fără TVA')}${sel('tvaV','TVA vânzare',[['9','9%'],['19','19%'],['21','21%']])}${inp('comision','Comision eMAG (%)')}</div><div class="emag-derived-row">Preț listare cu TVA: <strong>${emMoney(r.pCuTVA)}</strong></div></div>`:'';
-  const tB=s.open.transport?`<div class="emag-sec-body"><div class="emag-tip-livr"><button class="${s.tipLivr==='acasa'?'on':''}" onclick="emagInput('tipLivr','acasa')">🏠 Ramburs (acasă)</button><button class="${s.tipLivr==='nongenius'?'on':''}" onclick="emagInput('tipLivr','nongenius')">📦 Non-Genius</button><button class="${s.tipLivr==='genius'?'on':''}" onclick="emagInput('tipLivr','genius')">⚡ Genius</button></div>${s.tipLivr==='acasa'?`<div class="pc-grid" style="margin-top:8px">${inp('transCl','Transport perceput client')}${inp('transReal','Transport real plătit')}</div>`:s.tipLivr==='genius'?`<div class="emag-derived-row" style="margin-top:8px">Contribuție Genius: <strong>${emMoney(r.gC)}</strong></div>`:`<div class="emag-note" style="margin-top:8px">Costul transportului este absorbit în prețul de listare.</div>`}</div>`:'';
+  const tB=s.open.transport?`<div class="emag-sec-body"><div class="emag-tip-livr"><button class="${s.tipLivr==='acasa'?'on':''}" onclick="emagInput('tipLivr','acasa')">🏠 Ramburs (acasă)</button><button class="${s.tipLivr==='nongenius'?'on':''}" onclick="emagInput('tipLivr','nongenius')">📦 Non-Genius</button><button class="${s.tipLivr==='genius'?'on':''}" onclick="emagInput('tipLivr','genius')">⚡ Genius</button></div>${s.tipLivr==='acasa'?`<div class="pc-grid" style="margin-top:8px">${inp('transCl','Transport perceput client')}${inp('transReal','Transport real plătit')}</div>`:s.tipLivr==='genius'?`<div class="emag-derived-row" style="margin-top:8px">Contribuție Genius: <strong>${emMoney(r.gC)}</strong></div>`:`<div class="pc-grid" style="margin-top:8px">${inp('transReal','Transport real plătit')}</div><div class="emag-note" style="margin-top:8px">Transportul este inclus în prețul listării, dar costul real rămâne în calcul.</div>`}</div>`:'';
   const chelB=s.open.cheltuieli?`<div class="emag-sec-body"><div class="pc-grid">${inp('contab','Contabilitate / cmd')}${inp('consum','Consumabile')}${inp('alte','Alte costuri')}</div>${_cImpTgl(s,'emagInput')}</div>`:'';
   pcRootEl().innerHTML=`<div class="emag-calc">
   <div class="emag-rec"><div class="emag-rec-title">🎯 Prețuri recomandate — eMAG</div><div class="emag-rec-grid"><div class="emag-rec-item"><span>Prag profit 0</span><strong>${emMoney(p0)}</strong><small>cu TVA: ${emMoney(p0*(1+tvaV))}</small></div><div class="emag-rec-item"><span>La ${s.targetMargin}% marjă</span><strong>${emMoney(pRec)}</strong><small>cu TVA: ${emMoney(pRec*(1+tvaV))}</small></div></div><div class="emag-margin-picks">${[0,10,20,30].map(x=>`<button class="${s.targetMargin===x?'on':''}" onclick="emagSetMargin(${x})">${x}%</button>`).join('')}</div><button class="btn btn-acc btn-sm" onclick="emagApplyRec()">Aplică ${s.targetMargin}% în simulare</button></div>
@@ -7348,6 +7429,11 @@ function pcReset(acq=0,sell=0){
   pcState={emag:{},trendyol:{},direct:{}};
   Object.entries(PC_FIELDS).forEach(([ch,fields])=>fields.forEach(([id,,def])=>pcState[ch][id]=id==='acq'?acq:id==='sell'?sell:def));
   Object.keys(pcState).forEach(ch=>pcState[ch].target=10);
+  // Ecranul Calculator folosește interfața dedicată de mai jos. O resetare de produs trebuie să-i
+  // actualizeze și ei starea, altfel putea afișa prețurile/costul produsului deschis anterior.
+  [emagCalc,trendyolCalc,directCalc].forEach(s=>{
+    s.pretLei=acq;s.pretEur=acq>0?Math.round(acq/(+s.curs||5)*100)/100:0;s.pretV=sell;s.tvaV=21;s.impozit='profit';
+  });
   pcChannel='direct';pcTax='profit';pcRender();
 }
 function pcTab(id){pcChannel=id;pcRender();}
@@ -7360,8 +7446,10 @@ function pcApplyRecommended(){
 }
 function pcSyncAcqFromPrice(recalculate=true){
   const acq=Math.max(0,parseFloat(document.getElementById('f-pbuy')?.value)||0);
+  const tvaAcq=(parseFloat(document.getElementById('f-tva-acq')?.value)||0)*100;
   if(recalculate)offerPriceManual={direct:false,emag:false,trendyol:false};
   Object.keys(pcState).forEach(ch=>{pcState[ch].acq=acq;pcState[ch].vat=21;});
+  [emagCalc,trendyolCalc,directCalc].forEach(s=>{s.pretLei=acq;s.pretEur=acq>0?Math.round(acq/(+s.curs||5)*100)/100:0;s.tvaAch=tvaAcq;});
   pcRender();
 }
 
@@ -7414,12 +7502,12 @@ function buildCalcProductSelector(){
 }
 function _populateCalcFromProduct(p){
   const tva=p.tvaAcq??0.21,acq=p.priceBuyTTC>0?p.priceBuyTTC/(1+tva):0;
-  const tvaAchPct=p.tvaAcq?Math.round(p.tvaAcq*100):0,curs=emagCalc.curs||5;
-  const pretEur=Math.round(acq/curs*100)/100;
-  emagCalc.pretLei=acq;emagCalc.pretEur=pretEur;emagCalc.tvaAch=tvaAchPct;emagCalc.pretV=p.priceRec||0;
-  trendyolCalc.pretLei=acq;trendyolCalc.pretEur=pretEur;trendyolCalc.curs=curs;trendyolCalc.tvaAch=tvaAchPct;
-  directCalc.pretLei=acq;directCalc.pretEur=pretEur;directCalc.curs=curs;directCalc.tvaAch=tvaAchPct;
-  pcReset(acq,0);
+  const tvaAchPct=Math.round(tva*100),curs=emagCalc.curs||5;
+  pcReset(acq,p.priceSell||0);
+  [emagCalc,trendyolCalc,directCalc].forEach(s=>{s.curs=curs;s.tvaAch=tvaAchPct;});
+  emagCalc.pretV=p.priceEmag||p.priceRec||p.priceSell||0;
+  trendyolCalc.pretV=p.priceTrendyol||p.priceRec||p.priceSell||0;
+  directCalc.pretV=p.priceSell||0;
 }
 function loadCalcProduct(id){
   if(!id)return;
@@ -10535,7 +10623,14 @@ function aiSafeImageUrl(u){
 }
 function downloadImg(url){return url?'/api/img-proxy?url='+encodeURIComponent(url)+'&download=1':'';}
 // Returnează sursa potrivită pt <img src>: proxy pt http(s), direct pt data: URLs
-function imgSrc(url){if(!url)return'';if(url.startsWith('data:'))return url;if(url.startsWith(SUPA_URL))return url;if(url.startsWith('http'))return proxyImg(url);return url;}
+function imgSrc(url){
+  if(!url)return'';
+  if(url.startsWith('lazy-product://')){
+    const id=url.slice('lazy-product://'.length),p=P.find(x=>String(x.id)===id);
+    return p?productImageUrls.get(String(p.id)+'|'+productImageVersion(p))||PRODUCT_IMAGE_PLACEHOLDER:PRODUCT_IMAGE_PLACEHOLDER;
+  }
+  if(url.startsWith('data:'))return url;if(url.startsWith(SUPA_URL))return url;if(url.startsWith('http'))return proxyImg(url);return url;
+}
 function imgErr(el,url,mode='hide'){
   const raw=String(url||'');
   if(raw.startsWith('http')&&!el.dataset.rawTried){el.dataset.rawTried='1';el.src=raw;return;}
@@ -10549,7 +10644,10 @@ function imgErr(el,url,mode='hide'){
   else if(mode==='pcx')el.outerHTML='<div class="pcx-line-img-ph">📦</div>';
   else el.style.display='none';
 }
-function imgErrAttr(url,mode='hide'){return`onerror="imgErr(this,${esc(JSON.stringify(url||''))},'${mode}')"`;}
+function imgErrAttr(url,mode='hide'){
+  const raw=String(url||''),m=raw.match(/^lazy-product:\/\/(.+)$/),mark=m?`data-product-image="${esc(m[1])}" `:'';
+  return`${mark}onerror="imgErr(this,${esc(JSON.stringify(raw))},'${mode}')"`;
+}
 // Rewrite <img src> în HTML pentru preview — original URL rămâne în raw/copy
 function proxyHtmlImgs(html){return(html||'').replace(/<img([^>]+?)src=["']([^"']+)["']/gi,(m,attrs,u)=>u.startsWith('/api/img-proxy')?m:`<img${attrs}src="${proxyImg(u)}"`);}
 // Verifică dimensiunile imaginii la onload și afișează badge dimensiune
@@ -12823,7 +12921,7 @@ function renderSearch(){
   drop.classList.add('on');
   drop.innerHTML=hits.map(p=>{
     const s=qty(p);const tqs=tqp(p);
-    const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="ss-th click-edit" onclick="openModal(${p.id})" title="Editează produs" ${imgErrAttr(p.img)}>`:`<div class="ss-th-ph click-edit" onclick="openModal(${p.id})" title="Editează produs">📦</div>`;
+    const th=productImageTag(p,'ss-th click-edit',`onclick="openModal(${p.id})" title="Editează produs" onerror="this.src=PRODUCT_IMAGE_PLACEHOLDER"`);
     const copyBtn=`<button class="copy-nm-btn" onclick="event.stopPropagation();copyProductName(${p.id})" title="Copiază denumire">📋</button>`;
     const skuMeta=[p.sku?'SKU: '+p.sku:'',p.internalCode?'Cod intern: '+p.internalCode:''].filter(Boolean).join(' · ');
     return`<div class="ss-row">${th}<div class="ss-inf"><div class="ss-nm">${esc(p.name)}${copyBtn}</div><div class="ss-meta">${esc(skuMeta||'fără cod')} · stoc: ${fmtQty(s)}${p.priceSell>0?' · min '+p.priceSell.toFixed(2)+' RON':''}</div></div>
@@ -12832,6 +12930,7 @@ function renderSearch(){
         <button class="sell-btn" onclick="sellSearch(${p.id})">Vinde</button>
       </div></div>`;
   }).join('');
+  observeProductImages(drop);
 }
 function productSalesHistory(productId){
   if(!productId)return[];
@@ -13024,7 +13123,7 @@ async function sellSearch(id){
 /* TODAY GRID */
 let todayCardProds=[],todayCardIdx=0;
 function todayCardSide(p,side){
-  const img=p.img?`<img src="${esc(imgSrc(p.img))}" alt="" onclick="event.stopPropagation();openModal(${p.id})" ${imgErrAttr(p.img,'ph')}>`:`<span class="ph" onclick="event.stopPropagation();openModal(${p.id})">📦</span>`;
+  const img=productImageTag(p,'',`alt="" onclick="event.stopPropagation();openModal(${p.id})" onerror="this.src=PRODUCT_IMAGE_PLACEHOLDER"`);
   return`<div class="today-card today-card-side" onclick="todayCardGoTo(${p.id})" title="${esc(p.name)}"><div class="today-card-img click-edit">${img}</div><div class="today-card-title">${esc(p.name)}</div><div class="today-card-meta">azi ${fmtQty(tqp(p))} buc.</div></div>`;
 }
 function renderToday(){
@@ -13036,7 +13135,7 @@ function renderToday(){
   if(!todayCardProds.length)tg.innerHTML='<div class="empty-row">Niciun produs disponibil</div>';
   else{
     const n=todayCardProds.length,p=todayCardProds[todayCardIdx],prev=todayCardProds[(todayCardIdx-1+n)%n],next=todayCardProds[(todayCardIdx+1)%n],tqs=tqp(p),s=qty(p);
-    const img=p.img?`<img src="${esc(imgSrc(p.img))}" alt="" onclick="openModal(${p.id})" ${imgErrAttr(p.img,'ph')}>`:`<span class="ph" onclick="openModal(${p.id})">📦</span>`;
+    const img=productImageTag(p,'',`alt="" onclick="openModal(${p.id})" onerror="this.src=PRODUCT_IMAGE_PLACEHOLDER"`);
     const main=`<div class="today-card today-card-main"><div class="today-card-img click-edit" title="Editează produs">${img}</div><div class="today-card-title"><button class="copy-btn" onclick="copyProductName(${p.id})" title="Copiază denumirea">📋</button><span>${esc(p.name)}</span><span style="margin-left:auto;flex-shrink:0">${easyboxIconHtml(p)}</span></div><div class="today-card-meta"><button class="copy-btn" onclick="copyProductSku(${p.id})" title="Copiază SKU" ${!p.sku?'style="visibility:hidden"':''}>📋</button>SKU: ${esc(p.sku||'—')}</div><div class="today-card-meta"><button class="copy-btn" onclick="copyProductInternalCode(${p.id})" title="Copiază cod intern">📋</button>Cod intern: ${esc(p.internalCode||'—')}</div><div class="today-card-row"><span>Stoc actual</span><strong style="${s<0?'color:var(--rd)':''}">${fmtQty(s)}</strong></div><div class="today-card-row"><span>Vândute azi</span><strong>${fmtQty(tqs)}</strong></div><div class="today-card-prices"><div class="today-card-row"><span>Preț minim direct</span><strong>${p.priceSell>0?p.priceSell.toFixed(2)+' RON':'—'}</strong></div><div class="today-card-row"><span>Preț minim eMAG</span><strong>${p.priceEmag>0?p.priceEmag.toFixed(2)+' RON':'—'}</strong></div><div class="today-card-row"><span>Preț minim Trendyol</span><strong>${p.priceTrendyol>0?p.priceTrendyol.toFixed(2)+' RON':'—'}</strong></div></div><div class="today-actions"><input type="text" inputmode="decimal" class="tg-inp${tqs>0?' on':''}" id="ti-${p.id}" value="${fmtQty(tqs)}" onchange="updateTQ(${p.id})" oninput="pvTQ(${p.id})"><button class="tg-btn-minus" onclick="qUnsell(${p.id})" ${tqs<=0?'disabled':''} title="Corectează: -1 vânzare">−</button><button class="tg-btn" onclick="qSell(${p.id})" title="Adaugă: +1 vânzare">+</button><button class="tg-btn-del" onclick="deleteSale(${p.id})" ${tqs<=0?'disabled':''} title="Șterge vânzare">×</button></div></div>`;
     tg.innerHTML=`<div class="today-carousel">${n>1?todayCardSide(prev,'l'):'<div></div>'}<button class="today-arrow" onclick="todayCardNav(-1)">‹</button>${main}<button class="today-arrow" onclick="todayCardNav(1)">›</button>${n>1?todayCardSide(next,'r'):'<div></div>'}</div>`;
   }
@@ -13045,6 +13144,7 @@ function renderToday(){
   document.getElementById('tb-sum').innerHTML=tot>0
     ?`<span>Total azi: <strong>${fmtQty(tot)} buc</strong></span><span>Valoare: <strong>${val.toFixed(2)} RON</strong></span><span>${Object.keys(TS).filter(k=>TS[k]>0).length} produse</span>`
     :`<span style="font-style:italic;opacity:.6">Nicio vânzare. Caută un produs mai sus sau apasă + în grilă.</span>`;
+  observeProductImages(tg);
 }
 function todayCardNav(dir){if(!todayCardProds.length)return;todayCardIdx=(todayCardIdx+dir+todayCardProds.length)%todayCardProds.length;renderToday();}
 function todayCardGoTo(id){const i=todayCardProds.findIndex(p=>p.id===id);if(i>=0){todayCardIdx=i;renderToday();}}
@@ -13198,7 +13298,7 @@ function matchesStatusFilters(p){
   return[...selStatus].some(v=>{
     if(v==='ok'||v==='low'||v==='out')return st(p)===v;
     if(v==='transit')return parseQtyVal(p.incomingQty)>0;
-    if(v==='noimg')return!p.img;
+    if(v==='noimg')return!!p._imageLoaded&&!p.img;
     if(v==='supplier_oos')return!!p.supplierOOS;
     return false;
   });
@@ -13240,7 +13340,7 @@ function renderTable(){
     const s2=st(p),q2=qty(p);
     const bdg=s2==='ok'?`<span class="bdg bdg-ok">În stoc</span>`:s2==='low'?`<span class="bdg bdg-low">Scăzut</span>`:`<span class="bdg bdg-out">Epuizat</span>`;
     const catB=p.category?`<span class="bdg bdg-cat" title="${esc(p.category)}">${esc(p.category)}</span>`:'—';
-    const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="p-th click-edit" loading="lazy" onclick="openModal(${p.id})" title="Editează produs" ${imgErrAttr(p.img)}>`:`<div class="p-th-ph click-edit" onclick="openModal(${p.id})" title="Editează produs">📦</div>`;
+    const th=productImageTag(p,'p-th click-edit',`onclick="openModal(${p.id})" title="Editează produs" onerror="this.src=PRODUCT_IMAGE_PLACEHOLDER"`);
     const stocColor=s2==='out'?'var(--rd)':s2==='low'?'var(--am)':'var(--gr)';
     return`<tr>
       <td style="text-align:center;vertical-align:middle"><input type="checkbox" class="chk-prod" data-id="${p.id}" ${selProd.has(p.id)?'checked':''} onchange="toggleSelProd(${p.id},this.checked)"></td>
@@ -13284,6 +13384,7 @@ function renderTable(){
   const boxes=[...document.querySelectorAll('.chk-prod')],all=document.getElementById('chk-all');
   if(all){all.checked=boxes.length>0&&boxes.every(c=>c.checked);all.indeterminate=!all.checked&&boxes.some(c=>c.checked);}
   updateBulkBtns();
+  observeProductImages(tb);
 }
 
 /* EASYBOX — verifică dacă dimensiunile produsului încap în easybox (44,5 × 39 × 47 cm), direct sau pe diagonală */
@@ -13529,9 +13630,13 @@ function checkEditProductDeepLink(){
     if(id&&P.some(p=>String(p.id)===String(id)))openModal(Number(id));
   }catch(e){}
 }
-function openModal(id){
+async function openModal(id){
   editId=id||null;
   const p=id?P.find(x=>x.id===id):null;
+  if(p){
+    try{await Promise.all([ensureProductDetails(p),ensureProductImageSource(p)]);await ensureProductImage(p);}
+    catch(e){console.warn('Detaliile produsului nu s-au încărcat complet',e);}
+  }
   document.getElementById('m-title').textContent=p?'Editează produs':'Produs nou';
   peTab('info');
   mergeTargetId=null;mergePickProds=null;
@@ -13579,10 +13684,10 @@ function openModal(id){
   document.getElementById('f-product-url').value='';
   document.getElementById('import-url-status').innerHTML='Completează automat numele, codul, categoria, poza, descrierea, caracteristicile, prețul și o galerie de imagini tematice.';
   lastNameForCat='';
-  const acq=p?.priceBuyTTC?(p.tvaAcq>0?p.priceBuyTTC/(1+p.tvaAcq):p.priceBuyTTC):0;
-  pcReset(acq,p?.priceSell||0);
-  curImg=p?.img||'';
-  if(curImg){showPrev(curImg);document.getElementById('f-imgurl').value=curImg.startsWith('data:')?'':curImg;}
+  if(p)_populateCalcFromProduct(p);
+  else pcReset(0,0);
+  curImg=p?._imageSource||(!String(p?.img||'').startsWith('lazy-product://')?p?.img:'')||'';
+  if(curImg||p?._imageLoaded){showPrev(p?.img||curImg);document.getElementById('f-imgurl').value=(curImg.startsWith('data:')||curImg.startsWith('lazy-product://'))?'':curImg;}
   else{hidePrev();document.getElementById('f-imgurl').value='';}
   document.getElementById('f-img').value='';
   document.getElementById('ai-img-btn').disabled=!curImg;
@@ -20243,6 +20348,7 @@ applyTabOrder();
 applySyncSectionOrder();
 loadUiCustomizations();
 loadZoom();
+startProductImageObservation();
 load();
 // Preîncarcă dosarele Research tăcut, în fundal, chiar de la pornirea aplicației — nu doar la prima
 // vizită a tab-ului. Până apeși pe „Research" (de obicei la câteva secunde după ce ai deschis

@@ -1,5 +1,5 @@
-const SUPA_URL=process.env.SUPABASE_URL||'https://nuvgwytanlgvcffxeahs.supabase.co';
-const SUPA_KEY=process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.SUPABASE_ANON_KEY||'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51dmd3eXRhbmxndmNmZnhlYWhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MDI0OTAsImV4cCI6MjA5NTI3ODQ5MH0.lSy1CUJA9xlVv1isAyfTIxGUAbGMUIS7c3TXQ-5pcEg';
+const SUPA_URL=process.env.SUPABASE_URL||'https://cbpavtvrfpkbaeueexlw.supabase.co';
+const SUPA_KEY=process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.SUPABASE_ANON_KEY||'sb_publishable_m7_oRHyxmrrvuGpudY9V1g_LM85ubbr';
 const MAX_HTML=2*1024*1024;
 const VAT=.21,COMMISSION=.20,FIXED_COSTS=23,MIN_PROFIT=10,MIN_MARGIN=20,MAX_LINKS=25;
 // Curs aproximativ de conversie în RON — la fel ca EUR_RON hardcodat în index.html pentru prețurile din Inventar.

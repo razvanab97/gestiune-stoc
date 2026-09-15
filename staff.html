@@ -248,8 +248,8 @@ button{cursor:pointer}
 <button type="button" class="msg-badge-btn" id="msg-badge-btn" onclick="openMsgPopup()">📨 <span class="msg-badge-count" id="msg-badge-count"></span></button>
 
 <script>
-const SUPA_URL='https://nuvgwytanlgvcffxeahs.supabase.co';
-const SUPA_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im51dmd3eXRhbmxndmNmZnhlYWhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk3MDI0OTAsImV4cCI6MjA5NTI3ODQ5MH0.lSy1CUJA9xlVv1isAyfTIxGUAbGMUIS7c3TXQ-5pcEg';
+const SUPA_URL='https://cbpavtvrfpkbaeueexlw.supabase.co';
+const SUPA_KEY='sb_publishable_m7_oRHyxmrrvuGpudY9V1g_LM85ubbr';
 async function sb(method,path,body){
   const opts={method,headers:{'Content-Type':'application/json','apikey':SUPA_KEY,'Authorization':'Bearer '+SUPA_KEY,'Prefer':'return=representation'}};
   if(body)opts.body=JSON.stringify(body);
@@ -293,7 +293,7 @@ let PRODUSE=[],COMENZI=[],JURNAL=[],ORDERS=[],PREPACK=[],STAFFMSG=[],curKey=null
 let sheetCtx=null; // {lk} sau {lk,type:'stoc_redus'} — comanda/linia pentru care e deschis sheet-ul de probleme
 let pendingUndo=null; // {orderKey,lines:[{table,id,prev}],timeoutId,type}
 let lineBusy={}; // lk -> true cât timp o cerere e în curs (protecție dublu-tap)
-let pollTimer=null;
+let pollTimer=null,refreshInFlight=false,refreshQueued=false;
 // Identitate — DOAR un semnal, nu o măsură de securitate (nume din localStorage, peste cheia anon
 // expusă, la fel ca restul aplicației, documentat intenționat). Consecvent cu filozofia "fără PIN"
 // originală a paginii Staff — nu adăugăm autentificare reală, doar atribuire pentru prezență/audit.
@@ -1096,12 +1096,17 @@ function startPolling(){
   clearInterval(pollTimer);
   pollTimer=setInterval(()=>{
     // nu reîmprospăta peste un sheet deschis sau un undo în așteptare — ar smulge ecranul de sub deget
-    if(sheetCtx||pendingUndo)return;
+    if(document.hidden||sheetCtx||pendingUndo)return;
     refreshData();
   },25000);
 }
 
 async function refreshData(){
+  // Două tick-uri apropiate, revenirea în tab sau un refresh cerut de un flux
+  // nu mai pot porni citiri paralele ale acelorași patru tabele.
+  if(refreshInFlight){refreshQueued=true;return;}
+  if(document.hidden)return;
+  refreshInFlight=true;
   try{
     const [comRows,jurnalRows,prepackRows,msgRows]=await Promise.all([
       sb('GET',`platforma_comenzi?select=*&created_at=gte.${CUTOFF_DATE}&order=created_at.asc`),
@@ -1117,8 +1122,17 @@ async function refreshData(){
   }catch(e){
     document.getElementById('sync-dot').className='sync-dot err';
     console.warn('refresh eșuat:',e);
+  }finally{
+    refreshInFlight=false;
+    if(refreshQueued&&!document.hidden){refreshQueued=false;refreshData();}
   }
 }
+
+document.addEventListener('visibilitychange',()=>{
+  // La revenire, datele se aduc imediat o singură dată; în fundal nu există
+  // polling inutil care să consume egress sau să redeseneze ecranul ascuns.
+  if(!document.hidden)refreshData();
+});
 
 async function load(){
   renderStaffNameBadge();
