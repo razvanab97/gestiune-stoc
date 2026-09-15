@@ -3690,6 +3690,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:373,text:'Conector local eMAG — reparată comunicarea dintre aplicația deschisă în Safari/Chrome și serviciul local de pe Mac: aplicația folosește acum localhost (acceptat ca origine locală sigură de browsere), iar conectorul ascultă atât IPv4, cât și IPv6 loopback. Mesajul pentru browser blocat este explicit și indică repornirea conectorului, fără a afecta previzualizarea sau stocul.',date:'2026-09-16'},
   {n:372,text:'Integrare eMAG gratuită — importul manual RO/BG/HU și emiterea AWB România pot folosi acum Conectorul local AB HOMES de pe Mac, fără IP static Vercel sau abonament cloud. Conectorul ascultă exclusiv pe 127.0.0.1, păstrează credențialele în Keychain și comunică doar cu aplicațiile AB HOMES autorizate; când Mac-ul este pornit, același buton aduce comenzile în previzualizare fără să modifice automat stocul.',date:'2026-09-16'},
   {n:371,text:'Comenzi eMAG — butonul „Adu comenzi eMAG” citește acum într-un singur flux România, Bulgaria și Ungaria. Fiecare comandă păstrează piața și moneda corectă, iar deduplicarea include țara ca să nu confunde numere de comandă între piețe. Dacă o piață nu este configurată sau IP-ul ei nu este autorizat, comenzile din celelalte piețe se păstrează și apare un avertisment explicit. Emiterea AWB rămâne intenționat limitată la România până când sunt configurate separat adresele și curierii BG/HU.',date:'2026-09-15'},
   {n:370,text:'Diagnostic integrare eMAG — adăugat un test temporar, strict informativ, pentru IP-ul real de ieșire al funcției Vercel. Este folosit numai ca să validăm allowlist-ul eMAG înainte de configurarea unui IP static; nu citește comenzi, nu modifică stoc și nu expune credențialele API.',date:'2026-09-15'},
@@ -7946,13 +7947,13 @@ async function apiJson(path,payload,timeoutMs=45000){
 async function localEmagJson(path,payload,timeoutMs=60000){
   const ctrl=new AbortController(),t=setTimeout(()=>ctrl.abort(),timeoutMs);
   try{
-    const r=await fetch('http://127.0.0.1:43791'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:ctrl.signal});
+    const r=await fetch('http://localhost:43791'+path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),signal:ctrl.signal});
     let data=null;try{data=await r.json()}catch(e){data={error:'Răspuns invalid de la Conectorul local eMAG'}}
     if(!r.ok)throw new Error(data.error||`Conector local ${r.status}`);
     return data;
   }catch(e){
     if(e.name==='AbortError')throw new Error('Conectorul local eMAG nu a răspuns la timp.');
-    if(String(e.message||'').includes('Failed to fetch'))throw new Error('Conectorul local eMAG nu rulează pe acest Mac. Pornește-l din Terminal cu: node scripts/emag-local-connector.js serve');
+    if(/Failed to fetch|Load failed/i.test(String(e.message||'')))throw new Error('Browserul nu poate ajunge la Conectorul local eMAG. Rulează o dată în Terminal: node scripts/emag-local-connector.js install');
     throw e;
   }finally{clearTimeout(t)}
 }
