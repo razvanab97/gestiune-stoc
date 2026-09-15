@@ -2071,7 +2071,7 @@ th{font-weight:800!important;color:var(--t3)!important}
 .pcx-order-emag{background:radial-gradient(260px 140px at 100% 0%,rgba(118,87,246,.13),transparent 70%),linear-gradient(135deg,rgba(255,255,255,.85),rgba(248,250,255,.65))}
 .pcx-order-trendyol{background:radial-gradient(260px 140px at 100% 0%,rgba(247,144,9,.13),transparent 70%),linear-gradient(135deg,rgba(255,255,255,.85),rgba(255,250,240,.65))}
 .pcx-order-vinted{background:radial-gradient(260px 140px at 100% 0%,rgba(18,183,106,.13),transparent 70%),linear-gradient(135deg,rgba(255,255,255,.85),rgba(240,253,246,.65))}
-.pcx-order-hd{display:grid;grid-template-columns:auto auto 1fr auto auto auto auto auto;align-items:center;gap:14px;padding:12px 16px;cursor:pointer;min-height:44px}
+.pcx-order-hd{display:grid;grid-template-columns:auto auto auto 1fr auto auto auto auto auto;align-items:center;gap:14px;padding:12px 16px;cursor:pointer;min-height:44px}
 .pcx-order-hd:hover{background:rgba(255,255,255,.4)}
 .pcx-badge{font-size:18px;font-weight:800;padding:4px 10px;border-radius:999px;white-space:nowrap}
 .pcx-badge-emag{background:#F3F0FF;color:var(--acc)}
@@ -2080,6 +2080,7 @@ th{font-weight:800!important;color:var(--t3)!important}
 /* Numărul comenzii — culoare distinctă (albastru), cerut direct, ca să se citească dintr-o privire ca
    „identificator extern", separat de restul textului neutru (gri/negru) din antet. */
 .pcx-order-id{font-family:var(--mono);font-size:24px;font-weight:700;color:var(--bl);white-space:nowrap}
+.pcx-new-badge{font-size:14px;font-weight:900;letter-spacing:.05em;padding:4px 8px;border-radius:999px;background:var(--acc);color:#fff;box-shadow:0 2px 7px rgba(118,87,246,.28);white-space:nowrap}
 .pcx-order-buyer{font-size:24px;font-weight:600;color:var(--t1);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pcx-order-thumbs{display:flex}
 .pcx-order-thumbs img{width:40px;height:40px;border-radius:8px;object-fit:cover;border:2px solid var(--surf);margin-left:-12px;background:var(--surf2)}
@@ -3690,6 +3691,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:378,text:'Comenzi Platforme — fiecare comandă adăugată în ultimul import primește eticheta vizibilă „NOU” în antetul cardului. Eticheta se păstrează la reîncărcare și se mută automat pe următorul batch nou, fără a marca duplicatele ignorate.',date:'2026-09-16'},
   {n:377,text:'Conector local eMAG — HTTPS este prioritar pentru Safari; adăugat fallback local controlat pentru browsere izolate care nu pot citi certificatul din Keychain. Ambele variante rămân strict pe localhost, iar importul nu modifică automat stocul.',date:'2026-09-16'},
   {n:376,text:'Conector local eMAG — mutat pe HTTPS local cu certificat pentru localhost, astfel încât Safari poate comunica sigur cu aplicația deschisă din Vercel. Conectorul rămâne limitat la acest Mac și la adresele AB HOMES aprobate.',date:'2026-09-16'},
   {n:375,text:'Conector local eMAG — autorizată și adresa de deployment Vercel folosită pentru Gestiune Stoc, pe lângă domeniile stabile existente. Conectorul rămâne accesibil numai pe acest Mac și numai din adresele aprobate.',date:'2026-09-16'},
@@ -15250,6 +15252,8 @@ async function handlePcomImportFile(ev){
     // fiecărei platforme — ca previzualizarea să arate secțiuni curate, separate de o linie. Rulează pe
     // TOATĂ previzualizarea (inclusiv liniile de dinainte), ca gruparea să rămână corectă și după
     // adăugări succesive.
+    pcImpParsed.forEach(x=>delete x._recentImport);
+    for(let i=preExistingCount;i<pcImpParsed.length;i++)pcImpParsed[i]._recentImport=true;
     if(platforma==='both'||platforma==='all3'){
       const ord={emag:0,trendyol:1,vinted:2};
       pcImpParsed.sort((a,b)=>(ord[a.platforma]??3)-(ord[b.platforma]??3));
@@ -15281,12 +15285,14 @@ async function importEmagApiOrders(){
   if(btn){btn.disabled=true;btn.textContent='Se citesc comenzile…';}
   try{
     const r=await localEmagJson('/orders',{date},60000),marketOf=o=>String(o.tara||((o.moneda||'').toUpperCase()==='HUF'?'HU':(o.moneda||'').toUpperCase()==='BGN'?'BG':'RO')).toUpperCase(),orderKey=o=>'emag|'+marketOf(o)+'|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern),existing=new Set([...PCOM.map(orderKey),...pcImpParsed.map(orderKey)]);
-    let added=0,duplicates=0,matched=0;
+    const start=pcImpParsed.length;let added=0,duplicates=0,matched=0;
     for(const raw of r.lines||[]){
       const line=pcomEmagMatchLine(raw),key=orderKey(line);
       if(existing.has(key)){duplicates++;continue;}existing.add(key);pcImpParsed.push(line);added++;if(line.produsId)matched++;
     }
     if(!added){toast(duplicates?`Nicio linie nouă — ${duplicates} există deja în Comenzi Platforme sau previzualizare.`:'Nu există comenzi eMAG pentru ziua selectată.');return;}
+    pcImpParsed.forEach(x=>delete x._recentImport);
+    for(let i=start;i<pcImpParsed.length;i++)pcImpParsed[i]._recentImport=true;
     renderPcomImportPreview();
     const noMatch=added-matched,aiBtn=document.getElementById('pcmi-ai-btn');if(aiBtn)aiBtn.style.display=noMatch?'':'none';
     const unavailable=(r.markets||[]).filter(x=>!x.ok),marketSummary=(r.markets||[]).filter(x=>x.ok).map(x=>`${x.market} ${x.lines}`).join(' · ');
@@ -16393,6 +16399,7 @@ function pcxOrderCardHtml(idxs,gIdx){
   const key=pcxGroupKey(idxs);
   const open=pcxExpanded===null||pcxExpanded.has(key);
   const multi=idxs.length>1;
+  const isRecent=idxs.some(i=>pcImpParsed[i]._recentImport);
   const total=idxs.reduce((s,i)=>s+pcomToRon(pcImpParsed[i].pretTotalCuTva,pcImpParsed[i].moneda),0);
   const anyIncluded=idxs.some(i=>pcImpParsed[i].include);
   const allMatched=idxs.every(i=>pcImpParsed[i].produsId||pcImpParsed[i].newProduct);
@@ -16417,6 +16424,7 @@ function pcxOrderCardHtml(idxs,gIdx){
     <div class="pcx-order-hd" onclick="pcxToggleExpand('${esc(key)}')">
       <span class="pcx-badge pcx-badge-${platCls}">${platLabel}</span>
       <span class="pcx-order-id">#${esc(it0.comandaId||'—')}</span>
+      ${isRecent?'<span class="pcx-new-badge">NOU</span>':''}
       <span class="pcx-order-buyer">${esc(it0.clientNume||'—')}</span>
       <span class="pcx-order-thumbs">${thumbs}</span>
       <span class="pcx-order-count">${idxs.length} produs${idxs.length>1?'e':''}</span>
