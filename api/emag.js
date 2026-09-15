@@ -57,6 +57,12 @@ module.exports=async function handler(req,res){
   try{
     if(req.method!=='POST')return res.status(405).json({error:'Folosește POST'});
     const body=bodyOf(req),action=String(body.action||'');
+    if(action==='egress-ip'){
+      // Diagnostic temporar pentru allowlist eMAG; nu atinge API-ul sau credențialele eMAG.
+      const r=await fetch('https://api.ipify.org?format=json',{headers:{accept:'application/json'}}),data=await r.json();
+      if(!r.ok||!data?.ip)throw new Error('Nu s-a putut determina IP-ul de ieșire al funcției Vercel.');
+      return res.status(200).json({ip:String(data.ip)});
+    }
     if(action==='orders'){
       const day=isoDay(body.date);if(!day)return res.status(400).json({error:'Alege o dată validă'});
       const orders=await readOrders(day),lines=orders.flatMap(orderLines).filter(x=>x.comandaId&&x.titluExtern);
