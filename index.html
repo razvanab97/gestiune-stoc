@@ -3690,6 +3690,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:369,text:'Integrare eMAG pregătită pentru utilizare manuală: buton nou „Adu comenzi eMAG” pe o dată aleasă, fără webhook sau import automat. Comenzile sunt deduplicate după comandă+PNK/cod, asociate întâi după mapări confirmate/cod/titlu, iar cele incerte rămân în previzualizare pentru confirmare. Adăugată și emiterea AWB eMAG cu confirmare explicită; cheile API și adresa expeditorului rămân exclusiv în Vercel.',date:'2026-09-15'},
   {n:368,text:'Dashboard — overview nou, mai calm și mai ușor de urmărit: card luminos pentru situația stocului, panou Astăzi pentru activitatea curentă și o singură bandă pentru epuizate, stoc scăzut și produse de comandat. Cifrele și calculele existente rămân neschimbate; alertele deschid filtrele reale din Inventar sau lista de comandat.',date:'2026-09-15'},
   {n:367,text:'Navigare — indicatorul „Update” este poziționat în bara laterală, chiar deasupra separatorului și a rândului „Setări”, nu în zona de conținut a paginii.',date:'2026-09-15'},
   {n:366,text:'Optimizare egress — încărcarea inițială a Inventarului nu mai descarcă imaginea principală, galeria sau descrierea tuturor produselor. Miniaturile rămân vizibile peste tot: se încarcă doar când produsul intră în viewport sau este deschis, apoi sunt păstrate persistent în Cache Storage, deduplicate pe produs+versiune. La următoarea sesiune, o imagine deja văzută este servită local, inclusiv offline. Butonul „Golește cache poze” șterge doar copiile browserului, niciodată imaginile originale. Staff nu mai suprapune sincronizări și oprește pollingul când tabul este ascuns, reluând o singură sincronizare la revenire. Pregătit separat SQL neexecutat pentru Staff Queue; partea de coadă/realtime rămâne intenționat neactivată până la aprobarea și rularea manuală a migrării.',date:'2026-09-15'},
@@ -15243,6 +15244,47 @@ async function handlePcomImportFile(ev){
     ev.target.value='';
   }
 }
+function pcomEmagMatchLine(raw){
+  let produsId=null,score=0,viaPnk=false,viaTitle=false,viaCode=false;
+  if(raw.pnk){const m=SYNCM.find(s=>s.platforma==='emag'&&s.confirmat&&s.idExtern===raw.pnk);if(m){produsId=m.produsId;score=1;viaPnk=true;}}
+  if(!produsId&&raw.titluExtern){const key=raw.titluExtern.toLowerCase().trim(),m=SYNCM.find(s=>s.platforma==='emag'&&s.confirmat&&s.titluExtern.toLowerCase().trim()===key);if(m){produsId=m.produsId;score=1;viaTitle=true;}}
+  if(!produsId&&raw.codProdus){const key=raw.codProdus.toLowerCase(),p=P.find(x=>(x.sku||'').toLowerCase()===key||(x.internalCode||'').toLowerCase()===key);if(p){produsId=p.id;score=1;viaCode=true;}}
+  if(!produsId){const m=findExistingProduct({name:raw.titluExtern});if(m){produsId=m.product.id;score=m.score;}}
+  return{...raw,platforma:'emag',data:raw.data||td(),produsId,score,viaPnk,viaTitle,viaCode,include:false};
+}
+async function importEmagApiOrders(){
+  if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
+  const inp=document.getElementById('pcx-emag-date'),btn=document.getElementById('pcx-emag-import-btn');
+  const date=inp?.value||td();if(inp&&!inp.value)inp.value=date;
+  if(btn){btn.disabled=true;btn.textContent='Se citesc comenzile…';}
+  try{
+    const r=await apiJson('/api/emag',{action:'orders',date},60000),existing=new Set([...PCOM.map(o=>'emag|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern)),...pcImpParsed.map(o=>'emag|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern))]);
+    let added=0,duplicates=0,matched=0;
+    for(const raw of r.lines||[]){
+      const line=pcomEmagMatchLine(raw),key='emag|'+line.comandaId+'|'+(line.pnk||line.codProdus||line.titluExtern);
+      if(existing.has(key)){duplicates++;continue;}existing.add(key);pcImpParsed.push(line);added++;if(line.produsId)matched++;
+    }
+    if(!added){toast(duplicates?`Nicio linie nouă — ${duplicates} există deja în Comenzi Platforme sau previzualizare.`:'Nu există comenzi eMAG pentru ziua selectată.');return;}
+    renderPcomImportPreview();
+    const noMatch=added-matched,aiBtn=document.getElementById('pcmi-ai-btn');if(aiBtn)aiBtn.style.display=noMatch?'':'none';
+    toast(`${added} linii eMAG aduse pentru ${date} · ${matched} asociate${noMatch?` · ${noMatch} necesită confirmare`:''}${duplicates?` · ${duplicates} duplicate ignorate`:''}`);
+    pcomTranslateForeignTitles();
+  }catch(e){toast('eMAG: '+(e.message||'nu am putut citi comenzile'),'err');}
+  finally{if(btn){btn.disabled=false;btn.textContent='🛒 Adu comenzi eMAG';}}
+}
+async function issueEmagAwb(){
+  const orderId=(document.getElementById('pcx-emag-awb-order')?.value||'').trim(),weight=document.getElementById('pcx-emag-awb-weight')?.value,parcelNumber=document.getElementById('pcx-emag-awb-parcels')?.value,btn=document.getElementById('pcx-emag-awb-btn');
+  if(!orderId){toast('Introdu numărul comenzii eMAG','err');return;}
+  if(!confirm(`Emiți AWB eMAG pentru comanda #${orderId}?`))return;
+  if(btn){btn.disabled=true;btn.textContent='Se emite…';}
+  try{
+    const r=await apiJson('/api/emag',{action:'awb',orderId,weight,parcelNumber},60000);
+    const raw=JSON.stringify(r.result||{}),awb=(raw.match(/\"awb_number\"\s*:\s*\"?([^\",}]+)/)||raw.match(/\"awb\"\s*:\s*\"?([^\",}]+)/)||[])[1]||'';
+    if(awb){await dbPatch(`platforma_comenzi?platforma=eq.emag&comanda_id=eq.${encodeURIComponent(orderId)}`,{awb});PCOM.filter(o=>o.platforma==='emag'&&o.comandaId===orderId).forEach(o=>o.awb=awb);if(pcImpParsed.length)renderPcomImportPreview();}
+    toast(awb?`AWB ${awb} emis și salvat ✓`:'AWB emis de eMAG ✓ — verifică detaliile în Seller Center');
+  }catch(e){toast('AWB eMAG: '+(e.message||'eroare emitere'),'err');}
+  finally{if(btn){btn.disabled=false;btn.textContent='Emite AWB';}}
+}
 function pcomPickBtnHtml(idx){
   const it=pcImpParsed[idx];
   if(it.newProduct)return`<button type="button" class="smi-pick-btn" style="border-color:var(--or);color:var(--or)" onclick="openPcomPick(event,${idx})"><div class="smi-pick-th-ph">🆕</div><span class="smi-pick-nm">Produs nou — de adăugat</span><span class="smi-pick-car">▾</span></button>`;
@@ -16429,6 +16471,11 @@ function renderPcomRedesign(){
           <button type="button" class="pcx-plat-btn" data-plat="both" onclick="pcxSetPlatform('both')">eMAG <span class="pcx-plat-btn-sub">+ Trendyol</span></button>
           <button type="button" class="pcx-plat-btn" data-plat="all3" onclick="pcxSetPlatform('all3')">Toate <span class="pcx-plat-btn-sub">3 mixte</span></button>
         </div>
+        <div class="pcx-row2" style="margin:14px 0 4px;align-items:end">
+          <div class="pcx-fld"><label>Comenzi eMAG din ziua</label><input type="date" id="pcx-emag-date"></div>
+          <button type="button" class="pcx-btn pcx-btn-primary" id="pcx-emag-import-btn" onclick="importEmagApiOrders()">🛒 Adu comenzi eMAG</button>
+          <div style="font-size:15px;color:var(--t3);padding-bottom:9px">Manual, la apăsare. Fără webhook sau import automat.</div>
+        </div>
         <div id="pcx-file-zone" style="display:none">
           <div class="pcx-dropzone" onclick="document.getElementById('pcmi-file').click()">
             <span class="ic">📄</span>Alege fișier(e) comenzi (.xlsx / .xls / .csv)
@@ -16471,6 +16518,10 @@ function renderPcomRedesign(){
         <div id="pcx-awb-parsing-slot"></div>
         <div id="pcx-awb-preview-slot"></div>
         <div id="pcx-awb-foot-slot" style="display:flex;justify-content:flex-end;margin-top:10px"></div>
+        <details style="margin-top:14px"><summary style="cursor:pointer;font-size:16px;font-weight:700;color:var(--t2)">⚡ Emite AWB direct prin eMAG</summary>
+          <div class="pcx-row2" style="margin-top:10px;align-items:end"><div class="pcx-fld"><label>Număr comandă eMAG</label><input id="pcx-emag-awb-order" inputmode="numeric" placeholder="ex. 123456789"></div><div class="pcx-fld"><label>Greutate (kg)</label><input id="pcx-emag-awb-weight" type="number" min="0.01" step="0.01" value="1"></div><div class="pcx-fld"><label>Colete</label><input id="pcx-emag-awb-parcels" type="number" min="1" step="1" value="1"></div><button type="button" class="pcx-btn pcx-btn-primary" id="pcx-emag-awb-btn" onclick="issueEmagAwb()">Emite AWB</button></div>
+          <div style="font-size:14px;color:var(--t3);margin-top:6px">Se emite numai după confirmare. Necesită configurarea adresei expeditorului în Vercel.</div>
+        </details>
       </div>
       <div class="pcx-card pcx-card-preview">
         <div class="pcx-preview-hd">
