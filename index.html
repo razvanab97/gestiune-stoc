@@ -3690,6 +3690,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:371,text:'Comenzi eMAG — butonul „Adu comenzi eMAG” citește acum într-un singur flux România, Bulgaria și Ungaria. Fiecare comandă păstrează piața și moneda corectă, iar deduplicarea include țara ca să nu confunde numere de comandă între piețe. Dacă o piață nu este configurată sau IP-ul ei nu este autorizat, comenzile din celelalte piețe se păstrează și apare un avertisment explicit. Emiterea AWB rămâne intenționat limitată la România până când sunt configurate separat adresele și curierii BG/HU.',date:'2026-09-15'},
   {n:370,text:'Diagnostic integrare eMAG — adăugat un test temporar, strict informativ, pentru IP-ul real de ieșire al funcției Vercel. Este folosit numai ca să validăm allowlist-ul eMAG înainte de configurarea unui IP static; nu citește comenzi, nu modifică stoc și nu expune credențialele API.',date:'2026-09-15'},
   {n:369,text:'Integrare eMAG pregătită pentru utilizare manuală: buton nou „Adu comenzi eMAG” pe o dată aleasă, fără webhook sau import automat. Comenzile sunt deduplicate după comandă+PNK/cod, asociate întâi după mapări confirmate/cod/titlu, iar cele incerte rămân în previzualizare pentru confirmare. Adăugată și emiterea AWB eMAG cu confirmare explicită; cheile API și adresa expeditorului rămân exclusiv în Vercel.',date:'2026-09-15'},
   {n:368,text:'Dashboard — overview nou, mai calm și mai ușor de urmărit: card luminos pentru situația stocului, panou Astăzi pentru activitatea curentă și o singură bandă pentru epuizate, stoc scăzut și produse de comandat. Cifrele și calculele existente rămân neschimbate; alertele deschid filtrele reale din Inventar sau lista de comandat.',date:'2026-09-15'},
@@ -15259,16 +15260,17 @@ async function importEmagApiOrders(){
   const date=inp?.value||td();if(inp&&!inp.value)inp.value=date;
   if(btn){btn.disabled=true;btn.textContent='Se citesc comenzile…';}
   try{
-    const r=await apiJson('/api/emag',{action:'orders',date},60000),existing=new Set([...PCOM.map(o=>'emag|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern)),...pcImpParsed.map(o=>'emag|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern))]);
+    const r=await apiJson('/api/emag',{action:'orders',date},60000),marketOf=o=>String(o.tara||((o.moneda||'').toUpperCase()==='HUF'?'HU':(o.moneda||'').toUpperCase()==='BGN'?'BG':'RO')).toUpperCase(),orderKey=o=>'emag|'+marketOf(o)+'|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern),existing=new Set([...PCOM.map(orderKey),...pcImpParsed.map(orderKey)]);
     let added=0,duplicates=0,matched=0;
     for(const raw of r.lines||[]){
-      const line=pcomEmagMatchLine(raw),key='emag|'+line.comandaId+'|'+(line.pnk||line.codProdus||line.titluExtern);
+      const line=pcomEmagMatchLine(raw),key=orderKey(line);
       if(existing.has(key)){duplicates++;continue;}existing.add(key);pcImpParsed.push(line);added++;if(line.produsId)matched++;
     }
     if(!added){toast(duplicates?`Nicio linie nouă — ${duplicates} există deja în Comenzi Platforme sau previzualizare.`:'Nu există comenzi eMAG pentru ziua selectată.');return;}
     renderPcomImportPreview();
     const noMatch=added-matched,aiBtn=document.getElementById('pcmi-ai-btn');if(aiBtn)aiBtn.style.display=noMatch?'':'none';
-    toast(`${added} linii eMAG aduse pentru ${date} · ${matched} asociate${noMatch?` · ${noMatch} necesită confirmare`:''}${duplicates?` · ${duplicates} duplicate ignorate`:''}`);
+    const unavailable=(r.markets||[]).filter(x=>!x.ok),marketSummary=(r.markets||[]).filter(x=>x.ok).map(x=>`${x.market} ${x.lines}`).join(' · ');
+    toast(`${added} linii eMAG aduse pentru ${date}${marketSummary?` (${marketSummary})`:''} · ${matched} asociate${noMatch?` · ${noMatch} necesită confirmare`:''}${duplicates?` · ${duplicates} duplicate ignorate`:''}${unavailable.length?` · Atenție: ${unavailable.map(x=>x.market).join(', ')} neconfigurat/blocat`:''}`,unavailable.length?'warn':undefined);
     pcomTranslateForeignTitles();
   }catch(e){toast('eMAG: '+(e.message||'nu am putut citi comenzile'),'err');}
   finally{if(btn){btn.disabled=false;btn.textContent='🛒 Adu comenzi eMAG';}}
