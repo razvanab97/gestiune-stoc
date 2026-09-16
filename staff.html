@@ -308,7 +308,9 @@ function findProdus(id){return id?PRODUSE.find(p=>p.id===id):null;}
 function computeOrders(){
   const groups={};
   COMENZI.forEach(o=>{
-    const key=o.comanda_id||('_row'+o.id);
+    // Numărul unei comenzi nu este global unic între marketplace-uri. Fără platformă în cheie,
+    // o comandă eMAG și una Trendyol cu același ID se puteau împacheta ca un singur colet.
+    const key=o.comanda_id?`platforma:${o.platforma||'necunoscut'}:${o.comanda_id}`:('_row'+o.id);
     if(!groups[key])groups[key]={key,comandaId:o.comanda_id||'',platforma:o.platforma,clientNume:o.client_nume||'',data:o.data,sortAt:o.created_at||o.data,lines:[]};
     o._table='platforma_comenzi';
     groups[key].lines.push(o);
@@ -460,6 +462,7 @@ function lineInfoHtml(l,showCheck){
   const p=findProdus(l.produs_id);
   const lk=lineKey(l);
   const issueHtml=l.staff_blocked?`<div class="line-issue">⛔ ${esc(ISSUE_LABELS[l.staff_issue_type]||'Problemă raportată')}</div>`:'';
+  const resolveHtml=l.staff_blocked?`<button type="button" class="line-check" ${lineBusy[lk]?'disabled':''} onclick="resolveIssue('${lk}')">✓ Problemă rezolvată</button>`:'';
   const checkHtml=showCheck?`<button type="button" class="line-check ${l.impachetat?'on':''}" ${lineBusy[lk]?'disabled':''} onclick="toggleLineCheck('${lk}')">${l.impachetat?'✓ Confirmat':'Confirmă produs'}</button>`:'';
   const stock=p?(Number(p.bought)||0)-(Number(p.sold)||0):null;
   const stockCls=stock===null?'':stock<=0?'zero':stock<Number(l.cantitate)?'low':'';
@@ -471,7 +474,7 @@ function lineInfoHtml(l,showCheck){
       <div class="line-qty-box"><div class="line-qty-lbl">Cantitate în comandă</div><div class="line-qty">${l.cantitate} BUC.</div></div>
       ${stockHtml}
     </div>
-    ${issueHtml}${checkHtml}
+    ${issueHtml}${resolveHtml}${checkHtml}
   </div>`;
 }
 
@@ -789,9 +792,12 @@ async function undoAction(){
   const {orderKey,lines}=pendingUndo;
   try{
     for(const ch of lines){
-      await sb('PATCH',`${ch.table}?id=eq.${ch.id}`,ch.prev);
       const l=findLineByKey(ch.table+'_'+ch.id);
-      if(l)Object.assign(l,ch.prev);
+      // patchLine actualizează și sursa JURNAL pentru liniile sintetice de vânzare directă.
+      // Un PATCH direct schimba doar obiectul temporar, iar următorul computeOrders reintroducea
+      // starea veche, astfel încât „Anulează” părea că nu funcționează.
+      if(l)await patchLine(l,ch.prev);
+      else await sb('PATCH',`${ch.table}?id=eq.${ch.id}`,ch.prev);
     }
     logActivity('undo',null,{orderKey});
   }catch(e){console.error(e);}
@@ -882,8 +888,8 @@ async function submitIssue(type,note){
   const orderKey=sheetCtx.orderKey;
   closeSheet();
   if(!l)return;
-  const prev={staff_blocked:l.staff_blocked,staff_blocked_at:l.staff_blocked_at,staff_issue_type:l.staff_issue_type,staff_issue_note:l.staff_issue_note,fara_stoc:l.fara_stoc,fara_stoc_at:l.fara_stoc_at};
-  const body={staff_blocked:true,staff_blocked_at:new Date().toISOString(),staff_issue_type:type,staff_issue_note:note||null};
+  const prev={staff_blocked:l.staff_blocked,staff_blocked_at:l.staff_blocked_at,staff_issue_type:l.staff_issue_type,staff_issue_note:l.staff_issue_note,staff_issue_resolved:l.staff_issue_resolved,fara_stoc:l.fara_stoc,fara_stoc_at:l.fara_stoc_at};
+  const body={staff_blocked:true,staff_blocked_at:new Date().toISOString(),staff_issue_type:type,staff_issue_note:note||null,staff_issue_resolved:false};
   if(type==='stoc_zero'){body.fara_stoc=true;body.fara_stoc_at=body.staff_blocked_at;}
   try{
     await patchLine(l,body);
@@ -895,6 +901,30 @@ async function submitIssue(type,note){
     console.error(e);
     renderMain();
   }
+}
+
+// O problemă trebuie să poată fi închisă explicit după ce a fost rezolvată (produs găsit, stoc adus,
+// colet corectat). Altfel comanda rămânea blocată pe termen nelimitat, deși baza avea deja coloana
+// staff_issue_resolved. La rezolvare, linia se întoarce în coada normală de împachetat.
+async function resolveIssue(lk){
+  if(lineBusy[lk])return;
+  const l=findLineByKey(lk);if(!l||!l.staff_blocked)return;
+  const ord=orderOfLine(l);
+  if(!confirm('Confirmi că problema a fost rezolvată și produsul poate fi împachetat?'))return;
+  lineBusy[lk]=true;renderMain();
+  try{
+    await patchLine(l,{staff_blocked:false,staff_issue_resolved:true});
+    logActivity('problema_rezolvata',l,{tip:l.staff_issue_type||null});
+    computeOrders();
+    activeTab='pack';
+    curKey=ord?.key||null;
+    showToast('✓ Problemă rezolvată — comanda a revenit la împachetare');
+  }catch(e){
+    showToast('Eroare la salvare — încearcă din nou');
+    console.error(e);
+  }
+  lineBusy[lk]=false;
+  renderMain();
 }
 
 /* ── În așteptare ── */
