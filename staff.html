@@ -39,6 +39,7 @@ button{cursor:pointer}
 .hdr-title{display:flex;align-items:baseline;gap:10px;min-width:0}
 .hdr h1{font-size:27px;font-weight:700}
 .order-count{font-size:17px;color:var(--t3);font-weight:700;white-space:nowrap}
+.update-btn{border:1px solid var(--b2);background:var(--surf);color:var(--t2);border-radius:999px;padding:4px 9px;font-size:13px;font-weight:800;white-space:nowrap}.update-btn.new{border-color:var(--acc);background:var(--acc-light);color:var(--acc)}
 .sync-dot{width:11px;height:11px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:middle}
 .sync-dot.ok{background:var(--gr)}
 .sync-dot.err{background:var(--rd)}
@@ -220,7 +221,7 @@ button{cursor:pointer}
    doar lista internă poate derula, fără să mute antetul, navigația sau butonul de confirmare. */
 @media (min-width:768px) and (max-width:1366px) and (orientation:landscape){
   .wrap{padding-top:calc(7px + env(safe-area-inset-top));padding-bottom:calc(7px + env(safe-area-inset-bottom));grid-template-rows:auto auto auto auto minmax(0,1fr)}
-  .hdr{margin-bottom:1px}.hdr h1{font-size:18px}.hdr-title{gap:7px}.order-count{font-size:14px}.staff-name-badge{font-size:13px;padding:4px 9px}.sync-dot{width:8px;height:8px}
+  .hdr{margin-bottom:1px}.hdr h1{font-size:18px}.hdr-title{gap:7px}.order-count{font-size:14px}.update-btn{font-size:11px;padding:3px 7px}.staff-name-badge{font-size:13px;padding:4px 9px}.sync-dot{width:8px;height:8px}
   .progress-bar-wrap{gap:8px;margin:2px 0 5px}.progress-bar{height:5px}.progress-pct{font-size:13px}
   .tabbar{gap:3px;padding:3px;margin-bottom:6px;border-radius:10px;overflow:hidden}.tab-btn{min-width:0;min-height:40px;padding:5px 3px;flex-direction:row;justify-content:center;gap:3px;font-size:12px;line-height:1.05}.tab-btn .ic{font-size:15px}.tab-badge{font-size:10px;min-width:13px;padding:0 3px;margin-left:0}
   .card{padding:14px;gap:9px;border-radius:16px}.ord-hdr{gap:3px;padding-bottom:8px}.ord-hdr-row1{gap:7px}.ord-pl{font-size:13px;padding:3px 8px}.ord-num,.ord-client{font-size:24px;line-height:1.1}.ord-date{font-size:14px}.awb-box{padding:7px 12px;min-height:40px}.awb-lbl{font-size:12px}.awb-num{font-size:20px}.awb-num-tail{font-size:27px}.awb-pending{font-size:14px}
@@ -236,7 +237,7 @@ button{cursor:pointer}
 <body>
 <div class="wrap">
   <div class="hdr">
-    <div class="hdr-title"><h1>📦 Comenzi de împachetat</h1><span class="order-count" id="progress-txt">Se încarcă…</span></div>
+    <div class="hdr-title"><h1>📦 Comenzi de împachetat</h1><span class="order-count" id="progress-txt">Se încarcă…</span><button type="button" class="update-btn" id="staff-update-btn" onclick="openUpdatesSheet()"></button></div>
     <div style="display:flex;align-items:center;gap:10px">
       <button type="button" class="staff-name-badge" id="staff-name-badge" onclick="editStaffName()"></button>
       <span class="sync-dot" id="sync-dot"></span>
@@ -330,6 +331,13 @@ let pollTimer=null,refreshInFlight=false,refreshQueued=false;
 const STAFF_NAME_KEY='sm6_staff_name';
 let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
+const STAFF_UPDATE_KEY='sm6_staff_seen_update';
+const STAFF_UPDATES=[
+  {n:395,date:'17.09.2026',text:'Indicator „Update” în antet: vezi imediat versiunea publicată și deschizi istoricul schimbărilor Staff.'},
+  {n:394,date:'17.09.2026',text:'Butoane Anterioară și Următoare mai mari pentru atingere rapidă pe iPad.'},
+  {n:393,date:'17.09.2026',text:'Zona centrală a produsului este mai mare: poza, titlul, cantitatea și stocul sunt mai ușor de văzut.'},
+  {n:392,date:'17.09.2026',text:'Antet compact și Căutare fixă sub taburi, vizibilă deasupra tastaturii Safari.'}
+];
 const LOCK_TTL_MIN=15;
 let lockHeartbeatTimer=null,lockHeartbeatKey=null;
 
@@ -590,6 +598,23 @@ async function logActivity(action,line,detail){
 function renderStaffNameBadge(){
   const el=document.getElementById('staff-name-badge');if(!el)return;
   el.textContent=staffName?('👤 '+staffName):'👤 Cine ești?';
+  const updateBtn=document.getElementById('staff-update-btn');if(!updateBtn)return;
+  let seen=0;try{seen=Number(localStorage.getItem(STAFF_UPDATE_KEY)||0);}catch(e){}
+  const latest=STAFF_UPDATES[0];
+  updateBtn.textContent='Update #'+latest.n+(seen<latest.n?' · NOU':'');
+  updateBtn.classList.toggle('new',seen<latest.n);
+}
+function openUpdatesSheet(){
+  const latest=STAFF_UPDATES[0];
+  try{localStorage.setItem(STAFF_UPDATE_KEY,String(latest.n));}catch(e){}
+  renderStaffNameBadge();
+  sheetCtx={type:'updates'};
+  document.getElementById('sheet-body').innerHTML=`
+    <div class="sheet-title">Update-uri Staff</div>
+    <div class="sheet-sub">Ultimele modificări publicate pe această tabletă</div>
+    ${STAFF_UPDATES.map(u=>`<div class="msg-item"><div class="msg-item-tip">UPDATE #${u.n} · ${u.date}</div><div class="msg-item-txt">${esc(u.text)}</div></div>`).join('')}
+    <button type="button" class="sheet-close" onclick="closeSheet()">Închide</button>`;
+  document.getElementById('sheet-overlay').classList.add('on');
 }
 function editStaffName(){
   const v=prompt('Numele tău (apare pe comenzile la care lucrezi, doar informativ):',staffName);
