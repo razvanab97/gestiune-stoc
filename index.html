@@ -2038,6 +2038,8 @@ th{font-weight:800!important;color:var(--t3)!important}
 .pcx-dropzone .sub{font-size:15px;color:var(--t3);font-weight:400}
 .pcx-row2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
 @media(max-width:1100px){.pcx-row2{grid-template-columns:1fr}}
+.pcx-emag-date-range{display:grid;grid-template-columns:minmax(150px,1fr) minmax(150px,1fr) auto;gap:12px;align-items:end;margin:14px 0 4px}
+@media(max-width:720px){.pcx-emag-date-range{grid-template-columns:1fr}.pcx-emag-date-range .pcx-btn{width:100%}}
 .pcx-fld{display:flex;flex-direction:column;gap:5px}
 .pcx-fld label{font-size:15px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.03em}
 .pcx-fld input,.pcx-fld select{font-family:inherit;font-size:18px;padding:9px 12px;border:1px solid var(--b1);border-radius:var(--r);background:var(--surf);color:var(--t1)}
@@ -3700,6 +3702,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:381,text:'Comenzi Platforme — importul eMAG acceptă acum un interval „De la / Până la”, nu doar o singură zi. Citește pe rând fiecare zi, păstrează numai comenzile noi pe întreg intervalul și continuă cu zilele disponibile dacă o zi sau o piață are temporar o eroare; stocul rămâne neatins până la „Aplică import”.',date:'2026-09-16'},
   {n:380,text:'Comenzi Platforme — titlul primit din comandă este acum titlul principal al fiecărei linii, mai mare și separat clar de numele intern al produsului. Coloanele au spațiere mai echilibrată, iar numărul comenzii din antet are buton de copiere fără a restrânge cardul.',date:'2026-09-16'},
   {n:379,text:'Comenzi Platforme — buton global nou „✓ Selectează toate” în bara de jos a previzualizării. Include dintr-un singur click toate liniile care au deja un produs asociat; cele fără produs și cele amânate rămân intenționat neatinse pentru verificare, astfel încât importul în bloc nu poate introduce accidental comenzi neasociate.',date:'2026-09-16'},
   {n:378,text:'Comenzi Platforme — fiecare comandă adăugată în ultimul import primește eticheta vizibilă „NOU” în antetul cardului. Eticheta se păstrează la reîncărcare și se mută automat pe următorul batch nou, fără a marca duplicatele ignorate.',date:'2026-09-16'},
@@ -15291,23 +15294,37 @@ function pcomEmagMatchLine(raw){
 }
 async function importEmagApiOrders(){
   if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
-  const inp=document.getElementById('pcx-emag-date'),btn=document.getElementById('pcx-emag-import-btn');
-  const date=inp?.value||td();if(inp&&!inp.value)inp.value=date;
-  if(btn){btn.disabled=true;btn.textContent='Se citesc comenzile…';}
+  const startInp=document.getElementById('pcx-emag-date-start'),endInp=document.getElementById('pcx-emag-date-end'),btn=document.getElementById('pcx-emag-import-btn');
+  const startDate=startInp?.value||td(),endDate=endInp?.value||startDate;
+  if(startInp&&!startInp.value)startInp.value=startDate;
+  if(endInp&&!endInp.value)endInp.value=endDate;
+  if(endDate<startDate){toast('Data „Până la” trebuie să fie după data „De la”','err');return;}
+  const days=[];for(let d=new Date(startDate+'T00:00:00Z'),end=new Date(endDate+'T00:00:00Z');d<=end;d.setUTCDate(d.getUTCDate()+1))days.push(d.toISOString().slice(0,10));
+  const rangeLabel=days.length===1?startDate:`${startDate} → ${endDate}`;
+  if(btn){btn.disabled=true;btn.textContent=days.length===1?'Se citesc comenzile…':`Se citesc 0/${days.length} zile…`;}
   try{
-    const r=await localEmagJson('/orders',{date},60000),marketOf=o=>String(o.tara||((o.moneda||'').toUpperCase()==='HUF'?'HU':(o.moneda||'').toUpperCase()==='BGN'?'BG':'RO')).toUpperCase(),orderKey=o=>'emag|'+marketOf(o)+'|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern),existing=new Set([...PCOM.map(orderKey),...pcImpParsed.map(orderKey)]);
-    const start=pcImpParsed.length;let added=0,duplicates=0,matched=0;
-    for(const raw of r.lines||[]){
-      const line=pcomEmagMatchLine(raw),key=orderKey(line);
-      if(existing.has(key)){duplicates++;continue;}existing.add(key);pcImpParsed.push(line);added++;if(line.produsId)matched++;
+    const marketOf=o=>String(o.tara||((o.moneda||'').toUpperCase()==='HUF'?'HU':(o.moneda||'').toUpperCase()==='BGN'?'BG':'RO')).toUpperCase(),orderKey=o=>'emag|'+marketOf(o)+'|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern),existing=new Set([...PCOM.map(orderKey),...pcImpParsed.map(orderKey)]);
+    const start=pcImpParsed.length,unavailable=new Set(),failedDays=[];let added=0,duplicates=0,matched=0,readDays=0;
+    for(let dayIdx=0;dayIdx<days.length;dayIdx++){
+      const day=days[dayIdx];
+      if(btn)btn.textContent=days.length===1?'Se citesc comenzile…':`Se citesc ${dayIdx+1}/${days.length} zile…`;
+      try{
+        const r=await localEmagJson('/orders',{date:day},60000);
+        readDays++;
+        (r.markets||[]).filter(x=>!x.ok).forEach(x=>unavailable.add(x.market));
+        for(const raw of r.lines||[]){
+          const line=pcomEmagMatchLine(raw),key=orderKey(line);
+          if(existing.has(key)){duplicates++;continue;}existing.add(key);pcImpParsed.push(line);added++;if(line.produsId)matched++;
+        }
+      }catch(e){failedDays.push(day);console.warn('Nu s-au putut citi comenzile eMAG pentru',day,e);}
     }
-    if(!added){toast(duplicates?`Nicio linie nouă — ${duplicates} există deja în Comenzi Platforme sau previzualizare.`:'Nu există comenzi eMAG pentru ziua selectată.');return;}
+    if(!readDays)throw new Error(`Nu s-au putut citi comenzile pentru intervalul ${rangeLabel}`);
+    if(!added){toast(duplicates?`Nicio linie nouă pentru ${rangeLabel} — ${duplicates} există deja în Comenzi Platforme sau previzualizare.`:`Nu există comenzi eMAG pentru intervalul ${rangeLabel}.`,failedDays.length?'warn':undefined);return;}
     pcImpParsed.forEach(x=>delete x._recentImport);
     for(let i=start;i<pcImpParsed.length;i++)pcImpParsed[i]._recentImport=true;
     renderPcomImportPreview();
     const noMatch=added-matched,aiBtn=document.getElementById('pcmi-ai-btn');if(aiBtn)aiBtn.style.display=noMatch?'':'none';
-    const unavailable=(r.markets||[]).filter(x=>!x.ok),marketSummary=(r.markets||[]).filter(x=>x.ok).map(x=>`${x.market} ${x.lines}`).join(' · ');
-    toast(`${added} linii eMAG aduse pentru ${date}${marketSummary?` (${marketSummary})`:''} · ${matched} asociate${noMatch?` · ${noMatch} necesită confirmare`:''}${duplicates?` · ${duplicates} duplicate ignorate`:''}${unavailable.length?` · Atenție: ${unavailable.map(x=>x.market).join(', ')} neconfigurat/blocat`:''}`,unavailable.length?'warn':undefined);
+    toast(`${added} linii eMAG aduse pentru ${rangeLabel} · ${matched} asociate${noMatch?` · ${noMatch} necesită confirmare`:''}${duplicates?` · ${duplicates} duplicate ignorate`:''}${failedDays.length?` · ${failedDays.length} zile nu au putut fi citite`:''}${unavailable.size?` · Atenție: ${[...unavailable].join(', ')} neconfigurat/blocat`:''}`,failedDays.length||unavailable.size?'warn':undefined);
     pcomTranslateForeignTitles();
   }catch(e){toast('eMAG: '+(e.message||'nu am putut citi comenzile'),'err');}
   finally{if(btn){btn.disabled=false;btn.textContent='🛒 Adu comenzi eMAG';}}
@@ -16529,11 +16546,12 @@ function renderPcomRedesign(){
           <button type="button" class="pcx-plat-btn" data-plat="both" onclick="pcxSetPlatform('both')">eMAG <span class="pcx-plat-btn-sub">+ Trendyol</span></button>
           <button type="button" class="pcx-plat-btn" data-plat="all3" onclick="pcxSetPlatform('all3')">Toate <span class="pcx-plat-btn-sub">3 mixte</span></button>
         </div>
-        <div class="pcx-row2" style="margin:14px 0 4px;align-items:end">
-          <div class="pcx-fld"><label>Comenzi eMAG RO + BG + HU din ziua</label><input type="date" id="pcx-emag-date"></div>
+        <div class="pcx-emag-date-range">
+          <div class="pcx-fld"><label>Comenzi eMAG RO + BG + HU — De la</label><input type="date" id="pcx-emag-date-start"></div>
+          <div class="pcx-fld"><label>Până la</label><input type="date" id="pcx-emag-date-end"></div>
           <button type="button" class="pcx-btn pcx-btn-primary" id="pcx-emag-import-btn" onclick="importEmagApiOrders()">🛒 Adu comenzi eMAG</button>
           <div style="font-size:12px;color:var(--t3);grid-column:1/-1">Import gratuit prin Conectorul local de pe acest Mac. Nu importă automat în stoc.</div>
-          <div style="font-size:15px;color:var(--t3);padding-bottom:9px">Manual, la apăsare. Fără webhook sau import automat.</div>
+          <div style="font-size:15px;color:var(--t3);grid-column:1/-1">Manual, la apăsare. Se citesc toate zilele din interval, fără webhook sau import automat.</div>
         </div>
         <div id="pcx-file-zone" style="display:none">
           <div class="pcx-dropzone" onclick="document.getElementById('pcmi-file').click()">
