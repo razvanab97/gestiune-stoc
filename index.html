@@ -3388,9 +3388,10 @@ button.pcx-include-btn.included{border-color:var(--gr)}
             </div>
             <div class="fld"><label>Descriere produs</label><textarea id="f-description" rows="5" placeholder="Descriere detaliată pentru client: beneficii, utilizare, ce conține pachetul..."></textarea></div>
             <div class="pe-two">
-              <div class="fld"><label>SKU / Cod extern</label><input id="f-sku" type="text" placeholder="CAF-001"></div>
+              <div class="fld"><label>SKU / Cod extern</label><input id="f-sku" type="text" placeholder="CAF-001" oninput="suggestSkuConflictDebounced()"></div>
               <div class="fld"><label>Furnizor</label><input id="f-sup" type="text" placeholder="SC Produse SRL"></div>
             </div>
+            <div id="sku-conflict-suggest" style="display:none;margin-top:-4px"></div>
             <div class="pe-two">
               <div class="fld"><label>EAN</label><input id="f-ean" type="text" inputmode="numeric" placeholder="5900779945500" title="Codul de bare EAN/GTIN — folosit ca potrivire prioritară la Importă factură (mai stabil decât codul propriu al furnizorului între reaprovizionări)"></div>
               <div class="fld"><label>Cod intern unic</label><input id="f-internal-code" type="text" placeholder="Se generează automat la salvare" readonly style="background:#F3F4F6;color:#475467;font-family:var(--mono)"></div>
@@ -3702,6 +3703,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:383,text:'Produse — la introducerea unui SKU deja existent apare recomandarea produsului găsit. Dacă salvezi formularul, aplicația actualizează produsul respectiv cu titlul, descrierea, pozele, caracteristicile și prețurile completate; stocul, vânzările, istoricul și codul intern sunt păstrate, deci un produs nou nu poate șterge accidental evidența celui existent.',date:'2026-09-16'},
   {n:382,text:'Produse — salvarea verifică acum SKU-ul direct în Supabase înainte de creare, inclusiv când lista din browser este veche. Un cod deja folosit nu mai ajunge la eroarea tehnică PostgreSQL: aplicația spune clar ce produs îl are și păstrează formularul deschis, fără suprascriere automată.',date:'2026-09-16'},
   {n:381,text:'Comenzi Platforme — importul eMAG acceptă acum un interval „De la / Până la”, nu doar o singură zi. Citește pe rând fiecare zi, păstrează numai comenzile noi pe întreg intervalul și continuă cu zilele disponibile dacă o zi sau o piață are temporar o eroare; stocul rămâne neatins până la „Aplică import”.',date:'2026-09-16'},
   {n:380,text:'Comenzi Platforme — titlul primit din comandă este acum titlul principal al fiecărei linii, mai mare și separat clar de numele intern al produsului. Coloanele au spațiere mai echilibrată, iar numărul comenzii din antet are buton de copiere fără a restrânge cardul.',date:'2026-09-16'},
@@ -5955,6 +5957,45 @@ async function findSkuConflict(sku,currentId){
     const row=(rows||[]).find(p=>String(p.sku||'').trim().toLowerCase()===key&&String(p.id)!==String(currentId||''));
     return row?dbToP(row):null;
   }catch(e){console.warn('Nu s-a putut verifica unicitatea SKU înainte de salvare:',e);return null;}
+}
+let skuConflictCandidate=null,skuConflictCheckSeq=0;
+async function suggestSkuConflict(){
+  const box=document.getElementById('sku-conflict-suggest'),inp=document.getElementById('f-sku');if(!box||!inp)return;
+  const sku=inp.value.trim();
+  if(!sku){skuConflictCandidate=null;box.style.display='none';box.innerHTML='';return;}
+  const seq=++skuConflictCheckSeq;
+  box.style.display='block';box.innerHTML='<div style="font-size:16px;color:var(--t3);padding:7px 0">Verific SKU-ul în bază…</div>';
+  const conflict=await findSkuConflict(sku,editId);
+  if(seq!==skuConflictCheckSeq||inp.value.trim()!==sku)return;
+  skuConflictCandidate=conflict;
+  if(!conflict){box.style.display='none';box.innerHTML='';return;}
+  box.innerHTML=`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:10px 12px;border:1px solid rgba(247,144,9,.35);border-radius:10px;background:rgba(247,144,9,.08);font-size:16px;color:var(--t2)"><span>⚠️ SKU-ul există deja la <b>${esc(conflict.name)}</b>.</span><button type="button" class="btn btn-sm" onclick="openSkuConflictProduct()">Vezi produsul</button><span style="color:var(--t3)">La „Salvează produs” actualizezi listarea lui; stocul și istoricul rămân păstrate.</span></div>`;
+}
+const suggestSkuConflictDebounced=debounce(suggestSkuConflict,350);
+function openSkuConflictProduct(){
+  const conflict=skuConflictCandidate;if(!conflict)return;
+  if(!P.some(p=>p.id===conflict.id)){toast('Produsul există în baza de date, dar nu este încă în lista locală. Reîncarcă pagina pentru a-l deschide.','err');return;}
+  openModal(conflict.id);
+}
+async function mergeSkuConflictProduct(data,conflict){
+  let target=P.find(p=>p.id===conflict.id)||conflict;
+  try{
+    const rows=await dbGet(`produse?id=eq.${conflict.id}&select=*`);
+    if(rows?.[0])target=dbToP(rows[0]);
+  }catch(e){console.warn('Nu s-au putut citi toate detaliile produsului cu SKU existent:',e);}
+  const text=(next,old)=>String(next||'').trim()?next:(old||'');
+  const number=(next,old)=>Number(next)>0?Number(next):(Number(old)||0);
+  const nextCost=number(data.priceBuyTTC,target.priceBuyTTC),oldCost=Number(target.priceBuyTTC)||0;
+  const costChanged=oldCost>0&&nextCost>0&&Math.abs(nextCost-oldCost)>=0.005;
+  return{...target,...data,_detailsLoaded:true,_skuMergeTarget:target,
+    name:text(data.name,target.name),sku:target.sku||data.sku,ean:text(data.ean,target.ean),category:text(data.category,target.category),supplier:text(data.supplier,target.supplier),
+    colors:text(data.colors,target.colors),sizes:text(data.sizes,target.sizes),material:text(data.material,target.material),dims:text(data.dims,target.dims),notes:text(data.notes,target.notes),description:text(data.description,target.description),
+    images:Array.isArray(data.images)&&data.images.length?data.images:(target.images||[]),img:data.img||target.img||'',
+    easyboxL:number(data.easyboxL,target.easyboxL),easyboxW:number(data.easyboxW,target.easyboxW),easyboxT:number(data.easyboxT,target.easyboxT),
+    priceBuyTTC:nextCost,priceBuyEur:number(data.priceBuyEur,target.priceBuyEur),tvaAcq:target.tvaAcq??data.tvaAcq??.21,
+    priceBuyPrevTTC:costChanged?oldCost:(target.priceBuyPrevTTC||0),priceBuyChangedAt:costChanged?new Date().toISOString():(target.priceBuyChangedAt||''),
+    priceSell:number(data.priceSell,target.priceSell),priceEmag:number(data.priceEmag,target.priceEmag),priceTrendyol:number(data.priceTrendyol,target.priceTrendyol),
+    bought:target.bought||0,sold:target.sold||0,incomingQty:target.incomingQty||0,minQty:target.minQty||0,internalCode:target.internalCode||'',stockAddedAt:target.stockAddedAt||null,lastStockAddedQty:target.lastStockAddedQty||0};
 }
 
 function dbToSyncMap(r){
@@ -13728,6 +13769,7 @@ function checkEditProductDeepLink(){
 }
 async function openModal(id){
   editId=id||null;
+  skuConflictCandidate=null;skuConflictCheckSeq++;
   const p=id?P.find(x=>x.id===id):null;
   if(p){
     try{await Promise.all([ensureProductDetails(p),ensureProductImageSource(p)]);await ensureProductImage(p);}
@@ -13811,6 +13853,7 @@ async function openModal(id){
   // închidere, ca să nu confundăm valorile abia încărcate cu o modificare a utilizatorului.
   productEditorSnapshot=JSON.stringify(readProdFormData());
   setEditProductParam(p?p.id:null);
+  suggestSkuConflict();
 }
 function closeModal(force){
   if(!force&&productEditorDirty()){
@@ -13828,37 +13871,36 @@ async function saveProd(){
   const existing=editId?P.find(p=>p.id===editId):null;
   pcEnsureOfferPrices();
   // Aceleași câmpuri ca la detectarea modificărilor nesalvate (readProdFormData) — nicio logică dublă.
-  const d=readProdFormData();
+  let d=readProdFormData(),saveId=editId,saveExisting=existing,updatedExistingSku=false;
   if(d.sku){
     const dup=await findSkuConflict(d.sku,editId);
     if(dup){
-      toast(`SKU-ul „${d.sku}” este deja folosit de „${dup.name}”. Alege alt cod pentru produsul nou.`,'err');
-      document.getElementById('f-sku')?.focus();
-      return;
+      d=await mergeSkuConflictProduct(d,dup);
+      saveId=dup.id;saveExisting=P.find(p=>p.id===dup.id)||d._skuMergeTarget||dup;updatedExistingSku=true;
     }
   }
-  const qtyDelta=(d.bought-d.sold)-(existing?qty(existing):0);
+  const qtyDelta=(d.bought-d.sold)-(saveExisting?qty(saveExisting):0);
   const btn=document.getElementById('save-prod-btn'),label=btn.textContent;
   savingProduct=true;btn.disabled=true;btn.textContent='Se salvează…';
   try{
-    const saved=await saveProdToDb(d,editId);
+    const saved=await saveProdToDb(d,saveId);
     if(!saved)return;
-    const savedId=editId||P[P.length-1]?.id||null;
+    const savedId=saveId||P[P.length-1]?.id||null;
     // Bug real raportat — „Comenzi stoc" (Jurnal vânzări) rămânea goală deși stocul chiar se adăuga
     // constant, pentru că saveStockOrderHistory (tabela comenzi_stoc, sursa acelui tab) se apela DOAR
     // din bulkAddStock/import factură — o editare manuală a UNUI produs (calea cea mai folosită zi de
     // zi) trecea doar prin logMove (activitate_stoc, alimentează clopoțelul 🔔), niciodată prin
     // comenzi_stoc. Acum orice intrare de stoc, indiferent de cale, ajunge în ambele — evidență completă.
-    if(!editId&&d.bought>0){
+    if(!saveId&&d.bought>0){
       await logMove('in',d.name,d.bought,'Produs nou',savedId);
       await saveStockOrderHistory({source:'Produs nou',invoiceNumber:'',totalItems:1,totalQty:d.bought,totalValue:Math.round(d.bought*d.priceBuyTTC*100)/100,updatedCount:0,createdCount:1,skippedCount:0,details:[{status:'produs nou',sku:d.sku||'',productId:savedId,name:d.name,qty:d.bought,price:d.priceBuyTTC,value:Math.round(d.bought*d.priceBuyTTC*100)/100}]});
     }
-    else if(editId&&qtyDelta>0){
+    else if(saveId&&qtyDelta>0){
       await logMove('in',d.name,qtyDelta,'Editare manuală (Inventar)',savedId);
       await saveStockOrderHistory({source:'Editare manuală (Inventar)',invoiceNumber:'',totalItems:1,totalQty:qtyDelta,totalValue:Math.round(qtyDelta*d.priceBuyTTC*100)/100,updatedCount:1,createdCount:0,skippedCount:0,details:[{status:'actualizat',sku:d.sku||'',productId:savedId,name:d.name,qty:qtyDelta,price:d.priceBuyTTC,value:Math.round(qtyDelta*d.priceBuyTTC*100)/100}]});
     }
-    else if(editId&&qtyDelta<0)await logMove('out',d.name,-qtyDelta,'Editare manuală (Inventar)',savedId);
-    if(existing)await logPriceChanges(savedId,d.name,existing,d,'Editare manuală (Inventar)');
+    else if(saveId&&qtyDelta<0)await logMove('out',d.name,-qtyDelta,'Editare manuală (Inventar)',savedId);
+    if(saveExisting)await logPriceChanges(savedId,d.name,saveExisting,d,updatedExistingSku?'Actualizare după SKU duplicat':'Editare manuală (Inventar)');
     // Produs creat din „📥 Produse eMAG lipsă din stoc" (vezi addProductFromMissing) — leagă-l acum de
     // listarea care l-a adus aici (mapare confirmată, ca la o mapare manuală normală) și scoate-l din
     // lista de așteptare. Într-un try separat: dacă legarea eșuează, produsul tot rămâne salvat corect —
@@ -13876,7 +13918,7 @@ async function saveProd(){
       }
       pendingPlipsaCandidate=null;
     }
-    toast(editId?'Actualizat și salvat în baza de date':'Adăugat și salvat în baza de date');
+    toast(updatedExistingSku?`Produsul existent cu SKU ${d.sku} a fost actualizat ✓`:(saveId?'Actualizat și salvat în baza de date':'Adăugat și salvat în baza de date'));
     closeModal(true);renderToday();renderTable();
   }finally{
     savingProduct=false;btn.disabled=false;btn.textContent=label;
