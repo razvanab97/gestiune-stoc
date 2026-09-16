@@ -3442,6 +3442,19 @@ button.pcx-include-btn.included{border-color:var(--gr)}
               <option value="0.21" selected>21%</option>
             </select>
           </div>
+          <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--b1)">
+            <div class="sec" style="margin-bottom:8px">Alt furnizor</div>
+            <div id="supplier-sources-list" style="display:flex;flex-direction:column;gap:7px"></div>
+            <div class="pe-two" style="margin-top:8px">
+              <div class="fld"><label>Furnizor</label><input id="f-alt-supplier" type="text" placeholder="ex: Maxy"></div>
+              <div class="fld"><label>Cod extern</label><input id="f-alt-sku" type="text" placeholder="Cod la furnizor"></div>
+            </div>
+            <div class="pe-two" style="margin-top:8px">
+              <div class="fld"><label>Preț cu TVA</label><input id="f-alt-price" type="number" min="0" step="0.01" placeholder="0.00"></div>
+              <div class="fld"><label>Link produs</label><input id="f-alt-url" type="url" placeholder="https://..."></div>
+            </div>
+            <button type="button" class="btn btn-sm" style="margin-top:8px" onclick="addSupplierSource()">+ Adaugă sursă</button>
+          </div>
         </div>
         <div class="pe-section">
           <div class="sec">Vânzare</div>
@@ -3703,6 +3716,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:389,text:'Produse — surse alternative compacte de furnizor: același produs poate avea până la 5 surse cu furnizor, cod, preț cu TVA și link, fără stoc sau listare duplicată. „Folosește acest preț” completează furnizorul/codul/costul principal pentru Calculator; la import factură, codul alternativ poate identifica produsul existent. Rulează migration_supplier_sources.sql o singură dată în Supabase.',date:'2026-09-16'},
   {n:388,text:'Comenzi Platforme — import direct Trendyol prin API: buton nou pentru intervalul ales, fără fișier Excel. Citește doar pachetele deschise (Created/Picking/Invoiced), preia numele cumpărătorului, codul de produs, titlul, cantitatea, prețul și AWB-ul; detectează duplicatele înainte de previzualizare și nu modifică stocul până la „Aplică import”. Necesită TRENDYOL_SELLER_ID, TRENDYOL_API_KEY și TRENDYOL_API_SECRET în Vercel.',date:'2026-09-16'},
   {n:387,text:'Staff — migrare SQL pentru „Mesaje de la Admin”: tabela staff_mesaje lipsea din baza live, astfel mesajele nu puteau fi păstrate. Rulează migration_staff_mesaje.sql o singură dată în Supabase; nu modifică stocul sau comenzile existente.',date:'2026-09-16'},
   {n:386,text:'Staff — audit și corecții operaționale: comenzile cu același număr de pe eMAG și Trendyol nu se mai pot grupa într-un singur colet; „Anulează” revine corect și pentru vânzările directe; iar o comandă blocată are acum butonul „Problemă rezolvată”, care o trimite înapoi la împachetare. O problemă nouă resetează corect starea de rezolvare.',date:'2026-09-16'},
@@ -5894,6 +5908,10 @@ async function uploadProductImageToStorage(dataUrl){
 }
 
 // ── MAP DB ↔ APP ──
+function supplierSourcesFromDb(value){
+  if(Array.isArray(value))return value.slice(0,5);
+  try{return Array.isArray(JSON.parse(value||'[]'))?JSON.parse(value).slice(0,5):[];}catch(e){return[];}
+}
 function dbToP(r){
   return{id:r.id,name:r.name,sku:r.sku||'',ean:r.ean||'',internalCode:r.internal_code||productInternalCode(r.created_at,r.id),category:r.category||'',supplier:r.supplier||'',
     bought:r.bought||0,incomingQty:r.incoming_qty||0,sold:r.sold||0,minQty:r.min_qty||0,
@@ -5904,7 +5922,8 @@ function dbToP(r){
     description:r.description||'',images:Array.isArray(r.images)?r.images:[],_detailsLoaded:Object.prototype.hasOwnProperty.call(r,'description')||Object.prototype.hasOwnProperty.call(r,'images'),createdAt:r.created_at||'',updatedAt:r.updated_at||'',
     supplierOOS:!!r.supplier_oos,supplierOOSSince:r.supplier_oos_since||'',supplierRestockEta:r.supplier_restock_eta||'',supplierNotify:!!r.supplier_notify,supplierNotified:!!r.supplier_notified,
     archived:!!r.archived,archivedAt:r.archived_at||'',
-    easyboxL:r.easybox_l||0,easyboxW:r.easybox_w||0,easyboxT:r.easybox_t||0};
+    easyboxL:r.easybox_l||0,easyboxW:r.easybox_w||0,easyboxT:r.easybox_t||0,
+    supplierSources:Object.prototype.hasOwnProperty.call(r,'supplier_sources')?supplierSourcesFromDb(r.supplier_sources):undefined};
 }
 function pToDb(p){
   const d={name:p.name,sku:p.sku||'',category:p.category||'',supplier:p.supplier||'',
@@ -5922,6 +5941,7 @@ function pToDb(p){
   if(!String(p.img||'').startsWith('lazy-product://'))d.img=p.img||'';
   if(p.internalCode)d.internal_code=p.internalCode;
   if(p.ean)d.ean=p.ean;
+  if(Array.isArray(p.supplierSources))d.supplier_sources=p.supplierSources.slice(0,5);
   return d;
 }
 function dbSavedProductMatches(row,sent){
@@ -5929,6 +5949,7 @@ function dbSavedProductMatches(row,sent){
     // updated_at este rescris de Supabase/triggerele DB și poate avea altă precizie sau fus orar.
     // Nu reprezintă o informație introdusă de utilizator și nu trebuie să blocheze o salvare reușită.
     if(k==='updated_at')return true;
+    if(k==='supplier_sources')return JSON.stringify(row[k]||[])===JSON.stringify(v||[]);
     if((k==='price_buy_changed_at'||k==='stock_added_at'||k==='supplier_oos_since'||k==='archived_at')&&v)return Math.abs(new Date(row[k]).getTime()-new Date(v).getTime())<1000;
     return typeof v==='number'?Math.abs((Number(row[k])||0)-v)<0.001:String(row[k]??'')===String(v??'');
   });
@@ -5938,7 +5959,7 @@ function missingProductValues(data,missing){
   const map={incoming_qty:'incomingQty',price_emag:'priceEmag',price_trendyol:'priceTrendyol',tva_acq:'tvaAcq',internal_code:'internalCode',ean:'ean',price_buy_prev_ttc:'priceBuyPrevTTC',price_buy_changed_at:'priceBuyChangedAt',price_buy_eur:'priceBuyEur',stock_added_at:'stockAddedAt',last_stock_added_qty:'lastStockAddedQty',
     supplier_oos:'supplierOOS',supplier_oos_since:'supplierOOSSince',supplier_restock_eta:'supplierRestockEta',supplier_notify:'supplierNotify',supplier_notified:'supplierNotified',
     archived:'archived',archived_at:'archivedAt',
-    easybox_l:'easyboxL',easybox_w:'easyboxW',easybox_t:'easyboxT'};
+    easybox_l:'easyboxL',easybox_w:'easyboxW',easybox_t:'easyboxT',supplier_sources:'supplierSources'};
   return Object.fromEntries(missing.map(col=>[map[col]||col,data[map[col]||col]]));
 }
 async function saveProductRequest(method,path,data){
@@ -6001,6 +6022,7 @@ async function mergeSkuConflictProduct(data,conflict){
     images:Array.isArray(data.images)&&data.images.length?data.images:(target.images||[]),img:data.img||target.img||'',
     easyboxL:number(data.easyboxL,target.easyboxL),easyboxW:number(data.easyboxW,target.easyboxW),easyboxT:number(data.easyboxT,target.easyboxT),
     priceBuyTTC:nextCost,priceBuyEur:number(data.priceBuyEur,target.priceBuyEur),tvaAcq:target.tvaAcq??data.tvaAcq??.21,
+    supplierSources:Array.isArray(data.supplierSources)?data.supplierSources:(target.supplierSources||[]),
     priceBuyPrevTTC:costChanged?oldCost:(target.priceBuyPrevTTC||0),priceBuyChangedAt:costChanged?new Date().toISOString():(target.priceBuyChangedAt||''),
     priceSell:number(data.priceSell,target.priceSell),priceEmag:number(data.priceEmag,target.priceEmag),priceTrendyol:number(data.priceTrendyol,target.priceTrendyol),
     bought:target.bought||0,sold:target.sold||0,incomingQty:target.incomingQty||0,minQty:target.minQty||0,internalCode:target.internalCode||'',stockAddedAt:target.stockAddedAt||null,lastStockAddedQty:target.lastStockAddedQty||0};
@@ -6322,7 +6344,7 @@ async function load(){
     // pe tot tabelul ajunge la zeci de MB — suficient să depășească timeout-ul sau să fie prea
     // lent pe o conexiune slabă, blocând TOT inventarul doar din cauza pozelor. Datele care chiar
     // contează pentru gestiune (stoc, prețuri, nume) se încarcă separat de poze, garantat rapid.
-    const prodCols='id,name,sku,ean,internal_code,category,supplier,bought,incoming_qty,sold,min_qty,price_buy_ttc,price_buy_prev_ttc,price_buy_changed_at,tva_acq,stock_added_at,last_stock_added_qty,price_sell,price_emag,price_trendyol,price_rec,colors,sizes,material,dims,notes,created_at,updated_at,supplier_oos,supplier_oos_since,supplier_restock_eta,supplier_notify,supplier_notified,archived,archived_at,easybox_l,easybox_w,easybox_t';
+    const prodCols='id,name,sku,ean,internal_code,category,supplier,bought,incoming_qty,sold,min_qty,price_buy_ttc,price_buy_prev_ttc,price_buy_changed_at,tva_acq,stock_added_at,last_stock_added_qty,price_sell,price_emag,price_trendyol,price_rec,colors,sizes,material,dims,notes,supplier_sources,created_at,updated_at,supplier_oos,supplier_oos_since,supplier_restock_eta,supplier_notify,supplier_notified,archived,archived_at,easybox_l,easybox_w,easybox_t';
     const today=td();
     showLoading('Se încarcă datele din Supabase…');
     // Toate cererile independente pornesc DEODATĂ, nu una după alta — 8 cereri secvențiale își
@@ -6333,10 +6355,15 @@ async function load(){
     // opționale (care se degradează per-produs, la PATCH), o coloană lipsă în select() ar rupe ÎNTREG
     // încărcarea produselor (query eșuat), nu doar un câmp — de-aia are propria reîncercare aici,
     // înainte ca migrarea să fi rulat, fără de care restul aplicației ar rămâne fără niciun produs afișat.
-    const prodPromise=dbGet(`produse?select=${prodCols}&order=id.asc`).catch(e=>{
-      if(/column produse\.ean does not exist/i.test(String(e.message||e)))return dbGet(`produse?select=${prodCols.replace(',ean','')}&order=id.asc`);
-      throw e;
-    });
+    const loadProducts=async cols=>{
+      try{return await dbGet(`produse?select=${cols}&order=id.asc`);}
+      catch(e){
+        const missing=String(e.message||e).match(/column produse\.([a-z_]+) does not exist/i)?.[1];
+        if(missing&&cols.split(',').includes(missing))return loadProducts(cols.split(',').filter(x=>x!==missing).join(','));
+        throw e;
+      }
+    };
+    const prodPromise=loadProducts(prodCols);
     const todayPromise=dbGet(`vanzari_zilnice?data=eq.${today}&select=*`);
     const jurnalPromise=dbGet('jurnal?select=data,product_id,product_name,category,price_sell,qty&order=data.desc');
     const stockOrdersPromise=dbGet('comenzi_stoc?select=*&order=created_at.desc').catch(e=>({__err:e}));
@@ -6530,9 +6557,13 @@ async function clearProductImageCache(){
 }
 async function ensureProductDetails(p){
   if(!p||p._detailsLoaded)return p;
-  const rows=await dbGet(`produse?id=eq.${p.id}&select=description,images`);
+  let rows;
+  try{rows=await dbGet(`produse?id=eq.${p.id}&select=description,images,supplier_sources`);}
+  catch(e){rows=await dbGet(`produse?id=eq.${p.id}&select=description,images`);}
   const d=rows?.[0]||{};
-  p.description=d.description||'';p.images=Array.isArray(d.images)?d.images:[];p._detailsLoaded=true;
+  p.description=d.description||'';p.images=Array.isArray(d.images)?d.images:[];
+  if(Object.prototype.hasOwnProperty.call(d,'supplier_sources'))p.supplierSources=Array.isArray(d.supplier_sources)?d.supplier_sources:[];
+  p._detailsLoaded=true;
   return p;
 }
 async function ensureProductImageSource(p){
@@ -13717,6 +13748,34 @@ function peTab(tab){
 }
 // Aceleași câmpuri citite la Salvează produs — extrase separat ca să poată fi refolosite și la
 // detectarea modificărilor nesalvate (închidere X/Escape/click pe overlay), fără să dubleze logica.
+let supplierSourcesDraft=[];
+function renderSupplierSources(){
+  const host=document.getElementById('supplier-sources-list');if(!host)return;
+  if(!supplierSourcesDraft.length){host.innerHTML='<div style="font-size:15px;color:var(--t3)">Nicio sursă alternativă.</div>';return;}
+  host.innerHTML=supplierSourcesDraft.map((s,i)=>{
+    const url=/^https?:\/\//i.test(String(s.url||''))?`<a href="${esc(s.url)}" target="_blank" rel="noopener" style="font-size:14px">link ↗</a>`:'';
+    return`<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:7px 8px;border:1px solid var(--b1);border-radius:8px;font-size:15px"><b>${esc(s.supplier||'Furnizor')}</b><span style="color:var(--t3)">${esc(s.sku||'—')}</span><span style="margin-left:auto;font-family:var(--mono)">${Number(s.priceTTC||0).toFixed(2)} RON</span>${url}<button type="button" class="btn btn-sm" onclick="useSupplierSource(${i})">Folosește</button><button type="button" class="btn btn-sm" style="color:var(--rd)" onclick="removeSupplierSource(${i})">×</button></div>`;
+  }).join('');
+}
+function addSupplierSource(){
+  const supplier=document.getElementById('f-alt-supplier')?.value.trim()||'',sku=document.getElementById('f-alt-sku')?.value.trim()||'',priceTTC=Math.max(0,Number(document.getElementById('f-alt-price')?.value)||0),url=document.getElementById('f-alt-url')?.value.trim()||'';
+  if(!supplier||!sku||!priceTTC){toast('Completează furnizorul, codul extern și prețul cu TVA','err');return;}
+  if(url&&!/^https?:\/\//i.test(url)){toast('Linkul trebuie să înceapă cu http:// sau https://','err');return;}
+  if(supplierSourcesDraft.length>=5){toast('Poți păstra maximum 5 surse alternative pe produs','err');return;}
+  if(supplierSourcesDraft.some(s=>String(s.supplier).toLowerCase()===supplier.toLowerCase()&&String(s.sku).toLowerCase()===sku.toLowerCase())){toast('Această sursă există deja','err');return;}
+  supplierSourcesDraft.push({supplier,sku,priceTTC,url});
+  ['f-alt-supplier','f-alt-sku','f-alt-price','f-alt-url'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  renderSupplierSources();
+}
+function removeSupplierSource(idx){supplierSourcesDraft.splice(idx,1);renderSupplierSources();}
+function useSupplierSource(idx){
+  const s=supplierSourcesDraft[idx];if(!s)return;
+  document.getElementById('f-sup').value=s.supplier||'';
+  document.getElementById('f-sku').value=s.sku||'';
+  document.getElementById('f-pbuy-ttc').value=Number(s.priceTTC||0)||'';
+  syncAcqFields('ttc');
+  toast('Sursa aleasă a completat furnizorul și costul principal — apasă Salvează produs');
+}
 function readProdFormData(){
   const selC=document.querySelector('.cat-g input[type=radio]:checked');
   const existing=editId?P.find(p=>p.id===editId):null;
@@ -13732,6 +13791,7 @@ function readProdFormData(){
     material:document.getElementById('f-material').value.trim(),
     dims:document.getElementById('f-dims').value.trim(),
     notes:document.getElementById('f-notes').value.trim(),
+    supplierSources:supplierSourcesDraft.slice(0,5),
     description:document.getElementById('f-description').value.trim(),
     images:curImages.slice(0,10),
     easyboxL:parseFloat(document.getElementById('f-eb-l').value)||0,
@@ -13795,6 +13855,8 @@ async function openModal(id){
   document.getElementById('f-ean').value=p?.ean||'';
   document.getElementById('f-internal-code').value=p?.internalCode||'';
   document.getElementById('f-sup').value=p?.supplier||'';
+  supplierSourcesDraft=Array.isArray(p?.supplierSources)?p.supplierSources.map(s=>({supplier:String(s?.supplier||''),sku:String(s?.sku||''),priceTTC:Math.max(0,Number(s?.priceTTC)||0),url:String(s?.url||'')})).slice(0,5):[];
+  renderSupplierSources();
   document.getElementById('f-colors').value=p?.colors||'';
   document.getElementById('f-sizes').value=p?.sizes||'';
   document.getElementById('f-material').value=p?.material||'';
@@ -17825,6 +17887,9 @@ function findExistingProduct(item){
   if(item.sku){
     const bySku=P.find(p=>p.sku&&p.sku.toLowerCase()===item.sku.toLowerCase());
     if(bySku)return{product:bySku,confidence:'sku',score:1};
+    const key=String(item.sku).toLowerCase();
+    const bySupplierSku=P.find(p=>(p.supplierSources||[]).some(s=>String(s?.sku||'').toLowerCase()===key));
+    if(bySupplierSku)return{product:bySupplierSku,confidence:'supplier_sku',score:1};
   }
   let best=null,bestScore=0;
   for(const p of P){
@@ -19070,7 +19135,7 @@ function invxRowHtml(idx){
   let tag,nm;
   if(p){
     const isAuto=item._match&&item._match.product.id===p.id;
-    const conf=isAuto?(item._match.confidence==='ean'?'EAN exact':item._match.confidence==='sku'?'SKU exact':`sugestie automată, nume ${Math.round(item._match.score*100)}%`):'ales manual';
+    const conf=isAuto?(item._match.confidence==='ean'?'EAN exact':item._match.confidence==='sku'?'SKU exact':item._match.confidence==='supplier_sku'?'cod furnizor exact':`sugestie automată, nume ${Math.round(item._match.score*100)}%`):'ales manual';
     const receipt=invoiceReceiptPlan(p,item.qty);
     tag=receipt.fromIncoming>0
       ?`<span class="inv-match upd" title="${conf}">✓ recepționează ${fmtQty(receipt.fromIncoming)} din pe drum${receipt.incomingAfter>0?' · rămân '+fmtQty(receipt.incomingAfter):''}${receipt.extra>0?' + '+fmtQty(receipt.extra)+' extra':''}</span>`
