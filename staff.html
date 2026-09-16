@@ -1148,21 +1148,16 @@ function stockStep(dir){
   if(next<0||next>=limit)return;
   stockCardIdx=next;renderMain(true);
 }
-function keepStockEntryVisible(){
-  const host=document.getElementById('main-area'),input=document.getElementById('staff-stock-input');
-  if(!host||!input||document.activeElement!==input)return;
-  const h=host.getBoundingClientRect(),i=input.getBoundingClientRect(),pad=12;
-  if(i.bottom>h.bottom-pad)host.scrollTop+=i.bottom-h.bottom+pad;
-  else if(i.top<h.top+pad)host.scrollTop-=h.top+pad-i.top;
-}
 function openStockEntry(){
   const wrap=document.querySelector('.wrap');if(!wrap)return;
   wrap.dataset.stockEditing='true';
-  requestAnimationFrame(keepStockEntryVisible);
-  setTimeout(keepStockEntryVisible,180);
+  // Safari încerca să „ajute” mutând întregul card astfel încât câmpul ajungea sus, cu o zonă
+  // mare goală sub el. În starea compactă toate informațiile importante încap deja sus, așa că
+  // resetăm doar scroll-ul intern al zonei de conținut, niciodată cadrul paginii.
+  requestAnimationFrame(()=>{const host=document.getElementById('main-area');if(host)host.scrollTop=0;});
 }
 function closeStockEntry(){
-  setTimeout(()=>{const wrap=document.querySelector('.wrap');if(wrap)delete wrap.dataset.stockEditing;},120);
+  setTimeout(()=>{const wrap=document.querySelector('.wrap'),host=document.getElementById('main-area');if(wrap)delete wrap.dataset.stockEditing;if(host)host.scrollTop=0;},120);
 }
 function startStockSwipe(ev){if(ev.target.closest('input,button'))return;stockSwipeX=ev.clientX;}
 function endStockSwipe(ev){
@@ -1377,7 +1372,6 @@ function syncStaffViewport(){
 }
 syncStaffViewport();
 window.visualViewport?.addEventListener('resize',syncStaffViewport);
-window.visualViewport?.addEventListener('resize',keepStockEntryVisible);
 window.visualViewport?.addEventListener('scroll',syncStaffViewport);
 window.addEventListener('orientationchange',()=>setTimeout(syncStaffViewport,150));
 
