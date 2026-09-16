@@ -40,7 +40,7 @@ button{cursor:pointer}
 .hdr h1{font-size:27px;font-weight:700}
 .order-count{font-size:17px;color:var(--t3);font-weight:700;white-space:nowrap}
 .update-btn{border:1px solid var(--b2);background:var(--surf);color:var(--t2);border-radius:999px;padding:4px 9px;font-size:13px;font-weight:800;white-space:nowrap}.update-btn.new{border-color:var(--acc);background:var(--acc-light);color:var(--acc)}
-.refresh-btn{border:1px solid var(--b2);background:var(--surf);color:var(--t2);border-radius:999px;padding:6px 10px;font-size:14px;font-weight:800;white-space:nowrap}.refresh-btn:active{background:var(--acc-light);border-color:var(--acc);color:var(--acc)}.refresh-btn:disabled{opacity:.55;cursor:wait}
+.refresh-btn{border:1px solid var(--b2);background:var(--surf);color:var(--t2);border-radius:999px;padding:6px 10px;font-size:14px;font-weight:800;white-space:nowrap}.refresh-btn:active{background:var(--acc-light);border-color:var(--acc);color:var(--acc)}.refresh-btn:disabled{opacity:.55;cursor:wait}.queue-reset-btn{border-color:#f1c9b8;color:#a44a21;background:#fffaf7}.queue-reset-btn:active{background:#fff0e8;border-color:#df8a60;color:#8d3612}
 .sync-dot{width:11px;height:11px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:middle}
 .sync-dot.ok{background:var(--gr)}
 .sync-dot.err{background:var(--rd)}
@@ -245,6 +245,7 @@ button{cursor:pointer}
   <div class="hdr">
     <div class="hdr-title"><h1>📦 Comenzi de împachetat</h1><span class="order-count" id="progress-txt">Se încarcă…</span><button type="button" class="update-btn" id="staff-update-btn" onclick="openUpdatesSheet()"></button></div>
     <div style="display:flex;align-items:center;gap:10px">
+      <button type="button" class="refresh-btn queue-reset-btn" id="staff-queue-reset-btn" onclick="resetStaffQueue()">↺ Coada nouă</button>
       <button type="button" class="refresh-btn" id="staff-refresh-btn" onclick="refreshStaffNow()">↻ Reîncarcă</button>
       <button type="button" class="staff-name-badge" id="staff-name-badge" onclick="editStaffName()"></button>
       <span class="sync-dot" id="sync-dot"></span>
@@ -321,10 +322,11 @@ function awbBoxHtml(awb){
 }
 function td(){return new Date().toISOString().slice(0,10);}
 
-// Doar comenzile/vânzările de la această dată încolo intră în coadă — comenzile mai vechi decât
-// lansarea paginii de Staff rămân în istoric (index.html), dar nu mai apar aici (cerință directă:
-// "de azi trebuie sa inceapa"). NU se recalculează automat la fiecare zi — e un prag fix.
+// Doar comenzile/vânzările de la această dată încolo intră în coadă. Valoarea inițială păstrează
+// compatibilitatea cu instalările vechi, iar pragul real se salvează în setari_app la „Coada nouă”.
 const CUTOFF_DATE='2026-08-27';
+const STAFF_QUEUE_KEY='staff_queue_started_at';
+let staffQueueStartedAt=CUTOFF_DATE+'T00:00:00.000Z';
 const ISSUE_LABELS={stoc_zero:'Stoc zero',cantitate_insuficienta:'Cantitate insuficientă',produs_deteriorat:'Produs deteriorat',produs_gresit:'Produs greșit',nu_gasesc:'Nu găsesc produsul',alta:'Altă problemă'};
 
 let PRODUSE=[],COMENZI=[],JURNAL=[],ORDERS=[],PREPACK=[],STAFFMSG=[],curKey=null,activeTab='pack',activeImg={},stockCardIdx=0,stockSaveBusy=false,stockSwipeX=null;
@@ -340,6 +342,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:399,date:'17.09.2026',text:'Coada nouă: poți porni Staff de la zero fără să ștergi comenzile, facturile sau istoricul din ERP. După confirmare apar doar comenzile noi.'},
   {n:398,date:'17.09.2026',text:'Buton Reîncarcă: Staff citește imediat produsele, comenzile incluse în ERP, jurnalul și informațiile de împachetare direct din Supabase.'},
   {n:397,date:'17.09.2026',text:'Comenzi cu mai multe produse: cadrul Staff rămâne fix, iar numai lista centrală de produse derulează. Butonul ÎMPACHETAT și navigarea rămân pe ecran; dublu-tap și gesturile de zoom sunt blocate.'},
   {n:396,date:'17.09.2026',text:'Tab nou Raport stoc: actualizezi stocul fizic direct pe tabletă, produs cu produs. Se salvează în produsele principale, activitatea de stoc și istoricul încărcărilor.'},
@@ -1282,6 +1285,36 @@ async function refreshStaffNow(){
   }finally{setStaffRefreshButton(false);}
 }
 
+function queueDate(){return String(staffQueueStartedAt||CUTOFF_DATE).slice(0,10);}
+function afterStaffQueueStart(row){
+  // Unele rânduri vechi de jurnal nu aveau created_at. Nu le tratăm ca fiind noi doar pentru că
+  // au aceeași dată calendaristică; după reset, coada trebuie să fie efectiv goală.
+  return !!row?.created_at&&String(row.created_at)>=String(staffQueueStartedAt);
+}
+async function loadStaffQueueStart(){
+  try{
+    const rows=await sb('GET',`setari_app?key=eq.${STAFF_QUEUE_KEY}&select=value`);
+    const v=rows?.[0]?.value;
+    if(v&&!Number.isNaN(new Date(v).getTime()))staffQueueStartedAt=v;
+  }catch(e){console.warn('prag coadă Staff indisponibil:',e);}
+}
+async function resetStaffQueue(){
+  const text='Pornești o coadă nouă de acum? Comenzile deja existente rămân în ERP, jurnal și istoric, dar nu vor mai apărea în Staff.';
+  if(!confirm(text))return;
+  const b=document.getElementById('staff-queue-reset-btn');if(b)b.disabled=true;
+  const startedAt=new Date().toISOString();
+  try{
+    const updated=await sb('PATCH',`setari_app?key=eq.${STAFF_QUEUE_KEY}`,{value:startedAt});
+    if(!updated?.length)await sb('POST','setari_app',{key:STAFF_QUEUE_KEY,value:startedAt});
+    staffQueueStartedAt=startedAt;
+    curKey=null;
+    await refreshData();
+    showToast('✓ Coada Staff este goală. Comenzile noi vor intra de acum.');
+  }catch(e){
+    console.error(e);showToast('Nu am putut reseta coada — încearcă din nou');
+  }finally{if(b)b.disabled=false;}
+}
+
 async function refreshData(){
   // Două tick-uri apropiate, revenirea în tab sau un refresh cerut de un flux
   // nu mai pot porni citiri paralele ale acelorași patru tabele.
@@ -1290,12 +1323,12 @@ async function refreshData(){
   refreshInFlight=true;let ok=false;
   try{
     const [comRows,jurnalRows,prepackRows,msgRows]=await Promise.all([
-      sb('GET',`platforma_comenzi?select=*&created_at=gte.${CUTOFF_DATE}&order=created_at.asc`),
-      sb('GET',`jurnal?select=*&data=gte.${CUTOFF_DATE}&order=data.asc`).catch(()=>JURNAL),
+      sb('GET',`platforma_comenzi?select=*&created_at=gte.${encodeURIComponent(staffQueueStartedAt)}&order=created_at.asc`),
+      sb('GET',`jurnal?select=*&data=gte.${queueDate()}&order=data.asc`).catch(()=>JURNAL),
       sb('GET','pre_impachetate?select=*&folosit_la=is.null&order=created_at.asc').catch(()=>PREPACK),
       sb('GET','staff_mesaje?select=*&rezolvat=is.false&order=created_at.asc').catch(()=>STAFFMSG)
     ]);
-    COMENZI=comRows;JURNAL=jurnalRows;PREPACK=prepackRows;STAFFMSG=msgRows;
+    COMENZI=comRows;JURNAL=jurnalRows.filter(afterStaffQueueStart);PREPACK=prepackRows;STAFFMSG=msgRows;
     document.getElementById('sync-dot').className='sync-dot ok';
     computeOrders();
     renderMain();
@@ -1332,9 +1365,10 @@ window.addEventListener('orientationchange',()=>setTimeout(syncStaffViewport,150
 async function load(){
   renderStaffNameBadge();
   try{
+    await loadStaffQueueStart();
     const [prodRows,comRows,prepackRows,msgRows]=await Promise.all([
       sb('GET','produse?select=id,name,sku,internal_code,img,images,bought,sold,price_buy_ttc,archived&order=id.asc'),
-      sb('GET',`platforma_comenzi?select=*&created_at=gte.${CUTOFF_DATE}&order=created_at.asc`),
+      sb('GET',`platforma_comenzi?select=*&created_at=gte.${encodeURIComponent(staffQueueStartedAt)}&order=created_at.asc`),
       sb('GET','pre_impachetate?select=*&folosit_la=is.null&order=created_at.asc').catch(e=>{console.warn('pre_impachetate indisponibil:',e);return[];}),
       sb('GET','staff_mesaje?select=*&rezolvat=is.false&order=created_at.asc').catch(e=>{console.warn('staff_mesaje indisponibil:',e);return[];}),
     ]);
@@ -1343,7 +1377,7 @@ async function load(){
     PREPACK=prepackRows;
     STAFFMSG=msgRows;
     try{
-      JURNAL=await sb('GET',`jurnal?select=*&data=gte.${CUTOFF_DATE}&order=data.asc`);
+      JURNAL=(await sb('GET',`jurnal?select=*&data=gte.${queueDate()}&order=data.asc`)).filter(afterStaffQueueStart);
     }catch(e){
       JURNAL=[];
       console.warn('Nu am putut încărca vânzările directe din Jurnal (rulează migration_jurnal_packing.sql):',e);
