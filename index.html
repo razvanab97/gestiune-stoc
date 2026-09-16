@@ -3702,6 +3702,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:382,text:'Produse — salvarea verifică acum SKU-ul direct în Supabase înainte de creare, inclusiv când lista din browser este veche. Un cod deja folosit nu mai ajunge la eroarea tehnică PostgreSQL: aplicația spune clar ce produs îl are și păstrează formularul deschis, fără suprascriere automată.',date:'2026-09-16'},
   {n:381,text:'Comenzi Platforme — importul eMAG acceptă acum un interval „De la / Până la”, nu doar o singură zi. Citește pe rând fiecare zi, păstrează numai comenzile noi pe întreg intervalul și continuă cu zilele disponibile dacă o zi sau o piață are temporar o eroare; stocul rămâne neatins până la „Aplică import”.',date:'2026-09-16'},
   {n:380,text:'Comenzi Platforme — titlul primit din comandă este acum titlul principal al fiecărei linii, mai mare și separat clar de numele intern al produsului. Coloanele au spațiere mai echilibrată, iar numărul comenzii din antet are buton de copiere fără a restrânge cardul.',date:'2026-09-16'},
   {n:379,text:'Comenzi Platforme — buton global nou „✓ Selectează toate” în bara de jos a previzualizării. Include dintr-un singur click toate liniile care au deja un produs asociat; cele fără produs și cele amânate rămân intenționat neatinse pentru verificare, astfel încât importul în bloc nu poate introduce accidental comenzi neasociate.',date:'2026-09-16'},
@@ -5941,6 +5942,20 @@ async function saveProductRequest(method,path,data){
     }
   }
 }
+function isDuplicateSkuError(err){return/duplicate key value violates unique constraint.*(?:sku|idx_produse_sku_unique)|idx_produse_sku_unique/i.test(String(err?.message||err));}
+// Verificare directă în baza de date, nu doar în P: între încărcarea paginii și Salvare poate apărea
+// un produs creat în alt tab/dispozitiv. Indexul DB tratează SKU-ul fără diferență de majuscule.
+async function findSkuConflict(sku,currentId){
+  const key=String(sku||'').trim().toLowerCase();if(!key)return null;
+  const local=P.find(p=>String(p.sku||'').trim().toLowerCase()===key&&String(p.id)!==String(currentId||''));
+  if(local)return local;
+  if(!sbReady)return null;
+  try{
+    const rows=await dbGet(`produse?sku=ilike.${encodeURIComponent(String(sku).trim())}&select=id,name,sku,archived`);
+    const row=(rows||[]).find(p=>String(p.sku||'').trim().toLowerCase()===key&&String(p.id)!==String(currentId||''));
+    return row?dbToP(row):null;
+  }catch(e){console.warn('Nu s-a putut verifica unicitatea SKU înainte de salvare:',e);return null;}
+}
 
 function dbToSyncMap(r){
   return{id:r.id,platforma:r.platforma,idExtern:r.id_extern||'',titluExtern:r.titlu_extern||'',produsId:r.produs_id,confirmat:r.confirmat!==false,tara:r.tara||'',
@@ -6595,6 +6610,11 @@ async function saveProdToDb(data,id){
     return true;
   }catch(err){
     setSyncStatus('err','Eroare salvare');
+    if(isDuplicateSkuError(err)&&data.sku){
+      const conflict=await findSkuConflict(data.sku,id);
+      toast(conflict?`SKU-ul „${data.sku}” este deja folosit de „${conflict.name}”. Alege alt cod pentru produsul nou.`:`SKU-ul „${data.sku}” este deja folosit de alt produs. Alege alt cod pentru produsul nou.`,'err');
+      return false;
+    }
     toast('Eroare salvare: '+err.message,'err');
     return false;
   }
@@ -13810,8 +13830,12 @@ async function saveProd(){
   // Aceleași câmpuri ca la detectarea modificărilor nesalvate (readProdFormData) — nicio logică dublă.
   const d=readProdFormData();
   if(d.sku){
-    const dup=P.find(p=>p.id!==editId&&p.sku&&p.sku.toLowerCase()===d.sku.toLowerCase());
-    if(dup&&!confirm(`Există deja produsul "${dup.name}" cu același SKU (${d.sku}). Salvezi oricum?`))return;
+    const dup=await findSkuConflict(d.sku,editId);
+    if(dup){
+      toast(`SKU-ul „${d.sku}” este deja folosit de „${dup.name}”. Alege alt cod pentru produsul nou.`,'err');
+      document.getElementById('f-sku')?.focus();
+      return;
+    }
   }
   const qtyDelta=(d.bought-d.sold)-(existing?qty(existing):0);
   const btn=document.getElementById('save-prod-btn'),label=btn.textContent;
