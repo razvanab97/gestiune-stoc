@@ -3703,6 +3703,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:384,text:'Produse — actualizarea unei listări după SKU existent este confirmată explicit după salvare. Verificarea nu mai tratează câmpul tehnic „ultima modificare” (generat de Supabase) ca diferență de date, astfel formularul se închide corect iar inventarul afișează imediat titlul, pozele, descrierea, caracteristicile și prețurile noi.',date:'2026-09-16'},
   {n:383,text:'Produse — la introducerea unui SKU deja existent apare recomandarea produsului găsit. Dacă salvezi formularul, aplicația actualizează produsul respectiv cu titlul, descrierea, pozele, caracteristicile și prețurile completate; stocul, vânzările, istoricul și codul intern sunt păstrate, deci un produs nou nu poate șterge accidental evidența celui existent.',date:'2026-09-16'},
   {n:382,text:'Produse — salvarea verifică acum SKU-ul direct în Supabase înainte de creare, inclusiv când lista din browser este veche. Un cod deja folosit nu mai ajunge la eroarea tehnică PostgreSQL: aplicația spune clar ce produs îl are și păstrează formularul deschis, fără suprascriere automată.',date:'2026-09-16'},
   {n:381,text:'Comenzi Platforme — importul eMAG acceptă acum un interval „De la / Până la”, nu doar o singură zi. Citește pe rând fiecare zi, păstrează numai comenzile noi pe întreg intervalul și continuă cu zilele disponibile dacă o zi sau o piață are temporar o eroare; stocul rămâne neatins până la „Aplică import”.',date:'2026-09-16'},
@@ -5921,6 +5922,9 @@ function pToDb(p){
 }
 function dbSavedProductMatches(row,sent){
   return Object.entries(sent).every(([k,v])=>{
+    // updated_at este rescris de Supabase/triggerele DB și poate avea altă precizie sau fus orar.
+    // Nu reprezintă o informație introdusă de utilizator și nu trebuie să blocheze o salvare reușită.
+    if(k==='updated_at')return true;
     if((k==='price_buy_changed_at'||k==='stock_added_at'||k==='supplier_oos_since'||k==='archived_at')&&v)return Math.abs(new Date(row[k]).getTime()-new Date(v).getTime())<1000;
     return typeof v==='number'?Math.abs((Number(row[k])||0)-v)<0.001:String(row[k]??'')===String(v??'');
   });
@@ -13918,7 +13922,7 @@ async function saveProd(){
       }
       pendingPlipsaCandidate=null;
     }
-    toast(updatedExistingSku?`Produsul existent cu SKU ${d.sku} a fost actualizat ✓`:(saveId?'Actualizat și salvat în baza de date':'Adăugat și salvat în baza de date'));
+    toast(updatedExistingSku?`✓ Actualizare confirmată: informațiile noi au fost salvate pe produsul cu SKU ${d.sku}.`:(saveId?'✓ Actualizarea produsului a fost salvată în baza de date.':'✓ Produs adăugat și salvat în baza de date.'));
     closeModal(true);renderToday();renderTable();
   }finally{
     savingProduct=false;btn.disabled=false;btn.textContent=label;
