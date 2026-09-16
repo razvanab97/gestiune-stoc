@@ -26,7 +26,7 @@
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{width:100%;height:100%;overflow:hidden;overscroll-behavior:none;touch-action:manipulation}
-body{font-family:var(--font);color:var(--t1);font-size:23px;font-weight:500;line-height:1.4;height:var(--staff-vh,100dvh);min-height:0;-webkit-font-smoothing:antialiased;touch-action:manipulation;
+body{position:fixed;inset:0;font-family:var(--font);color:var(--t1);font-size:23px;font-weight:500;line-height:1.4;height:var(--staff-vh,100dvh);min-height:0;-webkit-font-smoothing:antialiased;touch-action:manipulation;
   background:
     radial-gradient(1200px 800px at 20% -10%,rgba(118,87,246,.09),transparent 55%),
     var(--bg);
@@ -343,6 +343,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:401,date:'17.09.2026',text:'Raport stoc — corecție Safari iPad: la atingerea câmpului „Stoc fizic”, documentul exterior rămâne fix și antetul Staff nu mai sare în sus. Se poate derula doar zona internă a raportului.'},
   {n:400,date:'17.09.2026',text:'Raport stoc: fotografia produsului este mai mare și cardul nu mai pleacă atunci când se deschide tastatura. La introducerea stocului se compactează numai conținutul intern, iar câmpul rămâne deasupra tastaturii Safari.'},
   {n:399,date:'17.09.2026',text:'Coada nouă: poți porni Staff de la zero fără să ștergi comenzile, facturile sau istoricul din ERP. După confirmare apar doar comenzile noi.'},
   {n:398,date:'17.09.2026',text:'Buton Reîncarcă: Staff citește imediat produsele, comenzile incluse în ERP, jurnalul și informațiile de împachetare direct din Supabase.'},
@@ -1154,10 +1155,21 @@ function openStockEntry(){
   // Safari încerca să „ajute” mutând întregul card astfel încât câmpul ajungea sus, cu o zonă
   // mare goală sub el. În starea compactă toate informațiile importante încap deja sus, așa că
   // resetăm doar scroll-ul intern al zonei de conținut, niciodată cadrul paginii.
-  requestAnimationFrame(()=>{const host=document.getElementById('main-area');if(host)host.scrollTop=0;});
+  requestAnimationFrame(()=>{const host=document.getElementById('main-area');if(host)host.scrollTop=0;pinStaffFrame();});
+  setTimeout(pinStaffFrame,80);
+  setTimeout(pinStaffFrame,260);
 }
 function closeStockEntry(){
   setTimeout(()=>{const wrap=document.querySelector('.wrap'),host=document.getElementById('main-area');if(wrap)delete wrap.dataset.stockEditing;if(host)host.scrollTop=0;},120);
+}
+function pinStaffFrame(){
+  // iPad Safari încearcă uneori să deruleze documentul exterior când un input primește focus,
+  // chiar dacă body are overflow:hidden. Staff este un ecran de lucru fix: păstrăm mereu originea
+  // documentului sus și lăsăm exclusiv #main-area să se deruleze.
+  if(activeTab!=='stock'||document.activeElement?.id!=='staff-stock-input')return;
+  window.scrollTo(0,0);
+  document.documentElement.scrollTop=0;
+  document.body.scrollTop=0;
 }
 function startStockSwipe(ev){if(ev.target.closest('input,button'))return;stockSwipeX=ev.clientX;}
 function endStockSwipe(ev){
@@ -1372,7 +1384,7 @@ function syncStaffViewport(){
 }
 syncStaffViewport();
 window.visualViewport?.addEventListener('resize',syncStaffViewport);
-window.visualViewport?.addEventListener('scroll',syncStaffViewport);
+window.visualViewport?.addEventListener('scroll',()=>{syncStaffViewport();pinStaffFrame();});
 window.addEventListener('orientationchange',()=>setTimeout(syncStaffViewport,150));
 
 async function load(){
