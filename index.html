@@ -3703,6 +3703,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:388,text:'Comenzi Platforme — import direct Trendyol prin API: buton nou pentru intervalul ales, fără fișier Excel. Citește doar pachetele deschise (Created/Picking/Invoiced), preia numele cumpărătorului, codul de produs, titlul, cantitatea, prețul și AWB-ul; detectează duplicatele înainte de previzualizare și nu modifică stocul până la „Aplică import”. Necesită TRENDYOL_SELLER_ID, TRENDYOL_API_KEY și TRENDYOL_API_SECRET în Vercel.',date:'2026-09-16'},
   {n:387,text:'Staff — migrare SQL pentru „Mesaje de la Admin”: tabela staff_mesaje lipsea din baza live, astfel mesajele nu puteau fi păstrate. Rulează migration_staff_mesaje.sql o singură dată în Supabase; nu modifică stocul sau comenzile existente.',date:'2026-09-16'},
   {n:386,text:'Staff — audit și corecții operaționale: comenzile cu același număr de pe eMAG și Trendyol nu se mai pot grupa într-un singur colet; „Anulează” revine corect și pentru vânzările directe; iar o comandă blocată are acum butonul „Problemă rezolvată”, care o trimite înapoi la împachetare. O problemă nouă resetează corect starea de rezolvare.',date:'2026-09-16'},
   {n:385,text:'Comenzi Platforme — importul Trendyol preia corect numele cumpărătorului din coloana „Destinatar”. Nu mai confundă această informație cu „Numărul de comenzi ale clientului”, o statistică repetitivă care făcea ca numele să apară gol în previzualizare și în Staff.',date:'2026-09-16'},
@@ -6069,7 +6070,8 @@ function pcomToDb(o){
     titlu_extern:o.titluExtern,produs_id:o.produsId||null,produs_nume:o.produsNume||null,
     cantitate:o.cantitate||0,pret_fara_tva:o.pretFaraTva||0,pret_total_cu_tva:o.pretTotalCuTva||0,
     moneda:o.moneda||'RON',pret_total_cu_tva_ron:o.pretTotalCuTvaRon||0,
-    profit_estimat:o.profitEstimat||0,marja_estimata:o.marjaEstimata||0,import_batch_id:o.importBatchId||null};
+    profit_estimat:o.profitEstimat||0,marja_estimata:o.marjaEstimata||0,import_batch_id:o.importBatchId||null,
+    awb:o.awb||null};
 }
 // eMAG operează pe 3 piețe (RO/HU/BG) — fișierul de comenzi nu are o coloană explicită de țară,
 // dar moneda o dă indirect: RON→România, HUF→Ungaria, EUR→Bulgaria (care a adoptat euro în 2026).
@@ -15365,6 +15367,42 @@ function pcomEmagMatchLine(raw){
   if(!produsId){const m=findExistingProduct({name:raw.titluExtern});if(m){produsId=m.product.id;score=m.score;}}
   return{...raw,platforma:'emag',data:raw.data||td(),produsId,score,viaPnk,viaTitle,viaCode,include:false};
 }
+function pcomTrendyolMatchLine(raw){
+  let produsId=null,score=0,viaPnk=false,viaTitle=false,viaCode=false;
+  if(raw.pnk){const m=SYNCM.find(s=>s.platforma==='trendyol'&&s.confirmat&&s.idExtern===raw.pnk);if(m){produsId=m.produsId;score=1;viaPnk=true;}}
+  if(!produsId&&raw.titluExtern){const key=raw.titluExtern.toLowerCase().trim(),m=SYNCM.find(s=>s.platforma==='trendyol'&&s.confirmat&&s.titluExtern.toLowerCase().trim()===key);if(m){produsId=m.produsId;score=1;viaTitle=true;}}
+  if(!produsId&&raw.codProdus){const key=raw.codProdus.toLowerCase(),p=P.find(x=>(x.sku||'').toLowerCase()===key||(x.internalCode||'').toLowerCase()===key);if(p){produsId=p.id;score=1;viaCode=true;}}
+  if(!produsId){const m=findExistingProduct({name:raw.titluExtern});if(m){produsId=m.product.id;score=m.score;}}
+  return{...raw,platforma:'trendyol',data:raw.data||td(),produsId,score,viaPnk,viaTitle,viaCode,include:false};
+}
+async function importTrendyolApiOrders(){
+  if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
+  const startInp=document.getElementById('pcx-trendyol-date-start'),endInp=document.getElementById('pcx-trendyol-date-end'),btn=document.getElementById('pcx-trendyol-import-btn');
+  const startDate=startInp?.value||td(),endDate=endInp?.value||startDate;
+  if(startInp&&!startInp.value)startInp.value=startDate;
+  if(endInp&&!endInp.value)endInp.value=endDate;
+  if(endDate<startDate){toast('Data „Până la” trebuie să fie după data „De la”','err');return;}
+  const days=(new Date(endDate+'T00:00:00Z')-new Date(startDate+'T00:00:00Z'))/86400000+1;
+  if(days>14){toast('Trendyol permite maximum 14 zile într-un singur import','err');return;}
+  if(btn){btn.disabled=true;btn.textContent='Se citesc comenzile…';}
+  try{
+    const r=await apiJson('/api/trendyol',{action:'orders',startDate,endDate},60000);
+    const orderKey=o=>'trendyol|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern),existing=new Set([...PCOM.map(orderKey),...pcImpParsed.map(orderKey)]);
+    const start=pcImpParsed.length;let added=0,duplicates=0,matched=0;
+    for(const raw of r.lines||[]){
+      const line=pcomTrendyolMatchLine(raw),key=orderKey(line);
+      if(existing.has(key)){duplicates++;continue;}existing.add(key);pcImpParsed.push(line);added++;if(line.produsId)matched++;
+    }
+    if(!added){toast(duplicates?`Nicio linie Trendyol nouă pentru ${startDate}${endDate!==startDate?' → '+endDate:''} — ${duplicates} există deja în Comenzi Platforme sau previzualizare.`:'Nu există comenzi Trendyol deschise pentru intervalul ales.');return;}
+    pcImpParsed.forEach(x=>delete x._recentImport);
+    for(let i=start;i<pcImpParsed.length;i++)pcImpParsed[i]._recentImport=true;
+    renderPcomImportPreview();
+    const noMatch=added-matched,aiBtn=document.getElementById('pcmi-ai-btn');if(aiBtn)aiBtn.style.display=noMatch?'':'none';
+    toast(`${added} linii Trendyol aduse · ${matched} asociate${noMatch?` · ${noMatch} necesită confirmare`:''}${duplicates?` · ${duplicates} duplicate ignorate`:''} · AWB-urile sunt preluate pentru Staff.`);
+    pcomTranslateForeignTitles();
+  }catch(e){toast('Trendyol: '+(e.message||'nu am putut citi comenzile'),'err');}
+  finally{if(btn){btn.disabled=false;btn.textContent='🛍️ Adu comenzi Trendyol';}}
+}
 async function importEmagApiOrders(){
   if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
   const startInp=document.getElementById('pcx-emag-date-start'),endInp=document.getElementById('pcx-emag-date-end'),btn=document.getElementById('pcx-emag-import-btn');
@@ -15845,7 +15883,7 @@ async function commitPcomLine(idx){
     const fin=pcomSaleFinancials(p,it,platforma);
     const profit=Math.round(fin.profit*it.cantitate*100)/100,margin=fin.marja;
     const row=pcomToDb({platforma,data:it.data,comandaId:it.comandaId,pnk:it.pnk,tara:it.tara,codProdus:it.codProdus,
-      clientNume:it.clientNume,titluExtern:it.titluExtern,produsId:p.id,produsNume:p.name,cantitate:it.cantitate,
+      clientNume:it.clientNume,titluExtern:it.titluExtern,produsId:p.id,produsNume:p.name,cantitate:it.cantitate,awb:it.awb,
       pretFaraTva:it.pretFaraTva,pretTotalCuTva:it.pretTotalCuTva,moneda:it.moneda,pretTotalCuTvaRon:totalRon,
       profitEstimat:profit,marjaEstimata:margin,importBatchId:pcImpBatchIdFor(platforma)});
     // Marchează explicit că stocul/Jurnalul NU au fost încă atinse — abia „Aplică import" le scrie.
@@ -16626,6 +16664,12 @@ function renderPcomRedesign(){
           <div style="font-size:12px;color:var(--t3);grid-column:1/-1">Import gratuit prin Conectorul local de pe acest Mac. Nu importă automat în stoc.</div>
           <div style="font-size:15px;color:var(--t3);grid-column:1/-1">Manual, la apăsare. Se citesc toate zilele din interval, fără webhook sau import automat.</div>
         </div>
+        <div class="pcx-emag-date-range">
+          <div class="pcx-fld"><label>Comenzi Trendyol — De la</label><input type="date" id="pcx-trendyol-date-start"></div>
+          <div class="pcx-fld"><label>Până la</label><input type="date" id="pcx-trendyol-date-end"></div>
+          <button type="button" class="pcx-btn pcx-btn-primary" id="pcx-trendyol-import-btn" onclick="importTrendyolApiOrders()">🛍️ Adu comenzi Trendyol</button>
+          <div style="font-size:15px;color:var(--t3);grid-column:1/-1">Import manual prin API: pachete deschise, cu cumpărător și AWB. Nu modifică stocul până la „Aplică import”.</div>
+        </div>
         <div id="pcx-file-zone" style="display:none">
           <div class="pcx-dropzone" onclick="document.getElementById('pcmi-file').click()">
             <span class="ic">📄</span>Alege fișier(e) comenzi (.xlsx / .xls / .csv)
@@ -16945,7 +16989,7 @@ async function applyPcomImport(){
           const fin=pcomSaleFinancials(p,it,platforma);
           const profit=Math.round(fin.profit*it.cantitate*100)/100,margin=fin.marja;
           const row=pcomToDb({platforma,data:it.data,comandaId:it.comandaId,pnk:it.pnk,tara:it.tara,codProdus:it.codProdus,
-            clientNume:it.clientNume,titluExtern:it.titluExtern,produsId:p.id,produsNume:p.name,cantitate:it.cantitate,
+            clientNume:it.clientNume,titluExtern:it.titluExtern,produsId:p.id,produsNume:p.name,cantitate:it.cantitate,awb:it.awb,
             pretFaraTva:it.pretFaraTva,pretTotalCuTva:it.pretTotalCuTva,moneda:it.moneda,pretTotalCuTvaRon:totalRon,
             profitEstimat:profit,marjaEstimata:margin,importBatchId:pcImpBatchIdFor(platforma)});
           row.efecte_aplicate=true;
