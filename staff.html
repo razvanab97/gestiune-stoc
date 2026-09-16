@@ -40,6 +40,7 @@ button{cursor:pointer}
 .hdr h1{font-size:27px;font-weight:700}
 .order-count{font-size:17px;color:var(--t3);font-weight:700;white-space:nowrap}
 .update-btn{border:1px solid var(--b2);background:var(--surf);color:var(--t2);border-radius:999px;padding:4px 9px;font-size:13px;font-weight:800;white-space:nowrap}.update-btn.new{border-color:var(--acc);background:var(--acc-light);color:var(--acc)}
+.refresh-btn{border:1px solid var(--b2);background:var(--surf);color:var(--t2);border-radius:999px;padding:6px 10px;font-size:14px;font-weight:800;white-space:nowrap}.refresh-btn:active{background:var(--acc-light);border-color:var(--acc);color:var(--acc)}.refresh-btn:disabled{opacity:.55;cursor:wait}
 .sync-dot{width:11px;height:11px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:middle}
 .sync-dot.ok{background:var(--gr)}
 .sync-dot.err{background:var(--rd)}
@@ -224,7 +225,7 @@ button{cursor:pointer}
    doar lista internă poate derula, fără să mute antetul, navigația sau butonul de confirmare. */
 @media (min-width:768px) and (max-width:1366px) and (orientation:landscape){
   .wrap{padding-top:calc(7px + env(safe-area-inset-top));padding-bottom:calc(7px + env(safe-area-inset-bottom));grid-template-rows:auto auto auto auto minmax(0,1fr)}
-  .hdr{margin-bottom:1px}.hdr h1{font-size:18px}.hdr-title{gap:7px}.order-count{font-size:14px}.update-btn{font-size:11px;padding:3px 7px}.staff-name-badge{font-size:13px;padding:4px 9px}.sync-dot{width:8px;height:8px}
+  .hdr{margin-bottom:1px}.hdr h1{font-size:18px}.hdr-title{gap:7px}.order-count{font-size:14px}.update-btn{font-size:11px;padding:3px 7px}.refresh-btn{font-size:12px;padding:4px 8px}.staff-name-badge{font-size:13px;padding:4px 9px}.sync-dot{width:8px;height:8px}
   .progress-bar-wrap{gap:8px;margin:2px 0 5px}.progress-bar{height:5px}.progress-pct{font-size:13px}
   .tabbar{gap:3px;padding:3px;margin-bottom:6px;border-radius:10px;overflow:hidden}.tab-btn{min-width:0;min-height:40px;padding:5px 3px;flex-direction:row;justify-content:center;gap:3px;font-size:12px;line-height:1.05}.tab-btn .ic{font-size:15px}.tab-badge{font-size:10px;min-width:13px;padding:0 3px;margin-left:0}
   .card{padding:14px;gap:9px;border-radius:16px}.ord-hdr{gap:3px;padding-bottom:8px}.ord-hdr-row1{gap:7px}.ord-pl{font-size:13px;padding:3px 8px}.ord-num,.ord-client{font-size:24px;line-height:1.1}.ord-date{font-size:14px}.awb-box{padding:7px 12px;min-height:40px}.awb-lbl{font-size:12px}.awb-num{font-size:20px}.awb-num-tail{font-size:27px}.awb-pending{font-size:14px}
@@ -244,6 +245,7 @@ button{cursor:pointer}
   <div class="hdr">
     <div class="hdr-title"><h1>📦 Comenzi de împachetat</h1><span class="order-count" id="progress-txt">Se încarcă…</span><button type="button" class="update-btn" id="staff-update-btn" onclick="openUpdatesSheet()"></button></div>
     <div style="display:flex;align-items:center;gap:10px">
+      <button type="button" class="refresh-btn" id="staff-refresh-btn" onclick="refreshStaffNow()">↻ Reîncarcă</button>
       <button type="button" class="staff-name-badge" id="staff-name-badge" onclick="editStaffName()"></button>
       <span class="sync-dot" id="sync-dot"></span>
     </div>
@@ -338,6 +340,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:398,date:'17.09.2026',text:'Buton Reîncarcă: Staff citește imediat produsele, comenzile incluse în ERP, jurnalul și informațiile de împachetare direct din Supabase.'},
   {n:397,date:'17.09.2026',text:'Comenzi cu mai multe produse: cadrul Staff rămâne fix, iar numai lista centrală de produse derulează. Butonul ÎMPACHETAT și navigarea rămân pe ecran; dublu-tap și gesturile de zoom sunt blocate.'},
   {n:396,date:'17.09.2026',text:'Tab nou Raport stoc: actualizezi stocul fizic direct pe tabletă, produs cu produs. Se salvează în produsele principale, activitatea de stoc și istoricul încărcărilor.'},
   {n:395,date:'17.09.2026',text:'Indicator „Update” în antet: vezi imediat versiunea publicată și deschizi istoricul schimbărilor Staff.'},
@@ -1258,12 +1261,33 @@ function startPolling(){
   },25000);
 }
 
+function setStaffRefreshButton(busy){
+  const b=document.getElementById('staff-refresh-btn');if(!b)return;
+  b.disabled=!!busy;b.textContent=busy?'↻ Se încarcă…':'↻ Reîncarcă';
+}
+async function refreshStaffNow(){
+  if(refreshInFlight){showToast('Staff se actualizează deja…');return;}
+  setStaffRefreshButton(true);
+  try{
+    // Reîncarcă și produsele, nu doar comenzile: o asociere sau un produs adăugat recent în ERP devine
+    // disponibil pe Staff imediat, fără refresh de browser și fără cache local intermediar.
+    const prodRows=await sb('GET','produse?select=id,name,sku,internal_code,img,images,bought,sold,price_buy_ttc,archived&order=id.asc');
+    PRODUSE=prodRows.map(p=>({...p,internalCode:p.internal_code}));
+    const ok=await refreshData();
+    if(ok)showToast(`✓ Staff actualizat · ${ORDERS.length} comenzi citite din ERP`);
+    else showToast('Nu am putut reîncărca toate datele — verifică conexiunea');
+  }catch(e){
+    console.error(e);document.getElementById('sync-dot').className='sync-dot err';
+    showToast('Eroare la reîncărcare — încearcă din nou');
+  }finally{setStaffRefreshButton(false);}
+}
+
 async function refreshData(){
   // Două tick-uri apropiate, revenirea în tab sau un refresh cerut de un flux
   // nu mai pot porni citiri paralele ale acelorași patru tabele.
   if(refreshInFlight){refreshQueued=true;return;}
   if(document.hidden)return;
-  refreshInFlight=true;
+  refreshInFlight=true;let ok=false;
   try{
     const [comRows,jurnalRows,prepackRows,msgRows]=await Promise.all([
       sb('GET',`platforma_comenzi?select=*&created_at=gte.${CUTOFF_DATE}&order=created_at.asc`),
@@ -1276,6 +1300,7 @@ async function refreshData(){
     computeOrders();
     renderMain();
     renderMsgPopup();
+    ok=true;
   }catch(e){
     document.getElementById('sync-dot').className='sync-dot err';
     console.warn('refresh eșuat:',e);
@@ -1283,6 +1308,7 @@ async function refreshData(){
     refreshInFlight=false;
     if(refreshQueued&&!document.hidden){refreshQueued=false;refreshData();}
   }
+  return ok;
 }
 
 document.addEventListener('visibilitychange',()=>{
