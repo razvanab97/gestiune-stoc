@@ -2617,7 +2617,7 @@ button.pcx-include-btn.included{border-color:var(--gr)}
 
   <div class="card" data-sync-sec="resync-emag" style="padding:1rem 1.25rem;margin-bottom:1rem;--stat-accent:var(--acc)">
     <div class="sec" style="margin-top:0">🛒 Resincronizează listările active eMAG</div>
-    <div style="font-size:24px;color:var(--t3);margin-bottom:10px">Citește direct din API doar ofertele eMAG active din RO, BG și HU. Asocierile existente după PNK sau titlu rămân neschimbate și li se actualizează stocul extern; pentru listările fără asociere primești o sugestie, apoi alegi tu ce salvezi.</div>
+    <div style="font-size:24px;color:var(--t3);margin-bottom:10px">Citește prin Conectorul local de pe acest Mac doar ofertele eMAG active din RO, BG și HU. Asocierile existente după PNK sau titlu rămân neschimbate și li se actualizează stocul extern; pentru listările fără asociere primești o sugestie, apoi alegi tu ce salvezi.</div>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button type="button" class="btn btn-acc" id="sync-emag-resync-btn" onclick="resyncEmagActiveListings()">↻ Adu listările active eMAG</button><span id="sync-emag-resync-info" style="font-size:21px;color:var(--t3)"></span></div>
   </div>
 
@@ -14585,8 +14585,9 @@ async function resyncEmagActiveListings(){
   if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span> Se citesc listările active…';}
   if(info)info.textContent='';
   try{
-    const r=await fetch('/api/emag',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'offers-active'})});
-    const data=await r.json();if(!r.ok)throw new Error(data.error||'Nu am putut citi listările eMAG');
+    // eMAG permite IP-ul acestui Mac în allowlist, nu IP-ul dinamic Vercel. Folosim același Conector
+    // local deja folosit la „Adu comenzi eMAG”, ca resincronizarea să funcționeze fără Vercel Pro/IP fix.
+    const data=await localEmagJson('/offers-active',{},180000);
     const rows=Array.isArray(data.offers)?data.offers:[];
     syncImpParsed=[];syncImpStockUpdates=[];syncImpDuplicates=[];
     const seen=new Set();

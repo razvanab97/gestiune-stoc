@@ -8,6 +8,7 @@ function bodyOf(req){return typeof req.body==='string'?JSON.parse(req.body||'{}'
 function isoDay(value){return /^\d{4}-\d{2}-\d{2}$/.test(String(value||''))?String(value):null;}
 function nextDay(day){const d=new Date(day+'T00:00:00Z');d.setUTCDate(d.getUTCDate()+1);return d.toISOString().slice(0,10);}
 function num(value){const n=Number(value);return Number.isFinite(n)?n:0;}
+function stockNum(value){return Array.isArray(value)?num(value[0]?.value??value[0]?.quantity??0):num(value);}
 
 function credentials(market='RO'){
   const user=process.env[`EMAG_${market}_API_USERNAME`]||process.env.EMAG_API_USERNAME,pass=process.env[`EMAG_${market}_API_PASSWORD`]||process.env.EMAG_API_PASSWORD;
@@ -72,27 +73,34 @@ function offerLine(offer,market){
   return{
     titluExtern:String(offer?.name||offer?.validation_name||offer?.product_name||product?.name||''),
     pnk:String(offer?.part_number_key||offer?.part_number||offer?.pnk||product?.part_number_key||''),
-    codProdus:String(offer?.vendor_ext_id||offer?.ext_id||offer?.product_id||''),
-    stocExtern:num(offer?.stock??offer?.quantity??offer?.available_stock),
+    codProdus:String(offer?.vendor_ext_id||offer?.ext_id||offer?.product_id||offer?.id||''),
+    stocExtern:stockNum(offer?.stock??offer?.quantity??offer?.available_stock),
     tara:market
   };
 }
 async function readActiveOffers(market){
-  const all=[];
+  const all=[],seenPages=new Set();
   for(let page=1;page<=20;page++){
-    const data=await emag(market,'/product_offer/read',{currentPage:page,itemsPerPage:1000});
+    // product_offer/read acceptă cel mult 100 oferte/pagină (spre deosebire de order/read, care
+    // acceptă 1000). Păstrăm paginația, ca un catalog mai mare să fie citit complet.
+    const data=await emag(market,'/product_offer/read',{currentPage:page,itemsPerPage:100,status:1});
     const rows=Array.isArray(data.results)?data.results:(Array.isArray(data.offers)?data.offers:[]);
+    // Protecție pentru răspunsuri API care ignoră pagina și repetă primele 100 de oferte: fără ea
+    // apelul ar aștepta inutil toate cele 20 de pagini și ar raporta lent un catalog incomplet.
+    const pageKey=rows.slice(0,5).map(x=>x.vendor_ext_id||x.part_number_key||x.part_number||x.id||x.name||'').join('|');
+    if(pageKey&&seenPages.has(pageKey))break;
+    if(pageKey)seenPages.add(pageKey);
     all.push(...rows);
-    if(rows.length<1000)break;
+    if(rows.length<100)break;
   }
   return all.filter(activeOffer).map(x=>offerLine(x,market)).filter(x=>x.titluExtern);
 }
 async function readActiveOffersAllMarkets(){
-  const markets=[],offers=[];
-  for(const market of Object.keys(EMAG_MARKETS)){
-    try{const rows=await readActiveOffers(market);markets.push({market,offers:rows.length,ok:true});offers.push(...rows);}
-    catch(e){markets.push({market,offers:0,ok:false,error:e.message||'Eroare necunoscută'});}
-  }
+  const results=await Promise.all(Object.keys(EMAG_MARKETS).map(async market=>{
+    try{const rows=await readActiveOffers(market);return{market,offers:rows.length,rows,ok:true};}
+    catch(e){return{market,offers:0,rows:[],ok:false,error:e.message||'Eroare necunoscută'};}
+  }));
+  const markets=results.map(({rows,...market})=>market),offers=results.flatMap(x=>x.rows);
   if(!markets.some(x=>x.ok))throw new Error(markets.map(x=>`${x.market}: ${x.error}`).join(' · '));
   return{markets,offers};
 }
