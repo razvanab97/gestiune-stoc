@@ -3716,6 +3716,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:405,text:'Comenzi Platforme — reîncărcarea din eMAG/Trendyol nu mai pierde o comandă confirmată temporar. O comandă deja aplicată în stoc rămâne protejată ca duplicat; una activă în Staff, dar absentă din previzualizare după refresh, este readusă în listă ca „Inclus”, fără duplicare și fără modificare de stoc.',date:'2026-09-17'},
   {n:404,text:'Staff — coada și contorul nu mai filtrează comenzile după data plasării pe eMAG/Trendyol. După resetarea Staff, toate comenzile confirmate în ERP după acel moment sunt vizibile, inclusiv cele plasate ieri și incluse azi; o comandă nu mai poate dispărea doar fiindcă are o dată mai veche.',date:'2026-09-17'},
   {n:403,text:'Comenzi eMAG — butonul „Adu comenzi eMAG” nu mai caută după interval de date. Citește strict comenzile din statusul eMAG „În lucru” (API: status 2), din RO, BG și HU; `type 3` a rămas numai filtrul corect pentru comenzile livrate de seller. Comenzile finalizate, noi sau din istoric nu mai sunt aduse. Dublurile rămân ignorate.',date:'2026-09-17'},
   {n:402,text:'Staff — Raport stoc în landscape: la atingerea câmpului, introducerea devine o bară fixă deasupra tastaturii Safari, fără să sară antetul sau produsul. După salvarea unui stoc corect, sistemul deschide automat produsul următor.',date:'2026-09-17'},
@@ -6470,7 +6471,7 @@ async function load(){
     document.getElementById('day-badge').textContent=new Date().toLocaleDateString('ro-RO',{day:'numeric',month:'long'});
     hideLoading();
     buildCats('');renderToday();renderTable();buildJMonths();if(document.getElementById('page-raport')?.classList.contains('on')){buildRaportCats();renderRaport();}
-    renderUpdWidget();renderNotif();renderDashboard();loadPcomImportState();loadSyncImportState();
+    renderUpdWidget();renderNotif();renderDashboard();loadPcomImportState().finally(()=>{pcomApplyImportUiMode();refreshPcomAvailableOrdersOnLoad();});loadSyncImportState();
     pcomApplyImportUiMode();
     checkSupplierRestockAlerts();
     checkEditProductDeepLink();
@@ -15452,7 +15453,26 @@ function pcomTrendyolMatchLine(raw){
   if(!produsId){const m=findExistingProduct({name:raw.titluExtern});if(m){produsId=m.product.id;score=m.score;}}
   return{...raw,platforma:'trendyol',data:raw.data||td(),produsId,score,viaPnk,viaTitle,viaCode,include:false};
 }
-async function importTrendyolApiOrders(){
+// O comandă confirmată cu „Inclus” există deja în baza Staff, însă stocul/Jurnalul nu sunt încă
+// aplicate (efecteAplicate===false). Dacă pagina a fost reîncărcată sau previzualizarea locală s-a
+// pierdut, nu o tratăm ca duplicat mort: o reconstruim din răspunsul API, legată de același rând DB.
+// Doar o comandă aplicată financiar sau una prezentă deja în previzualizarea curentă este ignorată.
+function pcomApiImportGate(keyOf){
+  const previewKeys=new Set(pcImpParsed.map(keyOf)),stored=new Map();
+  PCOM.forEach(o=>{const k=keyOf(o),old=stored.get(k);if(!old||o.efecteAplicate!==false)stored.set(k,o);});
+  return{
+    add(line){
+      const key=keyOf(line);
+      if(previewKeys.has(key))return'preview';
+      const old=stored.get(key);
+      if(old&&old.efecteAplicate!==false)return'applied';
+      if(old){line.include=true;line._committedId=old.id;line._restoredFromApi=true;}
+      pcImpParsed.push(line);previewKeys.add(key);
+      return old?'restored':'added';
+    }
+  };
+}
+async function importTrendyolApiOrders(silent=false){
   if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
   const startInp=document.getElementById('pcx-trendyol-date-start'),endInp=document.getElementById('pcx-trendyol-date-end'),btn=document.getElementById('pcx-trendyol-import-btn');
   const startDate=startInp?.value||td(),endDate=endInp?.value||startDate;
@@ -15464,44 +15484,61 @@ async function importTrendyolApiOrders(){
   if(btn){btn.disabled=true;btn.textContent='Se citesc comenzile…';}
   try{
     const r=await apiJson('/api/trendyol',{action:'orders',startDate,endDate},60000);
-    const orderKey=o=>'trendyol|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern),existing=new Set([...PCOM.map(orderKey),...pcImpParsed.map(orderKey)]);
-    const start=pcImpParsed.length;let added=0,duplicates=0,matched=0;
+    const orderKey=o=>'trendyol|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern),gate=pcomApiImportGate(orderKey);
+    const start=pcImpParsed.length;let added=0,duplicates=0,restored=0,matched=0;
     for(const raw of r.lines||[]){
-      const line=pcomTrendyolMatchLine(raw),key=orderKey(line);
-      if(existing.has(key)){duplicates++;continue;}existing.add(key);pcImpParsed.push(line);added++;if(line.produsId)matched++;
+      const line=pcomTrendyolMatchLine(raw);
+      const state=gate.add(line);
+      if(state==='preview'||state==='applied'){duplicates++;continue;}
+      added++;if(state==='restored')restored++;if(line.produsId)matched++;
     }
-    if(!added){toast(duplicates?`Nicio linie Trendyol nouă pentru ${startDate}${endDate!==startDate?' → '+endDate:''} — ${duplicates} există deja în Comenzi Platforme sau previzualizare.`:'Nu există comenzi Trendyol deschise pentru intervalul ales.');return;}
+    if(!added){if(!silent)toast(duplicates?`Nicio linie Trendyol nouă pentru ${startDate}${endDate!==startDate?' → '+endDate:''} — ${duplicates} sunt deja aplicate sau în previzualizare.`:'Nu există comenzi Trendyol deschise pentru intervalul ales.');return;}
     pcImpParsed.forEach(x=>delete x._recentImport);
     for(let i=start;i<pcImpParsed.length;i++)pcImpParsed[i]._recentImport=true;
     renderPcomImportPreview();
     const noMatch=added-matched,aiBtn=document.getElementById('pcmi-ai-btn');if(aiBtn)aiBtn.style.display=noMatch?'':'none';
-    toast(`${added} linii Trendyol aduse · ${matched} asociate${noMatch?` · ${noMatch} necesită confirmare`:''}${duplicates?` · ${duplicates} duplicate ignorate`:''} · AWB-urile sunt preluate pentru Staff.`);
+    if(!silent)toast(`${added} linii Trendyol aduse · ${matched} asociate${restored?` · ${restored} recuperate pentru Staff`:''}${noMatch?` · ${noMatch} necesită confirmare`:''}${duplicates?` · ${duplicates} deja aplicate/în previzualizare (ignorate)`:''} · AWB-urile sunt preluate pentru Staff.`);
     pcomTranslateForeignTitles();
-  }catch(e){toast('Trendyol: '+(e.message||'nu am putut citi comenzile'),'err');}
+  }catch(e){if(!silent)toast('Trendyol: '+(e.message||'nu am putut citi comenzile'),'err');else console.warn('Actualizare automată Trendyol eșuată:',e);}
   finally{if(btn){btn.disabled=false;btn.textContent='🛍️ Adu comenzi Trendyol';}}
 }
-async function importEmagApiOrders(){
+async function importEmagApiOrders(silent=false){
   if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
   const btn=document.getElementById('pcx-emag-import-btn');
   if(btn){btn.disabled=true;btn.textContent='Se citesc comenzile în lucru…';}
   try{
-    const marketOf=o=>String(o.tara||((o.moneda||'').toUpperCase()==='HUF'?'HU':(o.moneda||'').toUpperCase()==='BGN'?'BG':'RO')).toUpperCase(),orderKey=o=>'emag|'+marketOf(o)+'|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern),existing=new Set([...PCOM.map(orderKey),...pcImpParsed.map(orderKey)]);
+    const marketOf=o=>String(o.tara||((o.moneda||'').toUpperCase()==='HUF'?'HU':(o.moneda||'').toUpperCase()==='BGN'?'BG':'RO')).toUpperCase(),orderKey=o=>'emag|'+marketOf(o)+'|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern),gate=pcomApiImportGate(orderKey);
     const r=await localEmagJson('/orders-in-progress',{},60000);
-    const start=pcImpParsed.length,unavailable=new Set();let added=0,duplicates=0,matched=0;
+    const start=pcImpParsed.length,unavailable=new Set();let added=0,duplicates=0,restored=0,matched=0;
     (r.markets||[]).filter(x=>!x.ok).forEach(x=>unavailable.add(x.market));
     for(const raw of r.lines||[]){
-      const line=pcomEmagMatchLine(raw),key=orderKey(line);
-      if(existing.has(key)){duplicates++;continue;}existing.add(key);pcImpParsed.push(line);added++;if(line.produsId)matched++;
+      const line=pcomEmagMatchLine(raw);
+      const state=gate.add(line);
+      if(state==='preview'||state==='applied'){duplicates++;continue;}
+      added++;if(state==='restored')restored++;if(line.produsId)matched++;
     }
-    if(!added){toast(duplicates?`Nicio comandă eMAG nouă în lucru — ${duplicates} linii există deja în Comenzi Platforme sau previzualizare.`:'Nu există comenzi eMAG în lucru.',unavailable.size?'warn':undefined);return;}
+    if(!added){if(!silent)toast(duplicates?`Nicio comandă eMAG nouă în lucru — ${duplicates} linii sunt deja aplicate sau în previzualizare.`:'Nu există comenzi eMAG în lucru.',unavailable.size?'warn':undefined);return;}
     pcImpParsed.forEach(x=>delete x._recentImport);
     for(let i=start;i<pcImpParsed.length;i++)pcImpParsed[i]._recentImport=true;
     renderPcomImportPreview();
     const noMatch=added-matched,aiBtn=document.getElementById('pcmi-ai-btn');if(aiBtn)aiBtn.style.display=noMatch?'':'none';
-    toast(`${added} linii eMAG în lucru aduse · ${matched} asociate${noMatch?` · ${noMatch} necesită confirmare`:''}${duplicates?` · ${duplicates} duplicate ignorate`:''}${unavailable.size?` · Atenție: ${[...unavailable].join(', ')} neconfigurat/blocat`:''}`,unavailable.size?'warn':undefined);
+    if(!silent)toast(`${added} linii eMAG în lucru aduse · ${matched} asociate${restored?` · ${restored} recuperate pentru Staff`:''}${noMatch?` · ${noMatch} necesită confirmare`:''}${duplicates?` · ${duplicates} deja aplicate/în previzualizare (ignorate)`:''}${unavailable.size?` · Atenție: ${[...unavailable].join(', ')} neconfigurat/blocat`:''}`,unavailable.size?'warn':undefined);
     pcomTranslateForeignTitles();
-  }catch(e){toast('eMAG: '+(e.message||'nu am putut citi comenzile'),'err');}
+  }catch(e){if(!silent)toast('eMAG: '+(e.message||'nu am putut citi comenzile'),'err');else console.warn('Actualizare automată eMAG eșuată:',e);}
   finally{if(btn){btn.disabled=false;btn.textContent='🛒 Adu comenzi eMAG';}}
+}
+// La fiecare deschidere/reîncărcare, refacem previzualizarea numai cu comenzile încă disponibile.
+// Nu există efect financiar aici: stocul și jurnalul se schimbă exclusiv la „Aplică import”.
+let pcomAutoRefreshStarted=false;
+async function refreshPcomAvailableOrdersOnLoad(){
+  if(pcomAutoRefreshStarted||!sbReady)return;
+  pcomAutoRefreshStarted=true;
+  const end=td(),startDate=new Date(end+'T00:00:00Z');startDate.setUTCDate(startDate.getUTCDate()-13);
+  const start=startDate.toISOString().slice(0,10);
+  const trendStart=document.getElementById('pcx-trendyol-date-start'),trendEnd=document.getElementById('pcx-trendyol-date-end');
+  if(trendStart&&!trendStart.value)trendStart.value=start;
+  if(trendEnd&&!trendEnd.value)trendEnd.value=end;
+  await Promise.allSettled([importEmagApiOrders(true),importTrendyolApiOrders(true)]);
 }
 async function issueEmagAwb(){
   const orderId=(document.getElementById('pcx-emag-awb-order')?.value||'').trim(),weight=document.getElementById('pcx-emag-awb-weight')?.value,parcelNumber=document.getElementById('pcx-emag-awb-parcels')?.value,btn=document.getElementById('pcx-emag-awb-btn');
