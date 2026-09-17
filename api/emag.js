@@ -37,19 +37,23 @@ function orderLines(order,market='RO'){
     };
   });
 }
-async function readOrders(market,day){
+async function readOrders(market,day=null,status=null){
   const all=[];let page=1;
   while(page<=10){ // maximum 10.000 comenzi/zi; protecție pentru un apel manual
-    const data=await emag(market,'/order/read',{createdAfter:`${day} 00:00:00`,createdBefore:`${nextDay(day)} 00:00:00`,currentPage:page,itemsPerPage:1000,type:3});
+    // type:3 înseamnă livrare de seller; status:2 este adăugat numai pentru coada „În lucru”.
+    const payload={currentPage:page,itemsPerPage:1000,type:3};
+    if(status!==null)payload.status=status;
+    if(day){payload.createdAfter=`${day} 00:00:00`;payload.createdBefore=`${nextDay(day)} 00:00:00`;}
+    const data=await emag(market,'/order/read',payload);
     const rows=Array.isArray(data.results)?data.results:[];all.push(...rows);
     if(rows.length<1000)break;page++;
   }
   return all;
 }
-async function readAllMarkets(day){
+async function readAllMarkets(day=null,status=null){
   const markets=[];let lines=[];
   for(const market of Object.keys(EMAG_MARKETS)){
-    try{const orders=await readOrders(market,day),marketLines=orders.flatMap(x=>orderLines(x,market)).filter(x=>x.comandaId&&x.titluExtern);markets.push({market,orders:orders.length,lines:marketLines.length,ok:true});lines=lines.concat(marketLines);}
+    try{const orders=await readOrders(market,day,status),marketLines=orders.flatMap(x=>orderLines(x,market)).filter(x=>x.comandaId&&x.titluExtern);markets.push({market,orders:orders.length,lines:marketLines.length,ok:true});lines=lines.concat(marketLines);}
     catch(e){markets.push({market,orders:0,lines:0,ok:false,error:e.message||'Eroare necunoscută'});}
   }
   if(!markets.some(x=>x.ok))throw new Error(markets.map(x=>`${x.market}: ${x.error}`).join(' · '));
@@ -81,6 +85,10 @@ module.exports=async function handler(req,res){
       const day=isoDay(body.date);if(!day)return res.status(400).json({error:'Alege o dată validă'});
       const result=await readAllMarkets(day);
       return res.status(200).json({date:day,orders:result.markets.reduce((sum,x)=>sum+x.orders,0),lines:result.lines,markets:result.markets});
+    }
+    if(action==='orders-in-progress'){
+      const result=await readAllMarkets(null,2);
+      return res.status(200).json({scope:'in_progress',orders:result.markets.reduce((sum,x)=>sum+x.orders,0),lines:result.lines,markets:result.markets});
     }
     if(action==='awb'){
       const orderId=Number(body.orderId);if(!orderId)return res.status(400).json({error:'Alege o comandă eMAG validă'});
