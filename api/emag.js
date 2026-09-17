@@ -26,7 +26,10 @@ async function emag(market,path,payload){
 function orderLines(order,market='RO'){
   const customer=order.customer||{};
   const products=Array.isArray(order.products)?order.products:[];
-  const vatRate=num(order.vat_percentage||order.vat||21)>1?num(order.vat_percentage||order.vat||21)/100:num(order.vat_percentage||order.vat||.21);
+  // ?? nu || : un produs scutit de TVA trimite explicit 0, iar 0 e falsy în JS — || l-ar confunda
+  // cu „lipsă” și ar aplica 21% implicit, umflând totalul comenzii.
+  const vatRaw=order.vat_percentage??order.vat??21;
+  const vatRate=num(vatRaw)>1?num(vatRaw)/100:num(vatRaw);
   return products.filter(p=>num(p.status||1)!==0&&num(p.quantity)>0).map(p=>{
     const qty=num(p.quantity),priceExVat=num(p.sale_price),currency=String(p.currency||order.currency||EMAG_MARKETS[market].currency).toUpperCase();
     return{
@@ -52,11 +55,14 @@ async function readOrders(market,day=null,status=null){
   return all;
 }
 async function readAllMarkets(day=null,status=null){
-  const markets=[];let lines=[];
-  for(const market of Object.keys(EMAG_MARKETS)){
-    try{const orders=await readOrders(market,day,status),marketLines=orders.flatMap(x=>orderLines(x,market)).filter(x=>x.comandaId&&x.titluExtern);markets.push({market,orders:orders.length,lines:marketLines.length,ok:true});lines=lines.concat(marketLines);}
-    catch(e){markets.push({market,orders:0,lines:0,ok:false,error:e.message||'Eroare necunoscută'});}
-  }
+  const results=await Promise.all(Object.keys(EMAG_MARKETS).map(async market=>{
+    try{
+      const orders=await readOrders(market,day,status);
+      const marketLines=orders.flatMap(x=>orderLines(x,market)).filter(x=>x.comandaId&&x.titluExtern);
+      return{market,orders:orders.length,lines:marketLines.length,ok:true,marketLines};
+    }catch(e){return{market,orders:0,lines:0,ok:false,error:e.message||'Eroare necunoscută',marketLines:[]};}
+  }));
+  const markets=results.map(({marketLines,...m})=>m),lines=results.flatMap(x=>x.marketLines);
   if(!markets.some(x=>x.ok))throw new Error(markets.map(x=>`${x.market}: ${x.error}`).join(' · '));
   return{markets,lines};
 }
