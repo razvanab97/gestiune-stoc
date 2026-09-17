@@ -2627,6 +2627,12 @@ button.pcx-include-btn.included{border-color:var(--gr)}
     <div id="sync-mismatch-list"></div>
   </div>
 
+  <div class="card" data-sync-sec="repunere-stoc" style="padding:1rem 1.25rem;margin-bottom:1rem;--stat-accent:var(--or)">
+    <div class="sec" style="margin-top:0">🔔 De repus în stoc pe platforme</div>
+    <div style="font-size:24px;color:var(--t3);margin-bottom:10px">Produse cu stoc intern disponibil, dar cu toate listările eMAG și Trendyol raportate la 0. Copiază PNK-ul eMAG și codul/barcode-ul Trendyol; alerta se marchează rezolvată și dispare.</div>
+    <div id="sync-restock-list"></div>
+  </div>
+
   <div class="card" data-sync-sec="crossplatforma" style="padding:1rem 1.25rem;margin-bottom:1rem;--stat-accent:var(--or)">
     <div class="sec" style="margin-top:0">🔀 Activ pe eMAG, lipsă pe Trendyol</div>
     <div style="font-size:24px;color:var(--t3);margin-bottom:10px">Produse cu mapare eMAG confirmată, dar fără nicio mapare Trendyol încă — candidați de postat și acolo.</div>
@@ -3716,6 +3722,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:406,text:'Sincronizare — card nou „De repus în stoc pe platforme”: semnalează produsele cu stoc intern disponibil ale căror listări confirmate eMAG și Trendyol sunt toate la stoc extern 0. Arată PNK-ul eMAG și codul/barcode-ul Trendyol; copierea lor marchează alerta rezolvată și o ascunde până la următoarea actualizare externă.',date:'2026-09-17'},
   {n:405,text:'Comenzi Platforme — reîncărcarea din eMAG/Trendyol nu mai pierde o comandă confirmată temporar. O comandă deja aplicată în stoc rămâne protejată ca duplicat; una activă în Staff, dar absentă din previzualizare după refresh, este readusă în listă ca „Inclus”, fără duplicare și fără modificare de stoc.',date:'2026-09-17'},
   {n:404,text:'Staff — coada și contorul nu mai filtrează comenzile după data plasării pe eMAG/Trendyol. După resetarea Staff, toate comenzile confirmate în ERP după acel moment sunt vizibile, inclusiv cele plasate ieri și incluse azi; o comandă nu mai poate dispărea doar fiindcă are o dată mai veche.',date:'2026-09-17'},
   {n:403,text:'Comenzi eMAG — butonul „Adu comenzi eMAG” nu mai caută după interval de date. Citește strict comenzile din statusul eMAG „În lucru” (API: status 2), din RO, BG și HU; `type 3` a rămas numai filtrul corect pentru comenzile livrate de seller. Comenzile finalizate, noi sau din istoric nu mai sunt aduse. Dublurile rămân ignorate.',date:'2026-09-17'},
@@ -17448,6 +17455,43 @@ function renderSyncMismatchCard(){
   const toggleHtml=totalHidden>0||syncMismatchExpanded&&(risc.length+pierdut.length)>collapseAt*2?`<div style="text-align:center;padding-top:10px"><button class="btn btn-sm" onclick="toggleSyncMismatchExpanded()">${syncMismatchExpanded?'▴ Restrânge':`▾ Arată toate (${risc.length+pierdut.length})`}</button></div>`:'';
   box.innerHTML=html+toggleHtml;
 }
+// Alertă operațională, nu actualizare automată: apare doar dacă avem o imagine completă a ambelor
+// platforme (cel puțin o mapare eMAG și una Trendyol, fiecare cu stoc extern cunoscut) și TOATE sunt
+// la 0, deși inventarul local are stoc. Astfel nu confundăm o variantă epuizată cu produsul întreg.
+const SYNC_RESTOCK_DISMISS_KEY='sm6_sync_restock_dismissed';
+let syncRestockDismissed=(()=>{try{return JSON.parse(localStorage.getItem(SYNC_RESTOCK_DISMISS_KEY)||'{}')}catch(e){return{}}})();
+let syncRestockRendered=[];
+function syncRestockSignature(p,maps){return`${p.id}|${maps.map(m=>`${m.id}:${m.stocExtern}:${m.stocExternAt||''}`).sort().join('|')}`;}
+function getSyncRestockAlerts(){
+  const groups={};
+  SYNCM.filter(m=>m.confirmat&&(m.platforma==='emag'||m.platforma==='trendyol')&&m.stocExtern!=null).forEach(m=>{(groups[m.produsId]||(groups[m.produsId]=[])).push(m);});
+  return Object.entries(groups).map(([id,maps])=>{
+    const p=P.find(x=>x.id===Number(id));if(!p||p.archived||qty(p)<=0)return null;
+    const emag=maps.filter(m=>m.platforma==='emag'),trendyol=maps.filter(m=>m.platforma==='trendyol');
+    if(!emag.length||!trendyol.length||!emag.every(m=>m.stocExtern<=0)||!trendyol.every(m=>m.stocExtern<=0))return null;
+    return{p,emag,trendyol,signature:syncRestockSignature(p,maps)};
+  }).filter(Boolean).filter(x=>!syncRestockDismissed[x.signature]);
+}
+function renderSyncRestockCard(){
+  const box=document.getElementById('sync-restock-list');if(!box)return;
+  if(!sbReady){box.textContent='Necesită conexiune Supabase activă.';return;}
+  const alerts=getSyncRestockAlerts();syncRestockRendered=alerts;
+  if(!alerts.length){box.innerHTML='<div style="font-size:24px;color:var(--t3)">Niciun produs de repus în stoc detectat. Pentru verificare, importă exporturile actuale cu coloana Stock/Stoc pentru ambele platforme.</div>';return;}
+  box.innerHTML=groupBySupplier(alerts,x=>x.p).map(g=>`<div class="sec">${esc(g.supplier)} (${g.items.length})</div>${g.items.map(x=>{
+    const emagCodes=x.emag.map(m=>m.idExtern).filter(Boolean),trendyolCodes=x.trendyol.map(m=>m.idExtern).filter(Boolean);
+    const codeText=[emagCodes.length?`eMAG PNK: ${emagCodes.join(', ')}`:'eMAG PNK: —',trendyolCodes.length?`Trendyol barcode/cod: ${trendyolCodes.join(', ')}`:'Trendyol barcode/cod: —'].join('\n');
+    const externalAt=[...x.emag,...x.trendyol].map(m=>m.stocExternAt).filter(Boolean).sort().slice(-1)[0]||'';
+    return`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(x.p.name)}</strong>${x.p.sku?` <span style="color:var(--t3);font-family:var(--mono)">· SKU ${esc(x.p.sku)}</span>`:''}<div class="jp-meta">Stoc intern disponibil: <b>${fmtQty(qty(x.p))}</b> · eMAG: 0 (${x.emag.length} listări) · Trendyol: 0 (${x.trendyol.length} listări)${externalAt?` · verificat ${fmtDateRo(externalAt.slice(0,10))}`:''}</div><div class="jp-meta" style="font-family:var(--mono);white-space:pre-line">${esc(codeText)}</div></div><button type="button" class="btn btn-sm btn-amber" onclick="copySyncRestockCodes(${syncRestockRendered.indexOf(x)})">📋 Copiază coduri<br>și rezolvă</button></div>`;
+  }).join('')}`).join('');
+}
+function copySyncRestockCodes(idx){
+  const x=syncRestockRendered[idx];if(!x)return;
+  const emagCodes=x.emag.map(m=>m.idExtern).filter(Boolean),trendyolCodes=x.trendyol.map(m=>m.idExtern).filter(Boolean);
+  copyText([`Produs: ${x.p.name}`,`Stoc intern: ${fmtQty(qty(x.p))}`,emagCodes.length?`eMAG PNK: ${emagCodes.join(', ')}`:'eMAG PNK: —',trendyolCodes.length?`Trendyol barcode/cod: ${trendyolCodes.join(', ')}`:'Trendyol barcode/cod: —'].join('\n'));
+  syncRestockDismissed[x.signature]=new Date().toISOString();
+  safeLocalSet(SYNC_RESTOCK_DISMISS_KEY,JSON.stringify(syncRestockDismissed));
+  renderSyncRestockCard();
+}
 // Produse active pe eMAG (mapare confirmată) fără nicio mapare Trendyol încă — candidați de
 // cross-postat. Nu ține cont de stoc (spre deosebire de "De listat pe eMAG"): un produs poate fi
 // activ pe eMAG chiar și cu stoc temporar 0, iar scopul aici e acoperirea pe platforme, nu stocul.
@@ -17477,6 +17521,7 @@ function renderSyncPage(){
   renderSyncPnkDatalist();
   renderSyncOpportunityCard();
   renderSyncMismatchCard();
+  renderSyncRestockCard();
   renderSyncCrossPlatformCard();
   renderSyncMissingList();
   const list=document.getElementById('sync-map-list');if(!list)return;
