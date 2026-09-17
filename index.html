@@ -1941,6 +1941,11 @@ th{font-weight:800!important;color:var(--t3)!important}
 .notif-meta{font-size:24px;color:var(--t3);font-family:var(--mono);margin-top:2px}
 .notif-row.notif-in .notif-meta{color:var(--gr)}
 .notif-row.notif-out .notif-meta{color:var(--or)}
+.notif-row.notif-issue{background:var(--rd-bg)}
+.notif-row.notif-issue .notif-meta{color:var(--rd)}
+.notif-issue-actions{display:flex;gap:6px;margin-top:5px;flex-wrap:wrap}
+.notif-issue-btn{font-size:19px;font-weight:700;padding:3px 9px;border-radius:999px;border:1px solid var(--b2);background:var(--surf);color:var(--t2);cursor:pointer}
+.notif-issue-btn-danger{border-color:var(--rd);color:var(--rd)}
 /* NOTIȚĂ RAPIDĂ — pop-up mic, mutabil oriunde pe pagină (trage de bara de sus) și redimensionabil
    (colțul din dreapta-jos, resize CSS nativ), conținutul persistă local (localStorage), nu e legat
    de Supabase — un simplu bloc-notes la îndemână, nu o notă pe produs/comandă. */
@@ -3734,6 +3739,10 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:416,text:'Comenzi Platforme — „📮 Asociază AWB-uri" citește acum și direct din dosarul Desktop/AWB-uri de pe acest Mac (buton „📂 Citește din dosar"), în loc de selectare manuală a unui singur PDF. Pui acolo, în timpul zilei, PDF-urile descărcate de la eMAG ȘI Trendyol (amestecate, nu contează) — un click le citește pe toate deodată, iar cele asociate cu succes se mută automat în „procesate/<data>", ca dosarul să rămână curat. Confirmat că eMAG nu oferă altă cale de a citi un AWB generat manual pe Seller Center (API-ul cere un ID intern pe care nu-l avem în acest caz) — asta rămâne calea corectă.',date:'2026-09-18'},
+  {n:415,text:'🔔 Clopoțel — o problemă de „Stoc zero"/„Cantitate insuficientă" raportată de Staff arată acum direct dacă produsul are deja stoc suficient („✓ Stoc disponibil acum"), la fel ca pe tableta Staff — fără să mai deschizi produsul separat ca să verifici. O comandă blocată din lipsă de stoc NU trebuie anulată — rămâne normal în coada Staff până apare stoc; „Anulează" e pentru alte motive (test, dublură, comandă anulată de client).',date:'2026-09-18'},
+  {n:414,text:'Comenzi Platforme — card nou, permanent, „🚫 Comenzi anulate — de reconsiderat": arată orice produs anulat, neaplicat încă, indiferent dacă a fost reimportat sau nu — cu motivul anulării și „↺ Reconsideră". Înainte, o comandă anulată redevenea vizibilă DOAR dacă exact acea comandă era reregăsită la un reimport ulterior (nesigur — eMAG/Trendyol nu garantează c-o mai includ în export la nesfârșit); acum e mereu la îndemână, indiferent cât timp trece până se rezolvă motivul anulării (ex. stoc zero → reaprovizionare).',date:'2026-09-18'},
+  {n:413,text:'Coadă Staff — redesign complet, cerut direct. Staff începe curat de azi (pragul vechi de test rămâne în bază, nefolosit). Coada activă nu se mai bazează pe o dată — se curăță singură, permanent, după starea reală a fiecărui produs. Nou: „🚫 Anulează" pe orice produs din Comenzi Platforme, scoate produsul din Staff fără să atingă stocul (cere un motiv scurt). Nou: o problemă raportată de Staff (stoc zero, produs greșit etc.) ajunge acum și în clopoțelul 🔔 din admin — până acum rămânea vizibilă doar pe tabletă. De acolo poți rezolva problema sau anula produsul direct. Butonul „↺ Coadă nouă” rămâne disponibil, ca soluție de urgență. Necesită migration_staff_coada_anulare.sql.',date:'2026-09-17'},
   {n:412,text:'Sincronizare eMAG — „Adu listările active" devine 3 butoane separate, câte unul pentru RO/BG/HU, în loc de un singur buton care citea toate 3 piețele deodată. Fiecare rulează independent — util ca să compari numărul citit direct cu numărul de „Active" din Seller Center, piață cu piață.',date:'2026-09-17'},
   {n:411,text:'Sincronizare eMAG — „Adu listările active" nu mai poate include un produs blocat de eMAG (ex. încălcare drepturi terți). Verifica doar dacă oferta e „activă" (status), fără să știe că eMAG ține separat o stare de blocare la nivel de produs (validation_status) — un produs putea fi status activ ȘI blocat în același timp. Acum ambele sunt verificate.',date:'2026-09-17'},
   {n:410,text:'Produs — SKU duplicat: la salvare, dacă SKU-ul se potrivește cu alt produs, aplicația cere acum confirmare explicită înainte de a actualiza acel produs în loc să creeze unul nou (nu mai face merge silențios, fără avertisment). Verificarea SKU-ului în bază nu mai lărgește din greșeală căutarea la coduri asemănătoare când SKU-ul conține „_” sau „%”.',date:'2026-09-17'},
@@ -4470,11 +4479,123 @@ function notifRowHtml(a){
   const ic=a.tip==='in'?'📥':'📤';
   return`<div class="notif-row ${a.tip==='in'?'notif-in':'notif-out'}"><span class="notif-ic">${ic}</span><div><div class="notif-name">${esc(a.name)}</div><div class="notif-meta">${a.tip==='in'?'Intrat':'Ieșit'} ${fmtQty(a.qty)} buc. · ${dt}${a.sursa?' · '+esc(a.sursa):''}</div></div></div>`;
 }
+// ── PROBLEME RAPORTATE DE STAFF (pod lipsă până acum — staff_blocked nu ajungea deloc în admin) ──
+// Aceleași etichete ca ISSUE_LABELS din staff.html — text identic, ca omul să recunoască problema.
+const ISSUE_LABELS_ADMIN={stoc_zero:'Stoc zero',cantitate_insuficienta:'Cantitate insuficientă',produs_deteriorat:'Produs deteriorat',produs_gresit:'Produs greșit',nu_gasesc:'Nu găsesc produsul',alta:'Altă problemă'};
+let STAFF_ISSUES=[];
+async function loadStaffIssues(){
+  if(!sbReady)return;
+  try{
+    const [comRows,jurRows]=await Promise.all([
+      dbGet('platforma_comenzi?select=id,platforma,comanda_id,produs_id,produs_nume,cantitate,staff_issue_type,staff_issue_note,staff_blocked_at&staff_blocked=eq.true&staff_issue_resolved=eq.false&order=staff_blocked_at.desc'),
+      dbGet('jurnal?select=id,product_id,product_name,qty,staff_issue_type,staff_issue_note,staff_blocked_at&staff_blocked=eq.true&staff_issue_resolved=eq.false&order=staff_blocked_at.desc').catch(()=>[])
+    ]);
+    STAFF_ISSUES=[
+      ...comRows.map(r=>({table:'platforma_comenzi',id:r.id,comandaId:r.comanda_id||'',produsId:r.produs_id||null,cantitate:Number(r.cantitate)||1,nume:r.produs_nume||'',tip:r.staff_issue_type||'',nota:r.staff_issue_note||'',ts:r.staff_blocked_at||''})),
+      ...jurRows.map(r=>({table:'jurnal',id:r.id,comandaId:'',produsId:r.product_id||null,cantitate:Number(r.qty)||1,nume:r.product_name||'',tip:r.staff_issue_type||'',nota:r.staff_issue_note||'',ts:r.staff_blocked_at||''}))
+    ].sort((a,b)=>String(b.ts).localeCompare(String(a.ts)));
+    // PCOM e încărcat o singură dată la pornire — fără asta, un rând deja deschis în Comenzi Platforme
+    // nu ar mai afla niciodată de o problemă raportată ulterior de pe altă tabletă.
+    const openIds=new Set(comRows.map(r=>r.id));
+    PCOM.forEach(o=>{if(o.staffBlocked&&!openIds.has(o.id)){o.staffBlocked=false;o.staffIssueResolved=true;}});
+    comRows.forEach(r=>{const o=PCOM.find(x=>x.id===r.id);if(o){o.staffBlocked=true;o.staffIssueResolved=false;o.staffIssueType=r.staff_issue_type||'';o.staffIssueNote=r.staff_issue_note||'';}});
+    renderNotif();
+  }catch(e){console.warn('Nu s-au putut citi problemele raportate de Staff:',e);}
+}
+function goToPcomIssue(comandaId){
+  const btn=document.querySelector('.h-tab[data-page="pcom"]');
+  if(btn)goPage('pcom',btn);
+  const inp=document.getElementById('pcx-search');
+  if(inp&&comandaId){inp.value=comandaId;pcxRenderOrders();}
+}
+// Un motiv scurt obligatoriu, ca anularea să lase urmă — nu doar să dispară fără explicație.
+async function anuleazaLiniePlatforma(table,id){
+  const motiv=prompt('Motiv anulare (test, dublură, anulată de client, altul):');
+  if(motiv===null)return false;
+  try{
+    await dbPatch(`${table}?id=eq.${id}`,{anulata:true,motiv_anulare:motiv||null,staff_blocked:false,staff_issue_resolved:true});
+    if(table==='platforma_comenzi'){const o=PCOM.find(x=>x.id===id);if(o){o.anulata=true;o.motivAnulare=motiv||'';o.staffBlocked=false;o.staffIssueResolved=true;}}
+    STAFF_ISSUES=STAFF_ISSUES.filter(x=>!(x.table===table&&x.id===id));
+    toast('✓ Produs anulat — nu va mai apărea în Staff');
+    return true;
+  }catch(e){toast('Nu am putut anula: '+(e.message||e),'err');return false;}
+}
+async function cancelPcomLine(idx){
+  const it=pcImpParsed[idx];if(!it||!it._committedId)return;
+  if(!confirm('Anulezi acest produs? Rămâne vizibil aici, dar dispare din coada Staff. Nu atinge stocul.'))return;
+  const ok=await anuleazaLiniePlatforma('platforma_comenzi',it._committedId);
+  if(ok)renderPcomImportPreview();
+}
+// O comandă anulată anterior, regăsită la un reimport ulterior — motivul anulării nu mai era valabil
+// (ex. „stoc zero”, dar produsul a fost între timp regăsit), omul decide explicit s-o readucă activă.
+async function reconsiderPcomLine(idx){
+  const it=pcImpParsed[idx];if(!it||!it._cancelledId)return;
+  try{
+    await dbPatch(`platforma_comenzi?id=eq.${it._cancelledId}`,{anulata:false,motiv_anulare:null});
+    const o=PCOM.find(x=>x.id===it._cancelledId);if(o){o.anulata=false;o.motivAnulare='';}
+    it._committedId=it._cancelledId;delete it._cancelledId;delete it._cancelledMotiv;it.include=true;
+    renderPcomImportPreview();renderCancelledPcomList();
+    toast('✓ Comandă reconsiderată — vizibilă din nou în Staff');
+  }catch(e){toast('Nu am putut reconsidera comanda: '+(e.message||e),'err');}
+}
+// Listă persistentă, independentă de reimport — spre deosebire de badge-ul din pcxLineHtml (vizibil
+// doar dacă exact acea comandă a fost reregăsită la un import), asta arată ORICE comandă anulată,
+// neaplicată, direct din PCOM (încărcat la pornire) — răspunde la „cum o mai găsesc dacă vine stocul
+// mai târziu, fără să reimport exact fișierul ăla din nou?".
+function renderCancelledPcomList(){
+  const card=document.getElementById('pcx-cancelled-card'),list=document.getElementById('pcx-cancelled-list');
+  if(!card||!list)return;
+  const rows=PCOM.filter(o=>o.anulata&&o.efecteAplicate===false);
+  card.style.display=rows.length?'':'none';
+  if(!rows.length){list.innerHTML='';return;}
+  list.innerHTML=rows.map(o=>{
+    const p=o.produsId?P.find(x=>x.id===o.produsId):null;
+    const dt=o.createdAt?new Date(o.createdAt).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric'}):'';
+    return`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(p?p.name:(o.produsNume||o.titluExtern||'Produs'))}</strong> <span style="color:var(--t3);font-family:var(--mono)">· ${esc(o.platforma)}${o.comandaId?' #'+esc(o.comandaId):''}</span><div class="jp-meta">${o.motivAnulare?'Motiv: '+esc(o.motivAnulare):'Fără motiv notat'}${dt?' · '+dt:''}</div></div><button type="button" class="btn btn-sm" onclick="reconsiderPcomRow(${o.id})">↺ Reconsideră</button></div>`;
+  }).join('');
+}
+async function reconsiderPcomRow(id){
+  try{
+    await dbPatch(`platforma_comenzi?id=eq.${id}`,{anulata:false,motiv_anulare:null});
+    const o=PCOM.find(x=>x.id===id);if(o){o.anulata=false;o.motivAnulare='';}
+    renderCancelledPcomList();
+    toast('✓ Comandă reconsiderată — vizibilă din nou în Staff');
+  }catch(e){toast('Nu am putut reconsidera comanda: '+(e.message||e),'err');}
+}
+async function cancelStaffIssueOrder(table,id){
+  const ok=await anuleazaLiniePlatforma(table,id);
+  if(ok){renderNotif();if(table==='platforma_comenzi')renderPcomImportPreview();}
+}
+async function resolveStaffIssueAdmin(table,id){
+  try{
+    await dbPatch(`${table}?id=eq.${id}`,{staff_blocked:false,staff_issue_resolved:true});
+    if(table==='platforma_comenzi'){const o=PCOM.find(x=>x.id===id);if(o){o.staffBlocked=false;o.staffIssueResolved=true;}renderPcomImportPreview();}
+    STAFF_ISSUES=STAFF_ISSUES.filter(x=>!(x.table===table&&x.id===id));
+    renderNotif();
+    toast('✓ Problemă marcată rezolvată');
+  }catch(e){toast('Nu am putut marca problema rezolvată: '+(e.message||e),'err');}
+}
+function notifIssueRowHtml(x){
+  const d=new Date(x.ts);
+  const dt=isNaN(d)?'':d.toLocaleString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const label=ISSUE_LABELS_ADMIN[x.tip]||'Problemă raportată';
+  const verLink=x.table==='platforma_comenzi'&&x.comandaId?`<button type="button" class="notif-issue-btn" onclick="goToPcomIssue('${esc(x.comandaId)}')">Vezi comanda</button>`:'';
+  // O comandă blocată pe „Stoc zero”/„Cantitate insuficientă” nu trebuie anulată — rămâne normal în
+  // coada Staff, „De rezolvat”, până apare stoc. Semnalăm aici, la fel ca pe tabletă, când produsul are
+  // deja stoc suficient, ca să nu fie nevoie să deschizi produsul separat ca să afli.
+  const isStockIssue=x.tip==='stoc_zero'||x.tip==='cantitate_insuficienta';
+  const p=x.produsId?P.find(pr=>pr.id===x.produsId):null;
+  const stockReady=isStockIssue&&p&&qty(p)>=(x.cantitate||1);
+  const readyNote=stockReady?`<div class="notif-meta" style="color:var(--gr);font-weight:700">✓ Stoc disponibil acum — ${fmtQty(qty(p))} buc.</div>`:'';
+  return`<div class="notif-row notif-issue"><span class="notif-ic">⛔</span><div><div class="notif-name">${esc(x.nume||'Produs')}</div><div class="notif-meta">${esc(label)}${x.nota?' — '+esc(x.nota):''}${dt?' · '+dt:''}</div>${readyNote}<div class="notif-issue-actions">${verLink}<button type="button" class="notif-issue-btn" onclick="resolveStaffIssueAdmin('${x.table}',${x.id})">✓ Rezolvată</button><button type="button" class="notif-issue-btn notif-issue-btn-danger" onclick="cancelStaffIssueOrder('${x.table}',${x.id})">🚫 Anulează</button></div></div></div>`;
+}
 function renderNotif(){
   const list=document.getElementById('notif-list');
   if(!list)return;
-  list.innerHTML=ACT.length?ACT.slice(0,50).map(notifRowHtml).join(''):'<div class="notif-empty">Nicio mișcare de stoc încă.</div>';
-  const badge=document.getElementById('notif-badge'),unread=ACT.filter(a=>!a.seen).length;
+  const issueHtml=STAFF_ISSUES.map(notifIssueRowHtml).join('');
+  const actHtml=ACT.length?ACT.slice(0,50).map(notifRowHtml).join(''):'';
+  list.innerHTML=(issueHtml+actHtml)||'<div class="notif-empty">Nicio mișcare de stoc încă.</div>';
+  const badge=document.getElementById('notif-badge'),unread=ACT.filter(a=>!a.seen).length+STAFF_ISSUES.length;
   if(badge){badge.style.display=unread>0?'flex':'none';badge.textContent=unread>9?'9+':unread;}
 }
 // ── ISTORIC MODIFICĂRI DE PREȚ (achiziție/vânzare/eMAG/Trendyol, de oriunde ar veni) ──
@@ -6136,7 +6257,8 @@ function dbToPcom(r){
     // nu dispară brusc din Istoric importuri.
     efecteAplicate:r.efecte_aplicate!==false,
     impachetat:!!r.impachetat,impachetatAt:r.impachetat_at||'',faraStoc:!!r.fara_stoc,faraStocAt:r.fara_stoc_at||'',
-    awb:r.awb||'',staffBlocked:!!r.staff_blocked,staffIssueType:r.staff_issue_type||'',staffIssueResolved:!!r.staff_issue_resolved};
+    awb:r.awb||'',staffBlocked:!!r.staff_blocked,staffIssueType:r.staff_issue_type||'',staffIssueNote:r.staff_issue_note||'',staffIssueResolved:!!r.staff_issue_resolved,
+    anulata:!!r.anulata,motivAnulare:r.motiv_anulare||''};
 }
 function pcomToDb(o){
   return{platforma:o.platforma,data:o.data,comanda_id:o.comandaId||null,pnk:o.pnk||null,tara:o.tara||null,cod_produs:o.codProdus||null,
@@ -6507,7 +6629,7 @@ async function load(){
     document.getElementById('day-badge').textContent=new Date().toLocaleDateString('ro-RO',{day:'numeric',month:'long'});
     hideLoading();
     buildCats('');renderToday();renderTable();buildJMonths();if(document.getElementById('page-raport')?.classList.contains('on')){buildRaportCats();renderRaport();}
-    renderUpdWidget();renderNotif();renderDashboard();loadPcomImportState().finally(()=>{pcomApplyImportUiMode();refreshPcomAvailableOrdersOnLoad();});loadSyncImportState();
+    renderUpdWidget();renderNotif();renderDashboard();loadPcomImportState().finally(()=>{pcomApplyImportUiMode();refreshPcomAvailableOrdersOnLoad();});loadSyncImportState();loadStaffIssues();
     pcomApplyImportUiMode();
     checkSupplierRestockAlerts();
     checkEditProductDeepLink();
@@ -15381,24 +15503,23 @@ async function handlePcomImportFile(ev){
   parsing.innerHTML=files.length>1?`<span class="spin"></span> Se procesează ${files.length} fișiere…`:'<span class="spin"></span> Se procesează fișierul…';
   document.getElementById('pcmi-ai-btn').style.display='none';
   // Câteva fișiere deodată (ex. exporturi pe zile separate, sau eMAG+Trendyol deodată, cu platformă
-  // „both") — la cerere directă. existingKeys se calculează o singură dată (nu se schimbă între
-  // fișiere), dar seenInBatch trebuie să fie comun TUTUROR fișierelor din acest upload, altfel același
-  // rând (ex. aceeași comandă apărută din greșeală în două exporturi suprapuse) ar intra de două ori
-  // în listă. Cheile includ platforma (nu doar comandă+cod) ca să nu se amestece eMAG cu Trendyol la
-  // modul combinat — un nr. de comandă poate coincide accidental între cele două platforme. Include
-  // acum și liniile DEJA din previzualizare (preExisting), altfel un fișier care se suprapune parțial
-  // cu ce era deja încărcat ar duplica rânduri, nu doar adăuga cele chiar noi.
-  const existingKeys=new Set([
-    ...PCOM.map(o=>o.platforma+'|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern)),
-    ...pcImpParsed.map(x=>x.platforma+'|'+x.comandaId+'|'+(x.pnk||x.codProdus||x.titluExtern)),
-  ]);
-  const seenInBatch=new Set();
+  // „both") — la cerere directă. Poarta de mai jos e comună TUTUROR fișierelor din acest upload (creată
+  // o singură dată, în afara buclei), altfel același rând (ex. aceeași comandă apărută din greșeală în
+  // două exporturi suprapuse) ar intra de două ori în listă. Cheile includ platforma (nu doar
+  // comandă+cod) ca să nu se amestece eMAG cu Trendyol la modul combinat.
+  // Aceeași poartă de deduplicare ca la importul API eMAG/Trendyol (pcomApiImportGate) — nu doar o
+  // verificare de „există deja", ca înainte (existingKeys), care trata orbește orice comandă deja din
+  // PCOM ca „deja importată", chiar dacă era doar confirmată prin „✓ Inclus" și niciodată dusă la
+  // capăt prin „Aplică import" (stoc/Jurnal neatinse). O comandă în starea asta, dacă dispărea din
+  // previzualizarea locală (reîncărcare, browser nou), nu mai putea fi recuperată din Excel — exact
+  // bug-ul reparat pentru importul API (#405), acum reparat și aici, la sursă comună.
+  const gate=pcomApiImportGate(o=>o.platforma+'|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern));
   const failedFiles=[];
   // Exporturile Trendyol/eMAG includ de obicei TOATE comenzile active, nu doar cele noi de la ultimul
   // export — la reîncărcare zilnică, majoritatea liniilor sunt deja importate. Fără acest contor,
   // omiterea lor era complet tăcută: dintr-un fișier cu 9 comenzi reale, previzualizarea arăta doar 3,
   // fără nicio explicație — părea că fișierul „nu se recunoaște complet" (raportat direct).
-  let alreadyImportedCount=0;
+  let alreadyImportedCount=0,restoredCount=0,cancelledCount=0;
   try{
     await ensureXLSX();
     for(const file of files){
@@ -15447,10 +15568,6 @@ async function handlePcomImportFile(ev){
           const pnk=col.pnk>-1?String(r[col.pnk]||'').trim():'';
           const codProdus=col.codProdus>-1?String(r[col.codProdus]||'').trim():'';
           const clientNume=col.client>-1?String(r[col.client]||'').trim():'';
-          const key=filePlatforma+'|'+comandaId+'|'+(pnk||codProdus||titlu);
-          if(existingKeys.has(key)){alreadyImportedCount++;continue;}
-          if(seenInBatch.has(key))continue;
-          seenInBatch.add(key);
           const data=pcomParseDate(col.data>-1?r[col.data]:'')||td();
           // Bug real raportat direct: o cantitate corectă în Excel (ex. „1,5”, cu virgulă zecimală —
           // format românesc, posibil și la un export cu cantități parțiale/set) ieșea totuși 1 în
@@ -15508,7 +15625,11 @@ async function handlePcomImportFile(ev){
           // riscăm o scădere de stoc greșită dintr-un fals-pozitiv (ex. un cod care conține o cifră).
           const packSize=pcomDetectPackSize(titlu);
           const suggestedCantitate=packSize&&packSize!==cantitate?Math.round(cantitate*packSize*100)/100:null;
-          pcImpParsed.push({platforma:filePlatforma,comandaId,pachetId,data,pnk,tara,codProdus,clientNume,titluExtern:titlu,cantitate,suggestedCantitate,pretFaraTva,pretTotalCuTva,moneda,produsId,score,viaPnk,viaTitle,viaCode,include:false});
+          const line={platforma:filePlatforma,comandaId,pachetId,data,pnk,tara,codProdus,clientNume,titluExtern:titlu,cantitate,suggestedCantitate,pretFaraTva,pretTotalCuTva,moneda,produsId,score,viaPnk,viaTitle,viaCode,include:false};
+          const state=gate.add(line);
+          if(state==='preview'||state==='applied'){alreadyImportedCount++;continue;}
+          if(state==='restored')restoredCount++;
+          if(state==='cancelled')cancelledCount++;
         }
       }catch(fileErr){
         console.warn('Fișier ignorat la import Comenzi Platforme:',file.name,fileErr);
@@ -15535,7 +15656,7 @@ async function handlePcomImportFile(ev){
     renderPcomImportPreview();
     const noMatch=pcImpParsed.filter(x=>!x.produsId).length;
     document.getElementById('pcmi-ai-btn').style.display=noMatch?'':'none';
-    toast(`${newlyAddedCount} linii noi adăugate${files.length>1?' din '+files.length+' fișiere':''} (total ${pcImpParsed.length} în previzualizare) · ${pcImpParsed.length-noMatch} cu produs asociat ✓${alreadyImportedCount?` · ${alreadyImportedCount} deja importate anterior/în previzualizare (ignorate)`:''}${failedFiles.length?' · '+failedFiles.length+' fișiere ignorate: '+failedFiles.join(', '):''}`);
+    toast(`${newlyAddedCount} linii noi adăugate${files.length>1?' din '+files.length+' fișiere':''} (total ${pcImpParsed.length} în previzualizare) · ${pcImpParsed.length-noMatch} cu produs asociat ✓${restoredCount?` · ${restoredCount} recuperate pentru Staff`:''}${cancelledCount?` · ${cancelledCount} anulate anterior — de reconsiderat`:''}${alreadyImportedCount?` · ${alreadyImportedCount} deja aplicate/în previzualizare (ignorate)`:''}${failedFiles.length?' · '+failedFiles.length+' fișiere ignorate: '+failedFiles.join(', '):''}`);
     pcomTranslateForeignTitles();
   }catch(err){
     parsing.style.display='none';
@@ -15562,8 +15683,10 @@ function pcomTrendyolMatchLine(raw){
 }
 // O comandă confirmată cu „Inclus” există deja în baza Staff, însă stocul/Jurnalul nu sunt încă
 // aplicate (efecteAplicate===false). Dacă pagina a fost reîncărcată sau previzualizarea locală s-a
-// pierdut, nu o tratăm ca duplicat mort: o reconstruim din răspunsul API, legată de același rând DB.
-// Doar o comandă aplicată financiar sau una prezentă deja în previzualizarea curentă este ignorată.
+// pierdut, nu o tratăm ca duplicat mort: o reconstruim din PCOM, legată de același rând DB. Doar o
+// comandă aplicată financiar sau una prezentă deja în previzualizarea curentă este ignorată. Folosită
+// atât de importul API (eMAG/Trendyol), cât și de importul din fișier Excel — aceeași sursă de adevăr
+// pentru „e nou / e duplicat / trebuie recuperat", indiferent pe unde intră comanda.
 function pcomApiImportGate(keyOf){
   const previewKeys=new Set(pcImpParsed.map(keyOf)),stored=new Map();
   PCOM.forEach(o=>{const k=keyOf(o),old=stored.get(k);if(!old||o.efecteAplicate!==false)stored.set(k,o);});
@@ -15573,7 +15696,12 @@ function pcomApiImportGate(keyOf){
       if(previewKeys.has(key))return'preview';
       const old=stored.get(key);
       if(old&&old.efecteAplicate!==false)return'applied';
-      if(old){line.include=true;line._committedId=old.id;line._restoredFromApi=true;}
+      // O comandă anulată (vezi „Anulează") tot poate fi reconsiderată la un reimport ulterior — ex. s-a
+      // anulat pe motiv „stoc zero”, dar produsul a fost între timp regăsit/reaprovizionat. Nu o readucem
+      // automat ca „Inclus” (ar contrazice tăcut motivul notat), dar nici n-o mai ignorăm ca „aplicată”:
+      // apare vizibil, cu motivul anulării, și un buton dedicat de reconsiderare.
+      if(old&&old.anulata){line._cancelledId=old.id;line._cancelledMotiv=old.motivAnulare||'';pcImpParsed.push(line);previewKeys.add(key);return'cancelled';}
+      if(old){line.include=true;line._committedId=old.id;line._restoredFromGate=true;}
       pcImpParsed.push(line);previewKeys.add(key);
       return old?'restored':'added';
     }
@@ -15592,12 +15720,12 @@ async function importTrendyolApiOrders(silent=false){
   try{
     const r=await apiJson('/api/trendyol',{action:'orders',startDate,endDate},60000);
     const orderKey=o=>'trendyol|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern),gate=pcomApiImportGate(orderKey);
-    let added=0,duplicates=0,restored=0,matched=0;const newLines=[];
+    let added=0,duplicates=0,restored=0,matched=0,cancelled=0;const newLines=[];
     for(const raw of r.lines||[]){
       const line=pcomTrendyolMatchLine(raw);
       const state=gate.add(line);
       if(state==='preview'||state==='applied'){duplicates++;continue;}
-      added++;if(state==='restored')restored++;if(line.produsId)matched++;newLines.push(line);
+      added++;if(state==='restored')restored++;if(state==='cancelled')cancelled++;if(line.produsId)matched++;newLines.push(line);
     }
     if(!added){if(!silent)toast(duplicates?`Nicio linie Trendyol nouă pentru ${startDate}${endDate!==startDate?' → '+endDate:''} — ${duplicates} sunt deja aplicate sau în previzualizare.`:'Nu există comenzi Trendyol deschise pentru intervalul ales.');return;}
     // Marcăm liniile noi direct (nu un interval de indici) — la reîncărcarea paginii, acest import
@@ -15608,7 +15736,7 @@ async function importTrendyolApiOrders(silent=false){
     newLines.forEach(x=>x._recentImport=true);
     renderPcomImportPreview();
     const noMatch=added-matched,aiBtn=document.getElementById('pcmi-ai-btn');if(aiBtn)aiBtn.style.display=noMatch?'':'none';
-    if(!silent)toast(`${added} linii Trendyol aduse · ${matched} asociate${restored?` · ${restored} recuperate pentru Staff`:''}${noMatch?` · ${noMatch} necesită confirmare`:''}${duplicates?` · ${duplicates} deja aplicate/în previzualizare (ignorate)`:''} · AWB-urile sunt preluate pentru Staff.`);
+    if(!silent)toast(`${added} linii Trendyol aduse · ${matched} asociate${restored?` · ${restored} recuperate pentru Staff`:''}${cancelled?` · ${cancelled} anulate anterior — de reconsiderat`:''}${noMatch?` · ${noMatch} necesită confirmare`:''}${duplicates?` · ${duplicates} deja aplicate/în previzualizare (ignorate)`:''} · AWB-urile sunt preluate pentru Staff.`);
     pcomTranslateForeignTitles();
   }catch(e){if(!silent)toast('Trendyol: '+(e.message||'nu am putut citi comenzile'),'err');else console.warn('Actualizare automată Trendyol eșuată:',e);}
   finally{if(btn){btn.disabled=false;btn.textContent='🛍️ Adu comenzi Trendyol';}}
@@ -15620,13 +15748,13 @@ async function importEmagApiOrders(silent=false){
   try{
     const marketOf=o=>String(o.tara||((o.moneda||'').toUpperCase()==='HUF'?'HU':(o.moneda||'').toUpperCase()==='BGN'?'BG':'RO')).toUpperCase(),orderKey=o=>'emag|'+marketOf(o)+'|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern),gate=pcomApiImportGate(orderKey);
     const r=await localEmagJson('/orders-in-progress',{},60000);
-    const unavailable=new Set();let added=0,duplicates=0,restored=0,matched=0;const newLines=[];
+    const unavailable=new Set();let added=0,duplicates=0,restored=0,matched=0,cancelled=0;const newLines=[];
     (r.markets||[]).filter(x=>!x.ok).forEach(x=>unavailable.add(x.market));
     for(const raw of r.lines||[]){
       const line=pcomEmagMatchLine(raw);
       const state=gate.add(line);
       if(state==='preview'||state==='applied'){duplicates++;continue;}
-      added++;if(state==='restored')restored++;if(line.produsId)matched++;newLines.push(line);
+      added++;if(state==='restored')restored++;if(state==='cancelled')cancelled++;if(line.produsId)matched++;newLines.push(line);
     }
     if(!added){if(!silent)toast(duplicates?`Nicio comandă eMAG nouă în lucru — ${duplicates} linii sunt deja aplicate sau în previzualizare.`:'Nu există comenzi eMAG în lucru.',unavailable.size?'warn':undefined);return;}
     // Vezi importTrendyolApiOrders pentru explicația marcării prin referință în loc de interval de
@@ -15635,7 +15763,7 @@ async function importEmagApiOrders(silent=false){
     newLines.forEach(x=>x._recentImport=true);
     renderPcomImportPreview();
     const noMatch=added-matched,aiBtn=document.getElementById('pcmi-ai-btn');if(aiBtn)aiBtn.style.display=noMatch?'':'none';
-    if(!silent)toast(`${added} linii eMAG în lucru aduse · ${matched} asociate${restored?` · ${restored} recuperate pentru Staff`:''}${noMatch?` · ${noMatch} necesită confirmare`:''}${duplicates?` · ${duplicates} deja aplicate/în previzualizare (ignorate)`:''}${unavailable.size?` · Atenție: ${[...unavailable].join(', ')} neconfigurat/blocat`:''}`,unavailable.size?'warn':undefined);
+    if(!silent)toast(`${added} linii eMAG în lucru aduse · ${matched} asociate${restored?` · ${restored} recuperate pentru Staff`:''}${cancelled?` · ${cancelled} anulate anterior — de reconsiderat`:''}${noMatch?` · ${noMatch} necesită confirmare`:''}${duplicates?` · ${duplicates} deja aplicate/în previzualizare (ignorate)`:''}${unavailable.size?` · Atenție: ${[...unavailable].join(', ')} neconfigurat/blocat`:''}`,unavailable.size?'warn':undefined);
     pcomTranslateForeignTitles();
   }catch(e){if(!silent)toast('eMAG: '+(e.message||'nu am putut citi comenzile'),'err');else console.warn('Actualizare automată eMAG eșuată:',e);}
   finally{if(btn){btn.disabled=false;btn.textContent='🛒 Adu comenzi eMAG';}}
@@ -16752,8 +16880,17 @@ function pcxLineHtml(idx,groupIdxs){
     :'';
   const financialHtml=it.newProduct?'':(isVintedPriceConsolidated?(isVintedGroupFirst?pcxGroupFinancialsHtml(vintedGroupIdxs):''):pcxFinancialsHtml(idx));
   const stockHtml=it.newProduct?'':pcomStockWarningHtml(idx);
-  const committedAwb=it._committedId?PCOM.find(o=>o.id===it._committedId)?.awb:'';
-  const committedNote=it._committedId?`<div style="color:var(--gr);font-weight:700;font-size:15px;margin-top:2px">✓ Comandă creată — vizibilă în Staff${committedAwb?` · 📮 ${esc(committedAwb)}`:''}</div>`:'';
+  const committedRow=it._committedId?PCOM.find(o=>o.id===it._committedId):null;
+  const committedAwb=committedRow?.awb||'';
+  const committedNote=it._committedId?(committedRow?.anulata
+    ?`<div style="color:var(--rd);font-weight:700;font-size:15px;margin-top:2px">🚫 Anulată${committedRow.motivAnulare?': '+esc(committedRow.motivAnulare):''} — nu mai apare în Staff</div>`
+    :`<div style="color:var(--gr);font-weight:700;font-size:15px;margin-top:2px">✓ Comandă creată — vizibilă în Staff${committedAwb?` · 📮 ${esc(committedAwb)}`:''}</div>`):'';
+  const issueNote=(committedRow?.staffBlocked&&!committedRow.staffIssueResolved)
+    ?`<div style="color:var(--rd);font-weight:700;font-size:15px;margin-top:2px">⛔ ${esc(ISSUE_LABELS_ADMIN[committedRow.staffIssueType]||'Problemă raportată')}${committedRow.staffIssueNote?': '+esc(committedRow.staffIssueNote):''} <button type="button" class="pcx-btn" style="padding:1px 8px;font-size:14px" onclick="resolveStaffIssueAdmin('platforma_comenzi',${it._committedId})">✓ Rezolvată</button></div>`:'';
+  const cancelBtn=(it._committedId&&!committedRow?.anulata)?`<button type="button" class="pcx-btn" style="padding:4px 10px;font-size:14px;border-color:var(--or);color:var(--or)" onclick="cancelPcomLine(${idx})" title="Scoate acest produs din coada Staff, fără să atingă stocul">🚫 Anulează</button>`:'';
+  // Comandă regăsită la reimport, dar anulată anterior (vezi pcomApiImportGate) — nu revine automat
+  // „Inclus" (ar contrazice tăcut motivul notat), doar vizibilă, cu opțiunea explicită de reconsiderare.
+  const reconsiderNote=it._cancelledId?`<div style="color:var(--rd);font-weight:700;font-size:15px;margin-top:2px">🚫 A fost anulată anterior${it._cancelledMotiv?': '+esc(it._cancelledMotiv):''} <button type="button" class="pcx-btn" style="padding:1px 8px;font-size:14px" onclick="reconsiderPcomLine(${idx})">↺ Reconsideră</button></div>`:'';
   const includeBtn=it._committing
     ?`<span class="pcx-order-status pending">⏳ ...</span>`
     :`<button type="button" class="pcx-order-status pcx-include-btn ${it.include?'included':'pending'}" onclick="togglePcomInclude(${idx})" title="${it.include?'Comandă creată, vizibilă în Staff — click pentru a anula':'Click pentru a confirma — scrie comanda și apare imediat în Staff'}">${it.include?'✓ Inclus':'Neinclus'}</button>`;
@@ -16774,10 +16911,13 @@ function pcxLineHtml(idx,groupIdxs){
       ${it.suggestedCantitate?`<div class="pcx-line-meta" style="color:var(--or)">💡 Titlul sugerează ${fmtQty(it.suggestedCantitate)} buc. <button type="button" class="pcx-btn" style="padding:1px 8px;font-size:14px" onclick="applyPcomSuggestedQty(${idx})">Aplică</button></div>`:''}
       ${it.newProduct?pcomNewProductPromptHtml(idx):''}
       ${committedNote}
+      ${issueNote}
+      ${reconsiderNote}
     </div>
     ${hasFin?`<div class="pcx-line-fin">${financialHtml}${stockHtml}</div>`:''}
     <div class="pcx-line-actions">
       ${includeBtn}
+      ${cancelBtn}
       <div class="smi-pick" id="pcmi-pick-${idx}">${pcomPickBtnHtml(idx)}</div>
       <button type="button" class="pcx-btn pcx-btn-danger" style="padding:4px 10px;font-size:14px" onclick="removePcomLine(${idx})" title="Elimină definitiv această linie din import">🗑 Șterge</button>
     </div>
@@ -16830,6 +16970,7 @@ function pcxOrderCardHtml(idxs,gIdx){
   </div>`;
 }
 function pcxRenderOrders(){
+  renderCancelledPcomList();
   const host=document.getElementById('pcx-orders-list');if(!host)return;
   pcomComputeGroups();
   const q=(document.getElementById('pcx-search')?.value||'').toLowerCase().trim();
@@ -16945,6 +17086,8 @@ function renderPcomRedesign(){
           <span class="ic">📮</span>Alege PDF cu etichete AWB
           <span class="sub">FAN Courier, Trendyol — se asociază la comenzile deja importate mai sus</span>
         </div>
+        <button type="button" class="btn btn-sm" style="margin-top:8px" id="pcx-awb-folder-btn" onclick="readAwbFolderPdfs()">📂 Citește din dosarul AWB-uri de pe Mac</button>
+        <div style="font-size:14px;color:var(--t3);margin-top:4px">Pune PDF-urile descărcate în timpul zilei (eMAG și Trendyol la un loc) în dosarul <b>Desktop/AWB-uri</b> — apeși o singură dată aici, se citesc toate deodată. Cele asociate cu succes se mută automat în „procesate", ca să nu se recitească.</div>
         <div id="pcx-awb-parsing-slot"></div>
         <div id="pcx-awb-preview-slot"></div>
         <div id="pcx-awb-foot-slot" style="display:flex;justify-content:flex-end;margin-top:10px"></div>
@@ -16974,6 +17117,11 @@ function renderPcomRedesign(){
           </select>
         </div>
         <div class="pcx-orders-list" id="pcx-orders-list"></div>
+      </div>
+      <div class="pcx-card pcx-card-compact" id="pcx-cancelled-card" style="display:none">
+        <div class="pcx-card-title">🚫 Comenzi anulate — de reconsiderat</div>
+        <div style="font-size:16px;color:var(--t3);margin:4px 0 8px">Produse scoase din coada Staff (test, dublură, stoc zero etc.), încă neaplicate financiar. Dacă motivul nu mai e valabil (ex. produsul a fost reaprovizionat), le poți readuce active.</div>
+        <div id="pcx-cancelled-list"></div>
       </div>
       <div class="pcx-card pcx-card-compact">
         <div class="pcx-card-title">Istoric importuri</div>
@@ -18724,6 +18872,7 @@ async function extractPdfPagesText(file){
 // scrie în bază până nu se apasă explicit „Asociază AWB-urile”.
 let awbParsed=[];
 let awbUnrecognizedPages=[];
+let awbFolderFileNames=[];
 function parseAwbLabelText(text){
   const awbM=text.match(/AWB:\s*(\d+)/);
   const contM=text.match(/Continut:\s*(\d+)/);
@@ -18746,6 +18895,7 @@ function parseAwbLabelText(text){
 }
 async function handleAwbPdfFile(ev){
   const file=ev.target.files[0];if(!file)return;
+  awbFolderFileNames=[];
   const parsing=document.getElementById('pcmi-awb-parsing');
   parsing.style.display='block';
   document.getElementById('pcmi-awb-preview').innerHTML='';
@@ -18770,6 +18920,49 @@ async function handleAwbPdfFile(ev){
     toast('Eroare PDF: '+e.message,'err');
   }
   parsing.style.display='none';
+}
+function base64ToBlob(b64,type){
+  return new Blob([Uint8Array.from(atob(b64),c=>c.charCodeAt(0))],{type});
+}
+// Alternativă la selectarea manuală, fișier cu fișier — citește TOATE PDF-urile puse în dosarul
+// Desktop/AWB-uri de pe Mac (prin Conectorul local, singurul cu acces la sistemul de fișiere) și le
+// procesează pe rând prin ACEEAȘI logică de extragere/potrivire ca la un fișier ales manual.
+async function readAwbFolderPdfs(){
+  const btn=document.getElementById('pcx-awb-folder-btn'),parsing=document.getElementById('pcmi-awb-parsing');
+  if(btn)btn.disabled=true;
+  if(parsing)parsing.style.display='block';
+  document.getElementById('pcmi-awb-preview').innerHTML='';
+  document.getElementById('pcmi-awb-foot').style.display='none';
+  try{
+    const data=await localEmagJson('/awb-folder',{},60000);
+    const files=Array.isArray(data.files)?data.files:[];
+    if(!files.length){toast('Niciun PDF nou în Desktop/AWB-uri.');return;}
+    const pairs=[];
+    awbUnrecognizedPages=[];
+    for(const f of files){
+      try{
+        const pages=await extractPdfPagesText(base64ToBlob(f.data,'application/pdf'));
+        pages.forEach((text,i)=>{
+          const p=parseAwbLabelText(text);
+          if(p)pairs.push(p);else awbUnrecognizedPages.push(`${f.name} p.${i+1}`);
+        });
+      }catch(e){console.warn('PDF ignorat din dosar:',f.name,e);}
+    }
+    if(!pairs.length&&!awbUnrecognizedPages.length)throw new Error('Niciun PDF citit cu succes din dosar.');
+    const results=[];
+    for(const p of pairs){
+      const rows=await dbGet(`platforma_comenzi?comanda_id=eq.${p.comandaId}&select=id,client_nume,produs_nume,awb`);
+      results.push({...p,rows});
+    }
+    awbParsed=results;
+    awbFolderFileNames=files.map(f=>f.name);
+    renderAwbPreview();
+    toast(`${files.length} PDF-uri citite din dosar · ${results.length} etichete recunoscute`);
+  }catch(e){
+    toast('Eroare la citirea dosarului AWB: '+(e.message||e),'err');
+  }
+  if(parsing)parsing.style.display='none';
+  if(btn)btn.disabled=false;
 }
 function renderAwbPreview(){
   const box=document.getElementById('pcmi-awb-preview');
@@ -18797,6 +18990,13 @@ async function applyAwbAssociation(){
       PCOM.filter(o=>o.comandaId===p.comandaId).forEach(o=>o.awb=p.awb);
     }
     toast(`${matched.length} AWB-uri asociate ✓`);
+    // Fișierele au fost citite din Desktop/AWB-uri (nu selectate manual) — le mutăm în „procesate",
+    // ca dosarul să rămână curat pentru ziua următoare și niciunul să nu fie recitit din greșeală.
+    if(awbFolderFileNames.length){
+      try{await localEmagJson('/awb-folder-archive',{names:awbFolderFileNames},20000);}
+      catch(e){console.warn('Nu am putut muta fișierele AWB procesate:',e);}
+      awbFolderFileNames=[];
+    }
     awbParsed=[];
     document.getElementById('pcmi-awb-preview').innerHTML='';
     document.getElementById('pcmi-awb-foot').style.display='none';
@@ -20880,6 +21080,9 @@ document.addEventListener('keydown',rptCardKeyHandler);
 document.addEventListener('click',ev=>{if(!ev.target.closest('#ss-drop')&&!ev.target.closest('.ss-field'))document.getElementById('ss-drop').classList.remove('on');});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkSupplierRestockAlerts();});
 setInterval(checkSupplierRestockAlerts,10*60*1000);
+// Problemele raportate de Staff vin de pe alt dispozitiv (tabletă) — fără polling, admin nu ar afla
+// niciodată de o problemă nouă decât la reîncărcarea completă a paginii.
+setInterval(loadStaffIssues,60*1000);
 // Deschide direct secțiunea din link (#stoc, #raport, #dashboard...), sau un dosar Research anume
 // (#research/<id>, generat de „🔗 Copiază link dosar" / goToResearchProject) — al doilea segment
 // există DOAR ca fiecare dosar să aibă un URL propriu, altfel toate dosarele arătau exact „#research",

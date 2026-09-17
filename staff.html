@@ -153,6 +153,8 @@ button{cursor:pointer}
 .list-item-meta{color:var(--t3);font-size:16px;margin-top:2px}
 .list-item-issue{color:var(--rd);font-size:16px;font-weight:700;margin-top:2px}
 .list-item-time{color:var(--t3);font-size:15px;flex-shrink:0}
+.list-item-ready{color:var(--gr);font-size:16px;font-weight:800;margin-top:2px}
+.list-item-ready-row{border-color:var(--gr)}
 
 /* Raport stoc operațional — folosește aceeași tabelă produse ca platforma principală, nu un cache local. */
 .stock-card{justify-content:center}.stock-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--b1)}.stock-card-title{font-size:25px;font-weight:800}.stock-card-pos{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--t3);white-space:nowrap}.stock-product{display:flex;align-items:center;gap:24px;padding:4px 0}.stock-product-img,.stock-product-ph{width:180px;height:180px;flex-shrink:0;border-radius:var(--r2);object-fit:cover;border:1px solid var(--b1);background:var(--surf2);box-shadow:0 8px 20px rgba(16,24,40,.08)}.stock-product-ph{display:flex;align-items:center;justify-content:center;font-size:64px}.stock-product-info{min-width:0;flex:1}.stock-product-name{font-size:29px;font-weight:800;line-height:1.18}.stock-product-meta{font-family:var(--mono);font-size:16px;color:var(--t3);margin-top:7px}.stock-values{display:flex;gap:12px;margin-top:14px}.stock-value{flex:1;padding:12px 14px;border-radius:var(--r2);background:var(--surf2);border:1px solid var(--b1)}.stock-value-lbl{font-size:13px;color:var(--t3);font-weight:800;text-transform:uppercase;letter-spacing:.04em}.stock-value-num{font-family:var(--mono);font-size:30px;font-weight:800;margin-top:2px}.stock-value-num.low{color:var(--or)}.stock-value-num.zero{color:var(--rd)}.stock-entry{display:flex;gap:10px}.stock-entry input{flex:1;min-width:0;padding:14px 16px;border:2px solid var(--b2);border-radius:var(--r2);font-family:var(--mono);font-size:24px;font-weight:700}.stock-entry input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-light)}.stock-entry button{flex:1.1}.stock-nav-row{display:flex;gap:12px}.stock-nav-row .nav-btn{margin:0}.stock-saved{font-size:16px;color:var(--gr);font-weight:700;text-align:center;min-height:22px}
@@ -343,6 +345,9 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:407,date:'18.09.2026',text:'O comandă eMAG cu toate produsele împachetate nu mai dispare din coadă dacă nu are încă AWB generat — rămâne vizibilă, cu „AWB în așteptare”, până se emite AWB-ul din Comenzi Platforme. Trendyol/Vinted/vânzări directe nu sunt afectate (au deja cod de livrare din altă sursă).'},
+  {n:406,date:'18.09.2026',text:'Tab „De rezolvat”: o comandă blocată pe „Stoc zero”/„Cantitate insuficientă” arată acum direct dacă produsul are deja stoc suficient („✓ Stoc disponibil acum”) — apare după „↻ Reîncarcă”, fără să mai deschizi fiecare comandă blocată să verifici manual.'},
+  {n:405,date:'17.09.2026',text:'Coada Staff pornește curată de azi — comenzile mai vechi de test nu mai apar. Un produs anulat de admin din Comenzi Platforme dispare acum și din Staff, fără să atingă stocul. „↺ Coadă nouă" rămâne disponibil, ca soluție de urgență.'},
   {n:404,date:'17.09.2026',text:'Coada Staff include acum toate comenzile confirmate după reset, indiferent de data la care au fost plasate de client. O comandă de ieri inclusă azi nu mai este ascunsă; contorul și navigarea arată întregul lot.'},
   {n:402,date:'17.09.2026',text:'Raport stoc landscape: câmpul de introducere devine o bară fixă de lucru deasupra tastaturii Safari, astfel încât antetul și produsul nu mai sar. După salvare, se trece automat la produsul următor.'},
   {n:401,date:'17.09.2026',text:'Raport stoc — corecție Safari iPad: la atingerea câmpului „Stoc fizic”, documentul exterior rămâne fix și antetul Staff nu mai sare în sus. Se poate derula doar zona internă a raportului.'},
@@ -399,9 +404,14 @@ function computeOrders(){
   ORDERS.forEach(g=>{
     g.allDone=g.lines.every(l=>l.impachetat||l.staff_blocked);
     g.hasUnresolvedIssue=g.lines.some(l=>l.staff_blocked&&!l.staff_issue_resolved);
-    g.finalized=g.allDone&&!g.hasUnresolvedIssue;
-    g.waiting=g.hasUnresolvedIssue;
     g.awb=(g.lines.find(l=>l.awb)||{}).awb||'';
+    // O comandă eMAG e cu adevărat finalizată abia când are AWB generat — un colet împachetat, dar
+    // fără AWB, tot mai are un pas de făcut (îl emite adminul din Comenzi Platforme), nu trebuie să
+    // dispară din coada activă doar pentru că produsele sunt bifate. Banner-ul „AWB în așteptare” de
+    // mai jos, altfel, ar fi devenit imposibil de văzut — comanda pleca din coadă înainte să conteze.
+    g.needsAwb=g.platforma==='emag'&&!g.awb;
+    g.finalized=g.allDone&&!g.hasUnresolvedIssue&&!g.needsAwb;
+    g.waiting=g.hasUnresolvedIssue;
     const lastPackedAt=g.lines.map(l=>l.impachetat_at).filter(Boolean).sort().slice(-1)[0]||'';
     g.finalizedToday=g.finalized&&lastPackedAt.slice(0,10)===td();
   });
@@ -1020,11 +1030,19 @@ function waitingListItemHtml(o){
   const p=findProdus(blockedLine.produs_id);
   const img=p&&p.img?`<img class="list-item-th" src="${esc(imgSrc(p.img))}" onerror="this.style.display='none'">`:`<div class="list-item-th-ph">📦</div>`;
   const since=blockedLine.staff_blocked_at?timeAgo(blockedLine.staff_blocked_at):'';
-  return`<div class="list-item" onclick="curKey='${o.key}';renderMain()">
+  // O comandă blocată pe „Stoc zero”/„Cantitate insuficientă” poate primi stoc între timp — comparăm
+  // direct cu ERP-ul deja încărcat (proaspăt după „↻ Reîncarcă”), ca să nu mai fie nevoie să deschizi
+  // fiecare comandă blocată, una câte una, doar ca să afli dacă mai are sens s-o reiei acum.
+  const isStockIssue=blockedLine.staff_issue_type==='stoc_zero'||blockedLine.staff_issue_type==='cantitate_insuficienta';
+  const stock=p?(Number(p.bought)||0)-(Number(p.sold)||0):null;
+  const stockReady=isStockIssue&&stock!==null&&stock>=(Number(blockedLine.cantitate)||1);
+  const readyBadge=stockReady?`<div class="list-item-ready">✓ Stoc disponibil acum — ${stock} buc.</div>`:'';
+  return`<div class="list-item${stockReady?' list-item-ready-row':''}" onclick="curKey='${o.key}';renderMain()">
     ${img}
     <div class="list-item-main">
       <div class="list-item-nm">${o.comandaId?'#'+esc(o.comandaId)+' · ':''}${esc(blockedLine.produs_nume||'')}</div>
       <div class="list-item-issue">⛔ ${esc(ISSUE_LABELS[blockedLine.staff_issue_type]||'Problemă')}</div>
+      ${readyBadge}
     </div>
     <div class="list-item-time">${esc(since)}</div>
   </div>`;
@@ -1288,6 +1306,10 @@ async function refreshStaffNow(){
     // disponibil pe Staff imediat, fără refresh de browser și fără cache local intermediar.
     const prodRows=await sb('GET','produse?select=id,name,sku,internal_code,img,images,bought,sold,price_buy_ttc,archived&order=id.asc');
     PRODUSE=prodRows.map(p=>({...p,internalCode:p.internal_code}));
+    // Pragul de coadă se verifică doar aici și la încărcarea inițială (load()), nu la fiecare
+    // reîmprospătare automată (25s/visibilitychange/online) — „Coadă nouă” a devenit o acțiune rară,
+    // nu zilnică, nu merită încă un apel Supabase la fiecare tick doar pentru un caz de urgență.
+    await loadStaffQueueStart();
     const ok=await refreshData();
     if(ok)showToast(`✓ Staff actualizat · ${ORDERS.length} comenzi citite din ERP`);
     else showToast('Nu am putut reîncărca toate datele — verifică conexiunea');
@@ -1297,6 +1319,15 @@ async function refreshStaffNow(){
   }finally{setStaffRefreshButton(false);}
 }
 
+// Degradare controlată dacă migration_staff_coada_anulare.sql nu a rulat încă: reîncearcă fără
+// filtrul pe `anulata`, ca Staff să rămână funcțional (doar fără curățarea prin „Anulează"), nu blocat.
+async function sbComenzi(url){
+  try{return await sb('GET',url);}
+  catch(e){
+    if(/anulata/i.test(String(e.message||e))&&url.includes('&anulata=eq.false'))return sb('GET',url.replace('&anulata=eq.false',''));
+    throw e;
+  }
+}
 function queueDate(){return String(staffQueueStartedAt||CUTOFF_DATE).slice(0,10);}
 function afterStaffQueueStart(row){
   // Unele rânduri vechi de jurnal nu aveau created_at. Nu le tratăm ca fiind noi doar pentru că
@@ -1334,13 +1365,9 @@ async function refreshData(){
   if(document.hidden)return;
   refreshInFlight=true;let ok=false;
   try{
-    // Preluăm pragul de coadă la fiecare reîmprospătare, nu doar la încărcarea inițială — altfel o
-    // tabletă deja deschisă nu vede niciodată un „Coadă nouă” pornit de pe altă tabletă, nici măcar
-    // apăsând „Reîncarcă” (doar un refresh complet de browser mai apela load() din nou).
-    await loadStaffQueueStart();
     const [comRows,jurnalRows,prepackRows,msgRows]=await Promise.all([
-      sb('GET',`platforma_comenzi?select=*&created_at=gte.${encodeURIComponent(staffQueueStartedAt)}&order=created_at.asc`),
-      sb('GET',`jurnal?select=*&data=gte.${queueDate()}&order=data.asc`).catch(()=>JURNAL),
+      sbComenzi(`platforma_comenzi?select=*&created_at=gte.${encodeURIComponent(staffQueueStartedAt)}&anulata=eq.false&order=created_at.asc`),
+      sbComenzi(`jurnal?select=*&data=gte.${queueDate()}&anulata=eq.false&order=data.asc`).catch(()=>JURNAL),
       sb('GET','pre_impachetate?select=*&folosit_la=is.null&order=created_at.asc').catch(()=>PREPACK),
       sb('GET','staff_mesaje?select=*&rezolvat=is.false&order=created_at.asc').catch(()=>STAFFMSG)
     ]);
@@ -1384,7 +1411,7 @@ async function load(){
     await loadStaffQueueStart();
     const [prodRows,comRows,prepackRows,msgRows]=await Promise.all([
       sb('GET','produse?select=id,name,sku,internal_code,img,images,bought,sold,price_buy_ttc,archived&order=id.asc'),
-      sb('GET',`platforma_comenzi?select=*&created_at=gte.${encodeURIComponent(staffQueueStartedAt)}&order=created_at.asc`),
+      sbComenzi(`platforma_comenzi?select=*&created_at=gte.${encodeURIComponent(staffQueueStartedAt)}&anulata=eq.false&order=created_at.asc`),
       sb('GET','pre_impachetate?select=*&folosit_la=is.null&order=created_at.asc').catch(e=>{console.warn('pre_impachetate indisponibil:',e);return[];}),
       sb('GET','staff_mesaje?select=*&rezolvat=is.false&order=created_at.asc').catch(e=>{console.warn('staff_mesaje indisponibil:',e);return[];}),
     ]);
@@ -1393,7 +1420,7 @@ async function load(){
     PREPACK=prepackRows;
     STAFFMSG=msgRows;
     try{
-      JURNAL=(await sb('GET',`jurnal?select=*&data=gte.${queueDate()}&order=data.asc`)).filter(afterStaffQueueStart);
+      JURNAL=(await sbComenzi(`jurnal?select=*&data=gte.${queueDate()}&anulata=eq.false&order=data.asc`)).filter(afterStaffQueueStart);
     }catch(e){
       JURNAL=[];
       console.warn('Nu am putut încărca vânzările directe din Jurnal (rulează migration_jurnal_packing.sql):',e);
