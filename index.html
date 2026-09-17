@@ -2615,6 +2615,12 @@ button.pcx-include-btn.included{border-color:var(--gr)}
     </div>
   </div>
 
+  <div class="card" data-sync-sec="resync-emag" style="padding:1rem 1.25rem;margin-bottom:1rem;--stat-accent:var(--acc)">
+    <div class="sec" style="margin-top:0">🛒 Resincronizează listările active eMAG</div>
+    <div style="font-size:24px;color:var(--t3);margin-bottom:10px">Citește direct din API doar ofertele eMAG active din RO, BG și HU. Asocierile existente după PNK sau titlu rămân neschimbate și li se actualizează stocul extern; pentru listările fără asociere primești o sugestie, apoi alegi tu ce salvezi.</div>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><button type="button" class="btn btn-acc" id="sync-emag-resync-btn" onclick="resyncEmagActiveListings()">↻ Adu listările active eMAG</button><span id="sync-emag-resync-info" style="font-size:21px;color:var(--t3)"></span></div>
+  </div>
+
   <div class="card" data-sync-sec="oportunitate" style="padding:1rem 1.25rem;margin-bottom:1rem;--stat-accent:var(--acc)">
     <div class="sec" style="margin-top:0">🆕 De listat pe eMAG</div>
     <div style="font-size:24px;color:var(--t3);margin-bottom:10px">Produse cu stoc, dar fără nicio mapare eMAG confirmată încă — probabil ar trebui listate.</div>
@@ -2642,7 +2648,8 @@ button.pcx-include-btn.included{border-color:var(--gr)}
   <div class="card" data-sync-sec="import" style="padding:1rem 1.25rem;margin-bottom:1rem;--stat-accent:var(--tl)">
     <div class="sec" style="margin-top:0">Import în masă din fișier (.xlsx)</div>
     <div style="font-size:24px;color:var(--t3);margin-bottom:10px">
-      Încarcă exportul de produse/oferte din Seller Center (Excel) — aplicația detectează automat
+      Încarcă exportul de produse/oferte din Seller Center (Excel) — pentru eMAG sunt păstrate numai
+      listările active, când exportul conține coloana Status. Aplicația detectează automat
       coloana cu titlul listării și sugerează potriviri cu produsele din inventar (după același
       mecanism fuzzy de mai jos), pentru ca apoi să confirmi în bloc ce să se mapeze.
     </div>
@@ -3722,6 +3729,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:407,text:'Sincronizare — buton nou de resincronizare eMAG: citește din API exclusiv listările active RO/BG/HU, păstrează mapările confirmate după PNK/titlu, actualizează stocul extern și propune potriviri doar pentru listările fără asociere. Previzualizarea Comenzi Platforme este ordonată permanent eMAG → Trendyol → Vinted, indiferent de ordinea în care sunt aduse datele.',date:'2026-09-17'},
   {n:406,text:'Sincronizare — card nou „De repus în stoc pe platforme”: semnalează produsele cu stoc intern disponibil ale căror listări confirmate eMAG și Trendyol sunt toate la stoc extern 0. Arată PNK-ul eMAG și codul/barcode-ul Trendyol; copierea lor marchează alerta rezolvată și o ascunde până la următoarea actualizare externă.',date:'2026-09-17'},
   {n:405,text:'Comenzi Platforme — reîncărcarea din eMAG/Trendyol nu mai pierde o comandă confirmată temporar. O comandă deja aplicată în stoc rămâne protejată ca duplicat; una activă în Staff, dar absentă din previzualizare după refresh, este readusă în listă ca „Inclus”, fără duplicare și fără modificare de stoc.',date:'2026-09-17'},
   {n:404,text:'Staff — coada și contorul nu mai filtrează comenzile după data plasării pe eMAG/Trendyol. După resetarea Staff, toate comenzile confirmate în ERP după acel moment sunt vizibile, inclusiv cele plasate ieri și incluse azi; o comandă nu mai poate dispărea doar fiindcă are o dată mai veche.',date:'2026-09-17'},
@@ -14544,6 +14552,66 @@ async function pasteSmProductImageSearch(){
     toast('Eroare la analiza pozei: '+(e.message||e),'err');
   }
 }
+// Statusul din exportul eMAG este 1/Activ pentru o ofertă publicată. Nu folosim `includes('activ')`,
+// fiindcă "inactiv" ar trece accidental filtrul. Dacă exportul nu are deloc coloană de status, nu
+// eliminăm tăcut nimic — butonul API de mai sus rămâne varianta sigură pentru „doar active”.
+function isEmagActiveListingStatus(value){
+  const v=String(value??'').trim().toLowerCase();
+  return v==='1'||v==='true'||v==='active'||v==='activ'||v==='published'||v==='publicat';
+}
+async function saveExternalStockSnapshot(updates){
+  if(!updates.length)return{saved:0,failed:0};
+  const stamp=new Date().toISOString();let saved=0,failed=0;
+  for(let i=0;i<updates.length;i+=8){
+    const batch=updates.slice(i,i+8);
+    const result=await Promise.all(batch.map(async u=>{
+      try{
+        await dbPatch(`platforma_mapari?id=eq.${u.mapId}`,{stoc_extern:u.stocExtern,stoc_extern_actualizat_la:stamp});
+        const m=SYNCM.find(x=>x.id===u.mapId);if(m){m.stocExtern=u.stocExtern;m.stocExternAt=stamp;}
+        return true;
+      }catch(e){console.warn('Nu s-a putut actualiza stocul extern pentru maparea '+u.mapId,e);return false;}
+    }));
+    saved+=result.filter(Boolean).length;failed+=result.filter(x=>!x).length;
+  }
+  return{saved,failed};
+}
+// Citește numai ofertele confirmate ca active de eMAG. Mapările deja existente se regăsesc mai întâi
+// după PNK, apoi după titlu; ele NU sunt recreate. Doar listările fără mapare ajung în previzualizare
+// pentru confirmarea omului, cu aceeași sugestie fuzzy/AI ca la importul Excel.
+async function resyncEmagActiveListings(){
+  if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
+  if((syncImpParsed.length||syncImpStockUpdates.length||syncImpDuplicates.length)&&!confirm('Resincronizarea înlocuiește previzualizarea de sincronizare neaplicată. Mapările deja salvate rămân intacte. Continui?'))return;
+  const btn=document.getElementById('sync-emag-resync-btn'),info=document.getElementById('sync-emag-resync-info');
+  if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span> Se citesc listările active…';}
+  if(info)info.textContent='';
+  try{
+    const r=await fetch('/api/emag',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'offers-active'})});
+    const data=await r.json();if(!r.ok)throw new Error(data.error||'Nu am putut citi listările eMAG');
+    const rows=Array.isArray(data.offers)?data.offers:[];
+    syncImpParsed=[];syncImpStockUpdates=[];syncImpDuplicates=[];
+    const seen=new Set();
+    rows.forEach(it=>{
+      const titlu=String(it.titluExtern||'').trim(),pnk=String(it.pnk||'').trim();
+      const key=(pnk||titlu.toLowerCase().trim());if(!titlu||!key||seen.has(key))return;seen.add(key);
+      const m=findSyncMapEntry('emag',titlu,pnk);
+      if(m){if(Number.isFinite(Number(it.stocExtern)))syncImpStockUpdates.push({mapId:m.id,titluExtern:titlu,pnk:m.idExtern||pnk,produsId:m.produsId,stocExtern:Number(it.stocExtern)});return;}
+      const byPnk=findProductByPnk('emag',pnk);
+      if(byPnk){syncImpParsed.push({titluExtern:titlu,pnk,produsId:byPnk.id,score:1,viaPnk:true,include:true});return;}
+      const match=findExistingProduct({name:titlu});
+      syncImpParsed.push({titluExtern:titlu,pnk,produsId:match?match.product.id:null,score:match?match.score:0,include:!!match});
+    });
+    const stockResult=await saveExternalStockSnapshot(syncImpStockUpdates);
+    syncImpStockUpdates=[];
+    document.getElementById('smi-preview').dataset.platforma='emag';
+    if(syncImpParsed.length)renderSyncImportPreview();else{document.getElementById('smi-preview').innerHTML='';document.getElementById('smi-foot').style.display='none';}
+    document.getElementById('smi-stock-preview').innerHTML='';document.getElementById('smi-duplicate-preview').innerHTML='';
+    saveSyncImportState();renderSyncPage();
+    const marketInfo=(data.markets||[]).map(x=>`${x.market}: ${x.offers}`).join(' · ');
+    if(info)info.textContent=`${rows.length} active citite · ${stockResult.saved} stocuri actualizate${stockResult.failed?` · ${stockResult.failed} nereușite`:''}${marketInfo?` (${marketInfo})`:''}`;
+    toast(`${rows.length} listări active eMAG citite · ${syncImpParsed.length} fără mapare de revizuit${stockResult.failed?` · ${stockResult.failed} stocuri nu s-au salvat`:''}`,stockResult.failed?'err':undefined);
+  }catch(e){toast('Resincronizare eMAG: '+(e.message||e),'err');}
+  finally{if(btn){btn.disabled=false;btn.textContent='↻ Adu listările active eMAG';}}
+}
 async function handleSyncImportFile(ev){
   const file=ev.target.files[0];if(!file)return;
   const platforma=document.getElementById('smi-platforma').value;
@@ -14554,6 +14622,7 @@ async function handleSyncImportFile(ev){
   syncImpParsed=[];
   syncImpStockUpdates=[];
   syncImpDuplicates=[];
+  let inactiveSkipped=0;
   const seenDupPnk=new Set();
   function checkRowForDuplicate(pnk){
     if(!pnk||seenDupPnk.has(pnk))return;
@@ -14567,6 +14636,7 @@ async function handleSyncImportFile(ev){
     const findSub=(hdr,names)=>{for(const n of names){const i=hdr.findIndex(h=>h.includes(n));if(i>-1)return i;}return -1;};
     const findExact=(hdr,names)=>{for(const n of names){const i=hdr.findIndex(h=>h===n);if(i>-1)return i;}return -1;};
     const stockPat=['stock','stoc'];
+    const statusPat=['status','status ofertă','offer status','offer_status'];
     // Citește valoarea de stoc a unui rând (dacă există coloană) și, dacă rândul e deja mapat, o pune
     // în syncImpStockUpdates (nu în syncImpParsed — lista de "listări noi" rămâne neatinsă). Returnează
     // true dacă rândul era deja mapat (indiferent dacă a avut sau nu stoc de citit), ca apelantul să știe
@@ -14597,12 +14667,14 @@ async function handleSyncImportFile(ev){
       const iCurScore=findExact(curHdr,['scor_asociere']);
       const iCurPnk=findExact(curHdr,['pnk','id_extern']);
       const iCurStock=findExact(curHdr,stockPat);
+      const iCurOfferStatus=findExact(curHdr,statusPat);
       const existing=new Set(SYNCM.filter(m=>m.platforma===platforma).map(m=>m.titluExtern.toLowerCase().trim()));
       const existingPnk=new Set(SYNCM.filter(m=>m.platforma===platforma&&m.idExtern).map(m=>m.idExtern));
       const seen=new Set();
       for(let i=1;i<curRows.length;i++){
         const titlu=String(curRows[i][iCurTitle]||'').trim();
         const pnk=iCurPnk>-1?String(curRows[i][iCurPnk]||'').trim():'';
+        if(platforma==='emag'&&iCurOfferStatus>-1&&!isEmagActiveListingStatus(curRows[i][iCurOfferStatus])){inactiveSkipped++;continue;}
         checkRowForDuplicate(pnk);
         if(!titlu||seen.has(titlu.toLowerCase()))continue;
         if(existing.has(titlu.toLowerCase())||(pnk&&existingPnk.has(pnk))){
@@ -14638,7 +14710,7 @@ async function handleSyncImportFile(ev){
       renderSyncDuplicatesPreview();
       document.getElementById('smi-preview').dataset.platforma=platforma;
       saveSyncImportState();
-      toast(`${syncImpParsed.length?syncImpParsed.length+' listări noi detectate · ':''}${syncImpStockUpdates.length?syncImpStockUpdates.length+' actualizări de stoc de revizuit · ':''}${syncImpDuplicates.length?syncImpDuplicates.length+' posibile duplicate PNK':''}`.replace(/ · $/,'')||'Import procesat ✓');
+      toast(`${syncImpParsed.length?syncImpParsed.length+' listări noi detectate · ':''}${syncImpStockUpdates.length?syncImpStockUpdates.length+' actualizări de stoc de revizuit · ':''}${inactiveSkipped?inactiveSkipped+' inactive ignorate · ':''}${syncImpDuplicates.length?syncImpDuplicates.length+' posibile duplicate PNK':''}`.replace(/ · $/,'')||'Import procesat ✓');
       return;
     }
     const titlePat=['validation_name','numele produsului','nume produs','denumire produs','denumirea produsului','titlul produsului','titlu produs','titlu','name','title','produs','denumire'];
@@ -14651,18 +14723,20 @@ async function handleSyncImportFile(ev){
         if(iTitle<0)continue;
         const iStock=findExact(hdr,stockPat);
         const iPnk=findSub(hdr,pnkPat);
-        const score=1+(iStock>-1?5:0)+(iPnk>-1?3:0);
-        if(!best||score>best.score)best={rows:rws,headerIdx:r,iTitle,iStock,iPnk,score};
+        const iStatus=findExact(hdr,statusPat);
+        const score=1+(iStock>-1?5:0)+(iPnk>-1?3:0)+(iStatus>-1?2:0);
+        if(!best||score>best.score)best={rows:rws,headerIdx:r,iTitle,iStock,iPnk,iStatus,score};
       }
     }
     if(!best){toast('Nu am găsit o coloană cu titlul produsului în fișier','err');parsing.style.display='none';return;}
-    const{rows,headerIdx,iTitle,iStock,iPnk}=best;
+    const{rows,headerIdx,iTitle,iStock,iPnk,iStatus}=best;
     const existing=new Set(SYNCM.filter(m=>m.platforma===platforma).map(m=>m.titluExtern.toLowerCase().trim()));
     const existingPnk=new Set(SYNCM.filter(m=>m.platforma===platforma&&m.idExtern).map(m=>m.idExtern));
     const seen=new Set();
     for(let i=headerIdx+1;i<rows.length;i++){
       const titlu=String(rows[i][iTitle]||'').trim();
       const pnk=iPnk>-1?String(rows[i][iPnk]||'').trim():'';
+      if(platforma==='emag'&&iStatus>-1&&!isEmagActiveListingStatus(rows[i][iStatus])){inactiveSkipped++;continue;}
       checkRowForDuplicate(pnk);
       if(!titlu||seen.has(titlu.toLowerCase()))continue;
       if(existing.has(titlu.toLowerCase())||(pnk&&existingPnk.has(pnk))){
@@ -14693,7 +14767,7 @@ async function handleSyncImportFile(ev){
     renderSyncDuplicatesPreview();
     document.getElementById('smi-preview').dataset.platforma=platforma;
     saveSyncImportState();
-    toast(`${syncImpParsed.length?syncImpParsed.length+' listări noi · ':''}${syncImpParsed.filter(x=>x.produsId).length?syncImpParsed.filter(x=>x.produsId).length+' cu sugestie automată · ':''}${syncImpStockUpdates.length?syncImpStockUpdates.length+' actualizări de stoc de revizuit · ':''}${syncImpDuplicates.length?syncImpDuplicates.length+' posibile duplicate PNK':''}`.replace(/ · $/,'')||'Import procesat ✓');
+    toast(`${syncImpParsed.length?syncImpParsed.length+' listări noi · ':''}${syncImpParsed.filter(x=>x.produsId).length?syncImpParsed.filter(x=>x.produsId).length+' cu sugestie automată · ':''}${syncImpStockUpdates.length?syncImpStockUpdates.length+' actualizări de stoc de revizuit · ':''}${inactiveSkipped?inactiveSkipped+' inactive ignorate · ':''}${syncImpDuplicates.length?syncImpDuplicates.length+' posibile duplicate PNK':''}`.replace(/ · $/,'')||'Import procesat ✓');
   }catch(err){
     parsing.style.display='none';
     toast('Eroare la citirea fișierului: '+err.message,'err');
@@ -15804,8 +15878,11 @@ function pcomComputeGroups(){
   // Map, nu obiect simplu: comandaId/pachetId sunt șiruri numerice (ex: "499855037"), iar un obiect JS
   // reordonează automat cheile care arată ca numere întregi, în ordine crescătoare — asta amesteca ordinea
   // liniilor din previzualizare față de ordinea reală din fișier. Map păstrează mereu ordinea de inserare.
-  const map=new Map();
-  pcImpParsed.forEach((it,idx)=>{
+  const map=new Map(),platformOrder={emag:0,trendyol:1,vinted:2};
+  // Indiferent de ordinea în care au venit fișierele/API-ul/capturile, lucrul fizic urmează aceeași
+  // succesiune: eMAG, apoi Trendyol, apoi Vinted. Indexul original rămâne intact, deci acțiunile de
+  // includere, asociere și ștergere continuă să atingă exact linia corectă din pcImpParsed.
+  pcImpParsed.map((it,idx)=>({it,idx})).sort((a,b)=>(platformOrder[a.it.platforma]??99)-(platformOrder[b.it.platforma]??99)||a.idx-b.idx).forEach(({it,idx})=>{
     const key=it.pachetId||it.comandaId||('_line'+idx);
     if(!map.has(key))map.set(key,[]);
     map.get(key).push(idx);

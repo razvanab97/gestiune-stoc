@@ -59,6 +59,43 @@ async function readAllMarkets(day=null,status=null){
   if(!markets.some(x=>x.ok))throw new Error(markets.map(x=>`${x.market}: ${x.error}`).join(' · '));
   return{markets,lines};
 }
+// Ofertele active sunt citite separat de comenzi. eMAG trimite în mod normal `status: 1`; păstrăm
+// și formele text pentru compatibilitate cu răspunsurile diferite RO/BG/HU. Un status necunoscut nu
+// este presupus activ — scopul acestui apel este explicit să nu aducă listări inactive.
+function activeOffer(offer){
+  const value=offer?.status??offer?.offer_status??offer?.offerStatus??offer?.active??offer?.is_active;
+  const text=String(value??'').trim().toLowerCase();
+  return text==='1'||text==='true'||text==='active'||text==='activ'||text==='published'||text==='publicat';
+}
+function offerLine(offer,market){
+  const product=offer?.product||offer?.details||{};
+  return{
+    titluExtern:String(offer?.name||offer?.validation_name||offer?.product_name||product?.name||''),
+    pnk:String(offer?.part_number_key||offer?.part_number||offer?.pnk||product?.part_number_key||''),
+    codProdus:String(offer?.vendor_ext_id||offer?.ext_id||offer?.product_id||''),
+    stocExtern:num(offer?.stock??offer?.quantity??offer?.available_stock),
+    tara:market
+  };
+}
+async function readActiveOffers(market){
+  const all=[];
+  for(let page=1;page<=20;page++){
+    const data=await emag(market,'/product_offer/read',{currentPage:page,itemsPerPage:1000});
+    const rows=Array.isArray(data.results)?data.results:(Array.isArray(data.offers)?data.offers:[]);
+    all.push(...rows);
+    if(rows.length<1000)break;
+  }
+  return all.filter(activeOffer).map(x=>offerLine(x,market)).filter(x=>x.titluExtern);
+}
+async function readActiveOffersAllMarkets(){
+  const markets=[],offers=[];
+  for(const market of Object.keys(EMAG_MARKETS)){
+    try{const rows=await readActiveOffers(market);markets.push({market,offers:rows.length,ok:true});offers.push(...rows);}
+    catch(e){markets.push({market,offers:0,ok:false,error:e.message||'Eroare necunoscută'});}
+  }
+  if(!markets.some(x=>x.ok))throw new Error(markets.map(x=>`${x.market}: ${x.error}`).join(' · '));
+  return{markets,offers};
+}
 function sender(){
   try{const data=JSON.parse(process.env.EMAG_AWB_SENDER_JSON||'');if(data?.name&&data?.contact&&data?.phone1&&(data?.address_id||data?.locality_id))return data;}catch(e){}
   throw new Error('Lipsește EMAG_AWB_SENDER_JSON în Vercel. Configurează adresa expeditorului înainte de emiterea AWB-urilor.');
@@ -89,6 +126,10 @@ module.exports=async function handler(req,res){
     if(action==='orders-in-progress'){
       const result=await readAllMarkets(null,2);
       return res.status(200).json({scope:'in_progress',orders:result.markets.reduce((sum,x)=>sum+x.orders,0),lines:result.lines,markets:result.markets});
+    }
+    if(action==='offers-active'){
+      const result=await readActiveOffersAllMarkets();
+      return res.status(200).json({scope:'active_offers',offers:result.offers,markets:result.markets});
     }
     if(action==='awb'){
       const orderId=Number(body.orderId);if(!orderId)return res.status(400).json({error:'Alege o comandă eMAG validă'});
