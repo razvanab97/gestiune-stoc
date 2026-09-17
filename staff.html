@@ -343,6 +343,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:404,date:'17.09.2026',text:'Coada Staff include acum toate comenzile confirmate după reset, indiferent de data la care au fost plasate de client. O comandă de ieri inclusă azi nu mai este ascunsă; contorul și navigarea arată întregul lot.'},
   {n:402,date:'17.09.2026',text:'Raport stoc landscape: câmpul de introducere devine o bară fixă de lucru deasupra tastaturii Safari, astfel încât antetul și produsul nu mai sar. După salvare, se trece automat la produsul următor.'},
   {n:401,date:'17.09.2026',text:'Raport stoc — corecție Safari iPad: la atingerea câmpului „Stoc fizic”, documentul exterior rămâne fix și antetul Staff nu mai sare în sus. Se poate derula doar zona internă a raportului.'},
   {n:400,date:'17.09.2026',text:'Raport stoc: fotografia produsului este mai mare și cardul nu mai pleacă atunci când se deschide tastatura. La introducerea stocului se compactează numai conținutul intern, iar câmpul rămâne deasupra tastaturii Safari.'},
@@ -405,21 +406,14 @@ function computeOrders(){
     g.finalizedToday=g.finalized&&lastPackedAt.slice(0,10)===td();
   });
 }
-// Coada activă de împachetat — cerut direct, raportat cu o comandă din 4 septembrie tot apărând pe
-// 10 septembrie: comenzile neterminate se acumulau la nesfârșit din CUTOFF_DATE încoace, fără niciun
-// „reset" zilnic — practic exact ce fusese deja reparat la bara de progres (vezi progressDay/
-// renderProgress mai jos), dar NU și la coada propriu-zisă de lucru (packQueue/navQueue), care rămăsese
-// nescopată. Acum ambele arată DOAR ziua cea mai recentă din date (progressDay() — nu neapărat azi
-// calendaristic, ca ecranul să nu rămână gol dimineața, înainte să intre lotul zilei). O comandă mai
-// veche, neterminată, NU dispare din bază — rămâne găsibilă din tab-ul „Căutare", doar nu mai aglomerează
-// fluxul zilnic de împachetat. Comenzile blocate (probleme raportate) rămân vizibile în „În așteptare"
-// indiferent de zi — acelea chiar trebuie rezolvate, nu doar lăsate să „expire" din coadă.
-function packQueue(){const day=progressDay();return ORDERS.filter(o=>!o.finalized&&!o.waiting&&o.data===day);}
+// Pragul salvat la „Coada nouă” este fluxul real: toate comenzile introduse în ERP după acel moment
+// trebuie pregătite, indiferent de ziua în care clientul le-a plasat pe marketplace.
+function packQueue(){return ORDERS.filter(o=>!o.finalized&&!o.waiting);}
 function waitingQueue(){return ORDERS.filter(o=>o.waiting);}
 // listă completă (inclusiv comenzi deja împachetate) pt. navigare Anterioară/Următoare —
 // packQueue() se golește pe măsură ce lucrezi, așa că butonul "Anterioară" ar rămâne mereu
 // dezactivat dacă ar naviga tot peste packQueue (nu mai există "înainte" în coada care se micșorează)
-function navQueue(){const day=progressDay();return ORDERS.filter(o=>!o.waiting&&o.data===day);}
+function navQueue(){return ORDERS.filter(o=>!o.waiting);}
 function finalizedTodayQueue(){return ORDERS.filter(o=>o.finalizedToday).sort((a,b)=>{
   const at=a=>a.lines.map(l=>l.impachetat_at).filter(Boolean).sort().slice(-1)[0]||'';
   return at(b).localeCompare(at(a));
@@ -438,20 +432,9 @@ function showToast(msg,undoFn){
 }
 function hideToast(){document.getElementById('toast').classList.remove('on');}
 
-// Bara de progres arată doar ziua CEA MAI RECENTĂ prezentă în date (nu tot intervalul de la
-// CUTOFF_DATE) — cerere directă: numărul total nu trebuie să crească la nesfârșit pe măsură ce trec
-// zilele, ci să „se reseteze" de fiecare dată când intră un lot nou de comenzi, arătând doar câte sunt
-// de lucru în ziua respectivă. Coada reală de împachetat (packQueue/waitingQueue) rămâne neschimbată —
-// o comandă mai veche, încă neîmpachetată, tot apare acolo, doar bara de sus nu o mai numără la infinit.
-function progressDay(){
-  if(!ORDERS.length)return null;
-  return ORDERS.reduce((max,o)=>o.data>max?o.data:max,ORDERS[0].data);
-}
 function renderProgress(){
-  const day=progressDay();
-  const dayOrders=day?ORDERS.filter(o=>o.data===day):[];
-  const total=dayOrders.length;
-  const done=dayOrders.filter(o=>o.finalized).length;
+  const total=ORDERS.length;
+  const done=ORDERS.filter(o=>o.finalized).length;
   const remaining=total-done;
   document.getElementById('progress-txt').textContent=total?`${remaining} comenzi`:'Nicio comandă';
   const pct=total?Math.round(done/total*100):0;
