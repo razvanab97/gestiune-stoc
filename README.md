@@ -39,7 +39,9 @@ Aplicația se conectează la Supabase deja configurat:
 4. Fă un nou deploy după salvarea variabilei
 
 Cheia este folosită numai de funcția serverless `/api/openai` și nu ajunge în browser.
-Modelul implicit este `gpt-4.1-mini`. Opțional, îl poți schimba adăugând variabila Vercel `OPENAI_MODEL`.
+Modelele implicite sunt `gpt-5.6-luna` (traduceri, reformulări, clasificări simple — matching Sincronizare)
+și `gpt-5.6-terra` (analiză imagini, PDF-uri, research, extrageri complexe). Opțional, le poți schimba
+adăugând variabilele Vercel `OPENAI_MODEL` (nivelul simplu) și `OPENAI_MODEL_ANALYSIS` (nivelul analysis).
 
 ### Pasul 4: Testează aplicația
 
