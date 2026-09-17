@@ -69,10 +69,19 @@ async function readAllMarkets(day=null,status=null){
 // Ofertele active sunt citite separat de comenzi. eMAG trimite în mod normal `status: 1`; păstrăm
 // și formele text pentru compatibilitate cu răspunsurile diferite RO/BG/HU. Un status necunoscut nu
 // este presupus activ — scopul acestui apel este explicit să nu aducă listări inactive.
+function validationStatusValue(v){
+  const item=Array.isArray(v)?v[0]:v;
+  return Number(item&&typeof item==='object'?(item.value??item.Value):item);
+}
 function activeOffer(offer){
   const value=offer?.status??offer?.offer_status??offer?.offerStatus??offer?.active??offer?.is_active;
   const text=String(value??'').trim().toLowerCase();
-  return text==='1'||text==='true'||text==='active'||text==='activ'||text==='published'||text==='publicat';
+  const isOn=text==='1'||text==='true'||text==='active'||text==='activ'||text==='published'||text==='publicat';
+  if(!isOn)return false;
+  // status=1 (comutatorul „de vânzare") și validation_status (documentație/catalog) sunt independente
+  // în eMAG — un produs poate fi status=1 și, în același timp, validation_status=10 („Blocked", ex.
+  // încălcare drepturi terți). Fără verificarea asta, un produs blocat legal trece drept „activ".
+  return validationStatusValue(offer?.validation_status)!==10;
 }
 function offerLine(offer,market){
   const product=offer?.product||offer?.details||{};
@@ -101,8 +110,9 @@ async function readActiveOffers(market){
   }
   return all.filter(activeOffer).map(x=>offerLine(x,market)).filter(x=>x.titluExtern);
 }
-async function readActiveOffersAllMarkets(){
-  const results=await Promise.all(Object.keys(EMAG_MARKETS).map(async market=>{
+async function readActiveOffersAllMarkets(onlyMarket=null){
+  const marketKeys=onlyMarket?[onlyMarket]:Object.keys(EMAG_MARKETS);
+  const results=await Promise.all(marketKeys.map(async market=>{
     try{const rows=await readActiveOffers(market);return{market,offers:rows.length,rows,ok:true};}
     catch(e){return{market,offers:0,rows:[],ok:false,error:e.message||'Eroare necunoscută'};}
   }));
@@ -142,7 +152,9 @@ module.exports=async function handler(req,res){
       return res.status(200).json({scope:'in_progress',orders:result.markets.reduce((sum,x)=>sum+x.orders,0),lines:result.lines,markets:result.markets});
     }
     if(action==='offers-active'){
-      const result=await readActiveOffersAllMarkets();
+      const market=String(body.market||'').toUpperCase();
+      if(market&&!EMAG_MARKETS[market])return res.status(400).json({error:'Piață eMAG necunoscută'});
+      const result=await readActiveOffersAllMarkets(market||null);
       return res.status(200).json({scope:'active_offers',offers:result.offers,markets:result.markets});
     }
     if(action==='awb'){
