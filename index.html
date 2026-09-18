@@ -2858,7 +2858,7 @@ button.pcx-include-btn.included{border-color:var(--gr)}
          sau .classList.add('on') proprii. Rezultat: click pe „alege produs" nu se vedea niciodată,
          deși logica de asociere rula corect pe fundal. Mutat ca frate direct al ambelor variante,
          niciodată ascuns doar pentru că se schimbă modul de prezentare. -->
-    <div class="smi-pickdrop" id="pcmi-pickdrop"><input type="text" id="pcmi-pick-search" placeholder="Caută produs după nume sau SKU…" oninput="filterPcomPickDebounced()"><div class="smi-pick-list" id="pcmi-pick-list"></div></div>
+    <div class="smi-pickdrop" id="pcmi-pickdrop"><div style="display:flex;gap:6px;align-items:center"><input type="text" id="pcmi-pick-search" placeholder="Caută produs după nume sau SKU…" oninput="filterPcomPickDebounced()" style="flex:1"><button type="button" class="btn btn-sm" style="flex-shrink:0;padding:6px 8px" onclick="pcomPickRecognizeImage()" title="Lipește o poză din clipboard (captură eMAG/Trendyol sau poza produsului) — AI recunoaște produsul">📋</button></div><div class="smi-pick-list" id="pcmi-pick-list"></div></div>
     <div id="pcom-import-redesign" style="display:none"></div>
     </div>
 
@@ -3739,6 +3739,8 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:421,text:'Trei retușuri, cerute direct. (1) Căutarea produselor (Vânzări/Inventar și toate picker-ele de alegere produs) găsește acum și după SKU extern — codurile PNK mapate în Sincronizare (eMAG/Trendyol), nu doar numele/SKU/codul intern. (2) „📋 din imagine" (lipești o poză din clipboard, AI recunoaște produsul) e disponibil acum și pe picker-ul de produs din rândurile de previzualizare Sincronizare, și pe cel din liniile de comandă de la Comenzi Platforme — nu doar la „Adaugă mapare nouă"/„Compară furnizori", unde exista deja. (3) Butonul „🚫 Anulează" de la o linie de comandă e mai mic — nu se mai întinde la toată lățimea coloanei de acțiuni, ca să nu mai domine vizual picker-ul de produs.',date:'2026-09-18'},
+  {n:420,text:'Actualizare live în fundal, la cerere directă: orice modificare de stoc/produs/imagine făcută în altă filă, alt dispozitiv sau de Staff apare acum automat, fără refresh de browser — produsele se reîmprospătează din Supabase la fiecare 20 secunde (același model ca la Staff, care se resincronizează deja la 25s), sărind peste ciclu cât timp editorul de produs e deschis sau tastezi undeva, ca să nu se suprascrie o modificare în curs. Vânzări/Inventar se actualizează mereu; Dashboard, Raport stoc, Raport vânzări, Sincronizare, Calculator și Arhivă se reîmprospătează doar când chiar sunt pagina activă.',date:'2026-09-18'},
   {n:419,text:'Dashboard — card nou „Transport" în rândul de indicatori (lângă „Achiziții"), cerut direct: suma costului de transport plătit la facturile de furnizor importate (câmpul „Cost transport" din Importă factură), pe perioada aleasă din selectorul de sus al Dashboard-ului — aceeași dată deja salvată per factură, doar adunată acum și afișată.',date:'2026-09-18'},
   {n:418,text:'Sincronizare — „🤖 Sugerează cu AI" marchează acum vizibil sugestiile nesigure, la cerere directă (raportat pe un exemplu real: un brad decorativ de Crăciun asociat cu un candidat care nu semăna deloc la prima vedere). Când candidatul ales de AI are o potrivire lexicală slabă cu titlul, apare „⚠️ sugestie AI nesigură" (portocaliu, nu verde) și rândul NU se bifează automat — rămâne de intervenit local, prin picker sau „+ Nou", înainte de „Adaugă mapările selectate". Alegerea manuală a unui produs (sau marcarea „+ Nou") șterge corect eticheta veche AI/PNK, ca semnalul să dispară exact când cineva a rezolvat rândul.',date:'2026-09-18'},
   {n:417,text:'Comenzi Platforme — „📮 Asociază AWB-uri" citește acum și direct din dosarul Desktop/AWB-uri de pe acest Mac (buton „📂 Citește din dosar"), în loc de selectare manuală a unui singur PDF. Pui acolo, în timpul zilei, PDF-urile descărcate de la eMAG ȘI Trendyol (amestecate, nu contează) — un click le citește pe toate deodată, iar cele asociate cu succes se mută automat în „procesate/<data>", ca dosarul să rămână curat. Confirmat că eMAG nu oferă altă cale de a citi un AWB generat manual pe Seller Center (API-ul cere un ID intern pe care nu-l avem în acest caz) — asta rămâne calea corectă.',date:'2026-09-18'},
@@ -6533,15 +6535,18 @@ function renderGenStatusBadge(){
 }
 
 // ── LOAD FROM SUPABASE ──
+// produse — fără img: la produsele vechi cu poză base64 (nemigrate încă în Storage, vezi
+// migration_storage_product_images.sql) coloana img poate fi foarte mare, iar un select(*)
+// pe tot tabelul ajunge la zeci de MB — suficient să depășească timeout-ul sau să fie prea
+// lent pe o conexiune slabă, blocând TOT inventarul doar din cauza pozelor. Datele care chiar
+// contează pentru gestiune (stoc, prețuri, nume) se încarcă separat de poze, garantat rapid.
+// Constantă la nivel de modul (nu doar locală în load()) — reutilizată și de liveRefreshProducts,
+// ca reîmprospătarea din fundal să vadă exact aceleași coloane ca încărcarea inițială.
+const PROD_COLS='id,name,sku,ean,internal_code,category,supplier,bought,incoming_qty,sold,min_qty,price_buy_ttc,price_buy_prev_ttc,price_buy_changed_at,tva_acq,stock_added_at,last_stock_added_qty,price_sell,price_emag,price_trendyol,price_rec,colors,sizes,material,dims,notes,supplier_sources,created_at,updated_at,supplier_oos,supplier_oos_since,supplier_restock_eta,supplier_notify,supplier_notified,archived,archived_at,easybox_l,easybox_w,easybox_t';
 async function load(){
   showLoading('Se conectează la Supabase…');
   try{
-    // produse — fără img: la produsele vechi cu poză base64 (nemigrate încă în Storage, vezi
-    // migration_storage_product_images.sql) coloana img poate fi foarte mare, iar un select(*)
-    // pe tot tabelul ajunge la zeci de MB — suficient să depășească timeout-ul sau să fie prea
-    // lent pe o conexiune slabă, blocând TOT inventarul doar din cauza pozelor. Datele care chiar
-    // contează pentru gestiune (stoc, prețuri, nume) se încarcă separat de poze, garantat rapid.
-    const prodCols='id,name,sku,ean,internal_code,category,supplier,bought,incoming_qty,sold,min_qty,price_buy_ttc,price_buy_prev_ttc,price_buy_changed_at,tva_acq,stock_added_at,last_stock_added_qty,price_sell,price_emag,price_trendyol,price_rec,colors,sizes,material,dims,notes,supplier_sources,created_at,updated_at,supplier_oos,supplier_oos_since,supplier_restock_eta,supplier_notify,supplier_notified,archived,archived_at,easybox_l,easybox_w,easybox_t';
+    const prodCols=PROD_COLS;
     const today=td();
     showLoading('Se încarcă datele din Supabase…');
     // Toate cererile independente pornesc DEODATĂ, nu una după alta — 8 cereri secvențiale își
@@ -6656,6 +6661,7 @@ async function load(){
     pcomApplyImportUiMode();
     checkSupplierRestockAlerts();
     checkEditProductDeepLink();
+    startLiveSync();
   }catch(err){
     setSyncStatus('err','Eroare conexiune');
     hideLoading();
@@ -6663,6 +6669,45 @@ async function load(){
     // fallback localStorage
     loadLocalFallback();
   }
+}
+let liveSyncTimer=null,liveSyncInFlight=false;
+// Actualizare live în fundal, la cerere directă: orice modificare de stoc/produs/imagine făcută în
+// altă filă, alt dispozitiv sau de Staff trebuie să apară aici fără refresh de browser — același
+// model deja folosit în staff.html (startPolling, la 25 secunde), adaptat aici doar pentru produse
+// (stoc/preț/caracteristici/imagine — imaginea se reîmprospătează „gratis”: ensureProductImage
+// citește după updated_at, deci un produs cu poză schimbată în altă parte primește automat cache
+// nou). Reîmprospătează DOAR produsele, nu tot load() (jurnal/comenzi/istoric/setări) — prea greu
+// pentru un ciclu la fiecare 20s și nici nu ține de cererea „stoc/produs/imagine”. Sare peste ciclu
+// dacă fila e ascunsă, dacă editorul de produs e deschis (nu suprascrie o editare în curs) sau dacă
+// utilizatorul tastează undeva (input/textarea/select focusat) — exact grija din staff.html.
+async function liveRefreshProducts(){
+  if(liveSyncInFlight||document.hidden||!sbReady)return;
+  if(document.getElementById('ov')?.classList.contains('on'))return;
+  if(document.activeElement?.matches('input,textarea,select'))return;
+  liveSyncInFlight=true;
+  try{
+    const rows=await dbGet(`produse?select=${PROD_COLS}&order=id.asc`);
+    P=rows.map(r=>dbToP({...r,img:lazyProductImageRef(r.id)}));
+    // Inventarul/Vânzările (page-stoc) sunt randate mereu, indiferent de tab-ul activ — la fel ca la
+    // load() inițial. Restul paginilor se reîmprospătează doar dacă chiar sunt vizibile acum, ca să
+    // nu recalculăm degeaba ecrane pe care nimeni nu le vede în acest moment.
+    renderTable();renderToday();
+    const activeId=document.querySelector('.page.on')?.id?.replace(/^page-/,'');
+    if(activeId==='dashboard'){if(!syncMapsLoaded)await loadSyncMappings();renderDashboard();}
+    else if(activeId==='raport'){buildRaportCats();renderRaport();}
+    else if(activeId==='salesreport')renderSalesReport();
+    else if(activeId==='sync'){if(!syncMapsLoaded)await loadSyncMappings();renderSyncPage();}
+    else if(activeId==='calc')buildCalcProductSelector();
+    else if(activeId==='archive')renderArchivePage();
+  }catch(e){
+    console.warn('Actualizare live produse eșuată (reîncearcă la următorul ciclu):',e);
+  }finally{
+    liveSyncInFlight=false;
+  }
+}
+function startLiveSync(){
+  clearInterval(liveSyncTimer);
+  liveSyncTimer=setInterval(liveRefreshProducts,20000);
 }
 
 // Imaginile nu mai sunt citite în masă la pornire. Se folosesc doar când intră
@@ -13284,7 +13329,13 @@ function prodMatchesSearch(p,qRaw){
   if(!q)return true;
   const vals=[p.name,p.sku,p.internalCode,p.category,p.supplier,p.notes,p.material,p.dims,p.colors];
   if(vals.some(v=>invSearchNorm(v).includes(q)))return true;
-  return qd.length>=3&&vals.some(v=>invSearchDigits(v).includes(qd));
+  if(qd.length>=3&&vals.some(v=>invSearchDigits(v).includes(qd)))return true;
+  // SKU extern — codurile PNK mapate pe acest produs în Sincronizare (platforma_mapari), nu doar
+  // codurile proprii — la cerere directă, căutarea trebuie să găsească produsul și după codul de pe
+  // eMAG/Trendyol, nu doar după nume/SKU/cod intern.
+  const ext=SYNCM.filter(m=>m.produsId===p.id&&m.idExtern).map(m=>m.idExtern);
+  if(ext.some(v=>invSearchNorm(v).includes(q)))return true;
+  return qd.length>=3&&ext.some(v=>invSearchDigits(v).includes(qd));
 }
 function renderSearch(){
   const q=(document.getElementById('ss-inp').value||'').trim();
@@ -14681,25 +14732,35 @@ document.addEventListener('click',ev=>{
     document.getElementById('inv-search-pickdrop')?.classList.remove('on');
   }
 });
+// Partea comună tuturor butoanelor „Caută/Recunoaște din imagine" din aplicație (Sincronizare —
+// mapare nouă ȘI rândurile din previzualizare, Comenzi Platforme, Compară furnizori): citește o
+// imagine din clipboard, o trimite la AI vision și întoarce titlul scurt recunoscut. Fiecare apelant
+// își aplică apoi fuzzyMatch pe PROPRIA listă de candidați (P întreg, sau un cache local ca
+// smProdPickList/syncPickProds/pcomPickProds) și randează în propriul dropdown — doar pasul de
+// citire clipboard + AI e identic, extras aici ca să nu se mai copieze a patra oară.
+async function recognizeProductQueryFromClipboard(){
+  if(!navigator.clipboard?.read)throw new Error('Browserul nu suportă citirea directă din clipboard');
+  const items=await navigator.clipboard.read();
+  let blob=null;
+  for(const item of items){
+    const type=item.types.find(t=>t.startsWith('image/'));
+    if(type){blob=await item.getType(type);break;}
+  }
+  if(!blob)throw new Error('Nu am găsit nicio imagine în clipboard — fă întâi un screenshot (Cmd/Ctrl+Shift+4 pe Mac), apoi încearcă din nou');
+  toast('Analizez poza…');
+  const rawDataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(blob);});
+  const dataUrl=await resizeImageDataUrl(rawDataUrl,1000,.8);
+  const mt=dataUrl.match(/data:(image\/\w+);/)?.[1]||'image/jpeg',b64=dataUrl.split(',')[1];
+  if(!b64||b64.length<100)throw new Error('Imagine invalidă sau coruptă');
+  const content=[{type:'image',source:{type:'base64',media_type:mt,data:b64}},{type:'text',text:'Ce produs apare în această imagine (poate fi o captură de pe un magazin online sau poza produsului)? Răspunde STRICT cu titlul scurt al produsului, în română, fără alte cuvinte, fără ghilimele, fără punct la final.'}];
+  const resp=await callAI([{role:'user',content}],'Ești expert în identificarea produselor din poze pentru un magazin online. Răspunzi STRICT cu titlul scurt al produsului, în română, fără alte cuvinte.',80,'analysis');
+  const query=resp.trim().replace(/^["']|["']$/g,'').replace(/\.$/,'');
+  if(!query)throw new Error('AI nu a putut recunoaște produsul din poză');
+  return query;
+}
 async function pasteSmProductImageSearch(){
-  if(!navigator.clipboard?.read){toast('Browserul nu suportă citirea directă din clipboard — folosește căutarea cu text de mai sus','err');return;}
   try{
-    const items=await navigator.clipboard.read();
-    let blob=null;
-    for(const item of items){
-      const type=item.types.find(t=>t.startsWith('image/'));
-      if(type){blob=await item.getType(type);break;}
-    }
-    if(!blob){toast('Nu am găsit nicio imagine în clipboard — fă întâi un screenshot (Cmd/Ctrl+Shift+4 pe Mac), apoi încearcă din nou','err');return;}
-    toast('Analizez poza…');
-    const rawDataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(blob);});
-    const dataUrl=await resizeImageDataUrl(rawDataUrl,1000,.8);
-    const mt=dataUrl.match(/data:(image\/\w+);/)?.[1]||'image/jpeg',b64=dataUrl.split(',')[1];
-    if(!b64||b64.length<100)throw new Error('Imagine invalidă sau coruptă');
-    const content=[{type:'image',source:{type:'base64',media_type:mt,data:b64}},{type:'text',text:'Ce produs apare în această imagine (poate fi o captură de pe un magazin online sau poza produsului)? Răspunde STRICT cu titlul scurt al produsului, în română, fără alte cuvinte, fără ghilimele, fără punct la final.'}];
-    const resp=await callAI([{role:'user',content}],'Ești expert în identificarea produselor din poze pentru un magazin online. Răspunzi STRICT cu titlul scurt al produsului, în română, fără alte cuvinte.',80,'analysis');
-    const query=resp.trim().replace(/^["']|["']$/g,'').replace(/\.$/,'');
-    if(!query){toast('AI nu a putut recunoaște produsul din poză','err');return;}
+    const query=await recognizeProductQueryFromClipboard();
     if(!smProdPickList)smProdPickList=P.slice().sort((a,b)=>a.name.localeCompare(b.name));
     const scored=smProdPickList.map(p=>({p,score:fuzzyMatch(query,productMatchText(p))})).filter(x=>x.score>=0.2).sort((a,b)=>b.score-a.score);
     const btn=document.querySelector('#sm-produs-pick .smi-pick-btn');
@@ -15077,7 +15138,7 @@ function renderSyncImportPreview(){
   const includedCount=syncImpParsed.filter(x=>x.include).length;
   const toolbarHtml=`<div class="smi-preview-toolbar"><span>${includedCount} din ${syncImpParsed.length} selectate</span><div style="display:flex;gap:8px"><button type="button" class="btn btn-sm" onclick="toggleSyncImportAll(true)">☑️ Selectează tot</button><button type="button" class="btn btn-sm" onclick="toggleSyncImportAll(false)">☐ Deselectează tot</button></div></div>`;
   prev.innerHTML=`<div class="inv-preview"><div class="inv-prev-title">Previzualizare (${syncImpParsed.length} listări)</div>${toolbarHtml}${rows}</div>`+
-    `<div class="smi-pickdrop" id="smi-pickdrop"><input type="text" id="smi-pick-search" placeholder="Caută produs după nume sau SKU…" oninput="filterSyncPickDebounced()"><div class="smi-pick-list" id="smi-pick-list"></div></div>`;
+    `<div class="smi-pickdrop" id="smi-pickdrop"><div style="display:flex;gap:6px;align-items:center"><input type="text" id="smi-pick-search" placeholder="Caută produs după nume sau SKU…" oninput="filterSyncPickDebounced()" style="flex:1"><button type="button" class="btn btn-sm" style="flex-shrink:0;padding:6px 8px" onclick="syncPickRecognizeImage()" title="Lipește o poză din clipboard (captură eMAG/Trendyol sau poza produsului) — AI recunoaște produsul">📋</button></div><div class="smi-pick-list" id="smi-pick-list"></div></div>`;
   document.getElementById('smi-foot').style.display='flex';
   updSyncImportInfo();
   saveSyncImportState();
@@ -15283,16 +15344,31 @@ function openSyncPick(ev,idx){
   filterSyncPick();
   search.focus();
 }
-function filterSyncPick(){
-  const q=document.getElementById('smi-pick-search').value.toLowerCase().trim();
+function renderSyncPickRows(prods){
   const list=document.getElementById('smi-pick-list');
   const cur=syncImpParsed[syncPickIdx]?.produsId||null;
-  const matches=(q?syncPickProds.filter(p=>p.name.toLowerCase().includes(q)||(p.sku&&p.sku.toLowerCase().includes(q))):syncPickProds).slice(0,80);
-  const rows=matches.map(p=>{
+  list.innerHTML=prods.map(p=>{
     const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'pick')}>`:`<div class="smi-pick-th-ph">📦</div>`;
     return`<div class="smi-pick-item" onclick="pickSyncProduct(${p.id})" style="${p.id===cur?'background:var(--surf2)':''}">${th}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</span></div>`;
-  }).join('');
-  list.innerHTML=rows||`<div class="smi-pick-item" style="color:var(--t3);cursor:default">Niciun produs găsit</div>`;
+  }).join('')||`<div class="smi-pick-item" style="color:var(--t3);cursor:default">Niciun produs găsit</div>`;
+}
+function filterSyncPick(){
+  const q=document.getElementById('smi-pick-search').value.toLowerCase().trim();
+  const matches=(q?syncPickProds.filter(p=>p.name.toLowerCase().includes(q)||(p.sku&&p.sku.toLowerCase().includes(q))):syncPickProds).slice(0,80);
+  renderSyncPickRows(matches);
+}
+// „📋 din imagine" pe rândurile din previzualizare (nu doar la „Adaugă mapare nouă") — cerut direct.
+// Lipești o poză (produsul sau o captură eMAG/Trendyol), AI recunoaște titlul, iar fuzzyMatch alege
+// cei mai apropiați candidați din syncPickProds — exact ca la căutarea text din același dropdown.
+async function syncPickRecognizeImage(){
+  try{
+    const query=await recognizeProductQueryFromClipboard();
+    if(!syncPickProds)syncPickProds=P.slice().sort((a,b)=>a.name.localeCompare(b.name));
+    const scored=syncPickProds.map(p=>({p,score:fuzzyMatch(query,productMatchText(p))})).filter(x=>x.score>=0.2).sort((a,b)=>b.score-a.score);
+    const search=document.getElementById('smi-pick-search');if(search)search.value=query;
+    renderSyncPickRows(scored.length?scored.slice(0,20).map(x=>x.p):syncPickProds.slice(0,20));
+    toast(scored.length?`AI a recunoscut „${query}" — alege potrivirea corectă din listă`:`AI a recunoscut „${query}", dar nu am găsit nimic asemănător`,scored.length?undefined:'err');
+  }catch(e){toast('Eroare la analiza pozei: '+(e.message||e),'err');}
 }
 function pickSyncProduct(id){
   if(syncPickIdx==null)return;
@@ -17003,7 +17079,10 @@ function pcxLineHtml(idx,groupIdxs){
     :`<div style="color:var(--gr);font-weight:700;font-size:15px;margin-top:2px">✓ Comandă creată — vizibilă în Staff${committedAwb?` · 📮 ${esc(committedAwb)}`:''}</div>`):'';
   const issueNote=(committedRow?.staffBlocked&&!committedRow.staffIssueResolved)
     ?`<div style="color:var(--rd);font-weight:700;font-size:15px;margin-top:2px">⛔ ${esc(ISSUE_LABELS_ADMIN[committedRow.staffIssueType]||'Problemă raportată')}${committedRow.staffIssueNote?': '+esc(committedRow.staffIssueNote):''} <button type="button" class="pcx-btn" style="padding:1px 8px;font-size:14px" onclick="resolveStaffIssueAdmin('platforma_comenzi',${it._committedId})">✓ Rezolvată</button></div>`:'';
-  const cancelBtn=(it._committedId&&!committedRow?.anulata)?`<button type="button" class="pcx-btn" style="padding:4px 10px;font-size:14px;border-color:var(--or);color:var(--or)" onclick="cancelPcomLine(${idx})" title="Scoate acest produs din coada Staff, fără să atingă stocul">🚫 Anulează</button>`:'';
+  // align-self:flex-start — altfel .pcx-line-actions (flex column, align-items:stretch) întinde
+  // butonul la lățimea întregii coloane (230px), la fel de lat ca picker-ul de produs. „Anulează" e o
+  // acțiune mai rar folosită, mai puțin urgentă decât alegerea produsului — cerut direct, mai mic.
+  const cancelBtn=(it._committedId&&!committedRow?.anulata)?`<button type="button" class="pcx-btn" style="padding:4px 10px;font-size:14px;border-color:var(--or);color:var(--or);align-self:flex-start" onclick="cancelPcomLine(${idx})" title="Scoate acest produs din coada Staff, fără să atingă stocul">🚫 Anulează</button>`:'';
   // Comandă regăsită la reimport, dar anulată anterior (vezi pcomApiImportGate) — nu revine automat
   // „Inclus" (ar contrazice tăcut motivul notat), doar vizibilă, cu opțiunea explicită de reconsiderare.
   const reconsiderNote=it._cancelledId?`<div style="color:var(--rd);font-weight:700;font-size:15px;margin-top:2px">🚫 A fost anulată anterior${it._cancelledMotiv?': '+esc(it._cancelledMotiv):''} <button type="button" class="pcx-btn" style="padding:1px 8px;font-size:14px" onclick="reconsiderPcomLine(${idx})">↺ Reconsideră</button></div>`:'';
@@ -17335,20 +17414,35 @@ function openPcomPick(ev,idx){
   filterPcomPick();
   search.focus();
 }
-function filterPcomPick(){
-  const q=document.getElementById('pcmi-pick-search').value.toLowerCase().trim();
+function renderPcomPickRows(prods){
   const list=document.getElementById('pcmi-pick-list');
   const cur=pcImpParsed[pcomPickIdx]?.produsId||null;
   const curNew=!!pcImpParsed[pcomPickIdx]?.newProduct;
-  const matches=(q?pcomPickProds.filter(p=>p.name.toLowerCase().includes(q)||(p.sku&&p.sku.toLowerCase().includes(q))):pcomPickProds).slice(0,80);
   // Uneori produsul chiar nu există deloc încă în stoc — omul poate marca explicit linia ca „produs nou",
   // ca la aplicare să fie creat automat (ca la importul de facturi), nu doar sărit peste.
   const newRow=`<div class="smi-pick-item" onclick="pickPcomNewProduct()" style="border-bottom:1px solid var(--b1);${curNew?'background:var(--surf2)':''}"><div class="smi-pick-th-ph">🆕</div><span class="smi-pick-item-nm" style="color:var(--or)">Nu există — trebuie adăugat ca produs nou</span></div>`;
-  const rows=matches.map(p=>{
+  const rows=prods.map(p=>{
     const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'pick')}>`:`<div class="smi-pick-th-ph">📦</div>`;
     return`<div class="smi-pick-item" onclick="pickPcomProduct(${p.id})" style="${p.id===cur&&!curNew?'background:var(--surf2)':''}">${th}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</span></div>`;
   }).join('');
   list.innerHTML=newRow+(rows||`<div class="smi-pick-item" style="color:var(--t3);cursor:default">Niciun produs găsit</div>`);
+}
+function filterPcomPick(){
+  const q=document.getElementById('pcmi-pick-search').value.toLowerCase().trim();
+  const matches=(q?pcomPickProds.filter(p=>p.name.toLowerCase().includes(q)||(p.sku&&p.sku.toLowerCase().includes(q))):pcomPickProds).slice(0,80);
+  renderPcomPickRows(matches);
+}
+// „📋 din imagine" pe picker-ul de produs de la o linie de comandă — cerut direct. Aceeași logică
+// AI+fuzzyMatch ca la Sincronizare, doar randată în lista pcmi-pick-list (cu rândul „produs nou" păstrat).
+async function pcomPickRecognizeImage(){
+  try{
+    const query=await recognizeProductQueryFromClipboard();
+    if(!pcomPickProds)pcomPickProds=P.slice().sort((a,b)=>a.name.localeCompare(b.name));
+    const scored=pcomPickProds.map(p=>({p,score:fuzzyMatch(query,productMatchText(p))})).filter(x=>x.score>=0.2).sort((a,b)=>b.score-a.score);
+    const search=document.getElementById('pcmi-pick-search');if(search)search.value=query;
+    renderPcomPickRows(scored.length?scored.slice(0,20).map(x=>x.p):pcomPickProds.slice(0,20));
+    toast(scored.length?`AI a recunoscut „${query}" — alege potrivirea corectă din listă`:`AI a recunoscut „${query}", dar nu am găsit nimic asemănător`,scored.length?undefined:'err');
+  }catch(e){toast('Eroare la analiza pozei: '+(e.message||e),'err');}
 }
 async function pickPcomProduct(id){
   if(pcomPickIdx==null)return;
@@ -18508,21 +18602,8 @@ function scClearProduct(){scCompare.produsId=null;scCompare.newImg='';scCompare.
 // (același mecanism ca „📋 Caută din imagine" de la Sincronizare) și arătăm candidații sortați după
 // scor, cel mai probabil primul — omul confirmă cu un click, nu se alege nimic automat.
 async function scRecognizeProductImage(){
-  if(!navigator.clipboard?.read){toast('Browserul nu suportă citirea directă din clipboard','err');return;}
   try{
-    const items=await navigator.clipboard.read();
-    let blob=null;
-    for(const item of items){const type=item.types.find(t=>t.startsWith('image/'));if(type){blob=await item.getType(type);break;}}
-    if(!blob){toast('Nu am găsit nicio imagine în clipboard — fă un screenshot, apoi încearcă din nou','err');return;}
-    toast('Analizez poza…');
-    const rawDataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(blob);});
-    const dataUrl=await resizeImageDataUrl(rawDataUrl,1000,.8);
-    const mt=dataUrl.match(/data:(image\/\w+);/)?.[1]||'image/jpeg',b64=dataUrl.split(',')[1];
-    if(!b64||b64.length<100)throw new Error('Imagine invalidă sau coruptă');
-    const content=[{type:'image',source:{type:'base64',media_type:mt,data:b64}},{type:'text',text:'Ce produs apare în această imagine (poate fi o captură de pe un magazin online sau poza produsului)? Răspunde STRICT cu titlul scurt al produsului, în română, fără alte cuvinte, fără ghilimele, fără punct la final.'}];
-    const resp=await callAI([{role:'user',content}],'Ești expert în identificarea produselor din poze pentru un magazin online. Răspunzi STRICT cu titlul scurt al produsului, în română, fără alte cuvinte.',80,'analysis');
-    const query=resp.trim().replace(/^["']|["']$/g,'').replace(/\.$/,'');
-    if(!query){toast('AI nu a putut recunoaște produsul din poză','err');return;}
+    const query=await recognizeProductQueryFromClipboard();
     const scored=P.filter(p=>!p.archived).map(p=>({p,score:fuzzyMatch(query,productMatchText(p))})).filter(x=>x.score>=0.2).sort((a,b)=>b.score-a.score);
     const search=document.getElementById('sc-product-search');if(search)search.value=query;
     const box=document.getElementById('sc-product-results');
