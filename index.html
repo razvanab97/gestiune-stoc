@@ -3811,6 +3811,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:425,text:'Comenzi Platforme / Sincronizare — cerut direct, pe un exemplu real (cort de joacă AB HOMES tradus corect, dar rămas asociat cu o litieră Kruzzel complet nelegată): odată ce un titlu se traduce (automat sau prin „🌐 Traduce"), asocierea de produs se reîncearcă pe traducere, nu doar pe titlul brut — matching-ul pe un titlu englezesc/bulgăresc/maghiar/grecesc, împotriva numelor românești din inventar, produce scoruri aproape întâmplătoare. Nu atinge liniile deja sigure (EAN/SKU/titlu/cod cunoscut, PNK) și nici liniile deja scrise în Staff — acolo o schimbare locală ar rămâne divergentă tăcut față de ce vede deja Staff.',date:'2026-09-18'},
   {n:424,text:'Comenzi Platforme — 2 reparații, cerute direct: (1) cardurile de comandă sunt acum grupate pe platformă, cu antet separat și cu un contur colorat consistent pe fiecare (mov eMAG / portocaliu Trendyol / verde Vinted), în loc să fie amestecate în ordinea brută de import — mult mai clar care e a cui dintr-o privire. (2) „📮 Asociază AWB-uri" recunoaște acum și un al 4-lea format de etichetă, găsit direct pe etichete reale puse azi în dosar: notele de transport Sameday cu ramburs/COD („Nota transport: X / Y" + „Nr. Comanda: Z"), diferite de eticheta easybox deja recunoscută — 7 din 13 AWB-uri reale de azi picau exact în acest format necunoscut. Bug mai grav, găsit pe aceleași date reale: fișierele fără NICIO asociere reușită (format nerecunoscut sau comandă încă neimportată) erau arhivate în „procesate" oricum, doar pentru că alte fișiere din același lot se asociaseră cu succes — dispăreau din dosar fără să fi scris niciun AWB și fără nicio urmă. Acum se arhivează STRICT fișierele care au scris cu adevărat un AWB; restul rămân la vedere, gata de reîncercat. Cele 7 etichete de azi picate în formatul nou au fost puse înapoi în Desktop/AWB-uri, gata de reasociat cu „Citește din dosar".',date:'2026-09-18'},
   {n:423,text:'Nou — „📥 Comandă furnizor", cerut direct: pe lângă „Importă factură" (marfă deja sosită), acum poți înregistra și o comandă plasată la furnizor care e încă pe drum, ca să nu mai uiți ce urmează să vină. Lipești textul comenzii sau încarci poze/screenshot-uri (Dashboard sau Inventar → butonul nou), AI extrage produsele și le potrivește automat cu cele din inventar (fără să te oblige să creezi produs nou pentru cele nepotrivite — rămân ca text simplu). NU atinge stocul. În Staff apare un tab nou, separat de „De rezolvat" (care rămâne exact cum era, cu comenzile de client blocate): fiecare produs are „✗ Nu a ajuns" / „◐ A ajuns parțial" (cu cantitate), plus „✓ Tot restul a ajuns" pe toată comanda. Un „Nu a ajuns" ajunge direct în 🔔, care acum e împărțit pe 3 secțiuni: 📥 Marfă furnizor / ⛔ Probleme comenzi client / 📦 Mișcări de stoc. În Raport stoc apare și un card „ce stoc ajunge", cu toate comenzile de furnizor active. Necesită migration_comenzi_furnizor.sql.',date:'2026-09-18'},
   {n:422,text:'Comenzi Platforme — bug real reparat, raportat direct: titlurile în engleză de pe Trendyol (comenzi cross-border/globale, ex. „Set of 6 Solar Lamps for Outdoor Gardens...") nu primeau niciodată traducere/buton „🌐 Traduce", spre deosebire de cele bulgărești/maghiare/grecești. Cauza: detectarea „limbă străină" se uita doar la alfabet (chirilică/greacă/accente maghiare) — engleza folosește exact literele românești, deci trecea drept „deja română". Acum se verifică și cuvinte englezești fără echivalent identic în română (for/with/height/waterproof/etc.) — verificat pe tot inventarul real (387 produse) ca să nu declanșeze fals pe titluri românești (ex. „Set”/„material”/„include”, eliminate din listă după ce au dat 61 fals-pozitive la primul test).',date:'2026-09-18'},
@@ -15334,6 +15335,19 @@ function resetSyncImportPage(){
 // indiferent cât de bun e candidatul din inventar, deci fără traducere HU/BG/EN rămân practic mereu
 // „fără sugestie". Rulează în fundal (fără await) după fiecare import — suggestSyncImportWithAI o
 // așteaptă explicit înainte de a construi candidații, ca traducerea să fie deja gata la momentul potrivirii.
+// Re-încearcă asocierea de produs după ce titlul a fost tradus — cerut direct, la fel ca la Comenzi
+// Platforme (pcomRematchAfterTranslate): matching-ul inițial rulează pe titlul netradus, iar fuzzyMatch
+// împotriva numelor românești din inventar, pe un titlu englezesc/bulgăresc/maghiar, produce scoruri
+// aproape întâmplătoare. Nu atinge liniile deja sigure prin PNK sau marcate „+ Nou". include urmărește
+// mereu dacă s-a găsit un produs, la fel ca la parsarea inițială (fără produs → exclusă automat).
+function syncRematchAfterTranslate(idx){
+  const it=syncImpParsed[idx];
+  if(!it||!it.titluRo||it.viaPnk||it.newProduct)return;
+  const match=findExistingProduct({name:it.titluRo});
+  it.produsId=match?match.product.id:null;
+  it.score=match?match.score:0;
+  it.include=!!match;
+}
 async function syncTranslateForeignTitles(){
   const idxs=syncImpParsed.map((x,i)=>i).filter(i=>pcomDetectScript(syncImpParsed[i].titluExtern)!=='latin'&&!syncImpParsed[i].titluRo);
   if(!idxs.length)return;
@@ -15356,7 +15370,7 @@ Răspunde STRICT cu JSON, fără markdown: {"translations":[{"index":<index>,"ro
       if(!Array.isArray(parsed.translations))continue;
       parsed.translations.forEach(t=>{
         const i=Number(t.index);
-        if(syncImpParsed[i]&&t.ro)syncImpParsed[i].titluRo=String(t.ro).trim();
+        if(syncImpParsed[i]&&t.ro){syncImpParsed[i].titluRo=String(t.ro).trim();syncRematchAfterTranslate(i);}
       });
     }
     renderSyncImportPreview();
@@ -15379,6 +15393,7 @@ Răspunde STRICT cu JSON, fără markdown: {"ro":"<traducere scurtă în român�
     const parsed=JSON.parse(m[0]);
     if(!parsed.ro)throw new Error('Traducere lipsă în răspuns');
     it.titluRo=String(parsed.ro).trim();
+    syncRematchAfterTranslate(idx);
     renderSyncImportPreview();
     toast('Titlu tradus ✓');
   }catch(e){toast('Eroare la traducere: '+(e.message||e),'err');}
@@ -15750,6 +15765,22 @@ function pcomDetectPackSize(title){
 // engleză (comenzi Trendyol cross-border/globale — vezi pcomLooksEnglish), ca omul care revizuiește
 // previzualizarea să înțeleagă din prima la ce produs face referire, chiar înainte de a se face vreo
 // potrivire. Rulează în fundal (fără await la apel) — nu blochează previzualizarea inițială.
+// Re-încearcă asocierea de produs după ce titlul a fost tradus — cerut direct, exemplu real: un cort
+// de joacă AB HOMES (titlu Trendyol în engleză) rămăsese asociat, din matching-ul pe titlul netradus,
+// cu un produs complet nelegat (o litieră Kruzzel) — fuzzyMatch împotriva numelor românești din
+// inventar, pe un titlu englezesc/bulgăresc/maghiar/grecesc, produce scoruri aproape întâmplătoare.
+// Nu atinge liniile deja sigure (EAN/SKU/titlu/cod cunoscut — findExistingProduct's astea rulează
+// oricum din nou, dar respectăm marcajele viaTitle/viaCode existente ca să nu rescriem un rezultat deja
+// verificat altfel) și nici liniile deja scrise în Staff (_committedId) — schimbarea locală nu s-ar
+// propaga acolo, ar rămâne divergentă tăcut. include NU se atinge — la Comenzi Platforme pornește mereu
+// neconfirmat, indiferent de scor (omul tot trebuie să apese „✓ Inclus”).
+function pcomRematchAfterTranslate(idx){
+  const it=pcImpParsed[idx];
+  if(!it||!it.titluRo||it._committedId||it.viaPnk||it.viaTitle||it.viaCode||it.newProduct)return;
+  const match=findExistingProduct({name:it.titluRo});
+  it.produsId=match?match.product.id:null;
+  it.score=match?match.score:0;
+}
 async function pcomTranslateForeignTitles(){
   const idxs=pcImpParsed.map((x,i)=>i).filter(i=>pcomDetectScript(pcImpParsed[i].titluExtern)!=='latin'&&!pcImpParsed[i].titluRo);
   if(!idxs.length)return;
@@ -15772,7 +15803,7 @@ Răspunde STRICT cu JSON, fără markdown: {"translations":[{"index":<index>,"ro
       if(!Array.isArray(parsed.translations))continue;
       parsed.translations.forEach(t=>{
         const i=Number(t.index);
-        if(pcImpParsed[i]&&t.ro)pcImpParsed[i].titluRo=String(t.ro).trim();
+        if(pcImpParsed[i]&&t.ro){pcImpParsed[i].titluRo=String(t.ro).trim();pcomRematchAfterTranslate(i);}
       });
     }
     renderPcomImportPreview();
@@ -15798,6 +15829,7 @@ Răspunde STRICT cu JSON, fără markdown: {"ro":"<traducere scurtă în român�
     const parsed=JSON.parse(m[0]);
     if(!parsed.ro)throw new Error('Traducere lipsă în răspuns');
     it.titluRo=String(parsed.ro).trim();
+    pcomRematchAfterTranslate(idx);
     renderPcomImportPreview();
     toast('Titlu tradus ✓');
   }catch(e){toast('Eroare la traducere: '+(e.message||e),'err');}
