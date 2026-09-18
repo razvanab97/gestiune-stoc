@@ -3811,6 +3811,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:426,text:'Asociază AWB-uri — al 5-lea format recunoscut: DPD (crossborder Trendyol, ex. Bulgaria), raportat direct pe un exemplu real dintr-un PDF cu 9 etichete amestecate FAN Courier + DPD. Eticheta e în engleză, fără „AWB"/„Nota transport"/„ID=" ca celelalte 4 formate — codul de urmărire apare ca „1 of 1 for X" (cifre despărțite de spații de PDF.js), comanda_id pe rândul următor lui „note:". Verificat pe fișierul real: toate cele 9 pagini (8 FAN Courier deja funcționale + 1 DPD, nou) se asociază corect, inclusiv confirmarea că produsul de pe etichetă se potrivește exact cu comanda găsită în platforma_comenzi după codul extras.',date:'2026-09-18'},
   {n:425,text:'Comenzi Platforme / Sincronizare — cerut direct, pe un exemplu real (cort de joacă AB HOMES tradus corect, dar rămas asociat cu o litieră Kruzzel complet nelegată): odată ce un titlu se traduce (automat sau prin „🌐 Traduce"), asocierea de produs se reîncearcă pe traducere, nu doar pe titlul brut — matching-ul pe un titlu englezesc/bulgăresc/maghiar/grecesc, împotriva numelor românești din inventar, produce scoruri aproape întâmplătoare. Nu atinge liniile deja sigure (EAN/SKU/titlu/cod cunoscut, PNK) și nici liniile deja scrise în Staff — acolo o schimbare locală ar rămâne divergentă tăcut față de ce vede deja Staff.',date:'2026-09-18'},
   {n:424,text:'Comenzi Platforme — 2 reparații, cerute direct: (1) cardurile de comandă sunt acum grupate pe platformă, cu antet separat și cu un contur colorat consistent pe fiecare (mov eMAG / portocaliu Trendyol / verde Vinted), în loc să fie amestecate în ordinea brută de import — mult mai clar care e a cui dintr-o privire. (2) „📮 Asociază AWB-uri" recunoaște acum și un al 4-lea format de etichetă, găsit direct pe etichete reale puse azi în dosar: notele de transport Sameday cu ramburs/COD („Nota transport: X / Y" + „Nr. Comanda: Z"), diferite de eticheta easybox deja recunoscută — 7 din 13 AWB-uri reale de azi picau exact în acest format necunoscut. Bug mai grav, găsit pe aceleași date reale: fișierele fără NICIO asociere reușită (format nerecunoscut sau comandă încă neimportată) erau arhivate în „procesate" oricum, doar pentru că alte fișiere din același lot se asociaseră cu succes — dispăreau din dosar fără să fi scris niciun AWB și fără nicio urmă. Acum se arhivează STRICT fișierele care au scris cu adevărat un AWB; restul rămân la vedere, gata de reîncercat. Cele 7 etichete de azi picate în formatul nou au fost puse înapoi în Desktop/AWB-uri, gata de reasociat cu „Citește din dosar".',date:'2026-09-18'},
   {n:423,text:'Nou — „📥 Comandă furnizor", cerut direct: pe lângă „Importă factură" (marfă deja sosită), acum poți înregistra și o comandă plasată la furnizor care e încă pe drum, ca să nu mai uiți ce urmează să vină. Lipești textul comenzii sau încarci poze/screenshot-uri (Dashboard sau Inventar → butonul nou), AI extrage produsele și le potrivește automat cu cele din inventar (fără să te oblige să creezi produs nou pentru cele nepotrivite — rămân ca text simplu). NU atinge stocul. În Staff apare un tab nou, separat de „De rezolvat" (care rămâne exact cum era, cu comenzile de client blocate): fiecare produs are „✗ Nu a ajuns" / „◐ A ajuns parțial" (cu cantitate), plus „✓ Tot restul a ajuns" pe toată comanda. Un „Nu a ajuns" ajunge direct în 🔔, care acum e împărțit pe 3 secțiuni: 📥 Marfă furnizor / ⛔ Probleme comenzi client / 📦 Mișcări de stoc. În Raport stoc apare și un card „ce stoc ajunge", cu toate comenzile de furnizor active. Necesită migration_comenzi_furnizor.sql.',date:'2026-09-18'},
@@ -19365,16 +19366,21 @@ async function extractPdfPagesText(file){
   return pages;
 }
 // Asociază AWB-uri din etichetele de expediere ale curierului — cerere directă, verificat pe exemple
-// reale, cu 2 formate diferite găsite până acum (un PDF de etichete poate amesteca ambele, o pagină =
+// reale, cu 5 formate diferite găsite până acum (un PDF de etichete poate amesteca oricâte, o pagină =
 // o etichetă = o comandă):
 // 1) FAN Courier (Trendyol ȘI unele eMAG) — „AWB: X” + „Continut: Y”, Y = comanda_id exact (confirmat
 //    pe date reale din platforma_comenzi, pentru ambele platforme).
 // 2) Sameday/DELIVERY SOLUTIONS (eMAG, livrare easybox/locker) — un cod pe propriul rând, format
 //    „AWB_comandaId_altceva” (ex. „4EMGLN184263343001_501145696_252034091” — segmentul din mijloc,
 //    501145696, e exact comanda_id, confirmat pe date reale din platforma_comenzi).
-// Etichetele care nu se încadrează în niciun format cunoscut (ex. GLS — văzut pe un exemplu real: nu
-// are niciun AWB/număr de comandă tipărit, doar un cod de produs fără legătură cu comanda; sau Vinted —
-// platformă neconectată încă) sunt semnalate explicit, NU se ghicește o asociere nesigură.
+// 3) Sameday — „notă de transport" clasică (ramburs/COD): „Nota transport: X / Y” (Y = AWB) și
+//    „Nr. Comanda: Z” (Z = comanda_id).
+// 4) GLS (crossborder eMAG, ex. Ungaria) — comanda_id pe rândul „ID=X;”, AWB-ul căutat în toată pagina
+//    (layout complex, 2 coloane), excluzând telefoanele și ID-ul comenzii.
+// 5) DPD (crossborder Trendyol, ex. Bulgaria) — etichetă în engleză: AWB pe „N of M for X” (cifre
+//    despărțite de spații), comanda_id pe rândul următor lui „note:”.
+// Etichetele care nu se încadrează în niciun format cunoscut (ex. Vinted — platformă neconectată încă)
+// sunt semnalate explicit, NU se ghicește o asociere nesigură.
 // Nu e nevoie de AI — doar regex pe textul extras de PDF.js (rapid, gratuit, determinist). Nimic nu se
 // scrie în bază până nu se apasă explicit „Asociază AWB-urile”.
 let awbParsed=[];
@@ -19405,6 +19411,15 @@ function parseAwbLabelText(text){
     const awbM=withoutNoise.match(/\b(\d{10,14})\b/);
     if(awbM)return{awb:awbM[1],comandaId:idM[1]};
   }
+  // DPD (Bulgaria/CEE crossborder, Trendyol) — al 5-lea format, găsit direct pe o etichetă reală
+  // amestecată în același PDF cu etichete FAN Courier (raportat direct: „de ce se sar AWB-urile alea").
+  // Eticheta e în engleză, fără „AWB”/„Nota transport”/„ID=” ca celelalte formate — codul de urmărire
+  // apare ca „N of M for X” (cifrele lui X despărțite de spații de PDF.js, din cauza barcode-ului/
+  // chenarelor), iar comanda_id e pe rândul imediat următor lui „note:” (verificat pe date reale din
+  // platforma_comenzi — produsul de pe etichetă se potrivește exact cu comanda găsită după acest cod).
+  const dpdAwbM=text.match(/\d+\s+of\s+\d+\s+for\s+((?:\d\s*){9,14})/);
+  const dpdNoteM=text.match(/note:\s*(\d{6,})/);
+  if(dpdAwbM&&dpdNoteM)return{awb:dpdAwbM[1].replace(/\s+/g,''),comandaId:dpdNoteM[1]};
   return null;
 }
 async function handleAwbPdfFile(ev){
