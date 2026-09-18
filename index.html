@@ -3739,7 +3739,8 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
-  {n:418,text:'Dashboard — card nou „Transport" în rândul de indicatori (lângă „Achiziții"), cerut direct: suma costului de transport plătit la facturile de furnizor importate (câmpul „Cost transport" din Importă factură), pe perioada aleasă din selectorul de sus al Dashboard-ului — aceeași dată deja salvată per factură, doar adunată acum și afișată.',date:'2026-09-18'},
+  {n:419,text:'Dashboard — card nou „Transport" în rândul de indicatori (lângă „Achiziții"), cerut direct: suma costului de transport plătit la facturile de furnizor importate (câmpul „Cost transport" din Importă factură), pe perioada aleasă din selectorul de sus al Dashboard-ului — aceeași dată deja salvată per factură, doar adunată acum și afișată.',date:'2026-09-18'},
+  {n:418,text:'Sincronizare — „🤖 Sugerează cu AI" marchează acum vizibil sugestiile nesigure, la cerere directă (raportat pe un exemplu real: un brad decorativ de Crăciun asociat cu un candidat care nu semăna deloc la prima vedere). Când candidatul ales de AI are o potrivire lexicală slabă cu titlul, apare „⚠️ sugestie AI nesigură" (portocaliu, nu verde) și rândul NU se bifează automat — rămâne de intervenit local, prin picker sau „+ Nou", înainte de „Adaugă mapările selectate". Alegerea manuală a unui produs (sau marcarea „+ Nou") șterge corect eticheta veche AI/PNK, ca semnalul să dispară exact când cineva a rezolvat rândul.',date:'2026-09-18'},
   {n:417,text:'Comenzi Platforme — „📮 Asociază AWB-uri" citește acum și direct din dosarul Desktop/AWB-uri de pe acest Mac (buton „📂 Citește din dosar"), în loc de selectare manuală a unui singur PDF. Pui acolo, în timpul zilei, PDF-urile descărcate de la eMAG ȘI Trendyol (amestecate, nu contează) — un click le citește pe toate deodată, iar cele asociate cu succes se mută automat în „procesate/<data>", ca dosarul să rămână curat. Confirmat că eMAG nu oferă altă cale de a citi un AWB generat manual pe Seller Center (API-ul cere un ID intern pe care nu-l avem în acest caz) — asta rămâne calea corectă.',date:'2026-09-18'},
   {n:416,text:'🔔 Clopoțel — o problemă de „Stoc zero"/„Cantitate insuficientă" raportată de Staff arată acum direct dacă produsul are deja stoc suficient („✓ Stoc disponibil acum"), la fel ca pe tableta Staff — fără să mai deschizi produsul separat ca să verifici. O comandă blocată din lipsă de stoc NU trebuie anulată — rămâne normal în coada Staff până apare stoc; „Anulează" e pentru alte motive (test, dublură, comandă anulată de client).',date:'2026-09-18'},
   {n:415,text:'Comenzi Platforme — card nou, permanent, „🚫 Comenzi anulate — de reconsiderat": arată orice produs anulat, neaplicat încă, indiferent dacă a fost reimportat sau nu — cu motivul anulării și „↺ Reconsideră". Înainte, o comandă anulată redevenea vizibilă DOAR dacă exact acea comandă era reregăsită la un reimport ulterior (nesigur — eMAG/Trendyol nu garantează c-o mai includ în export la nesfârșit); acum e mereu la îndemână, indiferent cât timp trece până se rezolvă motivul anulării (ex. stoc zero → reaprovizionare).',date:'2026-09-18'},
@@ -15033,13 +15034,23 @@ function markSyncRowNewProduct(idx){
   syncImpParsed[idx].newProduct=true;
   syncImpParsed[idx].produsId=null;
   syncImpParsed[idx].include=true;
+  // Aceeași grijă ca la pickSyncProduct — fără asta, eticheta „🤖 sugestie AI”/„⚠️ nesigură” rămânea
+  // agățată de rând chiar și după ce omul respingea sugestia și alegea „produs nou” în loc.
+  syncImpParsed[idx].viaAi=false;
+  syncImpParsed[idx].aiUncertain=false;
+  syncImpParsed[idx].viaPnk=false;
   const host=document.getElementById('smi-pick-'+idx);if(host)host.innerHTML=syncPickBtnHtml(idx);
   renderSyncImportPreview();
 }
 function renderSyncImportPreview(){
   const prev=document.getElementById('smi-preview');
   const rows=syncImpParsed.map((it,idx)=>{
-    const tag=it.viaPnk?`<span class="inv-match upd" style="background:var(--gr-bg);color:var(--gr)" title="Produsul e deja mapat pe acest PNK">✓ prin PNK</span>`:it.viaAi?`<span class="inv-match upd" style="background:var(--acc-light);color:var(--acc)" title="Sugerat de AI — verifică și confirmă">🤖 sugestie AI</span>`:it.newProduct?`<span class="inv-match new" style="background:var(--acc-light);color:var(--acc)">✚ produs nou</span>`:it.produsId?`<span class="inv-match upd" title="potrivire ${Math.round(it.score*100)}%">↑ ${Math.round(it.score*100)}%</span>`:`<span class="inv-match new">? fără sugestie</span>`;
+    const tag=it.viaPnk?`<span class="inv-match upd" style="background:var(--gr-bg);color:var(--gr)" title="Produsul e deja mapat pe acest PNK">✓ prin PNK</span>`
+      :it.viaAi&&it.aiUncertain?`<span class="inv-match" style="background:var(--am-bg);color:var(--am)" title="AI a ales cel mai apropiat candidat, dar titlurile se potrivesc slab — verifică manual înainte să incluzi (de-aia nu e bifată automat)">⚠️ sugestie AI nesigură</span>`
+      :it.viaAi?`<span class="inv-match upd" style="background:var(--acc-light);color:var(--acc)" title="Sugerat de AI — verifică și confirmă">🤖 sugestie AI</span>`
+      :it.newProduct?`<span class="inv-match new" style="background:var(--acc-light);color:var(--acc)">✚ produs nou</span>`
+      :it.produsId?`<span class="inv-match upd" title="potrivire ${Math.round(it.score*100)}%">↑ ${Math.round(it.score*100)}%</span>`
+      :`<span class="inv-match new">? fără sugestie</span>`;
     const pnkTag=it.pnk?`<button type="button" class="rsx-pnk" onclick="copyText(${esc(JSON.stringify(String(it.pnk)))})" title="PNK eMAG — click pentru copiere">${esc(it.pnk)} ⧉</button>`:'';
     // "+ Nou"/"Mai târziu" rămân disponibile mereu, nu doar când rândul e chiar nepotrivit — bug real
     // raportat direct: o sugestie greșită (AI sau fuzzy) umplea produsId, iar cele două butoane
@@ -15232,10 +15243,18 @@ async function suggestSyncImportWithAI(){
         if(!pick||pick<1)return;
         const cand=candByIdx[idx][pick-1];
         if(!cand)return;
+        // Scorul fuzzy al candidatului ALES (deja calculat mai sus, ca să-l trimitem la AI) e un semnal
+        // independent de câtă legătură lexicală chiar există — la cerere directă, după o sugestie reală
+        // ("Brad Decorativ de Crăciun...") care nu părea deloc sigură vizual, deși AI-ul a ales-o motivat
+        // ("aceeași categorie/brand sunt suficiente"). Sub prag, sugestia rămâne vizibilă (omul tot vede
+        // ce a ales AI-ul), dar NU se bifează automat — trebuie confirmată manual, cu un semn distinct
+        // (⚠️, nu 🤖), ca să nu se piardă în valul de sugestii "sigure" la "Adaugă mapările selectate".
+        const uncertain=cand.score<0.45;
         syncImpParsed[idx].produsId=cand.p.id;
-        syncImpParsed[idx].score=1;
+        syncImpParsed[idx].score=uncertain?cand.score:1;
         syncImpParsed[idx].viaAi=true;
-        syncImpParsed[idx].include=true;
+        syncImpParsed[idx].aiUncertain=uncertain;
+        syncImpParsed[idx].include=!uncertain;
         resolved++;
       });
       renderSyncImportPreview();
@@ -15280,6 +15299,13 @@ function pickSyncProduct(id){
   syncImpParsed[syncPickIdx].produsId=id||null;
   syncImpParsed[syncPickIdx].newProduct=false;
   syncImpParsed[syncPickIdx].include=!!id;
+  // Alegerea manuală înlocuiește orice provenanță anterioară (AI/PNK) — altfel eticheta „⚠️ sugestie
+  // AI nesigură” ar rămâne agățată de rând după ce omul tocmai a rezolvat-o, contrazicând exact scopul
+  // ei (semnalul trebuie să dispară odată ce cineva a intervenit local pe listarea respectivă).
+  syncImpParsed[syncPickIdx].viaAi=false;
+  syncImpParsed[syncPickIdx].aiUncertain=false;
+  syncImpParsed[syncPickIdx].viaPnk=false;
+  if(id)syncImpParsed[syncPickIdx].score=1;
   const host=document.getElementById('smi-pick-'+syncPickIdx);
   if(host)host.innerHTML=syncPickBtnHtml(syncPickIdx);
   document.getElementById('smi-pickdrop').classList.remove('on');
