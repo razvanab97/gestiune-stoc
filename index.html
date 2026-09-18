@@ -3739,6 +3739,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:418,text:'Dashboard — card nou „Transport" în rândul de indicatori (lângă „Achiziții"), cerut direct: suma costului de transport plătit la facturile de furnizor importate (câmpul „Cost transport" din Importă factură), pe perioada aleasă din selectorul de sus al Dashboard-ului — aceeași dată deja salvată per factură, doar adunată acum și afișată.',date:'2026-09-18'},
   {n:417,text:'Comenzi Platforme — „📮 Asociază AWB-uri" citește acum și direct din dosarul Desktop/AWB-uri de pe acest Mac (buton „📂 Citește din dosar"), în loc de selectare manuală a unui singur PDF. Pui acolo, în timpul zilei, PDF-urile descărcate de la eMAG ȘI Trendyol (amestecate, nu contează) — un click le citește pe toate deodată, iar cele asociate cu succes se mută automat în „procesate/<data>", ca dosarul să rămână curat. Confirmat că eMAG nu oferă altă cale de a citi un AWB generat manual pe Seller Center (API-ul cere un ID intern pe care nu-l avem în acest caz) — asta rămâne calea corectă.',date:'2026-09-18'},
   {n:416,text:'🔔 Clopoțel — o problemă de „Stoc zero"/„Cantitate insuficientă" raportată de Staff arată acum direct dacă produsul are deja stoc suficient („✓ Stoc disponibil acum"), la fel ca pe tableta Staff — fără să mai deschizi produsul separat ca să verifici. O comandă blocată din lipsă de stoc NU trebuie anulată — rămâne normal în coada Staff până apare stoc; „Anulează" e pentru alte motive (test, dublură, comandă anulată de client).',date:'2026-09-18'},
   {n:415,text:'Comenzi Platforme — card nou, permanent, „🚫 Comenzi anulate — de reconsiderat": arată orice produs anulat, neaplicat încă, indiferent dacă a fost reimportat sau nu — cu motivul anulării și „↺ Reconsideră". Înainte, o comandă anulată redevenea vizibilă DOAR dacă exact acea comandă era reregăsită la un reimport ulterior (nesigur — eMAG/Trendyol nu garantează c-o mai includ în export la nesfârșit); acum e mereu la îndemână, indiferent cât timp trece până se rezolvă motivul anulării (ex. stoc zero → reaprovizionare).',date:'2026-09-18'},
@@ -4685,10 +4686,11 @@ function renderDashMiniKpis(cur,cmp){
   const platformVal=emag.value+trendyol.value+vinted.value;
   const purch=purchasesInRangeSimple(cur.from,cur.to);
   const profit=profitInRange(cur.from,cur.to);
+  const transport=transportInRangeSimple(cur.from,cur.to);
   let c=null;
   if(cmp){
     const cDirect=directSalesInRange(cmp.from,cmp.to),cEmag=platformSalesInRange(cmp.from,cmp.to,'emag'),cTrendyol=platformSalesInRange(cmp.from,cmp.to,'trendyol'),cVinted=platformSalesInRange(cmp.from,cmp.to,'vinted');
-    c={totalVal:cDirect.value+cEmag.value+cTrendyol.value+cVinted.value,direct:cDirect.value,platform:cEmag.value+cTrendyol.value+cVinted.value,purch:purchasesInRangeSimple(cmp.from,cmp.to).value,profit:profitInRange(cmp.from,cmp.to)};
+    c={totalVal:cDirect.value+cEmag.value+cTrendyol.value+cVinted.value,direct:cDirect.value,platform:cEmag.value+cTrendyol.value+cVinted.value,purch:purchasesInRangeSimple(cmp.from,cmp.to).value,profit:profitInRange(cmp.from,cmp.to),transport:transportInRangeSimple(cmp.from,cmp.to)};
   }
   const fmtRon=v=>v.toLocaleString('ro-RO',{maximumFractionDigits:0})+' RON';
   const hasCmp=!!cmp;
@@ -4697,6 +4699,7 @@ function renderDashMiniKpis(cur,cmp){
     srKpiCard('Vânzări directe',direct.value,c?.direct??0,fmtRon,hasCmp),
     srKpiCard('Vânzări platforme',platformVal,c?.platform??0,fmtRon,hasCmp),
     srKpiCard('Achiziții',purch.value,c?.purch??0,fmtRon,hasCmp),
+    srKpiCard('Transport',transport,c?.transport??0,fmtRon,hasCmp),
     srKpiCard('Profit estimat',profit,c?.profit??0,fmtRon,hasCmp),
   ].join('');
 }
@@ -5168,6 +5171,24 @@ function purchasesInRangeSimple(from,to){
   const m=purchasesByDate();let qty=0,value=0;
   Object.keys(m).forEach(d=>{if(d>=from&&d<=to){qty+=m[d].qty;value+=m[d].value;}});
   return{qty,value};
+}
+// Cost transport plătit la achiziție (facturi de furnizor, câmpul „Cost transport" din Importă
+// factură) — bani ieșiți strict spre transport, nu spre marfă. shippingCost e 0 pe majoritatea
+// intrărilor de stoc (Raport stoc Staff, ajustări manuale) — doar facturile importate cu transport
+// completat contribuie, exact cum arată deja coloana comenzi_stoc.shipping_cost.
+function transportByDate(){
+  const map={};
+  OI.forEach(o=>{
+    const key=String(o.createdAt||'').slice(0,10);if(!key)return;
+    const v=Number(o.shippingCost)||0;if(!v)return;
+    map[key]=(map[key]||0)+v;
+  });
+  return map;
+}
+function transportInRangeSimple(from,to){
+  const m=transportByDate();let value=0;
+  Object.keys(m).forEach(d=>{if(d>=from&&d<=to)value+=m[d];});
+  return value;
 }
 // Produse active vândute — produse distincte cu cel puțin o vânzare (orice canal) în interval.
 function srActiveProductsCount(from,to){
