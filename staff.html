@@ -188,6 +188,19 @@ button{cursor:pointer}
 .sheet-close{width:100%;padding:16px;border-radius:var(--r2);border:1px solid var(--b2);background:var(--surf);font-size:19px;font-weight:700;color:var(--t2)}
 .sheet-note{width:100%;padding:12px 14px;border:1px solid var(--b2);border-radius:var(--r2);font-size:18px;font-family:var(--font);margin-bottom:14px;resize:vertical;min-height:70px}
 
+.scan-open-btn{flex:0 0 auto;padding:14px 18px;font-size:22px;border:1px solid var(--b2);border-radius:var(--r2);background:var(--glass-strong);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur)}
+.scan-open-btn:active{background:var(--acc-light);border-color:var(--acc)}
+/* Scanare AWB/produs din cameră — cerut direct: „un sistem prin care să se deschidă camera și să
+   scaneze AWB-ul, iar prin scan să se recomande comanda și produsul de împachetat". Overlay separat de
+   .sheet (nu bottom-sheet) — video-ul are nevoie de tot ecranul, nu de un card la 85dvh. */
+.scan-overlay{position:fixed;inset:0;background:#000;z-index:260;display:none;flex-direction:column}
+.scan-overlay.on{display:flex}
+.scan-video{flex:1;width:100%;object-fit:cover;background:#000}
+.scan-frame{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:78vw;max-width:420px;height:200px;border:3px solid rgba(255,255,255,.85);border-radius:16px;box-shadow:0 0 0 2000px rgba(0,0,0,.35);pointer-events:none}
+.scan-top-bar{position:absolute;top:0;left:0;right:0;padding:calc(14px + env(safe-area-inset-top)) 16px 14px;display:flex;justify-content:flex-end;z-index:1}
+.scan-close-btn{padding:10px 16px;border-radius:999px;border:none;background:rgba(255,255,255,.15);color:#fff;font-size:19px;font-weight:700}
+.scan-status{position:absolute;left:0;right:0;bottom:calc(28px + env(safe-area-inset-bottom));text-align:center;color:#fff;font-size:19px;font-weight:600;padding:0 24px;text-shadow:0 1px 4px rgba(0,0,0,.6)}
+
 .toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:rgba(23,24,28,.8);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);color:#fff;padding:12px 18px;border-radius:999px;font-size:19px;font-weight:600;box-shadow:var(--sh2);z-index:300;opacity:0;transition:opacity .2s;pointer-events:none;display:flex;align-items:center;gap:12px;max-width:92vw}
 .toast.on{opacity:1;pointer-events:auto}
 .toast-undo{background:rgba(255,255,255,.15);border:none;color:#fff;font-weight:800;padding:6px 14px;border-radius:999px;flex-shrink:0}
@@ -283,6 +296,13 @@ button{cursor:pointer}
   <div class="sheet" id="sheet-body"></div>
 </div>
 
+<div class="scan-overlay" id="scan-overlay">
+  <video class="scan-video" id="scan-video" muted playsinline></video>
+  <div class="scan-frame"></div>
+  <div class="scan-top-bar"><button type="button" class="scan-close-btn" onclick="closeScanner()">✕ Închide</button></div>
+  <div class="scan-status" id="scan-status"></div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <div class="msg-overlay" id="msg-overlay">
@@ -352,6 +372,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:409,date:'18.09.2026',text:'La „🔍 Căutare" — buton nou „📷" lângă căutarea text: deschide camera și scanează codul de bare al AWB-ului sau al produsului. Un singur rezultat → sari direct la comanda de împachetat; mai multe → alegi din listă, la fel ca la căutarea manuală. Codul scanat completează exact același câmp de căutare, deci funcționează cu tot ce funcționa deja (comandă, client, AWB, SKU, cod intern) plus, nou, EAN-ul (codul de bare fizic al produsului).'},
   {n:408,date:'18.09.2026',text:'Tab nou „📥 Marfă furnizor" — separat de „De rezolvat", nu-l înlocuiește. Aici apar comenzile plasate la furnizor, încă pe drum (adăugate de admin din Inventar/Dashboard). Pe fiecare produs: „✗ Nu a ajuns" sau „◐ A ajuns parțial" (cu cantitatea primită), plus „✓ Tot restul a ajuns" jos, pentru tot ce-a rămas din comandă. Nu atinge stocul din Manager Stoc — doar urmărește sosirea.'},
   {n:407,date:'18.09.2026',text:'O comandă eMAG cu toate produsele împachetate nu mai dispare din coadă dacă nu are încă AWB generat — rămâne vizibilă, cu „AWB în așteptare”, până se emite AWB-ul din Comenzi Platforme. Trendyol/Vinted/vânzări directe nu sunt afectate (au deja cod de livrare din altă sursă).'},
   {n:406,date:'18.09.2026',text:'Tab „De rezolvat”: o comandă blocată pe „Stoc zero”/„Cantitate insuficientă” arată acum direct dacă produsul are deja stoc suficient („✓ Stoc disponibil acum”) — apare după „↻ Reîncarcă”, fără să mai deschizi fiecare comandă blocată să verifici manual.'},
@@ -1206,14 +1227,18 @@ function matchOrder(o,q){
   // Bug real găsit pe drum: placeholder-ul căutării promitea deja „...SKU sau cod intern", dar
   // codul intern (internalCode) nu era de fapt verificat — util mai ales acum, la pre-împachetare,
   // ca eticheta tipărită (care arată codul intern) să poată fi găsită manual când nu ai cameră.
+  // ean — codul de bare fizic de pe ambalajul produsului (diferit de SKU-ul intern) — verificat aici
+  // ca să funcționeze scanarea din cameră (📷 Scanează): cine scanează produsul, nu AWB-ul, trimite
+  // exact valoarea EAN ca text de căutare.
   return o.lines.some(l=>{
     const p=findProdus(l.produs_id);
-    return(l.produs_nume||l.titlu_extern||'').toLowerCase().includes(s)||(p?.sku||'').toLowerCase().includes(s)||(p?.internalCode||'').toLowerCase().includes(s);
+    return(l.produs_nume||l.titlu_extern||'').toLowerCase().includes(s)||(p?.sku||'').toLowerCase().includes(s)||(p?.internalCode||'').toLowerCase().includes(s)||(p?.ean||'').toLowerCase().includes(s);
   });
 }
 function renderSearchTab(host){
   document.getElementById('search-dock').innerHTML=`<div class="search-row search-drop">
     <input type="text" id="search-page-input" placeholder="Caută comandă, client, produs, SKU sau cod intern…" oninput="onSearchPageInput()" autofocus>
+    <button type="button" class="scan-open-btn" onclick="openScanner()" title="Scanează codul de bare (AWB sau produs)">📷</button>
   </div>`;
   host.innerHTML='<div class="search-page-list" id="search-page-results"></div>';
 }
@@ -1246,6 +1271,72 @@ function jumpToOrder(key){
   activeTab=ord.finalized?'finalized':ord.waiting?'waiting':'pack';
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('on',b.dataset.tab===activeTab));
   renderMain(true);
+}
+
+/* ── Scanare AWB/produs din cameră (📷, la Căutare) — cerut direct ── */
+// Bibliotecă încărcată doar la nevoie (nimeni nu scanează la fiecare sesiune) — același model ca la
+// XLSX/pdf.js din index.html. ZXing decodează 1D (Code128 — AWB-uri) ȘI 2D (QR), fără să depindă de
+// BarcodeDetector nativ, care nu e disponibil pe Safari/iPad.
+let zxingReader=null,scannerOpen=false,lastScanValue='',lastScanAt=0;
+async function ensureZXing(){
+  if(window.ZXing)return;
+  await new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/@zxing/library@0.23.0/umd/index.min.js';
+    s.onload=resolve;s.onerror=()=>reject(new Error('Nu s-a putut încărca scanerul — verifică internetul'));
+    document.head.appendChild(s);
+  });
+}
+async function openScanner(){
+  if(!navigator.mediaDevices?.getUserMedia){showToast('Camera nu e disponibilă în acest browser');return;}
+  const status=document.getElementById('scan-status');
+  document.getElementById('scan-overlay').classList.add('on');
+  scannerOpen=true;
+  if(status)status.textContent='Se pornește camera…';
+  try{
+    await ensureZXing();
+    zxingReader=new ZXing.BrowserMultiFormatReader();
+    // Camera din spate, nu cea frontală — pe iPad e ultima din listă la majoritatea modelelor; dacă
+    // eticheta lipsește sau nu se poate enumera, se cade pe selecția implicită a bibliotecii.
+    let deviceId;
+    try{
+      const devices=await zxingReader.listVideoInputDevices();
+      const back=devices.find(d=>/back|rear|environment|spate/i.test(d.label))||devices[devices.length-1];
+      deviceId=back?.deviceId;
+    }catch(e){/* selecție implicită */}
+    if(status)status.textContent='Îndreaptă camera spre codul de bare (AWB sau produs)';
+    await zxingReader.decodeFromVideoDevice(deviceId,'scan-video',(result)=>{
+      if(result)handleScanResult(result.getText());
+    });
+  }catch(e){
+    closeScanner();
+    showToast('Nu s-a putut porni camera: '+(e.message||e));
+  }
+}
+function closeScanner(){
+  scannerOpen=false;
+  document.getElementById('scan-overlay').classList.remove('on');
+  try{zxingReader?.reset();}catch(e){}
+  zxingReader=null;
+}
+// decodeFromVideoDevice apelează callback-ul pe FIECARE cadru analizat (10+/secundă) — fără debounce,
+// același cod citit ținând camera nemișcată pe etichetă ar redeclanșa căutarea de zeci de ori.
+function handleScanResult(text){
+  const now=Date.now();
+  if(text===lastScanValue&&now-lastScanAt<2000)return;
+  lastScanValue=text;lastScanAt=now;
+  closeScanner();
+  const input=document.getElementById('search-page-input');
+  if(input){input.value=text;onSearchPageInput();}
+  const hits=ORDERS.filter(o=>matchOrder(o,text));
+  if(hits.length===1){
+    showToast(`Scanat: ${text}`);
+    jumpToOrder(hits[0].key);
+  }else if(!hits.length){
+    showToast(`Niciun rezultat pentru codul scanat (${text})`);
+  }else{
+    showToast(`Scanat: ${text} — ${hits.length} rezultate, alege din listă`);
+  }
 }
 
 /* ── Raport stoc Staff ── */
@@ -1407,8 +1498,9 @@ document.addEventListener('gesturestart',ev=>ev.preventDefault(),{passive:false}
 function startPolling(){
   clearInterval(pollTimer);
   pollTimer=setInterval(()=>{
-    // nu reîmprospăta peste un sheet deschis sau un undo în așteptare — ar smulge ecranul de sub deget
-    if(document.hidden||sheetCtx||pendingUndo||document.activeElement?.matches('input,textarea,select'))return;
+    // nu reîmprospăta peste un sheet deschis, un undo în așteptare sau camera de scanare — ar smulge
+    // ecranul de sub deget (sau ar rescrie #main-area cât timp video-ul de scanare stă peste el)
+    if(document.hidden||sheetCtx||pendingUndo||scannerOpen||document.activeElement?.matches('input,textarea,select'))return;
     refreshData();
   },25000);
 }
@@ -1423,7 +1515,7 @@ async function refreshStaffNow(){
   try{
     // Reîncarcă și produsele, nu doar comenzile: o asociere sau un produs adăugat recent în ERP devine
     // disponibil pe Staff imediat, fără refresh de browser și fără cache local intermediar.
-    const prodRows=await sb('GET','produse?select=id,name,sku,internal_code,img,images,bought,sold,price_buy_ttc,archived&order=id.asc');
+    const prodRows=await sb('GET','produse?select=id,name,sku,ean,internal_code,img,images,bought,sold,price_buy_ttc,archived&order=id.asc');
     PRODUSE=prodRows.map(p=>({...p,internalCode:p.internal_code}));
     // Pragul de coadă se verifică doar aici și la încărcarea inițială (load()), nu la fiecare
     // reîmprospătare automată (25s/visibilitychange/online) — „Coadă nouă” a devenit o acțiune rară,
@@ -1530,7 +1622,7 @@ async function load(){
   try{
     await loadStaffQueueStart();
     const [prodRows,comRows,prepackRows,msgRows,furnizorRows]=await Promise.all([
-      sb('GET','produse?select=id,name,sku,internal_code,img,images,bought,sold,price_buy_ttc,archived&order=id.asc'),
+      sb('GET','produse?select=id,name,sku,ean,internal_code,img,images,bought,sold,price_buy_ttc,archived&order=id.asc'),
       sbComenzi(`platforma_comenzi?select=*&created_at=gte.${encodeURIComponent(staffQueueStartedAt)}&anulata=eq.false&order=created_at.asc`),
       sb('GET','pre_impachetate?select=*&folosit_la=is.null&order=created_at.asc').catch(e=>{console.warn('pre_impachetate indisponibil:',e);return[];}),
       sb('GET','staff_mesaje?select=*&rezolvat=is.false&order=created_at.asc').catch(e=>{console.warn('staff_mesaje indisponibil:',e);return[];}),
