@@ -142,6 +142,12 @@ button{cursor:pointer}
 .nav-btn:disabled{opacity:.4}
 .report-btn{flex:0 0 auto;padding:0 18px;border-radius:var(--r2);border:1px solid var(--glass-bd);background:var(--glass-strong);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);font-size:16px;font-weight:700;color:var(--t2);min-height:72px;white-space:nowrap}
 .report-btn:active{background:var(--surf2)}
+.cf-order{background:var(--glass);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);border:1px solid var(--glass-bd);border-radius:var(--r3);box-shadow:0 12px 40px rgba(16,24,40,.08);padding:20px;display:flex;flex-direction:column;gap:14px;margin-bottom:16px}
+.cf-line{padding:12px 0;border-top:1px solid var(--b1)}
+.cf-line:first-of-type{border-top:0;padding-top:0}
+.cf-line-top{display:flex;align-items:flex-start;gap:16px}
+.cf-line-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:10px}
+.cf-qty-input{width:70px;padding:8px 6px;border-radius:8px;border:1px solid var(--b2);background:var(--surf);font-size:16px;text-align:center}
 
 /* liste (În așteptare / Finalizate / Căutare) */
 .list-item{display:flex;align-items:center;gap:16px;padding:16px 18px;background:var(--glass);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);border:1px solid var(--glass-bd);border-radius:var(--r2);cursor:pointer}
@@ -266,6 +272,7 @@ button{cursor:pointer}
     <button class="tab-btn" data-tab="search" onclick="setTab('search')"><span class="ic">🔍</span>Căutare</button>
     <button class="tab-btn" data-tab="stock" onclick="setTab('stock')"><span class="ic">📋</span>Raport stoc</button>
     <button class="tab-btn" data-tab="prepack" onclick="setTab('prepack')"><span class="ic">🏷️</span>Pre-împachetate<span class="tab-badge" id="prepack-badge" style="display:none"></span></button>
+    <button class="tab-btn" data-tab="furnizor" onclick="setTab('furnizor')"><span class="ic">📥</span>Marfă furnizor<span class="tab-badge" id="furnizor-badge" style="display:none"></span></button>
   </div>
 
   <div id="search-dock"></div>
@@ -332,7 +339,7 @@ const STAFF_QUEUE_KEY='staff_queue_started_at';
 let staffQueueStartedAt=CUTOFF_DATE+'T00:00:00.000Z';
 const ISSUE_LABELS={stoc_zero:'Stoc zero',cantitate_insuficienta:'Cantitate insuficientă',produs_deteriorat:'Produs deteriorat',produs_gresit:'Produs greșit',nu_gasesc:'Nu găsesc produsul',alta:'Altă problemă'};
 
-let PRODUSE=[],COMENZI=[],JURNAL=[],ORDERS=[],PREPACK=[],STAFFMSG=[],curKey=null,activeTab='pack',activeImg={},stockCardIdx=0,stockSaveBusy=false,stockSwipeX=null;
+let PRODUSE=[],COMENZI=[],JURNAL=[],ORDERS=[],PREPACK=[],STAFFMSG=[],FURNIZOR=[],curKey=null,activeTab='pack',activeImg={},stockCardIdx=0,stockSaveBusy=false,stockSwipeX=null;
 let sheetCtx=null; // {lk} sau {lk,type:'stoc_redus'} — comanda/linia pentru care e deschis sheet-ul de probleme
 let pendingUndo=null; // {orderKey,lines:[{table,id,prev}],timeoutId,type}
 let lineBusy={}; // lk -> true cât timp o cerere e în curs (protecție dublu-tap)
@@ -345,6 +352,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:408,date:'18.09.2026',text:'Tab nou „📥 Marfă furnizor" — separat de „De rezolvat", nu-l înlocuiește. Aici apar comenzile plasate la furnizor, încă pe drum (adăugate de admin din Inventar/Dashboard). Pe fiecare produs: „✗ Nu a ajuns" sau „◐ A ajuns parțial" (cu cantitatea primită), plus „✓ Tot restul a ajuns" jos, pentru tot ce-a rămas din comandă. Nu atinge stocul din Manager Stoc — doar urmărește sosirea.'},
   {n:407,date:'18.09.2026',text:'O comandă eMAG cu toate produsele împachetate nu mai dispare din coadă dacă nu are încă AWB generat — rămâne vizibilă, cu „AWB în așteptare”, până se emite AWB-ul din Comenzi Platforme. Trendyol/Vinted/vânzări directe nu sunt afectate (au deja cod de livrare din altă sursă).'},
   {n:406,date:'18.09.2026',text:'Tab „De rezolvat”: o comandă blocată pe „Stoc zero”/„Cantitate insuficientă” arată acum direct dacă produsul are deja stoc suficient („✓ Stoc disponibil acum”) — apare după „↻ Reîncarcă”, fără să mai deschizi fiecare comandă blocată să verifici manual.'},
   {n:405,date:'17.09.2026',text:'Coada Staff pornește curată de azi — comenzile mai vechi de test nu mai apar. Un produs anulat de admin din Comenzi Platforme dispare acum și din Staff, fără să atingă stocul. „↺ Coadă nouă" rămâne disponibil, ca soluție de urgență.'},
@@ -456,6 +464,9 @@ function renderProgress(){
   const pc=prepackEligibleLines().length;
   const pbadge=document.getElementById('prepack-badge');
   if(pbadge){if(pc){pbadge.style.display='inline-block';pbadge.textContent=pc;}else{pbadge.style.display='none';}}
+  const fc=furnizorActiveOrders().length;
+  const fbadge=document.getElementById('furnizor-badge');
+  if(fbadge){if(fc){fbadge.style.display='inline-block';fbadge.textContent=fc;}else{fbadge.style.display='none';}}
 }
 
 function setTab(tab){
@@ -497,6 +508,7 @@ function renderMain(resetScroll=false){
   else if(activeTab==='search')renderSearchTab(host);
   else if(activeTab==='stock')renderStockTab(host);
   else if(activeTab==='prepack')renderPrepackTab(host);
+  else if(activeTab==='furnizor')renderFurnizorTab(host);
   // Pollingul înlocuiește doar conținutul intern. Restabilim poziția după paint, ca Safari să nu
   // trimită angajatul la începutul comenzii în timp ce verifică produsele.
   requestAnimationFrame(()=>{if(!resetScroll&&document.activeElement?.matches('input,textarea,select'))return;host.scrollTop=oldScroll;});
@@ -754,6 +766,113 @@ function renderPrepackTab(host){
     </div>`;
   }).join('')}</div>`;
 }
+
+/* ── Marfă furnizor — comenzi plasate la furnizor, încă pe drum (SEPARAT de stocul intern: nu se
+   atinge nimic din produse/stoc aici, doar se urmărește ce a ajuns fizic) ── */
+function computeFurnizorOrders(){
+  const groups={};
+  FURNIZOR.forEach(r=>{
+    const key=(r.furnizor||'—')+'|'+(r.comanda_ref||('_row'+r.id));
+    if(!groups[key])groups[key]={key,furnizor:r.furnizor||'',comandaRef:r.comanda_ref||'',sortAt:r.created_at,lines:[]};
+    groups[key].lines.push(r);
+    if(String(r.created_at)<String(groups[key].sortAt))groups[key].sortAt=r.created_at;
+  });
+  return Object.values(groups).sort((a,b)=>String(b.sortAt).localeCompare(String(a.sortAt)));
+}
+// Comenzile din FURNIZOR sunt deja filtrate finalizat=false la citire — un grup cu toate liniile
+// finalizate între timp local (după o acțiune) dispare corect din activ fără să mai ceară un refresh.
+function furnizorActiveOrders(){
+  return computeFurnizorOrders().map(g=>({...g,lines:g.lines.filter(l=>!l.finalizat)})).filter(g=>g.lines.length>0);
+}
+function furnizorLineHtml(r){
+  const p=findProdus(r.produs_id);
+  const lk='cf_'+r.id;
+  const busy=lineBusy[lk];
+  const img=p&&p.img?`<img class="list-item-th" src="${esc(imgSrc(p.img))}" onerror="this.style.display='none'">`:`<div class="list-item-th-ph">📦</div>`;
+  const restul=Math.max(0,(Number(r.cantitate_comandata)||0)-(Number(r.cantitate_sosita)||0));
+  const issueHtml=(r.nu_a_sosit&&!r.nu_a_sosit_rezolvat)?`<div class="list-item-issue">⛔ Nu a ajuns${r.nu_a_sosit_nota?': '+esc(r.nu_a_sosit_nota):''}</div>`:'';
+  return`<div class="cf-line">
+    <div class="cf-line-top">
+      ${img}
+      <div class="list-item-main">
+        <div class="list-item-nm">${esc(p?p.name:r.titlu_extern)}</div>
+        <div class="list-item-meta">${r.cod_extern?'Cod '+esc(r.cod_extern)+' · ':''}comandat ${fmtCfQty(r.cantitate_comandata)}${r.cantitate_sosita>0?` · sosit ${fmtCfQty(r.cantitate_sosita)} · rest ${fmtCfQty(restul)}`:''}</div>
+        ${issueHtml}
+      </div>
+    </div>
+    <div class="cf-line-actions">
+      <input type="number" class="cf-qty-input" id="cf-qty-${r.id}" min="0" step="1" placeholder="buc." ${busy?'disabled':''}>
+      <button type="button" class="line-check" ${busy?'disabled':''} onclick="furnizorReportSosire(${r.id})">◐ A ajuns</button>
+      <button type="button" class="report-btn" ${busy?'disabled':''} onclick="furnizorReportNuASosit(${r.id})">✗ Nu a ajuns</button>
+    </div>
+  </div>`;
+}
+function fmtCfQty(v){const n=Number(v)||0;return Number.isInteger(n)?String(n):n.toFixed(1);}
+function renderFurnizorTab(host){
+  const orders=furnizorActiveOrders();
+  if(!orders.length){host.innerHTML=`<div class="empty"><div class="big">📥</div><div>Nicio comandă de la furnizor în așteptare.</div></div>`;return;}
+  host.innerHTML=`<div class="search-page-list">${orders.map(g=>`<div class="cf-order">
+    <div class="ord-hdr"><span class="ord-num">${esc(g.furnizor||'Furnizor')}</span>${g.comandaRef?`<span class="list-item-meta">#${esc(g.comandaRef)}</span>`:''}</div>
+    ${g.lines.map(furnizorLineHtml).join('')}
+    <button type="button" class="nav-btn" onclick="furnizorFinalizeazaRestul('${esc(g.key)}')">✓ Tot restul a ajuns</button>
+  </div>`).join('')}</div>`;
+}
+async function furnizorReportNuASosit(id){
+  const lk='cf_'+id;if(lineBusy[lk])return;
+  const nota=prompt('Notă (opțional) — ce s-a întâmplat, cine a confirmat etc.:');
+  if(nota===null)return;
+  lineBusy[lk]=true;renderMain();
+  try{
+    const body={nu_a_sosit:true,nu_a_sosit_at:new Date().toISOString(),nu_a_sosit_nota:nota||null,nu_a_sosit_rezolvat:false};
+    await sb('PATCH',`comenzi_furnizor?id=eq.${id}`,body);
+    const r=FURNIZOR.find(x=>x.id===id);if(r)Object.assign(r,body);
+    logActivity('marfa_nu_a_sosit',{_table:'comenzi_furnizor',id},nota||null);
+    showToast('⛔ Marcat „nu a ajuns” — apare și în clopoțelul din admin');
+  }catch(e){showToast('Eroare — încearcă din nou');console.error(e);}
+  lineBusy[lk]=false;renderMain();
+}
+// Cantitatea introdusă se ADUNĂ la ce era deja sosit (nu înlocuiește) — o comandă poate ajunge în
+// mai multe tranșe, fiecare raportare adaugă ce a venit ACUM, nu totalul cumulat din cap.
+async function furnizorReportSosire(id){
+  const lk='cf_'+id;if(lineBusy[lk])return;
+  const r=FURNIZOR.find(x=>x.id===id);if(!r)return;
+  const inp=document.getElementById('cf-qty-'+id);
+  const add=Number(inp?.value);
+  if(!add||add<=0){showToast('Introdu o cantitate validă');return;}
+  lineBusy[lk]=true;renderMain();
+  try{
+    const sosita=(Number(r.cantitate_sosita)||0)+add;
+    const finalizat=sosita>=(Number(r.cantitate_comandata)||0);
+    const body={cantitate_sosita:sosita,finalizat,finalizat_at:finalizat?new Date().toISOString():null,
+      // Marfa a ajuns — orice raportare anterioară de „nu a ajuns” pe aceeași linie e depășită de fapte.
+      nu_a_sosit:false,nu_a_sosit_rezolvat:true};
+    await sb('PATCH',`comenzi_furnizor?id=eq.${id}`,body);
+    Object.assign(r,body);
+    logActivity('marfa_sosita',{_table:'comenzi_furnizor',id},String(add));
+    showToast(finalizat?'✓ Produs complet — linie închisă':`✓ +${fmtCfQty(add)} buc. înregistrate`);
+  }catch(e){showToast('Eroare — încearcă din nou');console.error(e);}
+  lineBusy[lk]=false;renderMain();
+}
+// „Tot restul a ajuns” NU atinge liniile cu o problemă nerezolvată („nu a ajuns”) — ar contrazice
+// tăcut un raport real; acelea rămân active până se rezolvă explicit, prin „A ajuns” sau din admin.
+async function furnizorFinalizeazaRestul(key){
+  const g=furnizorActiveOrders().find(x=>x.key===key);if(!g)return;
+  const targets=g.lines.filter(l=>!(l.nu_a_sosit&&!l.nu_a_sosit_rezolvat));
+  if(!targets.length){showToast('Nimic de finalizat — toate liniile rămase au o problemă raportată');return;}
+  if(!confirm(`Marchezi restul de ${targets.length} produs${targets.length>1?'e':''} ca sosit complet?`))return;
+  targets.forEach(l=>lineBusy['cf_'+l.id]=true);renderMain();
+  const now=new Date().toISOString();
+  try{
+    await Promise.all(targets.map(async l=>{
+      const body={cantitate_sosita:Number(l.cantitate_comandata)||0,finalizat:true,finalizat_at:now};
+      await sb('PATCH',`comenzi_furnizor?id=eq.${l.id}`,body);
+      Object.assign(l,body);
+    }));
+    showToast(`✓ ${targets.length} produs${targets.length>1?'e închise':' închis'}`);
+  }catch(e){showToast('Eroare la salvare — încearcă din nou');console.error(e);}
+  targets.forEach(l=>lineBusy['cf_'+l.id]=false);renderMain();
+}
+
 async function patchLine(l,body){
   await sb('PATCH',`${l._table}?id=eq.${l.id}`,body);
   Object.assign(l,body);
@@ -1365,13 +1484,14 @@ async function refreshData(){
   if(document.hidden)return;
   refreshInFlight=true;let ok=false;
   try{
-    const [comRows,jurnalRows,prepackRows,msgRows]=await Promise.all([
+    const [comRows,jurnalRows,prepackRows,msgRows,furnizorRows]=await Promise.all([
       sbComenzi(`platforma_comenzi?select=*&created_at=gte.${encodeURIComponent(staffQueueStartedAt)}&anulata=eq.false&order=created_at.asc`),
       sbComenzi(`jurnal?select=*&data=gte.${queueDate()}&anulata=eq.false&order=data.asc`).catch(()=>JURNAL),
       sb('GET','pre_impachetate?select=*&folosit_la=is.null&order=created_at.asc').catch(()=>PREPACK),
-      sb('GET','staff_mesaje?select=*&rezolvat=is.false&order=created_at.asc').catch(()=>STAFFMSG)
+      sb('GET','staff_mesaje?select=*&rezolvat=is.false&order=created_at.asc').catch(()=>STAFFMSG),
+      sb('GET','comenzi_furnizor?select=*&finalizat=eq.false&order=created_at.asc').catch(e=>{console.warn('comenzi_furnizor indisponibil (rulează migration_comenzi_furnizor.sql):',e);return FURNIZOR;})
     ]);
-    COMENZI=comRows;JURNAL=jurnalRows.filter(afterStaffQueueStart);PREPACK=prepackRows;STAFFMSG=msgRows;
+    COMENZI=comRows;JURNAL=jurnalRows.filter(afterStaffQueueStart);PREPACK=prepackRows;STAFFMSG=msgRows;FURNIZOR=furnizorRows;
     document.getElementById('sync-dot').className='sync-dot ok';
     computeOrders();
     renderMain();
@@ -1409,16 +1529,18 @@ async function load(){
   renderStaffNameBadge();
   try{
     await loadStaffQueueStart();
-    const [prodRows,comRows,prepackRows,msgRows]=await Promise.all([
+    const [prodRows,comRows,prepackRows,msgRows,furnizorRows]=await Promise.all([
       sb('GET','produse?select=id,name,sku,internal_code,img,images,bought,sold,price_buy_ttc,archived&order=id.asc'),
       sbComenzi(`platforma_comenzi?select=*&created_at=gte.${encodeURIComponent(staffQueueStartedAt)}&anulata=eq.false&order=created_at.asc`),
       sb('GET','pre_impachetate?select=*&folosit_la=is.null&order=created_at.asc').catch(e=>{console.warn('pre_impachetate indisponibil:',e);return[];}),
       sb('GET','staff_mesaje?select=*&rezolvat=is.false&order=created_at.asc').catch(e=>{console.warn('staff_mesaje indisponibil:',e);return[];}),
+      sb('GET','comenzi_furnizor?select=*&finalizat=eq.false&order=created_at.asc').catch(e=>{console.warn('comenzi_furnizor indisponibil (rulează migration_comenzi_furnizor.sql):',e);return[];}),
     ]);
     PRODUSE=prodRows.map(p=>({...p,internalCode:p.internal_code}));
     COMENZI=comRows;
     PREPACK=prepackRows;
     STAFFMSG=msgRows;
+    FURNIZOR=furnizorRows;
     try{
       JURNAL=(await sbComenzi(`jurnal?select=*&data=gte.${queueDate()}&anulata=eq.false&order=data.asc`)).filter(afterStaffQueueStart);
     }catch(e){

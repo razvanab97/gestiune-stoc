@@ -1946,6 +1946,9 @@ th{font-weight:800!important;color:var(--t3)!important}
 .notif-issue-actions{display:flex;gap:6px;margin-top:5px;flex-wrap:wrap}
 .notif-issue-btn{font-size:19px;font-weight:700;padding:3px 9px;border-radius:999px;border:1px solid var(--b2);background:var(--surf);color:var(--t2);cursor:pointer}
 .notif-issue-btn-danger{border-color:var(--rd);color:var(--rd)}
+.notif-section-hd{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;color:var(--t3);padding:14px 8px 6px;border-top:1px solid var(--b1);margin-top:4px}
+.notif-section-hd:first-child{border-top:0;margin-top:0;padding-top:4px}
+.notif-section-count{background:var(--surf2);color:var(--t2);border-radius:999px;padding:1px 8px;font-size:13px}
 /* NOTIȚĂ RAPIDĂ — pop-up mic, mutabil oriunde pe pagină (trage de bara de sus) și redimensionabil
    (colțul din dreapta-jos, resize CSS nativ), conținutul persistă local (localStorage), nu e legat
    de Supabase — un simplu bloc-notes la îndemână, nu o notă pe produs/comandă. */
@@ -2078,6 +2081,17 @@ th{font-weight:800!important;color:var(--t3)!important}
 .pcx-order-emag{background:radial-gradient(260px 140px at 100% 0%,rgba(118,87,246,.13),transparent 70%),linear-gradient(135deg,rgba(255,255,255,.85),rgba(248,250,255,.65))}
 .pcx-order-trendyol{background:radial-gradient(260px 140px at 100% 0%,rgba(247,144,9,.13),transparent 70%),linear-gradient(135deg,rgba(255,255,255,.85),rgba(255,250,240,.65))}
 .pcx-order-vinted{background:radial-gradient(260px 140px at 100% 0%,rgba(18,183,106,.13),transparent 70%),linear-gradient(135deg,rgba(255,255,255,.85),rgba(240,253,246,.65))}
+/* Bandă colorată pe platformă (cerut direct — „aceeași culoare comenzile din aceeași platformă"), pe
+   lângă badge/fundal, ca marcaj care rămâne vizibil chiar și pe cardul „inclus" (verde) — specificitate
+   egală cu .pcx-order.pcx-order-included, ultima regulă din CSS câștigă doar pe border-left. */
+.pcx-order.pcx-order-emag{border-left:5px solid var(--acc)}
+.pcx-order.pcx-order-trendyol{border-left:5px solid var(--or)}
+.pcx-order.pcx-order-vinted{border-left:5px solid var(--gr)}
+/* Delimitare între platforme (cerut direct — „spațiu vizibil între fiecare platformă") — antet de grup,
+   afișat o dată per platformă, înainte de cardurile ei (vezi pcxRenderOrders, grupare pe platformă). */
+.pcx-plat-divider{display:flex;align-items:center;gap:10px;margin:20px 0 4px;padding-top:16px;border-top:2px dashed var(--b2)}
+.pcx-plat-divider:first-child{margin-top:0;padding-top:0;border-top:0}
+.pcx-plat-divider-count{font-size:15px;font-weight:700;color:var(--t3);background:var(--surf2);border-radius:999px;padding:2px 10px}
 .pcx-order-hd{display:grid;grid-template-columns:auto auto auto 1fr auto auto auto auto auto;align-items:center;gap:14px;padding:12px 16px;cursor:pointer;min-height:44px}
 .pcx-order-hd:hover{background:rgba(255,255,255,.4)}
 .pcx-badge{font-size:18px;font-weight:800;padding:4px 10px;border-radius:999px;white-space:nowrap}
@@ -2265,6 +2279,7 @@ button.pcx-include-btn.included{border-color:var(--gr)}
       </select>
       <button type="button" class="btn btn-sm" onclick="openInvoice()">📄 Importă factură</button>
       <button type="button" class="btn btn-sm" onclick="openPresetCSV()" title="Încarcă direct un CSV de comandă (ex. Jumbo) — format recunoscut automat">📦 Preset CSV comandă</button>
+      <button type="button" class="btn btn-sm" onclick="openFurnizorComanda()" title="Marfă comandată la furnizor, încă pe drum — nu atinge stocul, apare în Staff pentru urmărit sosirea">📥 Comandă furnizor</button>
       <button type="button" class="btn btn-sm" onclick="openSupplierCompare()" title="Compară prețul de la mai mulți furnizori pentru același produs">⚖️ Compară furnizori</button>
       <button type="button" class="btn btn-acc btn-sm" onclick="openModal()">+ Produs nou</button>
     </div>
@@ -2341,6 +2356,7 @@ button.pcx-include-btn.included{border-color:var(--gr)}
       <div class="tb-btns">
         <button class="btn btn-sm" onclick="openInvoice()">📄 Importă factură</button>
         <button class="btn btn-sm" onclick="openPresetCSV()" title="Încarcă direct un CSV de comandă (ex. Jumbo) — format recunoscut automat">📦 Preset CSV comandă</button>
+        <button class="btn btn-sm" onclick="openFurnizorComanda()" title="Marfă comandată la furnizor, încă pe drum — nu atinge stocul, apare în Staff pentru urmărit sosirea">📥 Comandă furnizor</button>
         <input type="file" id="preset-csv-file" accept=".csv,.numbers" style="display:none" onchange="handlePresetCSV(event)">
         <button class="btn btn-sm" onclick="closeDay()">✓ Închide ziua</button>
         <button class="btn btn-sm" onclick="resetToday()">↺ Reset</button>
@@ -2429,6 +2445,11 @@ button.pcx-include-btn.included{border-color:var(--gr)}
 <!-- PAGE JURNAL -->
 <!-- PAGE RAPORT STOC -->
 <div id="page-raport" class="page"><div class="wrap">
+  <div class="card" id="rpt-furnizor-card" style="padding:1rem 1.25rem;margin-bottom:1rem;display:none">
+    <div class="sec" style="margin-top:0">📥 Marfă așteptată de la furnizor</div>
+    <div style="font-size:22px;color:var(--t3);margin-bottom:8px">Comenzi plasate la furnizor, încă pe drum — urmărirea sosirii (✗ Nu a ajuns / ◐ A ajuns) se face din Staff, tab „Marfă furnizor". Aici e doar o privire de ansamblu.</div>
+    <div id="rpt-furnizor-list"></div>
+  </div>
   <!-- Carduri produse (actualizare rapidă stoc) — primul lucru vizibil, e principalul motiv de a intra pe pagină -->
   <div class="rpt-cards-wrap">
     <div class="rpt-cards-head">
@@ -3617,6 +3638,57 @@ button.pcx-include-btn.included{border-color:var(--gr)}
 </div>
 </div>
 
+<!-- Marfă furnizor — comenzi plasate la furnizor, ÎNCĂ pe drum. Separat complet de „Importă factură"
+     (stoc intern, marfă deja sosită) — vezi migration_comenzi_furnizor.sql. Ajunge în Staff, tab nou
+     „📥 Marfă furnizor", unde se marchează per produs „✗ Nu a ajuns"/„◐ A ajuns" — nu aici. -->
+<div class="ov" id="ov-cf" onclick="if(event.target===this)closeFurnizorComanda()">
+<div class="inv-modal" onclick="event.stopPropagation()">
+  <div class="inv-head">
+    <div>
+      <h2>📥 Comandă furnizor așteptată</h2>
+      <div style="font-size:19px;color:#6B7280;font-weight:500;margin-top:2px">Marfă comandată, încă pe drum — NU atinge stocul. Apare în Staff pentru urmărit sosirea.</div>
+    </div>
+    <button class="m-close" onclick="closeFurnizorComanda()">×</button>
+  </div>
+  <div class="inv-body">
+    <div class="invx-summary">
+      <div class="invx-summary-card">
+        <div class="invx-summary-lbl">Furnizor</div>
+        <input type="text" id="cf-furnizor" class="invx-summary-input" list="inv-supplier-list" placeholder="ex: Jumbo">
+      </div>
+      <div class="invx-summary-card">
+        <div class="invx-summary-lbl">Referință comandă</div>
+        <input type="text" id="cf-comanda-ref" class="invx-summary-input" placeholder="opțional">
+      </div>
+      <div class="invx-summary-card">
+        <div class="invx-summary-lbl">Status analiză AI</div>
+        <div class="invx-summary-val" id="cfx-status">Se așteaptă text sau poză</div>
+      </div>
+    </div>
+    <div class="frow" style="margin-top:10px">
+      <div class="fld" style="flex:1;min-width:280px">
+        <label>Lipește textul comenzii (copiat din pagina furnizorului)</label>
+        <textarea id="cf-paste-text" rows="4" placeholder="Lipește aici textul comenzii — denumiri, coduri, cantități, prețuri…" style="width:100%;font-family:var(--font);padding:10px;border:1px solid var(--b2);border-radius:var(--r)"></textarea>
+        <button type="button" class="btn btn-sm" style="margin-top:6px" onclick="parseFurnizorPastedText()">🤖 Extrage din text</button>
+      </div>
+      <div class="fld" style="flex:0 0 auto">
+        <label>sau încarcă poze (screenshot-uri)</label>
+        <input type="file" id="cf-file" accept="image/*" multiple onchange="handleFurnizorFiles(event)">
+      </div>
+    </div>
+    <div id="cf-parsing" style="display:none;font-size:20px;color:var(--t3);margin:10px 0"><span class="spin"></span> Se analizează cu AI…</div>
+    <div id="cf-preview" style="margin-top:14px"></div>
+  </div>
+  <div class="inv-foot">
+    <div class="invx-foot-stats" id="cf-info">Adaugă produse pentru previzualizare</div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <button class="btn btn-sm" id="cf-cancel-btn" onclick="closeFurnizorComanda()">Anulează</button>
+      <button class="btn btn-sm btn-acc" id="cf-apply-btn" onclick="applyFurnizorComanda()" disabled>Trimite ca așteptată</button>
+    </div>
+  </div>
+</div>
+</div>
+
 <div id="inv-checklist-print"></div>
 <div id="pk-print"></div>
 <div id="sr-print"></div>
@@ -3739,6 +3811,9 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:422,text:'Comenzi Platforme — 2 reparații, cerute direct: (1) cardurile de comandă sunt acum grupate pe platformă, cu antet separat și cu un contur colorat consistent pe fiecare (mov eMAG / portocaliu Trendyol / verde Vinted), în loc să fie amestecate în ordinea brută de import — mult mai clar care e a cui dintr-o privire. (2) „📮 Asociază AWB-uri" recunoaște acum și un al 4-lea format de etichetă, găsit direct pe etichete reale puse azi în dosar: notele de transport Sameday cu ramburs/COD („Nota transport: X / Y" + „Nr. Comanda: Z"), diferite de eticheta easybox deja recunoscută — 7 din 13 AWB-uri reale de azi picau exact în acest format necunoscut. Bug mai grav, găsit pe aceleași date reale: fișierele fără NICIO asociere reușită (format nerecunoscut sau comandă încă neimportată) erau arhivate în „procesate" oricum, doar pentru că alte fișiere din același lot se asociaseră cu succes — dispăreau din dosar fără să fi scris niciun AWB și fără nicio urmă. Acum se arhivează STRICT fișierele care au scris cu adevărat un AWB; restul rămân la vedere, gata de reîncercat. Cele 7 etichete de azi picate în formatul nou au fost puse înapoi în Desktop/AWB-uri, gata de reasociat cu „Citește din dosar".',date:'2026-09-18'},
+  {n:421,text:'Nou — „📥 Comandă furnizor", cerut direct: pe lângă „Importă factură" (marfă deja sosită), acum poți înregistra și o comandă plasată la furnizor care e încă pe drum, ca să nu mai uiți ce urmează să vină. Lipești textul comenzii sau încarci poze/screenshot-uri (Dashboard sau Inventar → butonul nou), AI extrage produsele și le potrivește automat cu cele din inventar (fără să te oblige să creezi produs nou pentru cele nepotrivite — rămân ca text simplu). NU atinge stocul. În Staff apare un tab nou, separat de „De rezolvat" (care rămâne exact cum era, cu comenzile de client blocate): fiecare produs are „✗ Nu a ajuns" / „◐ A ajuns parțial" (cu cantitate), plus „✓ Tot restul a ajuns" pe toată comanda. Un „Nu a ajuns" ajunge direct în 🔔, care acum e împărțit pe 3 secțiuni: 📥 Marfă furnizor / ⛔ Probleme comenzi client / 📦 Mișcări de stoc. În Raport stoc apare și un card „ce stoc ajunge", cu toate comenzile de furnizor active. Necesită migration_comenzi_furnizor.sql.',date:'2026-09-18'},
+  {n:420,text:'Comenzi Platforme — titlurile Trendyol crossborder, în engleză (ex. „Princess Castle Kids Play Tent, Pink, Foldable..."), se traduc acum automat în română, la fel ca titlurile eMAG din Bulgaria/Ungaria/Grecia. Înainte, detectarea „are nevoie de traducere" se uita doar la alfabet (chirilic/grecesc/diacritice maghiare) — engleza, fiind tot alfabet latin ca și românește, trecea drept „deja românească" și nu se traducea niciodată. Aceeași reparație ajută automat și la Sincronizare (share-uit aceeași detecție).',date:'2026-09-18'},
   {n:419,text:'Dashboard — card nou „Transport" în rândul de indicatori (lângă „Achiziții"), cerut direct: suma costului de transport plătit la facturile de furnizor importate (câmpul „Cost transport" din Importă factură), pe perioada aleasă din selectorul de sus al Dashboard-ului — aceeași dată deja salvată per factură, doar adunată acum și afișată.',date:'2026-09-18'},
   {n:418,text:'Sincronizare — „🤖 Sugerează cu AI" marchează acum vizibil sugestiile nesigure, la cerere directă (raportat pe un exemplu real: un brad decorativ de Crăciun asociat cu un candidat care nu semăna deloc la prima vedere). Când candidatul ales de AI are o potrivire lexicală slabă cu titlul, apare „⚠️ sugestie AI nesigură" (portocaliu, nu verde) și rândul NU se bifează automat — rămâne de intervenit local, prin picker sau „+ Nou", înainte de „Adaugă mapările selectate". Alegerea manuală a unui produs (sau marcarea „+ Nou") șterge corect eticheta veche AI/PNK, ca semnalul să dispară exact când cineva a rezolvat rândul.',date:'2026-09-18'},
   {n:417,text:'Comenzi Platforme — „📮 Asociază AWB-uri" citește acum și direct din dosarul Desktop/AWB-uri de pe acest Mac (buton „📂 Citește din dosar"), în loc de selectare manuală a unui singur PDF. Pui acolo, în timpul zilei, PDF-urile descărcate de la eMAG ȘI Trendyol (amestecate, nu contează) — un click le citește pe toate deodată, iar cele asociate cu succes se mută automat în „procesate/<data>", ca dosarul să rămână curat. Confirmat că eMAG nu oferă altă cale de a citi un AWB generat manual pe Seller Center (API-ul cere un ID intern pe care nu-l avem în acest caz) — asta rămâne calea corectă.',date:'2026-09-18'},
@@ -4486,24 +4561,48 @@ function notifRowHtml(a){
 // Aceleași etichete ca ISSUE_LABELS din staff.html — text identic, ca omul să recunoască problema.
 const ISSUE_LABELS_ADMIN={stoc_zero:'Stoc zero',cantitate_insuficienta:'Cantitate insuficientă',produs_deteriorat:'Produs deteriorat',produs_gresit:'Produs greșit',nu_gasesc:'Nu găsesc produsul',alta:'Altă problemă'};
 let STAFF_ISSUES=[];
+let FURNIZOR_ADMIN=[],FURNIZOR_ISSUES=[];
 async function loadStaffIssues(){
   if(!sbReady)return;
   try{
-    const [comRows,jurRows]=await Promise.all([
+    const [comRows,jurRows,furRows]=await Promise.all([
       dbGet('platforma_comenzi?select=id,platforma,comanda_id,produs_id,produs_nume,cantitate,staff_issue_type,staff_issue_note,staff_blocked_at&staff_blocked=eq.true&staff_issue_resolved=eq.false&order=staff_blocked_at.desc'),
-      dbGet('jurnal?select=id,product_id,product_name,qty,staff_issue_type,staff_issue_note,staff_blocked_at&staff_blocked=eq.true&staff_issue_resolved=eq.false&order=staff_blocked_at.desc').catch(()=>[])
+      dbGet('jurnal?select=id,product_id,product_name,qty,staff_issue_type,staff_issue_note,staff_blocked_at&staff_blocked=eq.true&staff_issue_resolved=eq.false&order=staff_blocked_at.desc').catch(()=>[]),
+      dbGet('comenzi_furnizor?select=*&finalizat=eq.false&order=created_at.desc').catch(e=>{console.warn('comenzi_furnizor indisponibil (rulează migration_comenzi_furnizor.sql):',e);return[];})
     ]);
     STAFF_ISSUES=[
       ...comRows.map(r=>({table:'platforma_comenzi',id:r.id,comandaId:r.comanda_id||'',produsId:r.produs_id||null,cantitate:Number(r.cantitate)||1,nume:r.produs_nume||'',tip:r.staff_issue_type||'',nota:r.staff_issue_note||'',ts:r.staff_blocked_at||''})),
       ...jurRows.map(r=>({table:'jurnal',id:r.id,comandaId:'',produsId:r.product_id||null,cantitate:Number(r.qty)||1,nume:r.product_name||'',tip:r.staff_issue_type||'',nota:r.staff_issue_note||'',ts:r.staff_blocked_at||''}))
     ].sort((a,b)=>String(b.ts).localeCompare(String(a.ts)));
+    FURNIZOR_ADMIN=furRows;
+    FURNIZOR_ISSUES=furRows.filter(r=>r.nu_a_sosit&&!r.nu_a_sosit_rezolvat)
+      .map(r=>({id:r.id,nume:(r.produs_id&&P.find(x=>x.id===r.produs_id)?.name)||r.titlu_extern||'',produsId:r.produs_id||null,furnizor:r.furnizor||'',nota:r.nu_a_sosit_nota||'',ts:r.nu_a_sosit_at||r.created_at||''}))
+      .sort((a,b)=>String(b.ts).localeCompare(String(a.ts)));
     // PCOM e încărcat o singură dată la pornire — fără asta, un rând deja deschis în Comenzi Platforme
     // nu ar mai afla niciodată de o problemă raportată ulterior de pe altă tabletă.
     const openIds=new Set(comRows.map(r=>r.id));
     PCOM.forEach(o=>{if(o.staffBlocked&&!openIds.has(o.id)){o.staffBlocked=false;o.staffIssueResolved=true;}});
     comRows.forEach(r=>{const o=PCOM.find(x=>x.id===r.id);if(o){o.staffBlocked=true;o.staffIssueResolved=false;o.staffIssueType=r.staff_issue_type||'';o.staffIssueNote=r.staff_issue_note||'';}});
     renderNotif();
+    renderFurnizorStockCard();
   }catch(e){console.warn('Nu s-au putut citi problemele raportate de Staff:',e);}
+}
+function renderFurnizorStockCard(){
+  const card=document.getElementById('rpt-furnizor-card'),list=document.getElementById('rpt-furnizor-list');
+  if(!card||!list)return;
+  card.style.display=FURNIZOR_ADMIN.length?'':'none';
+  if(!FURNIZOR_ADMIN.length){list.innerHTML='';return;}
+  const groups={};
+  FURNIZOR_ADMIN.forEach(r=>{
+    const key=(r.furnizor||'—')+'|'+(r.comanda_ref||('_row'+r.id));
+    (groups[key]=groups[key]||{furnizor:r.furnizor||'',comandaRef:r.comanda_ref||'',rows:[]}).rows.push(r);
+  });
+  list.innerHTML=Object.values(groups).map(g=>`<div class="sec">${esc(g.furnizor||'Furnizor')}${g.comandaRef?' · #'+esc(g.comandaRef):''} (${g.rows.length})</div>${g.rows.map(r=>{
+    const p=r.produs_id?P.find(x=>x.id===r.produs_id):null;
+    const restul=Math.max(0,(Number(r.cantitate_comandata)||0)-(Number(r.cantitate_sosita)||0));
+    const issue=(r.nu_a_sosit&&!r.nu_a_sosit_rezolvat)?` · <span style="color:var(--rd);font-weight:700">⛔ nu a ajuns</span>`:'';
+    return`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(p?p.name:r.titlu_extern)}</strong><div class="jp-meta">comandat ${fmtQty(r.cantitate_comandata)}${r.cantitate_sosita>0?` · sosit ${fmtQty(r.cantitate_sosita)} · rest ${fmtQty(restul)}`:''}${issue}</div></div></div>`;
+  }).join('')}`).join('');
 }
 function goToPcomIssue(comandaId){
   const btn=document.querySelector('.h-tab[data-page="pcom"]');
@@ -4592,13 +4691,38 @@ function notifIssueRowHtml(x){
   const readyNote=stockReady?`<div class="notif-meta" style="color:var(--gr);font-weight:700">✓ Stoc disponibil acum — ${fmtQty(qty(p))} buc.</div>`:'';
   return`<div class="notif-row notif-issue"><span class="notif-ic">⛔</span><div><div class="notif-name">${esc(x.nume||'Produs')}</div><div class="notif-meta">${esc(label)}${x.nota?' — '+esc(x.nota):''}${dt?' · '+dt:''}</div>${readyNote}<div class="notif-issue-actions">${verLink}<button type="button" class="notif-issue-btn" onclick="resolveStaffIssueAdmin('${x.table}',${x.id})">✓ Rezolvată</button><button type="button" class="notif-issue-btn notif-issue-btn-danger" onclick="cancelStaffIssueOrder('${x.table}',${x.id})">🚫 Anulează</button></div></div></div>`;
 }
+function goToFurnizorStock(){
+  const btn=document.querySelector('.h-tab[data-page="raport"]');
+  if(btn)goPage('raport',btn);
+}
+async function resolveFurnizorIssueAdmin(id){
+  try{
+    await dbPatch(`comenzi_furnizor?id=eq.${id}`,{nu_a_sosit_rezolvat:true});
+    const r=FURNIZOR_ADMIN.find(x=>x.id===id);if(r)r.nu_a_sosit_rezolvat=true;
+    FURNIZOR_ISSUES=FURNIZOR_ISSUES.filter(x=>x.id!==id);
+    renderNotif();renderFurnizorStockCard();
+    toast('✓ Problemă marcată rezolvată');
+  }catch(e){toast('Nu am putut marca problema rezolvată: '+(e.message||e),'err');}
+}
+function notifFurnizorRowHtml(x){
+  const d=new Date(x.ts);
+  const dt=isNaN(d)?'':d.toLocaleString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  return`<div class="notif-row notif-issue"><span class="notif-ic">📥</span><div><div class="notif-name">${esc(x.nume||'Produs')}</div><div class="notif-meta">Nu a ajuns${x.furnizor?' — '+esc(x.furnizor):''}${x.nota?' — '+esc(x.nota):''}${dt?' · '+dt:''}</div><div class="notif-issue-actions"><button type="button" class="notif-issue-btn" onclick="goToFurnizorStock()">Vezi</button><button type="button" class="notif-issue-btn" onclick="resolveFurnizorIssueAdmin(${x.id})">✓ Rezolvată</button></div></div></div>`;
+}
+// 3 secțiuni, cea mai urgentă sus (marfă furnizor blocată/probleme client), mișcările de stoc jos
+// (informativ, nu cere acțiune) — cerut direct, „hai să împărțim notificările pe 2-3 secțiuni”.
+function notifSectionHtml(title,count,rowsHtml){
+  if(!count)return'';
+  return`<div class="notif-section-hd">${esc(title)} <span class="notif-section-count">${count}</span></div>${rowsHtml}`;
+}
 function renderNotif(){
   const list=document.getElementById('notif-list');
   if(!list)return;
-  const issueHtml=STAFF_ISSUES.map(notifIssueRowHtml).join('');
-  const actHtml=ACT.length?ACT.slice(0,50).map(notifRowHtml).join(''):'';
-  list.innerHTML=(issueHtml+actHtml)||'<div class="notif-empty">Nicio mișcare de stoc încă.</div>';
-  const badge=document.getElementById('notif-badge'),unread=ACT.filter(a=>!a.seen).length+STAFF_ISSUES.length;
+  const furHtml=notifSectionHtml('📥 Marfă furnizor',FURNIZOR_ISSUES.length,FURNIZOR_ISSUES.map(notifFurnizorRowHtml).join(''));
+  const issueHtml=notifSectionHtml('⛔ Probleme comenzi client',STAFF_ISSUES.length,STAFF_ISSUES.map(notifIssueRowHtml).join(''));
+  const actHtml=notifSectionHtml('📦 Mișcări de stoc',ACT.length,ACT.slice(0,50).map(notifRowHtml).join(''));
+  list.innerHTML=(furHtml+issueHtml+actHtml)||'<div class="notif-empty">Nicio notificare încă.</div>';
+  const badge=document.getElementById('notif-badge'),unread=ACT.filter(a=>!a.seen).length+STAFF_ISSUES.length+FURNIZOR_ISSUES.length;
   if(badge){badge.style.display=unread>0?'flex':'none';badge.textContent=unread>9?'9+':unread;}
 }
 // ── ISTORIC MODIFICĂRI DE PREȚ (achiziție/vânzare/eMAG/Trendyol, de oriunde ar veni) ──
@@ -6301,6 +6425,10 @@ function pcomDetectScript(text){
   if(/[\u0400-\u04FF]/.test(s))return'cyrillic';
   if(/[\u0370-\u03FF]/.test(s))return'greek';
   if(/[őűŐŰ]/.test(s))return'hungarian';
+  // Trendyol crossborder trimite uneori titluri complet în engleză (alfabet latin, ca și românește,
+  // deci nescăzute de regulile de mai sus) — fără asta, un titlu ca „Princess Castle Kids Play Tent,
+  // Pink, Foldable..." trecea drept „latin" (= presupus deja românesc) și nu se mai traducea niciodată.
+  if(!/[ăâîșțĂÂÎȘȚ]/.test(s)&&/\b(the|with|for|and|of|from|made|piece|pieces|set of|pack|kids|children|foldable|adjustable|portable|waterproof|includes|including|black|white|grey|gray|pink|blue|green|silver|gold|wood|wooden|metal|plastic|cotton)\b/i.test(s))return'english';
   return'latin';
 }
 function pcomCountryFromCurrency(moneda,titlu){
@@ -15544,13 +15672,14 @@ async function pcomTranslateForeignTitles(){
       const batchIdxs=idxs.slice(b,b+batchSize);
       const linesText=batchIdxs.map(i=>`${i}: ${pcImpParsed[i].titluExtern}`).join('\n');
       const prompt=`Traduce în română titlurile de produse de mai jos (comenzi eMAG din Bulgaria/Ungaria/Grecia —
-bulgară, maghiară sau greacă). Traducere scurtă, ca să se înțeleagă imediat despre ce produs e vorba.
+bulgară, maghiară sau greacă — sau comenzi Trendyol crossborder, în engleză). Traducere scurtă, ca să se
+înțeleagă imediat despre ce produs e vorba.
 
 TITLURI (index: titlu):
 ${linesText}
 
 Răspunde STRICT cu JSON, fără markdown: {"translations":[{"index":<index>,"ro":"<traducere scurtă în română>"}]}`;
-      const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert bulgară/maghiară/greacă→română pentru titluri de produse. Răspunzi DOAR cu JSON valid.',2000,'simple');
+      const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert bulgară/maghiară/greacă/engleză→română pentru titluri de produse. Răspunzi DOAR cu JSON valid.',2000,'simple');
       const objMatch=resp.match(/\{[\s\S]*\}/);
       if(!objMatch)continue;
       let parsed;try{parsed=JSON.parse(objMatch[0]);}catch(e){continue;}
@@ -15574,10 +15703,10 @@ async function pcomTranslateOneTitle(idx){
   const it=pcImpParsed[idx];if(!it||!it.titluExtern)return;
   toast('Traduc titlul…');
   try{
-    const prompt=`Traduce în română titlul de produs de mai jos (comandă eMAG/Trendyol din Bulgaria/Ungaria/Grecia — bulgară, maghiară sau greacă). Traducere scurtă, ca să se înțeleagă imediat despre ce produs e vorba.
+    const prompt=`Traduce în română titlul de produs de mai jos (comandă eMAG/Trendyol din Bulgaria/Ungaria/Grecia — bulgară, maghiară sau greacă — sau Trendyol crossborder, în engleză). Traducere scurtă, ca să se înțeleagă imediat despre ce produs e vorba.
 Titlu: ${it.titluExtern}
 Răspunde STRICT cu JSON, fără markdown: {"ro":"<traducere scurtă în română>"}`;
-    const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert bulgară/maghiară/greacă→română pentru titluri de produse. Răspunzi DOAR cu JSON valid.',400,'simple');
+    const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert bulgară/maghiară/greacă/engleză→română pentru titluri de produse. Răspunzi DOAR cu JSON valid.',400,'simple');
     const m=resp.match(/\{[\s\S]*\}/);
     if(!m)throw new Error('Răspuns AI invalid');
     const parsed=JSON.parse(m[0]);
@@ -17104,7 +17233,26 @@ function pcxRenderOrders(){
     }
     return true;
   });
-  host.innerHTML=filtered.length?filtered.map((idxs,gIdx)=>pcxOrderCardHtml(idxs,gIdx)).join(''):`<div class="pcx-empty">${pcImpParsed.length?'Nicio comandă nu corespunde filtrelor curente.':'Nicio comandă în previzualizare încă — alege o platformă și încarcă un fișier sau o captură mai sus.'}</div>`;
+  // Grupare pe platformă (cerut direct — „o delimitare clară... să înțelegem care e pentru una și care
+  // e pentru alta"), NU doar culoare de fundal — comenzile din aceeași platformă stau acum una lângă
+  // alta, sub un antet propriu, în loc să fie amestecate în ordinea brută de import. Ordinea relativă
+  // ÎN cadrul unei platforme rămâne neschimbată (cea din pcomGroups). Indexul de grup real (pentru
+  // pcxGroupAwbChipHtml, care citește direct din pcomGroups) se recalculează prin indexOf — filtrarea
+  // de mai sus poate schimba poziția unui grup față de pcomGroups, indexul din .map ar fi fost greșit.
+  const platOrder=['emag','trendyol','vinted'];
+  const buckets={};
+  filtered.forEach(idxs=>{
+    const plat=pcImpParsed[idxs[0]].platforma||pcImpPlatforma;
+    (buckets[plat]=buckets[plat]||[]).push(idxs);
+  });
+  const allPlats=platOrder.concat(Object.keys(buckets).filter(p=>!platOrder.includes(p)));
+  const html=allPlats.map(plat=>{
+    const list=buckets[plat];if(!list||!list.length)return'';
+    const cls=plat==='trendyol'?'trendyol':plat==='vinted'?'vinted':'emag';
+    const hd=`<div class="pcx-plat-divider"><span class="pcx-badge pcx-badge-${cls}">${esc(pcomPlatLabel(plat))}</span><span class="pcx-plat-divider-count">${list.length} ${list.length===1?'comandă':'comenzi'}</span></div>`;
+    return hd+list.map(idxs=>pcxOrderCardHtml(idxs,pcomGroups.indexOf(idxs))).join('');
+  }).join('');
+  host.innerHTML=filtered.length?html:`<div class="pcx-empty">${pcImpParsed.length?'Nicio comandă nu corespunde filtrelor curente.':'Nicio comandă în previzualizare încă — alege o platformă și încarcă un fișier sau o captură mai sus.'}</div>`;
   // Numărători — informative, pe TOATE liniile (nu doar cele filtrate), ca la legacy (updPcomImportInfo)
   const total=pcImpParsed.length;
   const byPlat={};pcImpParsed.forEach(x=>{const pl=x.platforma||pcImpPlatforma;byPlat[pl]=(byPlat[pl]||0)+1;});
@@ -18193,6 +18341,126 @@ function renderInvCatDatalist(){
   const dl=document.getElementById('inv-cat-list');if(!dl)return;
   dl.innerHTML=CATS.map(c=>`<option value="${esc(c)}">`).join('');
 }
+
+/* ── Marfă furnizor — comenzi ÎNCĂ pe drum, separat de Importă factură (stoc deja sosit). Nu creează
+   produse noi automat: o linie fără potrivire în stoc rămâne text simplu, exact cerut direct („nu am
+   timp tot timpul sa stau sa pun poza pentru a genera produsul nou"). Ajunge în Staff (comenzi_furnizor),
+   NU în produse/stoc. ── */
+let furnizorImpParsed=[];
+function openFurnizorComanda(){
+  furnizorImpParsed=[];
+  document.getElementById('cf-furnizor').value='';
+  document.getElementById('cf-comanda-ref').value='';
+  document.getElementById('cf-paste-text').value='';
+  document.getElementById('cf-file').value='';
+  document.getElementById('cf-preview').innerHTML='';
+  document.getElementById('cf-parsing').style.display='none';
+  document.getElementById('cfx-status').textContent='Se așteaptă text sau poză';
+  document.getElementById('cf-info').textContent='Adaugă produse pentru previzualizare';
+  document.getElementById('cf-apply-btn').disabled=true;
+  document.getElementById('ov-cf').classList.add('on');
+}
+function closeFurnizorComanda(){document.getElementById('ov-cf').classList.remove('on');}
+const FURNIZOR_ORDER_SCHEMA={
+  type:'object',
+  properties:{
+    comandaRef:{type:['string','null'],description:'Numărul comenzii, dacă apare (ex. „Comandă nr.", „Order no."). null dacă nu apare.'},
+    items:{type:'array',items:{type:'object',properties:{
+      name:{type:'string',description:'Denumirea completă a produsului — nu scurta, nu inventa ce nu apare.'},
+      cod:{type:['string','null'],description:'Codul produsului la furnizor (SKU/cod intern furnizor) — null dacă nu apare'},
+      qty:{type:'number',description:'Cantitatea comandată'},
+      pret:{type:['number','null'],description:'Prețul TOTAL al liniei (cantitate × preț unitar), în lei — null dacă nu apare'}
+    },required:['name','cod','qty','pret'],additionalProperties:false}}
+  },
+  required:['comandaRef','items'],
+  additionalProperties:false
+};
+async function furnizorApplyAiResult(resp){
+  const objMatch=resp.match(/\{[\s\S]*\}/);
+  let comandaRef='',rawItems=[];
+  if(objMatch){try{const parsed=JSON.parse(objMatch[0]);if(Array.isArray(parsed.items)){rawItems=parsed.items;comandaRef=String(parsed.comandaRef||'').trim();}}catch(e){}}
+  if(!rawItems.length)throw new Error('Nu am găsit niciun produs.');
+  const refInp=document.getElementById('cf-comanda-ref');
+  if(refInp&&!refInp.value&&comandaRef)refInp.value=comandaRef;
+  // Potrivire cu stocul existent — ACEEAȘI funcție folosită la Importă factură/Sincronizare, dar fără
+  // să oblige o alegere: fără potrivire, linia rămâne text simplu (produsId null), vizibilă oricum.
+  const newLines=rawItems.map(it=>{
+    const match=findExistingProduct({name:it.name});
+    return{titluExtern:String(it.name||'').trim(),codExtern:it.cod?String(it.cod).trim():'',cantitate:Math.max(0,Number(it.qty)||0)||1,pret:Math.max(0,Number(it.pret)||0),produsId:match?match.product.id:null,score:match?match.score:0};
+  });
+  furnizorImpParsed=furnizorImpParsed.concat(newLines);
+  renderFurnizorImportPreview();
+}
+async function parseFurnizorPastedText(){
+  const text=document.getElementById('cf-paste-text').value.trim();
+  if(!text){toast('Lipește mai întâi textul comenzii','err');return;}
+  const parsing=document.getElementById('cf-parsing');
+  parsing.style.display='block';parsing.innerHTML='<span class="spin"></span> Se analizează textul cu AI…';
+  document.getElementById('cfx-status').textContent='Se analizează…';
+  try{
+    const prompt=`Ești expert în citirea comenzilor plasate la furnizori (ex. Jumbo, alți distribuitori). Extrage TOATE produsele din textul de mai jos, copiat direct de pe pagina de confirmare a comenzii: denumire completă, cod produs (dacă apare), cantitate comandată, prețul TOTAL al liniei. Caută și numărul comenzii, dacă apare.
+
+TEXT COMANDĂ:
+${text}`;
+    const resp=await callAI([{role:'user',content:prompt}],'Ești expert în citirea comenzilor plasate la furnizori. Extragi date structurate, exacte.',2000,'analysis',FURNIZOR_ORDER_SCHEMA,'furnizor_order_extraction');
+    await furnizorApplyAiResult(resp);
+    document.getElementById('cf-paste-text').value='';
+  }catch(e){toast('Eroare la citirea textului: '+(e.message||e),'err');}
+  document.getElementById('cfx-status').textContent='Gata';
+  parsing.style.display='none';
+}
+async function handleFurnizorFiles(ev){
+  const files=[...(ev.target.files||[])];if(!files.length)return;
+  const parsing=document.getElementById('cf-parsing');
+  parsing.style.display='block';parsing.innerHTML=`<span class="spin"></span> Se analizează ${files.length>1?files.length+' poze':'poza'} cu AI…`;
+  document.getElementById('cfx-status').textContent='Se analizează…';
+  try{
+    const rawDataUrls=await Promise.all(files.map(f=>new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(f);})));
+    const dataUrls=await Promise.all(rawDataUrls.map(u=>resizeImageDataUrl(u,1400,.85)));
+    const content=[{type:'text',text:`Ești expert în citirea paginilor de confirmare comandă plasată la un furnizor (ex. Jumbo, alți distribuitori en-gros/retail). Extrage TOATE produsele din ${dataUrls.length>1?'aceste poze — sunt capturi succesive ale ACELEIAȘI comenzi (scroll pe aceeași pagină)':'această poză'}: denumire completă, cod produs (dacă apare), cantitate comandată, prețul TOTAL al liniei. Caută și numărul comenzii, dacă apare undeva pe pagină.`}];
+    dataUrls.forEach(u=>{
+      const mt=u.match(/data:(image\/\w+);/)?.[1]||'image/jpeg';
+      const b64=u.split(',')[1];
+      if(b64&&b64.length>=100)content.push({type:'image',source:{type:'base64',media_type:mt,data:b64}});
+    });
+    const resp=await callAI([{role:'user',content}],'Ești expert în citirea comenzilor plasate la furnizori. Extragi date structurate, exacte.',2000,'analysis',FURNIZOR_ORDER_SCHEMA,'furnizor_order_extraction');
+    await furnizorApplyAiResult(resp);
+  }catch(e){toast('Eroare la citirea imaginii: '+(e.message||e),'err');}
+  document.getElementById('cfx-status').textContent='Gata';
+  parsing.style.display='none';
+  ev.target.value='';
+}
+function renderFurnizorImportPreview(){
+  const box=document.getElementById('cf-preview');if(!box)return;
+  box.innerHTML=furnizorImpParsed.map((it,idx)=>{
+    const p=it.produsId?P.find(x=>x.id===it.produsId):null;
+    const matchTag=p?`<span style="color:var(--gr);font-weight:700">✓ ${esc(p.name)}${it.score<1?' ('+Math.round(it.score*100)+'%)':''}</span>`:`<span style="color:var(--t3)">? fără produs în stoc — rămâne text</span>`;
+    return`<div class="inv-prev-row">
+      <div style="flex:1;min-width:0"><b>${esc(it.titluExtern)}</b>${it.codExtern?' · cod '+esc(it.codExtern):''} · ${fmtQty(it.cantitate)} buc${it.pret?' · '+it.pret.toFixed(2)+' RON':''}<br>${matchTag}</div>
+      <button type="button" class="btn btn-sm" onclick="removeFurnizorImpLine(${idx})">🗑</button>
+    </div>`;
+  }).join('');
+  const matched=furnizorImpParsed.filter(x=>x.produsId).length;
+  document.getElementById('cf-info').textContent=furnizorImpParsed.length?`${furnizorImpParsed.length} produse · ${matched} potrivite din stoc · ${furnizorImpParsed.length-matched} rămân doar text`:'Adaugă produse pentru previzualizare';
+  document.getElementById('cf-apply-btn').disabled=!furnizorImpParsed.length;
+}
+function removeFurnizorImpLine(idx){furnizorImpParsed.splice(idx,1);renderFurnizorImportPreview();}
+async function applyFurnizorComanda(){
+  const furnizor=document.getElementById('cf-furnizor').value.trim();
+  if(!furnizor){toast('Completează furnizorul','err');return;}
+  if(!furnizorImpParsed.length)return;
+  const comandaRef=document.getElementById('cf-comanda-ref').value.trim()||null;
+  const btn=document.getElementById('cf-apply-btn');btn.disabled=true;btn.textContent='Se salvează…';
+  try{
+    const rows=furnizorImpParsed.map(it=>({furnizor,comanda_ref:comandaRef,titlu_extern:it.titluExtern,cod_extern:it.codExtern||null,produs_id:it.produsId,cantitate_comandata:it.cantitate,pret:it.pret||0}));
+    await dbPost('comenzi_furnizor',rows);
+    toast(`✓ ${rows.length} produse trimise ca și comandă așteptată — apar în Staff`);
+    closeFurnizorComanda();
+  }catch(e){
+    toast('Eroare la salvare: '+(e.message||e)+' (rulează migration_comenzi_furnizor.sql?)','err');
+  }
+  btn.disabled=false;btn.textContent='Trimite ca așteptată';
+}
 function closeInvoice(){document.getElementById('ov-inv').classList.remove('on');}
 function addInvLine(){
   const id='il-'+Date.now()+Math.random().toString(36).slice(2);invLines.push(id);
@@ -18995,6 +19263,13 @@ function parseAwbLabelText(text){
   if(awbM&&contM)return{awb:awbM[1],comandaId:contM[1]};
   const sdM=text.match(/^([A-Za-z0-9]{8,25})_(\d{6,})_\d+$/m);
   if(sdM)return{awb:sdM[1],comandaId:sdM[2]};
+  // Sameday — „notă de transport" clasică (ramburs/COD), format diferit de eticheta easybox de mai sus
+  // (găsit direct pe date reale, 7 etichete nerecunoscute până acum — vezi raport direct „AWB-uri puse
+  // în dosar, ce se întâmplă?"): AWB-ul complet (cu sufixul „001") e al doilea cod de pe rândul „Nota
+  // transport: X / Y", iar comanda_id e la „Referinta expeditor: Nr. Comanda: X;".
+  const notaM=text.match(/Nota transport:\s*[A-Za-z0-9]+\s*\/\s*([A-Za-z0-9]{8,25})/);
+  const comM=text.match(/Nr\.\s*Comanda:\s*(\d+)/);
+  if(notaM&&comM)return{awb:notaM[1],comandaId:comM[1]};
   // GLS (crossborder eMAG, ex. Ungaria) — comanda_id e pe rândul „ID=X;” (confirmat pe date reale).
   // Codul de urmărire (AWB) nu are o etichetă proprie ca la celelalte formate — layout-ul complex al
   // etichetei (2 coloane, cod de bare rotit) face ca PDF.js să-l „rupă" uneori pe mai multe rânduri, deci
@@ -19060,7 +19335,7 @@ async function readAwbFolderPdfs(){
         const pages=await extractPdfPagesText(base64ToBlob(f.data,'application/pdf'));
         pages.forEach((text,i)=>{
           const p=parseAwbLabelText(text);
-          if(p)pairs.push(p);else awbUnrecognizedPages.push(`${f.name} p.${i+1}`);
+          if(p)pairs.push({...p,file:f.name});else awbUnrecognizedPages.push(`${f.name} p.${i+1}`);
         });
       }catch(e){console.warn('PDF ignorat din dosar:',f.name,e);}
     }
@@ -19108,9 +19383,19 @@ async function applyAwbAssociation(){
     toast(`${matched.length} AWB-uri asociate ✓`);
     // Fișierele au fost citite din Desktop/AWB-uri (nu selectate manual) — le mutăm în „procesate",
     // ca dosarul să rămână curat pentru ziua următoare și niciunul să nu fie recitit din greșeală.
+    // Bug real găsit direct pe date reale (raportat „am pus AWB-uri în dosar, ce se întâmplă?"): se
+    // arhiva TOT lotul citit, inclusiv fișiere cu 0 asocieri reușite (format nerecunoscut sau comandă
+    // încă neimportată) — dispăreau din dosar fără să fi scris vreun AWB, fără nicio urmă vizibilă.
+    // Acum arhivăm STRICT fișierele care au contribuit cu minim o asociere scrisă în bază — restul
+    // rămân la vedere în Desktop/AWB-uri, gata de reîncercat (ex. după o reparație de parsare, sau după
+    // ce comanda ajunge și ea importată).
     if(awbFolderFileNames.length){
-      try{await localEmagJson('/awb-folder-archive',{names:awbFolderFileNames},20000);}
-      catch(e){console.warn('Nu am putut muta fișierele AWB procesate:',e);}
+      const matchedFiles=new Set(matched.map(p=>p.file).filter(Boolean));
+      const toArchive=awbFolderFileNames.filter(n=>matchedFiles.has(n));
+      if(toArchive.length){
+        try{await localEmagJson('/awb-folder-archive',{names:toArchive},20000);}
+        catch(e){console.warn('Nu am putut muta fișierele AWB procesate:',e);}
+      }
       awbFolderFileNames=[];
     }
     awbParsed=[];
