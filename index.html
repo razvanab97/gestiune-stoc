@@ -3739,6 +3739,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:422,text:'Comenzi Platforme — bug real reparat, raportat direct: titlurile în engleză de pe Trendyol (comenzi cross-border/globale, ex. „Set of 6 Solar Lamps for Outdoor Gardens...") nu primeau niciodată traducere/buton „🌐 Traduce", spre deosebire de cele bulgărești/maghiare/grecești. Cauza: detectarea „limbă străină" se uita doar la alfabet (chirilică/greacă/accente maghiare) — engleza folosește exact literele românești, deci trecea drept „deja română". Acum se verifică și cuvinte englezești fără echivalent identic în română (for/with/height/waterproof/etc.) — verificat pe tot inventarul real (387 produse) ca să nu declanșeze fals pe titluri românești (ex. „Set”/„material”/„include”, eliminate din listă după ce au dat 61 fals-pozitive la primul test).',date:'2026-09-18'},
   {n:421,text:'Trei retușuri, cerute direct. (1) Căutarea produselor (Vânzări/Inventar și toate picker-ele de alegere produs) găsește acum și după SKU extern — codurile PNK mapate în Sincronizare (eMAG/Trendyol), nu doar numele/SKU/codul intern. (2) „📋 din imagine" (lipești o poză din clipboard, AI recunoaște produsul) e disponibil acum și pe picker-ul de produs din rândurile de previzualizare Sincronizare, și pe cel din liniile de comandă de la Comenzi Platforme — nu doar la „Adaugă mapare nouă"/„Compară furnizori", unde exista deja. (3) Butonul „🚫 Anulează" de la o linie de comandă e mai mic — nu se mai întinde la toată lățimea coloanei de acțiuni, ca să nu mai domine vizual picker-ul de produs.',date:'2026-09-18'},
   {n:420,text:'Actualizare live în fundal, la cerere directă: orice modificare de stoc/produs/imagine făcută în altă filă, alt dispozitiv sau de Staff apare acum automat, fără refresh de browser — produsele se reîmprospătează din Supabase la fiecare 20 secunde (același model ca la Staff, care se resincronizează deja la 25s), sărind peste ciclu cât timp editorul de produs e deschis sau tastezi undeva, ca să nu se suprascrie o modificare în curs. Vânzări/Inventar se actualizează mereu; Dashboard, Raport stoc, Raport vânzări, Sincronizare, Calculator și Arhivă se reîmprospătează doar când chiar sunt pagina activă.',date:'2026-09-18'},
   {n:419,text:'Dashboard — card nou „Transport" în rândul de indicatori (lângă „Achiziții"), cerut direct: suma costului de transport plătit la facturile de furnizor importate (câmpul „Cost transport" din Importă factură), pe perioada aleasă din selectorul de sus al Dashboard-ului — aceeași dată deja salvată per factură, doar adunată acum și afișată.',date:'2026-09-18'},
@@ -6298,11 +6299,24 @@ function pcomToDb(o){
 // dar moneda o dă indirect: RON→România, HUF→Ungaria, EUR→Bulgaria (care a adoptat euro în 2026).
 // EUR e ambiguă (Bulgaria și Grecia îl folosesc pe amândouă) — dezambiguizăm după scrierea titlului:
 // chirilică→Bulgaria (singura piață EUR observată până acum), greacă→lăsăm țara necunoscută.
+// Titlurile Trendyol (comenzi cross-border/globale) pot ajunge complet în engleză — scriere latină,
+// la fel ca româna, deci alfabetul singur nu le deosebește — raportat direct, titluri gen „Set of 6
+// Solar Lamps for Outdoor Gardens..." rămâneau netraduse la nesfârșit, fiindcă treceau drept „latin"
+// alături de titlurile deja românești. Cuvinte englezești comune de legătură/descriere, ca semnal —
+// nu orice titlu latin fără diacritice e automat englezesc (multe titluri românești n-au diacritice),
+// dar prezența uneia din ele, ca și cuvânt întreg, e un indiciu solid că nu e deja română.
+function pcomLooksEnglish(text){
+  // „set”/„material”/„include” apar identic și în română (des în cataloage: „Set 6 pahare...”) — exact
+  // cuvintele care păreau semnale bune la prima vedere au dat cele mai multe fals-pozitive, verificat
+  // direct pe tot inventarul real (61 din 387 de produse) — eliminate din listă din cauza asta.
+  return/\b(the|for|with|and|height|width|length|colou?r|waterproof|outdoor|indoor|suitable)\b/i.test(String(text||''));
+}
 function pcomDetectScript(text){
   const s=String(text||'');
   if(/[\u0400-\u04FF]/.test(s))return'cyrillic';
   if(/[\u0370-\u03FF]/.test(s))return'greek';
   if(/[őűŐŰ]/.test(s))return'hungarian';
+  if(pcomLooksEnglish(s))return'english';
   return'latin';
 }
 function pcomCountryFromCurrency(moneda,titlu){
@@ -15190,10 +15204,11 @@ function resetSyncImportPage(){
   toast('Previzualizare golită ✓');
 }
 // Traduce automat titlurile scrise cu alt alfabet/limbă (bulgară/chirilică, maghiară — exporturile
-// eMAG Bulgaria/Ungaria din Seller Center), la fel ca la Comenzi Platforme (pcomTranslateForeignTitles,
-// același model, refolosind pcomDetectScript). Nu e doar cosmetic: fuzzyMatch de mai jos (folosit și
-// pentru candidații trimiși la AI) compară text românesc — pe un titlu netradus scorul e aproape mereu
-// 0, indiferent cât de bun e candidatul din inventar, deci fără traducere HU/BG rămân practic mereu
+// eMAG Bulgaria/Ungaria din Seller Center) SAU în engleză (comenzi Trendyol cross-border/globale —
+// vezi pcomLooksEnglish), la fel ca la Comenzi Platforme (pcomTranslateForeignTitles, același model,
+// refolosind pcomDetectScript). Nu e doar cosmetic: fuzzyMatch de mai jos (folosit și pentru
+// candidații trimiși la AI) compară text românesc — pe un titlu netradus scorul e aproape mereu 0,
+// indiferent cât de bun e candidatul din inventar, deci fără traducere HU/BG/EN rămân practic mereu
 // „fără sugestie". Rulează în fundal (fără await) după fiecare import — suggestSyncImportWithAI o
 // așteaptă explicit înainte de a construi candidații, ca traducerea să fie deja gata la momentul potrivirii.
 async function syncTranslateForeignTitles(){
@@ -15205,13 +15220,13 @@ async function syncTranslateForeignTitles(){
       const batchIdxs=idxs.slice(b,b+batchSize);
       const linesText=batchIdxs.map(i=>`${i}: ${syncImpParsed[i].titluExtern}`).join('\n');
       const prompt=`Traduce în română titlurile de produse de mai jos (listări eMAG din Bulgaria sau Ungaria —
-bulgară sau maghiară). Traducere scurtă, ca să se înțeleagă imediat despre ce produs e vorba.
+bulgară sau maghiară — sau listări Trendyol cross-border, în engleză). Traducere scurtă, ca să se înțeleagă imediat despre ce produs e vorba.
 
 TITLURI (index: titlu):
 ${linesText}
 
 Răspunde STRICT cu JSON, fără markdown: {"translations":[{"index":<index>,"ro":"<traducere scurtă în română>"}]}`;
-      const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert bulgară/maghiară→română pentru titluri de produse. Răspunzi DOAR cu JSON valid.',2000,'simple');
+      const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert bulgară/maghiară/engleză→română pentru titluri de produse. Răspunzi DOAR cu JSON valid.',2000,'simple');
       const objMatch=resp.match(/\{[\s\S]*\}/);
       if(!objMatch)continue;
       let parsed;try{parsed=JSON.parse(objMatch[0]);}catch(e){continue;}
@@ -15232,10 +15247,10 @@ async function syncTranslateOneTitle(idx){
   const it=syncImpParsed[idx];if(!it||!it.titluExtern)return;
   toast('Traduc titlul…');
   try{
-    const prompt=`Traduce în română titlul de produs de mai jos (listare eMAG din Bulgaria sau Ungaria — bulgară sau maghiară). Traducere scurtă, ca să se înțeleagă imediat despre ce produs e vorba.
+    const prompt=`Traduce în română titlul de produs de mai jos (listare eMAG din Bulgaria sau Ungaria — bulgară sau maghiară — sau listare Trendyol cross-border, în engleză). Traducere scurtă, ca să se înțeleagă imediat despre ce produs e vorba.
 Titlu: ${it.titluExtern}
 Răspunde STRICT cu JSON, fără markdown: {"ro":"<traducere scurtă în română>"}`;
-    const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert bulgară/maghiară→română pentru titluri de produse. Răspunzi DOAR cu JSON valid.',400,'simple');
+    const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert bulgară/maghiară/engleză→română pentru titluri de produse. Răspunzi DOAR cu JSON valid.',400,'simple');
     const m=resp.match(/\{[\s\S]*\}/);
     if(!m)throw new Error('Răspuns AI invalid');
     const parsed=JSON.parse(m[0]);
@@ -15608,9 +15623,10 @@ function pcomDetectPackSize(title){
   const n=parseInt(m[1],10);
   return n>=2&&n<=24?n:null;
 }
-// Traduce automat titlurile scrise cu alt alfabet/limbă (bulgară/chirilică, maghiară, greacă), ca omul
-// care revizuiește previzualizarea să înțeleagă din prima la ce produs face referire, chiar înainte
-// de a se face vreo potrivire. Rulează în fundal (fără await la apel) — nu blochează previzualizarea inițială.
+// Traduce automat titlurile scrise cu alt alfabet/limbă (bulgară/chirilică, maghiară, greacă) SAU în
+// engleză (comenzi Trendyol cross-border/globale — vezi pcomLooksEnglish), ca omul care revizuiește
+// previzualizarea să înțeleagă din prima la ce produs face referire, chiar înainte de a se face vreo
+// potrivire. Rulează în fundal (fără await la apel) — nu blochează previzualizarea inițială.
 async function pcomTranslateForeignTitles(){
   const idxs=pcImpParsed.map((x,i)=>i).filter(i=>pcomDetectScript(pcImpParsed[i].titluExtern)!=='latin'&&!pcImpParsed[i].titluRo);
   if(!idxs.length)return;
@@ -15620,13 +15636,13 @@ async function pcomTranslateForeignTitles(){
       const batchIdxs=idxs.slice(b,b+batchSize);
       const linesText=batchIdxs.map(i=>`${i}: ${pcImpParsed[i].titluExtern}`).join('\n');
       const prompt=`Traduce în română titlurile de produse de mai jos (comenzi eMAG din Bulgaria/Ungaria/Grecia —
-bulgară, maghiară sau greacă). Traducere scurtă, ca să se înțeleagă imediat despre ce produs e vorba.
+bulgară, maghiară sau greacă — sau comenzi Trendyol cross-border, în engleză). Traducere scurtă, ca să se înțeleagă imediat despre ce produs e vorba.
 
 TITLURI (index: titlu):
 ${linesText}
 
 Răspunde STRICT cu JSON, fără markdown: {"translations":[{"index":<index>,"ro":"<traducere scurtă în română>"}]}`;
-      const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert bulgară/maghiară/greacă→română pentru titluri de produse. Răspunzi DOAR cu JSON valid.',2000,'simple');
+      const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert bulgară/maghiară/greacă/engleză→română pentru titluri de produse. Răspunzi DOAR cu JSON valid.',2000,'simple');
       const objMatch=resp.match(/\{[\s\S]*\}/);
       if(!objMatch)continue;
       let parsed;try{parsed=JSON.parse(objMatch[0]);}catch(e){continue;}
@@ -15650,10 +15666,10 @@ async function pcomTranslateOneTitle(idx){
   const it=pcImpParsed[idx];if(!it||!it.titluExtern)return;
   toast('Traduc titlul…');
   try{
-    const prompt=`Traduce în română titlul de produs de mai jos (comandă eMAG/Trendyol din Bulgaria/Ungaria/Grecia — bulgară, maghiară sau greacă). Traducere scurtă, ca să se înțeleagă imediat despre ce produs e vorba.
+    const prompt=`Traduce în română titlul de produs de mai jos (comandă eMAG/Trendyol din Bulgaria/Ungaria/Grecia — bulgară, maghiară sau greacă — sau comandă Trendyol cross-border, în engleză). Traducere scurtă, ca să se înțeleagă imediat despre ce produs e vorba.
 Titlu: ${it.titluExtern}
 Răspunde STRICT cu JSON, fără markdown: {"ro":"<traducere scurtă în română>"}`;
-    const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert bulgară/maghiară/greacă→română pentru titluri de produse. Răspunzi DOAR cu JSON valid.',400,'simple');
+    const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert bulgară/maghiară/greacă/engleză→română pentru titluri de produse. Răspunzi DOAR cu JSON valid.',400,'simple');
     const m=resp.match(/\{[\s\S]*\}/);
     if(!m)throw new Error('Răspuns AI invalid');
     const parsed=JSON.parse(m[0]);
