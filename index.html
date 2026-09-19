@@ -580,7 +580,7 @@ tr:hover td{background:var(--surf2)}
 .fld textarea{resize:vertical;line-height:1.5}
 .frow{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .m-foot{padding:14px 28px;border-top:1px solid #E9EDF3;display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center;background:#fff;position:sticky;bottom:0;z-index:4}
-.m-foot-left{display:flex;justify-content:flex-start}
+.m-foot-left{display:flex;justify-content:flex-start;gap:8px}
 .m-foot-meta{font-size:16px;color:#667085;text-align:center;font-family:var(--mono);line-height:1.45}
 .m-foot-actions{display:flex;justify-content:flex-end;gap:8px}
 .pe-primary input{font-size:25px;font-weight:650;padding:12px 14px}
@@ -3566,7 +3566,7 @@ button.pcx-include-btn.included{border-color:var(--gr)}
     </div>
   </div>
   <div class="m-foot">
-    <div class="m-foot-left"><button class="btn" onclick="closeModal()">Anulează</button></div>
+    <div class="m-foot-left"><button class="btn" onclick="closeModal()">Anulează</button><span id="pe-archive-btn"></span></div>
     <div class="m-foot-meta" id="pe-meta">ID produs — · Creat — · Ultima modificare —</div>
     <div class="m-foot-actions"><button class="btn btn-acc" id="save-prod-btn" onclick="saveProd()">Salvează produs</button></div>
   </div>
@@ -3811,6 +3811,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:427,text:'Produs — buton nou „🗄️ Arhivează"/„↩️ Dezarhivează" direct în subsolul editorului, lângă „Anulează", cerut direct — nu mai trebuie să închizi produsul, să-l bifezi în Inventar și abia apoi să apeși „Arhivează selectate". Comută pe baza stării curente a produsului, folosește exact același mecanism ca arhivarea din Inventar/tab-ul „Arhivă" (nimic nou pe partea de date). Nu apare la „Produs nou" (nimic de arhivat încă).',date:'2026-09-19'},
   {n:426,text:'Asociază AWB-uri — al 5-lea format recunoscut: DPD (crossborder Trendyol, ex. Bulgaria), raportat direct pe un exemplu real dintr-un PDF cu 9 etichete amestecate FAN Courier + DPD. Eticheta e în engleză, fără „AWB"/„Nota transport"/„ID=" ca celelalte 4 formate — codul de urmărire apare ca „1 of 1 for X" (cifre despărțite de spații de PDF.js), comanda_id pe rândul următor lui „note:". Verificat pe fișierul real: toate cele 9 pagini (8 FAN Courier deja funcționale + 1 DPD, nou) se asociază corect, inclusiv confirmarea că produsul de pe etichetă se potrivește exact cu comanda găsită în platforma_comenzi după codul extras.',date:'2026-09-18'},
   {n:425,text:'Comenzi Platforme / Sincronizare — cerut direct, pe un exemplu real (cort de joacă AB HOMES tradus corect, dar rămas asociat cu o litieră Kruzzel complet nelegată): odată ce un titlu se traduce (automat sau prin „🌐 Traduce"), asocierea de produs se reîncearcă pe traducere, nu doar pe titlul brut — matching-ul pe un titlu englezesc/bulgăresc/maghiar/grecesc, împotriva numelor românești din inventar, produce scoruri aproape întâmplătoare. Nu atinge liniile deja sigure (EAN/SKU/titlu/cod cunoscut, PNK) și nici liniile deja scrise în Staff — acolo o schimbare locală ar rămâne divergentă tăcut față de ce vede deja Staff.',date:'2026-09-18'},
   {n:424,text:'Comenzi Platforme — 2 reparații, cerute direct: (1) cardurile de comandă sunt acum grupate pe platformă, cu antet separat și cu un contur colorat consistent pe fiecare (mov eMAG / portocaliu Trendyol / verde Vinted), în loc să fie amestecate în ordinea brută de import — mult mai clar care e a cui dintr-o privire. (2) „📮 Asociază AWB-uri" recunoaște acum și un al 4-lea format de etichetă, găsit direct pe etichete reale puse azi în dosar: notele de transport Sameday cu ramburs/COD („Nota transport: X / Y" + „Nr. Comanda: Z"), diferite de eticheta easybox deja recunoscută — 7 din 13 AWB-uri reale de azi picau exact în acest format necunoscut. Bug mai grav, găsit pe aceleași date reale: fișierele fără NICIO asociere reușită (format nerecunoscut sau comandă încă neimportată) erau arhivate în „procesate" oricum, doar pentru că alte fișiere din același lot se asociaseră cu succes — dispăreau din dosar fără să fi scris niciun AWB și fără nicio urmă. Acum se arhivează STRICT fișierele care au scris cu adevărat un AWB; restul rămân la vedere, gata de reîncercat. Cele 7 etichete de azi picate în formatul nou au fost puse înapoi în Desktop/AWB-uri, gata de reasociat cu „Citește din dosar".',date:'2026-09-18'},
@@ -14304,6 +14305,7 @@ async function openModal(id){
       metaEl.textContent='Produs nou — nesalvat încă';
     }
   }
+  renderModalArchiveBtn(p);
   document.getElementById('ov').classList.add('on');
   const body=document.querySelector('#ov .m-body');if(body)body.scrollTop=0;
   if(window.innerWidth>640)setTimeout(()=>document.getElementById('f-name').focus(),60);
@@ -14653,6 +14655,34 @@ async function unarchiveProd(id){
   if(!saved)return;
   toast(`${p.name}: dezarhivat, a revenit în Inventar`);
   renderArchivePage();renderToday();renderTable();
+  if(editId===id)renderModalArchiveBtn(P.find(x=>x.id===id));
+}
+// Buton „Arhivează”/„Dezarhivează” direct în pagina produsului (modal) — cerut direct, ca să nu mai
+// fie nevoie să închizi produsul, îl bifezi în Inventar și abia apoi apeși „Arhivează selectate”.
+// Comută pe baza stării curente (p.archived), la fel ca perechea bulkArchiveProd/unarchiveProd de mai
+// sus — reutilizează exact același mecanism (coloanele archived/archived_at), doar pentru UN produs,
+// din interiorul editorului. Nu închide modalul după acțiune — utilizatorul poate continua să vadă/
+// editeze produsul dacă vrea, la fel cum dezarhivarea din tab-ul „Arhivă” nu navighează nicăieri.
+function renderModalArchiveBtn(p){
+  const el=document.getElementById('pe-archive-btn');if(!el)return;
+  if(!p){el.innerHTML='';return;}
+  el.innerHTML=p.archived
+    ?`<button type="button" class="btn btn-sm" onclick="toggleArchiveFromModal()" title="Scoate produsul din Arhivă — revine în Inventar/Vânzări/Raport stoc">↩️ Dezarhivează</button>`
+    :`<button type="button" class="btn btn-sm" onclick="toggleArchiveFromModal()" title="Ascunde produsul din Inventar/Vânzări/Raport stoc — rămâne în rapoartele CSV pentru contabilitate, îl aduci înapoi oricând">🗄️ Arhivează</button>`;
+}
+async function toggleArchiveFromModal(){
+  if(!editId)return;
+  const p=P.find(x=>x.id===editId);if(!p)return;
+  const willArchive=!p.archived;
+  if(willArchive&&!confirm(`Arhivezi „${p.name}”? Iese din Inventar/Vânzări/Raport stoc, dar rămâne în rapoartele CSV pentru contabilitate. Îl aduci înapoi oricând, de-aici sau din tab-ul „Arhivă”.`))return;
+  showLoading(willArchive?'Se arhivează…':'Se dezarhivează…');
+  const saved=await saveProdToDb({...p,archived:willArchive,archivedAt:willArchive?new Date().toISOString():''},editId);
+  hideLoading();
+  if(!saved)return;
+  toast(willArchive?`${p.name}: arhivat`:`${p.name}: dezarhivat, a revenit în Inventar`);
+  renderToday();renderTable();
+  if(document.getElementById('page-archive')?.classList.contains('on'))renderArchivePage();
+  renderModalArchiveBtn(P.find(x=>x.id===editId));
 }
 function renderArchivePage(){
   const tb=document.getElementById('archive-tbody');if(!tb)return;
