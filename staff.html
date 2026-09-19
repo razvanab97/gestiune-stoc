@@ -372,6 +372,8 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:411,date:'19.09.2026',text:'Bug real reparat, raportat direct: scanul (📷) recunoștea codul de bare, dar nu-l asocia cu comanda, deși AWB-ul exista deja la noi. Cauza, verificată decodificând etichete reale (Sameday, FAN Courier, DPD): codul de bare fizic conține AWB-ul ca PARTE dintr-un cod mai lung (ex. FAN Courier adaugă un sufix intern după AWB), nu identic cu el — verificarea veche funcționa doar când codul scanat era mai scurt sau egal cu AWB-ul salvat. Acum se verifică ambele direcții.'},
+  {n:410,date:'19.09.2026',text:'„↺ Coadă nouă" pornește acum și automat, o singură dată pe zi, la ora 16:00 — cerut direct. Aceeași acțiune ca butonul manual (comenzile rămân în ERP/jurnal/istoric, doar dispar din coada activă Staff), dar fără confirmare, ca să pregătească singură platforma pentru ziua următoare. Verifică la deschiderea tabletei și la fiecare reîmprospătare — dacă tableta rămâne deschisă peste ora 16, sau e pornită abia după aceea.'},
   {n:409,date:'18.09.2026',text:'La „🔍 Căutare" — buton nou „📷" lângă căutarea text: deschide camera și scanează codul de bare al AWB-ului sau al produsului. Un singur rezultat → sari direct la comanda de împachetat; mai multe → alegi din listă, la fel ca la căutarea manuală. Codul scanat completează exact același câmp de căutare, deci funcționează cu tot ce funcționa deja (comandă, client, AWB, SKU, cod intern) plus, nou, EAN-ul (codul de bare fizic al produsului).'},
   {n:408,date:'18.09.2026',text:'Tab nou „📥 Marfă furnizor" — separat de „De rezolvat", nu-l înlocuiește. Aici apar comenzile plasate la furnizor, încă pe drum (adăugate de admin din Inventar/Dashboard). Pe fiecare produs: „✗ Nu a ajuns" sau „◐ A ajuns parțial" (cu cantitatea primită), plus „✓ Tot restul a ajuns" jos, pentru tot ce-a rămas din comandă. Nu atinge stocul din Manager Stoc — doar urmărește sosirea.'},
   {n:407,date:'18.09.2026',text:'O comandă eMAG cu toate produsele împachetate nu mai dispare din coadă dacă nu are încă AWB generat — rămâne vizibilă, cu „AWB în așteptare”, până se emite AWB-ul din Comenzi Platforme. Trendyol/Vinted/vânzări directe nu sunt afectate (au deja cod de livrare din altă sursă).'},
@@ -1223,7 +1225,16 @@ function matchOrder(o,q){
   const s=q.toLowerCase();
   if((o.comandaId||'').toLowerCase().includes(s))return true;
   if((o.clientNume||'').toLowerCase().includes(s))return true;
-  if((o.awb||'').toLowerCase().includes(s))return true;
+  // Bug real găsit pe drum, raportat direct („scanul AWB nu recunoaște, deși AWB-ul există"):
+  // codul de bare FIZIC de pe etichetă nu conține mereu exact AWB-ul salvat la noi — verificat direct,
+  // decodificând codurile reale de pe 3 etichete diferite (Sameday, FAN Courier, DPD): FAN Courier
+  // codifică "7000167148503" + "001F5159" (AWB + sufix intern curier), DPD codifică AWB-ul curat pe UN
+  // cod, dar și un cod de rutare mai lung care îl conține ca substring. Verificarea veche
+  // (awb.includes(text căutat)) mergea doar când textul căutat era mai scurt SAU egal cu AWB-ul salvat
+  // — un cod scanat cu sufix în plus (mai lung) nu putea fi niciodată "conținut" în AWB-ul mai scurt.
+  // Acum verificăm ambele direcții: AWB-ul salvat conține textul, SAU textul (scanat) conține AWB-ul.
+  const awbL=(o.awb||'').toLowerCase();
+  if(awbL&&(awbL.includes(s)||s.includes(awbL)))return true;
   // Bug real găsit pe drum: placeholder-ul căutării promitea deja „...SKU sau cod intern", dar
   // codul intern (internalCode) nu era de fapt verificat — util mai ales acum, la pre-împachetare,
   // ca eticheta tipărită (care arată codul intern) să poată fi găsită manual când nu ai cameră.
@@ -1497,11 +1508,14 @@ document.addEventListener('gesturestart',ev=>ev.preventDefault(),{passive:false}
 
 function startPolling(){
   clearInterval(pollTimer);
-  pollTimer=setInterval(()=>{
+  pollTimer=setInterval(async()=>{
     // nu reîmprospăta peste un sheet deschis, un undo în așteptare sau camera de scanare — ar smulge
     // ecranul de sub deget (sau ar rescrie #main-area cât timp video-ul de scanare stă peste el)
     if(document.hidden||sheetCtx||pendingUndo||scannerOpen||document.activeElement?.matches('input,textarea,select'))return;
-    refreshData();
+    // checkAutoQueueReset face deja un refreshData() intern dacă resetează — evităm un al doilea,
+    // redundant, imediat după.
+    const didAutoReset=await checkAutoQueueReset();
+    if(!didAutoReset)refreshData();
   },25000);
 }
 
@@ -1567,6 +1581,34 @@ async function resetStaffQueue(){
   }catch(e){
     console.error(e);showToast('Nu am putut reseta coada — încearcă din nou');
   }finally{if(b)b.disabled=false;}
+}
+// Coadă nouă automată zilnic la 16:00 — cerut direct: „comenzile împachetate să se reseteze în
+// fiecare zi la ora 16 și să pregătească platforma pentru ziua următoare". Aceeași acțiune ca „↺ Coadă
+// nouă" manual, dar fără confirm() (rulează singură, nesupravegheată) și fără să se repete la fiecare
+// tick de poll după ce a trecut ora 16 — se declanșează o SINGURĂ dată, comparând pragul curent
+// (staffQueueStartedAt) cu 16:00 de azi: dacă ultimul reset e deja după acel prag, nu mai repetă.
+// Verificată atât la încărcarea inițială (tableta pornită/reîmprospătată după ora 16), cât și la
+// fiecare tick de poll (tableta rămasă deschisă peste ora 16). Întoarce true dacă a resetat, ca
+// apelantul din poll să nu mai ceară și un refreshData() separat, redundant.
+function todayAt16(){const d=new Date();d.setHours(16,0,0,0);return d;}
+async function checkAutoQueueReset(){
+  const threshold=todayAt16();
+  const now=new Date();
+  if(now<threshold)return false;
+  if(staffQueueStartedAt&&new Date(staffQueueStartedAt)>=threshold)return false;
+  const startedAt=new Date().toISOString();
+  try{
+    const updated=await sb('PATCH',`setari_app?key=eq.${STAFF_QUEUE_KEY}`,{value:startedAt});
+    if(!updated?.length)await sb('POST','setari_app',{key:STAFF_QUEUE_KEY,value:startedAt});
+    staffQueueStartedAt=startedAt;
+    curKey=null;
+    await refreshData();
+    showToast('🕓 Coadă nouă pornită automat (16:00) — platforma e pregătită pentru ziua următoare.');
+    return true;
+  }catch(e){
+    console.warn('Reset automat coadă eșuat (reîncearcă la următorul ciclu):',e);
+    return false;
+  }
 }
 
 async function refreshData(){
@@ -1645,6 +1687,9 @@ async function load(){
     renderMain();
     renderMsgPopup();
     startPolling();
+    // Tableta poate fi pornită/reîncărcată DUPĂ ora 16 (nu doar rămasă deschisă peste ea) — verificăm
+    // și aici, nu doar în poll, ca reset-ul automat să nu aștepte până la 25 de secunde degeaba.
+    checkAutoQueueReset();
   }catch(e){
     document.getElementById('sync-dot').className='sync-dot err';
     document.getElementById('progress-txt').textContent='Eroare de conexiune';
