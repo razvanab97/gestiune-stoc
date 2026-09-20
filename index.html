@@ -1946,8 +1946,17 @@ th{font-weight:800!important;color:var(--t3)!important}
 .notif-issue-actions{display:flex;gap:6px;margin-top:5px;flex-wrap:wrap}
 .notif-issue-btn{font-size:19px;font-weight:700;padding:3px 9px;border-radius:999px;border:1px solid var(--b2);background:var(--surf);color:var(--t2);cursor:pointer}
 .notif-issue-btn-danger{border-color:var(--rd);color:var(--rd)}
-.notif-section-hd{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;color:var(--t3);padding:14px 8px 6px;border-top:1px solid var(--b1);margin-top:4px}
-.notif-section-hd:first-child{border-top:0;margin-top:0;padding-top:4px}
+.notif-section-hd{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;color:var(--t3);padding:4px 8px 6px}
+/* Coloane separate pe secțiune (Marfă furnizor/Probleme comenzi client/Mișcări de stoc), cerut direct
+   — nu mai stivuite vertical într-o singură listă lungă. #notif-panel (ID), NU .notif-panel (clasă) —
+   clasa e refolosită și de alte 3 dropdown-uri (config Sincronizare/tab-uri/UI), care trebuie să rămână
+   la lățimea lor îngustă, neschimbate; doar panoul de clopoțel e mai lat. flex-wrap face coloanele să
+   revină la stivuire verticală automat, fără media query separat, când panoul e prea îngust (mobil,
+   unde max-width:calc(100vw - 16px), deja pe .notif-panel, se aplică oricum).*/
+#notif-panel{width:820px}
+.notif-cols{display:flex;flex-wrap:wrap;gap:0}
+.notif-col{flex:1 1 240px;min-width:220px;padding:0 4px}
+.notif-col+.notif-col{border-left:1px solid var(--b1)}
 .notif-section-count{background:var(--surf2);color:var(--t2);border-radius:999px;padding:1px 8px;font-size:13px}
 /* NOTIȚĂ RAPIDĂ — pop-up mic, mutabil oriunde pe pagină (trage de bara de sus) și redimensionabil
    (colțul din dreapta-jos, resize CSS nativ), conținutul persistă local (localStorage), nu e legat
@@ -3811,6 +3820,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:428,text:'🔔 Clopoțel — secțiunile (📥 Marfă furnizor / ⛔ Probleme comenzi client / 📦 Mișcări de stoc) apar acum pe coloane separate, una lângă alta, nu mai stivuite vertical într-o singură listă lungă — cerut direct. O secțiune fără nimic de arătat nu mai ocupă loc (nicio coloană goală). Panoul de clopoțel e mai lat ca să încapă coloanele; celelalte 3 dropdown-uri care refolosesc același stil (config Sincronizare/tab-uri/UI) au rămas neschimbate, la lățimea lor îngustă.',date:'2026-09-20'},
   {n:427,text:'Produs — buton nou „🗄️ Arhivează"/„↩️ Dezarhivează" direct în subsolul editorului, lângă „Anulează", cerut direct — nu mai trebuie să închizi produsul, să-l bifezi în Inventar și abia apoi să apeși „Arhivează selectate". Comută pe baza stării curente a produsului, folosește exact același mecanism ca arhivarea din Inventar/tab-ul „Arhivă" (nimic nou pe partea de date). Nu apare la „Produs nou" (nimic de arhivat încă).',date:'2026-09-19'},
   {n:426,text:'Asociază AWB-uri — al 5-lea format recunoscut: DPD (crossborder Trendyol, ex. Bulgaria), raportat direct pe un exemplu real dintr-un PDF cu 9 etichete amestecate FAN Courier + DPD. Eticheta e în engleză, fără „AWB"/„Nota transport"/„ID=" ca celelalte 4 formate — codul de urmărire apare ca „1 of 1 for X" (cifre despărțite de spații de PDF.js), comanda_id pe rândul următor lui „note:". Verificat pe fișierul real: toate cele 9 pagini (8 FAN Courier deja funcționale + 1 DPD, nou) se asociază corect, inclusiv confirmarea că produsul de pe etichetă se potrivește exact cu comanda găsită în platforma_comenzi după codul extras.',date:'2026-09-18'},
   {n:425,text:'Comenzi Platforme / Sincronizare — cerut direct, pe un exemplu real (cort de joacă AB HOMES tradus corect, dar rămas asociat cu o litieră Kruzzel complet nelegată): odată ce un titlu se traduce (automat sau prin „🌐 Traduce"), asocierea de produs se reîncearcă pe traducere, nu doar pe titlul brut — matching-ul pe un titlu englezesc/bulgăresc/maghiar/grecesc, împotriva numelor românești din inventar, produce scoruri aproape întâmplătoare. Nu atinge liniile deja sigure (EAN/SKU/titlu/cod cunoscut, PNK) și nici liniile deja scrise în Staff — acolo o schimbare locală ar rămâne divergentă tăcut față de ce vede deja Staff.',date:'2026-09-18'},
@@ -4726,7 +4736,11 @@ function renderNotif(){
   const furHtml=notifSectionHtml('📥 Marfă furnizor',FURNIZOR_ISSUES.length,FURNIZOR_ISSUES.map(notifFurnizorRowHtml).join(''));
   const issueHtml=notifSectionHtml('⛔ Probleme comenzi client',STAFF_ISSUES.length,STAFF_ISSUES.map(notifIssueRowHtml).join(''));
   const actHtml=notifSectionHtml('📦 Mișcări de stoc',ACT.length,ACT.slice(0,50).map(notifRowHtml).join(''));
-  list.innerHTML=(furHtml+issueHtml+actHtml)||'<div class="notif-empty">Nicio notificare încă.</div>';
+  // Coloane separate, nu stivuite vertical (cerut direct) — fiecare secțiune e coloana ei, vizibile
+  // toate deodată dintr-o privire. Doar secțiunile cu ceva de arătat primesc coloană — o secțiune goală
+  // (ex. nicio problemă de la furnizor) nu lasă o coloană goală, inutilă, lângă celelalte.
+  const cols=[furHtml,issueHtml,actHtml].filter(Boolean).map(c=>`<div class="notif-col">${c}</div>`).join('');
+  list.innerHTML=cols?`<div class="notif-cols">${cols}</div>`:'<div class="notif-empty">Nicio notificare încă.</div>';
   const badge=document.getElementById('notif-badge'),unread=ACT.filter(a=>!a.seen).length+STAFF_ISSUES.length+FURNIZOR_ISSUES.length;
   if(badge){badge.style.display=unread>0?'flex':'none';badge.textContent=unread>9?'9+':unread;}
 }
