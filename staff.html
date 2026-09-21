@@ -372,6 +372,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:412,date:'21.09.2026',text:'Reset automat zilnic al cozii — pragul mutat de la ora 16:00 la ora 22:00, cerut direct. Aceeași logică (o singură dată pe zi, verificată la pornire și la fiecare reîmprospătare din poll), doar ora s-a schimbat.'},
   {n:411,date:'19.09.2026',text:'Bug real reparat, raportat direct: scanul (📷) recunoștea codul de bare, dar nu-l asocia cu comanda, deși AWB-ul exista deja la noi. Cauza, verificată decodificând etichete reale (Sameday, FAN Courier, DPD): codul de bare fizic conține AWB-ul ca PARTE dintr-un cod mai lung (ex. FAN Courier adaugă un sufix intern după AWB), nu identic cu el — verificarea veche funcționa doar când codul scanat era mai scurt sau egal cu AWB-ul salvat. Acum se verifică ambele direcții.'},
   {n:410,date:'19.09.2026',text:'„↺ Coadă nouă" pornește acum și automat, o singură dată pe zi, la ora 16:00 — cerut direct. Aceeași acțiune ca butonul manual (comenzile rămân în ERP/jurnal/istoric, doar dispar din coada activă Staff), dar fără confirmare, ca să pregătească singură platforma pentru ziua următoare. Verifică la deschiderea tabletei și la fiecare reîmprospătare — dacă tableta rămâne deschisă peste ora 16, sau e pornită abia după aceea.'},
   {n:409,date:'18.09.2026',text:'La „🔍 Căutare" — buton nou „📷" lângă căutarea text: deschide camera și scanează codul de bare al AWB-ului sau al produsului. Un singur rezultat → sari direct la comanda de împachetat; mai multe → alegi din listă, la fel ca la căutarea manuală. Codul scanat completează exact același câmp de căutare, deci funcționează cu tot ce funcționa deja (comandă, client, AWB, SKU, cod intern) plus, nou, EAN-ul (codul de bare fizic al produsului).'},
@@ -1582,17 +1583,18 @@ async function resetStaffQueue(){
     console.error(e);showToast('Nu am putut reseta coada — încearcă din nou');
   }finally{if(b)b.disabled=false;}
 }
-// Coadă nouă automată zilnic la 16:00 — cerut direct: „comenzile împachetate să se reseteze în
-// fiecare zi la ora 16 și să pregătească platforma pentru ziua următoare". Aceeași acțiune ca „↺ Coadă
-// nouă" manual, dar fără confirm() (rulează singură, nesupravegheată) și fără să se repete la fiecare
-// tick de poll după ce a trecut ora 16 — se declanșează o SINGURĂ dată, comparând pragul curent
-// (staffQueueStartedAt) cu 16:00 de azi: dacă ultimul reset e deja după acel prag, nu mai repetă.
-// Verificată atât la încărcarea inițială (tableta pornită/reîmprospătată după ora 16), cât și la
-// fiecare tick de poll (tableta rămasă deschisă peste ora 16). Întoarce true dacă a resetat, ca
+// Coadă nouă automată zilnic la 22:00 — cerut direct („comenzile împachetate să se reseteze în
+// fiecare zi la ora 16 și să pregătească platforma pentru ziua următoare", pragul mutat ulterior de la
+// 16:00 la 22:00, tot cerut direct). Aceeași acțiune ca „↺ Coadă nouă" manual, dar fără confirm()
+// (rulează singură, nesupravegheată) și fără să se repete la fiecare tick de poll după ce a trecut ora
+// 22 — se declanșează o SINGURĂ dată, comparând pragul curent (staffQueueStartedAt) cu 22:00 de azi:
+// dacă ultimul reset e deja după acel prag, nu mai repetă.
+// Verificată atât la încărcarea inițială (tableta pornită/reîmprospătată după ora 22), cât și la
+// fiecare tick de poll (tableta rămasă deschisă peste ora 22). Întoarce true dacă a resetat, ca
 // apelantul din poll să nu mai ceară și un refreshData() separat, redundant.
-function todayAt16(){const d=new Date();d.setHours(16,0,0,0);return d;}
+function todayAt22(){const d=new Date();d.setHours(22,0,0,0);return d;}
 async function checkAutoQueueReset(){
-  const threshold=todayAt16();
+  const threshold=todayAt22();
   const now=new Date();
   if(now<threshold)return false;
   if(staffQueueStartedAt&&new Date(staffQueueStartedAt)>=threshold)return false;
@@ -1603,7 +1605,7 @@ async function checkAutoQueueReset(){
     staffQueueStartedAt=startedAt;
     curKey=null;
     await refreshData();
-    showToast('🕓 Coadă nouă pornită automat (16:00) — platforma e pregătită pentru ziua următoare.');
+    showToast('🕓 Coadă nouă pornită automat (22:00) — platforma e pregătită pentru ziua următoare.');
     return true;
   }catch(e){
     console.warn('Reset automat coadă eșuat (reîncearcă la următorul ciclu):',e);
@@ -1687,7 +1689,7 @@ async function load(){
     renderMain();
     renderMsgPopup();
     startPolling();
-    // Tableta poate fi pornită/reîncărcată DUPĂ ora 16 (nu doar rămasă deschisă peste ea) — verificăm
+    // Tableta poate fi pornită/reîncărcată DUPĂ ora 22 (nu doar rămasă deschisă peste ea) — verificăm
     // și aici, nu doar în poll, ca reset-ul automat să nu aștepte până la 25 de secunde degeaba.
     checkAutoQueueReset();
   }catch(e){
