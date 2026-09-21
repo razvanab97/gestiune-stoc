@@ -3820,6 +3820,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:431,text:'Comenzi Platforme — 2 cereri directe, legate de AWB: (1) „Asociază AWB-uri" semnalează acum vizibil (nu doar la DPD, cerut explicit „nu doar DPD ci peste tot") orice etichetă recunoscută dar ANULATĂ de curier — apare separat de „format nerecunoscut", cu numărul comenzii și clientul (când se pot identifica), ca să știi că trebuie regenerat AWB, nu doar reîncercată citirea. (2) O comandă deja inclusă (vizibilă în Staff) dar încă fără AWB asociat arată acum „⚠️ Fără AWB" direct pe card, lângă „✓ Comandă creată" — ușor de ratat până acum printre multe carduri identice la prima vedere. Nu la Vinted, unde „AWB" e de fapt „Cod", opțional. Verificat de 2 ori: sintaxă + teste comportamentale (inclusiv pe cele 3 etichete DPD reale anulate, plus cazuri noi de anulare la alte curiere și cazurile fără AWB/cu AWB/anulate/Vinted).',date:'2026-09-21'},
   {n:430,text:'Asociază AWB-uri — reparat al 4-lea format (GLS, Ungaria/Automata): raportat direct „problemă cu încărcarea AWB-urilor, comenzile nu apar în platformă", verificat pe etichetele reale din dosar — 2 comenzi din Ungaria rămâneau permanent nerecunoscute, deși aveau formatul GLS deja cunoscut („ID=numărul;"). Cauza: fontul etichetei scrie separatorul de după număr cu un caracter Unicode diferit de „;" normal (identic vizual, imposibil de observat cu ochiul liber) — regexul care căuta strict „;" nu se potrivea niciodată. Acum acceptă ambele caractere. Verificat de 2 ori: sintaxă + test pe textul real extras din cele 2 etichete GLS afectate, plus reconfirmare că formatele deja funcționale (Sameday/easybox, FAN Courier) nu s-au atins.',date:'2026-09-21'},
   {n:429,text:'Vinted — verificarea de duplicat la import din captură (📋 Adaugă din clipboard) nu se mai uită doar la comenzile de azi, ci la tot istoricul Vinted — cerut direct: lista din aplicația Vinted amestecă vânzări vechi cu cele noi, așa că o captură nouă putea conține produse deja procesate cu zile/săptămâni în urmă, needetectate până acum. Mesajul de confirmare arată acum data reală a potrivirii găsite și dacă acea comandă e deja împachetată/expediată, nu doar „pare deja adăugat azi" — răspunde direct la „am mai făcut-o pe asta sau nu?" fără să deschizi nimic altceva. Comenzile anulate nu mai contează ca potrivire.',date:'2026-09-21'},
   {n:428,text:'🔔 Clopoțel — secțiunile (📥 Marfă furnizor / ⛔ Probleme comenzi client / 📦 Mișcări de stoc) apar acum pe coloane separate, una lângă alta, nu mai stivuite vertical într-o singură listă lungă — cerut direct. O secțiune fără nimic de arătat nu mai ocupă loc (nicio coloană goală). Panoul de clopoțel e mai lat ca să încapă coloanele; celelalte 3 dropdown-uri care refolosesc același stil (config Sincronizare/tab-uri/UI) au rămas neschimbate, la lățimea lor îngustă.',date:'2026-09-20'},
@@ -16584,7 +16585,11 @@ function pcomRowHtml(idx,showOwnAwb){
   // aici, ca să nu fie nevoie să verifici separat în Staff dacă asocierea chiar a scris ceva (cerut
   // direct, după o comandă unde asocierea părea că nu ajunge până la Staff).
   const committedAwb=it._committedId?PCOM.find(o=>o.id===it._committedId)?.awb:'';
-  const committedNote=it._committedId?`<div class="pcom-sel-meta" style="color:var(--gr);font-weight:700">✓ Comandă creată — vizibilă în Staff${committedAwb?` · 📮 AWB ${esc(committedAwb)}`:''}</div>`:'';
+  // Cerut direct: comandă deja inclusă (vizibilă în Staff), dar încă fără AWB — ușor de ratat printre
+  // multe carduri „✓ Comandă creată”, toate identice la prima vedere. Nu la Vinted — acolo „awb” e de
+  // fapt „Cod”, opțional, introdus separat, nu un pas obligatoriu de expediere ca la eMAG/Trendyol.
+  const awbMissingWarn=it._committedId&&!committedAwb&&it.platforma!=='vinted'?` <span style="color:var(--or);font-weight:700" title="Comanda e inclusă, dar încă nu are AWB asociat">⚠️ Fără AWB</span>`:'';
+  const committedNote=it._committedId?`<div class="pcom-sel-meta" style="color:var(--gr);font-weight:700">✓ Comandă creată — vizibilă în Staff${committedAwb?` · 📮 AWB ${esc(committedAwb)}`:''}${awbMissingWarn}</div>`:'';
   // Sugestie de cantitate din titlu („Pachet 3”/„Set 2”) — doar recomandare, un click de aplicat,
   // nu modifică nimic singură (cerut explicit, ca să nu scadă stocul greșit dintr-un fals-pozitiv).
   const packHint=it.suggestedCantitate?`<div class="pcom-sel-meta" style="color:var(--or)">💡 Titlul sugerează ${fmtQty(it.suggestedCantitate)} buc. <button type="button" class="btn btn-sm" style="padding:1px 8px;font-size:19px" onclick="applyPcomSuggestedQty(${idx})">Aplică</button></div>`:'';
@@ -17299,9 +17304,13 @@ function pcxLineHtml(idx,groupIdxs){
   const stockHtml=it.newProduct?'':pcomStockWarningHtml(idx);
   const committedRow=it._committedId?PCOM.find(o=>o.id===it._committedId):null;
   const committedAwb=committedRow?.awb||'';
+  // Cerut direct: comandă deja inclusă (vizibilă în Staff), dar încă fără AWB — ușor de ratat printre
+  // multe carduri „✓ Comandă creată”, toate identice la prima vedere. Nu la Vinted — acolo „awb” e de
+  // fapt „Cod”, opțional, introdus separat, nu un pas obligatoriu de expediere ca la eMAG/Trendyol.
+  const awbMissingWarn=it._committedId&&committedRow&&!committedRow.anulata&&!committedAwb&&it.platforma!=='vinted'?` <span style="color:var(--or);font-weight:700" title="Comanda e inclusă, dar încă nu are AWB asociat">⚠️ Fără AWB</span>`:'';
   const committedNote=it._committedId?(committedRow?.anulata
     ?`<div style="color:var(--rd);font-weight:700;font-size:15px;margin-top:2px">🚫 Anulată${committedRow.motivAnulare?': '+esc(committedRow.motivAnulare):''} — nu mai apare în Staff</div>`
-    :`<div style="color:var(--gr);font-weight:700;font-size:15px;margin-top:2px">✓ Comandă creată — vizibilă în Staff${committedAwb?` · 📮 ${esc(committedAwb)}`:''}</div>`):'';
+    :`<div style="color:var(--gr);font-weight:700;font-size:15px;margin-top:2px">✓ Comandă creată — vizibilă în Staff${committedAwb?` · 📮 ${esc(committedAwb)}`:''}${awbMissingWarn}</div>`):'';
   const issueNote=(committedRow?.staffBlocked&&!committedRow.staffIssueResolved)
     ?`<div style="color:var(--rd);font-weight:700;font-size:15px;margin-top:2px">⛔ ${esc(ISSUE_LABELS_ADMIN[committedRow.staffIssueType]||'Problemă raportată')}${committedRow.staffIssueNote?': '+esc(committedRow.staffIssueNote):''} <button type="button" class="pcx-btn" style="padding:1px 8px;font-size:14px" onclick="resolveStaffIssueAdmin('platforma_comenzi',${it._committedId})">✓ Rezolvată</button></div>`:'';
   // align-self:flex-start — altfel .pcx-line-actions (flex column, align-items:stretch) întinde
@@ -19438,20 +19447,30 @@ async function extractPdfPagesText(file){
 // scrie în bază până nu se apasă explicit „Asociază AWB-urile”.
 let awbParsed=[];
 let awbUnrecognizedPages=[];
+let awbCanceledPages=[];
 let awbFolderFileNames=[];
+// Cerut direct, extins de la DPD la TOATE formatele („nu doar DPD ci peste tot, dacă apar erori"):
+// orice etichetă recunoscută (indiferent de curier) e verificată și pentru cuvinte de anulare/stornare
+// tipărite pe ea — dacă apar, rezultatul e marcat `courierCanceled`, NU tratat ca o asociere validă,
+// chiar dacă AWB-ul/comanda_id s-au putut citi normal (un AWB anulat, asociat tăcut, ar fi mai rău decât
+// unul nerecunoscut — pare corect în listă, dar curierul nu-l mai livrează). Confirmat pe date reale
+// doar pentru DPD („CANCELED”, 3 etichete) — restul cuvintelor (ANULAT/STORNAT/VOID) sunt o plasă de
+// siguranță pentru celelalte curiere, netestată încă pe etichete reale ale lor.
+const AWB_CANCEL_RE=/\b(CANCELED|CANCELLED|ANULAT|STORNAT|VOID)/i;
 function parseAwbLabelText(text){
+  const canceled=AWB_CANCEL_RE.test(text);
   const awbM=text.match(/AWB:\s*(\d+)/);
   const contM=text.match(/Continut:\s*(\d+)/);
-  if(awbM&&contM)return{awb:awbM[1],comandaId:contM[1]};
+  if(awbM&&contM)return canceled?{courierCanceled:true,awb:awbM[1],comandaId:contM[1]}:{awb:awbM[1],comandaId:contM[1]};
   const sdM=text.match(/^([A-Za-z0-9]{8,25})_(\d{6,})_\d+$/m);
-  if(sdM)return{awb:sdM[1],comandaId:sdM[2]};
+  if(sdM)return canceled?{courierCanceled:true,awb:sdM[1],comandaId:sdM[2]}:{awb:sdM[1],comandaId:sdM[2]};
   // Sameday — „notă de transport" clasică (ramburs/COD), format diferit de eticheta easybox de mai sus
   // (găsit direct pe date reale, 7 etichete nerecunoscute până acum — vezi raport direct „AWB-uri puse
   // în dosar, ce se întâmplă?"): AWB-ul complet (cu sufixul „001") e al doilea cod de pe rândul „Nota
   // transport: X / Y", iar comanda_id e la „Referinta expeditor: Nr. Comanda: X;".
   const notaM=text.match(/Nota transport:\s*[A-Za-z0-9]+\s*\/\s*([A-Za-z0-9]{8,25})/);
   const comM=text.match(/Nr\.\s*Comanda:\s*(\d+)/);
-  if(notaM&&comM)return{awb:notaM[1],comandaId:comM[1]};
+  if(notaM&&comM)return canceled?{courierCanceled:true,awb:notaM[1],comandaId:comM[1]}:{awb:notaM[1],comandaId:comM[1]};
   // GLS (crossborder eMAG, ex. Ungaria) — comanda_id e pe rândul „ID=X;” (confirmat pe date reale).
   // Codul de urmărire (AWB) nu are o etichetă proprie ca la celelalte formate — layout-ul complex al
   // etichetei (2 coloane, cod de bare rotit) face ca PDF.js să-l „rupă" uneori pe mai multe rânduri, deci
@@ -19466,7 +19485,7 @@ function parseAwbLabelText(text){
   if(idM){
     const withoutNoise=text.replace(/\+\d{9,15}/g,'').replace(/ID=\d+[;;]/,'');
     const awbM=withoutNoise.match(/\b(\d{10,14})\b/);
-    if(awbM)return{awb:awbM[1],comandaId:idM[1]};
+    if(awbM)return canceled?{courierCanceled:true,awb:awbM[1],comandaId:idM[1]}:{awb:awbM[1],comandaId:idM[1]};
   }
   // DPD (Bulgaria/CEE crossborder, Trendyol) — al 5-lea format, găsit direct pe o etichetă reală
   // amestecată în același PDF cu etichete FAN Courier (raportat direct: „de ce se sar AWB-urile alea").
@@ -19476,7 +19495,14 @@ function parseAwbLabelText(text){
   // platforma_comenzi — produsul de pe etichetă se potrivește exact cu comanda găsită după acest cod).
   const dpdAwbM=text.match(/\d+\s+of\s+\d+\s+for\s+((?:\d\s*){9,14})/);
   const dpdNoteM=text.match(/note:\s*(\d{6,})/);
-  if(dpdAwbM&&dpdNoteM)return{awb:dpdAwbM[1].replace(/\s+/g,''),comandaId:dpdNoteM[1]};
+  if(dpdAwbM&&dpdNoteM)return canceled?{courierCanceled:true,awb:dpdAwbM[1].replace(/\s+/g,''),comandaId:dpdNoteM[1]}:{awb:dpdAwbM[1].replace(/\s+/g,''),comandaId:dpdNoteM[1]};
+  // DPD anulat de curier — raportat direct („comenzile nu apar în platformă"): eticheta e recunoscută
+  // ca format DPD (codul de urmărire se citește normal), dar rândul „note:” e complet gol — fără
+  // comanda_id, imposibil de asociat automat. Verificat pe 3 etichete reale: toate 3 aveau „CANCELED”
+  // tipărit direct pe etichetă — DPD a anulat/invalidat acel AWB înainte de preluare. Nu mai intră tăcut
+  // la „format nerecunoscut” (identic cu o etichetă ilizibilă) — semnalat distinct, ca omul să știe că
+  // trebuie regenerat AWB-ul, nu doar reîncercat citirea.
+  if(dpdAwbM&&canceled)return{courierCanceled:true,awb:dpdAwbM[1].replace(/\s+/g,'')};
   return null;
 }
 async function handleAwbPdfFile(ev){
@@ -19490,15 +19516,24 @@ async function handleAwbPdfFile(ev){
     const pages=await extractPdfPagesText(file);
     const pairs=[];
     awbUnrecognizedPages=[];
+    awbCanceledPages=[];
     pages.forEach((text,i)=>{
       const p=parseAwbLabelText(text);
-      if(p)pairs.push(p);else awbUnrecognizedPages.push(i+1);
+      if(p&&p.courierCanceled)awbCanceledPages.push({label:'p.'+(i+1),awb:p.awb,comandaId:p.comandaId});
+      else if(p)pairs.push(p);
+      else awbUnrecognizedPages.push(i+1);
     });
-    if(!pairs.length&&!awbUnrecognizedPages.length)throw new Error('PDF-ul pare gol.');
+    if(!pairs.length&&!awbUnrecognizedPages.length&&!awbCanceledPages.length)throw new Error('PDF-ul pare gol.');
     const results=[];
     for(const p of pairs){
       const rows=await dbGet(`platforma_comenzi?comanda_id=eq.${p.comandaId}&select=id,client_nume,produs_nume,awb`);
       results.push({...p,rows});
+    }
+    // La fel ca liniile matched — dacă eticheta anulată chiar are comanda_id (nu doar DPD, care n-are
+    // niciodată), arătăm și numele clientului, nu doar „AWB X, anulat” fără context.
+    for(const c of awbCanceledPages){
+      if(!c.comandaId)continue;
+      try{const rows=await dbGet(`platforma_comenzi?comanda_id=eq.${c.comandaId}&select=client_nume`);c.clientNume=rows?.[0]?.client_nume||'';}catch(e){}
     }
     awbParsed=results;
     renderAwbPreview();
@@ -19525,20 +19560,27 @@ async function readAwbFolderPdfs(){
     if(!files.length){toast('Niciun PDF nou în Desktop/AWB-uri.');return;}
     const pairs=[];
     awbUnrecognizedPages=[];
+    awbCanceledPages=[];
     for(const f of files){
       try{
         const pages=await extractPdfPagesText(base64ToBlob(f.data,'application/pdf'));
         pages.forEach((text,i)=>{
           const p=parseAwbLabelText(text);
-          if(p)pairs.push({...p,file:f.name});else awbUnrecognizedPages.push(`${f.name} p.${i+1}`);
+          if(p&&p.courierCanceled)awbCanceledPages.push({label:`${f.name} p.${i+1}`,awb:p.awb,comandaId:p.comandaId});
+          else if(p)pairs.push({...p,file:f.name});
+          else awbUnrecognizedPages.push(`${f.name} p.${i+1}`);
         });
       }catch(e){console.warn('PDF ignorat din dosar:',f.name,e);}
     }
-    if(!pairs.length&&!awbUnrecognizedPages.length)throw new Error('Niciun PDF citit cu succes din dosar.');
+    if(!pairs.length&&!awbUnrecognizedPages.length&&!awbCanceledPages.length)throw new Error('Niciun PDF citit cu succes din dosar.');
     const results=[];
     for(const p of pairs){
       const rows=await dbGet(`platforma_comenzi?comanda_id=eq.${p.comandaId}&select=id,client_nume,produs_nume,awb`);
       results.push({...p,rows});
+    }
+    for(const c of awbCanceledPages){
+      if(!c.comandaId)continue;
+      try{const rows=await dbGet(`platforma_comenzi?comanda_id=eq.${c.comandaId}&select=client_nume`);c.clientNume=rows?.[0]?.client_nume||'';}catch(e){}
     }
     awbParsed=results;
     awbFolderFileNames=files.map(f=>f.name);
@@ -19560,9 +19602,14 @@ function renderAwbPreview(){
     const already=p.rows[0].awb;
     return`<div class="inv-prev-row">✓ Comanda ${esc(p.comandaId)} — ${esc(nm)} → AWB ${esc(p.awb)}${already?` <span style="color:var(--t3)">(înlocuiește ${esc(already)})</span>`:''}</div>`;
   }).join('');
+  // Etichetă anulată de curier — raportat direct, extins de la DPD la orice curier („nu doar DPD ci
+  // peste tot, dacă apar erori"): secțiune separată de „format nerecunoscut", aici NU e o problemă de
+  // parsare (AWB-ul se citește clar), ci un AWB pe care curierul l-a anulat/stornat înainte de preluare
+  // — omul trebuie să regenereze AWB pentru acea comandă, nu doar să reîncerce citirea.
+  if(awbCanceledPages.length)html+=`<div class="inv-prev-row" style="color:var(--rd);font-weight:700">🚫 ${awbCanceledPages.length} ${awbCanceledPages.length>1?'etichete anulate':'etichetă anulată'} de curier (fără livrare posibilă cu acest AWB) — regenerează AWB, nu se poate asocia automat: ${awbCanceledPages.map(p=>`${esc(p.label)}${p.comandaId?` — comanda ${esc(p.comandaId)}${p.clientNume?' ('+esc(p.clientNume)+')':''}`:''} (AWB ${esc(p.awb)})`).join(', ')}</div>`;
   if(awbUnrecognizedPages.length)html+=`<div class="inv-prev-row" style="color:var(--t3)">❔ Format nerecunoscut, sărite (fără AWB/comandă identificabile) — ${awbUnrecognizedPages.length>1?'paginile':'pagina'} ${esc(awbUnrecognizedPages.join(', '))}</div>`;
   box.innerHTML=html;
-  document.getElementById('pcmi-awb-info').textContent=`${matched.length} găsite, ${unmatched.length} negăsite${awbUnrecognizedPages.length?`, ${awbUnrecognizedPages.length} nerecunoscute`:''}`;
+  document.getElementById('pcmi-awb-info').textContent=`${matched.length} găsite, ${unmatched.length} negăsite${awbCanceledPages.length?`, ${awbCanceledPages.length} anulate de curier`:''}${awbUnrecognizedPages.length?`, ${awbUnrecognizedPages.length} nerecunoscute`:''}`;
   document.getElementById('pcmi-awb-apply-btn').disabled=!matched.length;
   document.getElementById('pcmi-awb-foot').style.display='flex';
 }
