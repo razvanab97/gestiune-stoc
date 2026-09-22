@@ -3829,6 +3829,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:434,text:'Comenzi Platforme — card nou, permanent, „🕓 Comenzi rămase în urmă din Staff", raportat direct pe o comandă reală care nu se mai găsea nicăieri: o comandă neîmpachetată dispare din coada Staff la orice reset de coadă (manual sau automat, ora 22:00) dacă a fost creată înainte de acel prag — rămâne corectă în bază, dar invizibilă operațional, posibil niciodată expediată. Staff NU s-a atins (coada lui rămâne simplă, cum a fost cerută), dar admin-ul arată acum, permanent, orice comandă neîmpachetată/neanulată ieșită din vizibilitatea Staff, cu client, produs, platformă și dată, sortate cele mai vechi primele — plus buton „✓ Marchează împachetat" pentru cazul în care a plecat deja fizic, doar flag-ul nu era setat. Găsit direct pe date reale la lansare: 261 de comenzi acumulate din 17 august, nesemnalate până acum — verifică urgent, fizic, dacă au fost expediate. Verificat de 2 ori: sintaxă + teste comportamentale (inclusiv exact comanda reală raportată) + verificare vizuală live cu datele reale.',date:'2026-09-22'},
   {n:433,text:'Vinted — 2 reparații găsite testând direct, cu apeluri reale către AI, pe o captură reală (ecranul „Etichetă digitală de expediere" Sameday, trimis de utilizator): (1) codul de expediere citit corect vizual („3VCWYPT"), dar cu 2 caractere invizibile (zero-width space) strecurate în mijloc de model — identic la ochi, dar cod complet nefolosibil la potrivire exactă; curățat acum la sursă (cod, cumpărător, denumire produs), o singură dată, imediat după citirea AI — nimic din restul aplicației (inclusiv verificarea de duplicat) nu mai poate fi afectat. (2) Prețul produsului, deși vizibil doar parțial (pe margine/fundal, acoperit de fereastra pop-up de expediere), nu era citit — promptul nu-l căuta acolo. Corectat: promptul caută acum activ prețul oriunde apare în imagine, chiar parțial acoperit, și alege explicit prețul produsului, nu totalul cu comision/protecție cumpărător. Verificat de 2 ori: sintaxă + retestare reală, cu aceeași imagine — de la „preț: lipsă” la toate cele 4 informații corecte dintr-o singură captură (produs, cumpărător, cod curat, preț 190, nu 203).',date:'2026-09-22'},
   {n:432,text:'Comenzi Platforme (Vinted) — generator nou „🏷️ Etichetă GLS", cerut direct pe un exemplu real: Vinted nu oferă niciun AWB descărcabil pentru expedierea prin punct de depunere GLS, doar un cod text (ecranul „Împachetează și trimite"). Acum se poate genera pe loc un PDF minimal — logo GLS + denumirea produsului + codul — gata de printat, în două moduri: (1) formular rapid, oricând, lângă secțiunea Vinted din import; (2) buton direct pe orice comandă Vinted deja inclusă, care precompletează formularul din datele comenzii. Verificat de 2 ori: sintaxă + generare reală într-un browser (PDF valid, logo + text corect poziționate, diacriticele din denumirea produsului convertite automat, fără să blocheze generarea).',date:'2026-09-22'},
   {n:431,text:'Comenzi Platforme — 2 cereri directe, legate de AWB: (1) „Asociază AWB-uri" semnalează acum vizibil (nu doar la DPD, cerut explicit „nu doar DPD ci peste tot") orice etichetă recunoscută dar ANULATĂ de curier — apare separat de „format nerecunoscut", cu numărul comenzii și clientul (când se pot identifica), ca să știi că trebuie regenerat AWB, nu doar reîncercată citirea. (2) O comandă deja inclusă (vizibilă în Staff) dar încă fără AWB asociat arată acum „⚠️ Fără AWB" direct pe card, lângă „✓ Comandă creată" — ușor de ratat până acum printre multe carduri identice la prima vedere. Nu la Vinted, unde „AWB" e de fapt „Cod", opțional. Verificat de 2 ori: sintaxă + teste comportamentale (inclusiv pe cele 3 etichete DPD reale anulate, plus cazuri noi de anulare la alte curiere și cazurile fără AWB/cu AWB/anulate/Vinted).',date:'2026-09-21'},
@@ -4684,6 +4685,36 @@ function renderCancelledPcomList(){
     const dt=o.createdAt?new Date(o.createdAt).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric'}):'';
     return`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(p?p.name:(o.produsNume||o.titluExtern||'Produs'))}</strong> <span style="color:var(--t3);font-family:var(--mono)">· ${esc(o.platforma)}${o.comandaId?' #'+esc(o.comandaId):''}</span><div class="jp-meta">${o.motivAnulare?'Motiv: '+esc(o.motivAnulare):'Fără motiv notat'}${dt?' · '+dt:''}</div></div><button type="button" class="btn btn-sm" onclick="reconsiderPcomRow(${o.id})">↺ Reconsideră</button></div>`;
   }).join('');
+}
+// Comenzi „rămase în urmă" din Staff — cerut direct: Staff nu trebuie atins (coada lui trebuie să
+// rămână simplă, cu resetul zilnic la 22:00, cum s-a cerut), dar admin-ul nu are voie să piardă din
+// vedere ce dispare din ea. O comandă neîmpachetată, creată ÎNAINTE de ultimul prag de coadă (manual
+// sau automat), nu mai apare NICĂIERI în Staff după acel reset — rămâne corectă în bază, dar invizibilă
+// operațional. Găsit direct pe date reale: 261 de comenzi acumulate din 17 august până acum, niciuna
+// semnalată până la această listă. Sortate cele mai vechi primele — cele cu risc mai mare de penalizare
+// eMAG/Trendyol pentru întârziere ies primele la vedere.
+function renderStaleStaffOrdersCard(){
+  const card=document.getElementById('pcx-stale-staff-card'),list=document.getElementById('pcx-stale-staff-list');
+  if(!card||!list)return;
+  const rows=STAFF_QUEUE_STARTED_AT?PCOM.filter(o=>!o.impachetat&&!o.anulata&&o.createdAt&&o.createdAt<STAFF_QUEUE_STARTED_AT):[];
+  card.style.display=rows.length?'':'none';
+  if(!rows.length){list.innerHTML='';return;}
+  const sorted=rows.slice().sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));
+  list.innerHTML=`<div style="font-weight:700;color:var(--rd);margin-bottom:8px">${sorted.length} ${sorted.length>1?'comenzi neîmpachetate, ieșite din Staff':'comandă neîmpachetată, ieșită din Staff'}</div>`+sorted.map(o=>{
+    const p=o.produsId?P.find(x=>x.id===o.produsId):null;
+    const dt=o.createdAt?new Date(o.createdAt).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric'}):'';
+    return`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(p?p.name:(o.produsNume||o.titluExtern||'Produs'))}</strong> <span style="color:var(--t3);font-family:var(--mono)">· ${esc(pcomPlatLabel(o.platforma))}${o.comandaId?' #'+esc(o.comandaId):''}</span><div class="jp-meta">${o.clientNume?esc(o.clientNume)+' · ':''}${dt}</div></div><button type="button" class="btn btn-sm" onclick="markPcomOrderPacked(${o.id})" title="Confirmă doar dacă știi sigur, fizic, că a fost deja împachetată/expediată">✓ Marchează împachetat</button></div>`;
+  }).join('');
+}
+async function markPcomOrderPacked(id){
+  if(!confirm('Confirmi că această comandă a fost deja împachetată și expediată fizic?'))return;
+  try{
+    const at=new Date().toISOString();
+    await dbPatch(`platforma_comenzi?id=eq.${id}`,{impachetat:true,impachetat_at:at});
+    const o=PCOM.find(x=>x.id===id);if(o){o.impachetat=true;o.impachetatAt=at;}
+    renderStaleStaffOrdersCard();
+    toast('✓ Marcată ca împachetată');
+  }catch(e){toast('Nu am putut marca comanda: '+(e.message||e),'err');}
 }
 async function reconsiderPcomRow(id){
   try{
@@ -6588,7 +6619,7 @@ let jStockOrdersRendered=[];
 // applyPcomImport, AWB, etc.) rămâne exact aceeași sub ambele — vezi pcomApplyImportUiMode()/
 // renderPcomRedesign(). Pune pe false ca să revii instant la interfața veche, fără nimic de git-uit.
 const USE_PCOM_REDESIGN=true;
-let PCOM=[],pcomLoaded=false,pcImpParsed=[],pcImpPlatforma='emag';
+let PCOM=[],pcomLoaded=false,pcImpParsed=[],pcImpPlatforma='emag',STAFF_QUEUE_STARTED_AT=null;
 // Un singur import_batch_id per platformă, per sesiune de previzualizare — generat o singură dată,
 // reutilizat atât de commitPcomLine (scriere imediată, la „Inclus") cât și de applyPcomImport (mai
 // târziu), ca liniile confirmate din timp să rămână grupate corect în „Istoric importuri", nu izolate.
@@ -6740,6 +6771,7 @@ async function load(){
     const activityPromise=dbGet('activitate_stoc?select=*&order=created_at.desc&limit=100').catch(e=>({__err:e}));
     const priceHistPromise=dbGet('istoric_preturi?select=*&order=created_at.desc&limit=200').catch(e=>({__err:e}));
     const pcomPromise=dbGet('platforma_comenzi?select=*&order=data.desc').catch(e=>({__err:e}));
+    const staffQueueStartPromise=dbGet('setari_app?key=eq.staff_queue_started_at&select=value').catch(e=>({__err:e}));
     const reorderPromise=fetch('/api/settings?key='+REORDER_KEY).then(r=>r.json()).catch(e=>({__err:e}));
 
     const rows=await prodPromise;
@@ -6800,6 +6832,11 @@ async function load(){
       PCOM=[];
       console.warn('platforma_comenzi unavailable (rulează migration_platforma_comenzi.sql):',pcResult?.__err);
     }
+    // Pragul cozii Staff (setari_app, aceeași cheie ca în staff.html) — încărcat și în admin, doar ca
+    // să putem semnala comenzile neîmpachetate rămase ÎN URMA acelui prag (vezi renderStaleStaffOrdersCard).
+    // Nu schimbă nimic din comportamentul Staff-ului — Staff rămâne neatins, cum s-a cerut explicit.
+    const sqRows=await staffQueueStartPromise;
+    STAFF_QUEUE_STARTED_AT=(sqRows&&!sqRows.__err&&sqRows[0]?.value)||null;
 
     // produse de comandat (fără stoc, dar cu comenzi pe ele) — listă simplă, ținută în setari_app
     // (ca tab_order/ui_customizations), grupată pe lună prin addedAt.slice(0,7), nu prin ștergere
@@ -17520,6 +17557,7 @@ function pcxOrderCardHtml(idxs,gIdx){
 }
 function pcxRenderOrders(){
   renderCancelledPcomList();
+  renderStaleStaffOrdersCard();
   const host=document.getElementById('pcx-orders-list');if(!host)return;
   pcomComputeGroups();
   const q=(document.getElementById('pcx-search')?.value||'').toLowerCase().trim();
@@ -17687,6 +17725,11 @@ function renderPcomRedesign(){
           </select>
         </div>
         <div class="pcx-orders-list" id="pcx-orders-list"></div>
+      </div>
+      <div class="pcx-card pcx-card-compact" id="pcx-stale-staff-card" style="display:none">
+        <div class="pcx-card-title">🕓 Comenzi rămase în urmă din Staff</div>
+        <div style="font-size:16px;color:var(--t3);margin:4px 0 8px">Comenzi neîmpachetate care au ieșit din coada activă Staff la un reset de coadă (manual sau automat, ora 22:00) — nu mai sunt vizibile acolo, dar tot trebuie expediate. Verifică fizic dacă au plecat deja; dacă da, marchează-le împachetate de aici.</div>
+        <div id="pcx-stale-staff-list"></div>
       </div>
       <div class="pcx-card pcx-card-compact" id="pcx-cancelled-card" style="display:none">
         <div class="pcx-card-title">🚫 Comenzi anulate — de reconsiderat</div>
