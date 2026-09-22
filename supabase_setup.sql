@@ -115,6 +115,35 @@ create table if not exists platforma_mapari (
   created_at timestamptz default now()
 );
 
+-- Coloane adăugate ulterior, păstrate aici ca schema completă să fie sigură și pentru un proiect nou.
+alter table platforma_mapari add column if not exists tara text;
+alter table platforma_mapari add column if not exists stoc_extern integer;
+alter table platforma_mapari add column if not exists stoc_extern_actualizat_la timestamptz;
+create index if not exists idx_platforma_mapari_tara on platforma_mapari(platforma, tara);
+
+-- COMENZI PLASATE LA FURNIZOR, ÎNCĂ PE DRUM — separat de comenzi_stoc/facturi deja sosite.
+create table if not exists comenzi_furnizor (
+  id bigint primary key generated always as identity,
+  furnizor text not null,
+  comanda_ref text,
+  titlu_extern text not null,
+  cod_extern text,
+  produs_id bigint references produse(id) on delete set null,
+  cantitate_comandata numeric(10,2) not null default 0,
+  cantitate_sosita numeric(10,2) not null default 0,
+  pret numeric(10,2) default 0,
+  finalizat boolean not null default false,
+  finalizat_at timestamptz,
+  nu_a_sosit boolean not null default false,
+  nu_a_sosit_at timestamptz,
+  nu_a_sosit_nota text,
+  nu_a_sosit_rezolvat boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index if not exists idx_comenzi_furnizor_activ on comenzi_furnizor(finalizat) where finalizat=false;
+create index if not exists idx_comenzi_furnizor_nu_a_sosit on comenzi_furnizor(nu_a_sosit, nu_a_sosit_rezolvat) where nu_a_sosit=true and nu_a_sosit_rezolvat=false;
+create index if not exists idx_comenzi_furnizor_produs on comenzi_furnizor(produs_id);
+
 -- OBSERVAȚII PREȚURI DIN RESEARCH / LISTĂRI EXTERNE
 create table if not exists listing_price_observations (
   id bigint primary key generated always as identity,
@@ -238,6 +267,7 @@ alter table platforma_mapari disable row level security;
 alter table listing_price_observations disable row level security;
 alter table setari_app disable row level security;
 alter table comenzi_stoc disable row level security;
+alter table comenzi_furnizor disable row level security;
 alter table research_projects disable row level security;
 alter table research_links disable row level security;
 
@@ -245,6 +275,8 @@ grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on research_projects to anon, authenticated;
 grant select, insert, update, delete on research_links to anon, authenticated;
 grant select, insert, update, delete on comenzi_stoc to anon, authenticated;
+grant select, insert, update, delete on comenzi_furnizor to anon, authenticated;
+grant usage, select on sequence comenzi_furnizor_id_seq to anon, authenticated;
 
 -- Confirmare
 select 'Schema creat cu succes!' as status;

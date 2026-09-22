@@ -2643,10 +2643,9 @@ button.pcx-include-btn.included{border-color:var(--gr)}
   <div class="card" data-sync-sec="conexiune" style="padding:1rem 1.25rem;margin-bottom:1rem;--stat-accent:var(--bl)">
     <div class="sec" style="margin-top:0">Stare conexiune platforme</div>
     <div style="font-size:25px;color:var(--t2);line-height:1.6">
-      Sincronizarea automată cu eMAG și Trendyol necesită conectarea la API-urile lor (în lucru —
-      necesită credențiale de la contul de seller și un mic backend care să le păstreze în siguranță).
-      Până atunci, poți pregăti aici <b>maparea</b> dintre listările tale de pe platforme și
-      produsele din Inventar — pasul care va fi reutilizat automat când sincronizarea pornește.
+      eMAG se citește prin Conectorul local de pe acest Mac, iar Trendyol prin integrarea API. Aici
+      confirmi <b>maparea</b> dintre listările platformelor și produsele din Inventar; stocul intern
+      nu se modifică niciodată doar prin citire sau resincronizare.
     </div>
   </div>
 
@@ -3829,6 +3828,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:440,text:'Audit funcțional — patru reparații: (1) la resincronizarea eMAG, mapările noi păstrează acum piața RO/BG/HU; o listare dintr-o țară nu mai poate actualiza sau reutiliza greșit o asociere din altă piață, iar mapările vechi fără țară rămân compatibile. (2) Două comenzi cu același număr, dar din platforme diferite, nu mai pot fi grupate împreună în Comenzi Platforme. (3) Staff → „Marfă furnizor” acceptă și cantități parțiale de 0,5 bucăți și nu mai poate pierde butonul „Tot restul a ajuns” când numele furnizorului conține apostrof. (4) mesajul din Sincronizare reflectă integrarea eMAG/Trendyol activă, nu vechiul text „în lucru”.',date:'2026-09-22'},
   {n:439,text:'Asociază AWB-uri — recunoaște acum și propria etichetă GLS generată în aplicație (🏷️ Generator etichetă GLS, #432), cerut direct: „e chiar AWB-ul generat în platforma noastră, e important să fie asociat". Nu e o etichetă de curier, dar are exact aceeași problemă ca eticheta digitală Vinted (#435-437) — niciun ID de comandă Vinted pe ea — deci se rezolvă identic, prin denumirea produsului, cu aceeași protecție la ambiguitate/comenzi deja împachetate. Verificat de 2 ori: sintaxă + test pe eticheta GLS reală generată mai devreme, confirmat că se potrivește corect cu comanda ei din bază (și că nu re-atinge inutil o comandă care are deja AWB-ul corect).',date:'2026-09-22'},
   {n:438,text:'Comenzi Platforme — cantitatea editată DUPĂ ce o linie e deja inclusă (vizibilă în Staff) se salvează acum efectiv în bază, raportat direct („modific cantitatea, dar Staff tot arată valoarea veche"): înainte, modificarea rămânea STRICT în previzualizarea locală — chipul „AWB Nx produs" arăta valoarea nouă, părea că a mers, dar baza de date (deci și Staff) rămâneau cu valoarea veche, nescrisă niciodată. Acum se scrie direct, DOAR dacă stocul încă nu a fost scăzut pentru acea comandă („Aplică import" e un pas separat, ulterior) — dacă stocul a fost deja scăzut cu vechea cantitate, editarea e blocată explicit (un ajustaj retroactiv al stocului ar fi mult mai riscant, netratat aici), cu revenire automată la valoarea corectă și mesaj clar. Zona de editare a cantității a fost și mărită (68px, de la 52px) — o valoare ca „1,5" nu mai rămâne trunchiată vizual la „1,". Verificat de 2 ori: sintaxă + 5 teste comportamentale, inclusiv exact scenariul raportat.',date:'2026-09-22'},
   {n:437,text:'Asociază AWB-uri (Vinted) — bug real găsit ÎNAINTE de a ajunge live, verificând direct cu date reale funcția de potrivire automată din #436: o comandă deja ÎMPACHETATĂ putea avea totuși AWB gol (expediată fără ca AWB-ul să fi fost vreodată înregistrat la noi) — fără excludere explicită, o etichetă nouă, pentru un client complet diferit, risca să fie atribuită unei comenzi VECHI, deja terminate, doar pentru că au titlu identic generic (confirmat cu un caz real: „Set poker 500 jetoane..." — comandă nouă a lui Dzitac Madalin ar fi fost atribuită comenzii deja împachetate a lui Robert Gamez, din alt import). Comenzile deja împachetate sunt acum excluse explicit din candidați. Verificat de 2 ori: sintaxă + teste care reproduc exact scenariul real găsit, plus regresie pe cazurile deja funcționale.',date:'2026-09-22'},
@@ -14799,17 +14799,23 @@ async function loadSyncMappings(){
 // PNK e mai fiabil decât titlul — unic per listare, nu se schimbă niciodată la o editare de titlu
 // (spre deosebire de titlu, care se poate rescrie oricând pe platformă). Orice flux de mapare/potrivire
 // din aplicație încearcă întâi PNK-ul, titlul rămâne doar rezervă când PNK-ul lipsește/nu e cunoscut.
-function findProductByPnk(platforma,pnk){
+function findProductByPnk(platforma,pnk,tara=''){
   if(!pnk)return null;
-  const m=SYNCM.find(s=>s.platforma===platforma&&s.confirmat&&s.idExtern===pnk);
+  // La eMAG, PNK-ul este identificatorul listării dintr-o anumită piață. Preferăm piața cerută;
+  // mapările vechi fără țară rămân compatibile până sunt resalvate prin resincronizare.
+  const m=SYNCM.find(s=>s.platforma===platforma&&s.confirmat&&s.idExtern===pnk&&(!tara||s.tara===tara))
+    ||(tara?SYNCM.find(s=>s.platforma===platforma&&s.confirmat&&s.idExtern===pnk&&!s.tara):null);
   return m?P.find(p=>p.id===m.produsId)||null:null;
 }
 // Găsește maparea SYNCM deja confirmată pentru un titlu/PNK — folosit la captarea stocului extern
 // pentru rânduri DEJA mapate dintr-un import (spre deosebire de findProductByPnk, care caută produsul).
-function findSyncMapEntry(platforma,titlu,pnk){
-  if(pnk){const m=SYNCM.find(s=>s.platforma===platforma&&s.idExtern===pnk);if(m)return m;}
+function findSyncMapEntry(platforma,titlu,pnk,tara=''){
+  const sameMarket=s=>s.platforma===platforma&&(!tara||s.tara===tara);
+  const legacyMarket=s=>s.platforma===platforma&&!s.tara;
+  if(pnk){const m=SYNCM.find(s=>sameMarket(s)&&s.idExtern===pnk)||(tara&&SYNCM.find(s=>legacyMarket(s)&&s.idExtern===pnk));if(m)return m;}
   const t=(titlu||'').toLowerCase().trim();
-  return SYNCM.find(s=>s.platforma===platforma&&s.titluExtern.toLowerCase().trim()===t)||null;
+  return SYNCM.find(s=>sameMarket(s)&&s.titluExtern.toLowerCase().trim()===t)
+    ||(tara&&SYNCM.find(s=>legacyMarket(s)&&s.titluExtern.toLowerCase().trim()===t))||null;
 }
 // findSyncMapEntry (ca și .find() în general) întoarce mereu doar PRIMA potrivire — dacă PNK-ul e deja
 // dublat în platforma_mapari (ex. adăugat cronologic de două ori, o dată după titlu, o dată după PNK),
@@ -15065,12 +15071,13 @@ async function resyncEmagActiveListings(market){
     rows.forEach(it=>{
       const titlu=String(it.titluExtern||'').trim(),pnk=String(it.pnk||'').trim();
       const key=(pnk||titlu.toLowerCase().trim());if(!titlu||!key||seen.has(key))return;seen.add(key);
-      const m=findSyncMapEntry('emag',titlu,pnk);
+      const tara=String(it.tara||market||'').toUpperCase();
+      const m=findSyncMapEntry('emag',titlu,pnk,tara);
       if(m){if(Number.isFinite(Number(it.stocExtern)))syncImpStockUpdates.push({mapId:m.id,titluExtern:titlu,pnk:m.idExtern||pnk,produsId:m.produsId,stocExtern:Number(it.stocExtern)});return;}
-      const byPnk=findProductByPnk('emag',pnk);
-      if(byPnk){syncImpParsed.push({titluExtern:titlu,pnk,produsId:byPnk.id,score:1,viaPnk:true,include:true});return;}
+      const byPnk=findProductByPnk('emag',pnk,tara);
+      if(byPnk){syncImpParsed.push({titluExtern:titlu,pnk,tara,produsId:byPnk.id,score:1,viaPnk:true,include:true});return;}
       const match=findExistingProduct({name:titlu});
-      syncImpParsed.push({titluExtern:titlu,pnk,produsId:match?match.product.id:null,score:match?match.score:0,include:!!match});
+      syncImpParsed.push({titluExtern:titlu,pnk,tara,produsId:match?match.product.id:null,score:match?match.score:0,include:!!match});
     });
     const stockResult=await saveExternalStockSnapshot(syncImpStockUpdates);
     syncImpStockUpdates=[];
@@ -15675,7 +15682,7 @@ async function applySyncImport(){
       }
     }
     const resolved=toAdd.filter(x=>x.produsId);
-    const rows=resolved.length?await dbPost('platforma_mapari',resolved.map(it=>syncMapToDb({platforma,titluExtern:it.titluExtern,idExtern:it.pnk||null,produsId:it.produsId,confirmat:true}))):[];
+    const rows=resolved.length?await dbPost('platforma_mapari',resolved.map(it=>syncMapToDb({platforma,titluExtern:it.titluExtern,idExtern:it.pnk||null,produsId:it.produsId,confirmat:true,tara:it.tara||''}))):[];
     SYNCM=rows.map(dbToSyncMap).concat(SYNCM);
     // Rămân în listă doar liniile care NU s-au aplicat (produs nou eșuat la creare) — la fel ca la
     // import factură, ca să nu dispară din vedere fără să se fi întâmplat de fapt nimic pentru ele.
@@ -16555,7 +16562,7 @@ function pcomComputeGroups(){
   // succesiune: eMAG, apoi Trendyol, apoi Vinted. Indexul original rămâne intact, deci acțiunile de
   // includere, asociere și ștergere continuă să atingă exact linia corectă din pcImpParsed.
   pcImpParsed.map((it,idx)=>({it,idx})).sort((a,b)=>(platformOrder[a.it.platforma]??99)-(platformOrder[b.it.platforma]??99)||a.idx-b.idx).forEach(({it,idx})=>{
-    const key=it.pachetId||it.comandaId||('_line'+idx);
+    const key=(it.platforma||'necunoscut')+'|'+(it.pachetId||it.comandaId||('_line'+idx));
     if(!map.has(key))map.set(key,[]);
     map.get(key).push(idx);
   });
@@ -17325,7 +17332,7 @@ function pcxRelocateSharedNodes(){
   pcxRelocated=true;
 }
 let pcxExpanded=null; // Set — cheile grupurilor expandate; null = „toate expandate" (stare implicită, nimic ascuns)
-function pcxGroupKey(idxs){const it=pcImpParsed[idxs[0]];return it.pachetId||it.comandaId||('_line'+idxs[0]);}
+function pcxGroupKey(idxs){const it=pcImpParsed[idxs[0]];return (it.platforma||'necunoscut')+'|'+(it.pachetId||it.comandaId||('_line'+idxs[0]));}
 function pcxToggleExpand(key){
   if(pcxExpanded===null)pcxExpanded=new Set(pcomGroups.map(pcxGroupKey)); // materializează „toate" explicit, ca UN singur grup să poată fi închis
   if(pcxExpanded.has(key))pcxExpanded.delete(key);else pcxExpanded.add(key);
