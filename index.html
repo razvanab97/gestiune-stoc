@@ -2850,6 +2850,15 @@ button.pcx-include-btn.included{border-color:var(--gr)}
           </div>
           <button type="button" class="btn btn-sm btn-acc" style="margin-top:10px" onclick="vintedLotSubmit()">Adaugă lotul în Comenzi</button>
         </div>
+        <div id="gls-label-fld" style="display:none">
+          <div class="sec" style="margin-top:20px;font-size:25px">🏷️ Generator etichetă GLS</div>
+          <div style="font-size:21px;color:var(--t3);margin:2px 0 10px">Vinted nu oferă niciun AWB descărcabil pentru expedierea prin punct de depunere GLS — doar un cod text (vezi ecranul „Împachetează și trimite" din Vinted). Completează denumirea produsului și codul, ca să generezi o etichetă PDF gata de printat.</div>
+          <div class="frow">
+            <div class="fld"><label>Denumire produs</label><input type="text" id="gls-label-produs" placeholder="ex. Litieră închisă cu sertar pentru nisip"></div>
+            <div class="fld"><label>Cod de expediere</label><input type="text" id="gls-label-cod" placeholder="ex. 5891992"></div>
+          </div>
+          <button type="button" class="btn btn-sm btn-acc" style="margin-top:10px" onclick="downloadGlsLabelFromForm()">🏷️ Descarcă eticheta PDF</button>
+        </div>
       </div>
       <div class="card" style="padding:1rem 1.25rem">
         <div class="sec" style="margin-top:0">📮 Asociază AWB-uri</div>
@@ -3820,6 +3829,8 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:433,text:'Vinted — 2 reparații găsite testând direct, cu apeluri reale către AI, pe o captură reală (ecranul „Etichetă digitală de expediere" Sameday, trimis de utilizator): (1) codul de expediere citit corect vizual („3VCWYPT"), dar cu 2 caractere invizibile (zero-width space) strecurate în mijloc de model — identic la ochi, dar cod complet nefolosibil la potrivire exactă; curățat acum la sursă (cod, cumpărător, denumire produs), o singură dată, imediat după citirea AI — nimic din restul aplicației (inclusiv verificarea de duplicat) nu mai poate fi afectat. (2) Prețul produsului, deși vizibil doar parțial (pe margine/fundal, acoperit de fereastra pop-up de expediere), nu era citit — promptul nu-l căuta acolo. Corectat: promptul caută acum activ prețul oriunde apare în imagine, chiar parțial acoperit, și alege explicit prețul produsului, nu totalul cu comision/protecție cumpărător. Verificat de 2 ori: sintaxă + retestare reală, cu aceeași imagine — de la „preț: lipsă” la toate cele 4 informații corecte dintr-o singură captură (produs, cumpărător, cod curat, preț 190, nu 203).',date:'2026-09-22'},
+  {n:432,text:'Comenzi Platforme (Vinted) — generator nou „🏷️ Etichetă GLS", cerut direct pe un exemplu real: Vinted nu oferă niciun AWB descărcabil pentru expedierea prin punct de depunere GLS, doar un cod text (ecranul „Împachetează și trimite"). Acum se poate genera pe loc un PDF minimal — logo GLS + denumirea produsului + codul — gata de printat, în două moduri: (1) formular rapid, oricând, lângă secțiunea Vinted din import; (2) buton direct pe orice comandă Vinted deja inclusă, care precompletează formularul din datele comenzii. Verificat de 2 ori: sintaxă + generare reală într-un browser (PDF valid, logo + text corect poziționate, diacriticele din denumirea produsului convertite automat, fără să blocheze generarea).',date:'2026-09-22'},
   {n:431,text:'Comenzi Platforme — 2 cereri directe, legate de AWB: (1) „Asociază AWB-uri" semnalează acum vizibil (nu doar la DPD, cerut explicit „nu doar DPD ci peste tot") orice etichetă recunoscută dar ANULATĂ de curier — apare separat de „format nerecunoscut", cu numărul comenzii și clientul (când se pot identifica), ca să știi că trebuie regenerat AWB, nu doar reîncercată citirea. (2) O comandă deja inclusă (vizibilă în Staff) dar încă fără AWB asociat arată acum „⚠️ Fără AWB" direct pe card, lângă „✓ Comandă creată" — ușor de ratat până acum printre multe carduri identice la prima vedere. Nu la Vinted, unde „AWB" e de fapt „Cod", opțional. Verificat de 2 ori: sintaxă + teste comportamentale (inclusiv pe cele 3 etichete DPD reale anulate, plus cazuri noi de anulare la alte curiere și cazurile fără AWB/cu AWB/anulate/Vinted).',date:'2026-09-21'},
   {n:430,text:'Asociază AWB-uri — reparat al 4-lea format (GLS, Ungaria/Automata): raportat direct „problemă cu încărcarea AWB-urilor, comenzile nu apar în platformă", verificat pe etichetele reale din dosar — 2 comenzi din Ungaria rămâneau permanent nerecunoscute, deși aveau formatul GLS deja cunoscut („ID=numărul;"). Cauza: fontul etichetei scrie separatorul de după număr cu un caracter Unicode diferit de „;" normal (identic vizual, imposibil de observat cu ochiul liber) — regexul care căuta strict „;" nu se potrivea niciodată. Acum acceptă ambele caractere. Verificat de 2 ori: sintaxă + test pe textul real extras din cele 2 etichete GLS afectate, plus reconfirmare că formatele deja funcționale (Sameday/easybox, FAN Courier) nu s-au atins.',date:'2026-09-21'},
   {n:429,text:'Vinted — verificarea de duplicat la import din captură (📋 Adaugă din clipboard) nu se mai uită doar la comenzile de azi, ci la tot istoricul Vinted — cerut direct: lista din aplicația Vinted amestecă vânzări vechi cu cele noi, așa că o captură nouă putea conține produse deja procesate cu zile/săptămâni în urmă, needetectate până acum. Mesajul de confirmare arată acum data reală a potrivirii găsite și dacă acea comandă e deja împachetată/expediată, nu doar „pare deja adăugat azi" — răspunde direct la „am mai făcut-o pe asta sau nu?" fără să deschizi nimic altceva. Comenzile anulate nu mai contează ca potrivire.',date:'2026-09-21'},
@@ -15898,6 +15909,7 @@ function updPcmiPlatformaHint(){
   const fileFld=document.getElementById('pcmi-file-fld');if(fileFld)fileFld.style.display=showFile?'':'none';
   const vintedFld=document.getElementById('pcmi-vinted-fld');if(vintedFld)vintedFld.style.display=showVinted?'flex':'none';
   const lotFld=document.getElementById('pcmi-vinted-lot-fld');if(lotFld)lotFld.style.display=showVinted?'block':'none';
+  const glsFld=document.getElementById('gls-label-fld');if(glsFld)glsFld.style.display=showVinted?'block':'none';
 }
 async function handlePcomImportFile(ev){
   const files=[...(ev.target.files||[])];if(!files.length)return;
@@ -16787,7 +16799,7 @@ const VINTED_EXTRACTION_SCHEMA={
           tip:{type:'string',description:'"produs" — rând cu un articol individual, nume propriu de produs vizibil. "lot" — rând de tipul „Grupează N articole într-un lot”, FĂRĂ niciun nume de produs individual pe acel rând.'},
           produs:{type:['string','null'],description:'Numele/titlul produsului — obligatoriu (non-null) când tip="produs". Dacă titlul de pe Vinted e scurt/generic, completează-l cu detalii vizuale distinctive din poza produsului (culoare, material, formă, model) — se folosește la potrivirea cu produsele din stoc, deci contează orice detaliu real observabil în imagine. null când tip="lot".'},
           articole:{type:['number','null'],description:'Numărul N din „Grupează N articole” — obligatoriu (non-null) când tip="lot". null când tip="produs".'},
-          pret:{type:['number','null'],description:'Prețul afișat pe acel rând — doar numărul, fără monedă. null dacă nu apare.'},
+          pret:{type:['number','null'],description:'Prețul afișat pe acel rând — doar numărul, fără monedă. Poate fi parțial acoperit de o fereastră pop-up (ex. ecranul de expediere) — dacă cifrele rămân lizibile pe margine/fundal, extrage-l tot. Dacă apar mai multe prețuri (ex. preț produs vs. total cu comision/protecție cumpărător), alege prețul PRODUSULUI, nu totalul. null doar dacă niciun preț nu e deloc vizibil.'},
           moneda:{type:['string','null'],description:'"RON" sau "EUR", dedusă din simbol/text. null dacă neclar.'}
         },
         required:['tip','produs','articole','pret','moneda'],
@@ -16818,13 +16830,114 @@ function vintedFindLikelyDuplicate(produsName,pretTotalCuTva){
   if(!matches.length)return null;
   return matches.slice().sort((a,b)=>String(b.data).localeCompare(String(a.data)))[0];
 }
+// Generator etichetă GLS pentru comenzi Vinted expediate prin punct de depunere GLS — cerut direct,
+// pe baza unui exemplu real (ecranul Vinted „Împachetează și trimite", cu un cod de expediere text, ex.
+// 5891992, fără niciun AWB descărcabil ca la eMAG/Trendyol). Etichetă minimală: logo GLS (încărcat de la
+// AB HOMES) + denumirea produsului + codul, generată ca PDF nou, gata de printat și lipit pe colet.
+// pdf-lib (nu pdf.js, care doar CITEȘTE — aici scriem un PDF nou) — încărcat o singură dată, la cerere.
+const GLS_LOGO_PNG_B64='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';
+let glsPdfLibReady=false;
+async function ensureGlsPdfLib(){
+  if(glsPdfLibReady||window.PDFLib)return glsPdfLibReady=true;
+  await new Promise((resolve,reject)=>{
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js';
+    s.onload=resolve;s.onerror=reject;
+    document.head.appendChild(s);
+  });
+  glsPdfLibReady=true;
+}
+// Fonturile standard PDF (WinAnsi) nu au ă/â/î/ș/ț — fără asta, pdf-lib aruncă eroare la primul produs
+// cu diacritice (adică aproape orice produs din inventar). Mai simplu și mai robust decât încărcarea
+// unui font extern doar pentru o etichetă minimală: transliterăm diacriticele cunoscute, apoi eliminăm
+// orice alt caracter în afara Latin-1 (siguranță, ca un titlu tradus greșit să nu blocheze generarea).
+const GLS_DIACRITICS_MAP={'ă':'a','â':'a','î':'i','ș':'s','ş':'s','ț':'t','ţ':'t','Ă':'A','Â':'A','Î':'I','Ș':'S','Ş':'S','Ț':'T','Ţ':'T'};
+function glsAsciiText(s){
+  return String(s||'').replace(/[ăâîșşțţĂÂÎȘŞȚŢ]/g,c=>GLS_DIACRITICS_MAP[c]||c).replace(/[^\x00-\xFF]/g,'');
+}
+function glsWrapText(font,text,size,maxWidth){
+  const words=glsAsciiText(text).split(/\s+/).filter(Boolean);
+  const lines=[];let cur='';
+  for(const w of words){
+    const test=cur?cur+' '+w:w;
+    if(font.widthOfTextAtSize(test,size)>maxWidth&&cur){lines.push(cur);cur=w;}
+    else cur=test;
+  }
+  if(cur)lines.push(cur);
+  return lines;
+}
+const GLS_MM=2.83465;
+async function generateGlsLabelPdf(produsNume,cod){
+  await ensureGlsPdfLib();
+  const{PDFDocument,rgb,StandardFonts}=window.PDFLib;
+  const doc=await PDFDocument.create();
+  const W=100*GLS_MM,H=150*GLS_MM,margin=8*GLS_MM;
+  const page=doc.addPage([W,H]);
+  const fontBold=await doc.embedFont(StandardFonts.HelveticaBold);
+  const fontReg=await doc.embedFont(StandardFonts.Helvetica);
+  page.drawRectangle({x:3,y:3,width:W-6,height:H-6,borderColor:rgb(.75,.75,.75),borderWidth:1});
+  const logoBytes=Uint8Array.from(atob(GLS_LOGO_PNG_B64),c=>c.charCodeAt(0));
+  const logoImg=await doc.embedPng(logoBytes);
+  const logoW=W*.62,logoH=logoImg.height*(logoW/logoImg.width),logoY=H-margin-logoH;
+  page.drawImage(logoImg,{x:(W-logoW)/2,y:logoY,width:logoW,height:logoH});
+  const dividerY=logoY-8*GLS_MM;
+  page.drawLine({start:{x:margin,y:dividerY},end:{x:W-margin,y:dividerY},thickness:1,color:rgb(.82,.82,.82)});
+  let y=dividerY-9*GLS_MM;
+  page.drawText('PRODUS',{x:margin,y,size:9,font:fontReg,color:rgb(.45,.45,.45)});
+  y-=6*GLS_MM;
+  const prodLines=glsWrapText(fontBold,produsNume,13,W-2*margin);
+  for(const line of prodLines.slice(0,6)){page.drawText(line,{x:margin,y,size:13,font:fontBold,color:rgb(.1,.1,.15)});y-=6*GLS_MM;}
+  y-=8*GLS_MM;
+  page.drawText('COD DE EXPEDIERE',{x:margin,y,size:9,font:fontReg,color:rgb(.45,.45,.45)});
+  y-=13*GLS_MM;
+  const codText=glsAsciiText(cod);
+  let codSize=38;
+  while(codSize>16&&fontBold.widthOfTextAtSize(codText,codSize)>W-2*margin)codSize-=2;
+  page.drawText(codText,{x:margin,y,size:codSize,font:fontBold,color:rgb(.02,.09,.35)});
+  return doc.save();
+}
+async function downloadGlsLabel(produsNume,cod){
+  if(!String(produsNume||'').trim()||!String(cod||'').trim()){toast('Completează denumirea produsului și codul de expediere','err');return;}
+  try{
+    const bytes=await generateGlsLabelPdf(produsNume,cod);
+    const blob=new Blob([bytes],{type:'application/pdf'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download=`GLS_${String(cod).replace(/[^a-zA-Z0-9]+/g,'')||'eticheta'}.pdf`;
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),15000);
+  }catch(e){toast('Eroare la generarea etichetei GLS: '+(e.message||e),'err');}
+}
+function downloadGlsLabelFromForm(){
+  const produsNume=document.getElementById('gls-label-produs')?.value||'';
+  const cod=document.getElementById('gls-label-cod')?.value||'';
+  downloadGlsLabel(produsNume,cod);
+}
+// Buton direct pe o comandă Vinted deja inclusă (vezi codHtml/pcxLineHtml) — precompletează ȘI formularul
+// vizibil (ca omul să vadă/corecteze înainte de a genera din nou), apoi descarcă imediat, fără pași în plus.
+function generateGlsLabelForLine(produsNume,cod){
+  const pEl=document.getElementById('gls-label-produs'),cEl=document.getElementById('gls-label-cod');
+  if(pEl)pEl.value=produsNume;
+  if(cEl)cEl.value=cod;
+  downloadGlsLabel(produsNume,cod);
+}
+// Bug real găsit testând direct pe o captură reală (ecranul „Etichetă digitală de expediere" Sameday):
+// AI-ul a citit corect codul vizibil („3VCWYPT"), dar a strecurat 2 caractere invizibile (zero-width
+// space, U+200B) în mijlocul lui — identic vizual, cod complet nefolosibil pentru potrivire exactă
+// (comparație de string, "3VCWYPT"!=="3VCWY​​PT"). Aceleași câmpuri text (cod, cumpărător,
+// denumire produs) intră în comparații exacte în altă parte (ex. vintedFindLikelyDuplicate) — curățate
+// o singură dată, la sursă, imediat după parsare, ca nimic din aval să nu mai vadă vreodată problema.
+function stripInvisibleChars(s){return String(s||'').replace(/[​-‏⁠﻿­]/g,'').trim();}
 async function vintedRunRecognition(imageContent,previewSrc){
   const box=document.getElementById('vinted-parsing');box.style.display='block';
   try{
-    const content=[imageContent,{type:'text',text:'Această captură e din aplicația Vinted — poate fi o LISTĂ cu mai multe vânzări/articole deodată, confirmarea unei singure vânzări, sau ecranul de expediere (cod, transportator, destinatar). Extrage TOATE rândurile de produs/lot vizibile în imagine, fără să inventezi ce lipsește.'}];
+    const content=[imageContent,{type:'text',text:'Această captură e din aplicația Vinted — poate fi o LISTĂ cu mai multe vânzări/articole deodată, confirmarea unei singure vânzări, sau ecranul de expediere (cod, transportator, destinatar). Extrage TOATE rândurile de produs/lot vizibile în imagine, fără să inventezi ce lipsește. Pe ecranul de expediere, o fereastră pop-up acoperă parțial pagina de dedesubt — prețul produsului rămâne adesea vizibil pe margine sau în fundal, parțial acoperit; caută-l activ oriunde apare în imagine (nu doar sub titlul produsului) și asociază-l cu rândul corespunzător dacă cifrele sunt lizibile.'}];
     const resp=await callAI([{role:'user',content}],'Ești expert în citirea capturilor de ecran din aplicația Vinted. Extragi STRICT ce apare în imagine, rând cu rând — o listă are de obicei mai multe rânduri, nu unul singur.',900,'analysis',VINTED_EXTRACTION_SCHEMA,'vinted_extraction');
     const parsed=JSON.parse(resp);
+    if(parsed.cod)parsed.cod=stripInvisibleChars(parsed.cod);
+    if(parsed.cumparator)parsed.cumparator=stripInvisibleChars(parsed.cumparator);
     const randuri=Array.isArray(parsed.randuri)?parsed.randuri:[];
+    randuri.forEach(r=>{if(r.produs)r.produs=stripInvisibleChars(r.produs);});
     if(!randuri.length&&!parsed.cod&&!parsed.cumparator){toast('Nu am găsit nimic util în această captură','err');return;}
     const produsRows=randuri.filter(r=>r.tip==='produs'&&r.produs);
     const lotRows=randuri.filter(r=>r.tip==='lot'&&r.articole>1);
@@ -17135,6 +17248,7 @@ function pcxRelocateSharedNodes(){
   if(pcxRelocated)return;
   [['pcx-parsing-slot','pcmi-parsing'],['pcx-vinted-parsing-slot','vinted-parsing'],
    ['pcx-lot-rows-slot','vinted-lot-rows'],['pcx-lot-client-slot','vinted-lot-client'],['pcx-lot-awb-slot','vinted-lot-awb'],
+   ['pcx-gls-label-slot','gls-label-fld'],
    ['pcx-awb-parsing-slot','pcmi-awb-parsing'],['pcx-awb-preview-slot','pcmi-awb-preview'],
    ['pcx-awb-foot-slot','pcmi-awb-foot'],['pcx-history-slot','pcom-import-history']].forEach(([slotId,nodeId])=>{
     const slot=document.getElementById(slotId),node=document.getElementById(nodeId);
@@ -17295,10 +17409,16 @@ function pcxLineHtml(idx,groupIdxs){
     :(it.clientNume?`👤 ${esc(it.clientNume)}`:'');
   // Vinted ține „Cod:" lipit de cumpărător (câmp scurt/editabil) — eMAG/Trendyol au propria cutie AWB,
   // acum un bloc separat (pcx-awb-box), nu mai înghesuită pe rândul cumpărătorului.
+  // Comandă confirmată, cu Cod cunoscut — buton direct spre generatorul de etichetă GLS (vezi
+  // downloadGlsLabel/generateGlsLabelForLine), ca să nu mai fie nevoie să copiezi manual denumirea +
+  // codul în formularul de mai sus (cerut direct, pe exemplul real din ecranul Vinted).
+  const glsLabelBtnHtml=(it.platforma==='vinted'&&!isVintedPending&&it.awb&&(it.titluExtern||p?.name))
+    ?` <button type="button" class="pcx-btn" style="padding:1px 8px;font-size:14px" onclick="generateGlsLabelForLine('${esc((it.titluExtern||p?.name||'').replace(/'/g,"\\'"))}','${esc(it.awb.replace(/'/g,"\\'"))}')" title="Generează etichetă PDF cu denumirea produsului și codul, pentru expediere prin punct de depunere GLS">🏷️ Etichetă GLS</button>`
+    :'';
   const codHtml=it.platforma==='vinted'
     ?((isVintedMultiLine&&!isVintedGroupFirst)?''
       :isVintedPending?`Cod: <input type="text" placeholder="ex. 7UHX8VP" value="${esc(it.awb)}" oninput="pcomSetVintedCod(${idx},this.value)" style="font-family:var(--mono);padding:2px 6px;border:1px solid var(--b2);border-radius:4px;width:110px">`
-      :(it.awb?`Cod: <b style="font-family:var(--mono)">${esc(it.awb)}</b>`:''))
+      :(it.awb?`Cod: <b style="font-family:var(--mono)">${esc(it.awb)}</b>${glsLabelBtnHtml}`:''))
     :'';
   const financialHtml=it.newProduct?'':(isVintedPriceConsolidated?(isVintedGroupFirst?pcxGroupFinancialsHtml(vintedGroupIdxs):''):pcxFinancialsHtml(idx));
   const stockHtml=it.newProduct?'':pcomStockWarningHtml(idx);
@@ -17462,7 +17582,8 @@ function pcxRenderOrders(){
 }
 // Scheletul se construiește O SINGURĂ DATĂ (verificat prin #pcx-orders-list) — conține din start
 // TOATE sloturile statice (#pcx-file-zone/#pcx-vinted-zone/#pcx-parsing-slot/#pcx-vinted-parsing-slot/
-// #pcx-lot-rows-slot/#pcx-lot-client-slot/#pcx-lot-awb-slot/#pcx-awb-*-slot/#pcx-history-slot), ca
+// #pcx-lot-rows-slot/#pcx-lot-client-slot/#pcx-lot-awb-slot/#pcx-gls-label-slot/#pcx-awb-*-slot/
+// #pcx-history-slot), ca
 // nodurile relocate din legacy (pcxRelocateSharedNodes) să nu fie NICIODATĂ distruse de un innerHTML
 // ulterior pe un părinte de-al lor. Doar #pcx-orders-list/#pcx-counters/#pcx-stickybar se rescriu
 // des (pcxRenderOrders) — nu conțin noduri relocate, sigur de reconstruit oricând.
@@ -17521,6 +17642,7 @@ function renderPcomRedesign(){
             </div>
             <button type="button" class="pcx-btn pcx-btn-primary" style="margin-top:10px" onclick="vintedLotSubmit()">Adaugă lotul în Comenzi</button>
           </details>
+          <div id="pcx-gls-label-slot" style="margin-top:14px"></div>
         </div>
         <div id="pcx-parsing-slot"></div>
       </div>
