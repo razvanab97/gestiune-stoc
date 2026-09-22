@@ -2173,7 +2173,7 @@ button.pcx-include-btn.included{border-color:var(--gr)}
 .pcx-qty-stepper{display:inline-flex;align-items:stretch;border:1.5px solid var(--b2);border-radius:999px;overflow:hidden;background:var(--surf);vertical-align:middle}
 .pcx-qty-stepper button{width:30px;border:none;background:transparent;cursor:pointer;font-size:20px;color:var(--t2);line-height:1}
 .pcx-qty-stepper button:hover{background:var(--surf2)}
-.pcx-qty-stepper input{width:52px;text-align:center;border:none;border-left:1px solid var(--b2);border-right:1px solid var(--b2);font-family:var(--mono);font-size:20px;padding:6px 2px;background:transparent}
+.pcx-qty-stepper input{width:68px;text-align:center;border:none;border-left:1px solid var(--b2);border-right:1px solid var(--b2);font-family:var(--mono);font-size:20px;padding:6px 2px;background:transparent}
 /* AWB — mutat în capul cardului (cerut direct), sub rândul cu numărul comenzii/cumpărătorul, vizibil
    chiar și cu cardul restrâns — nu mai apare deloc în zona extinsă (o singură copie a informației).
    Secțiunea ÎNTREAGĂ (nu doar butonul) rămâne bifată verde după copiere, permanent — cerut direct. */
@@ -3829,6 +3829,10 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:438,text:'Comenzi Platforme — cantitatea editată DUPĂ ce o linie e deja inclusă (vizibilă în Staff) se salvează acum efectiv în bază, raportat direct („modific cantitatea, dar Staff tot arată valoarea veche"): înainte, modificarea rămânea STRICT în previzualizarea locală — chipul „AWB Nx produs" arăta valoarea nouă, părea că a mers, dar baza de date (deci și Staff) rămâneau cu valoarea veche, nescrisă niciodată. Acum se scrie direct, DOAR dacă stocul încă nu a fost scăzut pentru acea comandă („Aplică import" e un pas separat, ulterior) — dacă stocul a fost deja scăzut cu vechea cantitate, editarea e blocată explicit (un ajustaj retroactiv al stocului ar fi mult mai riscant, netratat aici), cu revenire automată la valoarea corectă și mesaj clar. Zona de editare a cantității a fost și mărită (68px, de la 52px) — o valoare ca „1,5" nu mai rămâne trunchiată vizual la „1,". Verificat de 2 ori: sintaxă + 5 teste comportamentale, inclusiv exact scenariul raportat.',date:'2026-09-22'},
+  {n:437,text:'Asociază AWB-uri (Vinted) — bug real găsit ÎNAINTE de a ajunge live, verificând direct cu date reale funcția de potrivire automată din #436: o comandă deja ÎMPACHETATĂ putea avea totuși AWB gol (expediată fără ca AWB-ul să fi fost vreodată înregistrat la noi) — fără excludere explicită, o etichetă nouă, pentru un client complet diferit, risca să fie atribuită unei comenzi VECHI, deja terminate, doar pentru că au titlu identic generic (confirmat cu un caz real: „Set poker 500 jetoane..." — comandă nouă a lui Dzitac Madalin ar fi fost atribuită comenzii deja împachetate a lui Robert Gamez, din alt import). Comenzile deja împachetate sunt acum excluse explicit din candidați. Verificat de 2 ori: sintaxă + teste care reproduc exact scenariul real găsit, plus regresie pe cazurile deja funcționale.',date:'2026-09-22'},
+  {n:436,text:'Asociază AWB-uri — 2 reparații găsite testând direct, pe fișiere reale din dosar, raportate „astea de ce nu au fost asociate?": (1) eticheta digitală Vinted (#435, ieri) presupunea o ordine fixă cod→produs pe etichetă — greșit, 2 din 4 etichete reale trimise aveau ordinea inversată (produs→cod). Acum nu se mai presupune nicio poziție — codul se recunoaște după FORMĂ (un singur cuvânt scurt, fără spații), indiferent unde apare. (2) Un al doilea format DPD, activ (nu anulat), fără referință de comandă pe etichetă — spre deosebire de cel anulat de săptămâna trecută, acesta chiar trebuie asociat. Rezolvat prin numele fișierului (deja „<comandă>_DPD_<awb>.pdf"), confirmat pe 2 etichete reale — funcționează doar la citirea din dosar (fiecare fișier își are numele lui), nu la un PDF ales manual cu mai multe pagini. Verificat de 2 ori: sintaxă + teste pe toate cele 4 etichete Vinted reale și ambele etichete DPD reale — 2 din cele 4 Vinted au ieșit chiar AMBIGUE (comenzi duplicate reale în bază), confirmând că protecția e necesară, nu doar teoretică.',date:'2026-09-22'},
+  {n:435,text:'Asociază AWB-uri — al 6-lea format recunoscut: eticheta digitală Vinted descărcată direct (PDF real, nu doar un cod ca la GLS), pentru curieri cu ridicare la adresă — verificat pe 2 exemple reale, Cargus și Sameday, ACELAȘI șablon Vinted. Spre deosebire de celelalte 5 formate, eticheta n-are niciun ID de comandă Vinted — singura legătură posibilă e denumirea produsului, potrivită automat cu comenzile Vinted deja importate, nerezolvate încă (fără AWB). Potrivire clară → asociat direct, cu procentul de încredere afișat. NICIUN candidat destul de asemănător → semnalat, de asociat manual. DOI+ candidați la fel de buni (verificat pe un caz real din date: 2 comenzi „Set 6 organizatoare de călătorie", scor identic 91.7%) → semnalat explicit ca AMBIGUU, nu se alege la întâmplare — un AWB greșit atribuit ar însemna coletul unui client trimis cu urmărirea altuia. Verificat de 2 ori: sintaxă + teste comportamentale complete pe cele 2 etichete PDF reale (Cargus cod numeric, Sameday cod alfanumeric) și pe toate cazurile limită (potrivire clară/ambiguă/inexistentă/comandă deja rezolvată/comandă anulată).',date:'2026-09-22'},
   {n:434,text:'Comenzi Platforme — card nou, permanent, „🕓 Comenzi rămase în urmă din Staff", raportat direct pe o comandă reală care nu se mai găsea nicăieri: o comandă neîmpachetată dispare din coada Staff la orice reset de coadă (manual sau automat, ora 22:00) dacă a fost creată înainte de acel prag — rămâne corectă în bază, dar invizibilă operațional, posibil niciodată expediată. Staff NU s-a atins (coada lui rămâne simplă, cum a fost cerută), dar admin-ul arată acum, permanent, orice comandă neîmpachetată/neanulată ieșită din vizibilitatea Staff, cu client, produs, platformă și dată, sortate cele mai vechi primele — plus buton „✓ Marchează împachetat" pentru cazul în care a plecat deja fizic, doar flag-ul nu era setat. Găsit direct pe date reale la lansare: 261 de comenzi acumulate din 17 august, nesemnalate până acum — verifică urgent, fizic, dacă au fost expediate. Verificat de 2 ori: sintaxă + teste comportamentale (inclusiv exact comanda reală raportată) + verificare vizuală live cu datele reale.',date:'2026-09-22'},
   {n:433,text:'Vinted — 2 reparații găsite testând direct, cu apeluri reale către AI, pe o captură reală (ecranul „Etichetă digitală de expediere" Sameday, trimis de utilizator): (1) codul de expediere citit corect vizual („3VCWYPT"), dar cu 2 caractere invizibile (zero-width space) strecurate în mijloc de model — identic la ochi, dar cod complet nefolosibil la potrivire exactă; curățat acum la sursă (cod, cumpărător, denumire produs), o singură dată, imediat după citirea AI — nimic din restul aplicației (inclusiv verificarea de duplicat) nu mai poate fi afectat. (2) Prețul produsului, deși vizibil doar parțial (pe margine/fundal, acoperit de fereastra pop-up de expediere), nu era citit — promptul nu-l căuta acolo. Corectat: promptul caută acum activ prețul oriunde apare în imagine, chiar parțial acoperit, și alege explicit prețul produsului, nu totalul cu comision/protecție cumpărător. Verificat de 2 ori: sintaxă + retestare reală, cu aceeași imagine — de la „preț: lipsă” la toate cele 4 informații corecte dintr-o singură captură (produs, cumpărător, cod curat, preț 190, nu 203).',date:'2026-09-22'},
   {n:432,text:'Comenzi Platforme (Vinted) — generator nou „🏷️ Etichetă GLS", cerut direct pe un exemplu real: Vinted nu oferă niciun AWB descărcabil pentru expedierea prin punct de depunere GLS, doar un cod text (ecranul „Împachetează și trimite"). Acum se poate genera pe loc un PDF minimal — logo GLS + denumirea produsului + codul — gata de printat, în două moduri: (1) formular rapid, oricând, lângă secțiunea Vinted din import; (2) buton direct pe orice comandă Vinted deja inclusă, care precompletează formularul din datele comenzii. Verificat de 2 ori: sintaxă + generare reală într-un browser (PDF valid, logo + text corect poziționate, diacriticele din denumirea produsului convertite automat, fără să blocheze generarea).',date:'2026-09-22'},
@@ -16366,11 +16370,36 @@ function pcomOpenAddProductForLine(idx){
     if(n){n.value=it.titluRo||it.titluExtern;suggestCatFromName();}
   },80);
 }
+// Editare DUPĂ ce linia e deja comisă (vizibilă în Staff) — raportat direct („modific cantitatea, dar
+// Staff tot arată valoarea veche"): înainte, modificarea rămânea STRICT în previzualizarea locală
+// (pcImpParsed) — chipul „AWB Nx produs" arăta valoarea nouă, dând impresia că a mers, dar baza de date
+// (și Staff, care citește de-acolo) rămâneau cu valoarea veche, nescrisă niciodată. Acum, dacă linia e
+// deja comisă ȘI stocul încă NU a fost scăzut pentru ea (efecte_aplicate=false — „Aplică import" e un
+// pas separat, ulterior), noua cantitate se scrie direct în platforma_comenzi. Dacă stocul a fost deja
+// scăzut cu vechea cantitate, editarea e blocată — un ajustaj retroactiv al stocului ar fi un calcul
+// mult mai riscant, netratat aici; omul trebuie să corecteze stocul manual în acel caz.
+async function pcomPersistQtyIfCommitted(idx){
+  const it=pcImpParsed[idx];
+  if(!it._committedId)return;
+  const row=PCOM.find(o=>o.id===it._committedId);
+  if(!row)return;
+  if(row.efecteAplicate){
+    toast('Stocul a fost deja scăzut pentru comanda asta — cantitatea nu se mai poate edita de aici','err');
+    it.cantitate=row.cantitate;
+    renderPcomImportPreview();
+    return;
+  }
+  try{
+    await dbPatch(`platforma_comenzi?id=eq.${it._committedId}`,{cantitate:it.cantitate});
+    row.cantitate=it.cantitate;
+  }catch(e){toast('Nu am putut salva cantitatea: '+(e.message||e),'err');}
+}
 function pcomAdjustQty(idx,delta){
   const it=pcImpParsed[idx];
   it.cantitate=Math.max(0.5,Math.round(((Number(it.cantitate)||1)+delta)*100)/100);
   it.suggestedCantitate=null;
   renderPcomImportPreview();
+  pcomPersistQtyIfCommitted(idx);
 }
 // Cantitatea de stoc poate fi și zecimală (ex: 1,5) — util când o comandă de N bucăți dintr-un
 // pachet/set corespunde altui număr de unități interne (ex: 4 în comandă = 6 în stocul intern)
@@ -16382,6 +16411,7 @@ function pcomSetQty(idx,val){
   // amânat cu setTimeout: onchange rulează în timpul unui blur pe input-ul din DOM-ul pe care tocmai
   // îl înlocuim — dacă îl înlocuim sincron aici, browserul aruncă "node no longer a child" pe unele căi
   setTimeout(renderPcomImportPreview,0);
+  pcomPersistQtyIfCommitted(idx);
 }
 // Preț/monedă editabile DOAR la Vinted, cât timp linia nu e confirmată (vezi isVintedPending în
 // pcomRowHtml) — citite dintr-o captură de AI, nu dintr-un export autoritar ca la eMAG/Trendyol,
@@ -19668,7 +19698,63 @@ function parseAwbLabelText(text){
   // la „format nerecunoscut” (identic cu o etichetă ilizibilă) — semnalat distinct, ca omul să știe că
   // trebuie regenerat AWB-ul, nu doar reîncercat citirea.
   if(dpdAwbM&&canceled)return{courierCanceled:true,awb:dpdAwbM[1].replace(/\s+/g,'')};
+  // DPD activ (NEanulat), dar tot fără „note:” — descoperit direct pe 2 etichete reale, NEcanceled
+  // ("CANCELED" nu apare pe ele), cerute „de ce nu au fost asociate?": nu orice etichetă DPD cu „note:”
+  // gol e anulată — unele active pur și simplu nu tipăresc deloc referința acolo. Singura legătură rămasă
+  // e NUMELE FIȘIERULUI — fișierele din Desktop/AWB-uri sunt deja denumite "<comandaId>_DPD_<awb>.pdf"
+  // de sursa care le descarcă (confirmat pe date reale: numărul din nume corespunde exact clientul +
+  // produsul comenzii găsite în platforma_comenzi). Rezolvabil DOAR la citirea din dosar (readAwbFolderPdfs,
+  // unde fiecare fișier are propriul nume) — NU la un PDF ales manual cu mai multe pagini (handleAwbPdfFile),
+  // unde o pagină individuală nu are niciun nume propriu de folosit.
+  if(dpdAwbM)return{dpdNeedsFilenameId:true,awb:dpdAwbM[1].replace(/\s+/g,'')};
+  // Vinted — etichetă digitală descărcată direct (al 6-lea format, cerut direct, cu exemple reale
+  // trimise: „Vinted-Digital-Label-*.pdf”, curieri diferiți — Cargus, Sameday — pe ACELAȘI șablon).
+  // Spre deosebire de GLS (doar un cod text, fără PDF), aici Vinted generează un PDF complet, cu QR,
+  // pentru curieri cu ridicare/livrare la adresă. Fără niciun ID de comandă Vinted pe etichetă — comenzile
+  // Vinted din platforma_comenzi au un comandaId sintetic (VNT-...), care nu apare nicăieri fizic pe
+  // etichetă. Singura legătură posibilă e denumirea produsului — rezolvată de apelant (are acces la
+  // PCOM; parseAwbLabelText rămâne funcție pură, fără stare). Codul de urmărire poate fi numeric
+  // (Cargus, ex. „1206520508”) SAU alfanumeric (Sameday prin Vinted, ex. „8R7L78R”) — acceptăm ambele.
+  // Bug real găsit direct pe 2 etichete Sameday suplimentare, trimise („astea de ce nu au fost
+  // asociate?"): ordinea cod/produs pe rândurile de după nume NU e fixă — pe unele etichete codul vine
+  // ÎNAINTE de produs, pe altele DUPĂ (verificat: 2 din 4 etichete reale aveau ordinea inversată).
+  // Nu se mai presupune o poziție fixă — se citesc ambele rânduri, apoi se decide care e codul DUPĂ
+  // FORMĂ (un singur cuvânt alfanumeric scurt, fără spații — un titlu de produs are mereu spații).
+  const vintedDigitalM=text.match(/Scanează acest cod pentru a trimite coletul\n([^\n]+)\nDestinatar\n([^\n]+)\n([^\n]+)\n([\s\S]+)/);
+  if(vintedDigitalM){
+    const courier=vintedDigitalM[1].trim(),destinatar=vintedDigitalM[2].trim();
+    const line3=vintedDigitalM[3].trim(),line4=vintedDigitalM[4].trim();
+    const looksLikeCode=s=>/^[A-Za-z0-9]{6,20}$/.test(s);
+    let awb=null,produs=null;
+    if(looksLikeCode(line3)&&!looksLikeCode(line4)){awb=line3;produs=line4;}
+    else if(looksLikeCode(line4)&&!looksLikeCode(line3)){awb=line4;produs=line3;}
+    else if(looksLikeCode(line3)){awb=line3;produs=line4;} // ambele arată ca un cod (rar) — primul rând câștigă
+    if(awb&&produs)return{vintedDigitalLabel:true,courier,destinatar,produs,awb};
+  }
   return null;
+}
+// Rezolvă eticheta Vinted digitală (fără niciun ID de comandă propriu) la o comandă Vinted deja
+// importată, nerezolvată încă (fără AWB), prin potrivirea denumirii produsului — singura legătură
+// posibilă pentru acest format. Prag mai ridicat decât la matching-ul normal de produs intern (0.5,
+// nu 0.35 ca la vintedRunRecognition) — o potrivire greșită aici ar asocia AWB-ul UNUI CLIENT la
+// comanda ALTUIA, mult mai grav decât un produs intern nepotrivit (doar cere corectare manuală).
+// Ambiguitate reală (verificată pe date reale: 2 comenzi Vinted nerezolvate cu titlu identic, „Set 6
+// organizatoare de călătorie”, scor egal 91.7% la amândouă) — mai bine nerezolvat automat decât riscul
+// de a alege la întâmplare între doi clienți diferiți.
+// Bug real găsit ÎNAINTE de push (verificare directă cu date live, nu doar teste inventate): o comandă
+// deja ÎMPACHETATĂ (impachetat=true) poate totuși avea awb gol — nu înseamnă că mai așteaptă un AWB, ci
+// că a fost expediată fără ca AWB-ul să fi fost înregistrat vreodată la noi. Fără exclusia asta, un
+// candidat vechi, deja închis, cu titlu generic identic (ex. „Set poker 500 jetoane...”), câștiga la
+// potrivire în fața comenzii CORECTE, doar mai noi — ar fi atribuit AWB-ul unui client complet diferit,
+// la o comandă deja terminată de zile. Exclus explicit din candidați.
+function resolveVintedDigitalLabelMatch(p){
+  const candidates=PCOM.filter(o=>o.platforma==='vinted'&&!o.awb&&!o.anulata&&!o.impachetat);
+  const scored=candidates.map(o=>({o,score:Math.max(fuzzyMatch(p.produs,o.titluExtern||''),fuzzyMatch(p.produs,o.produsNume||''))})).sort((a,b)=>b.score-a.score);
+  const best=scored[0];
+  if(!best||best.score<0.5)return p;
+  const second=scored[1];
+  if(second&&second.score>=best.score-0.05&&second.o.comandaId!==best.o.comandaId)return{...p,vintedAmbiguous:true};
+  return{...p,comandaId:best.o.comandaId,matchScore:best.score};
 }
 async function handleAwbPdfFile(ev){
   const file=ev.target.files[0];if(!file)return;
@@ -19683,7 +19769,11 @@ async function handleAwbPdfFile(ev){
     awbUnrecognizedPages=[];
     awbCanceledPages=[];
     pages.forEach((text,i)=>{
-      const p=parseAwbLabelText(text);
+      let p=parseAwbLabelText(text);
+      if(p&&p.vintedDigitalLabel)p=resolveVintedDigitalLabelMatch(p);
+      // DPD activ fără „note:" se rezolvă DOAR prin numele fișierului (vezi parseAwbLabelText) — o
+      // pagină dintr-un PDF ales manual, cu mai multe pagini, n-are propriul nume de folosit.
+      if(p&&p.dpdNeedsFilenameId){awbUnrecognizedPages.push(i+1);return;}
       if(p&&p.courierCanceled)awbCanceledPages.push({label:'p.'+(i+1),awb:p.awb,comandaId:p.comandaId});
       else if(p)pairs.push(p);
       else awbUnrecognizedPages.push(i+1);
@@ -19691,6 +19781,7 @@ async function handleAwbPdfFile(ev){
     if(!pairs.length&&!awbUnrecognizedPages.length&&!awbCanceledPages.length)throw new Error('PDF-ul pare gol.');
     const results=[];
     for(const p of pairs){
+      if(!p.comandaId){results.push({...p,rows:[]});continue;}
       const rows=await dbGet(`platforma_comenzi?comanda_id=eq.${p.comandaId}&select=id,client_nume,produs_nume,awb`);
       results.push({...p,rows});
     }
@@ -19730,7 +19821,15 @@ async function readAwbFolderPdfs(){
       try{
         const pages=await extractPdfPagesText(base64ToBlob(f.data,'application/pdf'));
         pages.forEach((text,i)=>{
-          const p=parseAwbLabelText(text);
+          let p=parseAwbLabelText(text);
+          if(p&&p.vintedDigitalLabel)p=resolveVintedDigitalLabelMatch(p);
+          // DPD activ fără „note:" — singura legătură rămasă e numele fișierului, deja "<comandaId>_
+          // DPD_<awb>.pdf" (confirmat pe 2 etichete reale: numărul din nume corespunde exact clientul +
+          // produsul comenzii găsite). Dacă numele nu începe cu cifre (redenumit manual), rămâne nerezolvat.
+          if(p&&p.dpdNeedsFilenameId){
+            const fileIdM=f.name.match(/^(\d{6,})/);
+            p=fileIdM?{...p,comandaId:fileIdM[1]}:null;
+          }
           if(p&&p.courierCanceled)awbCanceledPages.push({label:`${f.name} p.${i+1}`,awb:p.awb,comandaId:p.comandaId});
           else if(p)pairs.push({...p,file:f.name});
           else awbUnrecognizedPages.push(`${f.name} p.${i+1}`);
@@ -19740,6 +19839,7 @@ async function readAwbFolderPdfs(){
     if(!pairs.length&&!awbUnrecognizedPages.length&&!awbCanceledPages.length)throw new Error('Niciun PDF citit cu succes din dosar.');
     const results=[];
     for(const p of pairs){
+      if(!p.comandaId){results.push({...p,rows:[]});continue;}
       const rows=await dbGet(`platforma_comenzi?comanda_id=eq.${p.comandaId}&select=id,client_nume,produs_nume,awb`);
       results.push({...p,rows});
     }
@@ -19762,10 +19862,20 @@ function renderAwbPreview(){
   const matched=awbParsed.filter(p=>p.rows.length>0);
   const unmatched=awbParsed.filter(p=>p.rows.length===0);
   let html=awbParsed.map(p=>{
-    if(!p.rows.length)return`<div class="inv-prev-row" style="color:var(--rd)">⚠️ Comanda ${esc(p.comandaId)} (AWB ${esc(p.awb)}) — negăsită încă în Comenzi Platforme</div>`;
+    if(!p.rows.length){
+      // Etichetă Vinted digitală (Cargus/Sameday/etc., fără ID de comandă propriu) — două cazuri
+      // distincte de „negăsit", cu mesaje separate, ca omul să știe exact ce trebuie făcut: fie nu
+      // există NICIUN candidat destul de asemănător (produsul trebuie importat/asociat manual), fie
+      // există DOI+ candidați la fel de buni (ambiguu — orice alegere automată ar risca AWB-ul unui
+      // client atribuit la comanda ALTUIA).
+      if(p.vintedAmbiguous)return`<div class="inv-prev-row" style="color:var(--rd)">⚠️ Etichetă Vinted (${esc(p.courier)}) — „${esc(p.produs)}" se potrivește la fel de bine cu MAI MULTE comenzi Vinted nerezolvate (AWB ${esc(p.awb)}) — asociază manual, ca să nu greșești clientul</div>`;
+      if(p.vintedDigitalLabel)return`<div class="inv-prev-row" style="color:var(--rd)">⚠️ Etichetă Vinted (${esc(p.courier)}) — niciun produs Vinted nerezolvat nu se potrivește cu „${esc(p.produs)}" (AWB ${esc(p.awb)}) — asociază manual sau importă întâi comanda</div>`;
+      return`<div class="inv-prev-row" style="color:var(--rd)">⚠️ Comanda ${esc(p.comandaId)} (AWB ${esc(p.awb)}) — negăsită încă în Comenzi Platforme</div>`;
+    }
     const nm=p.rows[0].client_nume||p.rows.map(r=>r.produs_nume).join(', ');
     const already=p.rows[0].awb;
-    return`<div class="inv-prev-row">✓ Comanda ${esc(p.comandaId)} — ${esc(nm)} → AWB ${esc(p.awb)}${already?` <span style="color:var(--t3)">(înlocuiește ${esc(already)})</span>`:''}</div>`;
+    const matchNote=p.vintedDigitalLabel&&p.matchScore?` <span style="color:var(--t3)">(Vinted „${esc(p.courier)}" — potrivire produs ${Math.round(p.matchScore*100)}%, verifică)</span>`:'';
+    return`<div class="inv-prev-row">✓ Comanda ${esc(p.comandaId)} — ${esc(nm)} → AWB ${esc(p.awb)}${already?` <span style="color:var(--t3)">(înlocuiește ${esc(already)})</span>`:''}${matchNote}</div>`;
   }).join('');
   // Etichetă anulată de curier — raportat direct, extins de la DPD la orice curier („nu doar DPD ci
   // peste tot, dacă apar erori"): secțiune separată de „format nerecunoscut", aici NU e o problemă de
