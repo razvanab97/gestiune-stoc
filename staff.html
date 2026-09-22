@@ -372,6 +372,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:412,date:'23.09.2026',text:'Flux Staff simplificat: toate produsele unei comenzi rămân împreună în același card, iar o singură acțiune finalizează coletul. Cu AWB deja asociat devine complet; fără AWB este finalizat și poate fi completat ulterior din PDF. După confirmare ai 10 secunde pentru anulare, apoi se trece la următoarea comandă. Reîncărcarea este numai manuală, ca ecranul să nu se schimbe în timp ce lucrezi.'},
   {n:412,date:'21.09.2026',text:'Reset automat zilnic al cozii — pragul mutat de la ora 16:00 la ora 22:00, cerut direct. Aceeași logică (o singură dată pe zi, verificată la pornire și la fiecare reîmprospătare din poll), doar ora s-a schimbat.'},
   {n:411,date:'19.09.2026',text:'Bug real reparat, raportat direct: scanul (📷) recunoștea codul de bare, dar nu-l asocia cu comanda, deși AWB-ul exista deja la noi. Cauza, verificată decodificând etichete reale (Sameday, FAN Courier, DPD): codul de bare fizic conține AWB-ul ca PARTE dintr-un cod mai lung (ex. FAN Courier adaugă un sufix intern după AWB), nu identic cu el — verificarea veche funcționa doar când codul scanat era mai scurt sau egal cu AWB-ul salvat. Acum se verifică ambele direcții.'},
   {n:410,date:'19.09.2026',text:'„↺ Coadă nouă" pornește acum și automat, o singură dată pe zi, la ora 16:00 — cerut direct. Aceeași acțiune ca butonul manual (comenzile rămân în ERP/jurnal/istoric, doar dispar din coada activă Staff), dar fără confirmare, ca să pregătească singură platforma pentru ziua următoare. Verifică la deschiderea tabletei și la fiecare reîmprospătare — dacă tableta rămâne deschisă peste ora 16, sau e pornită abia după aceea.'},
@@ -437,12 +438,12 @@ function computeOrders(){
     g.allDone=g.lines.every(l=>l.impachetat||l.staff_blocked);
     g.hasUnresolvedIssue=g.lines.some(l=>l.staff_blocked&&!l.staff_issue_resolved);
     g.awb=(g.lines.find(l=>l.awb)||{}).awb||'';
-    // O comandă eMAG e cu adevărat finalizată abia când are AWB generat — un colet împachetat, dar
-    // fără AWB, tot mai are un pas de făcut (îl emite adminul din Comenzi Platforme), nu trebuie să
-    // dispară din coada activă doar pentru că produsele sunt bifate. Banner-ul „AWB în așteptare” de
-    // mai jos, altfel, ar fi devenit imposibil de văzut — comanda pleca din coadă înainte să conteze.
-    g.needsAwb=g.platforma==='emag'&&!g.awb;
-    g.finalized=g.allDone&&!g.hasUnresolvedIssue&&!g.needsAwb;
+    // Staff finalizează coletul ca întreg. Dacă eticheta nu a fost încă generată, comanda iese tot
+    // din fluxul de împachetare ca „Finalizat fără AWB”; la importul ulterior din PDF devine completă.
+    g.needsAwb=g.platforma!=='direct'&&!g.awb;
+    g.finalized=g.allDone&&!g.hasUnresolvedIssue;
+    g.finalizedWithoutAwb=g.finalized&&g.needsAwb;
+    g.complete=g.finalized&&!g.needsAwb;
     g.waiting=g.hasUnresolvedIssue;
     const lastPackedAt=g.lines.map(l=>l.impachetat_at).filter(Boolean).sort().slice(-1)[0]||'';
     g.finalizedToday=g.finalized&&lastPackedAt.slice(0,10)===td();
@@ -466,7 +467,7 @@ function pickInitialOrder(list){curKey=list.length?list[0].key:null;}
 
 function showToast(msg,undoFn){
   const t=document.getElementById('toast');
-  t.innerHTML=esc(msg)+(undoFn?'<button class="toast-undo" id="toast-undo-btn">ANULEAZĂ · <span id="toast-undo-sec">5</span>s</button>':'');
+  t.innerHTML=esc(msg)+(undoFn?'<button class="toast-undo" id="toast-undo-btn">ANULEAZĂ · <span id="toast-undo-sec">10</span>s</button>':'');
   t.classList.add('on');
   if(undoFn)document.getElementById('toast-undo-btn').onclick=()=>{undoFn();hideToast();};
   clearTimeout(showToast._t);
@@ -581,19 +582,11 @@ function renderPackTab(host){
   const idx=nq.findIndex(o=>o.key===ord.key);
   const plLabel=ord.platforma==='emag'?'eMAG':ord.platforma==='trendyol'?'Trendyol':ord.platforma==='vinted'?'Vinted':'Extra';
   const multi=ord.lines.length>1;
-  const doneCount=ord.lines.filter(l=>l.impachetat).length;
   const linesHtml=ord.lines.map(l=>{
     const state=l.impachetat?'done':(l.staff_blocked?'blocked':'');
-    return`<div class="line ${state}">${lineThumbHtml(l)}${lineInfoHtml(l,multi)}</div>`;
+    return`<div class="line ${state}">${lineThumbHtml(l)}${lineInfoHtml(l,false)}</div>`;
   }).join('');
-  const allChecked=ord.lines.every(l=>l.impachetat||l.staff_blocked);
-  const singleLine=!multi?ord.lines[0]:null;
-  const singleLk=singleLine?lineKey(singleLine):null;
-  const bigBtnHtml=multi
-    ?`<button type="button" class="big-pack-btn" ${allChecked&&!lineBusy['order_'+ord.key]?'':'disabled'} onclick="finalizeOrder('${ord.key}')">✓ ÎMPACHETAT${!allChecked?` (${doneCount}/${ord.lines.length})`:''}</button>`
-    :singleLine.impachetat
-      ?`<button type="button" class="big-pack-btn done" ${lineBusy[singleLk]?'disabled':''} onpointerdown="startHoldUnpack('${singleLk}')" onpointerup="cancelHoldUnpack()" onpointerleave="cancelHoldUnpack()" onpointercancel="cancelHoldUnpack()">✓ ÎMPACHETAT · ține apăsat pentru anulare</button>`
-      :`<button type="button" class="big-pack-btn" ${lineBusy[singleLk]?'disabled':''} onclick="packSingleLine('${singleLk}','${ord.key}')">✓ ÎMPACHETAT</button>`;
+  const bigBtnHtml=`<button type="button" class="big-pack-btn" ${lineBusy['order_'+ord.key]?'disabled':''} onclick="finalizeOrder('${ord.key}')">${ord.awb?'✓ Finalizează coletul':'✓ Marchează finalizat'}</button>`;
   host.innerHTML=`<div class="card ${multi?'multi-line':'single-line'}">
     <div class="ord-hdr">
       <div class="ord-hdr-row1">
@@ -605,7 +598,7 @@ function renderPackTab(host){
     </div>
     <div id="lock-banner-slot"></div>
     ${ord.awb?awbBoxHtml(ord.awb):(ord.platforma!=='direct'?`<div class="awb-box"><span class="awb-pending">AWB în așteptare</span></div>`:'')}
-    ${multi?`<div class="progress-mini">${doneCount} / ${ord.lines.length} produse pregătite</div>`:''}
+    ${multi?`<div class="progress-mini">${ord.lines.length} produse în același colet</div>`:''}
     <div class="lines">${linesHtml}</div>
     ${bigBtnHtml}
     <div class="nav-row">
@@ -979,21 +972,30 @@ async function toggleLineCheck(lk){
   renderMain();
 }
 
-// Butonul mare pentru comenzi cu mai multe produse — toate liniile sunt deja confirmate individual,
-// acesta doar finalizează explicit comanda (toast + undo + trecere automată).
+// Staff confirmă coletul, nu fiecare produs separat: produsele sunt văzute împreună și pleacă în
+// același ambalaj. Un AWB prezent îl face „Complet”; altfel rămâne „Finalizat fără AWB” în Admin.
 async function finalizeOrder(orderKey){
   const key='order_'+orderKey;
   if(lineBusy[key])return;
   const ord=ORDERS.find(o=>o.key===orderKey);if(!ord)return;
   lineBusy[key]=true;renderMain();
-  logActivity('comanda_finalizata',ord.lines[0],{comandaId:ord.comandaId});
-  lineBusy[key]=false;
-  scheduleUndo(orderKey,[],'pack');
+  const at=new Date().toISOString();
+  const changes=ord.lines.map(l=>({table:l._table,id:l.id,prev:{impachetat:l.impachetat,impachetat_at:l.impachetat_at||null,staff_finalizat_at:l.staff_finalizat_at||null}}));
+  let saved=false;
+  try{
+    for(const l of ord.lines){const body={impachetat:true,impachetat_at:at};if(l._table==='platforma_comenzi')body.staff_finalizat_at=at;await patchLine(l,body);}
+    logActivity(ord.awb?'comanda_completa':'comanda_finalizata_fara_awb',ord.lines[0],{comandaId:ord.comandaId,awb:ord.awb||null});
+    computeOrders();
+    saved=true;
+    scheduleUndo(orderKey,changes,'pack');
+  }catch(e){
+    console.error(e);showToast('Eroare la finalizare — încearcă din nou');renderMain();
+  }finally{lineBusy[key]=false;if(!saved)renderMain();}
 }
 
 function scheduleUndo(orderKey,lineChanges,type){
   if(pendingUndo)clearTimeout(pendingUndo.timeoutId);
-  const timeoutId=setTimeout(()=>{pendingUndo=null;hideToast();advanceAfterAction(orderKey);},5000);
+  const timeoutId=setTimeout(()=>{pendingUndo=null;hideToast();advanceAfterAction(orderKey);},10000);
   pendingUndo={orderKey,lines:lineChanges,timeoutId,type};
   const msg=type==='pack'?'✓ Comanda a fost împachetată':'⏸ Comandă mutată în „În așteptare"';
   showToast(msg,undoAction);
@@ -1643,13 +1645,8 @@ async function refreshData(){
   return ok;
 }
 
-document.addEventListener('visibilitychange',()=>{
-  // La revenire, datele se aduc imediat o singură dată; în fundal nu există
-  // polling inutil care să consume egress sau să redeseneze ecranul ascuns.
-  if(!document.hidden)refreshData();
-});
-window.addEventListener('pageshow',()=>{if(!document.hidden)refreshData();});
-window.addEventListener('online',()=>{if(!document.hidden)refreshData();});
+// Refresh-ul este intenționat manual: Staff nu schimbă lista de sub operator când revine în tab,
+// reapare rețeaua sau trece timpul. Butonul „↻ Reîncarcă” aduce numai informația cerută explicit.
 // Safari pe iPad nu micșorează mereu corect 100dvh la apariția tastaturii. Folosim viewportul real
 // vizibil, ca bara de Căutare să rămână imediat deasupra tastaturii și textul introdus să se vadă.
 function syncStaffViewport(){
@@ -1688,7 +1685,6 @@ async function load(){
     pickInitialOrder(packQueue());
     renderMain();
     renderMsgPopup();
-    startPolling();
     // Tableta poate fi pornită/reîncărcată DUPĂ ora 22 (nu doar rămasă deschisă peste ea) — verificăm
     // și aici, nu doar în poll, ca reset-ul automat să nu aștepte până la 25 de secunde degeaba.
     checkAutoQueueReset();

@@ -66,6 +66,23 @@ async function readAllMarkets(day=null,status=null){
   if(!markets.some(x=>x.ok))throw new Error(markets.map(x=>`${x.market}: ${x.error}`).join(' · '));
   return{markets,lines};
 }
+async function readNewAndInProgressMarkets(){
+  const results=await Promise.all([readAllMarkets(null,1),readAllMarkets(null,2)]);
+  const marketMap=new Map(),seen=new Set(),lines=[];
+  results.forEach(result=>{
+    result.markets.forEach(m=>{
+      const old=marketMap.get(m.market)||{market:m.market,orders:0,lines:0,ok:false,error:''};
+      old.orders+=m.orders;old.lines+=m.lines;old.ok=old.ok||m.ok;old.error=old.error||m.error||'';marketMap.set(m.market,old);
+    });
+    result.lines.forEach(line=>{
+      const key=[line.tara,line.comandaId,line.pnk||line.codProdus||line.titluExtern].join('|');
+      if(!seen.has(key)){seen.add(key);lines.push(line);}
+    });
+  });
+  const markets=[...marketMap.values()];
+  if(!markets.some(x=>x.ok))throw new Error(markets.map(x=>`${x.market}: ${x.error}`).join(' · '));
+  return{markets,lines};
+}
 // Ofertele active sunt citite separat de comenzi. eMAG trimite în mod normal `status: 1`; păstrăm
 // și formele text pentru compatibilitate cu răspunsurile diferite RO/BG/HU. Un status necunoscut nu
 // este presupus activ — scopul acestui apel este explicit să nu aducă listări inactive.
@@ -150,6 +167,10 @@ module.exports=async function handler(req,res){
     if(action==='orders-in-progress'){
       const result=await readAllMarkets(null,2);
       return res.status(200).json({scope:'in_progress',orders:result.markets.reduce((sum,x)=>sum+x.orders,0),lines:result.lines,markets:result.markets});
+    }
+    if(action==='orders-new-and-in-progress'){
+      const result=await readNewAndInProgressMarkets();
+      return res.status(200).json({scope:'new_and_in_progress',orders:result.markets.reduce((sum,x)=>sum+x.orders,0),lines:result.lines,markets:result.markets});
     }
     if(action==='offers-active'){
       const market=String(body.market||'').toUpperCase();
