@@ -3835,6 +3835,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:444,text:'Comenzi Platforme — reîmprospătarea automată eMAG/Trendyol reconciliază acum draftul cu comenzile care mai sunt efectiv „Noi” sau „În lucru”. Comenzile vechi care nu mai sunt returnate de platformă dispar din previzualizare, fără să atingă Staff, AWB-uri, stoc sau istoric. Importurile din fișier rămân marcate separat și nu sunt curățate de această sincronizare.',date:'2026-09-23'},
   {n:443,text:'Import & AWB — actualizarea automată de fundal nu mai blochează butoanele de import eMAG și Trendyol. Butoanele rămân disponibile imediat după deschiderea paginii; indicatorul „Se citesc comenzile...” apare numai la un import pornit manual.',date:'2026-09-23'},
   {n:442,text:'Import & AWB — interfața Comenzi Platforme este acum un Action Center: importul are un singur selector de sursă (eMAG, Trendyol, Vinted, fișier sau manual), astfel încât formularele nu mai apar toate simultan. Expedierea este separată clar în trei module: asociere PDF-uri AWB, generator GLS pentru Vinted și emitere AWB eMAG. Toate funcțiile, fișierele și integrările existente au rămas aceleași; s-a schimbat numai așezarea lor.',date:'2026-09-23'},
   {n:441,text:'Comenzi Platforme / Staff — flux nou de lucru: eMAG aduce acum comenzile „Noi” și „În lucru”, fără istoric; Staff finalizează un singur colet cu toate produsele lui, nu cere bife separate și oferă 10 secunde pentru anulare înainte de a trece la următoarea comandă. Dacă AWB-ul lipsește, comanda este finalizată fără AWB și poate deveni completă ulterior prin etichete. PDF-urile AWB se pot selecta acum în lot, iar fiecare asociere reține fișierul și pagina după rularea migrării `migration_platforma_staff_workflow.sql`. Refresh-ul Staff este exclusiv manual, ca pagina tabletei să nu se schimbe în timpul lucrului.',date:'2026-09-23'},
@@ -16110,7 +16111,7 @@ async function handlePcomImportFile(ev){
           // riscăm o scădere de stoc greșită dintr-un fals-pozitiv (ex. un cod care conține o cifră).
           const packSize=pcomDetectPackSize(titlu);
           const suggestedCantitate=packSize&&packSize!==cantitate?Math.round(cantitate*packSize*100)/100:null;
-          const line={platforma:filePlatforma,comandaId,pachetId,data,pnk,tara,codProdus,clientNume,titluExtern:titlu,cantitate,suggestedCantitate,pretFaraTva,pretTotalCuTva,moneda,produsId,score,viaPnk,viaTitle,viaCode,include:false};
+          const line={platforma:filePlatforma,comandaId,pachetId,data,pnk,tara,codProdus,clientNume,titluExtern:titlu,cantitate,suggestedCantitate,pretFaraTva,pretTotalCuTva,moneda,produsId,score,viaPnk,viaTitle,viaCode,include:false,_source:'file'};
           const state=gate.add(line);
           if(state==='preview'||state==='applied'){alreadyImportedCount++;continue;}
           if(state==='restored')restoredCount++;
@@ -16192,6 +16193,18 @@ function pcomApiImportGate(keyOf){
     }
   };
 }
+// API-ul arată doar comenzile încă deschise. La reîncărcare, draftul păstrat local nu are voie să
+// țină lângă ele comenzi vechi. Nu atingem niciodată linii deja trimise în Staff și nici importurile
+// declarate ca fișier/Vinted/manual; acestea sunt fluxuri introduse explicit de utilizator.
+function pcomReconcileApiDrafts(platform,keyOf,remoteKeys){
+  let removed=0;
+  pcImpParsed=pcImpParsed.filter(it=>{
+    if(it.platforma!==platform||it._committedId||['file','vinted','manual'].includes(it._source))return true;
+    if(remoteKeys.has(keyOf(it)))return true;
+    removed++;return false;
+  });
+  return removed;
+}
 async function importTrendyolApiOrders(silent=false){
   if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
   const startInp=document.getElementById('pcx-trendyol-date-start'),endInp=document.getElementById('pcx-trendyol-date-end'),btn=document.getElementById('pcx-trendyol-import-btn');
@@ -16204,15 +16217,16 @@ async function importTrendyolApiOrders(silent=false){
   if(btn&&!silent){btn.disabled=true;btn.textContent='Se citesc comenzile…';}
   try{
     const r=await apiJson('/api/trendyol',{action:'orders',startDate,endDate},60000);
-    const orderKey=o=>'trendyol|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern),gate=pcomApiImportGate(orderKey);
+    const orderKey=o=>'trendyol|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern),remoteKeys=new Set((r.lines||[]).map(orderKey));
+    const removed=silent?pcomReconcileApiDrafts('trendyol',orderKey,remoteKeys):0,gate=pcomApiImportGate(orderKey);
     let added=0,duplicates=0,restored=0,matched=0,cancelled=0;const newLines=[];
     for(const raw of r.lines||[]){
-      const line=pcomTrendyolMatchLine(raw);
+      const line={...pcomTrendyolMatchLine(raw),_source:'api'};
       const state=gate.add(line);
       if(state==='preview'||state==='applied'){duplicates++;continue;}
       added++;if(state==='restored')restored++;if(state==='cancelled')cancelled++;if(line.produsId)matched++;newLines.push(line);
     }
-    if(!added){if(!silent)toast(duplicates?`Nicio linie Trendyol nouă pentru ${startDate}${endDate!==startDate?' → '+endDate:''} — ${duplicates} sunt deja aplicate sau în previzualizare.`:'Nu există comenzi Trendyol deschise pentru intervalul ales.');return;}
+    if(!added){if(removed)renderPcomImportPreview();if(!silent)toast(duplicates?`Nicio linie Trendyol nouă pentru ${startDate}${endDate!==startDate?' → '+endDate:''} — ${duplicates} sunt deja aplicate sau în previzualizare.`:'Nu există comenzi Trendyol deschise pentru intervalul ales.');return;}
     // Marcăm liniile noi direct (nu un interval de indici) — la reîncărcarea paginii, acest import
     // rulează concurent cu importul eMAG (refreshPcomAvailableOrdersOnLoad), care golește o singură
     // dată flag-urile _recentImport înainte de a porni ambele; aici doar adăugăm, nu mai ștergem,
@@ -16231,17 +16245,18 @@ async function importEmagApiOrders(silent=false){
   const btn=document.getElementById('pcx-emag-import-btn');
   if(btn&&!silent){btn.disabled=true;btn.textContent='Se citesc comenzile noi/în lucru…';}
   try{
-    const marketOf=o=>String(o.tara||((o.moneda||'').toUpperCase()==='HUF'?'HU':(o.moneda||'').toUpperCase()==='BGN'?'BG':'RO')).toUpperCase(),orderKey=o=>'emag|'+marketOf(o)+'|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern),gate=pcomApiImportGate(orderKey);
+    const marketOf=o=>String(o.tara||((o.moneda||'').toUpperCase()==='HUF'?'HU':(o.moneda||'').toUpperCase()==='BGN'?'BG':'RO')).toUpperCase(),orderKey=o=>'emag|'+marketOf(o)+'|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern);
     const r=await localEmagJson('/orders-new-and-in-progress',{},60000);
+    const remoteKeys=new Set((r.lines||[]).map(orderKey)),removed=silent?pcomReconcileApiDrafts('emag',orderKey,remoteKeys):0,gate=pcomApiImportGate(orderKey);
     const unavailable=new Set();let added=0,duplicates=0,restored=0,matched=0,cancelled=0;const newLines=[];
     (r.markets||[]).filter(x=>!x.ok).forEach(x=>unavailable.add(x.market));
     for(const raw of r.lines||[]){
-      const line=pcomEmagMatchLine(raw);
+      const line={...pcomEmagMatchLine(raw),_source:'api'};
       const state=gate.add(line);
       if(state==='preview'||state==='applied'){duplicates++;continue;}
       added++;if(state==='restored')restored++;if(state==='cancelled')cancelled++;if(line.produsId)matched++;newLines.push(line);
     }
-    if(!added){if(!silent)toast(duplicates?`Nicio comandă eMAG nouă — ${duplicates} linii sunt deja aplicate sau în previzualizare.`:'Nu există comenzi eMAG noi sau în lucru.',unavailable.size?'warn':undefined);return;}
+    if(!added){if(removed)renderPcomImportPreview();if(!silent)toast(duplicates?`Nicio comandă eMAG nouă — ${duplicates} linii sunt deja aplicate sau în previzualizare.`:'Nu există comenzi eMAG noi sau în lucru.',unavailable.size?'warn':undefined);return;}
     // Vezi importTrendyolApiOrders pentru explicația marcării prin referință în loc de interval de
     // indici — cele două rulează concurent la reîncărcarea paginii, pe același pcImpParsed.
     if(!silent)pcImpParsed.forEach(x=>delete x._recentImport);
