@@ -3835,6 +3835,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:443,text:'Import & AWB — actualizarea automată de fundal nu mai blochează butoanele de import eMAG și Trendyol. Butoanele rămân disponibile imediat după deschiderea paginii; indicatorul „Se citesc comenzile...” apare numai la un import pornit manual.',date:'2026-09-23'},
   {n:442,text:'Import & AWB — interfața Comenzi Platforme este acum un Action Center: importul are un singur selector de sursă (eMAG, Trendyol, Vinted, fișier sau manual), astfel încât formularele nu mai apar toate simultan. Expedierea este separată clar în trei module: asociere PDF-uri AWB, generator GLS pentru Vinted și emitere AWB eMAG. Toate funcțiile, fișierele și integrările existente au rămas aceleași; s-a schimbat numai așezarea lor.',date:'2026-09-23'},
   {n:441,text:'Comenzi Platforme / Staff — flux nou de lucru: eMAG aduce acum comenzile „Noi” și „În lucru”, fără istoric; Staff finalizează un singur colet cu toate produsele lui, nu cere bife separate și oferă 10 secunde pentru anulare înainte de a trece la următoarea comandă. Dacă AWB-ul lipsește, comanda este finalizată fără AWB și poate deveni completă ulterior prin etichete. PDF-urile AWB se pot selecta acum în lot, iar fiecare asociere reține fișierul și pagina după rularea migrării `migration_platforma_staff_workflow.sql`. Refresh-ul Staff este exclusiv manual, ca pagina tabletei să nu se schimbe în timpul lucrului.',date:'2026-09-23'},
   {n:440,text:'Audit funcțional — patru reparații: (1) la resincronizarea eMAG, mapările noi păstrează acum piața RO/BG/HU; o listare dintr-o țară nu mai poate actualiza sau reutiliza greșit o asociere din altă piață, iar mapările vechi fără țară rămân compatibile. (2) Două comenzi cu același număr, dar din platforme diferite, nu mai pot fi grupate împreună în Comenzi Platforme. (3) Staff → „Marfă furnizor” acceptă și cantități parțiale de 0,5 bucăți și nu mai poate pierde butonul „Tot restul a ajuns” când numele furnizorului conține apostrof. (4) mesajul din Sincronizare reflectă integrarea eMAG/Trendyol activă, nu vechiul text „în lucru”.',date:'2026-09-22'},
@@ -16200,7 +16201,7 @@ async function importTrendyolApiOrders(silent=false){
   if(endDate<startDate){toast('Data „Până la” trebuie să fie după data „De la”','err');return;}
   const days=(new Date(endDate+'T00:00:00Z')-new Date(startDate+'T00:00:00Z'))/86400000+1;
   if(days>14){toast('Trendyol permite maximum 14 zile într-un singur import','err');return;}
-  if(btn){btn.disabled=true;btn.textContent='Se citesc comenzile…';}
+  if(btn&&!silent){btn.disabled=true;btn.textContent='Se citesc comenzile…';}
   try{
     const r=await apiJson('/api/trendyol',{action:'orders',startDate,endDate},60000);
     const orderKey=o=>'trendyol|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern),gate=pcomApiImportGate(orderKey);
@@ -16223,12 +16224,12 @@ async function importTrendyolApiOrders(silent=false){
     if(!silent)toast(`${added} linii Trendyol aduse · ${matched} asociate${restored?` · ${restored} recuperate pentru Staff`:''}${cancelled?` · ${cancelled} anulate anterior — de reconsiderat`:''}${noMatch?` · ${noMatch} necesită confirmare`:''}${duplicates?` · ${duplicates} deja aplicate/în previzualizare (ignorate)`:''} · AWB-urile sunt preluate pentru Staff.`);
     pcomTranslateForeignTitles();
   }catch(e){if(!silent)toast('Trendyol: '+(e.message||'nu am putut citi comenzile'),'err');else console.warn('Actualizare automată Trendyol eșuată:',e);}
-  finally{if(btn){btn.disabled=false;btn.textContent='🛍️ Adu comenzi Trendyol';}}
+  finally{if(btn&&!silent){btn.disabled=false;btn.textContent='🛍️ Adu comenzi Trendyol';}}
 }
 async function importEmagApiOrders(silent=false){
   if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
   const btn=document.getElementById('pcx-emag-import-btn');
-  if(btn){btn.disabled=true;btn.textContent='Se citesc comenzile noi/în lucru…';}
+  if(btn&&!silent){btn.disabled=true;btn.textContent='Se citesc comenzile noi/în lucru…';}
   try{
     const marketOf=o=>String(o.tara||((o.moneda||'').toUpperCase()==='HUF'?'HU':(o.moneda||'').toUpperCase()==='BGN'?'BG':'RO')).toUpperCase(),orderKey=o=>'emag|'+marketOf(o)+'|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern),gate=pcomApiImportGate(orderKey);
     const r=await localEmagJson('/orders-new-and-in-progress',{},60000);
@@ -16250,7 +16251,7 @@ async function importEmagApiOrders(silent=false){
     if(!silent)toast(`${added} linii eMAG noi/în lucru aduse · ${matched} asociate${restored?` · ${restored} recuperate pentru Staff`:''}${cancelled?` · ${cancelled} anulate anterior — de reconsiderat`:''}${noMatch?` · ${noMatch} necesită confirmare`:''}${duplicates?` · ${duplicates} deja aplicate/în previzualizare (ignorate)`:''}${unavailable.size?` · Atenție: ${[...unavailable].join(', ')} neconfigurat/blocat`:''}`,unavailable.size?'warn':undefined);
     pcomTranslateForeignTitles();
   }catch(e){if(!silent)toast('eMAG: '+(e.message||'nu am putut citi comenzile'),'err');else console.warn('Actualizare automată eMAG eșuată:',e);}
-  finally{if(btn){btn.disabled=false;btn.textContent='🛒 Adu comenzi eMAG';}}
+  finally{if(btn&&!silent){btn.disabled=false;btn.textContent='🛒 Adu comenzi eMAG';}}
 }
 // La fiecare deschidere/reîncărcare, refacem previzualizarea numai cu comenzile încă disponibile.
 // Nu există efect financiar aici: stocul și jurnalul se schimbă exclusiv la „Aplică import”.
