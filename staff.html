@@ -372,6 +372,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:413,date:'24.09.2026',text:'Bug real reparat, raportat direct ca recurent: „coadă nouă" automată de la ora 22:00 nu pornea de fiecare dată. Cauza: pragul se calcula mereu ca „ora 22 de azi” — dacă tableta nu era deschisă exact în jurul orei 22, resetul din noaptea respectivă rămânea ratat definitiv, fără nicio recuperare ulterioară. Acum, la orice deschidere sau reîmprospătare, se verifică cel mai recent prag de 22:00 deja trecut (azi sau ieri) — resetul se recuperează corect, oricât de târziu se deschide tableta.'},
   {n:412,date:'23.09.2026',text:'Flux Staff simplificat: toate produsele unei comenzi rămân împreună în același card, iar o singură acțiune finalizează coletul. Cu AWB deja asociat devine complet; fără AWB este finalizat și poate fi completat ulterior din PDF. După confirmare ai 10 secunde pentru anulare, apoi se trece la următoarea comandă. Reîncărcarea este numai manuală, ca ecranul să nu se schimbe în timp ce lucrezi.'},
   {n:412,date:'21.09.2026',text:'Reset automat zilnic al cozii — pragul mutat de la ora 16:00 la ora 22:00, cerut direct. Aceeași logică (o singură dată pe zi, verificată la pornire și la fiecare reîmprospătare din poll), doar ora s-a schimbat.'},
   {n:411,date:'19.09.2026',text:'Bug real reparat, raportat direct: scanul (📷) recunoștea codul de bare, dar nu-l asocia cu comanda, deși AWB-ul exista deja la noi. Cauza, verificată decodificând etichete reale (Sameday, FAN Courier, DPD): codul de bare fizic conține AWB-ul ca PARTE dintr-un cod mai lung (ex. FAN Courier adaugă un sufix intern după AWB), nu identic cu el — verificarea veche funcționa doar când codul scanat era mai scurt sau egal cu AWB-ul salvat. Acum se verifică ambele direcții.'},
@@ -1594,11 +1595,16 @@ async function resetStaffQueue(){
 // Verificată atât la încărcarea inițială (tableta pornită/reîmprospătată după ora 22), cât și la
 // fiecare tick de poll (tableta rămasă deschisă peste ora 22). Întoarce true dacă a resetat, ca
 // apelantul din poll să nu mai ceară și un refreshData() separat, redundant.
-function todayAt22(){const d=new Date();d.setHours(22,0,0,0);return d;}
+// Bug real reparat, raportat direct ca recurent („iarăși nu s-a sincronizat comenzi Staff — trebuia la
+// ora 22"): pragul se calcula mereu ca ora 22:00 DIN ZIUA CURENTĂ — dacă tableta nu era deschisă/vizibilă
+// exact în jurul orei 22 (ex. pusă la încărcat peste noapte), iar cineva o deschidea abia a doua zi
+// dimineața, „azi la 22" era deja în viitor, funcția ieșea imediat („now<threshold"), iar resetul din
+// noaptea trecută rămânea PERMANENT ratat — nu exista nicio recuperare ulterioară, oricât timp trecea.
+// Acum pragul e cel mai recent 22:00 deja trecut (azi, dacă a trecut ora 22; altfel ieri) — la orice
+// deschidere/poll ulterior, oricât de târziu, resetul se recuperează corect o singură dată.
+function lastQueueThreshold(){const d=new Date();d.setHours(22,0,0,0);if(d>new Date())d.setDate(d.getDate()-1);return d;}
 async function checkAutoQueueReset(){
-  const threshold=todayAt22();
-  const now=new Date();
-  if(now<threshold)return false;
+  const threshold=lastQueueThreshold();
   if(staffQueueStartedAt&&new Date(staffQueueStartedAt)>=threshold)return false;
   const startedAt=new Date().toISOString();
   try{
