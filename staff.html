@@ -345,10 +345,14 @@ function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&l
 function imgSrc(url){if(!url)return'';if(url.startsWith('data:'))return url;if(url.startsWith(SUPA_URL))return url;if(url.startsWith('http'))return'/api/img-proxy?url='+encodeURIComponent(url);return url;}
 // Ultimele 4 cifre cu accent — cerut direct, ca staff-ul să distingă rapid coletele când AWB-urile
 // se aseamănă la prima vedere (majoritatea au același prefix de curier/platformă).
-function awbBoxHtml(awb){
+// Cerut direct: numele curierului (Sameday/DPD/FAN Courier/GLS/Cargus…) afișat înaintea numărului, ca
+// să nu mai trebuiască dedus din primele cifre ale AWB-ului. Gol pe comenzi vechi/asociate manual,
+// unde curierul nu a fost reținut — eticheta rămâne „AWB", ca înainte.
+function awbBoxHtml(awb,courier){
   if(!awb)return'';
   const s=esc(awb),head=s.slice(0,-4),tail=s.slice(-4);
-  return`<div class="awb-box"><div><div class="awb-lbl">AWB</div><div class="awb-num">${head}<span class="awb-num-tail">${tail}</span></div></div></div>`;
+  const lbl=courier?`${esc(courier)} · AWB`:'AWB';
+  return`<div class="awb-box"><div><div class="awb-lbl">${lbl}</div><div class="awb-num">${head}<span class="awb-num-tail">${tail}</span></div></div></div>`;
 }
 function td(){return new Date().toISOString().slice(0,10);}
 
@@ -372,6 +376,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:413,date:'23.09.2026',text:'Cardul de comandă arată acum numele curierului (Sameday/DPD/FAN Courier/GLS/Cargus…) direct înaintea numărului AWB, nu doar codul brut — cerut direct. Curierul se reține automat la asociere, din formatul etichetei; pe comenzi vechi, asociate înainte de această modificare, rămâne doar „AWB", fără curier.'},
   {n:412,date:'23.09.2026',text:'Flux Staff simplificat: toate produsele unei comenzi rămân împreună în același card, iar o singură acțiune finalizează coletul. Cu AWB deja asociat devine complet; fără AWB este finalizat și poate fi completat ulterior din PDF. După confirmare ai 10 secunde pentru anulare, apoi se trece la următoarea comandă. Reîncărcarea este numai manuală, ca ecranul să nu se schimbe în timp ce lucrezi.'},
   {n:412,date:'21.09.2026',text:'Reset automat zilnic al cozii — pragul mutat de la ora 16:00 la ora 22:00, cerut direct. Aceeași logică (o singură dată pe zi, verificată la pornire și la fiecare reîmprospătare din poll), doar ora s-a schimbat.'},
   {n:411,date:'19.09.2026',text:'Bug real reparat, raportat direct: scanul (📷) recunoștea codul de bare, dar nu-l asocia cu comanda, deși AWB-ul exista deja la noi. Cauza, verificată decodificând etichete reale (Sameday, FAN Courier, DPD): codul de bare fizic conține AWB-ul ca PARTE dintr-un cod mai lung (ex. FAN Courier adaugă un sufix intern după AWB), nu identic cu el — verificarea veche funcționa doar când codul scanat era mai scurt sau egal cu AWB-ul salvat. Acum se verifică ambele direcții.'},
@@ -438,6 +443,10 @@ function computeOrders(){
     g.allDone=g.lines.every(l=>l.impachetat||l.staff_blocked);
     g.hasUnresolvedIssue=g.lines.some(l=>l.staff_blocked&&!l.staff_issue_resolved);
     g.awb=(g.lines.find(l=>l.awb)||{}).awb||'';
+    // Cerut direct — numele curierului (Sameday/DPD/FAN Courier/GLS/Cargus) afișat pe card, înainte de
+    // AWB, ca să nu mai trebuiască dedus din primele cifre. Reținut la asociere (vezi awb_courier din
+    // index.html); gol pe comenzi vechi, asociate înainte de această coloană.
+    g.awbCourier=(g.lines.find(l=>l.awb_courier)||{}).awb_courier||'';
     // Staff finalizează coletul ca întreg. Dacă eticheta nu a fost încă generată, comanda iese tot
     // din fluxul de împachetare ca „Finalizat fără AWB”; la importul ulterior din PDF devine completă.
     g.needsAwb=g.platforma!=='direct'&&!g.awb;
@@ -597,7 +606,7 @@ function renderPackTab(host){
       ${ord.clientNume?`<div class="ord-client">${esc(ord.clientNume)}</div>`:''}
     </div>
     <div id="lock-banner-slot"></div>
-    ${ord.awb?awbBoxHtml(ord.awb):(ord.platforma!=='direct'?`<div class="awb-box"><span class="awb-pending">AWB în așteptare</span></div>`:'')}
+    ${ord.awb?awbBoxHtml(ord.awb,ord.awbCourier):(ord.platforma!=='direct'?`<div class="awb-box"><span class="awb-pending">AWB în așteptare</span></div>`:'')}
     ${multi?`<div class="progress-mini">${ord.lines.length} produse în același colet</div>`:''}
     <div class="lines">${linesHtml}</div>
     ${bigBtnHtml}
@@ -1165,7 +1174,7 @@ function renderWaitingTab(host){
       <span class="ord-waiting-badge">⏸ În așteptare</span>
     </div>
     <div id="lock-banner-slot"></div>
-    ${ord.awb?awbBoxHtml(ord.awb):''}
+    ${ord.awb?awbBoxHtml(ord.awb,ord.awbCourier):''}
     <div class="lines">${linesHtml}</div>
     <button type="button" class="nav-btn" onclick="curKey=null;renderMain()">← Înapoi la listă</button>
   </div>`;
