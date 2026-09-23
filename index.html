@@ -3844,6 +3844,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:452,text:'Asociază AWB-uri — cerut direct: „când avem AWB adăugate fără comandă, să caute comanda și în finalizate". O etichetă eMAG citită din dosar a cărei comandă nu există încă local (AWB deja generat de eMAG a mutat comanda din „Nou"/„În lucru" în „Pregătită"/„Finalizată", deci nu mai apare la „Adu comenzi eMAG", care caută intenționat fără istoric) declanșează acum automat o căutare directă după numărul comenzii, pe toate piețele eMAG, indiferent de status — dacă o găsește, o adaugă ca linie nouă în „Comenzi", cu AWB deja completat, gata de „✓ Inclus"/„Aplică import" ca să scadă și stocul normal. Necesită conectorul local eMAG actualizat (versiunea 10, rută nouă /order-by-id).',date:'2026-09-23'},
   {n:451,text:'Comenzi Platforme — card nou „↺ Reactivează comandă finalizată": cauți după numărul comenzii (eMAG/Trendyol/Vinted) și, dacă a fost deja marcată împachetată/finalizată în Staff, o poți trimite din nou activă, gata de reprocesat. Funcționează pe toată comanda (toate produsele ei), nu doar pe o linie. Dacă a ieșit deja din fereastra activă a Staff (mai veche decât ultimul prag de coadă de la 22:00), reactivarea o aduce automat înapoi în fereastră — fără să atingă data reală a comenzii, deci Profit vânzări/Total încasări nu sunt afectate.',date:'2026-09-23'},
   {n:450,text:'Comenzi Platforme — nou buton „▶️ Rulează rutina zilnică", sus în Import & AWB: aduce automat comenzile eMAG + Trendyol, citește dosarul AWB-uri de pe Mac și include automat liniile cu potrivire sigură (cod/EAN/SKU exact sau nume ≥70%, ACELAȘI prag ca la potrivirea normală) — rămân doar excepțiile pentru tine. O etichetă Vinted/GLS din dosar fără nicio comandă nerezolvată de asociat creează acum direct o comandă Vinted nouă (produs potrivit automat, client = destinatarul de pe etichetă, AWB deja completat, preț editabil — inclusiv fără preț, pentru graba de zi cu zi); cazurile ambigue rămân manuale, ca înainte. O linie amânată (stoc insuficient) adaugă acum automat produsul pe „Produse de comandat", fără un click separat. Rutina se oprește o singură dată, la final, cu un rezumat scurt și butonul „✓ Aplică tot" — nicio scădere de stoc sau asociere AWB nu se întâmplă înainte de acel click. Pornire strict manuală, fără nicio programare automată.',date:'2026-09-23'},
   {n:449,text:'Comenzi Platforme — bordurile dintre secțiunile de sus (stepper 1-2-3, „Import comenzi", „Expediere" și cele 3 module A/B/C din interior) erau practic invizibile (gri aproape alb) — cerut direct, ușor mai accentuate, ca să se delimiteze clar unde se termină o secțiune și începe alta. Doar culoarea conturului s-a schimbat (un gri deja folosit în temă, mai închis), nimic altceva din așezare/dimensiuni nu s-a atins.',date:'2026-09-23'},
@@ -16334,6 +16335,24 @@ async function importEmagApiOrders(silent=false){
   }catch(e){if(!silent)toast('eMAG: '+(e.message||'nu am putut citi comenzile'),'err');else console.warn('Actualizare automată eMAG eșuată:',e);}
   finally{if(btn&&!silent){btn.disabled=false;btn.textContent='🛒 Adu comenzi eMAG';}}
 }
+// Ultimă soluție pentru o etichetă AWB citită din dosar a cărei comandă nu există încă local (vezi
+// readAwbFolderPdfs) — cerut direct: „când avem AWB adăugate fără comandă, să se ducă sistemul să caute
+// comanda aia și în finalizate". Un AWB deja generat schimbă statusul comenzii pe eMAG (Pregătită/
+// Finalizată), invizibil pentru importEmagApiOrders (Nou+În lucru, fără istoric, intenționat) — dar
+// comanda tot există, doar în alt status. Caută direct după număr, pe toate piețele eMAG, indiferent de
+// status (rută nouă /order-by-id pe conectorul local), și o adaugă ca linie nouă de import, cu AWB deja
+// completat — exact ca o comandă adusă normal, gata de „✓ Inclus”/„Aplică import” ca să scadă stocul.
+async function pcomFetchAndCreateEmagOrderById(comandaId,awb){
+  if(pcImpParsed.some(x=>x.platforma==='emag'&&x.comandaId===comandaId))return 0;
+  let resp;
+  try{resp=await localEmagJson('/order-by-id',{orderId:comandaId},20000);}
+  catch(e){console.warn('Căutare eMAG după număr eșuată pentru '+comandaId+':',e);return 0;}
+  if(!resp?.found||!Array.isArray(resp.lines)||!resp.lines.length)return 0;
+  resp.lines.forEach(raw=>{
+    pcImpParsed.push({...pcomEmagMatchLine(raw),_source:'api',awb:awb||''});
+  });
+  return resp.lines.length;
+}
 // La fiecare deschidere/reîncărcare, refacem previzualizarea numai cu comenzile încă disponibile.
 // Nu există efect financiar aici: stocul și jurnalul se schimbă exclusiv la „Aplică import”.
 let pcomAutoRefreshStarted=false;
@@ -19825,6 +19844,7 @@ let awbUnrecognizedPages=[];
 let awbCanceledPages=[];
 let awbFolderFileNames=[];
 let awbCreatedVintedFileNames=[];
+let awbEmagLookupFileNames=[];
 // Cerut direct, extins de la DPD la TOATE formatele („nu doar DPD ci peste tot, dacă apar erori"):
 // orice etichetă recunoscută (indiferent de curier) e verificată și pentru cuvinte de anulare/stornare
 // tipărite pe ea — dacă apar, rezultatul e marcat `courierCanceled`, NU tratat ca o asociere validă,
@@ -20085,6 +20105,7 @@ async function readAwbFolderPdfs(){
     awbUnrecognizedPages=[];
     awbCanceledPages=[];
     awbCreatedVintedFileNames=[];
+    awbEmagLookupFileNames=[];
     for(const f of files){
       try{
         const pages=await extractPdfPagesText(base64ToBlob(f.data,'application/pdf'));
@@ -20113,9 +20134,20 @@ async function readAwbFolderPdfs(){
     }
     if(!pairs.length&&!awbUnrecognizedPages.length&&!awbCanceledPages.length&&!awbCreatedVintedFileNames.length)throw new Error('Niciun PDF citit cu succes din dosar.');
     const results=[];
+    let awbEmagLookupCreated=0;
     for(const p of pairs){
       if(!p.comandaId){results.push({...p,rows:[]});continue;}
-      const rows=await dbGet(`platforma_comenzi?comanda_id=eq.${p.comandaId}&select=id,platforma,client_nume,produs_nume,awb`);
+      let rows=await dbGet(`platforma_comenzi?comanda_id=eq.${p.comandaId}&select=id,platforma,client_nume,produs_nume,awb`);
+      // Comanda nu există local — cerut direct („astea s-au finalizat deja, ar fi trebuit să fie deja
+      // importate; când avem AWB fără comandă, sistemul să caute comanda aia și în finalizate"): un AWB
+      // deja generat schimbă statusul comenzii pe eMAG (Pregătită/Finalizată), invizibil pentru „Adu
+      // comenzi eMAG" (Nou+În lucru, fără istoric, intenționat). O căutăm direct după numărul ei,
+      // indiferent de status — dacă o găsim, o adăugăm ca linie nouă de import (cu AWB deja completat),
+      // exact ca un import normal, gata de „✓ Inclus"/„Aplică import" ca să scadă și stocul.
+      if(!rows.length){
+        const createdCount=await pcomFetchAndCreateEmagOrderById(p.comandaId,p.awb);
+        if(createdCount){awbEmagLookupCreated+=createdCount;awbEmagLookupFileNames.push(p.file);continue;}
+      }
       results.push({...p,rows});
     }
     for(const c of awbCanceledPages){
@@ -20125,8 +20157,8 @@ async function readAwbFolderPdfs(){
     awbParsed=results;
     awbFolderFileNames=files.map(f=>f.name);
     renderAwbPreview();
-    if(awbCreatedVintedFileNames.length)renderPcomImportPreview();
-    toast(`${files.length} PDF-uri citite din dosar · ${results.length} etichete recunoscute${awbCreatedVintedFileNames.length?` · ${awbCreatedVintedFileNames.length} comenzi Vinted noi create din etichetă`:''}`);
+    if(awbCreatedVintedFileNames.length||awbEmagLookupCreated)renderPcomImportPreview();
+    toast(`${files.length} PDF-uri citite din dosar · ${results.length} etichete recunoscute${awbCreatedVintedFileNames.length?` · ${awbCreatedVintedFileNames.length} comenzi Vinted noi create din etichetă`:''}${awbEmagLookupCreated?` · ${awbEmagLookupCreated} comenzi eMAG găsite direct după număr (indiferent de status)`:''}`);
   }catch(e){
     toast('Eroare la citirea dosarului AWB: '+(e.message||e),'err');
   }
@@ -20213,8 +20245,10 @@ async function applyAwbAssociation(){
     // ce comanda ajunge și ea importată).
     if(awbFolderFileNames.length){
       // Include și fișierele care au creat o comandă Vinted nouă din etichetă (vezi
-      // pcomCreateVintedLineFromLabel/readAwbFolderPdfs) — la fel „procesate cu succes" ca o asociere.
-      const matchedFiles=new Set([...matched.map(p=>p.file).filter(Boolean),...awbCreatedVintedFileNames]);
+      // pcomCreateVintedLineFromLabel/readAwbFolderPdfs), sau o comandă eMAG găsită direct după număr,
+      // indiferent de status (vezi pcomFetchAndCreateEmagOrderById) — la fel „procesate cu succes" ca o
+      // asociere obișnuită.
+      const matchedFiles=new Set([...matched.map(p=>p.file).filter(Boolean),...awbCreatedVintedFileNames,...awbEmagLookupFileNames]);
       const toArchive=awbFolderFileNames.filter(n=>matchedFiles.has(n));
       if(toArchive.length){
         try{await localEmagJson('/awb-folder-archive',{names:toArchive},20000);}
@@ -20223,6 +20257,7 @@ async function applyAwbAssociation(){
       awbFolderFileNames=[];
     }
     awbCreatedVintedFileNames=[];
+    awbEmagLookupFileNames=[];
     awbParsed=[];
     document.getElementById('pcmi-awb-preview').innerHTML='';
     document.getElementById('pcmi-awb-foot').style.display='none';
