@@ -3511,7 +3511,7 @@ button.pcx-include-btn.included{border-color:var(--gr)}
             <div class="fld"><label>Descriere produs</label><textarea id="f-description" rows="5" placeholder="Descriere detaliată pentru client: beneficii, utilizare, ce conține pachetul..."></textarea></div>
             <div class="pe-two">
               <div class="fld"><label>SKU / Cod extern</label><input id="f-sku" type="text" placeholder="CAF-001" oninput="suggestSkuConflictDebounced()"></div>
-              <div class="fld"><label>Furnizor</label><input id="f-sup" type="text" placeholder="SC Produse SRL"></div>
+              <div class="fld"><label>Furnizor</label><input id="f-sup" type="text" list="inv-supplier-list" placeholder="SC Produse SRL"></div>
             </div>
             <div id="sku-conflict-suggest" style="display:none;margin-top:-4px"></div>
             <div class="pe-two">
@@ -3573,7 +3573,7 @@ button.pcx-include-btn.included{border-color:var(--gr)}
           <summary>Alt furnizor</summary>
           <div id="supplier-sources-list" style="display:flex;flex-direction:column;gap:7px"></div>
           <div class="pe-two" style="margin-top:8px">
-            <div class="fld"><label>Furnizor</label><input id="f-alt-supplier" type="text" placeholder="ex: Maxy"></div>
+            <div class="fld"><label>Furnizor</label><input id="f-alt-supplier" type="text" list="inv-supplier-list" placeholder="ex: Maxy"></div>
             <div class="fld"><label>Cod extern</label><input id="f-alt-sku" type="text" placeholder="Cod la furnizor"></div>
           </div>
           <div class="pe-two" style="margin-top:8px">
@@ -3895,6 +3895,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:460,text:'Fișa produsului — câmpul „Furnizor" (și „Alt furnizor") sugerează acum, la tastare, furnizorii deja folosiți pe alte produse, cerut direct — nu mai trebuie retastat exact numele de fiecare dată. Un furnizor nou nu are nevoie de nicio salvare separată: din momentul în care apare pe un produs, devine el însuși sugestie pentru următoarea dată. Aceeași listă (deja existentă la „Comandă furnizor"/import factură) e acum populată dinamic din datele reale, nu doar cele 3 nume fixe de dinainte.',date:'2026-09-24'},
   {n:459,text:'Fișa produsului → „Prețuri și TVA" — nou, cerut direct pe urma reorganizării de mai devreme: „📄 Ultimul preț din listare/factură", afișat sub prețul de achiziție. Diferă intenționat de „Preț achiziție cu TVA" (editabilă oricând din fișă): acest reper se mișcă STRICT la o reaprovizionare reală (Importă factură sau Adaugă stoc în masă), rămânând fix indiferent de câte ori corectezi manual prețul din formular — exact „prețul preluat din listare, stabil până la următoarea încărcare a produsului". Necesită migration_last_invoice_price.sql (coloane noi pe produse) — până rulezi migrarea, restul fișei funcționează neschimbat, doar acest rând nu apare încă.',date:'2026-09-24'},
   {n:458,text:'Fișa produsului → „Prețuri și TVA" — reorganizare cerută direct, „e foarte plină pagina": Preț achiziție trece dintr-o coloană printre altele într-o bandă unică, sus, pe toată lățimea tab-ului — sursa vizuală de la care rezultă tot restul, evidențiată cu un contur accent. Vânzare și Calculator rămân dedesubt, într-un rând separat, cu un indiciu „↳ rezultă din prețul de achiziție de mai sus" pe secțiunea Vânzare. „Alt furnizor" (informație secundară, folosită rar) trece dintr-un bloc mereu vizibil într-un `<details>` — colapsat implicit, la un click distanță, fără să mai aglomereze prima privire asupra prețului principal. Strict repoziționare/regândire vizuală — niciun calcul, câmp sau funcție nu s-a schimbat.',date:'2026-09-24'},
   {n:457,text:'Raport stoc — 2 completări cerute direct pe cardul de actualizare rapidă stoc. (1) Căutare produs (nume/SKU/cod intern) — găsește direct orice produs, în loc să navighezi rând cu rând prin toate; caută pe tot inventarul, nu doar în categoria curent filtrată (resetează filtrul automat dacă produsul găsit e în altă categorie). (2) „Ultima mișcare de stoc" — dată, sens (+/−) și sursă, direct sub „Stoc actual", ca să-ți dai seama dintr-o privire ce s-a întâmplat și dacă stocul chiar s-a actualizat recent — citit direct din activitate_stoc (nu din cache-ul local de 200 de intrări, care ar fi ratat produsele mai puțin active).',date:'2026-09-24'},
@@ -7011,6 +7012,7 @@ async function load(){
     document.getElementById('day-badge').textContent=new Date().toLocaleDateString('ro-RO',{day:'numeric',month:'long'});
     hideLoading();
     buildCats('');renderToday();renderTable();buildJMonths();if(document.getElementById('page-raport')?.classList.contains('on')){buildRaportCats();renderRaport();}
+    renderSupplierDatalist();
     renderUpdWidget();renderNotif();renderDashboard();loadPcomImportState().finally(()=>{pcomApplyImportUiMode();refreshPcomAvailableOrdersOnLoad();});loadSyncImportState();loadStaffIssues();
     pcomApplyImportUiMode();
     checkSupplierRestockAlerts();
@@ -7180,6 +7182,7 @@ function loadLocalFallback(){
   setSyncStatus('err','Mod offline');
   document.getElementById('day-badge').textContent=new Date().toLocaleDateString('ro-RO',{day:'numeric',month:'long'});
   buildCats('');renderToday();renderTable();buildJMonths();
+  renderSupplierDatalist();
   renderUpdWidget();renderNotif();renderDashboard();loadPcomImportState();
   pcomApplyImportUiMode();
 }
@@ -14494,6 +14497,7 @@ async function openModal(id){
   document.getElementById('f-pbuy').value=_net>0?_net.toFixed(2):'';
   document.getElementById('f-tva-acq').value=String(_tva);
   renderLastInvoicePrice(p);
+  renderSupplierDatalist();
   offerPriceManual={direct:!!p?.priceSell,emag:!!p?.priceEmag,trendyol:!!p?.priceTrendyol};
   document.getElementById('f-psell').value=p?.priceSell||'';
   document.getElementById('f-pemag').value=p?.priceEmag||'';
@@ -19102,6 +19106,16 @@ function openInvoice(){
 function renderInvCatDatalist(){
   const dl=document.getElementById('inv-cat-list');if(!dl)return;
   dl.innerHTML=CATS.map(c=>`<option value="${esc(c)}">`).join('');
+}
+// Sugestii de furnizor (cerut direct: „să se recomande furnizori deja salvați") — construit dinamic din
+// furnizorii deja folosiți pe produse (P), nu o listă separată de întreținut; un furnizor nou tastat nu
+// are nevoie de „salvare" separată — devine el însuși o sugestie viitoare din momentul în care ajunge pe
+// vreun produs. Cei 3 din lista veche rămân mereu prezenți, ca punct de plecare, chiar și pe o bază goală.
+function renderSupplierDatalist(){
+  const dl=document.getElementById('inv-supplier-list');if(!dl)return;
+  const seen=new Set(['Jumbo','Maxy','Verk']);
+  P.forEach(p=>{if(p.supplier)seen.add(p.supplier);});
+  dl.innerHTML=[...seen].sort((a,b)=>a.localeCompare(b,'ro')).map(s=>`<option value="${esc(s)}">`).join('');
 }
 
 /* ── Marfă furnizor — comenzi ÎNCĂ pe drum, separat de Importă factură (stoc deja sosit). Nu creează
