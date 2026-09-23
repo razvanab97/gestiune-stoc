@@ -3895,6 +3895,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:462,text:'Comenzi Platforme — „Istoric importuri" restrâns implicit la ultimele 3 zile, cerut direct (lista creștea nesfârșit, greu de răsfoit). Restul rămâne la un click distanță — buton „▾ Arată încă N importuri mai vechi", cu numărul exact, nimic ascuns definitiv. Ștergerea unui import vechi funcționează identic, indiferent dacă lista e restrânsă sau extinsă.',date:'2026-09-24'},
   {n:461,text:'Comenzi Platforme — cerut direct, pe urma arhivării unor produse sezoniere (Crăciun): dacă o comandă nouă se asociază cu un produs arhivat, apare acum un semnal clar „⚠️ arhivat" lângă statusul liniei, plus un contor „⚠️ Arhivate" în bara de numărători de sus, vizibil chiar și cu cardurile restrânse. Înainte, asocierea automată (după EAN/SKU/titlu) nu excludea produsele arhivate, dar nici nu semnala nimic — o comandă pe un produs arhivat trecea neobservată, la fel ca orice altă asociere reușită.',date:'2026-09-24'},
   {n:460,text:'Fișa produsului — câmpul „Furnizor" (și „Alt furnizor") sugerează acum, la tastare, furnizorii deja folosiți pe alte produse, cerut direct — nu mai trebuie retastat exact numele de fiecare dată. Un furnizor nou nu are nevoie de nicio salvare separată: din momentul în care apare pe un produs, devine el însuși sugestie pentru următoarea dată. Aceeași listă (deja existentă la „Comandă furnizor"/import factură) e acum populată dinamic din datele reale, nu doar cele 3 nume fixe de dinainte.',date:'2026-09-24'},
   {n:459,text:'Fișa produsului → „Prețuri și TVA" — nou, cerut direct pe urma reorganizării de mai devreme: „📄 Ultimul preț din listare/factură", afișat sub prețul de achiziție. Diferă intenționat de „Preț achiziție cu TVA" (editabilă oricând din fișă): acest reper se mișcă STRICT la o reaprovizionare reală (Importă factură sau Adaugă stoc în masă), rămânând fix indiferent de câte ori corectezi manual prețul din formular — exact „prețul preluat din listare, stabil până la următoarea încărcare a produsului". Necesită migration_last_invoice_price.sql (coloane noi pe produse) — până rulezi migrarea, restul fișei funcționează neschimbat, doar acest rând nu apare încă.',date:'2026-09-24'},
@@ -15892,10 +15893,10 @@ function renderPcomImportHistory(){
   });
   const list=Object.values(batches).sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
   if(!list.length){host.textContent='Niciun import încă.';return;}
-  host.innerHTML=list.map(b=>{
-    // Data afișată e ziua în care s-a FĂCUT importul (createdAt, dedus din inserarea în DB), nu data
-    // comenzii de pe eMAG/Trendyol (raportat direct: importat azi, dar apărea data comenzii din
-    // fișier, uneori o zi mai veche) — la fel ca în Jurnal/Vânzări azi, unde se aplică aceeași regulă.
+  // Data afișată e ziua în care s-a FĂCUT importul (createdAt, dedus din inserarea în DB), nu data
+  // comenzii de pe eMAG/Trendyol (raportat direct: importat azi, dar apărea data comenzii din
+  // fișier, uneori o zi mai veche) — la fel ca în Jurnal/Vânzări azi, unde se aplică aceeași regulă.
+  const rowHtml=b=>{
     const dates=[...b.dates].sort();
     const dateLabel=b.createdAt?b.createdAt.slice(0,10):(dates.length===1?dates[0]:`${dates[0]} → ${dates[dates.length-1]}`);
     const plLabel=pcomPlatLabel(b.platforma);
@@ -15903,8 +15904,20 @@ function renderPcomImportHistory(){
       <div class="pcom-batch-info"><b>${esc(plLabel)}</b> · ${esc(dateLabel)} · ${b.count} linii · ${b.total.toFixed(2)} RON</div>
       ${b.batchId?`<button type="button" class="btn btn-sm" style="color:var(--rd);border-color:var(--rd)" onclick="deletePcomBatch('${esc(b.batchId)}')">🗑️ Șterge</button>`:'<span style="font-size:21px;color:var(--t3)">import vechi, fără grupare</span>'}
     </div>`;
-  }).join('');
+  };
+  // Restrâns implicit la ultimele 3 zile (cerut direct — lista creștea nesfârșit, greu de răsfoit) —
+  // restul rămâne la un click distanță, cu numărul exact de importuri ascunse, niciodată pierdut.
+  const cutoff=new Date();cutoff.setDate(cutoff.getDate()-2);
+  const cutoffStr=cutoff.toISOString().slice(0,10);
+  const effDate=b=>b.createdAt?b.createdAt.slice(0,10):([...b.dates].sort().pop()||'');
+  const recent=list.filter(b=>effDate(b)>=cutoffStr);
+  const older=list.filter(b=>effDate(b)<cutoffStr);
+  const recentHtml=recent.length?recent.map(rowHtml).join(''):'<div style="font-size:21px;color:var(--t3)">Niciun import în ultimele 3 zile.</div>';
+  const olderHtml=older.length?`<button type="button" class="btn btn-sm" style="margin:10px 0" onclick="togglePcomHistoryExpanded()">${pcomHistoryExpanded?'▴ Ascunde importurile mai vechi':`▾ Arată încă ${older.length} import${older.length>1?'uri':''} mai vechi`}</button>${pcomHistoryExpanded?older.map(rowHtml).join(''):''}`:'';
+  host.innerHTML=recentHtml+olderHtml;
 }
+let pcomHistoryExpanded=false;
+function togglePcomHistoryExpanded(){pcomHistoryExpanded=!pcomHistoryExpanded;renderPcomImportHistory();}
 // Anulează ecoul din Jurnal scris la import (saveJurnalEntry) — bug real găsit la profilarea
 // Dashboard-ului: fără el, ștergerea unui import greșit corecta stocul, dar lăsa vânzarea "fantomă"
 // în Jurnal/Vânzări directe la nesfârșit. Ziua folosită e cea a IMPORTULUI (createdAt), la fel ca la
