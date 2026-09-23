@@ -3844,6 +3844,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:454,text:'🖨️ PDF AWB comenzi incluse — bug real reparat, raportat direct: butonul refuza toate cele 11 comenzi eMAG deja incluse cu „nu au încă pagina PDF salvată", deși toate aveau AWB corect. Cauza: „Citește din dosarul AWB-uri de pe Mac" (spre deosebire de selectarea manuală de PDF-uri) nu reținea NICIODATĂ numărul paginii din fișierul sursă — awb_source_page rămânea mereu gol, oricâte comenzi erau incluse. Reparat și la creare directă de comandă dintr-o etichetă (Vinted/GLS fără comandă, eMAG găsit după număr — vezi #452/#450), care pierdea aceeași informație. 13 comenzi deja afectate din producție au fost corectate direct (pagina confirmată cert pentru fiecare — fie fișier sursă cu o singură pagină, fie potrivire exactă după codul AWB extras din fiecare pagină a unui PDF cu mai multe etichete).',date:'2026-09-23'},
   {n:453,text:'Asociază AWB-uri — reparație pentru un caz real, raportat direct: un PDF ajuns din greșeală în arhiva zilei (Desktop/AWB-uri/procesate/<azi>), nu în Desktop/AWB-uri, făcea ca „Citește din dosar" să iasă complet gol, fără niciun indiciu de ce. Acum, dacă dosarul principal e gol dar arhiva de azi are fișiere, apare un avertisment explicit cu calea exactă — nu se recitesc automat fișierele din arhivă (protecția împotriva recitirii rămâne neatinsă), doar se arată clar unde s-au rătăcit. Necesită conectorul local eMAG actualizat (versiunea 11).',date:'2026-09-23'},
   {n:452,text:'Asociază AWB-uri — cerut direct: „când avem AWB adăugate fără comandă, să caute comanda și în finalizate". O etichetă eMAG citită din dosar a cărei comandă nu există încă local (AWB deja generat de eMAG a mutat comanda din „Nou"/„În lucru" în „Pregătită"/„Finalizată", deci nu mai apare la „Adu comenzi eMAG", care caută intenționat fără istoric) declanșează acum automat o căutare directă după numărul comenzii, pe toate piețele eMAG, indiferent de status — dacă o găsește, o adaugă ca linie nouă în „Comenzi", cu AWB deja completat, gata de „✓ Inclus"/„Aplică import" ca să scadă și stocul normal. Necesită conectorul local eMAG actualizat (versiunea 10, rută nouă /order-by-id).',date:'2026-09-23'},
   {n:451,text:'Comenzi Platforme — card nou „↺ Reactivează comandă finalizată": cauți după numărul comenzii (eMAG/Trendyol/Vinted) și, dacă a fost deja marcată împachetată/finalizată în Staff, o poți trimite din nou activă, gata de reprocesat. Funcționează pe toată comanda (toate produsele ei), nu doar pe o linie. Dacă a ieșit deja din fereastra activă a Staff (mai veche decât ultimul prag de coadă de la 22:00), reactivarea o aduce automat înapoi în fereastră — fără să atingă data reală a comenzii, deci Profit vânzări/Total încasări nu sunt afectate.',date:'2026-09-23'},
@@ -16343,14 +16344,14 @@ async function importEmagApiOrders(silent=false){
 // comanda tot există, doar în alt status. Caută direct după număr, pe toate piețele eMAG, indiferent de
 // status (rută nouă /order-by-id pe conectorul local), și o adaugă ca linie nouă de import, cu AWB deja
 // completat — exact ca o comandă adusă normal, gata de „✓ Inclus”/„Aplică import” ca să scadă stocul.
-async function pcomFetchAndCreateEmagOrderById(comandaId,awb){
+async function pcomFetchAndCreateEmagOrderById(comandaId,awb,file,page){
   if(pcImpParsed.some(x=>x.platforma==='emag'&&x.comandaId===comandaId))return 0;
   let resp;
   try{resp=await localEmagJson('/order-by-id',{orderId:comandaId},20000);}
   catch(e){console.warn('Căutare eMAG după număr eșuată pentru '+comandaId+':',e);return 0;}
   if(!resp?.found||!Array.isArray(resp.lines)||!resp.lines.length)return 0;
   resp.lines.forEach(raw=>{
-    pcImpParsed.push({...pcomEmagMatchLine(raw),_source:'api',awb:awb||''});
+    pcImpParsed.push({...pcomEmagMatchLine(raw),_source:'api',awb:awb||'',awbSourceFile:file||'',awbSourcePage:page||null});
   });
   return resp.lines.length;
 }
@@ -16897,8 +16898,14 @@ async function commitPcomLine(idx){
     // AWB-uri/setPcomAwb), deci acest pas nu are niciun efect asupra fluxului lor existent.
     if(it.awb&&it._committedId){
       try{
-        await dbPatch(`platforma_comenzi?id=eq.${it._committedId}`,{awb:it.awb});
-        const created=PCOM.find(o=>o.id===it._committedId);if(created)created.awb=it.awb;
+        // awbSourceFile/awbSourcePage — prezente doar pe liniile create direct dintr-o etichetă AWB deja
+        // citită (Vinted/GLS fără comandă, sau eMAG găsit după număr — vezi pcomCreateVintedLineFromLabel/
+        // pcomFetchAndCreateEmagOrderById): fără ele, „🖨️ PDF AWB comenzi incluse” nu găsește niciodată
+        // pagina sursă pentru aceste comenzi, deși AWB-ul e corect (bug real, raportat direct).
+        const src=it.awbSourceFile?{awb_source_file:it.awbSourceFile,awb_source_page:it.awbSourcePage||null}:{};
+        await dbPatch(`platforma_comenzi?id=eq.${it._committedId}`,{awb:it.awb,...src});
+        const created=PCOM.find(o=>o.id===it._committedId);
+        if(created)Object.assign(created,{awb:it.awb,...(it.awbSourceFile?{awbSourceFile:it.awbSourceFile,awbSourcePage:it.awbSourcePage||null}:{})});
       }catch(e){console.warn('Nu am putut salva codul/AWB la creare:',e);}
     }
     // Învață asocierea — omul tocmai a confirmat că potrivirea e corectă, la fel ca la Aplică import.
@@ -19987,7 +19994,8 @@ function pcomCreateVintedLineFromLabel(p){
     clientNume:p.destinatar||'',titluExtern:p.produs,vintedImg:'',
     cantitate:1,suggestedCantitate:0,pretFaraTva:0,pretTotalCuTva:0,moneda:'RON',
     produsId:match.product.id,score:match.score,viaPnk:false,viaTitle:false,viaCode:false,
-    include:false,awb:p.awb,_source:'vinted',_fromAwbLabel:true});
+    include:false,awb:p.awb,_source:'vinted',_fromAwbLabel:true,
+    awbSourceFile:p.file||'',awbSourcePage:p.page||null});
   return comandaId;
 }
 async function handleAwbPdfFile(ev){
@@ -20127,7 +20135,7 @@ async function readAwbFolderPdfs(){
           // Vinted nouă în previzualizare, în loc să rămână doar o eroare „asociază manual”. Fișierul se
           // arhivează abia la applyAwbAssociation (ACELAȘI moment ca restul), nu aici.
           if(p&&p.vintedDigitalLabel&&!p.comandaId&&!p.vintedAmbiguous){
-            if(pcomCreateVintedLineFromLabel(p)){awbCreatedVintedFileNames.push(f.name);return;}
+            if(pcomCreateVintedLineFromLabel({...p,file:f.name,page:i+1})){awbCreatedVintedFileNames.push(f.name);return;}
           }
           // DPD activ fără „note:" — singura legătură rămasă e numele fișierului, deja "<comandaId>_
           // DPD_<awb>.pdf" (confirmat pe 2 etichete reale: numărul din nume corespunde exact clientul +
@@ -20137,7 +20145,11 @@ async function readAwbFolderPdfs(){
             p=fileIdM?{...p,comandaId:fileIdM[1]}:null;
           }
           if(p&&p.courierCanceled)awbCanceledPages.push({label:`${f.name} p.${i+1}`,awb:p.awb,comandaId:p.comandaId});
-          else if(p)pairs.push({...p,file:f.name});
+          // Bug real, raportat direct („PDF AWB comenzi incluse” refuza toate comenzile deja incluse,
+          // deși aveau AWB): spre deosebire de handleAwbPdfFile (selectare manuală), bucla asta nu reținea
+          // NICIODATĂ numărul paginii — awb_source_page rămânea mereu null, deci activeAwbPrintOrders nu
+          // găsea niciodată o pagină sursă de tipărit, oricâte comenzi ar fi fost incluse.
+          else if(p)pairs.push({...p,file:f.name,page:i+1});
           else awbUnrecognizedPages.push(`${f.name} p.${i+1}`);
         });
       }catch(e){console.warn('PDF ignorat din dosar:',f.name,e);}
@@ -20155,7 +20167,7 @@ async function readAwbFolderPdfs(){
       // indiferent de status — dacă o găsim, o adăugăm ca linie nouă de import (cu AWB deja completat),
       // exact ca un import normal, gata de „✓ Inclus"/„Aplică import" ca să scadă și stocul.
       if(!rows.length){
-        const createdCount=await pcomFetchAndCreateEmagOrderById(p.comandaId,p.awb);
+        const createdCount=await pcomFetchAndCreateEmagOrderById(p.comandaId,p.awb,p.file,p.page);
         if(createdCount){awbEmagLookupCreated+=createdCount;awbEmagLookupFileNames.push(p.file);continue;}
       }
       results.push({...p,rows});
