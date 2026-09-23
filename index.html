@@ -3839,6 +3839,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:448,text:'Comenzi Platforme — nou buton „▶️ Rulează rutina zilnică", sus în Import & AWB: aduce automat comenzile eMAG + Trendyol, citește dosarul AWB-uri de pe Mac și include automat liniile cu potrivire sigură (cod/EAN/SKU exact sau nume ≥70%, ACELAȘI prag ca la potrivirea normală) — rămân doar excepțiile pentru tine. O etichetă Vinted/GLS din dosar fără nicio comandă nerezolvată de asociat creează acum direct o comandă Vinted nouă (produs potrivit automat, client = destinatarul de pe etichetă, AWB deja completat, preț editabil — inclusiv fără preț, pentru graba de zi cu zi); cazurile ambigue rămân manuale, ca înainte. O linie amânată (stoc insuficient) adaugă acum automat produsul pe „Produse de comandat", fără un click separat. Rutina se oprește o singură dată, la final, cu un rezumat scurt și butonul „✓ Aplică tot" — nicio scădere de stoc sau asociere AWB nu se întâmplă înainte de acel click. Pornire strict manuală, fără nicio programare automată.',date:'2026-09-23'},
   {n:447,text:'Comenzi Platforme — culoarea pe platformă din antetul cardului, cerută mai evidentă direct: primul cut (un glow mic în colț) era practic invizibil pe un card lat. Acum e un wash translucid pe toată lățimea antetului (mov eMAG / portocaliu Trendyol / verde Vinted), tot în stil liquid glass (blur, nu culoare plată) — se vede clar tranziția de la o comandă la alta, chiar dintr-o privire rapidă, fără să afecteze lizibilitatea textului. Ajustat și hover-ul antetului, care înainte spăla aproape complet culoarea cu alb la trecerea mouse-ului peste el.',date:'2026-09-23'},
   {n:446,text:'Expediere — buton nou „PDF AWB comenzi incluse”: citește automat etichetele originale din Desktop/AWB-uri și din arhiva procesată, păstrează numai paginile comenzilor confirmate cu „Inclus” în Admin, apoi descarcă un singur PDF pentru print. Paginile sunt ordonate după momentul includerii în Admin; fișierul rezultat este numerotat (de exemplu 01-08), fără a modifica etichetele oficiale sau codurile lor de bare.',date:'2026-09-23'},
   {n:445,text:'Vinted — importul din capturi indică acum direct și citirea PDF-urilor cu mai multe etichete: fiecare pagină este asociată separat cu comanda ei. Când o captură arată explicit GLS și un cod de expediere, sistemul pregătește automat eticheta PDF corectă, cu produsul sau coletul Vinted și codul detectat; descărcarea rămâne un singur tap, sigur și în Safari.',date:'2026-09-23'},
@@ -16351,8 +16352,14 @@ function pcomStockWarningHtml(idx){
   const reorderBtn=problem?(isInReorderList(p.id)?`<span style="font-size:21px;color:var(--gr);font-weight:600">✓ În lista de comandat</span>`:`<button type="button" class="btn btn-sm" style="color:#4F46E5;border-color:rgba(109,93,251,.35);background:rgba(109,93,251,.05);border-radius:8px;height:34px" onclick="addToReorderList(${p.id})">🛒 Adaugă la comandat</button>`):'';
   return`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:5px">${stockLbl}${(problem||it.amanat)?btn:''}${reorderBtn}${it.amanat?'<span style="font-size:21px;color:var(--or)">Amânat — nu se importă acum</span>':''}</div>`;
 }
+// Cerut direct (grill-me rutina zilnică): linia amânată rămâne manuală ca înainte, dar produsul ei se
+// adaugă acum SINGUR pe „Produse de comandat" — omul nu mai trebuie să repete alegerea separat, din
+// butonul „🛒 Adaugă la comandat" de mai jos (rămas neschimbat, pentru cazul invers — adăugat manual,
+// fără să amâni livrarea).
 function togglePcomAmanat(idx){
-  pcImpParsed[idx].amanat=!pcImpParsed[idx].amanat;
+  const it=pcImpParsed[idx];
+  it.amanat=!it.amanat;
+  if(it.amanat&&it.produsId)addToReorderList(it.produsId);
   renderPcomImportPreview();
 }
 function currentMonthKey(){return new Date().toISOString().slice(0,7);}
@@ -16891,6 +16898,80 @@ async function includeAllPcom(){
   for(const i of idxs)await syncPcomLineCommitState(i);
   renderPcomImportPreview();
   toast(`${idxs.length} ${idxs.length===1?'comandă selectată':'comenzi selectate'} ✓`);
+}
+
+// „▶️ Rulează rutina zilnică" (grill-me: .tmp/grill-me/logica-comenzi-platforme-zilnic.md) — un singur
+// buton care înlocuiește pașii manuali de zi cu zi: aduce eMAG+Trendyol, citește AWB-urile din dosar
+// (creează automat comenzile Vinted noi găsite pe etichetă — vezi pcomCreateVintedLineFromLabel),
+// include automat tot ce e sigur (pcomAutoIncludeConfident) și se oprește O SINGURĂ DATĂ, la final, cu
+// un rezumat + „Aplică tot" (pcomApplyRoutineAll) — nicio scriere de stoc/AWB nu se întâmplă înainte
+// de acel click. „Vândut sub minim" rămâne exact ca înainte — inclus automat, doar cu avertisment
+// vizual (pcomStockWarningHtml/fin.subMinim), nimic de schimbat aici.
+let pcomRoutineRunning=false;
+async function runRutinaZilnica(){
+  if(pcomRoutineRunning)return;
+  pcomRoutineRunning=true;
+  const btn=document.getElementById('pcx-routine-btn'),status=document.getElementById('pcx-routine-status');
+  if(btn){btn.disabled=true;btn.textContent='Se rulează…';}
+  if(status)status.innerHTML='<div class="pcx-source-note">⏳ Se aduc comenzile eMAG + Trendyol…</div>';
+  try{
+    await Promise.allSettled([importEmagApiOrders(true),importTrendyolApiOrders(true)]);
+    if(status)status.innerHTML='<div class="pcx-source-note">⏳ Se citesc etichetele AWB din dosar…</div>';
+    await readAwbFolderPdfs();
+    if(status)status.innerHTML='<div class="pcx-source-note">⏳ Se includ automat liniile sigure…</div>';
+    await pcomAutoIncludeConfident();
+    pcomRenderRoutineSummary();
+  }catch(e){
+    toast('Eroare la rutina zilnică: '+(e.message||e),'err');
+    if(status)status.innerHTML='';
+  }finally{
+    pcomRoutineRunning=false;
+    if(btn){btn.disabled=false;btn.textContent='▶️ Rulează rutina zilnică';}
+  }
+}
+// Prag identic cu potrivirea eMAG/Trendyol (findExistingProduct: exact=1, fuzzy≥0.7 — vezi
+// pcomEmagMatchLine/pcomTrendyolMatchLine). O linie Vinted adusă manual din captură, cu potrivire
+// slabă sub prag (fallback 0.35 din vintedRunRecognition, „punct de plecare, nu bifat automat"), NU e
+// inclusă automat aici — rămâne o excepție de verificat manual, la fel ca o linie fără niciun produs.
+async function pcomAutoIncludeConfident(){
+  const idxs=pcImpParsed.map((it,i)=>i).filter(i=>{
+    const it=pcImpParsed[i];
+    return!!it.produsId&&!it.include&&!it.amanat&&(it.score>=0.7||it.viaPnk||it.viaTitle||it.viaCode);
+  });
+  if(!idxs.length)return 0;
+  idxs.forEach(i=>{pcImpParsed[i].include=true;});
+  renderPcomImportPreview();
+  for(const i of idxs)await syncPcomLineCommitState(i);
+  renderPcomImportPreview();
+  return idxs.length;
+}
+// Checkpoint-ul unic al rutinei (cerut direct: „un singur checkpoint, la final") — rezumat scurt +
+// „Aplică tot", înainte de orice scădere de stoc sau scriere de AWB.
+function pcomRenderRoutineSummary(){
+  const status=document.getElementById('pcx-routine-status');if(!status)return;
+  const pending=pcImpParsed.filter(x=>x.include&&x.produsId&&!x.amanat).length;
+  const amanate=pcImpParsed.filter(x=>x.amanat).length;
+  const exceptii=pcImpParsed.filter(x=>!x.include&&!x.amanat).length;
+  const awbMatched=awbParsed.filter(pcomAwbMatched).length;
+  const awbUnmatched=awbParsed.filter(p=>!pcomAwbMatched(p)).length;
+  const createdVinted=awbCreatedVintedFileNames.length;
+  const parts=[`${pending} ${pending===1?'comandă pregătită':'comenzi pregătite'} pentru import`];
+  if(awbMatched)parts.push(`${awbMatched} AWB-uri potrivite`);
+  if(createdVinted)parts.push(`${createdVinted} ${createdVinted===1?'comandă Vinted nouă':'comenzi Vinted noi'} din etichetă`);
+  if(amanate)parts.push(`${amanate} amânate (stoc insuficient)`);
+  if(exceptii)parts.push(`⚠ ${exceptii} ${exceptii===1?'excepție de verificat':'excepții de verificat'} mai jos`);
+  if(awbUnmatched)parts.push(`⚠ ${awbUnmatched} ${awbUnmatched===1?'etichetă AWB nerezolvată':'etichete AWB nerezolvate'}`);
+  status.innerHTML=`<div class="pcx-source-note" style="margin-top:10px;font-size:17px">${parts.join(' · ')}</div>
+    <button type="button" class="pcx-btn pcx-btn-primary" style="width:100%;justify-content:center;margin-top:8px" onclick="pcomApplyRoutineAll()">✓ Aplică tot</button>`;
+}
+// Singurul loc din rutină unde chiar se scrie stoc/Jurnal (applyPcomImport) și AWB (applyAwbAssociation)
+// — abia după click-ul omului pe „✓ Aplică tot" din rezumat.
+async function pcomApplyRoutineAll(){
+  const status=document.getElementById('pcx-routine-status');
+  if(pcImpParsed.some(x=>x.include&&x.produsId&&!x.amanat))await applyPcomImport();
+  if(awbParsed.length)await applyAwbAssociation();
+  if(status)status.innerHTML='';
+  toast('Rutina zilnică aplicată ✓');
 }
 
 /* ── Vinted (din captură) — cerut direct: Vinted nu are export de fișier ca eMAG/Trendyol, deci nu
@@ -17738,6 +17819,11 @@ function renderPcomRedesign(){
     root.innerHTML=`<div class="pcx-wrap">
       <div class="pcx-action-head"><div class="pcx-card-hd"><div><div class="pcx-action-title">Import &amp; AWB</div><div class="pcx-card-sub">Adaugă comenzile din toate platformele și pregătește-le pentru expediere.</div></div><button type="button" class="pcx-help-btn" onclick="pcxToggleHelp('import')">Cum funcționează?</button></div></div>
       <div class="pcx-flow"><div class="pcx-flow-step"><i class="pcx-flow-n">1</i><div><b>Adaugă comenzi</b><span>Din eMAG, Trendyol, Vinted, fișier sau manual</span></div></div><i class="pcx-flow-arrow">→</i><div class="pcx-flow-step"><i class="pcx-flow-n">2</i><div><b>Procesează comenzile</b><span>Verifică produsele în secțiunea Comenzi</span></div></div><i class="pcx-flow-arrow">→</i><div class="pcx-flow-step"><i class="pcx-flow-n">3</i><div><b>Expediere</b><span>Asociază sau generează AWB și trimite</span></div></div></div>
+      <div class="pcx-card" style="border:2px solid var(--acc)">
+        <div class="pcx-card-hd"><div><div class="pcx-card-title">▶️ Rutina zilnică</div><div class="pcx-card-sub">Un singur buton: aduce eMAG + Trendyol, citește AWB-urile din dosar (creează automat comenzile Vinted noi găsite pe etichetă), potrivește tot ce e sigur — rămân doar excepțiile pentru tine.</div></div></div>
+        <button type="button" class="pcx-btn pcx-btn-primary" id="pcx-routine-btn" onclick="runRutinaZilnica()" style="width:100%;justify-content:center;font-size:19px;padding:14px">▶️ Rulează rutina zilnică</button>
+        <div id="pcx-routine-status"></div>
+      </div>
       <div class="pcx-card pcx-source-panel">
         <div class="pcx-card-hd"><div><div class="pcx-card-title">Import comenzi</div><div class="pcx-card-sub">Alege sursa comenzilor și importă-le în sistem.</div></div></div>
         <div class="pcx-help" id="pcx-help-import" style="display:none">${PCX_HELP.import}</div>
@@ -19671,6 +19757,7 @@ let awbParsed=[];
 let awbUnrecognizedPages=[];
 let awbCanceledPages=[];
 let awbFolderFileNames=[];
+let awbCreatedVintedFileNames=[];
 // Cerut direct, extins de la DPD la TOATE formatele („nu doar DPD ci peste tot, dacă apar erori"):
 // orice etichetă recunoscută (indiferent de curier) e verificată și pentru cuvinte de anulare/stornare
 // tipărite pe ea — dacă apar, rezultatul e marcat `courierCanceled`, NU tratat ca o asociere validă,
@@ -19790,6 +19877,31 @@ function resolveVintedDigitalLabelMatch(p){
   if(second&&second.score>=best.score-0.05&&second.o.comandaId!==best.o.comandaId)return{...p,vintedAmbiguous:true};
   return{...p,comandaId:best.o.comandaId,matchScore:best.score};
 }
+// Cerut direct (grill-me rutina zilnică — „avem PDF în calcul pentru Vinted, comenzile pot veni prin
+// PDF"): o etichetă Vinted digitală (sau propria etichetă GLS) FĂRĂ nicio comandă Vinted nerezolvată
+// de asociat (resolveVintedDigitalLabelMatch nu a găsit candidat, sau a găsit unul ambiguu — ambiguul
+// rămâne manual, netratat aici) nu mai e doar o eroare de asociat manual: devine direct o comandă
+// Vinted NOUĂ în previzualizare, la fel ca una lipită din captură (vezi vintedRunRecognition) — produs
+// potrivit din stoc, client = destinatarul de pe etichetă, AWB deja cunoscut. Prețul rămâne necompletat
+// (0, editabil) — inclusiv fără preț linia poate fi inclusă/aplicată, cerut explicit „pentru atunci
+// când ne grăbim". Produsul se potrivește STRICT cu findExistingProduct (exact sau fuzzy ≥70%, ACELAȘI
+// prag ca la eMAG/Trendyol) — sub prag, nu se creează nimic automat, eticheta rămâne o excepție
+// manuală ca înainte (return null).
+function pcomCreateVintedLineFromLabel(p){
+  // Idempotent la o recitire a dosarului înainte de „Asociază AWB-urile" (fișierul e arhivat abia
+  // atunci — vezi applyAwbAssociation) — fără asta, un al doilea „Citește din dosar" peste aceleași
+  // fișiere ar crea a doua oară aceeași comandă.
+  if(pcImpParsed.some(x=>x.platforma==='vinted'&&x.awb===p.awb))return null;
+  const match=findExistingProduct({name:p.produs});
+  if(!match)return null;
+  const comandaId='VNT-'+Date.now().toString(36).toUpperCase()+Math.random().toString(36).slice(2,5).toUpperCase();
+  pcImpParsed.push({platforma:'vinted',comandaId,pachetId:'',data:td(),pnk:'',tara:'',codProdus:'',
+    clientNume:p.destinatar||'',titluExtern:p.produs,vintedImg:'',
+    cantitate:1,suggestedCantitate:0,pretFaraTva:0,pretTotalCuTva:0,moneda:'RON',
+    produsId:match.product.id,score:match.score,viaPnk:false,viaTitle:false,viaCode:false,
+    include:false,awb:p.awb,_source:'vinted',_fromAwbLabel:true});
+  return comandaId;
+}
 async function handleAwbPdfFile(ev){
   const files=[...ev.target.files].filter(file=>/\.pdf$/i.test(file.name)||file.type==='application/pdf');if(!files.length)return;
   awbFolderFileNames=[];
@@ -19905,12 +20017,20 @@ async function readAwbFolderPdfs(){
     const pairs=[];
     awbUnrecognizedPages=[];
     awbCanceledPages=[];
+    awbCreatedVintedFileNames=[];
     for(const f of files){
       try{
         const pages=await extractPdfPagesText(base64ToBlob(f.data,'application/pdf'));
         pages.forEach((text,i)=>{
           let p=parseAwbLabelText(text);
           if(p&&p.vintedDigitalLabel)p=resolveVintedDigitalLabelMatch(p);
+          // Etichetă Vinted/GLS fără NICIO comandă nerezolvată de asociat (nu ambiguă — ambiguul rămâne
+          // mai jos, la fel ca înainte) — vezi pcomCreateVintedLineFromLabel: creează direct o comandă
+          // Vinted nouă în previzualizare, în loc să rămână doar o eroare „asociază manual”. Fișierul se
+          // arhivează abia la applyAwbAssociation (ACELAȘI moment ca restul), nu aici.
+          if(p&&p.vintedDigitalLabel&&!p.comandaId&&!p.vintedAmbiguous){
+            if(pcomCreateVintedLineFromLabel(p)){awbCreatedVintedFileNames.push(f.name);return;}
+          }
           // DPD activ fără „note:" — singura legătură rămasă e numele fișierului, deja "<comandaId>_
           // DPD_<awb>.pdf" (confirmat pe 2 etichete reale: numărul din nume corespunde exact clientul +
           // produsul comenzii găsite). Dacă numele nu începe cu cifre (redenumit manual), rămâne nerezolvat.
@@ -19924,7 +20044,7 @@ async function readAwbFolderPdfs(){
         });
       }catch(e){console.warn('PDF ignorat din dosar:',f.name,e);}
     }
-    if(!pairs.length&&!awbUnrecognizedPages.length&&!awbCanceledPages.length)throw new Error('Niciun PDF citit cu succes din dosar.');
+    if(!pairs.length&&!awbUnrecognizedPages.length&&!awbCanceledPages.length&&!awbCreatedVintedFileNames.length)throw new Error('Niciun PDF citit cu succes din dosar.');
     const results=[];
     for(const p of pairs){
       if(!p.comandaId){results.push({...p,rows:[]});continue;}
@@ -19938,7 +20058,8 @@ async function readAwbFolderPdfs(){
     awbParsed=results;
     awbFolderFileNames=files.map(f=>f.name);
     renderAwbPreview();
-    toast(`${files.length} PDF-uri citite din dosar · ${results.length} etichete recunoscute`);
+    if(awbCreatedVintedFileNames.length)renderPcomImportPreview();
+    toast(`${files.length} PDF-uri citite din dosar · ${results.length} etichete recunoscute${awbCreatedVintedFileNames.length?` · ${awbCreatedVintedFileNames.length} comenzi Vinted noi create din etichetă`:''}`);
   }catch(e){
     toast('Eroare la citirea dosarului AWB: '+(e.message||e),'err');
   }
@@ -20024,7 +20145,9 @@ async function applyAwbAssociation(){
     // rămân la vedere în Desktop/AWB-uri, gata de reîncercat (ex. după o reparație de parsare, sau după
     // ce comanda ajunge și ea importată).
     if(awbFolderFileNames.length){
-      const matchedFiles=new Set(matched.map(p=>p.file).filter(Boolean));
+      // Include și fișierele care au creat o comandă Vinted nouă din etichetă (vezi
+      // pcomCreateVintedLineFromLabel/readAwbFolderPdfs) — la fel „procesate cu succes" ca o asociere.
+      const matchedFiles=new Set([...matched.map(p=>p.file).filter(Boolean),...awbCreatedVintedFileNames]);
       const toArchive=awbFolderFileNames.filter(n=>matchedFiles.has(n));
       if(toArchive.length){
         try{await localEmagJson('/awb-folder-archive',{names:toArchive},20000);}
@@ -20032,6 +20155,7 @@ async function applyAwbAssociation(){
       }
       awbFolderFileNames=[];
     }
+    awbCreatedVintedFileNames=[];
     awbParsed=[];
     document.getElementById('pcmi-awb-preview').innerHTML='';
     document.getElementById('pcmi-awb-foot').style.display='none';
