@@ -3844,6 +3844,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:453,text:'Asociază AWB-uri — reparație pentru un caz real, raportat direct: un PDF ajuns din greșeală în arhiva zilei (Desktop/AWB-uri/procesate/<azi>), nu în Desktop/AWB-uri, făcea ca „Citește din dosar" să iasă complet gol, fără niciun indiciu de ce. Acum, dacă dosarul principal e gol dar arhiva de azi are fișiere, apare un avertisment explicit cu calea exactă — nu se recitesc automat fișierele din arhivă (protecția împotriva recitirii rămâne neatinsă), doar se arată clar unde s-au rătăcit. Necesită conectorul local eMAG actualizat (versiunea 11).',date:'2026-09-23'},
   {n:452,text:'Asociază AWB-uri — cerut direct: „când avem AWB adăugate fără comandă, să caute comanda și în finalizate". O etichetă eMAG citită din dosar a cărei comandă nu există încă local (AWB deja generat de eMAG a mutat comanda din „Nou"/„În lucru" în „Pregătită"/„Finalizată", deci nu mai apare la „Adu comenzi eMAG", care caută intenționat fără istoric) declanșează acum automat o căutare directă după numărul comenzii, pe toate piețele eMAG, indiferent de status — dacă o găsește, o adaugă ca linie nouă în „Comenzi", cu AWB deja completat, gata de „✓ Inclus"/„Aplică import" ca să scadă și stocul normal. Necesită conectorul local eMAG actualizat (versiunea 10, rută nouă /order-by-id).',date:'2026-09-23'},
   {n:451,text:'Comenzi Platforme — card nou „↺ Reactivează comandă finalizată": cauți după numărul comenzii (eMAG/Trendyol/Vinted) și, dacă a fost deja marcată împachetată/finalizată în Staff, o poți trimite din nou activă, gata de reprocesat. Funcționează pe toată comanda (toate produsele ei), nu doar pe o linie. Dacă a ieșit deja din fereastra activă a Staff (mai veche decât ultimul prag de coadă de la 22:00), reactivarea o aduce automat înapoi în fereastră — fără să atingă data reală a comenzii, deci Profit vânzări/Total încasări nu sunt afectate.',date:'2026-09-23'},
   {n:450,text:'Comenzi Platforme — nou buton „▶️ Rulează rutina zilnică", sus în Import & AWB: aduce automat comenzile eMAG + Trendyol, citește dosarul AWB-uri de pe Mac și include automat liniile cu potrivire sigură (cod/EAN/SKU exact sau nume ≥70%, ACELAȘI prag ca la potrivirea normală) — rămân doar excepțiile pentru tine. O etichetă Vinted/GLS din dosar fără nicio comandă nerezolvată de asociat creează acum direct o comandă Vinted nouă (produs potrivit automat, client = destinatarul de pe etichetă, AWB deja completat, preț editabil — inclusiv fără preț, pentru graba de zi cu zi); cazurile ambigue rămân manuale, ca înainte. O linie amânată (stoc insuficient) adaugă acum automat produsul pe „Produse de comandat", fără un click separat. Rutina se oprește o singură dată, la final, cu un rezumat scurt și butonul „✓ Aplică tot" — nicio scădere de stoc sau asociere AWB nu se întâmplă înainte de acel click. Pornire strict manuală, fără nicio programare automată.',date:'2026-09-23'},
@@ -20100,7 +20101,16 @@ async function readAwbFolderPdfs(){
   try{
     const data=await localEmagJson('/awb-folder',{},60000);
     const files=Array.isArray(data.files)?data.files:[];
-    if(!files.length){toast('Niciun PDF nou în Desktop/AWB-uri.');return;}
+    if(!files.length){
+      // Caz real, raportat direct: un PDF ajuns din greșeală în arhiva zilei (procesate/<azi>), nu în
+      // Desktop/AWB-uri — dosarul principal ieșea gol, fără niciun indiciu vizibil de ce. Nu recitim
+      // arhiva (ar strica protecția împotriva recitirii) — doar avertizăm, ca omul să știe unde să caute.
+      // Data locală, nu td() (UTC) — trebuie să coincidă cu folderul „procesate/<zi>" al conectorului,
+      // care e tot pe oră locală (vezi archiveAwbFiles/todayProcessedCount).
+      const localDay=(d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`)(new Date());
+      toast(data.todayProcessedCount?`Niciun PDF nou în Desktop/AWB-uri — dar sunt ${data.todayProcessedCount} fișiere în arhiva de azi (Desktop/AWB-uri/procesate/${localDay}). Verifică să nu le fi pus acolo din greșeală, în loc de Desktop/AWB-uri.`:'Niciun PDF nou în Desktop/AWB-uri.',data.todayProcessedCount?'warn':undefined);
+      return;
+    }
     const pairs=[];
     awbUnrecognizedPages=[];
     awbCanceledPages=[];
