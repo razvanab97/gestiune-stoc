@@ -2470,6 +2470,15 @@ button.pcx-include-btn.included{border-color:var(--gr)}
 <!-- PAGE JURNAL -->
 <!-- PAGE RAPORT STOC -->
 <div id="page-raport" class="page"><div class="wrap">
+  <div class="card" style="padding:1rem 1.25rem;margin-bottom:1rem">
+    <div class="sec" style="margin-top:0">🔍 Compară catalog furnizor</div>
+    <div style="font-size:22px;color:var(--t3);margin-bottom:8px">Lipește linkul unei pagini de categorie/catalog a unui furnizor (ex. Jumbo) — citim produsele de-acolo și îți arătăm ce NU avem încă în stoc.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <input type="text" id="rpt-catalog-url" placeholder="https://www.e-jumbo.ro/ro/..." style="flex:1;min-width:280px;font-size:18px;padding:8px 10px;border-radius:8px;border:1px solid var(--b1);background:var(--bg2);color:var(--t1)" onkeydown="if(event.key==='Enter')scanSupplierCatalog()">
+      <button type="button" class="btn btn-sm" id="rpt-catalog-scan-btn" style="background:var(--acc);color:var(--acc-fg)" onclick="scanSupplierCatalog()">🔍 Compară cu stocul nostru</button>
+    </div>
+    <div id="rpt-catalog-results"></div>
+  </div>
   <div class="card" id="rpt-furnizor-card" style="padding:1rem 1.25rem;margin-bottom:1rem;display:none">
     <div class="sec" style="margin-top:0">📥 Marfă așteptată de la furnizor</div>
     <div style="font-size:22px;color:var(--t3);margin-bottom:8px">Comenzi plasate la furnizor, încă pe drum — urmărirea sosirii (✗ Nu a ajuns / ◐ A ajuns) se face din Staff, tab „Marfă furnizor". Aici e doar o privire de ansamblu.</div>
@@ -3844,6 +3853,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:456,text:'Raport stoc — unealtă nouă „🔍 Compară catalog furnizor", cerută direct: lipești linkul unei pagini de categorie/catalog a unui furnizor (ex. Jumbo) și aplicația citește produsele de-acolo (browser headless, generic — nu doar Jumbo, orice grid de produse), le curăță prin AI (nume + preț, fără cod/etichete de marketing) și le potrivește cu stocul nostru (același prag de potrivire ≥70% folosit peste tot în aplicație). Rezultatul scoate în evidență STRICT ce lipsește din stocul nostru — cu poză, preț și link către pagina furnizorului — fiecare cu buton „+ Adaugă produs" (pre-completează numele și poza, tu completezi prețul de achiziție și restul). Produsele deja în stoc rămân doar un contor, nu o listă de citit.',date:'2026-09-23'},
   {n:455,text:'Cerute direct, 2 completări. (1) Comenzi Platforme — previzualizarea comenzilor arată acum și un contor „✓ Incluse", lângă Total/eMAG/Trendyol, ca să poți compara rapid câte ai selectat cu câte AWB-uri ai. (2) Staff — cardul de comandă arată acum numele curierului (Sameday/DPD/FAN Courier/GLS/Cargus…) direct înaintea numărului AWB, nu doar codul brut. Curierul se reține automat la asociere, dedus din formatul exact al etichetei (verificat pe date reale, inclusiv un caz în care o etichetă DPD/Trendyol se putea confunda cu formatul generic — acum distinsă corect); pe comenzi vechi, asociate înainte de această modificare, rămâne doar „AWB", fără curier. Necesită migration_awb_courier.sql.',date:'2026-09-23'},
   {n:454,text:'🖨️ PDF AWB comenzi incluse — bug real reparat, raportat direct: butonul refuza toate cele 11 comenzi eMAG deja incluse cu „nu au încă pagina PDF salvată", deși toate aveau AWB corect. Cauza: „Citește din dosarul AWB-uri de pe Mac" (spre deosebire de selectarea manuală de PDF-uri) nu reținea NICIODATĂ numărul paginii din fișierul sursă — awb_source_page rămânea mereu gol, oricâte comenzi erau incluse. Reparat și la creare directă de comandă dintr-o etichetă (Vinted/GLS fără comandă, eMAG găsit după număr — vezi #452/#450), care pierdea aceeași informație. 13 comenzi deja afectate din producție au fost corectate direct (pagina confirmată cert pentru fiecare — fie fișier sursă cu o singură pagină, fie potrivire exactă după codul AWB extras din fiecare pagină a unui PDF cu mai multe etichete).',date:'2026-09-23'},
   {n:453,text:'Asociază AWB-uri — reparație pentru un caz real, raportat direct: un PDF ajuns din greșeală în arhiva zilei (Desktop/AWB-uri/procesate/<azi>), nu în Desktop/AWB-uri, făcea ca „Citește din dosar" să iasă complet gol, fără niciun indiciu de ce. Acum, dacă dosarul principal e gol dar arhiva de azi are fișiere, apare un avertisment explicit cu calea exactă — nu se recitesc automat fișierele din arhivă (protecția împotriva recitirii rămâne neatinsă), doar se arată clar unde s-au rătăcit. Necesită conectorul local eMAG actualizat (versiunea 11).',date:'2026-09-23'},
@@ -18765,6 +18775,87 @@ function addProductFromMissing(id){
   openModal(null);
   document.getElementById('f-name').value=cand.titluExtern.slice(0,240);
   toast('Completează prețul/stocul/poza, apoi Salvează — se leagă automat de listarea eMAG/Trendyol');
+}
+// „Compară catalog furnizor" (Raport stoc) — cerut direct: „vreau să comparăm sistemul nostru cu ce e
+// pe pagina asta [Jumbo] sau alta, să ne menționeze ce lipsește din sistem". Citește pagina printr-un
+// browser headless generic (api/research-headless.js, acțiunea scan_catalog — NU selectoare specifice
+// unui singur site, funcționează pe orice grid de produse), apoi curăță textul brut al fiecărui card
+// prin AI (nume + preț, fără cod/etichete de marketing) și potrivește fiecare nume cu inventarul local
+// (findExistingProduct, ACELAȘI prag ≥70% folosit peste tot în aplicație). Doar produsele nepotrivite
+// (lipsă din stoc) sunt scoase în evidență — restul rămân doar un contor, nu o listă lungă de citit.
+const CATALOG_SCAN_CLEANUP_SCHEMA={
+  type:'object',
+  properties:{
+    produse:{
+      type:'array',
+      description:'EXACT aceeași ordine și număr de elemente ca lista primită — un rezultat curățat per card, în aceeași poziție, niciunul omis.',
+      items:{
+        type:'object',
+        properties:{
+          nume:{type:'string',description:'Numele curat al produsului — fără cod, fără preț, fără etichete de marketing (Nou/Reducere/Coming Soon/puncte de fidelitate etc.)'},
+          pret:{type:['number','null'],description:'Prețul, doar numărul (fără monedă). null dacă nu apare clar în text.'}
+        },
+        required:['nume','pret'],
+        additionalProperties:false
+      }
+    }
+  },
+  required:['produse'],
+  additionalProperties:false
+};
+let catalogScanResults=[];
+async function scanSupplierCatalog(){
+  const urlInp=document.getElementById('rpt-catalog-url');
+  const url=(urlInp?.value||'').trim();
+  if(!url||!/^https?:\/\//i.test(url)){toast('Introdu un link valid (începe cu http:// sau https://)','err');return;}
+  const btn=document.getElementById('rpt-catalog-scan-btn');
+  const box=document.getElementById('rpt-catalog-results');
+  if(!box)return;
+  if(btn){btn.disabled=true;btn.textContent='⏳ Se citește pagina…';}
+  box.innerHTML='';
+  try{
+    const resp=await fetch('/api/research-headless',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'scan_catalog',url})});
+    const data=await resp.json();
+    if(!resp.ok)throw new Error(data.error||'Eroare la citirea paginii');
+    if(!data.items?.length)throw new Error('Nu am găsit o listă de produse pe această pagină — poate fi blocată pentru citire automată, sau structura nu e recunoscută.');
+    if(btn)btn.textContent='⏳ Se identifică produsele…';
+    const prompt=`Mai jos e o listă de "carduri" brute extrase automat de pe o pagină de produse a unui furnizor (magazin online). Fiecare card conține text amestecat: numele produsului, uneori un cod intern, un preț, etichete de marketing ("Nou", "Reducere", "Coming Soon", puncte de fidelitate etc.). Pentru FIECARE card, în ACEEAȘI ORDINE, extrage DOAR numele curat al produsului (fără cod, fără preț, fără etichete) și prețul (doar numărul, fără monedă).\n\n${data.items.map((it,i)=>`${i+1}. ${it.text}`).join('\n')}`;
+    const aiResp=await callAI([{role:'user',content:prompt}],'Ești expert în curățarea textului brut extras automat de pe pagini de produse ale unor magazine online.',4000,'analysis',CATALOG_SCAN_CLEANUP_SCHEMA,'catalog_scan_cleanup');
+    const parsed=JSON.parse(aiResp);
+    const produse=Array.isArray(parsed.produse)?parsed.produse:[];
+    catalogScanResults=data.items.map((raw,i)=>{
+      const clean=produse[i]||{};
+      const name=(clean.nume||'').trim()||raw.text.slice(0,80);
+      const match=findExistingProduct({name});
+      return{name,price:clean.pret??null,image:raw.image,link:raw.link,inStock:!!match,matchName:match?.product?.name||'',score:match?.score||0};
+    });
+    renderCatalogScanResults();
+  }catch(e){
+    box.innerHTML=`<div style="color:var(--rd);font-size:18px">Eroare: ${esc(e.message||e)}</div>`;
+  }
+  if(btn){btn.disabled=false;btn.textContent='🔍 Compară cu stocul nostru';}
+}
+function renderCatalogScanResults(){
+  const box=document.getElementById('rpt-catalog-results');if(!box)return;
+  if(!catalogScanResults.length){box.innerHTML='';return;}
+  const missing=catalogScanResults.filter(x=>!x.inStock);
+  const found=catalogScanResults.filter(x=>x.inStock);
+  const missingHtml=missing.map(it=>{
+    const idx=catalogScanResults.indexOf(it);
+    const priceLbl=it.price?` <span style="color:var(--t3)">· ${(typeof it.price==='number'?it.price.toFixed(2):it.price)} Lei</span>`:'';
+    const linkLbl=it.link?` <a href="${esc(it.link)}" target="_blank" rel="noopener" style="color:var(--acc);margin-left:6px;font-size:14px">🔗 vezi</a>`:'';
+    const imgHtml=it.image?`<img src="${esc(it.image)}" style="width:44px;height:44px;object-fit:contain;border-radius:6px;background:var(--surf2);flex:none" onerror="this.style.display='none'">`:'';
+    return`<div class="pcom-batch-row"><div class="pcom-batch-info" style="display:flex;gap:10px;align-items:center">${imgHtml}<div><strong>${esc(it.name)}</strong>${priceLbl}${linkLbl}</div></div><button type="button" class="btn btn-sm" style="color:var(--gr);border-color:var(--gr)" onclick="openAddProductFromCatalogScan(${idx})">+ Adaugă produs</button></div>`;
+  }).join('');
+  box.innerHTML=`<div style="font-size:17px;font-weight:700;margin-bottom:10px">${missing.length} ${missing.length===1?'produs lipsă':'produse lipsă'} din stocul nostru <span style="color:var(--t3);font-weight:400">· ${found.length} ${found.length===1?'îl avem deja':'le avem deja'}</span></div>${missingHtml||'<div style="color:var(--t3);font-size:16px">Toate produsele găsite pe această pagină sunt deja în stocul nostru ✓</div>'}`;
+}
+function openAddProductFromCatalogScan(idx){
+  const it=catalogScanResults[idx];if(!it)return;
+  openModal(null);
+  document.getElementById('f-name').value=(it.name||'').slice(0,240);
+  if(it.image){showPrev(it.image);curImg=it.image;document.getElementById('f-imgurl').value=it.image;document.getElementById('ai-img-btn').disabled=false;}
+  suggestCatFromName();
+  toast('Completează prețul de achiziție și restul detaliilor, apoi Salvează');
 }
 async function deleteMissingCandidate(id){
   if(!confirm('Elimini această listare din lista de așteptare? Nu se creează niciun produs.'))return;
