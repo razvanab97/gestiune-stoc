@@ -1129,6 +1129,8 @@ function buildRaportCats(){
   #page-raport .rpt-card{padding:10px;gap:6px}
   #page-raport .rpt-card-title{font-size:26px}
   #page-raport .rpt-card-sku{font-size:22px}
+  #page-raport .rpt-card-lastmove{font-size:18px}
+  #page-raport .rpt-card-search-wrap{max-width:none}
   /* Rândul de mapare din Sincronizare (platformă + PNK lung, necomprimabil + titlu + buton ✕) nu
      încăpea pe un rând pe mobil — butonul ✕ de ștergere ajungea în afara ecranului, needitabil fără
      scroll orizontal în card. */
@@ -1172,6 +1174,21 @@ function buildRaportCats(){
 .rpt-cards-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap}
 .rpt-cards-nav{display:flex;align-items:center;gap:10px}
 .rpt-cards-nav-lbl{font-size:26px;color:var(--t3);font-family:var(--mono);min-width:96px;text-align:center}
+/* Căutare produs pe cardul de actualizare rapidă (cerut direct) — dropdown de rezultate sub input,
+   poziționat absolut ca să nu împingă restul antetului în jos când apare. */
+.rpt-card-search-wrap{position:relative;flex:1;min-width:220px;max-width:380px}
+.rpt-card-search{width:100%;font-family:inherit;font-size:20px;padding:8px 12px;border:1px solid var(--b1);border-radius:var(--r);background:var(--surf);color:var(--t1)}
+.rpt-card-search:focus{outline:2px solid var(--acc);outline-offset:1px;border-color:var(--acc)}
+.rpt-card-search-results{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--surf);border:1px solid var(--b1);border-radius:var(--r);box-shadow:var(--sh);max-height:320px;overflow-y:auto;z-index:20}
+.rpt-card-search-row{padding:9px 12px;font-size:19px;cursor:pointer;border-bottom:1px solid var(--b1)}
+.rpt-card-search-row:last-child{border-bottom:0}
+.rpt-card-search-row:hover{background:var(--surf2)}
+.rpt-card-search-empty{padding:9px 12px;font-size:18px;color:var(--t3)}
+/* Ultima mișcare de stoc (cerut direct) — sub „Stoc actual", ca să se vadă dintr-o privire dacă/când
+   s-a actualizat stocul, fără să deschizi produsul separat. */
+.rpt-card-lastmove{font-size:20px;color:var(--t3);text-align:center}
+.rpt-card-lastmove-in{color:var(--gr);font-weight:800;font-family:var(--mono)}
+.rpt-card-lastmove-out{color:var(--rd);font-weight:800;font-family:var(--mono)}
 .rpt-carousel{display:flex;align-items:center;justify-content:center;gap:22px;padding:12px 0 22px}
 .rpt-card{background:var(--bg2);border:1px solid var(--b1);border-radius:var(--r2);padding:14px;display:flex;flex-direction:column;gap:8px;transition:box-shadow .15s,border-color .15s,transform .2s,opacity .2s}
 .rpt-car-main{width:360px;border-color:var(--acc);box-shadow:var(--sh)}
@@ -2488,6 +2505,10 @@ button.pcx-include-btn.included{border-color:var(--gr)}
   <div class="rpt-cards-wrap">
     <div class="rpt-cards-head">
       <div class="tb-title" style="font-size:27px">🗂️ Actualizare rapidă stoc — carduri produse</div>
+      <div class="rpt-card-search-wrap">
+        <input type="text" id="rpt-card-search" class="rpt-card-search" placeholder="🔍 Caută produs (nume/SKU/cod intern)…" oninput="rptCardSearchInput(this.value)" onkeydown="if(event.key==='Escape'){this.value='';rptCardSearchInput('')}" onblur="setTimeout(()=>{const b=document.getElementById('rpt-card-search-results');if(b)b.style.display='none';},180)">
+        <div id="rpt-card-search-results" class="rpt-card-search-results" style="display:none"></div>
+      </div>
       <span class="rpt-cards-nav-lbl" id="rpt-card-pos">—</span>
     </div>
     <div class="rpt-card-grid" id="rpt-card-grid"></div>
@@ -3853,6 +3874,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:457,text:'Raport stoc — 2 completări cerute direct pe cardul de actualizare rapidă stoc. (1) Căutare produs (nume/SKU/cod intern) — găsește direct orice produs, în loc să navighezi rând cu rând prin toate; caută pe tot inventarul, nu doar în categoria curent filtrată (resetează filtrul automat dacă produsul găsit e în altă categorie). (2) „Ultima mișcare de stoc" — dată, sens (+/−) și sursă, direct sub „Stoc actual", ca să-ți dai seama dintr-o privire ce s-a întâmplat și dacă stocul chiar s-a actualizat recent — citit direct din activitate_stoc (nu din cache-ul local de 200 de intrări, care ar fi ratat produsele mai puțin active).',date:'2026-09-24'},
   {n:456,text:'Raport stoc — unealtă nouă „🔍 Compară catalog furnizor", cerută direct: lipești linkul unei pagini de categorie/catalog a unui furnizor (ex. Jumbo) și aplicația citește produsele de-acolo (browser headless, generic — nu doar Jumbo, orice grid de produse), le curăță prin AI (nume + preț, fără cod/etichete de marketing) și le potrivește cu stocul nostru (același prag de potrivire ≥70% folosit peste tot în aplicație). Rezultatul scoate în evidență STRICT ce lipsește din stocul nostru — cu poză, preț și link către pagina furnizorului — fiecare cu buton „+ Adaugă produs" (pre-completează numele și poza, tu completezi prețul de achiziție și restul). Produsele deja în stoc rămân doar un contor, nu o listă de citit.',date:'2026-09-23'},
   {n:455,text:'Cerute direct, 2 completări. (1) Comenzi Platforme — previzualizarea comenzilor arată acum și un contor „✓ Incluse", lângă Total/eMAG/Trendyol, ca să poți compara rapid câte ai selectat cu câte AWB-uri ai. (2) Staff — cardul de comandă arată acum numele curierului (Sameday/DPD/FAN Courier/GLS/Cargus…) direct înaintea numărului AWB, nu doar codul brut. Curierul se reține automat la asociere, dedus din formatul exact al etichetei (verificat pe date reale, inclusiv un caz în care o etichetă DPD/Trendyol se putea confunda cu formatul generic — acum distinsă corect); pe comenzi vechi, asociate înainte de această modificare, rămâne doar „AWB", fără curier. Necesită migration_awb_courier.sql.',date:'2026-09-23'},
   {n:454,text:'🖨️ PDF AWB comenzi incluse — bug real reparat, raportat direct: butonul refuza toate cele 11 comenzi eMAG deja incluse cu „nu au încă pagina PDF salvată", deși toate aveau AWB corect. Cauza: „Citește din dosarul AWB-uri de pe Mac" (spre deosebire de selectarea manuală de PDF-uri) nu reținea NICIODATĂ numărul paginii din fișierul sursă — awb_source_page rămânea mereu gol, oricâte comenzi erau incluse. Reparat și la creare directă de comandă dintr-o etichetă (Vinted/GLS fără comandă, eMAG găsit după număr — vezi #452/#450), care pierdea aceeași informație. 13 comenzi deja afectate din producție au fost corectate direct (pagina confirmată cert pentru fiecare — fie fișier sursă cu o singură pagină, fie potrivire exactă după codul AWB extras din fiecare pagină a unui PDF cu mai multe etichete).',date:'2026-09-23'},
@@ -21931,6 +21953,7 @@ function renderRaportCards(prods){
     <div class="rpt-card-sku"><button class="copy-btn" onclick="copyProductSku(${cur.id})" ${!cur.sku?'style="visibility:hidden"':''}>📋</button>SKU: ${esc(cur.sku||'—')}</div><div class="rpt-card-sku"><button class="copy-btn" onclick="copyProductInternalCode(${cur.id})">📋</button>Cod intern: ${esc(cur.internalCode||'—')}</div>
     <div class="rpt-card-row"><span>Stoc cumpărare</span><strong>${fmtQty(cur.bought)}</strong></div>
     <div class="rpt-card-row"><span>Stoc actual</span><strong class="${stocCls}">${fmtQty(stoc)}</strong></div>
+    <div class="rpt-card-lastmove" id="rpt-card-lastmove-${cur.id}">Se încarcă ultima mișcare…</div>
     <div class="rpt-card-upd">
       <input type="text" inputmode="decimal" placeholder="Stoc nou" id="rpt-card-inp-${cur.id}" onkeydown="if(event.key==='Enter')updateStockFromCard(${cur.id})">
       <button class="btn btn-sm btn-acc" onclick="updateStockFromCard(${cur.id})">Actualizează stoc</button>
@@ -21944,6 +21967,54 @@ function renderRaportCards(prods){
     ${n>1?rptCardGhost(nextP,'r'):'<div class="rpt-car-ghost" style="visibility:hidden;width:130px"></div>'}
   </div>`;
   updateRptCardNavLbl();
+  loadRptCardLastMove(cur.id);
+}
+// Ultima mișcare de stoc a produsului curent — cerut direct, „ca să ne putem face o idee ce s-a
+// întâmplat și dacă s-a actualizat stocul". Citește direct din activitate_stoc (nu din ACT, cache-ul
+// local limitat la 200 de intrări GLOBALE — cu volumul mare de ajustări din Raport stoc Staff, mișcarea
+// unui produs mai puțin activ ar fi căzut oricum din acel cache, deci ar fi arătat greșit „nicio
+// mișcare"). Interogare separată per card, declanșată la fiecare navigare — un singur rând, ieftină.
+async function loadRptCardLastMove(id){
+  const el=document.getElementById('rpt-card-lastmove-'+id);
+  if(!el)return;
+  if(!sbReady){el.textContent='';return;}
+  try{
+    const rows=await dbGet(`activitate_stoc?product_id=eq.${id}&select=tip,qty,sursa,created_at&order=created_at.desc&limit=1`);
+    // Dacă între timp s-a navigat la alt produs, elementul acestui id a fost deja înlocuit din DOM —
+    // getElementById nu-l mai găsește, iar scrierea de mai jos se oprește singură, fără verificare suplimentară.
+    const stillThere=document.getElementById('rpt-card-lastmove-'+id);
+    if(!stillThere)return;
+    if(!rows.length){stillThere.textContent='Nicio mișcare de stoc înregistrată încă.';return;}
+    const r=rows[0],dt=new Date(r.created_at).toLocaleString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    const sign=r.tip==='in'?'+':'−',cls=r.tip==='in'?'rpt-card-lastmove-in':'rpt-card-lastmove-out';
+    stillThere.innerHTML=`Ultima mișcare: <span class="${cls}">${sign}${fmtQty(r.qty)}</span> · ${dt}${r.sursa?' · '+esc(r.sursa):''}`;
+  }catch(e){
+    const stillThere=document.getElementById('rpt-card-lastmove-'+id);
+    if(stillThere)stillThere.textContent='';
+    console.warn('Nu am putut încărca ultima mișcare de stoc:',e);
+  }
+}
+// Căutare produs pentru carduri (cerut direct) — funcționează pe TOATE produsele active, nu doar pe
+// lista filtrată curentă (categorie), ca să nu pară „nu găsește nimic" pentru un produs dintr-o altă
+// categorie; dacă produsul găsit nu e în lista curentă, filtrul de categorie se resetează automat.
+function rptCardSearchInput(q){
+  const box=document.getElementById('rpt-card-search-results');
+  if(!box)return;
+  const query=String(q||'').trim().toLowerCase();
+  if(!query){box.style.display='none';box.innerHTML='';return;}
+  const matches=P.filter(p=>!p.archived&&`${p.name||''} ${p.sku||''} ${p.internalCode||''}`.toLowerCase().includes(query)).slice(0,8);
+  if(!matches.length){box.innerHTML='<div class="rpt-card-search-empty">Niciun produs găsit</div>';box.style.display='block';return;}
+  box.innerHTML=matches.map(p=>`<div class="rpt-card-search-row" onclick="rptCardSearchPick(${p.id})">${esc(p.name||'—')}${p.sku?' · SKU '+esc(p.sku):''}</div>`).join('');
+  box.style.display='block';
+}
+function rptCardSearchPick(id){
+  const inp=document.getElementById('rpt-card-search');if(inp)inp.value='';
+  const box=document.getElementById('rpt-card-search-results');if(box){box.style.display='none';box.innerHTML='';}
+  if(!rptCardProds.some(p=>p.id===id)){
+    const cat=document.getElementById('rpt-cat');if(cat)cat.value='';
+    renderRaport();
+  }
+  rptCardGoTo(id);
 }
 function updateRptCardNavLbl(){
   const lbl=document.getElementById('rpt-card-pos');
