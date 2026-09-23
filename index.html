@@ -3844,6 +3844,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:451,text:'Comenzi Platforme — card nou „↺ Reactivează comandă finalizată": cauți după numărul comenzii (eMAG/Trendyol/Vinted) și, dacă a fost deja marcată împachetată/finalizată în Staff, o poți trimite din nou activă, gata de reprocesat. Funcționează pe toată comanda (toate produsele ei), nu doar pe o linie. Dacă a ieșit deja din fereastra activă a Staff (mai veche decât ultimul prag de coadă de la 22:00), reactivarea o aduce automat înapoi în fereastră — fără să atingă data reală a comenzii, deci Profit vânzări/Total încasări nu sunt afectate.',date:'2026-09-23'},
   {n:450,text:'Comenzi Platforme — nou buton „▶️ Rulează rutina zilnică", sus în Import & AWB: aduce automat comenzile eMAG + Trendyol, citește dosarul AWB-uri de pe Mac și include automat liniile cu potrivire sigură (cod/EAN/SKU exact sau nume ≥70%, ACELAȘI prag ca la potrivirea normală) — rămân doar excepțiile pentru tine. O etichetă Vinted/GLS din dosar fără nicio comandă nerezolvată de asociat creează acum direct o comandă Vinted nouă (produs potrivit automat, client = destinatarul de pe etichetă, AWB deja completat, preț editabil — inclusiv fără preț, pentru graba de zi cu zi); cazurile ambigue rămân manuale, ca înainte. O linie amânată (stoc insuficient) adaugă acum automat produsul pe „Produse de comandat", fără un click separat. Rutina se oprește o singură dată, la final, cu un rezumat scurt și butonul „✓ Aplică tot" — nicio scădere de stoc sau asociere AWB nu se întâmplă înainte de acel click. Pornire strict manuală, fără nicio programare automată.',date:'2026-09-23'},
   {n:449,text:'Comenzi Platforme — bordurile dintre secțiunile de sus (stepper 1-2-3, „Import comenzi", „Expediere" și cele 3 module A/B/C din interior) erau practic invizibile (gri aproape alb) — cerut direct, ușor mai accentuate, ca să se delimiteze clar unde se termină o secțiune și începe alta. Doar culoarea conturului s-a schimbat (un gri deja folosit în temă, mai închis), nimic altceva din așezare/dimensiuni nu s-a atins.',date:'2026-09-23'},
   {n:448,text:'Comenzi Platforme — corectare imediată la #447, raportată direct: wash-ul de culoare pe platformă se întindea pe TOT cardul, inclusiv pe corpul extins (linia de produs) — cerut era doar pe antet (capul de comandă). Acum culoarea evidentă e strict pe antet, puțin mai deschisă decât încercarea anterioară; restul cardului a revenit exact la ce era înainte de #447 (glow discret în colț).',date:'2026-09-23'},
@@ -4754,6 +4755,56 @@ async function reconsiderPcomRow(id){
     renderCancelledPcomList();
     toast('✓ Comandă reconsiderată — vizibilă din nou în Staff');
   }catch(e){toast('Nu am putut reconsidera comanda: '+(e.message||e),'err');}
+}
+// „↺ Reactivează comandă finalizată" — cerut direct: un număr de comandă deja marcat împachetat/
+// finalizat în Staff (din greșeală, sau pentru că trebuie reprocesat) să poată fi trimis din nou activ,
+// căutat direct după numărul comenzii, fără să treacă prin reimport. Grupat pe comandaId+platformă (nu
+// linie cu linie) — o comandă cu mai multe produse e UN singur „colet" în Staff (computeOrders), deci
+// reactivarea trebuie să acopere toate liniile ei deodată, la fel cum finalizeOrder le finalizează.
+function searchPcomReactivate(){
+  const box=document.getElementById('pcom-reactivate-results');if(!box)return;
+  const q=(document.getElementById('pcom-reactivate-search')?.value||'').trim();
+  if(!q){box.innerHTML='<div style="color:var(--t3);font-size:16px">Introdu numărul comenzii.</div>';return;}
+  const rows=PCOM.filter(o=>String(o.comandaId||'').toLowerCase()===q.toLowerCase());
+  if(!rows.length){box.innerHTML=`<div style="color:var(--rd);font-size:16px">Nicio comandă găsită cu numărul „${esc(q)}".</div>`;return;}
+  const groups={};
+  rows.forEach(o=>{const k=o.platforma+'|'+o.comandaId;(groups[k]=groups[k]||[]).push(o);});
+  box.innerHTML=Object.values(groups).map(grp=>{
+    const o0=grp[0];
+    const names=grp.map(o=>{const p=o.produsId?P.find(x=>x.id===o.produsId):null;return p?p.name:(o.produsNume||o.titluExtern||'Produs');}).join(', ');
+    const dt=o0.createdAt?new Date(o0.createdAt).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric'}):'';
+    const anyCancelled=grp.some(o=>o.anulata);
+    const allPacked=grp.every(o=>o.impachetat);
+    const somePacked=grp.some(o=>o.impachetat);
+    const statusLbl=anyCancelled?'<span style="color:var(--rd)">🚫 anulată</span>':allPacked?'<span style="color:var(--gr)">✓ împachetată/finalizată</span>':somePacked?'<span style="color:var(--or)">◐ parțial împachetată</span>':'<span style="color:var(--t3)">deja activă în Staff</span>';
+    const canReactivate=!anyCancelled&&somePacked;
+    const ids=grp.filter(o=>o.impachetat).map(o=>o.id).join(',');
+    return`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(names)}</strong> <span style="color:var(--t3);font-family:var(--mono)">· ${esc(pcomPlatLabel(o0.platforma))}${o0.clientNume?' · '+esc(o0.clientNume):''}</span><div class="jp-meta">${statusLbl}${dt?' · '+dt:''}</div></div>${canReactivate?`<button type="button" class="btn btn-sm" onclick="reactivatePcomOrder('${ids}')">↺ Reactivează</button>`:''}</div>`;
+  }).join('');
+}
+async function reactivatePcomOrder(idsStr){
+  const ids=String(idsStr).split(',').map(Number).filter(Boolean);
+  if(!ids.length)return;
+  if(!confirm(`Trimiți din nou ${ids.length>1?'aceste '+ids.length+' linii':'această comandă'} în coada activă din Staff?`))return;
+  try{
+    const now=new Date().toISOString();
+    for(const id of ids){
+      const o=PCOM.find(x=>x.id===id);if(!o)continue;
+      const body={impachetat:false,impachetat_at:null};
+      // O comandă ieșită deja din fereastra activă a Staff (mai veche decât ultimul prag de coadă —
+      // vezi STAFF_QUEUE_STARTED_AT/checkAutoQueueReset din staff.html) nu revine vizibilă doar prin
+      // debifarea „împachetat" — Staff filtrează dur comenzile după created_at >= prag. O aducem înapoi
+      // în fereastră avansându-i created_at la acum; `data` (data reală a comenzii, folosită de Profit
+      // vânzări/Total încasări) rămâne neatinsă, deci rapoartele financiare nu sunt afectate.
+      if(STAFF_QUEUE_STARTED_AT&&o.createdAt&&o.createdAt<STAFF_QUEUE_STARTED_AT)body.created_at=now;
+      await dbPatch(`platforma_comenzi?id=eq.${id}`,body);
+      Object.assign(o,{impachetat:false,impachetatAt:null});
+      if(body.created_at)o.createdAt=body.created_at;
+    }
+    renderStaleStaffOrdersCard();
+    searchPcomReactivate();
+    toast('✓ Comandă reactivată — vizibilă din nou în Staff');
+  }catch(e){toast('Nu am putut reactiva comanda: '+(e.message||e),'err');}
 }
 async function cancelStaffIssueOrder(table,id){
   const ok=await anuleazaLiniePlatforma(table,id);
@@ -17885,6 +17936,15 @@ function renderPcomRedesign(){
         <div class="pcx-card-title">🚫 Comenzi anulate — de reconsiderat</div>
         <div style="font-size:16px;color:var(--t3);margin:4px 0 8px">Produse scoase din coada Staff (test, dublură, stoc zero etc.), încă neaplicate financiar. Dacă motivul nu mai e valabil (ex. produsul a fost reaprovizionat), le poți readuce active.</div>
         <div id="pcx-cancelled-list"></div>
+      </div>
+      <div class="pcx-card pcx-card-compact">
+        <div class="pcx-card-title">↺ Reactivează comandă finalizată</div>
+        <div style="font-size:16px;color:var(--t3);margin:4px 0 8px">Caută după numărul comenzii (eMAG/Trendyol/Vinted) o comandă deja marcată împachetată/finalizată în Staff, ca să apară din nou activă acolo, gata de procesat.</div>
+        <div class="frow" style="align-items:flex-end;gap:8px;margin-bottom:8px">
+          <div class="fld" style="max-width:220px;margin:0"><label style="font-size:14px">Număr comandă</label><input type="text" id="pcom-reactivate-search" placeholder="ex. 123456789" onkeydown="if(event.key==='Enter')searchPcomReactivate()"></div>
+          <button type="button" class="pcx-btn" onclick="searchPcomReactivate()">🔍 Caută</button>
+        </div>
+        <div id="pcom-reactivate-results"></div>
       </div>
       <div class="pcx-card pcx-card-compact">
         <div class="pcx-card-title">Istoric importuri</div>
