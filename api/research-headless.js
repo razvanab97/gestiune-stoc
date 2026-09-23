@@ -20,13 +20,21 @@
 // globală (window['__single-search-result__PROPS'].data.products), nu doar prin markup fragil.
 
 let chromiumMod = null, puppeteer = null;
+// Bug real, găsit direct testând endpoint-ul live (deployed, nu doar local) pentru scan_catalog:
+// require('puppeteer-core') arunca "require() of ES Module ... not supported" — pachetul (verificat
+// direct, instalat separat: v25.11.0) e acum pur ESM ("type":"module"), require() nu-l mai poate
+// încărca deloc, pe nicio versiune ^25.x. Afecta TOATE acțiunile din acest fișier (auto-căutare eMAG/
+// Trendyol la fel de stricat, nu doar scan_catalog — verificat separat, aceeași eroare). import()
+// dinamic funcționează (verificat direct: namespace-ul întors are .launch ca export numit, direct
+// utilizabil). La fel pentru @sparticuz/chromium (tot ESM) — proprietățile folosite mai jos
+// (args/executablePath/...) sunt pe mod.default, verificat direct.
 async function loadDeps() {
   if (puppeteer) return;
   // Pe Vercel (VERCEL=1, setat automat de platformă): @sparticuz/chromium, binarul potrivit mediului
   // serverless. Local (dezvoltare/testare): puppeteer-core + un Chrome/Chromium deja instalat pe
   // mașină — @sparticuz/chromium NU rulează corect în afara mediului AWS Lambda/Vercel.
-  puppeteer = require('puppeteer-core');
-  if (process.env.VERCEL) chromiumMod = require('@sparticuz/chromium');
+  puppeteer = await import('puppeteer-core');
+  if (process.env.VERCEL) chromiumMod = (await import('@sparticuz/chromium')).default;
 }
 
 async function launchBrowser() {
