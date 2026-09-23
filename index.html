@@ -549,6 +549,8 @@ tr:hover td{background:var(--surf2)}
    drept sursa, nu doar o secțiune oarecare printre celelalte. */
 .pe-acq-section{margin-bottom:18px;border-color:var(--acc)}
 .pe-acq-fields{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.pe-last-invoice{font-size:16px;color:var(--t2);margin-top:8px;padding:8px 12px;border-radius:10px;background:var(--acc-light)}
+.pe-last-invoice:empty{display:none}
 @media(max-width:860px){.pe-acq-fields{grid-template-columns:1fr 1fr}}
 /* „Alt furnizor" — trecut din bloc mereu vizibil în <details>, ca achiziția principală să rămână
    compactă (cerut direct — „e foarte plină pagina"); informația secundară nu mai concurează vizual
@@ -3566,6 +3568,7 @@ button.pcx-include-btn.included{border-color:var(--gr)}
           </div>
         </div>
         <div style="font-size:16px;color:#667085;margin-top:6px">furnizor extern · curs 5,07 RON/€ · restul câmpurilor se convertesc automat din acesta</div>
+        <div class="pe-last-invoice" id="pe-last-invoice-price"></div>
         <details class="pe-alt-supplier">
           <summary>Alt furnizor</summary>
           <div id="supplier-sources-list" style="display:flex;flex-direction:column;gap:7px"></div>
@@ -3892,6 +3895,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:459,text:'Fișa produsului → „Prețuri și TVA" — nou, cerut direct pe urma reorganizării de mai devreme: „📄 Ultimul preț din listare/factură", afișat sub prețul de achiziție. Diferă intenționat de „Preț achiziție cu TVA" (editabilă oricând din fișă): acest reper se mișcă STRICT la o reaprovizionare reală (Importă factură sau Adaugă stoc în masă), rămânând fix indiferent de câte ori corectezi manual prețul din formular — exact „prețul preluat din listare, stabil până la următoarea încărcare a produsului". Necesită migration_last_invoice_price.sql (coloane noi pe produse) — până rulezi migrarea, restul fișei funcționează neschimbat, doar acest rând nu apare încă.',date:'2026-09-24'},
   {n:458,text:'Fișa produsului → „Prețuri și TVA" — reorganizare cerută direct, „e foarte plină pagina": Preț achiziție trece dintr-o coloană printre altele într-o bandă unică, sus, pe toată lățimea tab-ului — sursa vizuală de la care rezultă tot restul, evidențiată cu un contur accent. Vânzare și Calculator rămân dedesubt, într-un rând separat, cu un indiciu „↳ rezultă din prețul de achiziție de mai sus" pe secțiunea Vânzare. „Alt furnizor" (informație secundară, folosită rar) trece dintr-un bloc mereu vizibil într-un `<details>` — colapsat implicit, la un click distanță, fără să mai aglomereze prima privire asupra prețului principal. Strict repoziționare/regândire vizuală — niciun calcul, câmp sau funcție nu s-a schimbat.',date:'2026-09-24'},
   {n:457,text:'Raport stoc — 2 completări cerute direct pe cardul de actualizare rapidă stoc. (1) Căutare produs (nume/SKU/cod intern) — găsește direct orice produs, în loc să navighezi rând cu rând prin toate; caută pe tot inventarul, nu doar în categoria curent filtrată (resetează filtrul automat dacă produsul găsit e în altă categorie). (2) „Ultima mișcare de stoc" — dată, sens (+/−) și sursă, direct sub „Stoc actual", ca să-ți dai seama dintr-o privire ce s-a întâmplat și dacă stocul chiar s-a actualizat recent — citit direct din activitate_stoc (nu din cache-ul local de 200 de intrări, care ar fi ratat produsele mai puțin active).',date:'2026-09-24'},
   {n:456,text:'Raport stoc — unealtă nouă „🔍 Compară catalog furnizor", cerută direct: lipești linkul unei pagini de categorie/catalog a unui furnizor (ex. Jumbo) și aplicația citește produsele de-acolo (browser headless, generic — nu doar Jumbo, orice grid de produse), le curăță prin AI (nume + preț, fără cod/etichete de marketing) și le potrivește cu stocul nostru (același prag de potrivire ≥70% folosit peste tot în aplicație). Rezultatul scoate în evidență STRICT ce lipsește din stocul nostru — cu poză, preț și link către pagina furnizorului — fiecare cu buton „+ Adaugă produs" (pre-completează numele și poza, tu completezi prețul de achiziție și restul). Produsele deja în stoc rămân doar un contor, nu o listă de citit.',date:'2026-09-23'},
@@ -6426,6 +6430,7 @@ function dbToP(r){
   return{id:r.id,name:r.name,sku:r.sku||'',ean:r.ean||'',internalCode:r.internal_code||productInternalCode(r.created_at,r.id),category:r.category||'',supplier:r.supplier||'',
     bought:r.bought||0,incomingQty:r.incoming_qty||0,sold:r.sold||0,minQty:r.min_qty||0,
     priceBuyTTC:r.price_buy_ttc||0,priceBuyPrevTTC:r.price_buy_prev_ttc||0,priceBuyChangedAt:r.price_buy_changed_at||'',priceBuyEur:r.price_buy_eur||0,tvaAcq:r.tva_acq??0.21,
+    lastInvoicePriceTTC:r.last_invoice_price_ttc||0,lastInvoicePriceAt:r.last_invoice_price_at||'',
     stockAddedAt:r.stock_added_at||'',lastStockAddedQty:r.last_stock_added_qty||0,
     priceSell:r.price_sell||0,priceEmag:r.price_emag||0,priceTrendyol:r.price_trendyol||0,priceRec:r.price_rec||0,img:r.img||'',
     colors:r.colors||'',sizes:r.sizes||'',material:r.material||'',dims:r.dims||'',notes:r.notes||'',
@@ -6451,6 +6456,12 @@ function pToDb(p){
   if(!String(p.img||'').startsWith('lazy-product://'))d.img=p.img||'';
   if(p.internalCode)d.internal_code=p.internalCode;
   if(p.ean)d.ean=p.ean;
+  // Preț „blocat" din ultima listare/factură — inclus STRICT când chiar e setat de un flux de
+  // reaprovizionare reală (applyInvoice/applyStockIntake, vezi acolo), niciodată de-aici implicit —
+  // o editare manuală simplă din fișa produsului (readProdFormData, fără aceste 2 câmpuri) trebuie să
+  // treacă pe lângă acest PATCH neatinsă, ca valoarea să rămână fixă exact cum s-a cerut.
+  if(p.lastInvoicePriceTTC)d.last_invoice_price_ttc=p.lastInvoicePriceTTC;
+  if(p.lastInvoicePriceAt)d.last_invoice_price_at=p.lastInvoicePriceAt;
   if(Array.isArray(p.supplierSources))d.supplier_sources=p.supplierSources.slice(0,5);
   return d;
 }
@@ -6468,13 +6479,13 @@ function dbSavedProductMatches(row,sent){
         return String(x?.supplier||'')===String(y?.supplier||'')&&String(x?.sku||'')===String(y?.sku||'')&&Math.abs((Number(x?.priceTTC)||0)-(Number(y?.priceTTC)||0))<0.001&&String(x?.url||'')===String(y?.url||'');
       });
     }
-    if((k==='price_buy_changed_at'||k==='stock_added_at'||k==='supplier_oos_since'||k==='archived_at')&&v)return Math.abs(new Date(row[k]).getTime()-new Date(v).getTime())<1000;
+    if((k==='price_buy_changed_at'||k==='stock_added_at'||k==='supplier_oos_since'||k==='archived_at'||k==='last_invoice_price_at')&&v)return Math.abs(new Date(row[k]).getTime()-new Date(v).getTime())<1000;
     return typeof v==='number'?Math.abs((Number(row[k])||0)-v)<0.001:String(row[k]??'')===String(v??'');
   });
 }
 function missingProductColumn(err){return String(err?.message||err).match(/Could not find the '([^']+)' column of 'produse'/i)?.[1]||'';}
 function missingProductValues(data,missing){
-  const map={incoming_qty:'incomingQty',price_emag:'priceEmag',price_trendyol:'priceTrendyol',tva_acq:'tvaAcq',internal_code:'internalCode',ean:'ean',price_buy_prev_ttc:'priceBuyPrevTTC',price_buy_changed_at:'priceBuyChangedAt',price_buy_eur:'priceBuyEur',stock_added_at:'stockAddedAt',last_stock_added_qty:'lastStockAddedQty',
+  const map={incoming_qty:'incomingQty',price_emag:'priceEmag',price_trendyol:'priceTrendyol',tva_acq:'tvaAcq',internal_code:'internalCode',ean:'ean',price_buy_prev_ttc:'priceBuyPrevTTC',price_buy_changed_at:'priceBuyChangedAt',price_buy_eur:'priceBuyEur',stock_added_at:'stockAddedAt',last_stock_added_qty:'lastStockAddedQty',last_invoice_price_ttc:'lastInvoicePriceTTC',last_invoice_price_at:'lastInvoicePriceAt',
     supplier_oos:'supplierOOS',supplier_oos_since:'supplierOOSSince',supplier_restock_eta:'supplierRestockEta',supplier_notify:'supplierNotify',supplier_notified:'supplierNotified',
     archived:'archived',archived_at:'archivedAt',
     easybox_l:'easyboxL',easybox_w:'easyboxW',easybox_t:'easyboxT',supplier_sources:'supplierSources'};
@@ -6879,7 +6890,7 @@ function renderGenStatusBadge(){
 // contează pentru gestiune (stoc, prețuri, nume) se încarcă separat de poze, garantat rapid.
 // Constantă la nivel de modul (nu doar locală în load()) — reutilizată și de liveRefreshProducts,
 // ca reîmprospătarea din fundal să vadă exact aceleași coloane ca încărcarea inițială.
-const PROD_COLS='id,name,sku,ean,internal_code,category,supplier,bought,incoming_qty,sold,min_qty,price_buy_ttc,price_buy_prev_ttc,price_buy_changed_at,tva_acq,stock_added_at,last_stock_added_qty,price_sell,price_emag,price_trendyol,price_rec,colors,sizes,material,dims,notes,supplier_sources,created_at,updated_at,supplier_oos,supplier_oos_since,supplier_restock_eta,supplier_notify,supplier_notified,archived,archived_at,easybox_l,easybox_w,easybox_t';
+const PROD_COLS='id,name,sku,ean,internal_code,category,supplier,bought,incoming_qty,sold,min_qty,price_buy_ttc,price_buy_prev_ttc,price_buy_changed_at,tva_acq,stock_added_at,last_stock_added_qty,last_invoice_price_ttc,last_invoice_price_at,price_sell,price_emag,price_trendyol,price_rec,colors,sizes,material,dims,notes,supplier_sources,created_at,updated_at,supplier_oos,supplier_oos_since,supplier_restock_eta,supplier_notify,supplier_notified,archived,archived_at,easybox_l,easybox_w,easybox_t';
 async function load(){
   showLoading('Se conectează la Supabase…');
   try{
@@ -14427,6 +14438,15 @@ function checkEditProductDeepLink(){
     if(id&&P.some(p=>String(p.id)===String(id)))openModal(Number(id));
   }catch(e){}
 }
+// Preț „blocat" din ultima listare/factură (cerut direct) — strict afișare, needitabil aici; se mișcă
+// doar din applyInvoice/applyStockIntake (reaprovizionare reală), nu dintr-o editare manuală a fișei.
+function renderLastInvoicePrice(p){
+  const el=document.getElementById('pe-last-invoice-price');
+  if(!el)return;
+  if(!p||!p.lastInvoicePriceTTC){el.textContent=p?'📄 Niciun preț din listare/factură încă — apare la prima reaprovizionare.':'';return;}
+  const dt=p.lastInvoicePriceAt?new Date(p.lastInvoicePriceAt).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric'}):'';
+  el.innerHTML=`📄 Ultimul preț din listare/factură: <strong>${p.lastInvoicePriceTTC.toFixed(2)} lei</strong>${dt?' · '+esc(dt):''} — rămâne fix până la următoarea încărcare de stoc a acestui produs.`;
+}
 async function openModal(id){
   editId=id||null;
   skuConflictCandidate=null;skuConflictCheckSeq++;
@@ -14473,6 +14493,7 @@ async function openModal(id){
   document.getElementById('f-pbuy-ttc').value=_ttc||'';
   document.getElementById('f-pbuy').value=_net>0?_net.toFixed(2):'';
   document.getElementById('f-tva-acq').value=String(_tva);
+  renderLastInvoicePrice(p);
   offerPriceManual={direct:!!p?.priceSell,emag:!!p?.priceEmag,trendyol:!!p?.priceTrendyol};
   document.getElementById('f-psell').value=p?.priceSell||'';
   document.getElementById('f-pemag').value=p?.priceEmag||'';
@@ -14630,6 +14651,9 @@ async function applyStockIntake(products,add,newCost,orderNumber,source){
       if(oldCost>0&&Math.abs(oldCost-newCost)>=0.005){data.priceBuyPrevTTC=oldCost;data.priceBuyChangedAt=new Date().toISOString();}
       const prices=calcPrices(newCost);
       data.priceBuyTTC=newCost;data.priceSell=prices.sell;data.priceEmag=prices.emag;data.priceTrendyol=prices.trendyol;data.priceRec=prices.rec;
+      // Vezi nota din applyInvoice — reaprovizionare reală, cu preț nou introdus explicit, mișcă și
+      // reperul "blocat" al ultimei liste/facturi.
+      data.lastInvoicePriceTTC=newCost;data.lastInvoicePriceAt=new Date().toISOString();
     }
     data.stockAddedAt=new Date().toISOString();data.lastStockAddedQty=add;
     await saveProdToDb(data,p.id);
@@ -21228,6 +21252,10 @@ async function applyInvoice(){
           const oldCost=oldCostBefore;
           if(oldCost>0&&Math.abs(oldCost-costRon)>=0.005){P[idx].priceBuyPrevTTC=oldCost;P[idx].priceBuyChangedAt=new Date().toISOString();}
           P[idx].priceBuyTTC=costRon;P[idx].priceSell=prices.sell;P[idx].priceEmag=prices.emag;P[idx].priceTrendyol=prices.trendyol;P[idx].priceRec=prices.rec;
+          // Preț „blocat" din ultima listare/factură (cerut direct) — spre deosebire de priceBuyTTC
+          // (poate fi corectat oricând manual din fișa produsului), acesta se mișcă STRICT aici, la o
+          // reaprovizionare reală, ca reper stabil până la următoarea factură/listare a produsului.
+          P[idx].lastInvoicePriceTTC=costRon;P[idx].lastInvoicePriceAt=new Date().toISOString();
           // Prețul original, în moneda facturii — dincolo de prețul RON deja salvat mai sus, cerut
           // explicit: prețul EUR (când factura era în EUR) rămâne vizibil ulterior în fișa produsului,
           // nu doar în timpul importului. Silențios, fără nicio confirmare — se întâmplă în fundal.
@@ -21248,7 +21276,7 @@ async function applyInvoice(){
         sku:item.sku||null,ean:item.ean||null,
         bought:item.qty,sold:0,minQty:0,
         stockAddedAt:stockStamp,lastStockAddedQty:item.qty,
-        priceBuyTTC:costRon,priceBuyEur:item.currency==='EUR'?item.priceBuy||0:0,tvaAcq:0.21,
+        priceBuyTTC:costRon,lastInvoicePriceTTC:costRon,lastInvoicePriceAt:stockStamp,priceBuyEur:item.currency==='EUR'?item.priceBuy||0:0,tvaAcq:0.21,
         priceSell:item.sellOverride!=null?item.sellOverride:prices.sell,priceEmag:prices.emag,priceTrendyol:prices.trendyol,priceRec:prices.rec,
         category:item.category||'',supplier:item.supplier||'',img:item.img||''
       };
