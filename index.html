@@ -3895,6 +3895,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:461,text:'Comenzi Platforme — cerut direct, pe urma arhivării unor produse sezoniere (Crăciun): dacă o comandă nouă se asociază cu un produs arhivat, apare acum un semnal clar „⚠️ arhivat" lângă statusul liniei, plus un contor „⚠️ Arhivate" în bara de numărători de sus, vizibil chiar și cu cardurile restrânse. Înainte, asocierea automată (după EAN/SKU/titlu) nu excludea produsele arhivate, dar nici nu semnala nimic — o comandă pe un produs arhivat trecea neobservată, la fel ca orice altă asociere reușită.',date:'2026-09-24'},
   {n:460,text:'Fișa produsului — câmpul „Furnizor" (și „Alt furnizor") sugerează acum, la tastare, furnizorii deja folosiți pe alte produse, cerut direct — nu mai trebuie retastat exact numele de fiecare dată. Un furnizor nou nu are nevoie de nicio salvare separată: din momentul în care apare pe un produs, devine el însuși sugestie pentru următoarea dată. Aceeași listă (deja existentă la „Comandă furnizor"/import factură) e acum populată dinamic din datele reale, nu doar cele 3 nume fixe de dinainte.',date:'2026-09-24'},
   {n:459,text:'Fișa produsului → „Prețuri și TVA" — nou, cerut direct pe urma reorganizării de mai devreme: „📄 Ultimul preț din listare/factură", afișat sub prețul de achiziție. Diferă intenționat de „Preț achiziție cu TVA" (editabilă oricând din fișă): acest reper se mișcă STRICT la o reaprovizionare reală (Importă factură sau Adaugă stoc în masă), rămânând fix indiferent de câte ori corectezi manual prețul din formular — exact „prețul preluat din listare, stabil până la următoarea încărcare a produsului". Necesită migration_last_invoice_price.sql (coloane noi pe produse) — până rulezi migrarea, restul fișei funcționează neschimbat, doar acest rând nu apare încă.',date:'2026-09-24'},
   {n:458,text:'Fișa produsului → „Prețuri și TVA" — reorganizare cerută direct, „e foarte plină pagina": Preț achiziție trece dintr-o coloană printre altele într-o bandă unică, sus, pe toată lățimea tab-ului — sursa vizuală de la care rezultă tot restul, evidențiată cu un contur accent. Vânzare și Calculator rămân dedesubt, într-un rând separat, cu un indiciu „↳ rezultă din prețul de achiziție de mai sus" pe secțiunea Vânzare. „Alt furnizor" (informație secundară, folosită rar) trece dintr-un bloc mereu vizibil într-un `<details>` — colapsat implicit, la un click distanță, fără să mai aglomereze prima privire asupra prețului principal. Strict repoziționare/regândire vizuală — niciun calcul, câmp sau funcție nu s-a schimbat.',date:'2026-09-24'},
@@ -17770,6 +17771,11 @@ function pcxLineHtml(idx,groupIdxs){
   else if(it.viaCode)matchTag=`<span style="color:var(--gr);font-weight:700">✓ Cod produs</span>`;
   else if(it.produsId)matchTag=`<span style="color:var(--gr);font-weight:700">↑ ${Math.round(it.score*100)}% potrivire</span>`;
   else matchTag=`<span style="color:var(--rd);font-weight:700">⚠ fără produs</span>`;
+  // Produs arhivat regăsit într-o comandă nouă (cerut direct) — asocierea automată (EAN/SKU/nume) nu
+  // exclude produsele arhivate, deci o comandă pe un produs sezonier arhivat (ex. Crăciun) s-ar asocia
+  // altfel tăcut, la fel ca oricare alt produs activ — fără niciun semnal că cineva ar trebui să decidă
+  // dacă îl dezarhivează sau nu, înainte de a include comanda.
+  if(p?.archived)matchTag+=` <span style="color:var(--or);font-weight:700" title="Produsul asociat e arhivat — dezarhivează-l din fișa lui dacă vrei să continui vânzarea">⚠️ arhivat</span>`;
   // SKU/Cod intern/PNK/Cod produs — stivuite, fiecare pe rândul lui (cerut direct), nu înșirate pe un
   // singur rând cu " · " ca înainte; SKU și PNK au acum și propriul buton de copiere (cerut direct).
   const codeLines=[];
@@ -17953,11 +17959,14 @@ function pcxRenderOrders(){
   const total=pcImpParsed.length;
   const byPlat={};pcImpParsed.forEach(x=>{const pl=x.platforma||pcImpPlatforma;byPlat[pl]=(byPlat[pl]||0)+1;});
   const unmatched=pcImpParsed.filter(x=>!x.produsId&&!x.newProduct).length;
+  // Produse arhivate regăsite în comandă (cerut direct) — contor separat, vizibil chiar și cu cardurile
+  // restrânse, ca semnalul să nu depindă de a răsfoi manual fiecare comandă expandată.
+  const archivedCount=pcImpParsed.filter(x=>x.produsId&&P.find(p=>p.id===x.produsId)?.archived).length;
   // Cerut direct — ca omul să poată compara rapid „câte am inclus” cu „câte AWB-uri am”, fără să numere
   // manual cardurile cu eticheta „Inclus”.
   const includedCount=pcImpParsed.filter(x=>x.include).length;
   const counters=document.getElementById('pcx-counters');
-  if(counters)counters.innerHTML=`<span class="pcx-counter">Total <b>${total}</b></span>${Object.entries(byPlat).map(([pl,c])=>`<span class="pcx-counter">${esc(pcomPlatLabel(pl))} <b>${c}</b></span>`).join('')}<span class="pcx-counter" style="color:var(--gr);border-color:rgba(34,197,94,.35)">✓ Incluse <b>${includedCount}</b></span>${unmatched?`<span class="pcx-counter" style="color:var(--rd);border-color:rgba(240,68,56,.3)">⚠ Fără produs <b>${unmatched}</b></span>`:''}`;
+  if(counters)counters.innerHTML=`<span class="pcx-counter">Total <b>${total}</b></span>${Object.entries(byPlat).map(([pl,c])=>`<span class="pcx-counter">${esc(pcomPlatLabel(pl))} <b>${c}</b></span>`).join('')}<span class="pcx-counter" style="color:var(--gr);border-color:rgba(34,197,94,.35)">✓ Incluse <b>${includedCount}</b></span>${unmatched?`<span class="pcx-counter" style="color:var(--rd);border-color:rgba(240,68,56,.3)">⚠ Fără produs <b>${unmatched}</b></span>`:''}${archivedCount?`<span class="pcx-counter" style="color:var(--or);border-color:rgba(247,144,9,.35)">⚠️ Arhivate <b>${archivedCount}</b></span>`:''}`;
   // Bară de acțiuni sticky — reflectă EXACT aceleași condiții ca updPcomImportInfo()/#pcmi-foot,
   // butoanele apelează exact aceleași handlere (resetPcomImportPage/pcomAiMatchUnmatched/applyPcomImport).
   const bar=document.getElementById('pcx-stickybar');
