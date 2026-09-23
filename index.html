@@ -2470,6 +2470,15 @@ button.pcx-include-btn.included{border-color:var(--gr)}
 <!-- PAGE JURNAL -->
 <!-- PAGE RAPORT STOC -->
 <div id="page-raport" class="page"><div class="wrap">
+  <div class="card" style="padding:1rem 1.25rem;margin-bottom:1rem">
+    <div class="sec" style="margin-top:0">🔍 Compară catalog furnizor</div>
+    <div style="font-size:22px;color:var(--t3);margin-bottom:8px">Lipește linkul unei pagini de categorie/catalog a unui furnizor (ex. Jumbo) — citim produsele de-acolo și îți arătăm ce NU avem încă în stoc.</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      <input type="text" id="rpt-catalog-url" placeholder="https://www.e-jumbo.ro/ro/..." style="flex:1;min-width:280px;font-size:18px;padding:8px 10px;border-radius:8px;border:1px solid var(--b1);background:var(--bg2);color:var(--t1)" onkeydown="if(event.key==='Enter')scanSupplierCatalog()">
+      <button type="button" class="btn btn-sm" id="rpt-catalog-scan-btn" style="background:var(--acc);color:var(--acc-fg)" onclick="scanSupplierCatalog()">🔍 Compară cu stocul nostru</button>
+    </div>
+    <div id="rpt-catalog-results"></div>
+  </div>
   <div class="card" id="rpt-furnizor-card" style="padding:1rem 1.25rem;margin-bottom:1rem;display:none">
     <div class="sec" style="margin-top:0">📥 Marfă așteptată de la furnizor</div>
     <div style="font-size:22px;color:var(--t3);margin-bottom:8px">Comenzi plasate la furnizor, încă pe drum — urmărirea sosirii (✗ Nu a ajuns / ◐ A ajuns) se face din Staff, tab „Marfă furnizor". Aici e doar o privire de ansamblu.</div>
@@ -3844,6 +3853,9 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:456,text:'Raport stoc — unealtă nouă „🔍 Compară catalog furnizor", cerută direct: lipești linkul unei pagini de categorie/catalog a unui furnizor (ex. Jumbo) și aplicația citește produsele de-acolo (browser headless, generic — nu doar Jumbo, orice grid de produse), le curăță prin AI (nume + preț, fără cod/etichete de marketing) și le potrivește cu stocul nostru (același prag de potrivire ≥70% folosit peste tot în aplicație). Rezultatul scoate în evidență STRICT ce lipsește din stocul nostru — cu poză, preț și link către pagina furnizorului — fiecare cu buton „+ Adaugă produs" (pre-completează numele și poza, tu completezi prețul de achiziție și restul). Produsele deja în stoc rămân doar un contor, nu o listă de citit.',date:'2026-09-23'},
+  {n:455,text:'Cerute direct, 2 completări. (1) Comenzi Platforme — previzualizarea comenzilor arată acum și un contor „✓ Incluse", lângă Total/eMAG/Trendyol, ca să poți compara rapid câte ai selectat cu câte AWB-uri ai. (2) Staff — cardul de comandă arată acum numele curierului (Sameday/DPD/FAN Courier/GLS/Cargus…) direct înaintea numărului AWB, nu doar codul brut. Curierul se reține automat la asociere, dedus din formatul exact al etichetei (verificat pe date reale, inclusiv un caz în care o etichetă DPD/Trendyol se putea confunda cu formatul generic — acum distinsă corect); pe comenzi vechi, asociate înainte de această modificare, rămâne doar „AWB", fără curier. Necesită migration_awb_courier.sql.',date:'2026-09-23'},
+  {n:454,text:'🖨️ PDF AWB comenzi incluse — bug real reparat, raportat direct: butonul refuza toate cele 11 comenzi eMAG deja incluse cu „nu au încă pagina PDF salvată", deși toate aveau AWB corect. Cauza: „Citește din dosarul AWB-uri de pe Mac" (spre deosebire de selectarea manuală de PDF-uri) nu reținea NICIODATĂ numărul paginii din fișierul sursă — awb_source_page rămânea mereu gol, oricâte comenzi erau incluse. Reparat și la creare directă de comandă dintr-o etichetă (Vinted/GLS fără comandă, eMAG găsit după număr — vezi #452/#450), care pierdea aceeași informație. 13 comenzi deja afectate din producție au fost corectate direct (pagina confirmată cert pentru fiecare — fie fișier sursă cu o singură pagină, fie potrivire exactă după codul AWB extras din fiecare pagină a unui PDF cu mai multe etichete).',date:'2026-09-23'},
   {n:453,text:'Asociază AWB-uri — reparație pentru un caz real, raportat direct: un PDF ajuns din greșeală în arhiva zilei (Desktop/AWB-uri/procesate/<azi>), nu în Desktop/AWB-uri, făcea ca „Citește din dosar" să iasă complet gol, fără niciun indiciu de ce. Acum, dacă dosarul principal e gol dar arhiva de azi are fișiere, apare un avertisment explicit cu calea exactă — nu se recitesc automat fișierele din arhivă (protecția împotriva recitirii rămâne neatinsă), doar se arată clar unde s-au rătăcit. Necesită conectorul local eMAG actualizat (versiunea 11).',date:'2026-09-23'},
   {n:452,text:'Asociază AWB-uri — cerut direct: „când avem AWB adăugate fără comandă, să caute comanda și în finalizate". O etichetă eMAG citită din dosar a cărei comandă nu există încă local (AWB deja generat de eMAG a mutat comanda din „Nou"/„În lucru" în „Pregătită"/„Finalizată", deci nu mai apare la „Adu comenzi eMAG", care caută intenționat fără istoric) declanșează acum automat o căutare directă după numărul comenzii, pe toate piețele eMAG, indiferent de status — dacă o găsește, o adaugă ca linie nouă în „Comenzi", cu AWB deja completat, gata de „✓ Inclus"/„Aplică import" ca să scadă și stocul normal. Necesită conectorul local eMAG actualizat (versiunea 10, rută nouă /order-by-id).',date:'2026-09-23'},
   {n:451,text:'Comenzi Platforme — card nou „↺ Reactivează comandă finalizată": cauți după numărul comenzii (eMAG/Trendyol/Vinted) și, dacă a fost deja marcată împachetată/finalizată în Staff, o poți trimite din nou activă, gata de reprocesat. Funcționează pe toată comanda (toate produsele ei), nu doar pe o linie. Dacă a ieșit deja din fereastra activă a Staff (mai veche decât ultimul prag de coadă de la 22:00), reactivarea o aduce automat înapoi în fereastră — fără să atingă data reală a comenzii, deci Profit vânzări/Total încasări nu sunt afectate.',date:'2026-09-23'},
@@ -6553,7 +6565,7 @@ function dbToPcom(r){
     efecteAplicate:r.efecte_aplicate!==false,
     impachetat:!!r.impachetat,impachetatAt:r.impachetat_at||'',faraStoc:!!r.fara_stoc,faraStocAt:r.fara_stoc_at||'',
     awb:r.awb||'',staffBlocked:!!r.staff_blocked,staffIssueType:r.staff_issue_type||'',staffIssueNote:r.staff_issue_note||'',staffIssueResolved:!!r.staff_issue_resolved,
-    anulata:!!r.anulata,motivAnulare:r.motiv_anulare||'',staffInclusAt:r.staff_inclus_at||'',staffFinalizatAt:r.staff_finalizat_at||'',awbSourceFile:r.awb_source_file||'',awbSourcePage:r.awb_source_page||null};
+    anulata:!!r.anulata,motivAnulare:r.motiv_anulare||'',staffInclusAt:r.staff_inclus_at||'',staffFinalizatAt:r.staff_finalizat_at||'',awbSourceFile:r.awb_source_file||'',awbSourcePage:r.awb_source_page||null,awbCourier:r.awb_courier||''};
 }
 function pcomToDb(o){
   return{platforma:o.platforma,data:o.data,comanda_id:o.comandaId||null,pnk:o.pnk||null,tara:o.tara||null,cod_produs:o.codProdus||null,
@@ -6563,7 +6575,7 @@ function pcomToDb(o){
     moneda:o.moneda||'RON',pret_total_cu_tva_ron:o.pretTotalCuTvaRon||0,
     profit_estimat:o.profitEstimat||0,marja_estimata:o.marjaEstimata||0,import_batch_id:o.importBatchId||null,
     awb:o.awb||null,staff_inclus_at:o.staffInclusAt||null,staff_finalizat_at:o.staffFinalizatAt||null,
-    awb_source_file:o.awbSourceFile||null,awb_source_page:o.awbSourcePage||null};
+    awb_source_file:o.awbSourceFile||null,awb_source_page:o.awbSourcePage||null,awb_courier:o.awbCourier||null};
 }
 // eMAG operează pe 3 piețe (RO/HU/BG) — fișierul de comenzi nu are o coloană explicită de țară,
 // dar moneda o dă indirect: RON→România, HUF→Ungaria, EUR→Bulgaria (care a adoptat euro în 2026).
@@ -16343,14 +16355,14 @@ async function importEmagApiOrders(silent=false){
 // comanda tot există, doar în alt status. Caută direct după număr, pe toate piețele eMAG, indiferent de
 // status (rută nouă /order-by-id pe conectorul local), și o adaugă ca linie nouă de import, cu AWB deja
 // completat — exact ca o comandă adusă normal, gata de „✓ Inclus”/„Aplică import” ca să scadă stocul.
-async function pcomFetchAndCreateEmagOrderById(comandaId,awb){
+async function pcomFetchAndCreateEmagOrderById(comandaId,awb,file,page,courier){
   if(pcImpParsed.some(x=>x.platforma==='emag'&&x.comandaId===comandaId))return 0;
   let resp;
   try{resp=await localEmagJson('/order-by-id',{orderId:comandaId},20000);}
   catch(e){console.warn('Căutare eMAG după număr eșuată pentru '+comandaId+':',e);return 0;}
   if(!resp?.found||!Array.isArray(resp.lines)||!resp.lines.length)return 0;
   resp.lines.forEach(raw=>{
-    pcImpParsed.push({...pcomEmagMatchLine(raw),_source:'api',awb:awb||''});
+    pcImpParsed.push({...pcomEmagMatchLine(raw),_source:'api',awb:awb||'',awbSourceFile:file||'',awbSourcePage:page||null,awbCourier:courier||''});
   });
   return resp.lines.length;
 }
@@ -16897,8 +16909,15 @@ async function commitPcomLine(idx){
     // AWB-uri/setPcomAwb), deci acest pas nu are niciun efect asupra fluxului lor existent.
     if(it.awb&&it._committedId){
       try{
-        await dbPatch(`platforma_comenzi?id=eq.${it._committedId}`,{awb:it.awb});
-        const created=PCOM.find(o=>o.id===it._committedId);if(created)created.awb=it.awb;
+        // awbSourceFile/awbSourcePage/awbCourier — prezente doar pe liniile create direct dintr-o
+        // etichetă AWB deja citită (Vinted/GLS fără comandă, sau eMAG găsit după număr — vezi
+        // pcomCreateVintedLineFromLabel/pcomFetchAndCreateEmagOrderById): fără ele, „🖨️ PDF AWB comenzi
+        // incluse” nu găsește niciodată pagina sursă pentru aceste comenzi, deși AWB-ul e corect (bug
+        // real, raportat direct), iar Staff nu poate arăta numele curierului pe card.
+        const src=it.awbSourceFile?{awb_source_file:it.awbSourceFile,awb_source_page:it.awbSourcePage||null}:{};
+        await patchAwbWithSource(`id=eq.${it._committedId}`,{awb:it.awb,...src,awb_courier:it.awbCourier||null});
+        const created=PCOM.find(o=>o.id===it._committedId);
+        if(created)Object.assign(created,{awb:it.awb,awbCourier:it.awbCourier||'',...(it.awbSourceFile?{awbSourceFile:it.awbSourceFile,awbSourcePage:it.awbSourcePage||null}:{})});
       }catch(e){console.warn('Nu am putut salva codul/AWB la creare:',e);}
     }
     // Învață asocierea — omul tocmai a confirmat că potrivirea e corectă, la fel ca la Aplică import.
@@ -17865,8 +17884,11 @@ function pcxRenderOrders(){
   const total=pcImpParsed.length;
   const byPlat={};pcImpParsed.forEach(x=>{const pl=x.platforma||pcImpPlatforma;byPlat[pl]=(byPlat[pl]||0)+1;});
   const unmatched=pcImpParsed.filter(x=>!x.produsId&&!x.newProduct).length;
+  // Cerut direct — ca omul să poată compara rapid „câte am inclus” cu „câte AWB-uri am”, fără să numere
+  // manual cardurile cu eticheta „Inclus”.
+  const includedCount=pcImpParsed.filter(x=>x.include).length;
   const counters=document.getElementById('pcx-counters');
-  if(counters)counters.innerHTML=`<span class="pcx-counter">Total <b>${total}</b></span>${Object.entries(byPlat).map(([pl,c])=>`<span class="pcx-counter">${esc(pcomPlatLabel(pl))} <b>${c}</b></span>`).join('')}${unmatched?`<span class="pcx-counter" style="color:var(--rd);border-color:rgba(240,68,56,.3)">⚠ Fără produs <b>${unmatched}</b></span>`:''}`;
+  if(counters)counters.innerHTML=`<span class="pcx-counter">Total <b>${total}</b></span>${Object.entries(byPlat).map(([pl,c])=>`<span class="pcx-counter">${esc(pcomPlatLabel(pl))} <b>${c}</b></span>`).join('')}<span class="pcx-counter" style="color:var(--gr);border-color:rgba(34,197,94,.35)">✓ Incluse <b>${includedCount}</b></span>${unmatched?`<span class="pcx-counter" style="color:var(--rd);border-color:rgba(240,68,56,.3)">⚠ Fără produs <b>${unmatched}</b></span>`:''}`;
   // Bară de acțiuni sticky — reflectă EXACT aceleași condiții ca updPcomImportInfo()/#pcmi-foot,
   // butoanele apelează exact aceleași handlere (resetPcomImportPage/pcomAiMatchUnmatched/applyPcomImport).
   const bar=document.getElementById('pcx-stickybar');
@@ -18753,6 +18775,87 @@ function addProductFromMissing(id){
   openModal(null);
   document.getElementById('f-name').value=cand.titluExtern.slice(0,240);
   toast('Completează prețul/stocul/poza, apoi Salvează — se leagă automat de listarea eMAG/Trendyol');
+}
+// „Compară catalog furnizor" (Raport stoc) — cerut direct: „vreau să comparăm sistemul nostru cu ce e
+// pe pagina asta [Jumbo] sau alta, să ne menționeze ce lipsește din sistem". Citește pagina printr-un
+// browser headless generic (api/research-headless.js, acțiunea scan_catalog — NU selectoare specifice
+// unui singur site, funcționează pe orice grid de produse), apoi curăță textul brut al fiecărui card
+// prin AI (nume + preț, fără cod/etichete de marketing) și potrivește fiecare nume cu inventarul local
+// (findExistingProduct, ACELAȘI prag ≥70% folosit peste tot în aplicație). Doar produsele nepotrivite
+// (lipsă din stoc) sunt scoase în evidență — restul rămân doar un contor, nu o listă lungă de citit.
+const CATALOG_SCAN_CLEANUP_SCHEMA={
+  type:'object',
+  properties:{
+    produse:{
+      type:'array',
+      description:'EXACT aceeași ordine și număr de elemente ca lista primită — un rezultat curățat per card, în aceeași poziție, niciunul omis.',
+      items:{
+        type:'object',
+        properties:{
+          nume:{type:'string',description:'Numele curat al produsului — fără cod, fără preț, fără etichete de marketing (Nou/Reducere/Coming Soon/puncte de fidelitate etc.)'},
+          pret:{type:['number','null'],description:'Prețul, doar numărul (fără monedă). null dacă nu apare clar în text.'}
+        },
+        required:['nume','pret'],
+        additionalProperties:false
+      }
+    }
+  },
+  required:['produse'],
+  additionalProperties:false
+};
+let catalogScanResults=[];
+async function scanSupplierCatalog(){
+  const urlInp=document.getElementById('rpt-catalog-url');
+  const url=(urlInp?.value||'').trim();
+  if(!url||!/^https?:\/\//i.test(url)){toast('Introdu un link valid (începe cu http:// sau https://)','err');return;}
+  const btn=document.getElementById('rpt-catalog-scan-btn');
+  const box=document.getElementById('rpt-catalog-results');
+  if(!box)return;
+  if(btn){btn.disabled=true;btn.textContent='⏳ Se citește pagina…';}
+  box.innerHTML='';
+  try{
+    const resp=await fetch('/api/research-headless',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'scan_catalog',url})});
+    const data=await resp.json();
+    if(!resp.ok)throw new Error(data.error||'Eroare la citirea paginii');
+    if(!data.items?.length)throw new Error('Nu am găsit o listă de produse pe această pagină — poate fi blocată pentru citire automată, sau structura nu e recunoscută.');
+    if(btn)btn.textContent='⏳ Se identifică produsele…';
+    const prompt=`Mai jos e o listă de "carduri" brute extrase automat de pe o pagină de produse a unui furnizor (magazin online). Fiecare card conține text amestecat: numele produsului, uneori un cod intern, un preț, etichete de marketing ("Nou", "Reducere", "Coming Soon", puncte de fidelitate etc.). Pentru FIECARE card, în ACEEAȘI ORDINE, extrage DOAR numele curat al produsului (fără cod, fără preț, fără etichete) și prețul (doar numărul, fără monedă).\n\n${data.items.map((it,i)=>`${i+1}. ${it.text}`).join('\n')}`;
+    const aiResp=await callAI([{role:'user',content:prompt}],'Ești expert în curățarea textului brut extras automat de pe pagini de produse ale unor magazine online.',4000,'analysis',CATALOG_SCAN_CLEANUP_SCHEMA,'catalog_scan_cleanup');
+    const parsed=JSON.parse(aiResp);
+    const produse=Array.isArray(parsed.produse)?parsed.produse:[];
+    catalogScanResults=data.items.map((raw,i)=>{
+      const clean=produse[i]||{};
+      const name=(clean.nume||'').trim()||raw.text.slice(0,80);
+      const match=findExistingProduct({name});
+      return{name,price:clean.pret??null,image:raw.image,link:raw.link,inStock:!!match,matchName:match?.product?.name||'',score:match?.score||0};
+    });
+    renderCatalogScanResults();
+  }catch(e){
+    box.innerHTML=`<div style="color:var(--rd);font-size:18px">Eroare: ${esc(e.message||e)}</div>`;
+  }
+  if(btn){btn.disabled=false;btn.textContent='🔍 Compară cu stocul nostru';}
+}
+function renderCatalogScanResults(){
+  const box=document.getElementById('rpt-catalog-results');if(!box)return;
+  if(!catalogScanResults.length){box.innerHTML='';return;}
+  const missing=catalogScanResults.filter(x=>!x.inStock);
+  const found=catalogScanResults.filter(x=>x.inStock);
+  const missingHtml=missing.map(it=>{
+    const idx=catalogScanResults.indexOf(it);
+    const priceLbl=it.price?` <span style="color:var(--t3)">· ${(typeof it.price==='number'?it.price.toFixed(2):it.price)} Lei</span>`:'';
+    const linkLbl=it.link?` <a href="${esc(it.link)}" target="_blank" rel="noopener" style="color:var(--acc);margin-left:6px;font-size:14px">🔗 vezi</a>`:'';
+    const imgHtml=it.image?`<img src="${esc(it.image)}" style="width:44px;height:44px;object-fit:contain;border-radius:6px;background:var(--surf2);flex:none" onerror="this.style.display='none'">`:'';
+    return`<div class="pcom-batch-row"><div class="pcom-batch-info" style="display:flex;gap:10px;align-items:center">${imgHtml}<div><strong>${esc(it.name)}</strong>${priceLbl}${linkLbl}</div></div><button type="button" class="btn btn-sm" style="color:var(--gr);border-color:var(--gr)" onclick="openAddProductFromCatalogScan(${idx})">+ Adaugă produs</button></div>`;
+  }).join('');
+  box.innerHTML=`<div style="font-size:17px;font-weight:700;margin-bottom:10px">${missing.length} ${missing.length===1?'produs lipsă':'produse lipsă'} din stocul nostru <span style="color:var(--t3);font-weight:400">· ${found.length} ${found.length===1?'îl avem deja':'le avem deja'}</span></div>${missingHtml||'<div style="color:var(--t3);font-size:16px">Toate produsele găsite pe această pagină sunt deja în stocul nostru ✓</div>'}`;
+}
+function openAddProductFromCatalogScan(idx){
+  const it=catalogScanResults[idx];if(!it)return;
+  openModal(null);
+  document.getElementById('f-name').value=(it.name||'').slice(0,240);
+  if(it.image){showPrev(it.image);curImg=it.image;document.getElementById('f-imgurl').value=it.image;document.getElementById('ai-img-btn').disabled=false;}
+  suggestCatFromName();
+  toast('Completează prețul de achiziție și restul detaliilor, apoi Salvează');
 }
 async function deleteMissingCandidate(id){
   if(!confirm('Elimini această listare din lista de așteptare? Nu se creează niciun produs.'))return;
@@ -19856,18 +19959,25 @@ let awbEmagLookupFileNames=[];
 const AWB_CANCEL_RE=/\b(CANCELED|CANCELLED|ANULAT|STORNAT|VOID)/i;
 function parseAwbLabelText(text){
   const canceled=AWB_CANCEL_RE.test(text);
+  // Curierul e reținut de-acum pe fiecare format (cerut direct — Staff arată numele curierului direct
+  // pe card, înainte de AWB). Acest prim format („AWB: X / Continut: Y") NU e strict FAN Courier —
+  // verificat direct pe date reale: o etichetă DPD/Trendyol (Unknown-78.pdf) conține AMBELE rânduri
+  // (AWB: și Continut:), deci acest branch câștigă înaintea celui specific DPD de mai jos. Verificăm
+  // deci și semnătura distinctivă DPD („N of M for X", vezi dpdAwbM) — dacă apare și ea, chiar e DPD;
+  // altfel rămâne fără etichetă (mai bine necunoscut decât greșit).
   const awbM=text.match(/AWB:\s*(\d+)/);
   const contM=text.match(/Continut:\s*(\d+)/);
-  if(awbM&&contM)return canceled?{courierCanceled:true,awb:awbM[1],comandaId:contM[1]}:{awb:awbM[1],comandaId:contM[1]};
+  const dpdSignature=/\d+\s+of\s+\d+\s+for\s+(?:\d\s*){9,14}/.test(text);
+  if(awbM&&contM)return canceled?{courierCanceled:true,awb:awbM[1],comandaId:contM[1]}:{awb:awbM[1],comandaId:contM[1],...(dpdSignature?{courier:'DPD'}:{})};
   const sdM=text.match(/^([A-Za-z0-9]{8,25})_(\d{6,})_\d+$/m);
-  if(sdM)return canceled?{courierCanceled:true,awb:sdM[1],comandaId:sdM[2]}:{awb:sdM[1],comandaId:sdM[2]};
+  if(sdM)return canceled?{courierCanceled:true,awb:sdM[1],comandaId:sdM[2]}:{awb:sdM[1],comandaId:sdM[2],courier:'Sameday'};
   // Sameday — „notă de transport" clasică (ramburs/COD), format diferit de eticheta easybox de mai sus
   // (găsit direct pe date reale, 7 etichete nerecunoscute până acum — vezi raport direct „AWB-uri puse
   // în dosar, ce se întâmplă?"): AWB-ul complet (cu sufixul „001") e al doilea cod de pe rândul „Nota
   // transport: X / Y", iar comanda_id e la „Referinta expeditor: Nr. Comanda: X;".
   const notaM=text.match(/Nota transport:\s*[A-Za-z0-9]+\s*\/\s*([A-Za-z0-9]{8,25})/);
   const comM=text.match(/Nr\.\s*Comanda:\s*(\d+)/);
-  if(notaM&&comM)return canceled?{courierCanceled:true,awb:notaM[1],comandaId:comM[1]}:{awb:notaM[1],comandaId:comM[1]};
+  if(notaM&&comM)return canceled?{courierCanceled:true,awb:notaM[1],comandaId:comM[1]}:{awb:notaM[1],comandaId:comM[1],courier:'Sameday'};
   // GLS (crossborder eMAG, ex. Ungaria) — comanda_id e pe rândul „ID=X;” (confirmat pe date reale).
   // Codul de urmărire (AWB) nu are o etichetă proprie ca la celelalte formate — layout-ul complex al
   // etichetei (2 coloane, cod de bare rotit) face ca PDF.js să-l „rupă" uneori pe mai multe rânduri, deci
@@ -19882,7 +19992,7 @@ function parseAwbLabelText(text){
   if(idM){
     const withoutNoise=text.replace(/\+\d{9,15}/g,'').replace(/ID=\d+[;;]/,'');
     const awbM=withoutNoise.match(/\b(\d{10,14})\b/);
-    if(awbM)return canceled?{courierCanceled:true,awb:awbM[1],comandaId:idM[1]}:{awb:awbM[1],comandaId:idM[1]};
+    if(awbM)return canceled?{courierCanceled:true,awb:awbM[1],comandaId:idM[1]}:{awb:awbM[1],comandaId:idM[1],courier:'GLS'};
   }
   // DPD (Bulgaria/CEE crossborder, Trendyol) — al 5-lea format, găsit direct pe o etichetă reală
   // amestecată în același PDF cu etichete FAN Courier (raportat direct: „de ce se sar AWB-urile alea").
@@ -19892,7 +20002,7 @@ function parseAwbLabelText(text){
   // platforma_comenzi — produsul de pe etichetă se potrivește exact cu comanda găsită după acest cod).
   const dpdAwbM=text.match(/\d+\s+of\s+\d+\s+for\s+((?:\d\s*){9,14})/);
   const dpdNoteM=text.match(/note:\s*(\d{6,})/);
-  if(dpdAwbM&&dpdNoteM)return canceled?{courierCanceled:true,awb:dpdAwbM[1].replace(/\s+/g,''),comandaId:dpdNoteM[1]}:{awb:dpdAwbM[1].replace(/\s+/g,''),comandaId:dpdNoteM[1]};
+  if(dpdAwbM&&dpdNoteM)return canceled?{courierCanceled:true,awb:dpdAwbM[1].replace(/\s+/g,''),comandaId:dpdNoteM[1]}:{awb:dpdAwbM[1].replace(/\s+/g,''),comandaId:dpdNoteM[1],courier:'DPD'};
   // DPD anulat de curier — raportat direct („comenzile nu apar în platformă"): eticheta e recunoscută
   // ca format DPD (codul de urmărire se citește normal), dar rândul „note:” e complet gol — fără
   // comanda_id, imposibil de asociat automat. Verificat pe 3 etichete reale: toate 3 aveau „CANCELED”
@@ -19908,7 +20018,7 @@ function parseAwbLabelText(text){
   // produsul comenzii găsite în platforma_comenzi). Rezolvabil DOAR la citirea din dosar (readAwbFolderPdfs,
   // unde fiecare fișier are propriul nume) — NU la un PDF ales manual cu mai multe pagini (handleAwbPdfFile),
   // unde o pagină individuală nu are niciun nume propriu de folosit.
-  if(dpdAwbM)return{dpdNeedsFilenameId:true,awb:dpdAwbM[1].replace(/\s+/g,'')};
+  if(dpdAwbM)return{dpdNeedsFilenameId:true,awb:dpdAwbM[1].replace(/\s+/g,''),courier:'DPD'};
   // Vinted — etichetă digitală descărcată direct (al 6-lea format, cerut direct, cu exemple reale
   // trimise: „Vinted-Digital-Label-*.pdf”, curieri diferiți — Cargus, Sameday — pe ACELAȘI șablon).
   // Spre deosebire de GLS (doar un cod text, fără PDF), aici Vinted generează un PDF complet, cu QR,
@@ -19987,7 +20097,8 @@ function pcomCreateVintedLineFromLabel(p){
     clientNume:p.destinatar||'',titluExtern:p.produs,vintedImg:'',
     cantitate:1,suggestedCantitate:0,pretFaraTva:0,pretTotalCuTva:0,moneda:'RON',
     produsId:match.product.id,score:match.score,viaPnk:false,viaTitle:false,viaCode:false,
-    include:false,awb:p.awb,_source:'vinted',_fromAwbLabel:true});
+    include:false,awb:p.awb,_source:'vinted',_fromAwbLabel:true,
+    awbSourceFile:p.file||'',awbSourcePage:p.page||null,awbCourier:p.courier||''});
   return comandaId;
 }
 async function handleAwbPdfFile(ev){
@@ -20127,7 +20238,7 @@ async function readAwbFolderPdfs(){
           // Vinted nouă în previzualizare, în loc să rămână doar o eroare „asociază manual”. Fișierul se
           // arhivează abia la applyAwbAssociation (ACELAȘI moment ca restul), nu aici.
           if(p&&p.vintedDigitalLabel&&!p.comandaId&&!p.vintedAmbiguous){
-            if(pcomCreateVintedLineFromLabel(p)){awbCreatedVintedFileNames.push(f.name);return;}
+            if(pcomCreateVintedLineFromLabel({...p,file:f.name,page:i+1})){awbCreatedVintedFileNames.push(f.name);return;}
           }
           // DPD activ fără „note:" — singura legătură rămasă e numele fișierului, deja "<comandaId>_
           // DPD_<awb>.pdf" (confirmat pe 2 etichete reale: numărul din nume corespunde exact clientul +
@@ -20137,7 +20248,11 @@ async function readAwbFolderPdfs(){
             p=fileIdM?{...p,comandaId:fileIdM[1]}:null;
           }
           if(p&&p.courierCanceled)awbCanceledPages.push({label:`${f.name} p.${i+1}`,awb:p.awb,comandaId:p.comandaId});
-          else if(p)pairs.push({...p,file:f.name});
+          // Bug real, raportat direct („PDF AWB comenzi incluse” refuza toate comenzile deja incluse,
+          // deși aveau AWB): spre deosebire de handleAwbPdfFile (selectare manuală), bucla asta nu reținea
+          // NICIODATĂ numărul paginii — awb_source_page rămânea mereu null, deci activeAwbPrintOrders nu
+          // găsea niciodată o pagină sursă de tipărit, oricâte comenzi ar fi fost incluse.
+          else if(p)pairs.push({...p,file:f.name,page:i+1});
           else awbUnrecognizedPages.push(`${f.name} p.${i+1}`);
         });
       }catch(e){console.warn('PDF ignorat din dosar:',f.name,e);}
@@ -20155,7 +20270,7 @@ async function readAwbFolderPdfs(){
       // indiferent de status — dacă o găsim, o adăugăm ca linie nouă de import (cu AWB deja completat),
       // exact ca un import normal, gata de „✓ Inclus"/„Aplică import" ca să scadă și stocul.
       if(!rows.length){
-        const createdCount=await pcomFetchAndCreateEmagOrderById(p.comandaId,p.awb);
+        const createdCount=await pcomFetchAndCreateEmagOrderById(p.comandaId,p.awb,p.file,p.page,p.courier);
         if(createdCount){awbEmagLookupCreated+=createdCount;awbEmagLookupFileNames.push(p.file);continue;}
       }
       results.push({...p,rows});
@@ -20181,7 +20296,7 @@ function pcomAwbMatched(p){
 function pcomAwbErrorKey(p){return[p.file||'manual',p.page||0,p.awb||'',p.comandaId||'fara-comanda'].join('|');}
 async function persistAwbErrors(rows){
   for(const p of rows){
-    const sourceKey=pcomAwbErrorKey(p),body={source_key:sourceKey,source_file:p.file||null,source_page:p.page||null,awb:p.awb||null,comanda_id:p.comandaId||null,platforma:null,reason:p.vintedAmbiguous?'Număr de comandă ambiguu între platforme':'Comanda nu există în Comenzi Platforme'};
+    const sourceKey=pcomAwbErrorKey(p),body={source_key:sourceKey,source_file:p.file||null,source_page:p.page||null,awb:p.awb||null,comanda_id:p.comandaId||null,platforma:null,courier:p.courier||null,reason:p.vintedAmbiguous?'Număr de comandă ambiguu între platforme':'Comanda nu există în Comenzi Platforme'};
     try{
       const old=await dbGet(`staff_awb_erori?source_key=eq.${encodeURIComponent(sourceKey)}&select=id`);
       if(old?.[0])await dbPatch(`staff_awb_erori?id=eq.${old[0].id}`,{resolved:false,updated_at:new Date().toISOString(),reason:body.reason});
@@ -20226,9 +20341,11 @@ function renderAwbPreview(){
 async function patchAwbWithSource(filter,source){
   try{return await dbPatch(`platforma_comenzi?${filter}`,source);}
   catch(e){
-    // Migrarea nouă păstrează fișierul și pagina. Dacă nu a fost rulată încă, AWB-ul în sine
-    // rămâne mai important decât trasabilitatea suplimentară, deci nu blocăm operațiunea curentă.
-    if(/Could not find the '(awb_source_file|awb_source_page)' column/i.test(String(e.message||e)))return dbPatch(`platforma_comenzi?${filter}`,{awb:source.awb});
+    // Migrațiile noi (fișier+pagină, apoi curier) pot fi rulate treptat — dacă o coloană încă nu
+    // există, o scoatem din body și reîncercăm, fără să pierdem restul câmpurilor care CHIAR există.
+    // AWB-ul în sine rămâne mai important decât trasabilitatea suplimentară, deci nu blocăm operațiunea.
+    const m=String(e.message||e).match(/Could not find the '(awb_source_file|awb_source_page|awb_courier)' column/i);
+    if(m){const rest={...source};delete rest[m[1]];return patchAwbWithSource(filter,rest);}
     throw e;
   }
 }
@@ -20238,10 +20355,10 @@ async function applyAwbAssociation(){
   btn.disabled=true;
   try{
     for(const p of matched){
-      const source={awb:p.awb,awb_source_file:p.file||null,awb_source_page:p.page||null};
+      const source={awb:p.awb,awb_source_file:p.file||null,awb_source_page:p.page||null,awb_courier:p.courier||null};
       const platforma=p.rows[0].platforma;
       await patchAwbWithSource(`comanda_id=eq.${encodeURIComponent(p.comandaId)}&platforma=eq.${encodeURIComponent(platforma)}`,source);
-      PCOM.filter(o=>o.comandaId===p.comandaId&&o.platforma===platforma).forEach(o=>Object.assign(o,{awb:p.awb,awbSourceFile:p.file||'',awbSourcePage:p.page||null}));
+      PCOM.filter(o=>o.comandaId===p.comandaId&&o.platforma===platforma).forEach(o=>Object.assign(o,{awb:p.awb,awbSourceFile:p.file||'',awbSourcePage:p.page||null,awbCourier:p.courier||''}));
     }
     await persistAwbErrors(unmatched);
     toast(`${matched.length} AWB-uri asociate ✓`);
@@ -20291,9 +20408,9 @@ async function retrySavedAwbErrors(){
       const platforms=[...new Set(rows.map(r=>r.platforma||''))];
       if(platforms.length!==1||!rows.length||!rows.every(r=>r.impachetat)){stillOpen++;continue;}
       const platforma=platforms[0];
-      await patchAwbWithSource(`comanda_id=eq.${encodeURIComponent(e.comanda_id)}&platforma=eq.${encodeURIComponent(platforma)}`,{awb:e.awb,awb_source_file:e.source_file||null,awb_source_page:e.source_page||null});
+      await patchAwbWithSource(`comanda_id=eq.${encodeURIComponent(e.comanda_id)}&platforma=eq.${encodeURIComponent(platforma)}`,{awb:e.awb,awb_source_file:e.source_file||null,awb_source_page:e.source_page||null,awb_courier:e.courier||null});
       await dbPatch(`staff_awb_erori?id=eq.${e.id}`,{resolved:true,resolved_at:new Date().toISOString(),updated_at:new Date().toISOString()});
-      PCOM.filter(o=>o.comandaId===e.comanda_id&&o.platforma===platforma).forEach(o=>o.awb=e.awb);
+      PCOM.filter(o=>o.comandaId===e.comanda_id&&o.platforma===platforma).forEach(o=>Object.assign(o,{awb:e.awb,awbCourier:e.courier||''}));
       resolved++;
     }
     toast(resolved?`${resolved} AWB-uri asociate la comenzi finalizate ✓${stillOpen?` · ${stillOpen} încă fără comandă finalizată`:''}`:(stillOpen?'Niciun AWB cu eroare nu are încă o comandă finalizată potrivită.':'Nu există AWB-uri cu eroare de reîncercat.'));

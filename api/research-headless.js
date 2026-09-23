@@ -20,13 +20,21 @@
 // globală (window['__single-search-result__PROPS'].data.products), nu doar prin markup fragil.
 
 let chromiumMod = null, puppeteer = null;
+// Bug real, găsit direct testând endpoint-ul live (deployed, nu doar local) pentru scan_catalog:
+// require('puppeteer-core') arunca "require() of ES Module ... not supported" — pachetul (verificat
+// direct, instalat separat: v25.11.0) e acum pur ESM ("type":"module"), require() nu-l mai poate
+// încărca deloc, pe nicio versiune ^25.x. Afecta TOATE acțiunile din acest fișier (auto-căutare eMAG/
+// Trendyol la fel de stricat, nu doar scan_catalog — verificat separat, aceeași eroare). import()
+// dinamic funcționează (verificat direct: namespace-ul întors are .launch ca export numit, direct
+// utilizabil). La fel pentru @sparticuz/chromium (tot ESM) — proprietățile folosite mai jos
+// (args/executablePath/...) sunt pe mod.default, verificat direct.
 async function loadDeps() {
   if (puppeteer) return;
   // Pe Vercel (VERCEL=1, setat automat de platformă): @sparticuz/chromium, binarul potrivit mediului
   // serverless. Local (dezvoltare/testare): puppeteer-core + un Chrome/Chromium deja instalat pe
   // mașină — @sparticuz/chromium NU rulează corect în afara mediului AWS Lambda/Vercel.
-  puppeteer = require('puppeteer-core');
-  if (process.env.VERCEL) chromiumMod = require('@sparticuz/chromium');
+  puppeteer = await import('puppeteer-core');
+  if (process.env.VERCEL) chromiumMod = (await import('@sparticuz/chromium')).default;
 }
 
 async function launchBrowser() {
@@ -138,6 +146,61 @@ async function searchTrendyol(query) {
   });
 }
 
+// Scanare generică a unei pagini-catalog de furnizor (orice site, nu doar eMAG/Trendyol) — cerut
+// direct: „vreau să comparăm sistemul nostru cu ce e pe pagina asta [Jumbo] sau alta". Fără selectoare
+// specifice unui singur site (ar fi fragil pe termen lung) — euristică generică: găsește elementele al
+// căror text propriu conține un preț (regex, lei/RON/EUR), urcă la cel mai apropiat ancestor care are
+// și o imagine și un link (un „card" plauzibil), apoi grupează cardurile după semnătura tag+clasă și
+// păstrează DOAR grupul cel mai mare, repetat de minim 3 ori — un grid real de produse, nu o mențiune
+// izolată de preț undeva pe pagină (banner, footer etc.). Verificat direct pe o pagină reală Jumbo
+// (10/10 produse găsite corect, nume+preț+poză+link). Textul brut al fiecărui card e curățat ulterior
+// de AI (index.html), nu aici — pagina rămâne o funcție „pură" de extragere candidați.
+async function scanCatalogPage(url) {
+  return withPage(async (page) => {
+    const resp = await page.goto(url, { waitUntil: 'networkidle2', timeout: 25000 });
+    const status = resp ? resp.status() : 0;
+    if (status && status >= 400) throw new Error(`HTTP ${status}`);
+    await new Promise((r) => setTimeout(r, 1200));
+    return page.evaluate(() => {
+      const priceRe = /(\d[\d.,]{1,8})\s*(lei|ron|€|eur)/i;
+      const seen = new Set();
+      const groups = new Map();
+      const all = document.querySelectorAll('body *');
+      for (const el of all) {
+        if (el.children.length > 6) continue;
+        const text = el.textContent || '';
+        if (text.length > 300 || !priceRe.test(text)) continue;
+        let card = el, depth = 0;
+        while (card && depth < 6) {
+          if (card.querySelector('img') && card.querySelector('a[href]')) break;
+          card = card.parentElement; depth++;
+        }
+        if (!card || seen.has(card)) continue;
+        seen.add(card);
+        const cls = (card.className || '').toString().trim().split(/\s+/).slice(0, 2).join('.');
+        const sig = card.tagName + (cls ? '.' + cls : '');
+        (groups.get(sig) || groups.set(sig, []).get(sig)).push(card);
+      }
+      let best = [];
+      for (const arr of groups.values()) if (arr.length > best.length) best = arr;
+      if (best.length < 3) return { items: [] };
+      return {
+        items: best.slice(0, 60).map((card) => {
+          const img = card.querySelector('img');
+          const link = card.querySelector('a[href]');
+          const priceMatch = (card.textContent || '').match(priceRe);
+          return {
+            text: card.textContent.replace(/\s+/g, ' ').trim().slice(0, 300),
+            image: img?.getAttribute('data-src') || img?.getAttribute('src') || '',
+            link: link?.href || '',
+            priceRaw: priceMatch ? priceMatch[0] : '',
+          };
+        }),
+      };
+    });
+  });
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Metodă nepermisă' });
   const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : (req.body || {});
@@ -154,6 +217,12 @@ module.exports = async function handler(req, res) {
       if (!query) return res.status(400).json({ error: 'Lipsește termenul de căutare' });
       const candidates = platform === 'trendyol' ? await searchTrendyol(query) : await searchEmag(query);
       return res.status(200).json({ candidates });
+    }
+    if (body.action === 'scan_catalog') {
+      const url = String(body.url || '').trim();
+      if (!url || !/^https?:\/\//i.test(url)) return res.status(400).json({ error: 'URL invalid' });
+      const { items } = await scanCatalogPage(url);
+      return res.status(200).json({ items });
     }
     return res.status(400).json({ error: 'Acțiune necunoscută' });
   } catch (e) {
