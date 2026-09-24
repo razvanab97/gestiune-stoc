@@ -3935,6 +3935,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:481,text:'Fix real, raportat direct cu 2 comenzi reale: „➕ Adaugă în Comenzi Platforme" (#479) le făcea vizibile în admin, dar TOT nu apăreau în Staff. Cauza: Staff filtrează comenzile după created_at ≥ pragul cozii active, chiar la nivelul interogării — o comandă mai veche decât acel prag rămâne invizibilă în Staff indiferent ce altceva se schimbă pe ea (anulata/impachetat). reactivatePcomOrder avansa deja created_at în cazul lui, dar reconsiderPcomRow și noul pullPcomOrderToPreview nu — extras acum într-o singură funcție (staffQueueCreatedAtBump), aplicată consecvent la toate 3. Cele 2 comenzi reale reparate direct și în bază.',date:'2026-09-24'},
   {n:480,text:'„↺ Reactivează comandă finalizată" — aceeași căutare live pe eMAG de la #478, cerut direct: dacă numărul introdus nu există deloc în bază (nu doar lipsă din previzualizare), apare butonul „🔍 Caută pe eMAG după acest număr" — caută pe eMAG indiferent de status, aduce comanda direct în Comenzi Platforme, deja „✓ Inclus", gata de asociat AWB. Cele 2 puncte de intrare (#pcx-search și acest card) folosesc acum același nucleu comun.',date:'2026-09-24'},
   {n:479,text:'„↺ Reactivează comandă finalizată" — buton nou „➕ Adaugă în Comenzi Platforme", raportat direct cu un caz real (comanda 516977084, eMAG): o comandă poate fi perfect activă în Staff (nici anulată, nici împachetată — deci fără nimic de „reactivat"), dar TOT să lipsească din previzualizarea admin, needitabilă, fără nicio cale de a-i asocia un AWB. Cauza: previzualizarea admin (pcImpParsed) se populează doar din importuri explicite sau dintr-un resync care regăsește comanda — una mai veche, ieșită între timp din „Noi"/„În lucru" pe eMAG, nu mai avea cum să fie recuperată automat. Butonul o aduce direct din bază, deja „✓ Inclus", gata de asociat AWB.',date:'2026-09-24'},
   {n:478,text:'Comenzi Platforme — căutarea (#pcx-search) escaladează acum în 2 pași când nu găsește nimic în previzualizarea curentă, cerut direct: (1) mai caută direct în comenzile deja scrise în bază, INCLUSIV anulate — dacă găsește o comandă anulată, arată direct un buton „↺ Reconsideră", fără să mai fie nevoie să scrolezi la cardul separat „🚫 Comenzi anulate"; (2) dacă nu găsește nimic nicăieri local, propune „🔍 Caută pe eMAG după acest număr" — caută direct pe eMAG, indiferent de status (Nou/În lucru/Pregătită/Finalizată — nu doar Nou+În lucru, ca la „Adu comenzi eMAG"), și aduce comanda în previzualizare, gata de „✓ Inclus"/confirmare instant. Reutilizează 100% infrastructura deja existentă (pcomFetchAndCreateEmagOrderById, reconsiderPcomRow) — nicio logică nouă de potrivire produs.',date:'2026-09-24'},
@@ -4936,10 +4937,26 @@ async function markPcomOrderPacked(id){
     toast('✓ Marcată ca împachetată');
   }catch(e){toast('Nu am putut marca comanda: '+(e.message||e),'err');}
 }
+// O comandă mai veche decât pragul curent al cozii Staff (STAFF_QUEUE_STARTED_AT) nu redevine vizibilă
+// în Staff doar prin schimbarea altor câmpuri (anulata/impachetat) — Staff filtrează dur după
+// created_at, chiar la nivelul interogării (sbComenzi din staff.html, cerere directă la Supabase, nu
+// doar randare locală). Orice acțiune care trebuie să aducă o comandă înapoi lucrabilă în Staff are
+// nevoie și de avansarea acestui câmp, dacă e cazul — `data` (data reală a comenzii, folosită de Profit
+// vânzări/Total încasări) rămâne mereu neatinsă. Extras dintr-o singură funcție (reactivatePcomOrder)
+// ca să nu se repete separat, incomplet, la fiecare acțiune similară — bug real, raportat direct: două
+// comenzi „reactivate"/„aduse în admin" (pullPcomOrderToPreview, reconsiderPcomRow) tot nu apăreau în
+// Staff, exact din cauza asta.
+function staffQueueCreatedAtBump(o){
+  return(STAFF_QUEUE_STARTED_AT&&o.createdAt&&o.createdAt<STAFF_QUEUE_STARTED_AT)?new Date().toISOString():null;
+}
 async function reconsiderPcomRow(id){
   try{
-    await dbPatch(`platforma_comenzi?id=eq.${id}`,{anulata:false,motiv_anulare:null});
-    const o=PCOM.find(x=>x.id===id);if(o){o.anulata=false;o.motivAnulare='';}
+    const o=PCOM.find(x=>x.id===id);
+    const body={anulata:false,motiv_anulare:null};
+    const bump=o?staffQueueCreatedAtBump(o):null;
+    if(bump)body.created_at=bump;
+    await dbPatch(`platforma_comenzi?id=eq.${id}`,body);
+    if(o){o.anulata=false;o.motivAnulare='';if(bump)o.createdAt=bump;}
     // Și lista din cardul dedicat, și rezultatul căutării (#pcx-search, dacă tocmai a găsit-o acolo —
     // vezi pcxSearchFallbackHtml) trebuie actualizate, nu doar cardul — altfel mesajul „găsită în
     // comenzile anulate" rămâne pe ecran, needitor, deși comanda tocmai a fost reactivată.
@@ -4990,19 +5007,14 @@ async function reactivatePcomOrder(idsStr){
   if(!ids.length)return;
   if(!confirm(`Trimiți din nou ${ids.length>1?'aceste '+ids.length+' linii':'această comandă'} în coada activă din Staff?`))return;
   try{
-    const now=new Date().toISOString();
     for(const id of ids){
       const o=PCOM.find(x=>x.id===id);if(!o)continue;
       const body={impachetat:false,impachetat_at:null};
-      // O comandă ieșită deja din fereastra activă a Staff (mai veche decât ultimul prag de coadă —
-      // vezi STAFF_QUEUE_STARTED_AT/checkAutoQueueReset din staff.html) nu revine vizibilă doar prin
-      // debifarea „împachetat" — Staff filtrează dur comenzile după created_at >= prag. O aducem înapoi
-      // în fereastră avansându-i created_at la acum; `data` (data reală a comenzii, folosită de Profit
-      // vânzări/Total încasări) rămâne neatinsă, deci rapoartele financiare nu sunt afectate.
-      if(STAFF_QUEUE_STARTED_AT&&o.createdAt&&o.createdAt<STAFF_QUEUE_STARTED_AT)body.created_at=now;
+      const bump=staffQueueCreatedAtBump(o);
+      if(bump)body.created_at=bump;
       await dbPatch(`platforma_comenzi?id=eq.${id}`,body);
       Object.assign(o,{impachetat:false,impachetatAt:null});
-      if(body.created_at)o.createdAt=body.created_at;
+      if(bump)o.createdAt=bump;
     }
     renderStaleStaffOrdersCard();
     searchPcomReactivate();
@@ -5025,13 +5037,21 @@ function pcomLineFromCommittedOrder(o){
     include:true,awb:o.awb||'',awbSourceFile:o.awbSourceFile||'',awbSourcePage:o.awbSourcePage||null,awbCourier:o.awbCourier||'',
     _source:'api',_committedId:o.id,_restoredFromGate:true};
 }
-function pullPcomOrderToPreview(idsStr){
+async function pullPcomOrderToPreview(idsStr){
   const ids=String(idsStr).split(',').map(Number).filter(Boolean);
   if(!ids.length)return;
   let added=0;
   for(const id of ids){
     const o=PCOM.find(x=>x.id===id);if(!o)continue;
     if(pcImpParsed.some(x=>x._committedId===id))continue;
+    // Bug real, raportat direct — comanda devenea vizibilă în ADMIN, dar TOT lipsea din Staff: fără
+    // asta, a face comanda „lucrabilă în admin" nu o face automat și „vizibilă în Staff" dacă created_at
+    // a rămas mai vechi decât pragul cozii active (vezi staffQueueCreatedAtBump).
+    const bump=staffQueueCreatedAtBump(o);
+    if(bump){
+      try{await dbPatch(`platforma_comenzi?id=eq.${id}`,{created_at:bump});o.createdAt=bump;}
+      catch(e){console.warn('Nu am putut avansa created_at pentru comanda '+id+':',e);}
+    }
     pcImpParsed.push(pcomLineFromCommittedOrder(o));
     added++;
   }
