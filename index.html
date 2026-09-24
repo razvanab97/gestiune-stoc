@@ -3935,6 +3935,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:482,text:'Fix pe termen lung, cerut direct („rezolvă și pe viitor"), raportat cu o comandă complet normală (#516985310, deja „✓ Inclus", cu AWB), care tot nu apărea în Staff — deci #481 nu acoperea toate cazurile: orice comandă neîmpachetată poate ieși din fereastra activă a Staff pur și simplu prin trecerea timpului (resetul zilnic al cozii), indiferent cum a fost creată/comisă — nu doar prin cele 3 fluxuri reparate la #481. Cardul „Comenzi rămase în urmă din Staff" (Comenzi Platforme) le arată deja pe toate automat — primește acum și un buton „↺ Readu la împachetare", care le readuce în fereastra activă dintr-un click, indiferent de cauză. Verificat direct în bază: 0 comenzi rămase blocate în acest fel, la momentul reparației.',date:'2026-09-24'},
   {n:481,text:'Fix real, raportat direct cu 2 comenzi reale: „➕ Adaugă în Comenzi Platforme" (#479) le făcea vizibile în admin, dar TOT nu apăreau în Staff. Cauza: Staff filtrează comenzile după created_at ≥ pragul cozii active, chiar la nivelul interogării — o comandă mai veche decât acel prag rămâne invizibilă în Staff indiferent ce altceva se schimbă pe ea (anulata/impachetat). reactivatePcomOrder avansa deja created_at în cazul lui, dar reconsiderPcomRow și noul pullPcomOrderToPreview nu — extras acum într-o singură funcție (staffQueueCreatedAtBump), aplicată consecvent la toate 3. Cele 2 comenzi reale reparate direct și în bază.',date:'2026-09-24'},
   {n:480,text:'„↺ Reactivează comandă finalizată" — aceeași căutare live pe eMAG de la #478, cerut direct: dacă numărul introdus nu există deloc în bază (nu doar lipsă din previzualizare), apare butonul „🔍 Caută pe eMAG după acest număr" — caută pe eMAG indiferent de status, aduce comanda direct în Comenzi Platforme, deja „✓ Inclus", gata de asociat AWB. Cele 2 puncte de intrare (#pcx-search și acest card) folosesc acum același nucleu comun.',date:'2026-09-24'},
   {n:479,text:'„↺ Reactivează comandă finalizată" — buton nou „➕ Adaugă în Comenzi Platforme", raportat direct cu un caz real (comanda 516977084, eMAG): o comandă poate fi perfect activă în Staff (nici anulată, nici împachetată — deci fără nimic de „reactivat"), dar TOT să lipsească din previzualizarea admin, needitabilă, fără nicio cale de a-i asocia un AWB. Cauza: previzualizarea admin (pcImpParsed) se populează doar din importuri explicite sau dintr-un resync care regăsește comanda — una mai veche, ieșită între timp din „Noi"/„În lucru" pe eMAG, nu mai avea cum să fie recuperată automat. Butonul o aduce direct din bază, deja „✓ Inclus", gata de asociat AWB.',date:'2026-09-24'},
@@ -4897,8 +4898,26 @@ function renderStaleStaffOrdersCard(){
     const dt=o.createdAt?new Date(o.createdAt).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric'}):'';
     return`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(p?p.name:(o.produsNume||o.titluExtern||'Produs'))}</strong> <span style="color:var(--t3);font-family:var(--mono)">· ${esc(pcomPlatLabel(o.platforma))}${o.comandaId?' #'+esc(o.comandaId):''}</span><div class="jp-meta">${o.clientNume?esc(o.clientNume)+' · ':''}${dt}</div>
       <div class="rpt-card-search-wrap" style="max-width:320px;margin-top:6px"><input type="text" class="rpt-card-search" placeholder="✏️ Schimbă produsul asociat…" oninput="staleReassignSearch(${o.id},this.value)" onkeydown="if(event.key==='Escape'){this.value='';staleReassignSearch(${o.id},'')}" onblur="setTimeout(()=>{const b=document.getElementById('stale-reassign-results-${o.id}');if(b)b.style.display='none';},180)"><div id="stale-reassign-results-${o.id}" class="rpt-card-search-results" style="display:none"></div></div>
-    </div><button type="button" class="btn btn-sm" onclick="markPcomOrderPacked(${o.id})" title="Confirmă doar dacă știi sigur, fizic, că a fost deja împachetată/expediată">✓ Marchează împachetat</button></div>`;
+    </div><div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn btn-sm btn-acc" onclick="reactivateStaleOrder(${o.id})" title="Avansează data comenzii ca să reintre în fereastra activă a Staff, gata de împachetat">↺ Readu la împachetare</button><button type="button" class="btn btn-sm" onclick="markPcomOrderPacked(${o.id})" title="Confirmă doar dacă știi sigur, fizic, că a fost deja împachetată/expediată">✓ Marchează împachetat</button></div></div>`;
   }).join('');
+}
+// Reparație pe termen lung (cerut direct — „rezolvă și pe viitor"), NU doar un patch punctual pe o
+// comandă anume: orice comandă neîmpachetată, ieșită din fereastra activă a Staff (created_at sub
+// pragul cozii — vezi staffQueueCreatedAtBump), ajunge AUTOMAT aici, indiferent cum a fost creată sau
+// comisă (import normal, „✓ Inclus" manual, sau oricare din fluxurile mai noi — reactivatePcomOrder/
+// reconsiderPcomRow/pullPcomOrderToPreview, deja reparate separat). Butonul readuce comanda în coada
+// activă fără s-o marcheze împachetată — spre deosebire de markPcomOrderPacked (pentru una deja
+// expediată fizic), asta e pentru una care CHIAR trebuie împachetată acum.
+async function reactivateStaleOrder(id){
+  const o=PCOM.find(x=>x.id===id);if(!o)return;
+  const bump=staffQueueCreatedAtBump(o);
+  if(!bump){toast('Comanda e deja în fereastra activă a Staff');renderStaleStaffOrdersCard();return;}
+  try{
+    await dbPatch(`platforma_comenzi?id=eq.${id}`,{created_at:bump});
+    o.createdAt=bump;
+    renderStaleStaffOrdersCard();
+    toast('✓ Comandă readusă în coada activă — disponibilă pentru împachetat în Staff');
+  }catch(e){toast('Nu am putut readuce comanda: '+(e.message||e),'err');}
 }
 // Reasociere produs (cerut direct — „comanda e greșit asociată ca produs, cum reasociem?"), scopat aici
 // la comenzile rămase în urmă. Caută pe tot inventarul (nu doar produse active — o comandă veche putea
