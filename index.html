@@ -3921,6 +3921,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:471,text:'Sincronizare — aceeași idee de „confirmare instant" ca la Comenzi Platforme (#470), cerută direct, dar cu o diferență importantă: aici o mapare confirmată nu mai are nimic de revizuit, deci rândul chiar DISPARE din previzualizare, nu doar rămâne bifat. Scopat strict la PNK deja cunoscut (identificator exact, nu scor fuzzy) — funcționează la resincronizarea eMAG și la „Import în masă din fișier". O potrivire după nume, oricât de mare scorul, rămâne vizibilă pentru confirmare manuală, exact ca înainte.',date:'2026-09-24'},
   {n:470,text:'Comenzi Platforme — „confirmare instant", cerut direct: o linie găsită prin PNK, titlu sau cod deja cunoscute (aceleași semnale arătate cu ✓ verde, nu un scor fuzzy oarecare) se scrie acum SINGURĂ, imediat — devine vizibilă/împachetabilă în Staff fără să mai apeși „✓ Inclus" manual, exact ca o comandă normal confirmată (stocul rămâne neatins până la „Aplică import" — reversibil oricând prin „🚫 Anulează"). Funcționează și din import manual (fișier/API), și din reîmprospătarea silențioasă de fundal. Restul (potrivire fuzzy fără niciun identificator sigur, sau fără produs) rămâne exact ca înainte — se confirmă manual, prin „✓ Inclus". Pe drum, 2 reparații de siguranță găsite chiar în timpul construcției: o comandă redescoperită ca fiind anulată anterior nu se mai auto-confirmă din greșeală (ar fi contrazis tăcut motivul anulării), iar „⏳ Amână livrarea" retrage acum corect o comandă deja auto-confirmată, nu doar bifa locală.',date:'2026-09-24'},
   {n:469,text:'„📥 Comandă furnizor" — trei completări cerute direct. (1) Câmp nou opțional „Dată estimativă (gata la furnizor)" — dacă lipsește, termenul de livrare se calculează de la data plasării comenzii. La 7 zile peste acest termen, dacă linia n-a fost marcată sosită, se trece automat pe „⛔ nu a ajuns" — apare în clopoțel exact ca o raportare manuală din Staff, fără să mai fie nevoie ca cineva să verifice manual. (2) Bug real reparat: codul produsului extras din text/poză nu era folosit deloc la potrivirea automată (doar numele) — acum verifică întâi codul (SKU propriu sau cod de la „Alt furnizor"), mult mai fiabil când numele are variante ambigue în stoc. (3) Picker manual pe fiecare linie din previzualizare — potrivirea automată rămâne doar un punct de plecare, se poate alege oricând alt produs sau elimina complet asocierea, la fel ca la Comenzi Platforme/Sincronizare. Necesită migration_comenzi_furnizor_termen.sql — până rulează, restul funcționează neschimbat, doar data estimativă nu se salvează încă.',date:'2026-09-24'},
   {n:468,text:'Sincronizare — cerut direct, „strict la produsele pe care le avem în stoc": resincronizarea eMAG (toate 3 piețele) și „Import în masă din fișier" nu mai aduc nimic pentru un produs arhivat — nici actualizare de stoc extern pe o mapare deja confirmată, nici o nouă asociere prin PNK/nume, chiar dacă potrivirea ar fi perfectă; listarea e sărită complet, nu doar lăsată „fără sugestie" (reapare normal dacă produsul e vreodată dezarhivat). „🤖 Sugerează cu AI" nu mai vede deloc produsele arhivate ca posibili candidați — rămâne la fel de insistent să găsească o sugestie pentru cât mai multe titluri, dar doar dintre produsele active. Pe drum, buton nou „🗑 Elimină" pe fiecare linie din previzualizare, cerut direct: scoate rândul din previzualizarea curentă (nu salvează nimic) — listarea reapare normal la următoarea resincronizare/import, util pentru „nu am treabă cu asta acum".',date:'2026-09-24'},
@@ -15344,12 +15345,13 @@ async function resyncEmagActiveListings(market){
     });
     const stockResult=await saveExternalStockSnapshot(syncImpStockUpdates);
     syncImpStockUpdates=[];
+    const autoApplied=await autoApplyConfidentSyncLines('emag');
     document.getElementById('smi-preview').dataset.platforma='emag';
     if(syncImpParsed.length)renderSyncImportPreview();else{document.getElementById('smi-preview').innerHTML='';document.getElementById('smi-foot').style.display='none';}
     document.getElementById('smi-stock-preview').innerHTML='';document.getElementById('smi-duplicate-preview').innerHTML='';
     saveSyncImportState();renderSyncPage();
-    if(info)info.textContent=`eMAG ${market} · ${rows.length} active citite · ${stockResult.saved} stocuri actualizate${stockResult.failed?` · ${stockResult.failed} nereușite`:''}`;
-    toast(`eMAG ${market}: ${rows.length} listări active citite · ${syncImpParsed.length} fără mapare de revizuit${stockResult.failed?` · ${stockResult.failed} stocuri nu s-au salvat`:''}`,stockResult.failed?'err':undefined);
+    if(info)info.textContent=`eMAG ${market} · ${rows.length} active citite · ${stockResult.saved} stocuri actualizate${stockResult.failed?` · ${stockResult.failed} nereușite`:''}${autoApplied?` · ${autoApplied} confirmate instant (PNK)`:''}`;
+    toast(`eMAG ${market}: ${rows.length} listări active citite · ${autoApplied?autoApplied+' confirmate instant (PNK) · ':''}${syncImpParsed.length} fără mapare de revizuit${stockResult.failed?` · ${stockResult.failed} stocuri nu s-au salvat`:''}`,stockResult.failed?'err':undefined);
   }catch(e){toast(`Resincronizare eMAG ${market}: `+(e.message||e),'err');}
   finally{btns.forEach(b=>b.disabled=false);if(btn)btn.textContent=label;}
 }
@@ -15445,6 +15447,7 @@ async function handleSyncImportFile(ev){
       }
       parsing.style.display='none';
       if(!syncImpParsed.length&&!syncImpStockUpdates.length&&!syncImpDuplicates.length){toast('Nicio listare nouă găsită (toate sunt deja mapate)','err');return;}
+      const autoApplied=await autoApplyConfidentSyncLines(platforma);
       if(syncImpParsed.length){
         document.getElementById('smi-preview').dataset.platforma=platforma;
         renderSyncImportPreview();
@@ -15453,7 +15456,7 @@ async function handleSyncImportFile(ev){
       renderSyncDuplicatesPreview();
       document.getElementById('smi-preview').dataset.platforma=platforma;
       saveSyncImportState();
-      toast(`${syncImpParsed.length?syncImpParsed.length+' listări noi detectate · ':''}${syncImpStockUpdates.length?syncImpStockUpdates.length+' actualizări de stoc de revizuit · ':''}${inactiveSkipped?inactiveSkipped+' inactive ignorate · ':''}${syncImpDuplicates.length?syncImpDuplicates.length+' posibile duplicate PNK':''}`.replace(/ · $/,'')||'Import procesat ✓');
+      toast(`${autoApplied?autoApplied+' confirmate instant (PNK) · ':''}${syncImpParsed.length?syncImpParsed.length+' listări noi detectate · ':''}${syncImpStockUpdates.length?syncImpStockUpdates.length+' actualizări de stoc de revizuit · ':''}${inactiveSkipped?inactiveSkipped+' inactive ignorate · ':''}${syncImpDuplicates.length?syncImpDuplicates.length+' posibile duplicate PNK':''}`.replace(/ · $/,'')||'Import procesat ✓');
       if(syncImpParsed.length)syncTranslateForeignTitles();
       return;
     }
@@ -15505,6 +15508,7 @@ async function handleSyncImportFile(ev){
     }
     parsing.style.display='none';
     if(!syncImpParsed.length&&!syncImpStockUpdates.length&&!syncImpDuplicates.length){toast('Nicio listare nouă găsită (toate sunt deja mapate sau coloana e goală)','err');return;}
+    const autoApplied=await autoApplyConfidentSyncLines(platforma);
     if(syncImpParsed.length){
       document.getElementById('smi-preview').dataset.platforma=platforma;
       renderSyncImportPreview();
@@ -15513,7 +15517,7 @@ async function handleSyncImportFile(ev){
     renderSyncDuplicatesPreview();
     document.getElementById('smi-preview').dataset.platforma=platforma;
     saveSyncImportState();
-    toast(`${syncImpParsed.length?syncImpParsed.length+' listări noi · ':''}${syncImpParsed.filter(x=>x.produsId).length?syncImpParsed.filter(x=>x.produsId).length+' cu sugestie automată · ':''}${syncImpStockUpdates.length?syncImpStockUpdates.length+' actualizări de stoc de revizuit · ':''}${inactiveSkipped?inactiveSkipped+' inactive ignorate · ':''}${syncImpDuplicates.length?syncImpDuplicates.length+' posibile duplicate PNK':''}`.replace(/ · $/,'')||'Import procesat ✓');
+    toast(`${autoApplied?autoApplied+' confirmate instant (PNK) · ':''}${syncImpParsed.length?syncImpParsed.length+' listări noi · ':''}${syncImpParsed.filter(x=>x.produsId).length?syncImpParsed.filter(x=>x.produsId).length+' cu sugestie automată · ':''}${syncImpStockUpdates.length?syncImpStockUpdates.length+' actualizări de stoc de revizuit · ':''}${inactiveSkipped?inactiveSkipped+' inactive ignorate · ':''}${syncImpDuplicates.length?syncImpDuplicates.length+' posibile duplicate PNK':''}`.replace(/ · $/,'')||'Import procesat ✓');
     if(syncImpParsed.length)syncTranslateForeignTitles();
   }catch(err){
     parsing.style.display='none';
@@ -15936,6 +15940,27 @@ function updSyncImportInfo(){
   const n=syncImpParsed.filter(x=>x.include&&(x.produsId||x.newProduct)).length;
   document.getElementById('smi-info').textContent=`${n} mapări selectate pentru adăugare`;
   document.getElementById('smi-apply-btn').disabled=n===0;
+}
+// Confirmare instant + dispariție din listă (cerut direct — „aceeași funcție și în Sincronizare”): spre
+// deosebire de Comenzi Platforme (unde o comandă confirmată RĂMÂNE vizibilă, de urmărit până se
+// împachetează), o mapare confirmată aici nu mai are nimic de revizuit — se scrie direct în
+// platforma_mapari (identic cu ce ar face „Adaugă mapările selectate”) și dispare din previzualizare.
+// Scopată STRICT la viaPnk (PNK deja cunoscut — cel mai sigur semnal disponibil aici, un identificator
+// exact, nu un scor fuzzy după text) — o potrivire după nume, oricât de mare scorul, rămâne vizibilă
+// pentru confirmare manuală, la fel ca înainte. Întoarce numărul aplicat, ca apelantul să-l integreze
+// în propriul mesaj (toast() e un singur element, nu o stivă — un toast separat l-ar suprascrie pe cel
+// cu numărul total de listări citite).
+async function autoApplyConfidentSyncLines(platforma){
+  if(!sbReady)return 0;
+  const confident=syncImpParsed.filter(x=>x.viaPnk&&x.produsId);
+  if(!confident.length)return 0;
+  try{
+    const rows=await dbPost('platforma_mapari',confident.map(it=>syncMapToDb({platforma,titluExtern:it.titluExtern,idExtern:it.pnk||null,produsId:it.produsId,confirmat:true,tara:it.tara||''})));
+    SYNCM=rows.map(dbToSyncMap).concat(SYNCM);
+    const appliedSet=new Set(confident);
+    syncImpParsed=syncImpParsed.filter(it=>!appliedSet.has(it));
+    return rows.length;
+  }catch(e){console.warn('Confirmare instant Sincronizare eșuată:',e);return 0;}
 }
 async function applySyncImport(){
   if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
