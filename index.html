@@ -3921,6 +3921,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:472,text:'Comenzi Platforme — buton nou „✓ Deja livrată" pe fiecare linie din previzualizare, cerut direct: pentru o comandă deja împachetată/livrată fizic (ex. ieri), dar reîntoarsă la o resincronizare (eMAG/Trendyol încă o raportează „în lucru"), un singur click o comite și o anulează cu motiv fix — nu mai reapare la viitoarele resincronizări/importuri. Reutilizează 100% infrastructura de anulare deja existentă (card „🚫 Comenzi anulate", reconsiderare oricând) — nicio coloană/tabelă nouă.',date:'2026-09-24'},
   {n:471,text:'Sincronizare — aceeași idee de „confirmare instant" ca la Comenzi Platforme (#470), cerută direct, dar cu o diferență importantă: aici o mapare confirmată nu mai are nimic de revizuit, deci rândul chiar DISPARE din previzualizare, nu doar rămâne bifat. Scopat strict la PNK deja cunoscut (identificator exact, nu scor fuzzy) — funcționează la resincronizarea eMAG și la „Import în masă din fișier". O potrivire după nume, oricât de mare scorul, rămâne vizibilă pentru confirmare manuală, exact ca înainte.',date:'2026-09-24'},
   {n:470,text:'Comenzi Platforme — „confirmare instant", cerut direct: o linie găsită prin PNK, titlu sau cod deja cunoscute (aceleași semnale arătate cu ✓ verde, nu un scor fuzzy oarecare) se scrie acum SINGURĂ, imediat — devine vizibilă/împachetabilă în Staff fără să mai apeși „✓ Inclus" manual, exact ca o comandă normal confirmată (stocul rămâne neatins până la „Aplică import" — reversibil oricând prin „🚫 Anulează"). Funcționează și din import manual (fișier/API), și din reîmprospătarea silențioasă de fundal. Restul (potrivire fuzzy fără niciun identificator sigur, sau fără produs) rămâne exact ca înainte — se confirmă manual, prin „✓ Inclus". Pe drum, 2 reparații de siguranță găsite chiar în timpul construcției: o comandă redescoperită ca fiind anulată anterior nu se mai auto-confirmă din greșeală (ar fi contrazis tăcut motivul anulării), iar „⏳ Amână livrarea" retrage acum corect o comandă deja auto-confirmată, nu doar bifa locală.',date:'2026-09-24'},
   {n:469,text:'„📥 Comandă furnizor" — trei completări cerute direct. (1) Câmp nou opțional „Dată estimativă (gata la furnizor)" — dacă lipsește, termenul de livrare se calculează de la data plasării comenzii. La 7 zile peste acest termen, dacă linia n-a fost marcată sosită, se trece automat pe „⛔ nu a ajuns" — apare în clopoțel exact ca o raportare manuală din Staff, fără să mai fie nevoie ca cineva să verifice manual. (2) Bug real reparat: codul produsului extras din text/poză nu era folosit deloc la potrivirea automată (doar numele) — acum verifică întâi codul (SKU propriu sau cod de la „Alt furnizor"), mult mai fiabil când numele are variante ambigue în stoc. (3) Picker manual pe fiecare linie din previzualizare — potrivirea automată rămâne doar un punct de plecare, se poate alege oricând alt produs sau elimina complet asocierea, la fel ca la Comenzi Platforme/Sincronizare. Necesită migration_comenzi_furnizor_termen.sql — până rulează, restul funcționează neschimbat, doar data estimativă nu se salvează încă.',date:'2026-09-24'},
@@ -4803,6 +4804,25 @@ async function cancelPcomLine(idx){
   if(!confirm('Anulezi acest produs? Rămâne vizibil aici, dar dispare din coada Staff. Nu atinge stocul.'))return;
   const ok=await anuleazaLiniePlatforma('platforma_comenzi',it._committedId);
   if(ok)renderPcomImportPreview();
+}
+// Comandă deja împachetată/livrată fizic, dinainte să fi trecut vreodată prin acest import (cerut
+// direct — „creează un buton prin care sistemul să înțeleagă că trebuie să sară peste comanda aceea").
+// Comite linia (dacă nu era deja comisă) și o anulează imediat, cu un motiv fix — un singur click, spre
+// deosebire de „🚫 Anulează" (necesită deja o comandă comisă + prompt de motiv).
+async function skipAlreadyPackedPcomLine(idx){
+  const it=pcImpParsed[idx];if(!it||!it.produsId)return;
+  if(!confirm(`Marchezi „${it.titluExtern||it.comandaId||'această comandă'}" ca deja împachetată/livrată fizic? Nu va mai reapărea la viitoarele resincronizări/importuri.`))return;
+  if(!it._committedId){
+    await commitPcomLine(idx);
+    if(!it._committedId){toast('Nu am putut înregistra comanda — încearcă din nou','err');return;}
+  }
+  const motiv='Deja împachetată/livrată fizic (marcat manual din import)';
+  try{
+    await dbPatch(`platforma_comenzi?id=eq.${it._committedId}`,{anulata:true,motiv_anulare:motiv,staff_blocked:false,staff_issue_resolved:true});
+    const o=PCOM.find(x=>x.id===it._committedId);if(o){o.anulata=true;o.motivAnulare=motiv;o.staffBlocked=false;o.staffIssueResolved=true;}
+    toast('✓ Marcată deja livrată — nu va mai reapărea la resincronizare');
+    renderPcomImportPreview();
+  }catch(e){toast('Nu am putut marca: '+(e.message||e),'err');}
 }
 // O comandă anulată anterior, regăsită la un reimport ulterior — motivul anulării nu mai era valabil
 // (ex. „stoc zero”, dar produsul a fost între timp regăsit), omul decide explicit s-o readucă activă.
@@ -18036,6 +18056,13 @@ function pcxLineHtml(idx,groupIdxs){
   // butonul la lățimea întregii coloane (230px), la fel de lat ca picker-ul de produs. „Anulează" e o
   // acțiune mai rar folosită, mai puțin urgentă decât alegerea produsului — cerut direct, mai mic.
   const cancelBtn=(it._committedId&&!committedRow?.anulata)?`<button type="button" class="pcx-btn" style="padding:4px 10px;font-size:14px;border-color:var(--or);color:var(--or);align-self:flex-start" onclick="cancelPcomLine(${idx})" title="Scoate acest produs din coada Staff, fără să atingă stocul">🚫 Anulează</button>`:'';
+  // „Deja livrată" — cerut direct: unele comenzi reapar la resincronizare deși au fost deja
+  // împachetate/livrate fizic (ex. ieri), înainte să fi trecut vreodată prin acest import — spre
+  // deosebire de „🚫 Anulează" (mai sus), funcționează și pe o linie încă necomisă (o comite silențios,
+  // cu motiv fix, fără promptul de anulare normal) — un singur click. Reutilizează 100% infrastructura
+  // de anulare deja existentă (gate-ul o recunoaște „cancelled" la orice reimport ulterior, card „🚫
+  // Comenzi anulate", reconsiderare oricând din admin) — nu are nevoie de cod/tabelă separată.
+  const skipBtn=(it.produsId&&!committedRow?.anulata)?`<button type="button" class="pcx-btn" style="padding:4px 10px;font-size:14px;border-color:var(--gr);color:var(--gr);align-self:flex-start" onclick="skipAlreadyPackedPcomLine(${idx})" title="Comanda a fost deja împachetată/livrată fizic — n-o mai aduce la viitoarele resincronizări/importuri">✓ Deja livrată</button>`:'';
   // Comandă regăsită la reimport, dar anulată anterior (vezi pcomApiImportGate) — nu revine automat
   // „Inclus" (ar contrazice tăcut motivul notat), doar vizibilă, cu opțiunea explicită de reconsiderare.
   const reconsiderNote=it._cancelledId?`<div style="color:var(--rd);font-weight:700;font-size:15px;margin-top:2px">🚫 A fost anulată anterior${it._cancelledMotiv?': '+esc(it._cancelledMotiv):''} <button type="button" class="pcx-btn" style="padding:1px 8px;font-size:14px" onclick="reconsiderPcomLine(${idx})">↺ Reconsideră</button></div>`:'';
@@ -18066,6 +18093,7 @@ function pcxLineHtml(idx,groupIdxs){
     <div class="pcx-line-actions">
       ${includeBtn}
       ${cancelBtn}
+      ${skipBtn}
       <div class="smi-pick" id="pcmi-pick-${idx}">${pcomPickBtnHtml(idx)}</div>
       <button type="button" class="pcx-btn pcx-btn-danger" style="padding:4px 10px;font-size:14px" onclick="removePcomLine(${idx})" title="Elimină definitiv această linie din import">🗑 Șterge</button>
     </div>
