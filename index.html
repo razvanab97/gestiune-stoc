@@ -3895,6 +3895,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:464,text:'„🛒 Produse de comandat" se completează acum și SINGUR din Vânzări, cerut direct: orice vânzare (căutare, + rapid sau editare directă a cantității de azi) care lasă un produs cu stoc 0 sau 1 îl adaugă automat pe listă, cu codul lui de furnizor deja acolo — gata de inclus în comanda următoare, fără să mai fie nevoie să-l cauți separat. Nu se dublează dacă produsul e deja pe listă în luna curentă. Pe drum, eticheta din listă a devenit „Cod furnizor" (era „SKU"), mai clară.',date:'2026-09-24'},
   {n:463,text:'„🕓 Comenzi rămase în urmă din Staff" — cerut direct, pe o comandă greșit asociată cu produsul: fiecare comandă din listă are acum o căutare inline „✏️ Schimbă produsul asociat" — găsești produsul corect (nume/SKU, inclusiv printre cele arhivate) și un click îl reasociază, fără să mai fie nevoie de vreo unealtă separată. NU corectează automat stocul/profitul dacă erau deja aplicate pe produsul vechi — confirmarea avertizează explicit acest caz, ca decizia să rămână informată.',date:'2026-09-24'},
   {n:462,text:'Comenzi Platforme — „Istoric importuri" restrâns implicit la ultimele 3 zile, cerut direct (lista creștea nesfârșit, greu de răsfoit). Restul rămâne la un click distanță — buton „▾ Arată încă N importuri mai vechi", cu numărul exact, nimic ascuns definitiv. Ștergerea unui import vechi funcționează identic, indiferent dacă lista e restrânsă sau extinsă.',date:'2026-09-24'},
   {n:461,text:'Comenzi Platforme — cerut direct, pe urma arhivării unor produse sezoniere (Crăciun): dacă o comandă nouă se asociază cu un produs arhivat, apare acum un semnal clar „⚠️ arhivat" lângă statusul liniei, plus un contor „⚠️ Arhivate" în bara de numărători de sus, vizibil chiar și cu cardurile restrânse. Înainte, asocierea automată (după EAN/SKU/titlu) nu excludea produsele arhivate, dar nici nu semnala nimic — o comandă pe un produs arhivat trecea neobservată, la fel ca orice altă asociere reușită.',date:'2026-09-24'},
@@ -13930,8 +13931,9 @@ async function sellSearch(id){
   }
   await saveJurnalEntry(p,c);
   await logMove('out',p.name,c,'Vânzare din căutare',p.id);
+  const reordered=autoAddToReorderIfLow(p);
   renderToday();renderTable();renderSearch();
-  toast(`Vândut: ${fmtQty(c)}× ${p.name}${qty(p)<0?' · stoc pe minus: '+fmtQty(qty(p)):''}`);
+  toast(`Vândut: ${fmtQty(c)}× ${p.name}${qty(p)<0?' · stoc pe minus: '+fmtQty(qty(p)):''}${reordered?' · 📦 adăugat la Produse de comandat':''}`);
 }
 
 /* TODAY GRID */
@@ -13977,6 +13979,7 @@ async function updateTQ(id){
   }else{
     saveLocalCache();
   }
+  if(autoAddToReorderIfLow(p))toast(`📦 „${p.name}" a rămas cu stoc ${fmtQty(qty(p))} — adăugat la Produse de comandat`);
   renderToday();renderTable();
 }
 async function qSell(id){
@@ -13990,7 +13993,8 @@ async function qSell(id){
   }
   await saveJurnalEntry(p,1);
   await logMove('out',p.name,1,'Vânzare rapidă',p.id);
-  renderToday();renderTable();toast(`${p.name}${qty(p)<0?' · stoc pe minus: '+fmtQty(qty(p)):''}`);
+  const reordered=autoAddToReorderIfLow(p);
+  renderToday();renderTable();toast(`${p.name}${qty(p)<0?' · stoc pe minus: '+fmtQty(qty(p)):''}${reordered?' · 📦 adăugat la Produse de comandat':''}`);
 }
 // Corectează o vânzare adăugată din greșeală: -1 la contorul de azi, fără să atingă jurnalul (la fel ca scăderea din câmpul editabil)
 async function qUnsell(id){
@@ -16570,14 +16574,28 @@ function isInReorderList(productId){
   const cur=currentMonthKey();
   return REORDER.some(r=>r.productId===productId&&(r.addedAt||'').slice(0,7)===cur);
 }
+function pushReorderEntry(p){
+  REORDER.push({id:'ro-'+Date.now()+Math.random().toString(36).slice(2),productId:p.id,name:p.name,sku:p.sku||'',addedAt:new Date().toISOString()});
+  saveReorderList();
+}
 function addToReorderList(productId){
   const p=P.find(x=>x.id===productId);
   if(!p)return;
   if(isInReorderList(productId)){toast('Produsul e deja în lista de comandat pentru luna asta');return;}
-  REORDER.push({id:'ro-'+Date.now()+Math.random().toString(36).slice(2),productId:p.id,name:p.name,sku:p.sku||'',addedAt:new Date().toISOString()});
-  saveReorderList();
+  pushReorderEntry(p);
   renderPcomImportPreview();
   toast('Adăugat la „Produse de comandat" ✓');
+}
+// Auto-adăugare (cerut direct, din Vânzări): orice vânzare care lasă un produs cu stoc 0 sau 1 îl trece
+// singur pe „Produse de comandat", cu codul lui de furnizor (p.sku) deja acolo — gata de inclus în
+// comanda următoare, fără să mai fie nevoie să-l cauți separat mai târziu. Întoarce true doar dacă
+// TOCMAI a fost adăugat (silențios altfel — deja pe listă luna asta, sau stoc încă >1) — apelantul
+// integrează asta în PROPRIUL toast (toast() e un singur element, nu o stivă — două apeluri consecutive
+// s-ar suprascrie una pe alta, pierzând confirmarea vânzării).
+function autoAddToReorderIfLow(p){
+  if(!p||qty(p)>1||isInReorderList(p.id))return false;
+  pushReorderEntry(p);
+  return true;
 }
 function removeFromReorderList(id){
   REORDER=REORDER.filter(r=>r.id!==id);
@@ -16603,7 +16621,7 @@ function renderReorderList(){
   monthSel.innerHTML=months.map(m=>{const[y,mo]=m.split('-');const lbl=new Date(y,mo-1).toLocaleDateString('ro-RO',{month:'long',year:'numeric'});return`<option value="${m}"${m===sel?' selected':''}>${lbl}${m===cur?' (luna curentă)':''}</option>`;}).join('');
   const isCurrent=sel===cur;
   const list=REORDER.filter(r=>(r.addedAt||'').slice(0,7)===sel).sort((a,b)=>(a.name||'').localeCompare(b.name||'','ro'));
-  host.innerHTML=list.length?list.map(r=>`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(r.name)}</strong>${r.sku?` <span style="color:var(--t3);font-family:var(--mono)">· SKU ${esc(r.sku)}</span>`:''}</div>${isCurrent?`<button type="button" class="btn btn-sm" style="color:var(--gr);border-color:var(--gr)" onclick="removeFromReorderList('${r.id}')">✓ Comandat</button>`:''}</div>`).join(''):`<div style="font-size:24px;color:var(--t3);padding:8px 0">Nicio comandă pe listă ${isCurrent?'luna asta':'în luna selectată'}.</div>`;
+  host.innerHTML=list.length?list.map(r=>`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(r.name)}</strong>${r.sku?` <span style="color:var(--t3);font-family:var(--mono)">· Cod furnizor ${esc(r.sku)}</span>`:''}</div>${isCurrent?`<button type="button" class="btn btn-sm" style="color:var(--gr);border-color:var(--gr)" onclick="removeFromReorderList('${r.id}')">✓ Comandat</button>`:''}</div>`).join(''):`<div style="font-size:24px;color:var(--t3);padding:8px 0">Nicio comandă pe listă ${isCurrent?'luna asta':'în luna selectată'}.</div>`;
 }
 // Liniile marcate "produs nou" nu se creează automat la aplicare — omul le adaugă manual, cu categorie/
 // preț/poză complete, prin formularul normal de produs (deschis pre-completat cu numele din comandă).
