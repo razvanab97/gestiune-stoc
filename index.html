@@ -433,6 +433,14 @@ input:focus,select:focus,textarea:focus{border-color:var(--acc);box-shadow:0 0 0
 #merge-pickdrop .smi-pick-th,#merge-pickdrop .smi-pick-th-ph{width:76px;height:76px;border-radius:8px;font-size:38px}
 #merge-pickdrop .smi-pick-item{padding:12px 14px;gap:14px}
 #merge-pickdrop .smi-pick-item-nm{font-size:28px;white-space:normal}
+/* Picker-ul de produs pe fiecare linie din „Comandă furnizor" (cerut direct — „să putem selecta atunci
+   când vrem produsul pentru acest tip de import") — construit nou, deci direct în formatul mărit deja
+   stabilit la celelalte 5 picker-e similare, nu mai trece prin varianta mică. */
+#cf-pickdrop{width:460px;max-height:420px}
+#cf-pickdrop input{font-size:28px;padding:9px 12px}
+#cf-pickdrop .smi-pick-th,#cf-pickdrop .smi-pick-th-ph{width:76px;height:76px;border-radius:8px;font-size:38px}
+#cf-pickdrop .smi-pick-item{padding:12px 14px;gap:14px}
+#cf-pickdrop .smi-pick-item-nm{font-size:28px;white-space:normal}
 .btn{font-family:var(--font);font-size:27px;font-weight:500;padding:10px 18px;border-radius:var(--r);cursor:pointer;border:1px solid var(--b2);background:var(--surf);color:var(--t1);transition:all .15s;white-space:nowrap}
 .btn:hover{background:var(--surf2);border-color:var(--b3)}
 .btn-acc{background:var(--acc);color:var(--acc-fg);border-color:var(--acc)}
@@ -3758,6 +3766,10 @@ button.pcx-include-btn.included{border-color:var(--gr)}
         <input type="text" id="cf-comanda-ref" class="invx-summary-input" placeholder="opțional">
       </div>
       <div class="invx-summary-card">
+        <div class="invx-summary-lbl">Dată estimativă (gata la furnizor)</div>
+        <input type="date" id="cf-data-estimativa" class="invx-summary-input" title="Opțional — dacă lipsește, termenul de livrare se calculează de la data plasării comenzii">
+      </div>
+      <div class="invx-summary-card">
         <div class="invx-summary-lbl">Status analiză AI</div>
         <div class="invx-summary-val" id="cfx-status">Se așteaptă text sau poză</div>
       </div>
@@ -3775,6 +3787,7 @@ button.pcx-include-btn.included{border-color:var(--gr)}
     </div>
     <div id="cf-parsing" style="display:none;font-size:20px;color:var(--t3);margin:10px 0"><span class="spin"></span> Se analizează cu AI…</div>
     <div id="cf-preview" style="margin-top:14px"></div>
+    <div class="smi-pickdrop" id="cf-pickdrop"><input type="text" id="cf-pick-search" placeholder="Caută produs după nume sau SKU…" oninput="filterFurnizorPickDebounced()"><div class="smi-pick-list" id="cf-pick-list"></div></div>
   </div>
   <div class="inv-foot">
     <div class="invx-foot-stats" id="cf-info">Adaugă produse pentru previzualizare</div>
@@ -3908,6 +3921,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:469,text:'„📥 Comandă furnizor" — trei completări cerute direct. (1) Câmp nou opțional „Dată estimativă (gata la furnizor)" — dacă lipsește, termenul de livrare se calculează de la data plasării comenzii. La 7 zile peste acest termen, dacă linia n-a fost marcată sosită, se trece automat pe „⛔ nu a ajuns" — apare în clopoțel exact ca o raportare manuală din Staff, fără să mai fie nevoie ca cineva să verifice manual. (2) Bug real reparat: codul produsului extras din text/poză nu era folosit deloc la potrivirea automată (doar numele) — acum verifică întâi codul (SKU propriu sau cod de la „Alt furnizor"), mult mai fiabil când numele are variante ambigue în stoc. (3) Picker manual pe fiecare linie din previzualizare — potrivirea automată rămâne doar un punct de plecare, se poate alege oricând alt produs sau elimina complet asocierea, la fel ca la Comenzi Platforme/Sincronizare. Necesită migration_comenzi_furnizor_termen.sql — până rulează, restul funcționează neschimbat, doar data estimativă nu se salvează încă.',date:'2026-09-24'},
   {n:468,text:'Sincronizare — cerut direct, „strict la produsele pe care le avem în stoc": resincronizarea eMAG (toate 3 piețele) și „Import în masă din fișier" nu mai aduc nimic pentru un produs arhivat — nici actualizare de stoc extern pe o mapare deja confirmată, nici o nouă asociere prin PNK/nume, chiar dacă potrivirea ar fi perfectă; listarea e sărită complet, nu doar lăsată „fără sugestie" (reapare normal dacă produsul e vreodată dezarhivat). „🤖 Sugerează cu AI" nu mai vede deloc produsele arhivate ca posibili candidați — rămâne la fel de insistent să găsească o sugestie pentru cât mai multe titluri, dar doar dintre produsele active. Pe drum, buton nou „🗑 Elimină" pe fiecare linie din previzualizare, cerut direct: scoate rândul din previzualizarea curentă (nu salvează nimic) — listarea reapare normal la următoarea resincronizare/import, util pentru „nu am treabă cu asta acum".',date:'2026-09-24'},
   {n:467,text:'„Preț privat" — iconița devine 💸 (era 🔒 de la #466), cerut direct: „un emoticon care să dea senzația de bani" — mai potrivit pentru un instrument de verificat rapid profitabilitatea, decât un lacăt. Nu se suprapune cu 💰 (deja folosit la „Preț achiziție") sau 💵 (Profit estimat, Dashboard).',date:'2026-09-24'},
   {n:466,text:'„Preț privat" — două retușuri cerute direct. (1) Iconița 🏷️ (buton header, capul popup-ului, ecranul gol) devine 🔒 — 🏷️ era deja folosit pentru 4 lucruri diferite în aplicație (Pre-împachetează, Etichetă GLS, Categorii Dashboard), confuz. (2) Lista de potrivire produs (căutare după denumire + candidați recunoscuți din poză) — poze de 31px, aproape neclare, text trunchiat cu „…" pe nume lungi; mărite (poze 56px, text pe mai multe rânduri, aliniat la stânga).',date:'2026-09-24'},
@@ -4717,6 +4731,23 @@ async function loadStaffIssues(){
       ...comRows.map(r=>({table:'platforma_comenzi',id:r.id,comandaId:r.comanda_id||'',produsId:r.produs_id||null,cantitate:Number(r.cantitate)||1,nume:r.produs_nume||'',tip:r.staff_issue_type||'',nota:r.staff_issue_note||'',ts:r.staff_blocked_at||''})),
       ...jurRows.map(r=>({table:'jurnal',id:r.id,comandaId:'',produsId:r.product_id||null,cantitate:Number(r.qty)||1,nume:r.product_name||'',tip:r.staff_issue_type||'',nota:r.staff_issue_note||'',ts:r.staff_blocked_at||''}))
     ].sort((a,b)=>String(b.ts).localeCompare(String(a.ts)));
+    // Termen de livrare furnizor (7 zile, cerut direct) — dacă o linie nu e nici sosită, nici marcată
+    // „nu a sosit" până la termen (dată estimativă + 7 zile, sau created_at + 7 zile dacă lipsește data
+    // estimativă), o trecem automat pe „nu a sosit" — reutilizează exact fluxul deja existent (bară
+    // Staff, clopoțel, rezolvare din admin), nu unul nou. Scriere idempotentă (PATCH pe aceleași
+    // câmpuri) — sigură chiar dacă rulează din mai multe file/sesiuni admin la fiecare poll de 60s.
+    const nowMs=Date.now();
+    for(const r of furRows.filter(x=>!x.nu_a_sosit&&x.created_at)){
+      const anchor=new Date(r.data_estimativa||r.created_at);
+      if(isNaN(anchor))continue;
+      const deadline=new Date(anchor);deadline.setDate(deadline.getDate()+7);
+      if(nowMs<=deadline.getTime())continue;
+      try{
+        const body={nu_a_sosit:true,nu_a_sosit_at:new Date().toISOString(),nu_a_sosit_nota:'Termenul de livrare (7 zile) a expirat automat',nu_a_sosit_rezolvat:false};
+        await dbPatch(`comenzi_furnizor?id=eq.${r.id}`,body);
+        Object.assign(r,body);
+      }catch(e){console.warn('Nu am putut marca automat termenul depășit (comenzi_furnizor):',r.id,e);}
+    }
     FURNIZOR_ADMIN=furRows;
     FURNIZOR_ISSUES=furRows.filter(r=>r.nu_a_sosit&&!r.nu_a_sosit_rezolvat)
       .map(r=>({id:r.id,nume:(r.produs_id&&P.find(x=>x.id===r.produs_id)?.name)||r.titlu_extern||'',produsId:r.produs_id||null,furnizor:r.furnizor||'',nota:r.nu_a_sosit_nota||'',ts:r.nu_a_sosit_at||r.created_at||''}))
@@ -19249,6 +19280,7 @@ function openFurnizorComanda(){
   furnizorImpParsed=[];
   document.getElementById('cf-furnizor').value='';
   document.getElementById('cf-comanda-ref').value='';
+  document.getElementById('cf-data-estimativa').value='';
   document.getElementById('cf-paste-text').value='';
   document.getElementById('cf-file').value='';
   document.getElementById('cf-preview').innerHTML='';
@@ -19283,8 +19315,13 @@ async function furnizorApplyAiResult(resp){
   // Potrivire cu stocul existent — ACEEAȘI funcție folosită la Importă factură/Sincronizare, dar fără
   // să oblige o alegere: fără potrivire, linia rămâne text simplu (produsId null), vizibilă oricum.
   const newLines=rawItems.map(it=>{
-    const match=findExistingProduct({name:it.name});
-    return{titluExtern:String(it.name||'').trim(),codExtern:it.cod?String(it.cod).trim():'',cantitate:Math.max(0,Number(it.qty)||0)||1,pret:Math.max(0,Number(it.pret)||0),produsId:match?match.product.id:null,score:match?match.score:0};
+    const cod=it.cod?String(it.cod).trim():'';
+    // Codul extras din text/poză (cerut direct — „codul se găsește și într-un fișier și altul"): trimis
+    // și el la findExistingProduct, nu doar numele — se verifică pe SKU-ul nostru ȘI pe codurile de la
+    // „Alt furnizor" (supplierSources), înainte de fuzzy pe nume. Fără el, o potrivire de nume ambiguă
+    // (mai multe variante similare în stoc) putea alege greșit, deși codul exact ar fi eliminat orice dubiu.
+    const match=findExistingProduct({name:it.name,sku:cod});
+    return{titluExtern:String(it.name||'').trim(),codExtern:cod,cantitate:Math.max(0,Number(it.qty)||0)||1,pret:Math.max(0,Number(it.pret)||0),produsId:match?match.product.id:null,score:match?match.score:0};
   });
   furnizorImpParsed=furnizorImpParsed.concat(newLines);
   renderFurnizorImportPreview();
@@ -19332,9 +19369,15 @@ function renderFurnizorImportPreview(){
   const box=document.getElementById('cf-preview');if(!box)return;
   box.innerHTML=furnizorImpParsed.map((it,idx)=>{
     const p=it.produsId?P.find(x=>x.id===it.produsId):null;
-    const matchTag=p?`<span style="color:var(--gr);font-weight:700">✓ ${esc(p.name)}${it.score<1?' ('+Math.round(it.score*100)+'%)':''}</span>`:`<span style="color:var(--t3)">? fără produs în stoc — rămâne text</span>`;
+    const scoreTag=p&&it.score<1?`<span style="font-size:14px;color:var(--t3);margin-left:6px">${Math.round(it.score*100)}% potrivire automată</span>`:'';
     return`<div class="inv-prev-row">
-      <div style="flex:1;min-width:0"><b>${esc(it.titluExtern)}</b>${it.codExtern?' · cod '+esc(it.codExtern):''} · ${fmtQty(it.cantitate)} buc${it.pret?' · '+it.pret.toFixed(2)+' RON':''}<br>${matchTag}</div>
+      <div style="flex:1;min-width:0"><b>${esc(it.titluExtern)}</b>${it.codExtern?' · cod '+esc(it.codExtern):''} · ${fmtQty(it.cantitate)} buc${it.pret?' · '+it.pret.toFixed(2)+' RON':''}
+        <div style="margin-top:6px;display:flex;align-items:center;gap:6px">
+          <div class="smi-pick cf-pick-trigger" style="flex:1;max-width:340px">${furnizorPickBtnHtml(idx)}</div>
+          ${p?`<button type="button" class="btn btn-sm" onclick="clearFurnizorPick(${idx})" title="Elimină asocierea — rândul rămâne doar text">✕</button>`:''}
+          ${scoreTag}
+        </div>
+      </div>
       <button type="button" class="btn btn-sm" onclick="removeFurnizorImpLine(${idx})">🗑</button>
     </div>`;
   }).join('');
@@ -19343,16 +19386,77 @@ function renderFurnizorImportPreview(){
   document.getElementById('cf-apply-btn').disabled=!furnizorImpParsed.length;
 }
 function removeFurnizorImpLine(idx){furnizorImpParsed.splice(idx,1);renderFurnizorImportPreview();}
+// Picker manual pe fiecare linie (cerut direct — „să putem selecta atunci când vrem produsul pentru
+// acest tip de import") — potrivirea automată (nume + cod) rămâne doar un punct de plecare, niciodată
+// finală; oricând se poate alege alt produs sau elimina complet asocierea.
+function furnizorPickBtnHtml(idx){
+  const it=furnizorImpParsed[idx];
+  const p=it.produsId?P.find(x=>x.id===it.produsId):null;
+  const th=p?(p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'cf')}>`:`<div class="smi-pick-th-ph">📦</div>`):'';
+  const nm=p?`${esc(p.name)}${p.sku?' · '+esc(p.sku):''}`:'— alege produs —';
+  return`<button type="button" class="smi-pick-btn" onclick="openFurnizorPick(event,${idx})">${th}<span class="smi-pick-nm">${nm}</span><span class="smi-pick-car">▾</span></button>`;
+}
+function clearFurnizorPick(idx){furnizorImpParsed[idx].produsId=null;furnizorImpParsed[idx].score=0;renderFurnizorImportPreview();}
+let furnizorPickIdx=null,furnizorPickProds=null;
+function openFurnizorPick(ev,idx){
+  ev.stopPropagation();
+  furnizorPickIdx=idx;
+  if(!furnizorPickProds||furnizorPickProds._t!==P.length)furnizorPickProds=Object.assign(P.filter(p=>!p.archived).slice().sort((a,b)=>a.name.localeCompare(b.name,'ro')),{_t:P.length});
+  const drop=document.getElementById('cf-pickdrop');
+  const btn=ev.currentTarget.getBoundingClientRect();
+  let left=btn.left,top=btn.bottom+4;
+  if(left+460>window.innerWidth)left=window.innerWidth-470;
+  if(top+420>window.innerHeight)top=Math.max(8,btn.top-424);
+  drop.style.left=zoomAdjust(left)+'px';drop.style.top=zoomAdjust(top)+'px';
+  drop.classList.add('on');
+  const search=document.getElementById('cf-pick-search');
+  search.value='';
+  filterFurnizorPick();
+  search.focus();
+}
+function filterFurnizorPick(){
+  const q=(document.getElementById('cf-pick-search')?.value||'').toLowerCase().trim();
+  const list=document.getElementById('cf-pick-list');if(!list)return;
+  const pool=furnizorPickProds||[];
+  const matches=(q?pool.filter(p=>p.name.toLowerCase().includes(q)||(p.sku&&p.sku.toLowerCase().includes(q))):pool).slice(0,80);
+  list.innerHTML=matches.map(p=>{
+    const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'cf')}>`:`<div class="smi-pick-th-ph">📦</div>`;
+    return`<div class="smi-pick-item" onclick="pickFurnizorProduct(${p.id})">${th}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</span></div>`;
+  }).join('')||`<div class="smi-pick-item" style="color:var(--t3);cursor:default">Niciun produs găsit</div>`;
+}
+const filterFurnizorPickDebounced=debounce(()=>filterFurnizorPick(),150);
+function pickFurnizorProduct(id){
+  if(furnizorPickIdx==null)return;
+  const it=furnizorImpParsed[furnizorPickIdx];
+  it.produsId=id;it.score=1;
+  document.getElementById('cf-pickdrop').classList.remove('on');
+  renderFurnizorImportPreview();
+}
+document.addEventListener('click',ev=>{
+  if(!ev.target.closest('#cf-pickdrop')&&!ev.target.closest('.cf-pick-trigger')){
+    const d=document.getElementById('cf-pickdrop');if(d)d.classList.remove('on');
+  }
+});
 async function applyFurnizorComanda(){
   const furnizor=document.getElementById('cf-furnizor').value.trim();
   if(!furnizor){toast('Completează furnizorul','err');return;}
   if(!furnizorImpParsed.length)return;
   const comandaRef=document.getElementById('cf-comanda-ref').value.trim()||null;
+  const dataEstimativa=document.getElementById('cf-data-estimativa').value||null;
   const btn=document.getElementById('cf-apply-btn');btn.disabled=true;btn.textContent='Se salvează…';
   try{
-    const rows=furnizorImpParsed.map(it=>({furnizor,comanda_ref:comandaRef,titlu_extern:it.titluExtern,cod_extern:it.codExtern||null,produs_id:it.produsId,cantitate_comandata:it.cantitate,pret:it.pret||0}));
-    await dbPost('comenzi_furnizor',rows);
-    toast(`✓ ${rows.length} produse trimise ca și comandă așteptată — apar în Staff`);
+    const rows=furnizorImpParsed.map(it=>({furnizor,comanda_ref:comandaRef,titlu_extern:it.titluExtern,cod_extern:it.codExtern||null,produs_id:it.produsId,cantitate_comandata:it.cantitate,pret:it.pret||0,data_estimativa:dataEstimativa}));
+    let dateSkipped=false;
+    try{
+      await dbPost('comenzi_furnizor',rows);
+    }catch(e){
+      // Coloană nouă (data_estimativa) — degradare grațioasă dacă migration_comenzi_furnizor.sql nu a
+      // rulat încă (fără asta, TOT lotul ar eșua la scriere doar din cauza unui câmp opțional).
+      if(!/data_estimativa/i.test(String(e.message||e)))throw e;
+      await dbPost('comenzi_furnizor',rows.map(({data_estimativa,...rest})=>rest));
+      dateSkipped=true;
+    }
+    toast(`✓ ${rows.length} produse trimise ca și comandă așteptată — apar în Staff${dateSkipped?' (dată estimativă neinclusă — rulează migration_comenzi_furnizor.sql)':''}`,dateSkipped?'err':undefined);
     closeFurnizorComanda();
   }catch(e){
     toast('Eroare la salvare: '+(e.message||e)+' (rulează migration_comenzi_furnizor.sql?)','err');
