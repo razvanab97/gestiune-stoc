@@ -3921,6 +3921,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:470,text:'Comenzi Platforme — „confirmare instant", cerut direct: o linie găsită prin PNK, titlu sau cod deja cunoscute (aceleași semnale arătate cu ✓ verde, nu un scor fuzzy oarecare) se scrie acum SINGURĂ, imediat — devine vizibilă/împachetabilă în Staff fără să mai apeși „✓ Inclus" manual, exact ca o comandă normal confirmată (stocul rămâne neatins până la „Aplică import" — reversibil oricând prin „🚫 Anulează"). Funcționează și din import manual (fișier/API), și din reîmprospătarea silențioasă de fundal. Restul (potrivire fuzzy fără niciun identificator sigur, sau fără produs) rămâne exact ca înainte — se confirmă manual, prin „✓ Inclus". Pe drum, 2 reparații de siguranță găsite chiar în timpul construcției: o comandă redescoperită ca fiind anulată anterior nu se mai auto-confirmă din greșeală (ar fi contrazis tăcut motivul anulării), iar „⏳ Amână livrarea" retrage acum corect o comandă deja auto-confirmată, nu doar bifa locală.',date:'2026-09-24'},
   {n:469,text:'„📥 Comandă furnizor" — trei completări cerute direct. (1) Câmp nou opțional „Dată estimativă (gata la furnizor)" — dacă lipsește, termenul de livrare se calculează de la data plasării comenzii. La 7 zile peste acest termen, dacă linia n-a fost marcată sosită, se trece automat pe „⛔ nu a ajuns" — apare în clopoțel exact ca o raportare manuală din Staff, fără să mai fie nevoie ca cineva să verifice manual. (2) Bug real reparat: codul produsului extras din text/poză nu era folosit deloc la potrivirea automată (doar numele) — acum verifică întâi codul (SKU propriu sau cod de la „Alt furnizor"), mult mai fiabil când numele are variante ambigue în stoc. (3) Picker manual pe fiecare linie din previzualizare — potrivirea automată rămâne doar un punct de plecare, se poate alege oricând alt produs sau elimina complet asocierea, la fel ca la Comenzi Platforme/Sincronizare. Necesită migration_comenzi_furnizor_termen.sql — până rulează, restul funcționează neschimbat, doar data estimativă nu se salvează încă.',date:'2026-09-24'},
   {n:468,text:'Sincronizare — cerut direct, „strict la produsele pe care le avem în stoc": resincronizarea eMAG (toate 3 piețele) și „Import în masă din fișier" nu mai aduc nimic pentru un produs arhivat — nici actualizare de stoc extern pe o mapare deja confirmată, nici o nouă asociere prin PNK/nume, chiar dacă potrivirea ar fi perfectă; listarea e sărită complet, nu doar lăsată „fără sugestie" (reapare normal dacă produsul e vreodată dezarhivat). „🤖 Sugerează cu AI" nu mai vede deloc produsele arhivate ca posibili candidați — rămâne la fel de insistent să găsească o sugestie pentru cât mai multe titluri, dar doar dintre produsele active. Pe drum, buton nou „🗑 Elimină" pe fiecare linie din previzualizare, cerut direct: scoate rândul din previzualizarea curentă (nu salvează nimic) — listarea reapare normal la următoarea resincronizare/import, util pentru „nu am treabă cu asta acum".',date:'2026-09-24'},
   {n:467,text:'„Preț privat" — iconița devine 💸 (era 🔒 de la #466), cerut direct: „un emoticon care să dea senzația de bani" — mai potrivit pentru un instrument de verificat rapid profitabilitatea, decât un lacăt. Nu se suprapune cu 💰 (deja folosit la „Preț achiziție") sau 💵 (Profit estimat, Dashboard).',date:'2026-09-24'},
@@ -16377,9 +16378,12 @@ async function handlePcomImportFile(ev){
             const match=findExistingProduct({name:titlu});
             if(match){produsId=match.product.id;score=match.score;}
           }
-          // include pornește NEconfirmat (cerere directă) — chiar dacă produsul s-a potrivit automat,
-          // scrierea comenzii (și apariția ei în Staff) se întâmplă abia la click pe „✓ Inclus”, nu
-          // doar din încărcarea fișierului. Vezi togglePcomInclude/commitPcomLine mai jos.
+          // include pornește confirmat DOAR pentru o potrivire sigură (PNK/titlu/cod deja cunoscute —
+          // aceleași semnale arătate cu ✓ verde în matchTag, nu un scor fuzzy oarecare) — cerut direct,
+          // „confirmare instant pentru cele care se pot confirma instant”. O potrivire fuzzy după nume
+          // (fără niciun identificator sigur) rămâne NEconfirmată, exact ca înainte — scrierea comenzii
+          // (și apariția ei în Staff) se întâmplă abia la click pe „✓ Inclus”. Vezi togglePcomInclude/
+          // commitPcomLine mai jos.
           // Cerut direct: titlul de pe platformă spune des „Pachet 3”/„Set 2” (comanda e pentru
           // MULTIPACK-ul de pe listare), dar cantitatea din Excel reflectă câte LISTĂRI s-au cumpărat
           // (de obicei 1), nu câte bucăți fizice ies din stoc — la fel ca „Set 6 organizatoare” de la
@@ -16387,7 +16391,7 @@ async function handlePcomImportFile(ev){
           // riscăm o scădere de stoc greșită dintr-un fals-pozitiv (ex. un cod care conține o cifră).
           const packSize=pcomDetectPackSize(titlu);
           const suggestedCantitate=packSize&&packSize!==cantitate?Math.round(cantitate*packSize*100)/100:null;
-          const line={platforma:filePlatforma,comandaId,pachetId,data,pnk,tara,codProdus,clientNume,titluExtern:titlu,cantitate,suggestedCantitate,pretFaraTva,pretTotalCuTva,moneda,produsId,score,viaPnk,viaTitle,viaCode,include:false,_source:'file'};
+          const line={platforma:filePlatforma,comandaId,pachetId,data,pnk,tara,codProdus,clientNume,titluExtern:titlu,cantitate,suggestedCantitate,pretFaraTva,pretTotalCuTva,moneda,produsId,score,viaPnk,viaTitle,viaCode,include:viaPnk||viaTitle||viaCode,_source:'file'};
           const state=gate.add(line);
           if(state==='preview'||state==='applied'){alreadyImportedCount++;continue;}
           if(state==='restored')restoredCount++;
@@ -16404,6 +16408,9 @@ async function handlePcomImportFile(ev){
       toast(failedFiles.length?'Niciun fișier n-a putut fi citit: '+failedFiles.join(', '):alreadyImportedCount?`Nicio linie nouă — toate cele ${alreadyImportedCount} comenzi din fișier există deja (importate anterior sau deja în previzualizare)`:'Nicio linie nouă de importat (fișierele sunt goale)','err');
       return;
     }
+    // Referințe (nu indici) — sortarea de mai jos schimbă pozițiile, indicii de-acum ar fi greșiți la
+    // confirmarea instant de mai jos.
+    const newLines=pcImpParsed.slice(preExistingCount);
     // La „both", grupează liniile pe platformă (eMAG întâi, apoi Trendyol) indiferent de ordinea în
     // care au fost alese fișierele — sortare stabilă, păstrează ordinea originală în interiorul
     // fiecărei platforme — ca previzualizarea să arate secțiuni curate, separate de o linie. Rulează pe
@@ -16420,6 +16427,7 @@ async function handlePcomImportFile(ev){
     document.getElementById('pcmi-ai-btn').style.display=noMatch?'':'none';
     toast(`${newlyAddedCount} linii noi adăugate${files.length>1?' din '+files.length+' fișiere':''} (total ${pcImpParsed.length} în previzualizare) · ${pcImpParsed.length-noMatch} cu produs asociat ✓${restoredCount?` · ${restoredCount} recuperate pentru Staff`:''}${cancelledCount?` · ${cancelledCount} anulate anterior — de reconsiderat`:''}${alreadyImportedCount?` · ${alreadyImportedCount} deja aplicate/în previzualizare (ignorate)`:''}${failedFiles.length?' · '+failedFiles.length+' fișiere ignorate: '+failedFiles.join(', '):''}`);
     pcomTranslateForeignTitles();
+    await autoCommitConfidentPcomLines(newLines);
   }catch(err){
     parsing.style.display='none';
     toast('Eroare la citirea fișierelor: '+err.message,'err');
@@ -16433,7 +16441,7 @@ function pcomEmagMatchLine(raw){
   if(!produsId&&raw.titluExtern){const key=raw.titluExtern.toLowerCase().trim(),m=SYNCM.find(s=>s.platforma==='emag'&&s.confirmat&&s.titluExtern.toLowerCase().trim()===key);if(m){produsId=m.produsId;score=1;viaTitle=true;}}
   if(!produsId&&raw.codProdus){const key=raw.codProdus.toLowerCase(),p=P.find(x=>(x.sku||'').toLowerCase()===key||(x.internalCode||'').toLowerCase()===key);if(p){produsId=p.id;score=1;viaCode=true;}}
   if(!produsId){const m=findExistingProduct({name:raw.titluExtern});if(m){produsId=m.product.id;score=m.score;}}
-  return{...raw,platforma:'emag',data:raw.data||td(),produsId,score,viaPnk,viaTitle,viaCode,include:false};
+  return{...raw,platforma:'emag',data:raw.data||td(),produsId,score,viaPnk,viaTitle,viaCode,include:viaPnk||viaTitle||viaCode};
 }
 function pcomTrendyolMatchLine(raw){
   let produsId=null,score=0,viaPnk=false,viaTitle=false,viaCode=false;
@@ -16441,7 +16449,7 @@ function pcomTrendyolMatchLine(raw){
   if(!produsId&&raw.titluExtern){const key=raw.titluExtern.toLowerCase().trim(),m=SYNCM.find(s=>s.platforma==='trendyol'&&s.confirmat&&s.titluExtern.toLowerCase().trim()===key);if(m){produsId=m.produsId;score=1;viaTitle=true;}}
   if(!produsId&&raw.codProdus){const key=raw.codProdus.toLowerCase(),p=P.find(x=>(x.sku||'').toLowerCase()===key||(x.internalCode||'').toLowerCase()===key);if(p){produsId=p.id;score=1;viaCode=true;}}
   if(!produsId){const m=findExistingProduct({name:raw.titluExtern});if(m){produsId=m.product.id;score=m.score;}}
-  return{...raw,platforma:'trendyol',data:raw.data||td(),produsId,score,viaPnk,viaTitle,viaCode,include:false};
+  return{...raw,platforma:'trendyol',data:raw.data||td(),produsId,score,viaPnk,viaTitle,viaCode,include:viaPnk||viaTitle||viaCode};
 }
 // O comandă confirmată cu „Inclus” există deja în baza Staff, însă stocul/Jurnalul nu sunt încă
 // aplicate (efecteAplicate===false). Dacă pagina a fost reîncărcată sau previzualizarea locală s-a
@@ -16462,7 +16470,11 @@ function pcomApiImportGate(keyOf){
       // anulat pe motiv „stoc zero”, dar produsul a fost între timp regăsit/reaprovizionat. Nu o readucem
       // automat ca „Inclus” (ar contrazice tăcut motivul notat), dar nici n-o mai ignorăm ca „aplicată”:
       // apare vizibil, cu motivul anulării, și un buton dedicat de reconsiderare.
-      if(old&&old.anulata){line._cancelledId=old.id;line._cancelledMotiv=old.motivAnulare||'';pcImpParsed.push(line);previewKeys.add(key);return'cancelled';}
+      // include forțat pe false, indiferent cât de sigură ar fi potrivirea (viaPnk/viaTitle/viaCode) —
+      // de când liniile astea pot porni include:true la construcție (confirmare instant), o comandă
+      // anulată redescoperită ar fi altfel auto-confirmată/scrisă din nou, contrazicând tăcut exact
+      // motivul anulării notat mai sus.
+      if(old&&old.anulata){line.include=false;line._cancelledId=old.id;line._cancelledMotiv=old.motivAnulare||'';pcImpParsed.push(line);previewKeys.add(key);return'cancelled';}
       if(old){line.include=true;line._committedId=old.id;line._restoredFromGate=true;}
       pcImpParsed.push(line);previewKeys.add(key);
       return old?'restored':'added';
@@ -16513,6 +16525,7 @@ async function importTrendyolApiOrders(silent=false){
     const noMatch=added-matched,aiBtn=document.getElementById('pcmi-ai-btn');if(aiBtn)aiBtn.style.display=noMatch?'':'none';
     if(!silent)toast(`${added} linii Trendyol aduse · ${matched} asociate${restored?` · ${restored} recuperate pentru Staff`:''}${cancelled?` · ${cancelled} anulate anterior — de reconsiderat`:''}${noMatch?` · ${noMatch} necesită confirmare`:''}${duplicates?` · ${duplicates} deja aplicate/în previzualizare (ignorate)`:''} · AWB-urile sunt preluate pentru Staff.`);
     pcomTranslateForeignTitles();
+    await autoCommitConfidentPcomLines(newLines);
   }catch(e){if(!silent)toast('Trendyol: '+(e.message||'nu am putut citi comenzile'),'err');else console.warn('Actualizare automată Trendyol eșuată:',e);}
   finally{if(btn&&!silent){btn.disabled=false;btn.textContent='🛍️ Adu comenzi Trendyol';}}
 }
@@ -16541,6 +16554,7 @@ async function importEmagApiOrders(silent=false){
     const noMatch=added-matched,aiBtn=document.getElementById('pcmi-ai-btn');if(aiBtn)aiBtn.style.display=noMatch?'':'none';
     if(!silent)toast(`${added} linii eMAG noi/în lucru aduse · ${matched} asociate${restored?` · ${restored} recuperate pentru Staff`:''}${cancelled?` · ${cancelled} anulate anterior — de reconsiderat`:''}${noMatch?` · ${noMatch} necesită confirmare`:''}${duplicates?` · ${duplicates} deja aplicate/în previzualizare (ignorate)`:''}${unavailable.size?` · Atenție: ${[...unavailable].join(', ')} neconfigurat/blocat`:''}`,unavailable.size?'warn':undefined);
     pcomTranslateForeignTitles();
+    await autoCommitConfidentPcomLines(newLines);
   }catch(e){if(!silent)toast('eMAG: '+(e.message||'nu am putut citi comenzile'),'err');else console.warn('Actualizare automată eMAG eșuată:',e);}
   finally{if(btn&&!silent){btn.disabled=false;btn.textContent='🛒 Adu comenzi eMAG';}}
 }
@@ -16642,11 +16656,15 @@ function pcomStockWarningHtml(idx){
 // adaugă acum SINGUR pe „Produse de comandat" — omul nu mai trebuie să repete alegerea separat, din
 // butonul „🛒 Adaugă la comandat" de mai jos (rămas neschimbat, pentru cazul invers — adăugat manual,
 // fără să amâni livrarea).
-function togglePcomAmanat(idx){
+async function togglePcomAmanat(idx){
   const it=pcImpParsed[idx];
   it.amanat=!it.amanat;
   if(it.amanat&&it.produsId)addToReorderList(it.produsId);
   renderPcomImportPreview();
+  // De la confirmarea instant (liniile sigure pot porni deja comise, fără click pe „✓ Inclus”): o
+  // amânare trebuie să retragă și comanda deja scrisă în Staff, nu doar flagul local — altfel rămânea
+  // vizibilă/împachetabilă acolo, deși omul tocmai a decis s-o amâne din lipsă de stoc.
+  await syncPcomLineCommitState(idx);
 }
 function currentMonthKey(){return new Date().toISOString().slice(0,7);}
 function isInReorderList(productId){
@@ -17179,6 +17197,21 @@ async function syncPcomLineCommitState(idx){
   const shouldCommit=it.include&&it.produsId&&!it.amanat;
   if(shouldCommit&&!it._committedId)await commitPcomLine(idx);
   else if(!shouldCommit&&it._committedId)await uncommitPcomLine(idx);
+}
+// Confirmare instant pentru liniile cu potrivire sigură (cerut direct — „confirmare instant, pentru
+// cele care se pot confirma instant, pe lângă cele care se vor confirma prin inclus”): scrie comanda
+// (devine vizibilă/împachetabilă în Staff), FĂRĂ să atingă stocul — exact ca la bifarea manuală
+// „✓ Inclus” (efecte_aplicate=false, reversibil oricând prin „🚫 Anulează”/debifare). Rulează pe liniile
+// deja marcate include:true la construcție (viaPnk/viaTitle/viaCode — vezi pcomEmagMatchLine/
+// pcomTrendyolMatchLine/handlePcomImportFile), atât din import manual, cât și din reîmprospătarea
+// silențioasă de fundal — o comandă pentru un produs deja cunoscut ajunge în Staff fără să mai fie
+// nevoie ca cineva să deschidă pagina și să apese ceva. Primește obiecte (nu indici): un import cu
+// sortare ulterioară (ex. „mixte”) schimbă pozițiile, indicii de dinainte de sortare ar fi greșiți.
+async function autoCommitConfidentPcomLines(lines){
+  const idxs=(lines||[]).map(l=>pcImpParsed.indexOf(l)).filter(i=>i>=0&&pcImpParsed[i].include&&!pcImpParsed[i]._committedId);
+  if(!idxs.length)return;
+  for(const i of idxs)await syncPcomLineCommitState(i);
+  renderPcomImportPreview();
 }
 async function togglePcomInclude(idx){
   pcImpParsed[idx].include=!pcImpParsed[idx].include;
