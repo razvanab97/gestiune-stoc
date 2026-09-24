@@ -3921,6 +3921,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:473,text:'Asociere AWB — 2 formate noi de etichetă recunoscute, cerute direct: (1) eMAG Ungaria prin Sameday/Pactic (etichetă în maghiară, fără niciun ID de comandă recognoscibil în sistemul nostru) — se asociază acum după numele clientului („Címzett:") ȘI suma de ramburs („Utánvét:", FT), la fel ca la eticheta digitală Vinted, dar pe alte câmpuri; (2) Cargus „Click & Collect" generat de Vinted — codul de sub „CARGUS" (format „XXXXXXX / XXXXXXX", diferit de „Comanda:" și de codul de bare) se potrivește EXACT cu awb-ul deja cunoscut al comenzii Vinted, salvat la citirea capturii din aplicație. Funcționează atât la selectarea manuală a PDF-ului, cât și la citirea din dosarul Desktop/AWB-uri.',date:'2026-09-24'},
   {n:472,text:'Comenzi Platforme — buton nou „✓ Deja livrată" pe fiecare linie din previzualizare, cerut direct: pentru o comandă deja împachetată/livrată fizic (ex. ieri), dar reîntoarsă la o resincronizare (eMAG/Trendyol încă o raportează „în lucru"), un singur click o comite și o anulează cu motiv fix — nu mai reapare la viitoarele resincronizări/importuri. Reutilizează 100% infrastructura de anulare deja existentă (card „🚫 Comenzi anulate", reconsiderare oricând) — nicio coloană/tabelă nouă.',date:'2026-09-24'},
   {n:471,text:'Sincronizare — aceeași idee de „confirmare instant" ca la Comenzi Platforme (#470), cerută direct, dar cu o diferență importantă: aici o mapare confirmată nu mai are nimic de revizuit, deci rândul chiar DISPARE din previzualizare, nu doar rămâne bifat. Scopat strict la PNK deja cunoscut (identificator exact, nu scor fuzzy) — funcționează la resincronizarea eMAG și la „Import în masă din fișier". O potrivire după nume, oricât de mare scorul, rămâne vizibilă pentru confirmare manuală, exact ca înainte.',date:'2026-09-24'},
   {n:470,text:'Comenzi Platforme — „confirmare instant", cerut direct: o linie găsită prin PNK, titlu sau cod deja cunoscute (aceleași semnale arătate cu ✓ verde, nu un scor fuzzy oarecare) se scrie acum SINGURĂ, imediat — devine vizibilă/împachetabilă în Staff fără să mai apeși „✓ Inclus" manual, exact ca o comandă normal confirmată (stocul rămâne neatins până la „Aplică import" — reversibil oricând prin „🚫 Anulează"). Funcționează și din import manual (fișier/API), și din reîmprospătarea silențioasă de fundal. Restul (potrivire fuzzy fără niciun identificator sigur, sau fără produs) rămâne exact ca înainte — se confirmă manual, prin „✓ Inclus". Pe drum, 2 reparații de siguranță găsite chiar în timpul construcției: o comandă redescoperită ca fiind anulată anterior nu se mai auto-confirmă din greșeală (ar fi contrazis tăcut motivul anulării), iar „⏳ Amână livrarea" retrage acum corect o comandă deja auto-confirmată, nu doar bifa locală.',date:'2026-09-24'},
@@ -20441,6 +20442,38 @@ function parseAwbLabelText(text){
   // generateGlsLabelPdf) — „PRODUS" + denumire + „COD DE EXPEDIERE" + cod, nimic altceva pe pagină.
   const glsOwnLabelM=text.match(/^PRODUS\n([^\n]+)\nCOD DE EXPEDIERE\n([A-Za-z0-9]{4,20})\s*$/);
   if(glsOwnLabelM)return{vintedDigitalLabel:true,courier:'GLS',destinatar:'',produs:glsOwnLabelM[1].trim(),awb:glsOwnLabelM[2].trim()};
+  // eMAG Ungaria prin Sameday/Pactic (al 7-lea format, cerut direct — „o să mai găsesc din astea, să
+  // fie recunoscută și asociată după nume client și suma de vânzare"): etichetă în maghiară, fără
+  // niciun ID de comandă recognoscibil în sistemul nostru („Ref. sz." e o referință internă Pactic/
+  // curier, nu comanda_id-ul eMAG) — spre deosebire de eticheta GLS Ungaria de mai sus (care are
+  // „ID=X;"), aici SINGURA legătură posibilă e numele clientului („Címzett:") și suma de ramburs
+  // („Utánvét:", în FT = HUF), comparate direct cu clientNume/pretTotalCuTva ale comenzilor eMAG HU
+  // nerezolvate (vezi resolveEmagHuLabelMatch) — la fel ca eticheta digitală Vinted, dar pe alte câmpuri.
+  if(/Címzett:/.test(text)&&/Utánvét:/i.test(text)){
+    const huNameM=text.match(/Címzett:\s*\n\s*([^\n]+)/);
+    const huAmountM=text.match(/Utánvét:\s*([\d][\d\s.,]*\d|\d)\s*FT/i);
+    if(huNameM&&huAmountM){
+      const name=huNameM[1].trim();
+      const amount=Number(huAmountM[1].replace(/[^\d]/g,''));
+      const barcodeM=text.match(/^\s*(\d[\d ]{10,40}\d)\s*$/m);
+      const awb=barcodeM?barcodeM[1].replace(/\s+/g,' ').trim():'';
+      if(name&&amount)return canceled?{courierCanceled:true,awb:awb||String(amount)}:{emagHuLabel:true,courier:'Sameday',destinatarHu:name,amountHuf:amount,awb};
+    }
+  }
+  // Cargus — etichetă „Click & Collect" generată de Vinted (al 8-lea format, cerut direct: „are numărul
+  // de awb acolo de formatul: 0219330 / 0219282, acesta să fie asociat cu comanda de la Vinted care are
+  // codul asta"): fără niciun ID de comandă Vinted pe etichetă, la fel ca eticheta digitală Vinted de
+  // mai sus — dar aici codul de pe etichetă (perechea de sub „CARGUS", DIFERITĂ de „Comanda:" — referința
+  // internă Cargus — și de codul de bare de sub ea) se potrivește EXACT (nu fuzzy pe titlu) cu awb-ul
+  // deja cunoscut al comenzii Vinted, salvat la citirea capturii din aplicația Vinted (vezi
+  // resolveCargusClickCollectMatch).
+  if(/CARGUS/.test(text)&&/Serviciu:\s*Click\s*&\s*Collect/i.test(text)){
+    const cargusM=text.match(/(\d{5,8}\s*\/\s*\d{5,8})/);
+    if(cargusM){
+      const awb=cargusM[1].replace(/\s+/g,' ').trim();
+      return canceled?{courierCanceled:true,awb}:{cargusClickCollectLabel:true,courier:'Cargus',awb};
+    }
+  }
   return null;
 }
 // Rezolvă eticheta Vinted digitală (fără niciun ID de comandă propriu) la o comandă Vinted deja
@@ -20465,6 +20498,44 @@ function resolveVintedDigitalLabelMatch(p){
   const second=scored[1];
   if(second&&second.score>=best.score-0.05&&second.o.comandaId!==best.o.comandaId)return{...p,vintedAmbiguous:true};
   return{...p,comandaId:best.o.comandaId,matchScore:best.score};
+}
+// Rezolvă eticheta eMAG Ungaria (Sameday/Pactic, fără niciun comandaId propriu — vezi parseAwbLabelText)
+// la o comandă eMAG HU deja importată, nerezolvată încă (fără AWB), prin numele clientului ȘI suma de
+// ramburs — cerut direct („să fie recunoscută și asociată după nume client și suma de vânzare"). O
+// comandă poate avea mai multe linii de produs sub același comandaId (ex. 2 produse cumpărate împreună)
+// — grupăm și însumăm pretTotalCuTva pe comandaId, ca suma de pe etichetă (totalul coletului) să se
+// compare corect cu totalul comenzii, nu doar cu o singură linie. Prag de nume la fel de ridicat ca la
+// Vinted (0.5) și toleranță mică pe sumă (rotunjiri FT) — o potrivire greșită ar asocia AWB-ul unui
+// client la comanda altuia.
+function resolveEmagHuLabelMatch(p){
+  const candidates=PCOM.filter(o=>o.platforma==='emag'&&(o.tara==='HU'||String(o.moneda||'').toUpperCase()==='HUF')&&!o.awb&&!o.anulata&&!o.impachetat);
+  const groups=new Map();
+  candidates.forEach(o=>{
+    const g=groups.get(o.comandaId)||{comandaId:o.comandaId,clientNume:o.clientNume||'',total:0};
+    g.total+=Number(o.pretTotalCuTva)||0;
+    if(o.clientNume)g.clientNume=o.clientNume;
+    groups.set(o.comandaId,g);
+  });
+  const scored=[...groups.values()]
+    .filter(g=>Math.abs(g.total-p.amountHuf)<=Math.max(2,g.total*0.01))
+    .map(g=>({g,score:fuzzyMatch(p.destinatarHu,g.clientNume)}))
+    .sort((a,b)=>b.score-a.score);
+  const best=scored[0];
+  if(!best||best.score<0.5)return p;
+  const second=scored[1];
+  if(second&&second.score>=best.score-0.05&&second.g.comandaId!==best.g.comandaId)return{...p,emagHuAmbiguous:true};
+  return{...p,comandaId:best.g.comandaId,matchScore:best.score};
+}
+// Rezolvă eticheta Cargus „Click & Collect" (generată de Vinted, fără niciun cod de comandă propriu —
+// vezi parseAwbLabelText) la comanda Vinted care are deja EXACT acest cod salvat ca awb — cerut direct
+// („acesta să fie asociat cu comanda de la Vinted care are codul asta"). Spre deosebire de eticheta
+// digitală Vinted de mai sus (care se potrivește fuzzy, după titlul produsului, fiindcă nu are niciun
+// cod), aici codul de pe etichetă e deja cunoscut EXACT (salvat la citirea capturii din aplicația
+// Vinted — vezi vintedRunRecognition), deci nicio ambiguitate posibilă: fie se potrivește exact, fie nu.
+function resolveCargusClickCollectMatch(p){
+  const hit=PCOM.find(o=>o.platforma==='vinted'&&!o.anulata&&String(o.awb||'').trim()===p.awb);
+  if(!hit)return p;
+  return{...p,comandaId:hit.comandaId};
 }
 // Cerut direct (grill-me rutina zilnică — „avem PDF în calcul pentru Vinted, comenzile pot veni prin
 // PDF"): o etichetă Vinted digitală (sau propria etichetă GLS) FĂRĂ nicio comandă Vinted nerezolvată
@@ -20509,6 +20580,8 @@ async function handleAwbPdfFile(ev){
       pages.forEach((text,i)=>{
         let p=parseAwbLabelText(text);
         if(p&&p.vintedDigitalLabel)p=resolveVintedDigitalLabelMatch(p);
+        if(p&&p.emagHuLabel)p=resolveEmagHuLabelMatch(p);
+        if(p&&p.cargusClickCollectLabel)p=resolveCargusClickCollectMatch(p);
         const label=`${file.name} p.${i+1}`;
         // Un PDF ales manual are un nume de fișier, deci și DPD-ul fără „note:" poate fi
         // reconciliat când documentul a fost descărcat cu numărul comenzii la începutul numelui.
@@ -20624,6 +20697,8 @@ async function readAwbFolderPdfs(){
         pages.forEach((text,i)=>{
           let p=parseAwbLabelText(text);
           if(p&&p.vintedDigitalLabel)p=resolveVintedDigitalLabelMatch(p);
+          if(p&&p.emagHuLabel)p=resolveEmagHuLabelMatch(p);
+          if(p&&p.cargusClickCollectLabel)p=resolveCargusClickCollectMatch(p);
           // Etichetă Vinted/GLS fără NICIO comandă nerezolvată de asociat (nu ambiguă — ambiguul rămâne
           // mai jos, la fel ca înainte) — vezi pcomCreateVintedLineFromLabel: creează direct o comandă
           // Vinted nouă în previzualizare, în loc să rămână doar o eroare „asociază manual”. Fișierul se
@@ -20708,12 +20783,17 @@ function renderAwbPreview(){
       // client atribuit la comanda ALTUIA).
       if(p.vintedAmbiguous)return`<div class="inv-prev-row" style="color:var(--rd)">⚠️ Etichetă Vinted (${esc(p.courier)}) — „${esc(p.produs)}" se potrivește la fel de bine cu MAI MULTE comenzi Vinted nerezolvate (AWB ${esc(p.awb)}) — asociază manual, ca să nu greșești clientul</div>`;
       if(p.vintedDigitalLabel)return`<div class="inv-prev-row" style="color:var(--rd)">⚠️ Etichetă Vinted (${esc(p.courier)}) — niciun produs Vinted nerezolvat nu se potrivește cu „${esc(p.produs)}" (AWB ${esc(p.awb)}) — asociază manual sau importă întâi comanda</div>`;
+      if(p.emagHuAmbiguous)return`<div class="inv-prev-row" style="color:var(--rd)">⚠️ Etichetă eMAG Ungaria (Sameday) — „${esc(p.destinatarHu)}" (${esc(p.amountHuf)} FT) se potrivește la fel de bine cu MAI MULTE comenzi eMAG HU nerezolvate (AWB ${esc(p.awb)}) — asociază manual, ca să nu greșești clientul</div>`;
+      if(p.emagHuLabel)return`<div class="inv-prev-row" style="color:var(--rd)">⚠️ Etichetă eMAG Ungaria (Sameday) — nicio comandă eMAG HU nerezolvată nu se potrivește cu „${esc(p.destinatarHu)}" (${esc(p.amountHuf)} FT, AWB ${esc(p.awb)}) — asociază manual sau importă întâi comanda</div>`;
+      if(p.cargusClickCollectLabel)return`<div class="inv-prev-row" style="color:var(--rd)">⚠️ Etichetă Cargus Click & Collect — niciun cod de comandă Vinted nu corespunde cu „${esc(p.awb)}" — asociază manual sau importă întâi comanda</div>`;
       const source=p.file?` · ${esc(p.file)} p.${esc(p.page||'?')}`:'';
       return`<div class="inv-prev-row" style="color:var(--rd)">⚠️ Comanda ${esc(p.comandaId)} (AWB ${esc(p.awb)}) — negăsită sau ambiguă în Comenzi Platforme${source}</div>`;
     }
     const nm=p.rows[0].client_nume||p.rows.map(r=>r.produs_nume).join(', ');
     const already=p.rows[0].awb;
-    const matchNote=p.vintedDigitalLabel&&p.matchScore?` <span style="color:var(--t3)">(Vinted „${esc(p.courier)}" — potrivire produs ${Math.round(p.matchScore*100)}%, verifică)</span>`:'';
+    const matchNote=p.vintedDigitalLabel&&p.matchScore?` <span style="color:var(--t3)">(Vinted „${esc(p.courier)}" — potrivire produs ${Math.round(p.matchScore*100)}%, verifică)</span>`
+      :p.emagHuLabel&&p.matchScore?` <span style="color:var(--t3)">(eMAG Ungaria „${esc(p.destinatarHu)}", ${esc(p.amountHuf)} FT — potrivire nume ${Math.round(p.matchScore*100)}%, verifică)</span>`
+      :p.cargusClickCollectLabel?` <span style="color:var(--t3)">(Cargus Click & Collect — potrivire exactă după cod)</span>`:'';
     return`<div class="inv-prev-row">✓ Comanda ${esc(p.comandaId)} — ${esc(nm)} → AWB ${esc(p.awb)}${already?` <span style="color:var(--t3)">(înlocuiește ${esc(already)})</span>`:''}${matchNote}</div>`;
   }).join('');
   // Etichetă anulată de curier — raportat direct, extins de la DPD la orice curier („nu doar DPD ci
