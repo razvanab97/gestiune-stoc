@@ -441,6 +441,13 @@ input:focus,select:focus,textarea:focus{border-color:var(--acc);box-shadow:0 0 0
 #cf-pickdrop .smi-pick-th,#cf-pickdrop .smi-pick-th-ph{width:76px;height:76px;border-radius:8px;font-size:38px}
 #cf-pickdrop .smi-pick-item{padding:12px 14px;gap:14px}
 #cf-pickdrop .smi-pick-item-nm{font-size:28px;white-space:normal}
+/* Picker-ul de asociere manuală pentru AWB-uri fără potrivire perfectă (cerut direct — „să putem
+   selecta din cele care nu s-au potrivit perfect") — text, nu produse, deci fără coloana de thumbnail,
+   dar în același format mărit ca restul picker-elor similare. */
+#awb-pickdrop{width:460px;max-height:420px}
+#awb-pickdrop input{font-size:28px;padding:9px 12px}
+#awb-pickdrop .smi-pick-item{padding:12px 14px;gap:2px}
+#awb-pickdrop .smi-pick-item-nm{font-size:24px;white-space:normal}
 .btn{font-family:var(--font);font-size:27px;font-weight:500;padding:10px 18px;border-radius:var(--r);cursor:pointer;border:1px solid var(--b2);background:var(--surf);color:var(--t1);transition:all .15s;white-space:nowrap}
 .btn:hover{background:var(--surf2);border-color:var(--b3)}
 .btn-acc{background:var(--acc);color:var(--acc-fg);border-color:var(--acc)}
@@ -2961,6 +2968,7 @@ button.pcx-include-btn.included{border-color:var(--gr)}
           <span id="pcmi-awb-info" style="font-size:24px;color:var(--t3)"></span>
           <button class="btn btn-sm btn-acc" id="pcmi-awb-apply-btn" onclick="applyAwbAssociation()" disabled>Asociază AWB-urile</button>
         </div>
+        <div class="smi-pickdrop" id="awb-pickdrop"><input type="text" id="awb-pick-search" placeholder="Caută după client, comandă sau produs…" oninput="filterAwbPickDebounced()"><div class="smi-pick-list" id="awb-pick-list"></div></div>
       </div>
       <div class="card" style="padding:1rem 1.25rem;margin-top:1rem">
         <div class="sec" style="margin-top:0">Istoric importuri</div>
@@ -3921,6 +3929,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:474,text:'Asociere AWB — buton nou „🔗 Asociază manual" pe orice etichetă fără potrivire perfectă (comandă negăsită, ambiguă, sau nepotrivită automat), cerut direct: deschide o listă căutabilă cu toate comenzile încă nerezolvate (din toate platformele), din care alegi manual comanda corectă — AWB-ul, fișierul și pagina rămân cele citite de pe etichetă, doar comanda se schimbă.',date:'2026-09-24'},
   {n:473,text:'Asociere AWB — 2 formate noi de etichetă recunoscute, cerute direct: (1) eMAG Ungaria prin Sameday/Pactic (etichetă în maghiară, fără niciun ID de comandă recognoscibil în sistemul nostru) — se asociază acum după numele clientului („Címzett:") ȘI suma de ramburs („Utánvét:", FT), la fel ca la eticheta digitală Vinted, dar pe alte câmpuri; (2) Cargus „Click & Collect" generat de Vinted — codul de sub „CARGUS" (format „XXXXXXX / XXXXXXX", diferit de „Comanda:" și de codul de bare) se potrivește EXACT cu awb-ul deja cunoscut al comenzii Vinted, salvat la citirea capturii din aplicație. Funcționează atât la selectarea manuală a PDF-ului, cât și la citirea din dosarul Desktop/AWB-uri.',date:'2026-09-24'},
   {n:472,text:'Comenzi Platforme — buton nou „✓ Deja livrată" pe fiecare linie din previzualizare, cerut direct: pentru o comandă deja împachetată/livrată fizic (ex. ieri), dar reîntoarsă la o resincronizare (eMAG/Trendyol încă o raportează „în lucru"), un singur click o comite și o anulează cu motiv fix — nu mai reapare la viitoarele resincronizări/importuri. Reutilizează 100% infrastructura de anulare deja existentă (card „🚫 Comenzi anulate", reconsiderare oricând) — nicio coloană/tabelă nouă.',date:'2026-09-24'},
   {n:471,text:'Sincronizare — aceeași idee de „confirmare instant" ca la Comenzi Platforme (#470), cerută direct, dar cu o diferență importantă: aici o mapare confirmată nu mai are nimic de revizuit, deci rândul chiar DISPARE din previzualizare, nu doar rămâne bifat. Scopat strict la PNK deja cunoscut (identificator exact, nu scor fuzzy) — funcționează la resincronizarea eMAG și la „Import în masă din fișier". O potrivire după nume, oricât de mare scorul, rămâne vizibilă pentru confirmare manuală, exact ca înainte.',date:'2026-09-24'},
@@ -20537,6 +20546,57 @@ function resolveCargusClickCollectMatch(p){
   if(!hit)return p;
   return{...p,comandaId:hit.comandaId};
 }
+// Picker manual pentru orice etichetă AWB fără potrivire perfectă (cerut direct — „să putem selecta din
+// cele care nu s-au potrivit perfect"): potrivirea automată (comandaId/nume+sumă/cod exact, în funcție
+// de format) rămâne doar un punct de plecare — oricând se poate alege manual comanda corectă dintr-o
+// listă căutabilă cu toate comenzile încă nerezolvate (fără AWB, neanulate, neîmpachetate), indiferent
+// de platformă. Aceeași structură ca la picker-ul de produs din Comandă furnizor (openFurnizorPick),
+// dar pe comenzi în loc de produse.
+let awbPickIdx=null,awbPickVisible=null;
+function awbPickCandidates(){
+  return PCOM.filter(o=>!o.awb&&!o.anulata&&!o.impachetat).slice().sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
+}
+function openAwbPick(ev,idx){
+  ev.stopPropagation();
+  awbPickIdx=idx;
+  const drop=document.getElementById('awb-pickdrop');
+  const btn=ev.currentTarget.getBoundingClientRect();
+  let left=btn.left,top=btn.bottom+4;
+  if(left+460>window.innerWidth)left=window.innerWidth-470;
+  if(top+420>window.innerHeight)top=Math.max(8,btn.top-424);
+  drop.style.left=zoomAdjust(left)+'px';drop.style.top=zoomAdjust(top)+'px';
+  drop.classList.add('on');
+  const search=document.getElementById('awb-pick-search');
+  search.value='';
+  filterAwbPick();
+  search.focus();
+}
+function filterAwbPick(){
+  const q=(document.getElementById('awb-pick-search')?.value||'').toLowerCase().trim();
+  const list=document.getElementById('awb-pick-list');if(!list)return;
+  const pool=awbPickCandidates();
+  const matches=(q?pool.filter(o=>(o.clientNume||'').toLowerCase().includes(q)||(o.comandaId||'').toLowerCase().includes(q)||(o.produsNume||'').toLowerCase().includes(q)||(o.titluExtern||'').toLowerCase().includes(q)):pool).slice(0,80);
+  awbPickVisible=matches;
+  list.innerHTML=matches.map((o,i)=>{
+    const plat=o.platforma==='emag'?'eMAG':o.platforma==='trendyol'?'Trendyol':'Vinted';
+    const nm=o.clientNume||o.produsNume||o.titluExtern||'(fără nume)';
+    const sub=[o.comandaId,o.produsNume||o.titluExtern,o.pretTotalCuTva?o.pretTotalCuTva.toFixed(2)+' '+(o.moneda||'RON'):''].filter(Boolean).join(' · ');
+    return`<div class="smi-pick-item" style="flex-direction:column;align-items:flex-start" onclick="pickAwbOrder(${i})"><span class="smi-pick-item-nm" style="font-weight:700">${esc(plat)} · ${esc(nm)}</span><span class="smi-pick-item-nm" style="font-size:19px;color:var(--t3)">${esc(sub)}</span></div>`;
+  }).join('')||`<div class="smi-pick-item" style="color:var(--t3);cursor:default">Nicio comandă nerezolvată găsită</div>`;
+}
+const filterAwbPickDebounced=debounce(()=>filterAwbPick(),150);
+function pickAwbOrder(i){
+  const o=awbPickVisible?.[i];if(!o)return;
+  const p=awbParsed[awbPickIdx];if(!p)return;
+  awbParsed[awbPickIdx]={...p,comandaId:o.comandaId,rows:[{id:o.id,platforma:o.platforma,client_nume:o.clientNume,produs_nume:o.produsNume,awb:o.awb}],vintedAmbiguous:false,emagHuAmbiguous:false,_manualPick:true};
+  document.getElementById('awb-pickdrop').classList.remove('on');
+  renderAwbPreview();
+}
+document.addEventListener('click',ev=>{
+  if(!ev.target.closest('#awb-pickdrop')&&!ev.target.closest('.awb-pick-trigger')){
+    const d=document.getElementById('awb-pickdrop');if(d)d.classList.remove('on');
+  }
+});
 // Cerut direct (grill-me rutina zilnică — „avem PDF în calcul pentru Vinted, comenzile pot veni prin
 // PDF"): o etichetă Vinted digitală (sau propria etichetă GLS) FĂRĂ nicio comandă Vinted nerezolvată
 // de asociat (resolveVintedDigitalLabelMatch nu a găsit candidat, sau a găsit unul ambiguu — ambiguul
@@ -20774,20 +20834,23 @@ function renderAwbPreview(){
   const box=document.getElementById('pcmi-awb-preview');
   const matched=awbParsed.filter(pcomAwbMatched);
   const unmatched=awbParsed.filter(p=>!pcomAwbMatched(p));
-  let html=awbParsed.map(p=>{
+  let html=awbParsed.map((p,idx)=>{
     if(!pcomAwbMatched(p)){
       // Etichetă Vinted digitală (Cargus/Sameday/etc., fără ID de comandă propriu) — două cazuri
       // distincte de „negăsit", cu mesaje separate, ca omul să știe exact ce trebuie făcut: fie nu
       // există NICIUN candidat destul de asemănător (produsul trebuie importat/asociat manual), fie
       // există DOI+ candidați la fel de buni (ambiguu — orice alegere automată ar risca AWB-ul unui
-      // client atribuit la comanda ALTUIA).
-      if(p.vintedAmbiguous)return`<div class="inv-prev-row" style="color:var(--rd)">⚠️ Etichetă Vinted (${esc(p.courier)}) — „${esc(p.produs)}" se potrivește la fel de bine cu MAI MULTE comenzi Vinted nerezolvate (AWB ${esc(p.awb)}) — asociază manual, ca să nu greșești clientul</div>`;
-      if(p.vintedDigitalLabel)return`<div class="inv-prev-row" style="color:var(--rd)">⚠️ Etichetă Vinted (${esc(p.courier)}) — niciun produs Vinted nerezolvat nu se potrivește cu „${esc(p.produs)}" (AWB ${esc(p.awb)}) — asociază manual sau importă întâi comanda</div>`;
-      if(p.emagHuAmbiguous)return`<div class="inv-prev-row" style="color:var(--rd)">⚠️ Etichetă eMAG Ungaria (Sameday) — „${esc(p.destinatarHu)}" (${esc(p.amountHuf)} FT) se potrivește la fel de bine cu MAI MULTE comenzi eMAG HU nerezolvate (AWB ${esc(p.awb)}) — asociază manual, ca să nu greșești clientul</div>`;
-      if(p.emagHuLabel)return`<div class="inv-prev-row" style="color:var(--rd)">⚠️ Etichetă eMAG Ungaria (Sameday) — nicio comandă eMAG HU nerezolvată nu se potrivește cu „${esc(p.destinatarHu)}" (${esc(p.amountHuf)} FT, AWB ${esc(p.awb)}) — asociază manual sau importă întâi comanda</div>`;
-      if(p.cargusClickCollectLabel)return`<div class="inv-prev-row" style="color:var(--rd)">⚠️ Etichetă Cargus Click & Collect — niciun cod de comandă Vinted nu corespunde cu „${esc(p.awb)}" — asociază manual sau importă întâi comanda</div>`;
-      const source=p.file?` · ${esc(p.file)} p.${esc(p.page||'?')}`:'';
-      return`<div class="inv-prev-row" style="color:var(--rd)">⚠️ Comanda ${esc(p.comandaId)} (AWB ${esc(p.awb)}) — negăsită sau ambiguă în Comenzi Platforme${source}</div>`;
+      // client atribuit la comanda ALTUIA). În ambele cazuri (și în formatul generic de mai jos),
+      // cerut direct — „să putem selecta din cele care nu s-au potrivit perfect": picker manual pe
+      // fiecare linie nerezolvată, ca alternativă la a importa/corecta comanda din altă parte.
+      let msg;
+      if(p.vintedAmbiguous)msg=`⚠️ Etichetă Vinted (${esc(p.courier)}) — „${esc(p.produs)}" se potrivește la fel de bine cu MAI MULTE comenzi Vinted nerezolvate (AWB ${esc(p.awb)})`;
+      else if(p.vintedDigitalLabel)msg=`⚠️ Etichetă Vinted (${esc(p.courier)}) — niciun produs Vinted nerezolvat nu se potrivește cu „${esc(p.produs)}" (AWB ${esc(p.awb)})`;
+      else if(p.emagHuAmbiguous)msg=`⚠️ Etichetă eMAG Ungaria (Sameday) — „${esc(p.destinatarHu)}" (${esc(p.amountHuf)} FT) se potrivește la fel de bine cu MAI MULTE comenzi eMAG HU nerezolvate (AWB ${esc(p.awb)})`;
+      else if(p.emagHuLabel)msg=`⚠️ Etichetă eMAG Ungaria (Sameday) — nicio comandă eMAG HU nerezolvată nu se potrivește cu „${esc(p.destinatarHu)}" (${esc(p.amountHuf)} FT, AWB ${esc(p.awb)})`;
+      else if(p.cargusClickCollectLabel)msg=`⚠️ Etichetă Cargus Click & Collect — niciun cod de comandă Vinted nu corespunde cu „${esc(p.awb)}"`;
+      else{const source=p.file?` · ${esc(p.file)} p.${esc(p.page||'?')}`:'';msg=`⚠️ Comanda ${esc(p.comandaId)} (AWB ${esc(p.awb)}) — negăsită sau ambiguă în Comenzi Platforme${source}`;}
+      return`<div class="inv-prev-row" style="color:var(--rd);flex-wrap:wrap;gap:8px"><span style="flex:1;min-width:260px">${msg}</span><button type="button" class="btn btn-sm awb-pick-trigger" style="flex-shrink:0" onclick="openAwbPick(event,${idx})">🔗 Asociază manual</button></div>`;
     }
     const nm=p.rows[0].client_nume||p.rows.map(r=>r.produs_nume).join(', ');
     const already=p.rows[0].awb;
