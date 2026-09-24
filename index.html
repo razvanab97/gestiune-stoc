@@ -3935,6 +3935,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:479,text:'„↺ Reactivează comandă finalizată" — buton nou „➕ Adaugă în Comenzi Platforme", raportat direct cu un caz real (comanda 516977084, eMAG): o comandă poate fi perfect activă în Staff (nici anulată, nici împachetată — deci fără nimic de „reactivat"), dar TOT să lipsească din previzualizarea admin, needitabilă, fără nicio cale de a-i asocia un AWB. Cauza: previzualizarea admin (pcImpParsed) se populează doar din importuri explicite sau dintr-un resync care regăsește comanda — una mai veche, ieșită între timp din „Noi"/„În lucru" pe eMAG, nu mai avea cum să fie recuperată automat. Butonul o aduce direct din bază, deja „✓ Inclus", gata de asociat AWB.',date:'2026-09-24'},
   {n:478,text:'Comenzi Platforme — căutarea (#pcx-search) escaladează acum în 2 pași când nu găsește nimic în previzualizarea curentă, cerut direct: (1) mai caută direct în comenzile deja scrise în bază, INCLUSIV anulate — dacă găsește o comandă anulată, arată direct un buton „↺ Reconsideră", fără să mai fie nevoie să scrolezi la cardul separat „🚫 Comenzi anulate"; (2) dacă nu găsește nimic nicăieri local, propune „🔍 Caută pe eMAG după acest număr" — caută direct pe eMAG, indiferent de status (Nou/În lucru/Pregătită/Finalizată — nu doar Nou+În lucru, ca la „Adu comenzi eMAG"), și aduce comanda în previzualizare, gata de „✓ Inclus"/confirmare instant. Reutilizează 100% infrastructura deja existentă (pcomFetchAndCreateEmagOrderById, reconsiderPcomRow) — nicio logică nouă de potrivire produs.',date:'2026-09-24'},
   {n:477,text:'Asociere AWB — fix pe termen lung, raportat direct cu o comandă reală (#VNT-MUFEBOOHS0A, „Tolescu Elena", scor 67%): o etichetă Vinted digitală rămânea „negăsită" deși comanda corectă era vizibil deja în previzualizare. Cauza: potrivirea automată (și picker-ul manual, #474) căutau STRICT în comenzile deja scrise în bază (platforma_comenzi) — o comandă „Neinclus" (scor de potrivire produs sub prag, încă neconfirmată manual) nu ajunsese încă acolo, deci era invizibilă indiferent cât de bine se potrivea. Acum ambele caută și printre liniile încă necomise din previzualizare — AWB-ul se scrie direct pe acea linie (marcată vizibil „comandă încă «Neinclus»"), gata să fie scris corect în bază la „✓ Inclus".',date:'2026-09-24'},
   {n:476,text:'Două retușuri cerute direct. (1) „Preț privat" — deschiderea butonului 💸 pornește acum mereu din ecranul inițial gol (poză/căutare), nu din starea rămasă de la ultima verificare din aceeași sesiune (produs ales, cost manual, rezultat calculat). (2) Panoul de notificări 🔔 — mărit (820→1080px lățime, 420→560px înălțime): la 820px, cele 4 coloane (Marfă furnizor/Probleme comenzi client/Produse de comandat/Mișcări de stoc) nu încăpeau pe un rând, rupeau vizual pe 2 rânduri.',date:'2026-09-24'},
@@ -4968,7 +4969,16 @@ function searchPcomReactivate(){
     const statusLbl=anyCancelled?'<span style="color:var(--rd)">🚫 anulată</span>':allPacked?'<span style="color:var(--gr)">✓ împachetată/finalizată</span>':somePacked?'<span style="color:var(--or)">◐ parțial împachetată</span>':'<span style="color:var(--t3)">deja activă în Staff</span>';
     const canReactivate=!anyCancelled&&somePacked;
     const ids=grp.filter(o=>o.impachetat).map(o=>o.id).join(',');
-    return`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(names)}</strong> <span style="color:var(--t3);font-family:var(--mono)">· ${esc(pcomPlatLabel(o0.platforma))}${o0.clientNume?' · '+esc(o0.clientNume):''}</span><div class="jp-meta">${statusLbl}${dt?' · '+dt:''}</div></div>${canReactivate?`<button type="button" class="btn btn-sm" onclick="reactivatePcomOrder('${ids}')">↺ Reactivează</button>`:''}</div>`;
+    // Bug real, raportat direct: o comandă poate fi perfect activă în Staff (nici anulată, nici
+    // împachetată — deci fără nimic de „reactivat” în sensul de mai sus) și TOT să lipsească din
+    // previzualizarea admin (pcImpParsed) — ex. o comandă comisă cândva, dar care nu a mai fost
+    // reregăsită de niciun resync ulterior (eMAG a scos-o din „Noi”/„În lucru” între timp), deci gate-ul
+    // n-a mai avut ocazia s-o recupereze automat. Fără acest buton, adminul n-avea NICIO cale să-i
+    // asocieze un AWB din Comenzi Platforme — comanda exista corect în bază, dar era needitabilă.
+    const allIds=grp.map(o=>o.id).join(',');
+    const alreadyInPreview=grp.every(o=>pcImpParsed.some(x=>x._committedId===o.id));
+    const pullBtn=(!anyCancelled&&!alreadyInPreview)?`<button type="button" class="btn btn-sm btn-acc" onclick="pullPcomOrderToPreview('${allIds}')">➕ Adaugă în Comenzi Platforme</button>`:'';
+    return`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(names)}</strong> <span style="color:var(--t3);font-family:var(--mono)">· ${esc(pcomPlatLabel(o0.platforma))}${o0.clientNume?' · '+esc(o0.clientNume):''}</span><div class="jp-meta">${statusLbl}${dt?' · '+dt:''}</div></div><div style="display:flex;gap:6px;flex-wrap:wrap">${pullBtn}${canReactivate?`<button type="button" class="btn btn-sm" onclick="reactivatePcomOrder('${ids}')">↺ Reactivează</button>`:''}</div></div>`;
   }).join('');
 }
 async function reactivatePcomOrder(idsStr){
@@ -4994,6 +5004,37 @@ async function reactivatePcomOrder(idsStr){
     searchPcomReactivate();
     toast('✓ Comandă reactivată — vizibilă din nou în Staff');
   }catch(e){toast('Nu am putut reactiva comanda: '+(e.message||e),'err');}
+}
+// O comandă deja scrisă în platforma_comenzi (deci activă/reală în Staff) poate lipsi complet din
+// previzualizarea admin (pcImpParsed) — populată STRICT din importuri explicite sau din gate-ul care
+// recuperează automat o comandă doar dacă e reregăsită la un resync ulterior. O comandă mai veche, care
+// nu mai apare în „Noi"/„În lucru" pe eMAG (a trecut în alt status pe platforma lor), nu mai are cum să
+// fie recuperată automat — rămânea needitabilă din admin, fără nicio cale de a-i asocia un AWB. Aceeași
+// formă de linie ca la recuperarea automată (pcomApiImportGate, ramura „old" — include:true,
+// _committedId, _restoredFromGate), doar construită direct din PCOM, la cerere, nu din import.
+function pcomLineFromCommittedOrder(o){
+  return{platforma:o.platforma,comandaId:o.comandaId,pachetId:o.comandaId,data:o.data||td(),
+    pnk:o.pnk||'',tara:o.tara||'',codProdus:o.codProdus||'',clientNume:o.clientNume||'',
+    titluExtern:o.titluExtern||o.produsNume||'',produsId:o.produsId||null,produsNume:o.produsNume||'',
+    cantitate:o.cantitate||1,suggestedCantitate:0,pretFaraTva:o.pretFaraTva||0,pretTotalCuTva:o.pretTotalCuTva||0,
+    moneda:o.moneda||'RON',score:o.produsId?1:0,viaPnk:false,viaTitle:false,viaCode:false,
+    include:true,awb:o.awb||'',awbSourceFile:o.awbSourceFile||'',awbSourcePage:o.awbSourcePage||null,awbCourier:o.awbCourier||'',
+    _source:'api',_committedId:o.id,_restoredFromGate:true};
+}
+function pullPcomOrderToPreview(idsStr){
+  const ids=String(idsStr).split(',').map(Number).filter(Boolean);
+  if(!ids.length)return;
+  let added=0;
+  for(const id of ids){
+    const o=PCOM.find(x=>x.id===id);if(!o)continue;
+    if(pcImpParsed.some(x=>x._committedId===id))continue;
+    pcImpParsed.push(pcomLineFromCommittedOrder(o));
+    added++;
+  }
+  if(!added){toast('Comanda e deja vizibilă în previzualizarea de mai sus');return;}
+  renderPcomImportPreview();
+  searchPcomReactivate();
+  toast(`✓ ${added} ${added===1?'linie adusă':'linii aduse'} în Comenzi Platforme — asociază AWB și marchează „✓ Inclus"`);
 }
 async function cancelStaffIssueOrder(table,id){
   const ok=await anuleazaLiniePlatforma(table,id);
