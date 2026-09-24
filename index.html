@@ -3935,6 +3935,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:480,text:'„↺ Reactivează comandă finalizată" — aceeași căutare live pe eMAG de la #478, cerut direct: dacă numărul introdus nu există deloc în bază (nu doar lipsă din previzualizare), apare butonul „🔍 Caută pe eMAG după acest număr" — caută pe eMAG indiferent de status, aduce comanda direct în Comenzi Platforme, deja „✓ Inclus", gata de asociat AWB. Cele 2 puncte de intrare (#pcx-search și acest card) folosesc acum același nucleu comun.',date:'2026-09-24'},
   {n:479,text:'„↺ Reactivează comandă finalizată" — buton nou „➕ Adaugă în Comenzi Platforme", raportat direct cu un caz real (comanda 516977084, eMAG): o comandă poate fi perfect activă în Staff (nici anulată, nici împachetată — deci fără nimic de „reactivat"), dar TOT să lipsească din previzualizarea admin, needitabilă, fără nicio cale de a-i asocia un AWB. Cauza: previzualizarea admin (pcImpParsed) se populează doar din importuri explicite sau dintr-un resync care regăsește comanda — una mai veche, ieșită între timp din „Noi"/„În lucru" pe eMAG, nu mai avea cum să fie recuperată automat. Butonul o aduce direct din bază, deja „✓ Inclus", gata de asociat AWB.',date:'2026-09-24'},
   {n:478,text:'Comenzi Platforme — căutarea (#pcx-search) escaladează acum în 2 pași când nu găsește nimic în previzualizarea curentă, cerut direct: (1) mai caută direct în comenzile deja scrise în bază, INCLUSIV anulate — dacă găsește o comandă anulată, arată direct un buton „↺ Reconsideră", fără să mai fie nevoie să scrolezi la cardul separat „🚫 Comenzi anulate"; (2) dacă nu găsește nimic nicăieri local, propune „🔍 Caută pe eMAG după acest număr" — caută direct pe eMAG, indiferent de status (Nou/În lucru/Pregătită/Finalizată — nu doar Nou+În lucru, ca la „Adu comenzi eMAG"), și aduce comanda în previzualizare, gata de „✓ Inclus"/confirmare instant. Reutilizează 100% infrastructura deja existentă (pcomFetchAndCreateEmagOrderById, reconsiderPcomRow) — nicio logică nouă de potrivire produs.',date:'2026-09-24'},
   {n:477,text:'Asociere AWB — fix pe termen lung, raportat direct cu o comandă reală (#VNT-MUFEBOOHS0A, „Tolescu Elena", scor 67%): o etichetă Vinted digitală rămânea „negăsită" deși comanda corectă era vizibil deja în previzualizare. Cauza: potrivirea automată (și picker-ul manual, #474) căutau STRICT în comenzile deja scrise în bază (platforma_comenzi) — o comandă „Neinclus" (scor de potrivire produs sub prag, încă neconfirmată manual) nu ajunsese încă acolo, deci era invizibilă indiferent cât de bine se potrivea. Acum ambele caută și printre liniile încă necomise din previzualizare — AWB-ul se scrie direct pe acea linie (marcată vizibil „comandă încă «Neinclus»"), gata să fie scris corect în bază la „✓ Inclus".',date:'2026-09-24'},
@@ -4956,7 +4957,10 @@ function searchPcomReactivate(){
   const q=(document.getElementById('pcom-reactivate-search')?.value||'').trim();
   if(!q){box.innerHTML='<div style="color:var(--t3);font-size:16px">Introdu numărul comenzii.</div>';return;}
   const rows=PCOM.filter(o=>String(o.comandaId||'').toLowerCase()===q.toLowerCase());
-  if(!rows.length){box.innerHTML=`<div style="color:var(--rd);font-size:16px">Nicio comandă găsită cu numărul „${esc(q)}".</div>`;return;}
+  // Cerut direct: dacă numărul introdus nu există deloc local (nu doar lipsă din previzualizare, ci
+  // genuin necunoscut în bază), oferim direct legătura cu eMAG-ul, ca să aducem comanda de acolo — nu
+  // doar un mesaj „negăsit" fără nicio cale de urmat.
+  if(!rows.length){box.innerHTML=`<div style="color:var(--rd);font-size:16px">Nicio comandă găsită cu numărul „${esc(q)}" în bază.</div><button type="button" class="btn btn-sm btn-acc" id="pcom-reactivate-emag-btn" style="margin-top:8px" onclick="searchEmagOrderFromReactivate()">🔍 Caută pe eMAG după acest număr</button>`;return;}
   const groups={};
   rows.forEach(o=>{const k=o.platforma+'|'+o.comandaId;(groups[k]=groups[k]||[]).push(o);});
   box.innerHTML=Object.values(groups).map(grp=>{
@@ -16688,32 +16692,43 @@ async function pcomFetchAndCreateEmagOrderById(comandaId,awb,file,page,courier){
   });
   return resp.lines.length;
 }
-// Căutare manuală directă, din bara de căutare a previzualizării (cerut direct — „dacă pun un număr de
-// comandă eMAG care nu e în admin, să se ducă să o caute în eMAG în toate secțiunile"): reutilizează
-// EXACT pcomFetchAndCreateEmagOrderById (deja folosită la citirea etichetelor AWB dintr-un dosar, caută
-// pe /order-by-id, indiferent de status — Nou/În lucru/Pregătită/Finalizată) — singura diferență e că
-// aici pornește dintr-un click, nu dintr-o etichetă găsită. Comanda adusă astfel primește șansa la
-// „confirmare instant" (#470), exact ca un import normal, ca să apară deja gata de împachetat în Staff
-// dacă potrivirea e sigură — nu doar adusă, needitabilă.
-async function searchEmagOrderByNumber(){
-  const inp=document.getElementById('pcx-search');
-  const q=(inp?.value||'').trim();
-  if(!q){toast('Scrie mai întâi numărul comenzii eMAG în căutare','err');return;}
-  const btn=document.getElementById('pcx-emag-search-btn');
+// Căutare manuală directă (cerut direct — „dacă pun un număr de comandă eMAG care nu e în admin, să se
+// ducă să o caute în eMAG în toate secțiunile"): reutilizează EXACT pcomFetchAndCreateEmagOrderById
+// (deja folosită la citirea etichetelor AWB dintr-un dosar, caută pe /order-by-id, indiferent de status
+// — Nou/În lucru/Pregătită/Finalizată) — singura diferență e că aici pornește dintr-un click, nu dintr-o
+// etichetă găsită. Comanda adusă astfel primește șansa la „confirmare instant" (#470), exact ca un
+// import normal. Nucleu comun (core) — folosit din 2 locuri cu cerințe identice, doar punctul de intrare
+// diferă: bara de căutare din previzualizare (#pcx-search) ȘI cardul „↺ Reactivează comandă finalizată"
+// (căutare directă în bază, fără nicio comandă găsită acolo — cerut direct, aceeași idee).
+async function searchEmagOrderByNumberCore(q,btnId){
+  const btn=btnId?document.getElementById(btnId):null;
   if(btn){btn.disabled=true;btn.textContent='Se caută pe eMAG…';}
+  let count=0;
   try{
     const before=pcImpParsed.length;
-    const count=await pcomFetchAndCreateEmagOrderById(q,'','',null,'');
+    count=await pcomFetchAndCreateEmagOrderById(q,'','',null,'');
     if(count){
       const newLines=pcImpParsed.slice(before);
       await autoCommitConfidentPcomLines(newLines);
-      pcxRenderOrders();
-      toast(`✓ Comanda eMAG ${q} găsită și adusă în previzualizare (${count} ${count===1?'produs':'produse'})`);
+      renderPcomImportPreview();
+      toast(`✓ Comanda eMAG ${q} găsită și adusă în Comenzi Platforme (${count} ${count===1?'produs':'produse'})`);
     }else{
       toast(`Nicio comandă eMAG cu numărul „${q}" găsită (verifică numărul, sau conectorul local/IP-ul autorizat)`,'err');
     }
   }catch(e){toast('Eroare la căutarea pe eMAG: '+(e.message||e),'err');}
   if(btn){btn.disabled=false;btn.textContent='🔍 Caută pe eMAG după acest număr';}
+  return count>0;
+}
+async function searchEmagOrderByNumber(){
+  const q=(document.getElementById('pcx-search')?.value||'').trim();
+  if(!q){toast('Scrie mai întâi numărul comenzii eMAG în căutare','err');return;}
+  await searchEmagOrderByNumberCore(q,'pcx-emag-search-btn');
+}
+async function searchEmagOrderFromReactivate(){
+  const q=(document.getElementById('pcom-reactivate-search')?.value||'').trim();
+  if(!q)return;
+  await searchEmagOrderByNumberCore(q,'pcom-reactivate-emag-btn');
+  searchPcomReactivate();
 }
 // La fiecare deschidere/reîncărcare, refacem previzualizarea numai cu comenzile încă disponibile.
 // Nu există efect financiar aici: stocul și jurnalul se schimbă exclusiv la „Aplică import”.
