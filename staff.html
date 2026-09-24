@@ -377,6 +377,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:417,date:'24.09.2026',text:'Bug real reparat, raportat direct: în „Împachetare", o comandă deja finalizată (în fereastra de 10s de anulare) tot arăta butonul activ de finalizare, apăsabil din nou. Acum arată clar „✓ Comandă finalizată" (needitabil) + un buton nou „↺ Reactivează pentru împachetare". Aceeași reactivare e disponibilă acum și din „Finalizate azi", pe orice comandă finalizată azi — nu doar în fereastra scurtă de anulare.'},
   {n:416,date:'24.09.2026',text:'Navigare cu săgețile ← → tastaturii, cerută direct — funcționează în „Împachetare" (comanda anterioară/următoare) și „Raport stoc" (produsul anterior/următor), la fel ca butoanele deja existente. Ignorată automat cât timp tastezi într-un câmp (ex. „Stoc fizic numărat"), ca să nu strice tastarea.'},
   {n:415,date:'24.09.2026',text:'Raport stoc — 3 butoane noi de ordonare, cerute direct: „A-Z" (alfabetic, ca înainte), „Stoc ▲ mic→mare" (util să găsești rapid produsele cu stoc 0) și „Stoc ▼ mare→mic". Schimbarea ordinii pornește mereu de la primul produs din noua listă. La stoc egal, ordinea rămâne alfabetică.'},
   {n:414,date:'24.09.2026',text:'Bug real reparat, raportat direct ca recurent: „coadă nouă" automată de la ora 22:00 nu pornea de fiecare dată. Cauza: pragul se calcula mereu ca „ora 22 de azi” — dacă tableta nu era deschisă exact în jurul orei 22, resetul din noaptea respectivă rămânea ratat definitiv, fără nicio recuperare ulterioară. Acum, la orice deschidere sau reîmprospătare, se verifică cel mai recent prag de 22:00 deja trecut (azi sau ieri) — resetul se recuperează corect, oricât de târziu se deschide tableta.'},
@@ -599,7 +600,13 @@ function renderPackTab(host){
     const state=l.impachetat?'done':(l.staff_blocked?'blocked':'');
     return`<div class="line ${state}">${lineThumbHtml(l)}${lineInfoHtml(l,false)}</div>`;
   }).join('');
-  const bigBtnHtml=`<button type="button" class="big-pack-btn" ${lineBusy['order_'+ord.key]?'disabled':''} onclick="finalizeOrder('${ord.key}')">${ord.awb?'✓ Finalizează coletul':'✓ Marchează finalizat'}</button>`;
+  // Comanda curentă poate rămâne finalizată pe ecran în fereastra de 10s de anulare (navQueue, spre
+  // deosebire de packQueue, nu exclude comenzile finalizate) — bug real raportat direct: butonul de
+  // finalizare rămânea activ, apăsabil din nou, deși comanda era deja finalizată. Acum arată clar starea
+  // (needitabil) + un buton explicit de reactivare, în loc de „Finalizează” încă apăsabil.
+  const bigBtnHtml=ord.finalized
+    ?`<button type="button" class="big-pack-btn done" disabled>✓ Comandă finalizată</button><button type="button" class="nav-btn" style="margin-top:8px" ${lineBusy['order_'+ord.key]?'disabled':''} onclick="reactivateOrder('${ord.key}')">↺ Reactivează pentru împachetare</button>`
+    :`<button type="button" class="big-pack-btn" ${lineBusy['order_'+ord.key]?'disabled':''} onclick="finalizeOrder('${ord.key}')">${ord.awb?'✓ Finalizează coletul':'✓ Marchează finalizat'}</button>`;
   host.innerHTML=`<div class="card ${multi?'multi-line':'single-line'}">
     <div class="ord-hdr">
       <div class="ord-hdr-row1">
@@ -1005,6 +1012,27 @@ async function finalizeOrder(orderKey){
     console.error(e);showToast('Eroare la finalizare — încearcă din nou');renderMain();
   }finally{lineBusy[key]=false;if(!saved)renderMain();}
 }
+// Deselectare/reactivare (cerut direct — „pune o funcție de deselectare ca împachetat”): pentru o
+// comandă finalizată din greșeală, dincolo de fereastra de 10s de anulare a lui scheduleUndo. Aceeași
+// acțiune, disponibilă oricând — din „Împachetare” (comanda curentă, dacă e deja finalizată) și din
+// „Finalizate azi”. Readuce comanda în coada activă de împachetat.
+async function reactivateOrder(orderKey){
+  const key='order_'+orderKey;
+  if(lineBusy[key])return;
+  const ord=ORDERS.find(o=>o.key===orderKey);if(!ord)return;
+  if(!confirm('Reactivezi această comandă pentru împachetare? Redevine activă în coada de lucru.'))return;
+  lineBusy[key]=true;renderMain();
+  try{
+    for(const l of ord.lines){const body={impachetat:false,impachetat_at:null};if(l._table==='platforma_comenzi')body.staff_finalizat_at=null;await patchLine(l,body);}
+    logActivity('comanda_reactivata',ord.lines[0],{comandaId:ord.comandaId});
+    computeOrders();
+    curKey=orderKey;
+    showToast('↺ Comandă reactivată — a revenit în coada activă');
+  }catch(e){
+    console.error(e);showToast('Eroare la reactivare — încearcă din nou');
+  }
+  lineBusy[key]=false;renderMain();
+}
 
 function scheduleUndo(orderKey,lineChanges,type){
   if(pendingUndo)clearTimeout(pendingUndo.timeoutId);
@@ -1232,6 +1260,7 @@ function renderFinalizedTab(host){
         <div class="list-item-meta">${esc(nm)}</div>
       </div>
       <div class="list-item-time">${at?new Date(at).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}):''}</div>
+      <button type="button" class="line-check" style="align-self:center" ${lineBusy['order_'+o.key]?'disabled':''} onclick="reactivateOrder('${o.key}')">↺ Reactivează</button>
     </div>`;
   }).join('')}</div>`;
 }
