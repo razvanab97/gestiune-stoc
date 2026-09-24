@@ -377,6 +377,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:418,date:'24.09.2026',text:'În „Împachetare", cerut direct („să nu se mai folosească mouse-ul destul de mult"): tasta Space apăsată de 2 ori finalizează comanda curentă (la fel ca butonul „✓ Finalizează"), iar Backspace apăsat de 2 ori resetează împachetarea unei comenzi deja finalizate (la fel ca „↺ Reactivează"). O singură apăsare nu face nimic — trebuie 2, într-un interval scurt, ca o atingere din greșeală să nu schimbe starea comenzii. Ignorate automat cât timp tastezi într-un câmp.'},
   {n:417,date:'24.09.2026',text:'Bug real reparat, raportat direct: în „Împachetare", o comandă deja finalizată (în fereastra de 10s de anulare) tot arăta butonul activ de finalizare, apăsabil din nou. Acum arată clar „✓ Comandă finalizată" (needitabil) + un buton nou „↺ Reactivează pentru împachetare". Aceeași reactivare e disponibilă acum și din „Finalizate azi", pe orice comandă finalizată azi — nu doar în fereastra scurtă de anulare.'},
   {n:416,date:'24.09.2026',text:'Navigare cu săgețile ← → tastaturii, cerută direct — funcționează în „Împachetare" (comanda anterioară/următoare) și „Raport stoc" (produsul anterior/următor), la fel ca butoanele deja existente. Ignorată automat cât timp tastezi într-un câmp (ex. „Stoc fizic numărat"), ca să nu strice tastarea.'},
   {n:415,date:'24.09.2026',text:'Raport stoc — 3 butoane noi de ordonare, cerute direct: „A-Z" (alfabetic, ca înainte), „Stoc ▲ mic→mare" (util să găsești rapid produsele cu stoc 0) și „Stoc ▼ mare→mic". Schimbarea ordinii pornește mereu de la primul produs din noua listă. La stoc egal, ordinea rămâne alfabetică.'},
@@ -1772,13 +1773,42 @@ async function load(){
 // deja exista o ordine „anterior/următor" (navStep/stockStep, butoane + swipe); nu atinge alte taburi.
 // Ignorată complet dacă focus-ul e într-un câmp de tastat (ex. „Stoc fizic numărat"), altfel săgețile
 // ar muta cursorul de editare al cifrei ÎN LOC să treacă la alt produs — confuz, ar strica tastarea.
+// Space × 2 = finalizează comanda curentă, Backspace × 2 = resetează împachetarea (reactivează),
+// cerute direct („să nu se mai folosească mouse-ul destul de mult") — Backspace ales ca pereche a lui
+// Space (confirmă/anulează, aceeași poziție a mâinii pe tastatură), scopate strict la Împachetare, ca
+// să nu se atingă de câmpurile de căutare/text (unde Backspace trebuie să șteargă normal). Necesar de
+// 2 apăsări ale ACELEIAȘI taste într-un interval scurt — o singură apăsare nu face nimic — ca o atingere
+// din greșeală să nu finalizeze/reseteze comanda greșită, exact ca la orice altă acțiune ireversibilă
+// din Staff.
+let dblKeyState={key:null,at:0};
+function isDoubleKeyPress(key){
+  const now=Date.now();
+  if(dblKeyState.key===key&&now-dblKeyState.at<=600){dblKeyState={key:null,at:0};return true;}
+  dblKeyState={key,at:now};
+  return false;
+}
 document.addEventListener('keydown',e=>{
-  if(e.key!=='ArrowLeft'&&e.key!=='ArrowRight')return;
   const tag=document.activeElement?.tagName;
-  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')return;
-  const dir=e.key==='ArrowLeft'?-1:1;
-  if(activeTab==='pack')navStep(dir);
-  else if(activeTab==='stock')stockStep(dir);
+  const typing=tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT';
+  if(e.key==='ArrowLeft'||e.key==='ArrowRight'){
+    if(typing)return;
+    const dir=e.key==='ArrowLeft'?-1:1;
+    if(activeTab==='pack')navStep(dir);
+    else if(activeTab==='stock')stockStep(dir);
+    return;
+  }
+  if(activeTab!=='pack'||typing)return;
+  if(e.key===' '){
+    e.preventDefault();
+    if(!isDoubleKeyPress('Space'))return;
+    const ord=currentOrder();
+    if(ord&&!ord.finalized)finalizeOrder(ord.key);
+  }else if(e.key==='Backspace'){
+    e.preventDefault();
+    if(!isDoubleKeyPress('Backspace'))return;
+    const ord=currentOrder();
+    if(ord&&ord.finalized)reactivateOrder(ord.key);
+  }
 });
 load();
 </script>
