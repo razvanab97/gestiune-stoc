@@ -166,6 +166,17 @@ button{cursor:pointer}
 .stock-card{justify-content:center}.stock-card-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:12px;border-bottom:1px solid var(--b1)}.stock-card-title{font-size:25px;font-weight:800}.stock-card-pos{font-family:var(--mono);font-size:17px;font-weight:700;color:var(--t3);white-space:nowrap}.stock-product{display:flex;align-items:center;gap:24px;padding:4px 0}.stock-product-img,.stock-product-ph{width:180px;height:180px;flex-shrink:0;border-radius:var(--r2);object-fit:cover;border:1px solid var(--b1);background:var(--surf2);box-shadow:0 8px 20px rgba(16,24,40,.08)}.stock-product-ph{display:flex;align-items:center;justify-content:center;font-size:64px}.stock-product-info{min-width:0;flex:1}.stock-product-name{font-size:29px;font-weight:800;line-height:1.18}.stock-product-meta{font-family:var(--mono);font-size:16px;color:var(--t3);margin-top:7px}.stock-values{display:flex;gap:12px;margin-top:14px}.stock-value{flex:1;padding:12px 14px;border-radius:var(--r2);background:var(--surf2);border:1px solid var(--b1)}.stock-value-lbl{font-size:13px;color:var(--t3);font-weight:800;text-transform:uppercase;letter-spacing:.04em}.stock-value-num{font-family:var(--mono);font-size:30px;font-weight:800;margin-top:2px}.stock-value-num.low{color:var(--or)}.stock-value-num.zero{color:var(--rd)}.stock-entry{display:flex;gap:10px}.stock-entry input{flex:1;min-width:0;padding:14px 16px;border:2px solid var(--b2);border-radius:var(--r2);font-family:var(--mono);font-size:24px;font-weight:700}.stock-entry input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-light)}.stock-entry button{flex:1.1}.stock-nav-row{display:flex;gap:12px}.stock-nav-row .nav-btn{margin:0}.stock-saved{font-size:16px;color:var(--gr);font-weight:700;text-align:center;min-height:22px}
 .stock-sort-row{display:flex;gap:8px}.stock-sort-btn{flex:1;padding:9px 6px;border-radius:10px;border:1px solid var(--b1);background:var(--surf2);color:var(--t2);font-size:15px;font-weight:700}.stock-sort-btn.on{background:var(--acc);border-color:var(--acc);color:#fff}
 
+/* Retururi — simplu și rapid, cerut direct: caută produsul, alege cantitatea și motivul, un buton
+   adaugă înapoi în stoc (scade din `sold`, nu atinge `bought`/Jurnalul — vezi submitReturn). */
+.returns-qty-row{display:flex;align-items:center;gap:12px}
+.returns-qty-row .nav-btn{flex:0 0 64px;font-size:32px;font-weight:800;min-height:64px;padding:0}
+.returns-qty-row input{flex:1;min-width:0;text-align:center;padding:14px 16px;border:2px solid var(--b2);border-radius:var(--r2);font-family:var(--mono);font-size:26px;font-weight:700}
+.returns-qty-row input:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-light)}
+.returns-motiv-select{width:100%;padding:14px 16px;border:1px solid var(--b2);border-radius:var(--r2);background:var(--surf);font-size:20px;font-weight:600;color:var(--t1)}
+.returns-recent{margin-top:14px;padding-top:14px;border-top:1px solid var(--b1)}
+.returns-recent-hd{font-size:13px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--t3);margin-bottom:8px}
+.returns-recent-row{font-size:18px;color:var(--gr);font-weight:700;padding:4px 0}
+
 /* Legendă */
 .legend-sec{background:var(--glass);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);border:1px solid var(--glass-bd);border-radius:var(--r2);padding:18px 20px;margin-bottom:14px}
 .legend-sec h3{font-size:20px;margin-bottom:8px;color:var(--t1)}
@@ -287,6 +298,7 @@ button{cursor:pointer}
     <button class="tab-btn" data-tab="stock" onclick="setTab('stock')"><span class="ic">📋</span>Raport stoc</button>
     <button class="tab-btn" data-tab="prepack" onclick="setTab('prepack')"><span class="ic">🏷️</span>Pre-împachetate<span class="tab-badge" id="prepack-badge" style="display:none"></span></button>
     <button class="tab-btn" data-tab="furnizor" onclick="setTab('furnizor')"><span class="ic">📥</span>Marfă furnizor<span class="tab-badge" id="furnizor-badge" style="display:none"></span></button>
+    <button class="tab-btn" data-tab="returns" onclick="setTab('returns')"><span class="ic">↩️</span>Retururi</button>
   </div>
 
   <div id="search-dock"></div>
@@ -365,6 +377,8 @@ let staffQueueStartedAt=CUTOFF_DATE+'T00:00:00.000Z';
 const ISSUE_LABELS={stoc_zero:'Stoc zero',cantitate_insuficienta:'Cantitate insuficientă',produs_deteriorat:'Produs deteriorat',produs_gresit:'Produs greșit',nu_gasesc:'Nu găsesc produsul',alta:'Altă problemă'};
 
 let PRODUSE=[],COMENZI=[],JURNAL=[],ORDERS=[],PREPACK=[],STAFFMSG=[],FURNIZOR=[],curKey=null,activeTab='pack',activeImg={},stockCardIdx=0,stockSaveBusy=false,stockSwipeX=null,stockSortMode='alpha';
+const RETURN_REASONS={client_renunta:'Client a renunțat',produs_defect:'Produs defect',trimis_gresit:'Trimis greșit',alt_motiv:'Alt motiv'};
+let returnsQuery='',returnsPickId=null,returnsQty=1,returnsMotiv='client_renunta',returnsBusy=false,returnsRecent=[];
 let sheetCtx=null; // {lk} sau {lk,type:'stoc_redus'} — comanda/linia pentru care e deschis sheet-ul de probleme
 let pendingUndo=null; // {orderKey,lines:[{table,id,prev}],timeoutId,type}
 let lineBusy={}; // lk -> true cât timp o cerere e în curs (protecție dublu-tap)
@@ -377,6 +391,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:419,date:'24.09.2026',text:'Tab nou „↩️ Retururi", cerut direct — simplu și rapid: cauți produsul întors (nume, SKU sau cod intern), alegi cantitatea și motivul (Client a renunțat / Produs defect / Trimis greșit / Alt motiv), un buton îl adaugă înapoi în stoc. Scade din stocul vândut, nu adaugă la „Intrate total" — nu e marfă nouă de la furnizor. Apare imediat în „Mișcări de stoc" din Admin. Nu corectează automat Jurnalul/profitul vânzării originale (decizie asumată, pentru viteză).'},
   {n:418,date:'24.09.2026',text:'În „Împachetare", cerut direct („să nu se mai folosească mouse-ul destul de mult"): tasta Space apăsată de 2 ori finalizează comanda curentă (la fel ca butonul „✓ Finalizează"), iar Backspace apăsat de 2 ori resetează împachetarea unei comenzi deja finalizate (la fel ca „↺ Reactivează"). O singură apăsare nu face nimic — trebuie 2, într-un interval scurt, ca o atingere din greșeală să nu schimbe starea comenzii. Ignorate automat cât timp tastezi într-un câmp.'},
   {n:417,date:'24.09.2026',text:'Bug real reparat, raportat direct: în „Împachetare", o comandă deja finalizată (în fereastra de 10s de anulare) tot arăta butonul activ de finalizare, apăsabil din nou. Acum arată clar „✓ Comandă finalizată" (needitabil) + un buton nou „↺ Reactivează pentru împachetare". Aceeași reactivare e disponibilă acum și din „Finalizate azi", pe orice comandă finalizată azi — nu doar în fereastra scurtă de anulare.'},
   {n:416,date:'24.09.2026',text:'Navigare cu săgețile ← → tastaturii, cerută direct — funcționează în „Împachetare" (comanda anterioară/următoare) și „Raport stoc" (produsul anterior/următor), la fel ca butoanele deja existente. Ignorată automat cât timp tastezi într-un câmp (ex. „Stoc fizic numărat"), ca să nu strice tastarea.'},
@@ -549,6 +564,7 @@ function renderMain(resetScroll=false){
   else if(activeTab==='stock')renderStockTab(host);
   else if(activeTab==='prepack')renderPrepackTab(host);
   else if(activeTab==='furnizor')renderFurnizorTab(host);
+  else if(activeTab==='returns')renderReturnsTab(host);
   // Pollingul înlocuiește doar conținutul intern. Restabilim poziția după paint, ca Safari să nu
   // trimită angajatul la începutul comenzii în timp ce verifică produsele.
   requestAnimationFrame(()=>{if(!resetScroll&&document.activeElement?.matches('input,textarea,select'))return;host.scrollTop=oldScroll;});
@@ -1489,6 +1505,95 @@ async function saveStaffStock(){
   }catch(e){console.error(e);showToast('Eroare la salvarea stocului — încearcă din nou');}
   stockSaveBusy=false;
   if(savedOk&&stockCardIdx<list.length-1)stockCardIdx++;
+  renderMain(true);
+}
+
+/* ── Retururi (cerut direct — „simplu și rapid, ce s-a întors să intre în stoc") ── */
+// Design ales explicit, discutat direct: FĂRĂ legătură cu vânzarea/Jurnalul original — mai rapid
+// pentru staff (caută produsul, alege cantitatea și motivul, un buton), dar NU corectează automat
+// profitul raportat (asumat, nu e un bug). Scade din `sold`, NU adaugă la `bought` — un retur nu e
+// marfă nouă de la furnizor, ci o vânzare care se anulează parțial/complet, deci stocul disponibil
+// (bought-sold) crește corect fără să umfle „Intrate total".
+function returnsSearchResults(){
+  const q=returnsQuery.trim().toLowerCase();
+  if(q.length<2)return[];
+  return PRODUSE.filter(p=>!p.archived&&(
+    (p.name||'').toLowerCase().includes(q)||
+    (p.sku||'').toLowerCase().includes(q)||
+    (p.internalCode||'').toLowerCase().includes(q)
+  )).slice(0,30);
+}
+function returnsRecentHtml(){
+  if(!returnsRecent.length)return'';
+  return`<div class="returns-recent"><div class="returns-recent-hd">Retururi înregistrate acum</div>${returnsRecent.map(r=>`<div class="returns-recent-row">✓ ${r.qty} buc. — ${esc(r.name)}</div>`).join('')}</div>`;
+}
+// Rezultatele se randează separat de inputul de căutare (container propriu, #returns-results) —
+// altfel un renderMain() complet la fiecare literă tastată ar distruge și recrea inputul, pierzând
+// focusul la fiecare apăsare (exact bug-ul deja reparat la „Preț privat", #310, din index.html).
+function renderReturnsResults(){
+  const box=document.getElementById('returns-results');if(!box)return;
+  const q=returnsQuery.trim();
+  if(!q){box.innerHTML=`<div class="empty"><div class="big">↩️</div><div>Caută produsul care s-a întors, ca să-l adaugi înapoi în stoc.</div></div>${returnsRecentHtml()}`;return;}
+  const hits=returnsSearchResults();
+  if(!hits.length){box.innerHTML=`<div class="empty"><div class="big">🔍</div><div>Niciun produs găsit.</div></div>${returnsRecentHtml()}`;return;}
+  box.innerHTML=`<div class="search-page-list">${hits.map(p=>{
+    const img=p.img?`<img class="list-item-th" src="${esc(imgSrc(p.img))}" onerror="this.style.display='none'">`:`<div class="list-item-th-ph">📦</div>`;
+    const stock=Number(p.bought||0)-Number(p.sold||0);
+    return`<div class="list-item" onclick="pickReturnProduct(${p.id})">${img}<div class="list-item-main"><div class="list-item-nm">${esc(p.name||'')}</div><div class="list-item-meta">${p.sku?'SKU '+esc(p.sku)+' · ':''}Stoc ERP ${stock} buc.</div></div></div>`;
+  }).join('')}</div>${returnsRecentHtml()}`;
+}
+function onReturnsSearchInput(v){returnsQuery=v;renderReturnsResults();}
+function renderReturnsTab(host){
+  if(!returnsPickId){
+    host.innerHTML=`<div class="card">
+      <div class="search-row"><input type="text" id="returns-search-input" placeholder="Caută produs după nume, SKU sau cod intern…" value="${esc(returnsQuery)}" oninput="onReturnsSearchInput(this.value)" autofocus></div>
+      <div id="returns-results"></div>
+    </div>`;
+    renderReturnsResults();
+    return;
+  }
+  const p=findProdus(returnsPickId);
+  if(!p){returnsPickId=null;renderReturnsTab(host);return;}
+  const img=p.img?`<img class="stock-product-img" src="${esc(imgSrc(p.img))}" onerror="this.style.display='none'">`:'<div class="stock-product-ph">📦</div>';
+  const stock=Number(p.bought||0)-Number(p.sold||0);
+  const reasonOpts=Object.entries(RETURN_REASONS).map(([k,label])=>`<option value="${k}" ${returnsMotiv===k?'selected':''}>${esc(label)}</option>`).join('');
+  host.innerHTML=`<div class="card">
+    <div class="stock-product">${img}<div class="stock-product-info"><div class="stock-product-name">${esc(p.name||'Produs fără nume')}</div><div class="stock-product-meta">${p.sku?'SKU '+esc(p.sku)+' · ':''}Stoc ERP acum: ${stock} buc.</div></div></div>
+    <div class="returns-qty-row">
+      <button type="button" class="nav-btn" onclick="adjustReturnsQty(-1)">−</button>
+      <input type="text" inputmode="numeric" id="returns-qty-input" value="${returnsQty}" onchange="setReturnsQtyInput(this.value)">
+      <button type="button" class="nav-btn" onclick="adjustReturnsQty(1)">+</button>
+    </div>
+    <select id="returns-motiv-select" onchange="setReturnsMotiv(this.value)" class="returns-motiv-select">${reasonOpts}</select>
+    <button type="button" class="big-pack-btn" ${returnsBusy?'disabled':''} onclick="submitReturn()">${returnsBusy?'Se salvează…':`✓ Adaugă ${returnsQty} buc. în stoc`}</button>
+    <button type="button" class="nav-btn" onclick="clearReturnsPick()">← Alt produs</button>
+  </div>`;
+}
+function pickReturnProduct(id){returnsPickId=id;returnsQty=1;returnsMotiv='client_renunta';renderMain(true);}
+function clearReturnsPick(){returnsPickId=null;returnsQuery='';renderMain(true);}
+function adjustReturnsQty(delta){returnsQty=Math.max(1,returnsQty+delta);renderMain();}
+function setReturnsQtyInput(v){const n=Math.round(Number(String(v).replace(',','.')));returnsQty=Number.isFinite(n)&&n>0?n:1;renderMain();}
+function setReturnsMotiv(v){returnsMotiv=v;}
+async function submitReturn(){
+  if(returnsBusy||!returnsPickId)return;
+  const p=findProdus(returnsPickId);if(!p)return;
+  returnsBusy=true;renderMain();
+  try{
+    // Recitim produsul chiar înainte de scriere, la fel ca la Raport stoc — o vânzare sincronizată
+    // între timp nu trebuie anulată de scrierea noastră, bazată pe o valoare veche de `sold`.
+    const rows=await sb('GET',`produse?id=eq.${p.id}&select=id,name,sold`),fresh=rows[0];
+    if(!fresh)throw new Error('Produsul nu mai există în baza de date.');
+    const newSold=Math.max(0,Number(fresh.sold||0)-returnsQty);
+    const saved=await sb('PATCH',`produse?id=eq.${p.id}`,{sold:newSold});
+    Object.assign(p,saved[0]||{sold:newSold});
+    const motivLabel=RETURN_REASONS[returnsMotiv]||'';
+    await sb('POST','activitate_stoc',{tip:'in',product_id:p.id,product_name:fresh.name||p.name||'',qty:returnsQty,sursa:'Retur Staff'+(motivLabel?' — '+motivLabel:'')}).catch(e=>console.warn('activitate_stoc:',e));
+    logActivity('retur_stoc',null,{productId:p.id,qty:returnsQty,motiv:returnsMotiv});
+    returnsRecent=[{name:fresh.name||p.name||'',qty:returnsQty},...returnsRecent].slice(0,5);
+    showToast(`✓ Retur înregistrat: ${returnsQty} buc. — ${fresh.name||p.name||''}`);
+    returnsPickId=null;returnsQuery='';
+  }catch(e){console.error(e);showToast('Eroare la salvare — încearcă din nou');}
+  returnsBusy=false;
   renderMain(true);
 }
 
