@@ -3935,6 +3935,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:477,text:'Asociere AWB — fix pe termen lung, raportat direct cu o comandă reală (#VNT-MUFEBOOHS0A, „Tolescu Elena", scor 67%): o etichetă Vinted digitală rămânea „negăsită" deși comanda corectă era vizibil deja în previzualizare. Cauza: potrivirea automată (și picker-ul manual, #474) căutau STRICT în comenzile deja scrise în bază (platforma_comenzi) — o comandă „Neinclus" (scor de potrivire produs sub prag, încă neconfirmată manual) nu ajunsese încă acolo, deci era invizibilă indiferent cât de bine se potrivea. Acum ambele caută și printre liniile încă necomise din previzualizare — AWB-ul se scrie direct pe acea linie (marcată vizibil „comandă încă «Neinclus»"), gata să fie scris corect în bază la „✓ Inclus".',date:'2026-09-24'},
   {n:476,text:'Două retușuri cerute direct. (1) „Preț privat" — deschiderea butonului 💸 pornește acum mereu din ecranul inițial gol (poză/căutare), nu din starea rămasă de la ultima verificare din aceeași sesiune (produs ales, cost manual, rezultat calculat). (2) Panoul de notificări 🔔 — mărit (820→1080px lățime, 420→560px înălțime): la 820px, cele 4 coloane (Marfă furnizor/Probleme comenzi client/Produse de comandat/Mișcări de stoc) nu încăpeau pe un rând, rupeau vizual pe 2 rânduri.',date:'2026-09-24'},
   {n:475,text:'Fix — dropdown-ul „🔗 Asociază manual" de la #474 nu se deschidea deloc, raportat direct („nu pare să deschidă"). Cauza: exact același bug documentat deja la #pcmi-pickdrop — dropdown-ul stătea în interiorul #pcom-import-legacy, ascuns cu tot cu el la modul redesign (activ implicit). Mutat frate direct al ambelor variante — acum se deschide indiferent de modul de prezentare.',date:'2026-09-24'},
   {n:474,text:'Asociere AWB — buton nou „🔗 Asociază manual" pe orice etichetă fără potrivire perfectă (comandă negăsită, ambiguă, sau nepotrivită automat), cerut direct: deschide o listă căutabilă cu toate comenzile încă nerezolvate (din toate platformele), din care alegi manual comanda corectă — AWB-ul, fișierul și pagina rămân cele citite de pe etichetă, doar comanda se schimbă.',date:'2026-09-24'},
@@ -20510,14 +20511,64 @@ function parseAwbLabelText(text){
 // candidat vechi, deja închis, cu titlu generic identic (ex. „Set poker 500 jetoane...”), câștiga la
 // potrivire în fața comenzii CORECTE, doar mai noi — ar fi atribuit AWB-ul unui client complet diferit,
 // la o comandă deja terminată de zile. Exclus explicit din candidați.
+// Comenzi Vinted ÎNCĂ necomise în bază („Neinclus" — scor de potrivire produs sub prag, sau pur și
+// simplu neconfirmate încă manual) — invizibile pentru PCOM, care se populează STRICT din
+// platforma_comenzi, deja scrisă. Bug real găsit direct, raportat cu o comandă reală (#VNT-MUFEBOOHS0A,
+// „Tolescu Elena”, scor 67% — sub pragul de auto-confirmare): o etichetă citită ÎNAINTE de „✓ Inclus”
+// rămânea mereu „negăsită”, deși alegerea corectă era deja vizibilă în previzualizare — comanda pur și
+// simplu nu ajunsese încă în bază când eticheta a fost procesată. `awb` NU e exclus din filtru (spre
+// deosebire de PCOM, unde o comandă cu awb deja completat înseamnă „deja rezolvată”): la o linie Vinted
+// încă necomisă, acest câmp poate ține deja „codul” propriu Vinted (recunoscut din captură la creare,
+// vezi vintedRunRecognition) — NU un AWB real de curier. Verificat pe date reale: exact acest cod e cel
+// care apare mai târziu, identic, pe eticheta fizică — excluderea liniilor cu awb deja completat ar fi
+// ratat mereu exact acest caz.
+function pendingVintedCandidates(){
+  return pcImpParsed.filter(it=>it.platforma==='vinted'&&!it._committedId);
+}
+// Identificăm o linie pending prin comandaId (stabil, generat o singură dată la creare — vezi
+// vintedRunRecognition), NU printr-un index brut în pcImpParsed — array-ul se poate schimba între
+// citirea etichetei și „Asociază AWB-urile" (alte comenzi adăugate/șterse), deci un index reținut ar
+// putea ajunge să indice altă linie decât cea potrivită inițial. O căutare vie, de fiecare dată,
+// elimină acest risc.
+function findPendingVintedByComandaId(comandaId){
+  return pcImpParsed.find(it=>it.platforma==='vinted'&&!it._committedId&&it.comandaId===comandaId)||null;
+}
+// Comanda Vinted găsită prin pendingVintedCandidates nu există încă în platforma_comenzi — nu se poate
+// „citi" înapoi din bază ca la o comandă deja scrisă. Reconstruim exact aceeași formă de rând
+// (platforma/client_nume/produs_nume/awb) direct din pcImpParsed, ca restul fluxului (pcomAwbMatched,
+// renderAwbPreview, applyAwbAssociation) să funcționeze neschimbat, fără să știe diferența.
+function pendingVintedRowSnapshot(comandaId){
+  const it=findPendingVintedByComandaId(comandaId);if(!it)return[];
+  const prodName=it.produsId?(P.find(x=>x.id===it.produsId)?.name||''):'';
+  return[{platforma:it.platforma,client_nume:it.clientNume||'',produs_nume:it.titluExtern||prodName||'',awb:it.awb||''}];
+}
+// Variante generale (orice platformă, nu doar Vinted), pentru picker-ul manual (awbPickCandidates) —
+// aceeași reparație (comenzi „Neinclus" invizibile pentru PCOM), dar picker-ul manual caută deja
+// pe toate platformele deodată, spre deosebire de resolverele automate de mai sus, scopate strict la
+// Vinted (unde e singura legătură posibilă, prin cod/titlu).
+function findPendingImportLineByComandaId(comandaId){
+  return pcImpParsed.find(it=>!it._committedId&&it.comandaId===comandaId)||null;
+}
+function pendingImportRowSnapshot(comandaId){
+  const it=findPendingImportLineByComandaId(comandaId);if(!it)return[];
+  const prodName=it.produsId?(P.find(x=>x.id===it.produsId)?.name||''):'';
+  return[{platforma:it.platforma,client_nume:it.clientNume||'',produs_nume:it.titluExtern||prodName||'',awb:it.awb||''}];
+}
 function resolveVintedDigitalLabelMatch(p){
-  const candidates=PCOM.filter(o=>o.platforma==='vinted'&&!o.awb&&!o.anulata&&!o.impachetat);
-  const scored=candidates.map(o=>({o,score:Math.max(fuzzyMatch(p.produs,o.titluExtern||''),fuzzyMatch(p.produs,o.produsNume||''))})).sort((a,b)=>b.score-a.score);
+  const committedScored=PCOM.filter(o=>o.platforma==='vinted'&&!o.awb&&!o.anulata&&!o.impachetat)
+    .map(o=>({comandaId:o.comandaId,pending:false,score:Math.max(fuzzyMatch(p.produs,o.titluExtern||''),fuzzyMatch(p.produs,o.produsNume||''))}));
+  const pendingScored=pendingVintedCandidates().map(it=>{
+    const prodName=it.produsId?(P.find(x=>x.id===it.produsId)?.name||''):'';
+    return{comandaId:it.comandaId,pending:true,score:Math.max(fuzzyMatch(p.produs,it.titluExtern||''),fuzzyMatch(p.produs,prodName))};
+  });
+  const scored=[...committedScored,...pendingScored].sort((a,b)=>b.score-a.score);
   const best=scored[0];
   if(!best||best.score<0.5)return p;
   const second=scored[1];
-  if(second&&second.score>=best.score-0.05&&second.o.comandaId!==best.o.comandaId)return{...p,vintedAmbiguous:true};
-  return{...p,comandaId:best.o.comandaId,matchScore:best.score};
+  if(second&&second.score>=best.score-0.05&&second.comandaId!==best.comandaId)return{...p,vintedAmbiguous:true};
+  return best.pending
+    ?{...p,comandaId:best.comandaId,_pendingMatch:true,matchScore:best.score}
+    :{...p,comandaId:best.comandaId,matchScore:best.score};
 }
 // Rezolvă eticheta eMAG Ungaria (Sameday/Pactic, fără niciun comandaId propriu — vezi parseAwbLabelText)
 // la o comandă eMAG HU deja importată, nerezolvată încă (fără AWB), prin numele clientului ȘI suma de
@@ -20554,8 +20605,12 @@ function resolveEmagHuLabelMatch(p){
 // Vinted — vezi vintedRunRecognition), deci nicio ambiguitate posibilă: fie se potrivește exact, fie nu.
 function resolveCargusClickCollectMatch(p){
   const hit=PCOM.find(o=>o.platforma==='vinted'&&!o.anulata&&String(o.awb||'').trim()===p.awb);
-  if(!hit)return p;
-  return{...p,comandaId:hit.comandaId};
+  if(hit)return{...p,comandaId:hit.comandaId};
+  // Aceeași reparație pe termen lung ca la resolveVintedDigitalLabelMatch — o comandă Vinted „Neinclus"
+  // (încă necomisă) are propriul cod deja salvat pe pcImpParsed[i].awb, invizibil pentru PCOM.
+  const pendingHit=pendingVintedCandidates().find(it=>String(it.awb||'').trim()===p.awb);
+  if(pendingHit)return{...p,comandaId:pendingHit.comandaId,_pendingMatch:true};
+  return p;
 }
 // Picker manual pentru orice etichetă AWB fără potrivire perfectă (cerut direct — „să putem selecta din
 // cele care nu s-au potrivit perfect"): potrivirea automată (comandaId/nume+sumă/cod exact, în funcție
@@ -20564,8 +20619,19 @@ function resolveCargusClickCollectMatch(p){
 // de platformă. Aceeași structură ca la picker-ul de produs din Comandă furnizor (openFurnizorPick),
 // dar pe comenzi în loc de produse.
 let awbPickIdx=null,awbPickVisible=null;
+// Include și comenzile ÎNCĂ necomise din previzualizare („Neinclus" — vezi resolveVintedDigitalLabelMatch
+// mai sus, aceeași reparație pe termen lung), nu doar cele deja scrise în platforma_comenzi — altfel
+// picker-ul manual ar fi orb exact la comenzile pentru care omul are cel mai des nevoie să caute manual
+// (cele pe care potrivirea automată nu le-a găsit, adesea tocmai fiindcă încă nu erau comise).
 function awbPickCandidates(){
-  return PCOM.filter(o=>!o.awb&&!o.anulata&&!o.impachetat).slice().sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
+  const committed=PCOM.filter(o=>!o.awb&&!o.anulata&&!o.impachetat).map(o=>({...o,_pending:false}));
+  const pending=pcImpParsed.filter(it=>!it._committedId&&!it._cancelledId).map(it=>({
+    comandaId:it.comandaId,platforma:it.platforma,clientNume:it.clientNume||'',
+    produsNume:it.produsId?(P.find(x=>x.id===it.produsId)?.name||''):'',
+    titluExtern:it.titluExtern||'',pretTotalCuTva:it.pretTotalCuTva||0,moneda:it.moneda||'RON',
+    data:it.data||'',awb:it.awb||'',_pending:true
+  }));
+  return[...committed,...pending].sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
 }
 function openAwbPick(ev,idx){
   ev.stopPropagation();
@@ -20591,15 +20657,17 @@ function filterAwbPick(){
   list.innerHTML=matches.map((o,i)=>{
     const plat=o.platforma==='emag'?'eMAG':o.platforma==='trendyol'?'Trendyol':'Vinted';
     const nm=o.clientNume||o.produsNume||o.titluExtern||'(fără nume)';
+    const pendingTag=o._pending?' · <span style="color:var(--or);font-weight:700">Neinclus</span>':'';
     const sub=[o.comandaId,o.produsNume||o.titluExtern,o.pretTotalCuTva?o.pretTotalCuTva.toFixed(2)+' '+(o.moneda||'RON'):''].filter(Boolean).join(' · ');
-    return`<div class="smi-pick-item" style="flex-direction:column;align-items:flex-start" onclick="pickAwbOrder(${i})"><span class="smi-pick-item-nm" style="font-weight:700">${esc(plat)} · ${esc(nm)}</span><span class="smi-pick-item-nm" style="font-size:19px;color:var(--t3)">${esc(sub)}</span></div>`;
+    return`<div class="smi-pick-item" style="flex-direction:column;align-items:flex-start" onclick="pickAwbOrder(${i})"><span class="smi-pick-item-nm" style="font-weight:700">${esc(plat)} · ${esc(nm)}</span><span class="smi-pick-item-nm" style="font-size:19px;color:var(--t3)">${esc(sub)}${pendingTag}</span></div>`;
   }).join('')||`<div class="smi-pick-item" style="color:var(--t3);cursor:default">Nicio comandă nerezolvată găsită</div>`;
 }
 const filterAwbPickDebounced=debounce(()=>filterAwbPick(),150);
 function pickAwbOrder(i){
   const o=awbPickVisible?.[i];if(!o)return;
   const p=awbParsed[awbPickIdx];if(!p)return;
-  awbParsed[awbPickIdx]={...p,comandaId:o.comandaId,rows:[{id:o.id,platforma:o.platforma,client_nume:o.clientNume,produs_nume:o.produsNume,awb:o.awb}],vintedAmbiguous:false,emagHuAmbiguous:false,_manualPick:true};
+  const rows=o._pending?pendingImportRowSnapshot(o.comandaId):[{id:o.id,platforma:o.platforma,client_nume:o.clientNume,produs_nume:o.produsNume,awb:o.awb}];
+  awbParsed[awbPickIdx]={...p,comandaId:o.comandaId,rows,vintedAmbiguous:false,emagHuAmbiguous:false,_manualPick:true,_pendingMatch:!!o._pending};
   document.getElementById('awb-pickdrop').classList.remove('on');
   renderAwbPreview();
 }
@@ -20665,6 +20733,7 @@ async function handleAwbPdfFile(ev){
     if(!pairs.length&&!awbUnrecognizedPages.length&&!awbCanceledPages.length)throw new Error('PDF-ul pare gol.');
     const results=[];
     for(const p of pairs){
+      if(p._pendingMatch){results.push({...p,rows:pendingVintedRowSnapshot(p.comandaId)});continue;}
       if(!p.comandaId){results.push({...p,rows:[]});continue;}
       const rows=await dbGet(`platforma_comenzi?comanda_id=eq.${p.comandaId}&select=id,platforma,client_nume,produs_nume,awb`);
       results.push({...p,rows});
@@ -20798,6 +20867,7 @@ async function readAwbFolderPdfs(){
     const results=[];
     let awbEmagLookupCreated=0;
     for(const p of pairs){
+      if(p._pendingMatch){results.push({...p,rows:pendingVintedRowSnapshot(p.comandaId)});continue;}
       if(!p.comandaId){results.push({...p,rows:[]});continue;}
       let rows=await dbGet(`platforma_comenzi?comanda_id=eq.${p.comandaId}&select=id,platforma,client_nume,produs_nume,awb`);
       // Comanda nu există local — cerut direct („astea s-au finalizat deja, ar fi trebuit să fie deja
@@ -20868,7 +20938,11 @@ function renderAwbPreview(){
     const matchNote=p.vintedDigitalLabel&&p.matchScore?` <span style="color:var(--t3)">(Vinted „${esc(p.courier)}" — potrivire produs ${Math.round(p.matchScore*100)}%, verifică)</span>`
       :p.emagHuLabel&&p.matchScore?` <span style="color:var(--t3)">(eMAG Ungaria „${esc(p.destinatarHu)}", ${esc(p.amountHuf)} FT — potrivire nume ${Math.round(p.matchScore*100)}%, verifică)</span>`
       :p.cargusClickCollectLabel?` <span style="color:var(--t3)">(Cargus Click & Collect — potrivire exactă după cod)</span>`:'';
-    return`<div class="inv-prev-row">✓ Comanda ${esc(p.comandaId)} — ${esc(nm)} → AWB ${esc(p.awb)}${already?` <span style="color:var(--t3)">(înlocuiește ${esc(already)})</span>`:''}${matchNote}</div>`;
+    // Comandă Vinted încă necomisă (vezi resolveVintedDigitalLabelMatch/resolveCargusClickCollectMatch)
+    // — AWB-ul se scrie pe linia din previzualizare, dar comanda tot trebuie confirmată cu „✓ Inclus"
+    // separat, ca la orice linie Vinted nouă — altfel ar părea „gata", deși nimic nu s-a scris în bază.
+    const pendingNote=p._pendingMatch?` <span style="color:var(--or);font-weight:700">(comandă încă „Neinclus" — confirmă separat cu ✓ Inclus)</span>`:'';
+    return`<div class="inv-prev-row">✓ Comanda ${esc(p.comandaId)} — ${esc(nm)} → AWB ${esc(p.awb)}${already?` <span style="color:var(--t3)">(înlocuiește ${esc(already)})</span>`:''}${matchNote}${pendingNote}</div>`;
   }).join('');
   // Etichetă anulată de curier — raportat direct, extins de la DPD la orice curier („nu doar DPD ci
   // peste tot, dacă apar erori"): secțiune separată de „format nerecunoscut", aici NU e o problemă de
@@ -20900,6 +20974,17 @@ async function applyAwbAssociation(){
   btn.disabled=true;
   try{
     for(const p of matched){
+      // Comandă încă necomisă („Neinclus" — vezi resolveVintedDigitalLabelMatch/
+      // resolveCargusClickCollectMatch/picker-ul manual) — nu există niciun rând în platforma_comenzi
+      // de PATCH-uit; scriem direct pe linia din previzualizare, ca „✓ Inclus", ulterior, să scrie deja
+      // AWB-ul real, nu placeholder-ul Vinted. Lookup general (orice platformă — picker-ul manual poate
+      // alege și o linie eMAG/Trendyol încă necomisă), prin comandaId (nu index reținut) — corect chiar
+      // dacă lista s-a schimbat între timp.
+      if(p._pendingMatch){
+        const it=findPendingImportLineByComandaId(p.comandaId);
+        if(it){Object.assign(it,{awb:p.awb,awbSourceFile:p.file||'',awbSourcePage:p.page||null,awbCourier:p.courier||''});continue;}
+        // Linia a fost între timp comisă manual („✓ Inclus") — există acum în PCOM, tratată normal mai jos.
+      }
       const source={awb:p.awb,awb_source_file:p.file||null,awb_source_page:p.page||null,awb_courier:p.courier||null};
       const platforma=p.rows[0].platforma;
       await patchAwbWithSource(`comanda_id=eq.${encodeURIComponent(p.comandaId)}&platforma=eq.${encodeURIComponent(platforma)}`,source);
