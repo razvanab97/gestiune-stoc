@@ -3935,6 +3935,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:478,text:'Comenzi Platforme — căutarea (#pcx-search) escaladează acum în 2 pași când nu găsește nimic în previzualizarea curentă, cerut direct: (1) mai caută direct în comenzile deja scrise în bază, INCLUSIV anulate — dacă găsește o comandă anulată, arată direct un buton „↺ Reconsideră", fără să mai fie nevoie să scrolezi la cardul separat „🚫 Comenzi anulate"; (2) dacă nu găsește nimic nicăieri local, propune „🔍 Caută pe eMAG după acest număr" — caută direct pe eMAG, indiferent de status (Nou/În lucru/Pregătită/Finalizată — nu doar Nou+În lucru, ca la „Adu comenzi eMAG"), și aduce comanda în previzualizare, gata de „✓ Inclus"/confirmare instant. Reutilizează 100% infrastructura deja existentă (pcomFetchAndCreateEmagOrderById, reconsiderPcomRow) — nicio logică nouă de potrivire produs.',date:'2026-09-24'},
   {n:477,text:'Asociere AWB — fix pe termen lung, raportat direct cu o comandă reală (#VNT-MUFEBOOHS0A, „Tolescu Elena", scor 67%): o etichetă Vinted digitală rămânea „negăsită" deși comanda corectă era vizibil deja în previzualizare. Cauza: potrivirea automată (și picker-ul manual, #474) căutau STRICT în comenzile deja scrise în bază (platforma_comenzi) — o comandă „Neinclus" (scor de potrivire produs sub prag, încă neconfirmată manual) nu ajunsese încă acolo, deci era invizibilă indiferent cât de bine se potrivea. Acum ambele caută și printre liniile încă necomise din previzualizare — AWB-ul se scrie direct pe acea linie (marcată vizibil „comandă încă «Neinclus»"), gata să fie scris corect în bază la „✓ Inclus".',date:'2026-09-24'},
   {n:476,text:'Două retușuri cerute direct. (1) „Preț privat" — deschiderea butonului 💸 pornește acum mereu din ecranul inițial gol (poză/căutare), nu din starea rămasă de la ultima verificare din aceeași sesiune (produs ales, cost manual, rezultat calculat). (2) Panoul de notificări 🔔 — mărit (820→1080px lățime, 420→560px înălțime): la 820px, cele 4 coloane (Marfă furnizor/Probleme comenzi client/Produse de comandat/Mișcări de stoc) nu încăpeau pe un rând, rupeau vizual pe 2 rânduri.',date:'2026-09-24'},
   {n:475,text:'Fix — dropdown-ul „🔗 Asociază manual" de la #474 nu se deschidea deloc, raportat direct („nu pare să deschidă"). Cauza: exact același bug documentat deja la #pcmi-pickdrop — dropdown-ul stătea în interiorul #pcom-import-legacy, ascuns cu tot cu el la modul redesign (activ implicit). Mutat frate direct al ambelor variante — acum se deschide indiferent de modul de prezentare.',date:'2026-09-24'},
@@ -4937,7 +4938,10 @@ async function reconsiderPcomRow(id){
   try{
     await dbPatch(`platforma_comenzi?id=eq.${id}`,{anulata:false,motiv_anulare:null});
     const o=PCOM.find(x=>x.id===id);if(o){o.anulata=false;o.motivAnulare='';}
-    renderCancelledPcomList();
+    // Și lista din cardul dedicat, și rezultatul căutării (#pcx-search, dacă tocmai a găsit-o acolo —
+    // vezi pcxSearchFallbackHtml) trebuie actualizate, nu doar cardul — altfel mesajul „găsită în
+    // comenzile anulate" rămâne pe ecran, needitor, deși comanda tocmai a fost reactivată.
+    renderCancelledPcomList();renderPcomImportPreview();
     toast('✓ Comandă reconsiderată — vizibilă din nou în Staff');
   }catch(e){toast('Nu am putut reconsidera comanda: '+(e.message||e),'err');}
 }
@@ -16643,6 +16647,33 @@ async function pcomFetchAndCreateEmagOrderById(comandaId,awb,file,page,courier){
   });
   return resp.lines.length;
 }
+// Căutare manuală directă, din bara de căutare a previzualizării (cerut direct — „dacă pun un număr de
+// comandă eMAG care nu e în admin, să se ducă să o caute în eMAG în toate secțiunile"): reutilizează
+// EXACT pcomFetchAndCreateEmagOrderById (deja folosită la citirea etichetelor AWB dintr-un dosar, caută
+// pe /order-by-id, indiferent de status — Nou/În lucru/Pregătită/Finalizată) — singura diferență e că
+// aici pornește dintr-un click, nu dintr-o etichetă găsită. Comanda adusă astfel primește șansa la
+// „confirmare instant" (#470), exact ca un import normal, ca să apară deja gata de împachetat în Staff
+// dacă potrivirea e sigură — nu doar adusă, needitabilă.
+async function searchEmagOrderByNumber(){
+  const inp=document.getElementById('pcx-search');
+  const q=(inp?.value||'').trim();
+  if(!q){toast('Scrie mai întâi numărul comenzii eMAG în căutare','err');return;}
+  const btn=document.getElementById('pcx-emag-search-btn');
+  if(btn){btn.disabled=true;btn.textContent='Se caută pe eMAG…';}
+  try{
+    const before=pcImpParsed.length;
+    const count=await pcomFetchAndCreateEmagOrderById(q,'','',null,'');
+    if(count){
+      const newLines=pcImpParsed.slice(before);
+      await autoCommitConfidentPcomLines(newLines);
+      pcxRenderOrders();
+      toast(`✓ Comanda eMAG ${q} găsită și adusă în previzualizare (${count} ${count===1?'produs':'produse'})`);
+    }else{
+      toast(`Nicio comandă eMAG cu numărul „${q}" găsită (verifică numărul, sau conectorul local/IP-ul autorizat)`,'err');
+    }
+  }catch(e){toast('Eroare la căutarea pe eMAG: '+(e.message||e),'err');}
+  if(btn){btn.disabled=false;btn.textContent='🔍 Caută pe eMAG după acest număr';}
+}
 // La fiecare deschidere/reîncărcare, refacem previzualizarea numai cu comenzile încă disponibile.
 // Nu există efect financiar aici: stocul și jurnalul se schimbă exclusiv la „Aplică import”.
 let pcomAutoRefreshStarted=false;
@@ -18167,6 +18198,25 @@ function pcxOrderCardHtml(idxs,gIdx){
     </div>
   </div>`;
 }
+// Escaladare de căutare (cerut direct, în 2 pași): dacă „#pcx-search" nu găsește nimic în previzualizarea
+// curentă (pcImpParsed), mai căutăm o dată direct în TOATE comenzile deja scrise în bază (PCOM) — inclusiv
+// anulate, cu buton de reactivare chiar aici (nu doar în cardul separat „🚫 Comenzi anulate") — înainte
+// să propunem căutarea live pe eMAG (searchEmagOrderByNumber), ultima soluție, doar când chiar nu există
+// nicăieri local.
+function pcxSearchFallbackHtml(q){
+  if(!pcImpParsed.length)return'<div class="pcx-empty">Nicio comandă în previzualizare încă — alege o platformă și încarcă un fișier sau o captură mai sus.</div>';
+  if(!q)return'<div class="pcx-empty">Nicio comandă nu corespunde filtrelor curente.</div>';
+  const dbHit=PCOM.find(o=>[o.comandaId,o.clientNume,o.titluExtern,o.produsNume,o.awb].filter(Boolean).some(v=>String(v).toLowerCase().includes(q)));
+  if(dbHit){
+    const p=dbHit.produsId?P.find(x=>x.id===dbHit.produsId):null;
+    const nm=p?p.name:(dbHit.produsNume||dbHit.titluExtern||'Produs');
+    const label=`<strong>${esc(nm)}</strong> · ${esc(pcomPlatLabel(dbHit.platforma))}${dbHit.comandaId?' #'+esc(dbHit.comandaId):''}`;
+    if(dbHit.anulata)return`<div class="pcx-empty">Găsită în comenzile anulate: ${label}${dbHit.motivAnulare?' — motiv: '+esc(dbHit.motivAnulare):''}<br><button type="button" class="btn btn-sm btn-acc" style="margin-top:10px" onclick="reconsiderPcomRow(${dbHit.id})">↺ Reconsideră — readu-o la împachetare</button></div>`;
+    const stare=dbHit.impachetat?'deja împachetată':dbHit.efecteAplicate===false?'confirmată, în așteptare la „Aplică import"':'deja aplicată';
+    return`<div class="pcx-empty">Găsită deja în bază: ${label} — ${stare}</div>`;
+  }
+  return`<div class="pcx-empty">Nicio comandă nu corespunde căutării „${esc(q)}" — nici în previzualizare, nici în comenzile deja din bază.<br><button type="button" class="btn btn-sm btn-acc" id="pcx-emag-search-btn" style="margin-top:10px" onclick="searchEmagOrderByNumber()">🔍 Caută pe eMAG după acest număr</button></div>`;
+}
 function pcxRenderOrders(){
   renderCancelledPcomList();
   renderStaleStaffOrdersCard();
@@ -18206,7 +18256,7 @@ function pcxRenderOrders(){
     const hd=`<div class="pcx-plat-divider"><span class="pcx-badge pcx-badge-${cls}">${esc(pcomPlatLabel(plat))}</span><span class="pcx-plat-divider-count">${list.length} ${list.length===1?'comandă':'comenzi'}</span></div>`;
     return hd+list.map(idxs=>pcxOrderCardHtml(idxs,pcomGroups.indexOf(idxs))).join('');
   }).join('');
-  host.innerHTML=filtered.length?html:`<div class="pcx-empty">${pcImpParsed.length?'Nicio comandă nu corespunde filtrelor curente.':'Nicio comandă în previzualizare încă — alege o platformă și încarcă un fișier sau o captură mai sus.'}</div>`;
+  host.innerHTML=filtered.length?html:pcxSearchFallbackHtml(q);
   // Numărători — informative, pe TOATE liniile (nu doar cele filtrate), ca la legacy (updPcomImportInfo)
   const total=pcImpParsed.length;
   const byPlat={};pcImpParsed.forEach(x=>{const pl=x.platforma||pcImpPlatforma;byPlat[pl]=(byPlat[pl]||0)+1;});
