@@ -425,6 +425,14 @@ input:focus,select:focus,textarea:focus{border-color:var(--acc);box-shadow:0 0 0
 #invmi-pickdrop .smi-pick-th,#invmi-pickdrop .smi-pick-th-ph{width:76px;height:76px;border-radius:8px;font-size:38px}
 #invmi-pickdrop .smi-pick-item{padding:12px 14px;gap:14px}
 #invmi-pickdrop .smi-pick-item-nm{font-size:28px;white-space:normal}
+/* Picker-ul „Există deja acest produs?" (combinare duplicat) — lipsea și el din grupul de mai sus,
+   la fel ca #invmi-pickdrop înainte de reparație (raportat direct, cu captură: titluri lungi tăiate cu
+   „…", listă mică, greu de lucrat). Același tipar mărit ca la celelalte 4 picker-e similare. */
+#merge-pickdrop{width:460px;max-height:420px}
+#merge-pickdrop input{font-size:28px;padding:9px 12px}
+#merge-pickdrop .smi-pick-th,#merge-pickdrop .smi-pick-th-ph{width:76px;height:76px;border-radius:8px;font-size:38px}
+#merge-pickdrop .smi-pick-item{padding:12px 14px;gap:14px}
+#merge-pickdrop .smi-pick-item-nm{font-size:28px;white-space:normal}
 .btn{font-family:var(--font);font-size:27px;font-weight:500;padding:10px 18px;border-radius:var(--r);cursor:pointer;border:1px solid var(--b2);background:var(--surf);color:var(--t1);transition:all .15s;white-space:nowrap}
 .btn:hover{background:var(--surf2);border-color:var(--b3)}
 .btn-acc{background:var(--acc);color:var(--acc-fg);border-color:var(--acc)}
@@ -3895,6 +3903,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:465,text:'Două completări cerute direct. (1) Clopoțelul 🔔 primește o secțiune nouă „🛒 Produse de comandat" (produsele adăugate luna asta, cu codul de furnizor, buton „Vezi" spre listă) — actualizată imediat la orice adăugare/scoatere, nu doar la următorul ciclu de sincronizare. (2) Picker-ul „Există deja acest produs?" (combinare duplicat, din fișa produsului) — titluri trunchiate cu „…" într-o listă mică, greu de folosit; adus la același format mărit (poze 76px, text pe mai multe rânduri, listă 460px) deja folosit la celelalte 4 picker-e similare din aplicație.',date:'2026-09-24'},
   {n:464,text:'„🛒 Produse de comandat" se completează acum și SINGUR din Vânzări, cerut direct: orice vânzare (căutare, + rapid sau editare directă a cantității de azi) care lasă un produs cu stoc 0 sau 1 îl adaugă automat pe listă, cu codul lui de furnizor deja acolo — gata de inclus în comanda următoare, fără să mai fie nevoie să-l cauți separat. Nu se dublează dacă produsul e deja pe listă în luna curentă. Pe drum, eticheta din listă a devenit „Cod furnizor" (era „SKU"), mai clară.',date:'2026-09-24'},
   {n:463,text:'„🕓 Comenzi rămase în urmă din Staff" — cerut direct, pe o comandă greșit asociată cu produsul: fiecare comandă din listă are acum o căutare inline „✏️ Schimbă produsul asociat" — găsești produsul corect (nume/SKU, inclusiv printre cele arhivate) și un click îl reasociază, fără să mai fie nevoie de vreo unealtă separată. NU corectează automat stocul/profitul dacă erau deja aplicate pe produsul vechi — confirmarea avertizează explicit acest caz, ca decizia să rămână informată.',date:'2026-09-24'},
   {n:462,text:'Comenzi Platforme — „Istoric importuri" restrâns implicit la ultimele 3 zile, cerut direct (lista creștea nesfârșit, greu de răsfoit). Restul rămâne la un click distanță — buton „▾ Arată încă N importuri mai vechi", cu numărul exact, nimic ascuns definitiv. Ștergerea unui import vechi funcționează identic, indiferent dacă lista e restrânsă sau extinsă.',date:'2026-09-24'},
@@ -4939,6 +4948,14 @@ async function resolveFurnizorIssueAdmin(id){
     toast('✓ Problemă marcată rezolvată');
   }catch(e){toast('Nu am putut marca problema rezolvată: '+(e.message||e),'err');}
 }
+function goToReorderList(){
+  const btn=document.querySelector('.h-tab[data-page="pcom"]');
+  if(btn)goPage('pcom',btn);
+  pcomMode('reorder');
+}
+function notifReorderRowHtml(r){
+  return`<div class="notif-row"><span class="notif-ic">🛒</span><div><div class="notif-name">${esc(r.name)}</div><div class="notif-meta">${r.sku?'Cod furnizor '+esc(r.sku):'Fără cod furnizor salvat'}</div><div class="notif-issue-actions"><button type="button" class="notif-issue-btn" onclick="goToReorderList()">Vezi</button></div></div></div>`;
+}
 function notifFurnizorRowHtml(x){
   const d=new Date(x.ts);
   const dt=isNaN(d)?'':d.toLocaleString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
@@ -4955,13 +4972,17 @@ function renderNotif(){
   if(!list)return;
   const furHtml=notifSectionHtml('📥 Marfă furnizor',FURNIZOR_ISSUES.length,FURNIZOR_ISSUES.map(notifFurnizorRowHtml).join(''));
   const issueHtml=notifSectionHtml('⛔ Probleme comenzi client',STAFF_ISSUES.length,STAFF_ISSUES.map(notifIssueRowHtml).join(''));
+  // Produse de comandat (cerut direct) — doar luna curentă, aceeași fereastră ca lista propriu-zisă
+  // (renderReorderList) — un produs deja marcat „✓ Comandat" (scos din REORDER) nu mai apare aici.
+  const reorderCur=REORDER.filter(r=>(r.addedAt||'').slice(0,7)===currentMonthKey());
+  const reorderHtml=notifSectionHtml('🛒 Produse de comandat',reorderCur.length,reorderCur.map(notifReorderRowHtml).join(''));
   const actHtml=notifSectionHtml('📦 Mișcări de stoc',ACT.length,ACT.slice(0,50).map(notifRowHtml).join(''));
   // Coloane separate, nu stivuite vertical (cerut direct) — fiecare secțiune e coloana ei, vizibile
   // toate deodată dintr-o privire. Doar secțiunile cu ceva de arătat primesc coloană — o secțiune goală
   // (ex. nicio problemă de la furnizor) nu lasă o coloană goală, inutilă, lângă celelalte.
-  const cols=[furHtml,issueHtml,actHtml].filter(Boolean).map(c=>`<div class="notif-col">${c}</div>`).join('');
+  const cols=[furHtml,issueHtml,reorderHtml,actHtml].filter(Boolean).map(c=>`<div class="notif-col">${c}</div>`).join('');
   list.innerHTML=cols?`<div class="notif-cols">${cols}</div>`:'<div class="notif-empty">Nicio notificare încă.</div>';
-  const badge=document.getElementById('notif-badge'),unread=ACT.filter(a=>!a.seen).length+STAFF_ISSUES.length+FURNIZOR_ISSUES.length;
+  const badge=document.getElementById('notif-badge'),unread=ACT.filter(a=>!a.seen).length+STAFF_ISSUES.length+FURNIZOR_ISSUES.length+reorderCur.length;
   if(badge){badge.style.display=unread>0?'flex':'none';badge.textContent=unread>9?'9+':unread;}
 }
 // ── ISTORIC MODIFICĂRI DE PREȚ (achiziție/vânzare/eMAG/Trendyol, de oriunde ar veni) ──
@@ -14313,8 +14334,8 @@ function openMergePick(ev){
   const drop=document.getElementById('merge-pickdrop');
   const btn=ev.currentTarget.getBoundingClientRect();
   let left=btn.left,top=btn.bottom+4;
-  if(left+300>window.innerWidth)left=window.innerWidth-310;
-  if(top+340>window.innerHeight)top=Math.max(8,btn.top-344);
+  if(left+460>window.innerWidth)left=window.innerWidth-470;
+  if(top+420>window.innerHeight)top=Math.max(8,btn.top-424);
   drop.style.left=zoomAdjust(left)+'px';drop.style.top=zoomAdjust(top)+'px';
   drop.classList.add('on');
   const search=document.getElementById('merge-pick-search');
@@ -16577,6 +16598,9 @@ function isInReorderList(productId){
 function pushReorderEntry(p){
   REORDER.push({id:'ro-'+Date.now()+Math.random().toString(36).slice(2),productId:p.id,name:p.name,sku:p.sku||'',addedAt:new Date().toISOString()});
   saveReorderList();
+  // Un singur loc pentru toate căile de adăugare (manuală + automată din Vânzări) — clopoțelul
+  // reflectă imediat noua intrare, nu abia la următorul ciclu de 60s din loadStaffIssues.
+  renderNotif();
 }
 function addToReorderList(productId){
   const p=P.find(x=>x.id===productId);
@@ -16600,6 +16624,7 @@ function autoAddToReorderIfLow(p){
 function removeFromReorderList(id){
   REORDER=REORDER.filter(r=>r.id!==id);
   saveReorderList();
+  renderNotif();
   renderReorderList();
 }
 function saveReorderList(){
