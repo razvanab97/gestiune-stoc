@@ -3908,6 +3908,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:468,text:'Sincronizare — cerut direct, „strict la produsele pe care le avem în stoc": resincronizarea eMAG (toate 3 piețele) și „Import în masă din fișier" nu mai aduc nimic pentru un produs arhivat — nici actualizare de stoc extern pe o mapare deja confirmată, nici o nouă asociere prin PNK/nume, chiar dacă potrivirea ar fi perfectă; listarea e sărită complet, nu doar lăsată „fără sugestie" (reapare normal dacă produsul e vreodată dezarhivat). „🤖 Sugerează cu AI" nu mai vede deloc produsele arhivate ca posibili candidați — rămâne la fel de insistent să găsească o sugestie pentru cât mai multe titluri, dar doar dintre produsele active. Pe drum, buton nou „🗑 Elimină" pe fiecare linie din previzualizare, cerut direct: scoate rândul din previzualizarea curentă (nu salvează nimic) — listarea reapare normal la următoarea resincronizare/import, util pentru „nu am treabă cu asta acum".',date:'2026-09-24'},
   {n:467,text:'„Preț privat" — iconița devine 💸 (era 🔒 de la #466), cerut direct: „un emoticon care să dea senzația de bani" — mai potrivit pentru un instrument de verificat rapid profitabilitatea, decât un lacăt. Nu se suprapune cu 💰 (deja folosit la „Preț achiziție") sau 💵 (Profit estimat, Dashboard).',date:'2026-09-24'},
   {n:466,text:'„Preț privat" — două retușuri cerute direct. (1) Iconița 🏷️ (buton header, capul popup-ului, ecranul gol) devine 🔒 — 🏷️ era deja folosit pentru 4 lucruri diferite în aplicație (Pre-împachetează, Etichetă GLS, Categorii Dashboard), confuz. (2) Lista de potrivire produs (căutare după denumire + candidați recunoscuți din poză) — poze de 31px, aproape neclare, text trunchiat cu „…" pe nume lungi; mărite (poze 56px, text pe mai multe rânduri, aliniat la stânga).',date:'2026-09-24'},
   {n:465,text:'Două completări cerute direct. (1) Clopoțelul 🔔 primește o secțiune nouă „🛒 Produse de comandat" (produsele adăugate luna asta, cu codul de furnizor, buton „Vezi" spre listă) — actualizată imediat la orice adăugare/scoatere, nu doar la următorul ciclu de sincronizare. (2) Picker-ul „Există deja acest produs?" (combinare duplicat, din fișa produsului) — titluri trunchiate cu „…" într-o listă mică, greu de folosit; adus la același format mărit (poze 76px, text pe mai multe rânduri, listă 460px) deja folosit la celelalte 4 picker-e similare din aplicație.',date:'2026-09-24'},
@@ -15298,10 +15299,15 @@ async function resyncEmagActiveListings(market){
       const key=(pnk||titlu.toLowerCase().trim());if(!titlu||!key||seen.has(key))return;seen.add(key);
       const tara=String(it.tara||market||'').toUpperCase();
       const m=findSyncMapEntry('emag',titlu,pnk,tara);
-      if(m){if(Number.isFinite(Number(it.stocExtern)))syncImpStockUpdates.push({mapId:m.id,titluExtern:titlu,pnk:m.idExtern||pnk,produsId:m.produsId,stocExtern:Number(it.stocExtern)});return;}
+      // Strict pe produsele din stoc (cerut direct) — o mapare deja confirmată, dar al cărei produs a
+      // fost arhivat între timp, nu mai primește actualizare de stoc extern; un PNK/nume care s-ar
+      // potrivi doar cu un produs arhivat nu mai e adus deloc din platformă (sărit complet, nu doar
+      // lăsat „fără sugestie") — reapare corect la o resincronizare ulterioară dacă produsul e dezarhivat.
+      if(m){if(P.find(p=>p.id===m.produsId)?.archived)return;if(Number.isFinite(Number(it.stocExtern)))syncImpStockUpdates.push({mapId:m.id,titluExtern:titlu,pnk:m.idExtern||pnk,produsId:m.produsId,stocExtern:Number(it.stocExtern)});return;}
       const byPnk=findProductByPnk('emag',pnk,tara);
-      if(byPnk){syncImpParsed.push({titluExtern:titlu,pnk,tara,produsId:byPnk.id,score:1,viaPnk:true,include:true});return;}
+      if(byPnk){if(byPnk.archived)return;syncImpParsed.push({titluExtern:titlu,pnk,tara,produsId:byPnk.id,score:1,viaPnk:true,include:true});return;}
       const match=findExistingProduct({name:titlu});
+      if(match&&match.product.archived)return;
       syncImpParsed.push({titluExtern:titlu,pnk,tara,produsId:match?match.product.id:null,score:match?match.score:0,include:!!match});
     });
     const stockResult=await saveExternalStockSnapshot(syncImpStockUpdates);
@@ -15388,18 +15394,20 @@ async function handleSyncImportFile(ev){
         seen.add(titlu.toLowerCase());
         const byPnk=findProductByPnk(platforma,pnk);
         if(byPnk){
+          if(byPnk.archived)continue;
           syncImpParsed.push({titluExtern:titlu,pnk,produsId:byPnk.id,score:1,viaPnk:true,include:true});
           continue;
         }
         const status=iCurStatus>-1?String(curRows[i][iCurStatus]||'').trim().toUpperCase():'';
         const pidRaw=String(curRows[i][iCurPid]||'').trim();
         const pid=pidRaw?Number(pidRaw):null;
-        const fromFile=(status==='AUTO'||status==='REVIEW')&&pid&&P.some(p=>p.id===pid);
+        const fromFile=(status==='AUTO'||status==='REVIEW')&&pid&&P.some(p=>p.id===pid&&!p.archived);
         if(fromFile){
           const score=iCurScore>-1?(Number(curRows[i][iCurScore])||0)/100:1;
           syncImpParsed.push({titluExtern:titlu,pnk,produsId:pid,score,include:status==='AUTO'});
         }else{
           const match=findExistingProduct({name:titlu});
+          if(match&&match.product.archived)continue;
           syncImpParsed.push({titluExtern:titlu,pnk,produsId:match?match.product.id:null,score:match?match.score:0,include:!!match});
         }
       }
@@ -15455,10 +15463,12 @@ async function handleSyncImportFile(ev){
       seen.add(titlu.toLowerCase());
       const byPnk=findProductByPnk(platforma,pnk);
       if(byPnk){
+        if(byPnk.archived)continue;
         syncImpParsed.push({titluExtern:titlu,pnk,produsId:byPnk.id,score:1,viaPnk:true,include:true});
         continue;
       }
       const match=findExistingProduct({name:titlu});
+      if(match&&match.product.archived)continue;
       syncImpParsed.push({titluExtern:titlu,pnk,produsId:match?match.product.id:null,score:match?match.score:0,include:!!match});
     }
     parsing.style.display='none';
@@ -15592,6 +15602,10 @@ function renderSyncImportPreview(){
     const hasMatch=!!it.produsId||!!it.newProduct;
     const newBtn=it.newProduct?'':`<button type="button" class="btn btn-sm" onclick="markSyncRowNewProduct(${idx})" title="${hasMatch?'Asocierea de mai sus e greșită — nu există încă în Inventar, creează un produs nou cu acest titlu':'Nu există încă în Inventar — creează acum un produs nou cu acest titlu'}">+ Nou</button>`;
     const laterBtn=`<button type="button" class="btn btn-sm" onclick="parkSyncRowLater(${idx})" title="Pune deoparte în „📥 Produse eMAG lipsă din stoc" — o aduci în stoc mai târziu, când vrei, nu acum${hasMatch?' (renunță la asocierea de mai sus)':''}">🕓 Mai târziu</button>`;
+    // Elimină doar din previzualizarea curentă (cerut direct — „nu avem treabă cu ea acum") — nu se
+    // salvează nimic nicăieri, spre deosebire de „Mai târziu"; listarea reapare normal la următoarea
+    // resincronizare/import, exact ca și cum n-ar fi fost niciodată eliminată.
+    const removeBtn=`<button type="button" class="btn btn-sm" style="color:var(--rd);border-color:var(--rd)" onclick="removeSyncRow(${idx})" title="Elimină din previzualizarea curentă — nu se salvează nimic, reapare la următoarea resincronizare/import">🗑 Elimină</button>`;
     const p=it.produsId?P.find(x=>x.id===it.produsId):null;
     const rowImg=it.newProduct?`<div class="pcom-row-img-ph">🆕</div>`:(p&&p.img?`<img src="${esc(imgSrc(p.img))}" class="pcom-row-img" ${imgErrAttr(p.img,'pcomrow')}>`:`<div class="pcom-row-img-ph">📦</div>`);
     const includeBtn=`<button type="button" class="pcom-include-toggle${it.include?' on':''}" onclick="toggleSyncRowInclude(${idx})" title="${it.include?'Se va mapa — click pentru a exclude':'Exclusă — click pentru a include'}">${it.include?'✓ Inclus':'Neinclus'}</button>`;
@@ -15603,7 +15617,7 @@ function renderSyncImportPreview(){
         <div class="smi-imp-meta">${pnkTag}${tag}</div>
       </div>
       <div class="smi-pick smi-pick-lg" id="smi-pick-${idx}">${syncPickBtnHtml(idx)}</div>
-      <div style="display:flex;gap:6px;flex-shrink:0">${newBtn}${laterBtn}</div>
+      <div style="display:flex;gap:6px;flex-shrink:0">${newBtn}${laterBtn}${removeBtn}</div>
     </div>`;
   }).join('');
   const includedCount=syncImpParsed.filter(x=>x.include).length;
@@ -15616,6 +15630,10 @@ function renderSyncImportPreview(){
 }
 function toggleSyncRowInclude(idx){
   syncImpParsed[idx].include=!syncImpParsed[idx].include;
+  renderSyncImportPreview();
+}
+function removeSyncRow(idx){
+  syncImpParsed.splice(idx,1);
   renderSyncImportPreview();
 }
 // Bifat/debifat în bloc — la cerere directă, pe o listă de 50+ rânduri era greoi să bifezi unul
@@ -15757,7 +15775,9 @@ async function suggestSyncImportWithAI(){
       const promptRows=chunk.map((idx,i)=>{
         const it=syncImpParsed[idx];
         const titluCautare=it.titluRo||it.titluExtern;
-        const cands=P.map(p=>({p,score:fuzzyMatch(titluCautare,productMatchText(p))})).sort((a,b)=>b.score-a.score).slice(0,8);
+        // Strict pe produsele din stoc (cerut direct) — un produs arhivat nu mai intră deloc în lista
+        // de candidați trimisă la AI, ca să nu poată fi sugerat, oricât de bine s-ar potrivi titlul.
+        const cands=P.filter(p=>!p.archived).map(p=>({p,score:fuzzyMatch(titluCautare,productMatchText(p))})).sort((a,b)=>b.score-a.score).slice(0,8);
         candByIdx[idx]=cands;
         // Specificațiile (dimensiuni/material/culori), nu doar numele — la cerere directă, ca AI-ul
         // să poată confirma SAU respinge un candidat pe baza lor, nu doar pe asemănarea titlului.
