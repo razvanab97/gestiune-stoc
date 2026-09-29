@@ -3741,8 +3741,8 @@ button.pcx-include-btn.included{border-color:var(--gr)}
         <div class="invx-summary-val" id="invx-status">Se așteaptă fișier</div>
       </div>
       <div class="invx-summary-card">
-        <div class="invx-summary-lbl">Format acceptat</div>
-        <div class="invx-summary-val muted">PDF, CSV, Excel, JPG, PNG</div>
+        <div class="invx-summary-lbl">Furnizor</div>
+        <input type="text" id="inv-supplier" class="invx-summary-input" list="inv-supplier-list" placeholder="ex: Maxy">
       </div>
     </div>
     <div class="inv-drop">
@@ -3955,6 +3955,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:496,text:'Continuare directă la #495 (media ponderată), cerută explicit: „undeva să se și salveze informația — de la furnizorul X, pe data Y, avem prețul Z". Câmp nou „Furnizor" la Importă factură (o dată per factură, cu sugestii din furnizorii deja folosiți) și un prompt „Furnizor pentru această livrare" la Adaugă stoc/recepție din fișa produsului (pre-completat cu furnizorul curent al produsului, editabil). Se salvează pe comanda din Istoric (comenzi_stoc.supplier, coloană nouă) ȘI apare direct pe istoricul de intrări stoc din fișa fiecărui produs (🏭 Furnizor, sub dată) — răspunde exact la „de la cine, când, cu ce preț" pentru fiecare lot, chiar dacă prețul de achiziție afișat e acum media. Adăugat și în lista „Comenzi" (Jurnal) și în exportul CSV. Degradare grațioasă dacă migrarea nu a rulat încă — totul funcționează la fel, doar furnizorul nu se ține minte în bază (rămâne local). Rulează o singură dată: `alter table comenzi_stoc add column if not exists supplier text;`. Verificat cu 11 teste izolate (round-trip bază de date, degradare la coloană lipsă, istoricul per produs arată prețul REAL al fiecărui lot, nu media).',date:'2026-09-29'},
   {n:495,text:'Feature — cerut direct („cum ne raportăm la costul produsului când avem stoc de la 2 furnizori diferiți, cu prețuri diferite"): reaprovizionarea (Adaugă stoc/Importă factură) nu mai SUPRASCRIE costul de achiziție cu ultimul preț plătit — acum îl calculează ca medie ponderată cu stocul deja rămas în depozit (weightedAvgCost). Exemplu: 20 buc. la 90,42 lei în stoc, intră 10 buc. noi la 60 lei de la alt furnizor → costul devine 80,28 lei, nu 60 — reflectă corect că majoritatea stocului tot de la furnizorul mai scump vine, în loc să umfle artificial marja pe stocul vechi. Media se face pe stocul FIZIC rămas (bought−sold la momentul intrării), nu pe tot ce s-a cumpărat vreodată. „Ultimul preț din listare/factură" (reperul afișat separat pe fișa produsului) rămâne neschimbat — prețul BRUT, real, plătit la ultima achiziție, nu media; la fel, valoarea înregistrată în Istoric comenzi pentru fiecare lot rămâne costul real plătit pentru ACEL lot, nu media rezultată. Fără stoc vechi sau fără cost anterior (produs nou/rămas fără stoc) → costul nou intră direct, exact ca înainte. Aplicat identic în ambele fluxuri de reaprovizionare (Adaugă stoc ȘI Importă factură, care duplicau separat aceeași logică). Verificat cu 23 de teste izolate (formula pe cazul exact discutat, stoc negativ/gol, fără cost anterior, ponderare pe stoc rămas nu pe total cumpărat vreodată, transport alocat inclus corect, istoricul comenzii păstrează costul brut al lotului).',date:'2026-09-29'},
   {n:494,text:'Fix real, foarte important, raportat direct cu captură de ecran („avem funcția de alt furnizor, doar că nu funcționează cum trebuie — se trimite informația de la un produs la altul"): când salvezi un produs cu un SKU care există deja pe ALT produs, sistemul actualizează acel produs existent în loc să creeze un duplicat (funcție intenționată, cu confirmare explicită) — dar „Alt furnizor" al produsului ȚINTĂ (surse reale, introduse anterior pentru el) era înlocuit ORBEȘTE cu draftul din formularul care era deschis (al produsului editat, nu al țintei), chiar și când acela era gol — fie lipea sursele altui produs fără nicio legătură, fie ștergea silențios surse reale. Verificat direct pe date live: în bază, niciun produs nu are încă „Alt furnizor" salvat (0 din 398) — nicio daună de reparat, doar bug-ul oprit înainte de următoarea lovitură. Adăugat și un avertisment nou la „+ Adaugă sursă": dacă același cod+furnizor e deja folosit pe alt produs, întreabă înainte să-l adaugi — exact ce previne potrivirea automată la import (findExistingProduct → cod extern, deja funcțională) să devină ambiguă. Verificat cu 16 teste izolate (scurgere/ștergere date între produse pe codul vechi vs. reparat, avertisment duplicat, potrivire automată după cod la import).',date:'2026-09-29'},
   {n:493,text:'Feature — cerut direct: „la fel ca butonul Reîncarcă din Staff, să avem și-n admin, ca staff-ul să vadă în timp real ce lucrăm noi". Buton nou 📤 în bara de sus: trimite un semnal ușor (setari_app, aceeași tehnică deja folosită la coada Staff) pe care tableta îl verifică din fundal, la fiecare 6 secunde, și arată o bulină pulsatorie lângă „↻ Reîncarcă" a lor. Reîncărcarea efectivă a listei rămâne STRICT manuală pe tabletă — decizie deliberată deja luată acolo, ca lista să nu se schimbe singură de sub degetul celui care împachetează; semnalul e doar un indiciu vizual, nu un refresh automat. Trimite semnalul și automat, tăcut, la fiecare mesaj/task trimis din 📨 „Mesaje pentru Staff" — un mesaj nou merită același indiciu ca orice altă actualizare.',date:'2026-09-29'},
@@ -6986,7 +6987,7 @@ function pcomCountryFromCurrency(moneda,titlu){
 }
 function dbToStockOrder(r){
   return{id:r.id,createdAt:r.created_at||new Date().toISOString(),source:r.source||'Import stoc',
-    invoiceNumber:r.invoice_number||'',shippingCost:Number(r.shipping_cost)||0,
+    invoiceNumber:r.invoice_number||'',shippingCost:Number(r.shipping_cost)||0,supplier:r.supplier||'',
     totalItems:r.total_items||0,totalQty:Number(r.total_qty)||0,totalValue:Number(r.total_value)||0,
     updatedCount:r.updated_count||0,createdCount:r.created_count||0,skippedCount:r.skipped_count||0,
     details:Array.isArray(r.details)?r.details:[]};
@@ -6996,6 +6997,9 @@ function stockOrderToDb(o){
     updated_count:o.updatedCount||0,created_count:o.createdCount||0,skipped_count:o.skippedCount||0,details:o.details||[]};
   if(o.invoiceNumber)d.invoice_number=o.invoiceNumber;
   if(o.shippingCost)d.shipping_cost=o.shippingCost;
+  // Furnizorul livrării — cerut direct („de la furnizorul X, pe data Y, avem prețul Z"), coloană nouă,
+  // necesită migration (vezi optionalCols din trySyncStockOrderToDb — degradare grațioasă dacă lipsește).
+  if(o.supplier)d.supplier=o.supplier;
   return d;
 }
 function loadLocalStockOrders(){try{return JSON.parse(localStorage.getItem(OK)||'[]');}catch(e){return[];}}
@@ -7013,7 +7017,8 @@ function mergeStockOrders(...groups){
 async function trySyncStockOrderToDb(order){
   const sent=stockOrderToDb(order);
   const optionalCols={invoice_number:'Numărul facturii a fost păstrat doar local. Pentru salvare în baza de date rulează migration_invoice_number.sql.',
-    shipping_cost:'Costul de transport a fost păstrat doar local. Pentru salvare în baza de date rulează: alter table comenzi_stoc add column if not exists shipping_cost numeric default 0;'};
+    shipping_cost:'Costul de transport a fost păstrat doar local. Pentru salvare în baza de date rulează: alter table comenzi_stoc add column if not exists shipping_cost numeric default 0;',
+    supplier:'Furnizorul livrării a fost păstrat doar local. Pentru salvare în baza de date rulează: alter table comenzi_stoc add column if not exists supplier text;'};
   let rows;
   for(;;){
     try{rows=await dbPost('comenzi_stoc',sent);break;}
@@ -14060,7 +14065,7 @@ function productStockIntakeHistory(productId){
   OI.forEach(o=>{
     (o.details||[]).forEach(d=>{
       const matches=(d.productId&&Number(d.productId)===Number(productId))||(sku&&d.sku&&String(d.sku).toLowerCase()===sku);
-      if(matches&&Number(d.qty)>0)rows.push({date:o.createdAt,qty:Number(d.qty)||0,price:Number(d.price)||0,value:Number(d.value)||0,source:o.source||'',invoiceNumber:o.invoiceNumber||'',status:d.status||''});
+      if(matches&&Number(d.qty)>0)rows.push({date:o.createdAt,qty:Number(d.qty)||0,price:Number(d.price)||0,value:Number(d.value)||0,source:o.source||'',invoiceNumber:o.invoiceNumber||'',supplier:o.supplier||'',status:d.status||''});
     });
   });
   return rows.sort((a,b)=>String(b.date).localeCompare(String(a.date)));
@@ -14075,7 +14080,11 @@ function renderProductStockIntakeHistory(productId){
       const dt=new Date(r.date);
       const dtLbl=isNaN(dt)?esc(r.date):dt.toLocaleString('ro-RO',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'});
       const orderLbl=r.invoiceNumber?`Comandă: <strong>${esc(r.invoiceNumber)}</strong>`:esc(r.source||'—');
-      return`<div class="m-sales-row"><div class="m-sales-date">${dtLbl}<div class="m-stock-order">${orderLbl}</div></div><div class="m-stock-qty">+${fmtQty(r.qty)} buc</div><div class="m-sales-value">${r.price>0?r.price.toFixed(2)+' RON/buc':'—'}</div></div>`;
+      // Furnizorul livrării (cerut direct — „de la furnizorul X, pe data Y, avem prețul Z") — rând
+      // separat, sub comandă/sursă, doar dacă a fost completat (istoricul mai vechi, dinainte de
+      // câmpul nou, rămâne fără el, fără gol vizibil urât).
+      const supplierLbl=r.supplier?`<div class="m-stock-order" style="color:var(--acc)">🏭 ${esc(r.supplier)}</div>`:'';
+      return`<div class="m-sales-row"><div class="m-sales-date">${dtLbl}<div class="m-stock-order">${orderLbl}</div>${supplierLbl}</div><div class="m-stock-qty">+${fmtQty(r.qty)} buc</div><div class="m-sales-value">${r.price>0?r.price.toFixed(2)+' RON/buc':'—'}</div></div>`;
     }).join('')}</div>`;
 }
 // Modificări de stoc introduse manual (fișa produsului / carduri Raport stoc), spre deosebire de recepțiile din CSV/factură (vezi productStockIntakeHistory)
@@ -14980,7 +14989,7 @@ function updateBulkBtns(){
 // Aplică o recepție de stoc (aceeași cantitate + preț opțional) la o listă de produse,
 // actualizează prețul cu istoric, și salvează o intrare în istoricul de comenzi (comenzi_stoc)
 // — vizibilă atât în "Comenzi" (Jurnal) cât și în istoricul de încărcări din fișa fiecărui produs.
-async function applyStockIntake(products,add,newCost,orderNumber,source){
+async function applyStockIntake(products,add,newCost,orderNumber,source,supplier){
   const details=[];
   for(const p of products){
     const data={...p,bought:(p.bought||0)+add};
@@ -15008,6 +15017,9 @@ async function applyStockIntake(products,add,newCost,orderNumber,source){
   if(details.length){
     await saveStockOrderHistory({
       source,invoiceNumber:(orderNumber||'').trim(),
+      // Furnizorul livrării — cerut direct („de la furnizorul X, pe data Y, avem prețul Z"), vezi
+      // nota din applyInvoice/dbToStockOrder pentru aceeași coloană nouă (opțională, degradare grațioasă).
+      supplier:(supplier||'').trim(),
       totalItems:details.length,totalQty:add*details.length,
       totalValue:Math.round(details.reduce((s,d)=>s+d.value,0)*100)/100,
       updatedCount:details.length,createdCount:0,skippedCount:0,details
@@ -15180,9 +15192,12 @@ async function bulkAddStock(){
   const priceInput=prompt('Preț achiziție nou, cu TVA (RON) — lasă gol ca să păstrezi prețul actual','');
   const newCost=priceInput?Math.max(0,parseFloat(String(priceInput).replace(',','.'))||0):0;
   const orderNumber=prompt('Număr comandă / factură (opțional)','')||'';
+  // Cerut direct — „undeva să se și salveze informația: de la furnizorul X, pe data Y, avem prețul Z":
+  // întrebat doar dacă a fost introdus un preț nou (altfel nu are ce fel de „livrare" să documenteze).
+  const supplier=newCost>0?(prompt('Furnizor pentru această livrare (opțional)','')||''):'';
   showLoading(`Se adaugă stoc la ${n} produse…`);
   const products=[...selProd].map(id=>P.find(x=>x.id===id)).filter(Boolean);
-  await applyStockIntake(products,add,newCost,orderNumber,'Adăugare stoc în masă');
+  await applyStockIntake(products,add,newCost,orderNumber,'Adăugare stoc în masă',supplier);
   hideLoading();
   selProd.clear();
   renderToday();renderTable();
@@ -15199,8 +15214,11 @@ async function addStockFromProductPage(){
   const priceInput=prompt('Preț achiziție nou, cu TVA (RON) — lasă gol ca să păstrezi prețul actual','');
   const newCost=priceInput?Math.max(0,parseFloat(String(priceInput).replace(',','.'))||0):0;
   const orderNumber=prompt('Număr comandă / factură (opțional)','')||'';
+  // Cerut direct — „de la furnizorul X, pe data Y, avem prețul Z": pre-completat cu furnizorul curent
+  // al produsului (cazul cel mai frecvent), dar editabil — dacă livrarea asta chiar vine de la altul.
+  const supplier=newCost>0?(prompt('Furnizor pentru această livrare (opțional)',p.supplier||'')||''):'';
   showLoading('Se adaugă stoc…');
-  await applyStockIntake([p],add,newCost,orderNumber,'Comandă produs unic');
+  await applyStockIntake([p],add,newCost,orderNumber,'Comandă produs unic',supplier);
   hideLoading();
   const updated=P.find(x=>x.id===editId);
   document.getElementById('f-bought').value=fmtQty(updated.bought);
@@ -19811,6 +19829,7 @@ function openInvoice(){
   document.getElementById('inv-preview').innerHTML='';
   document.getElementById('inv-file').value='';
   document.getElementById('inv-number').value='';
+  const supEl=document.getElementById('inv-supplier');if(supEl)supEl.value='';
   const shipEl=document.getElementById('inv-shipping');if(shipEl){shipEl.value='';delete shipEl.dataset.manual;}
   const shipHint=document.getElementById('inv-shipping-hint');if(shipHint)shipHint.textContent='';
   document.getElementById('inv-parsing').style.display='none';
@@ -22490,6 +22509,11 @@ async function applyInvoice(){
     await saveStockOrderHistory({
       source:invSourceName||'Import stoc',
       invoiceNumber:document.getElementById('inv-number')?.value.trim()||'',
+      // Furnizorul livrării (cerut direct — „undeva să se și salveze informația: de la furnizorul X,
+      // pe data Y, avem prețul Z"): câmp nou, o singură dată per factură (o factură vine practic mereu
+      // de la UN singur furnizor) — nu doar de decor, se salvează pe comanda din Istoric ȘI pe istoricul
+      // de preț al fiecărui produs (vezi productStockIntakeHistory), ca prețul mediat să rămână explicabil.
+      supplier:document.getElementById('inv-supplier')?.value.trim()||'',
       shippingCost:invShippingCostRon,
       totalItems:orderDetails.length,
       totalQty:orderDetails.reduce((s,i)=>s+parseQtyVal(i.qty),0),
@@ -23591,7 +23615,7 @@ function renderJurnal(){
 function renderStockOrders(){
   const q=(document.getElementById('js').value||'').toLowerCase(),mo=document.getElementById('jm').value;
   let rows=[...OI];if(mo)rows=rows.filter(o=>(o.createdAt||'').startsWith(mo));
-  if(q)rows=rows.filter(o=>(o.source||'').toLowerCase().includes(q)||(o.invoiceNumber||'').toLowerCase().includes(q)||(o.details||[]).some(d=>[d.name,d.sku,d.status].some(v=>String(v||'').toLowerCase().includes(q))));
+  if(q)rows=rows.filter(o=>(o.source||'').toLowerCase().includes(q)||(o.invoiceNumber||'').toLowerCase().includes(q)||(o.supplier||'').toLowerCase().includes(q)||(o.details||[]).some(d=>[d.name,d.sku,d.status].some(v=>String(v||'').toLowerCase().includes(q))));
   const body=document.getElementById('jbody');
   jStockOrdersRendered=rows;
   if(!rows.length){body.innerHTML=`<div class="jrnl-empty">Nicio comandă de stoc încărcată</div>`;document.getElementById('jtotal').textContent='';return;}
@@ -23606,7 +23630,7 @@ function renderStockOrders(){
       const stockLine=Number.isFinite(Number(d.stockBefore))?`<div class="jp-meta">Stoc: ${fmtQty(d.stockBefore)} + ${fmtQty(d.qty)} = ${fmtQty(d.stockAfter)}${Number(d.negativeCompensated)>0?' · minus compensat '+fmtQty(d.negativeCompensated):''}</div>`:'';
       return`<div class="jp-row"><div class="jp-th-ph">📦</div><div class="jp-nm">${esc(d.name||'—')}<br><span class="jp-cat">SKU: ${esc(d.sku||'—')} · <span class="inv-match ${cls}" style="margin-left:0">${esc(d.status||'actualizat')}</span></span>${delta?`<div class="jp-meta">${delta}</div>`:''}${stockLine}</div><div class="jp-qty">+${fmtQty(d.qty)}</div><div class="jp-val">${Number(d.price)>0?Number(d.price).toFixed(2)+' RON/buc':'—'}<br><span class="jp-cat">${Number(d.value)>0?Number(d.value).toFixed(2)+' RON':'—'}</span></div></div>`;
     }).join('');
-    return`<div class="jd-card"><div class="jd-head" onclick="togJ('${id}')"><span class="jd-date">${esc(o.source||'Import stoc')}${o.invoiceNumber?` · <span class="bdg-cat" style="font-size:24px">📄 ${esc(o.invoiceNumber)}</span>`:''}<br><span class="jp-cat">${dt}</span></span><div class="jd-stats"><span><strong>${fmtQty(o.totalQty)}</strong> buc</span><span><strong>${Number(o.totalValue||0).toFixed(2)}</strong> RON</span><span>${o.updatedCount||0} actualizate · ${o.createdCount||0} noi · ${o.skippedCount||0} sărite</span></div><button type="button" class="btn btn-sm" onclick="event.stopPropagation();generateStockOrderChecklist(${i})" title="Regenerează lista de verificare depozit pentru această comandă">🖨️</button><span class="jd-chev" id="${id}-c">▼</span></div><div class="jd-body" id="${id}">${lines||'<div class="jrnl-empty">Fără detalii</div>'}</div></div>`;
+    return`<div class="jd-card"><div class="jd-head" onclick="togJ('${id}')"><span class="jd-date">${esc(o.source||'Import stoc')}${o.invoiceNumber?` · <span class="bdg-cat" style="font-size:24px">📄 ${esc(o.invoiceNumber)}</span>`:''}<br><span class="jp-cat">${dt}${o.supplier?` · 🏭 ${esc(o.supplier)}`:''}</span></span><div class="jd-stats"><span><strong>${fmtQty(o.totalQty)}</strong> buc</span><span><strong>${Number(o.totalValue||0).toFixed(2)}</strong> RON</span><span>${o.updatedCount||0} actualizate · ${o.createdCount||0} noi · ${o.skippedCount||0} sărite</span></div><button type="button" class="btn btn-sm" onclick="event.stopPropagation();generateStockOrderChecklist(${i})" title="Regenerează lista de verificare depozit pentru această comandă">🖨️</button><span class="jd-chev" id="${id}-c">▼</span></div><div class="jd-body" id="${id}">${lines||'<div class="jrnl-empty">Fără detalii</div>'}</div></div>`;
   }).join('');
   document.getElementById('jtotal').textContent=`Total comenzi: ${rows.length} · ${fmtQty(gQ)} buc · ${gV.toFixed(2)} RON · ${gI} linii`;
 }
@@ -23631,8 +23655,8 @@ function exportCSV(){
 function exportStockOrdersCSV(){
   const mo=document.getElementById('jm').value;
   let rows=[...OI];if(mo)rows=rows.filter(o=>(o.createdAt||'').startsWith(mo));
-  let csv='Data,Sursa,Nr. factura/comanda,Status,SKU,Produs,Cantitate,Pret achizitie,Valoare,Pret vechi,Stoc inainte,Stoc dupa,Minus compensat\n';
-  rows.forEach(o=>(o.details||[]).forEach(d=>{csv+=`"${csvEsc(o.createdAt||'')}","${csvEsc(o.source||'')}","${csvEsc(o.invoiceNumber||'')}","${csvEsc(d.status||'')}","${csvEsc(d.sku||'')}","${csvEsc(d.name||'')}","${d.qty||0}","${d.price||0}","${d.value||0}","${d.oldPrice||0}","${d.stockBefore??''}","${d.stockAfter??''}","${d.negativeCompensated||0}"\n`;}));
+  let csv='Data,Sursa,Furnizor,Nr. factura/comanda,Status,SKU,Produs,Cantitate,Pret achizitie,Valoare,Pret vechi,Stoc inainte,Stoc dupa,Minus compensat\n';
+  rows.forEach(o=>(o.details||[]).forEach(d=>{csv+=`"${csvEsc(o.createdAt||'')}","${csvEsc(o.source||'')}","${csvEsc(o.supplier||'')}","${csvEsc(o.invoiceNumber||'')}","${csvEsc(d.status||'')}","${csvEsc(d.sku||'')}","${csvEsc(d.name||'')}","${d.qty||0}","${d.price||0}","${d.value||0}","${d.oldPrice||0}","${d.stockBefore??''}","${d.stockAfter??''}","${d.negativeCompensated||0}"\n`;}));
   const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,\uFEFF'+encodeURIComponent(csv);a.download='comenzi-stoc'+(mo?'-'+mo:'')+'.csv';a.click();
 }
 
