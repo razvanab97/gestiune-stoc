@@ -3955,6 +3955,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:497,text:'Fix real, raportat direct („eu le adaug manual acum în alt furnizor, ca să se asocieze la factură — cum facem să se salveze și la manual"): „+ Adaugă sursă"/„×" din „Alt furnizor" modificau STRICT formularul deschis pe ecran — părea deja salvat (rândul apărea complet, cu buton „Folosește"), dar nimic nu ajungea de fapt în bază decât la apăsarea SEPARATĂ a „Salvează produs", de jos de tot — secțiune colapsată implicit, pas ușor de uitat. Verificat direct pe date live: produse editate chiar în ultimele minute tot arătau „Alt furnizor" gol în bază — confirmă exact acest raport. Acum orice adăugare/ștergere de sursă se salvează IMEDIAT în bază, fără să mai fie nevoie de „Salvează produs" separat pentru ele (celelalte câmpuri din formular, dacă au și ele modificări nesalvate în același timp, rămân corect semnalate ca atare — nu se ascund din greșeală). Verificat cu 19 teste izolate (salvare instant pe produs existent, produs nou fără rând încă în bază, eroare de rețea nu pierde draftul local, alte câmpuri nesalvate rămân corect semnalate) + o scriere reală de test pe produsul #144 direct în Supabase, verificată și restaurată.',date:'2026-09-29'},
   {n:496,text:'Continuare directă la #495 (media ponderată), cerută explicit: „undeva să se și salveze informația — de la furnizorul X, pe data Y, avem prețul Z". Câmp nou „Furnizor" la Importă factură (o dată per factură, cu sugestii din furnizorii deja folosiți) și un prompt „Furnizor pentru această livrare" la Adaugă stoc/recepție din fișa produsului (pre-completat cu furnizorul curent al produsului, editabil). Se salvează pe comanda din Istoric (comenzi_stoc.supplier, coloană nouă) ȘI apare direct pe istoricul de intrări stoc din fișa fiecărui produs (🏭 Furnizor, sub dată) — răspunde exact la „de la cine, când, cu ce preț" pentru fiecare lot, chiar dacă prețul de achiziție afișat e acum media. Adăugat și în lista „Comenzi" (Jurnal) și în exportul CSV. Degradare grațioasă dacă migrarea nu a rulat încă — totul funcționează la fel, doar furnizorul nu se ține minte în bază (rămâne local). Rulează o singură dată: `alter table comenzi_stoc add column if not exists supplier text;`. Verificat cu 11 teste izolate (round-trip bază de date, degradare la coloană lipsă, istoricul per produs arată prețul REAL al fiecărui lot, nu media).',date:'2026-09-29'},
   {n:495,text:'Feature — cerut direct („cum ne raportăm la costul produsului când avem stoc de la 2 furnizori diferiți, cu prețuri diferite"): reaprovizionarea (Adaugă stoc/Importă factură) nu mai SUPRASCRIE costul de achiziție cu ultimul preț plătit — acum îl calculează ca medie ponderată cu stocul deja rămas în depozit (weightedAvgCost). Exemplu: 20 buc. la 90,42 lei în stoc, intră 10 buc. noi la 60 lei de la alt furnizor → costul devine 80,28 lei, nu 60 — reflectă corect că majoritatea stocului tot de la furnizorul mai scump vine, în loc să umfle artificial marja pe stocul vechi. Media se face pe stocul FIZIC rămas (bought−sold la momentul intrării), nu pe tot ce s-a cumpărat vreodată. „Ultimul preț din listare/factură" (reperul afișat separat pe fișa produsului) rămâne neschimbat — prețul BRUT, real, plătit la ultima achiziție, nu media; la fel, valoarea înregistrată în Istoric comenzi pentru fiecare lot rămâne costul real plătit pentru ACEL lot, nu media rezultată. Fără stoc vechi sau fără cost anterior (produs nou/rămas fără stoc) → costul nou intră direct, exact ca înainte. Aplicat identic în ambele fluxuri de reaprovizionare (Adaugă stoc ȘI Importă factură, care duplicau separat aceeași logică). Verificat cu 23 de teste izolate (formula pe cazul exact discutat, stoc negativ/gol, fără cost anterior, ponderare pe stoc rămas nu pe total cumpărat vreodată, transport alocat inclus corect, istoricul comenzii păstrează costul brut al lotului).',date:'2026-09-29'},
   {n:494,text:'Fix real, foarte important, raportat direct cu captură de ecran („avem funcția de alt furnizor, doar că nu funcționează cum trebuie — se trimite informația de la un produs la altul"): când salvezi un produs cu un SKU care există deja pe ALT produs, sistemul actualizează acel produs existent în loc să creeze un duplicat (funcție intenționată, cu confirmare explicită) — dar „Alt furnizor" al produsului ȚINTĂ (surse reale, introduse anterior pentru el) era înlocuit ORBEȘTE cu draftul din formularul care era deschis (al produsului editat, nu al țintei), chiar și când acela era gol — fie lipea sursele altui produs fără nicio legătură, fie ștergea silențios surse reale. Verificat direct pe date live: în bază, niciun produs nu are încă „Alt furnizor" salvat (0 din 398) — nicio daună de reparat, doar bug-ul oprit înainte de următoarea lovitură. Adăugat și un avertisment nou la „+ Adaugă sursă": dacă același cod+furnizor e deja folosit pe alt produs, întreabă înainte să-l adaugi — exact ce previne potrivirea automată la import (findExistingProduct → cod extern, deja funcțională) să devină ambiguă. Verificat cu 16 teste izolate (scurgere/ștergere date între produse pe codul vechi vs. reparat, avertisment duplicat, potrivire automată după cod la import).',date:'2026-09-29'},
@@ -14697,7 +14698,32 @@ function renderSupplierSources(){
     return`<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;padding:7px 8px;border:1px solid var(--b1);border-radius:8px;font-size:15px"><b>${esc(s.supplier||'Furnizor')}</b><span style="color:var(--t3)">${esc(s.sku||'—')}</span><span style="margin-left:auto;font-family:var(--mono)">${Number(s.priceTTC||0).toFixed(2)} RON</span>${url}<button type="button" class="btn btn-sm" onclick="useSupplierSource(${i})">Folosește</button><button type="button" class="btn btn-sm" style="color:var(--rd)" onclick="removeSupplierSource(${i})">×</button></div>`;
   }).join('');
 }
-function addSupplierSource(){
+// Salvează imediat sursele alternative pe produsul deja existent (editId) — cerut direct („cum facem
+// sa se salveze si la manual"): până acum, „+ Adaugă sursă"/„×" modificau STRICT draftul local, vizibil
+// pe ecran (părea deja „salvat" — rândul apare complet, cu buton „Folosește"/„×"), dar nimic nu ajungea
+// de fapt în bază decât la apăsarea SEPARATĂ a „Salvează produs", de jos de tot — secțiunea „Alt
+// furnizor" fiind colapsată implicit (`<details>`), pasul ăla separat era ușor de uitat/rata. Nu
+// salvează un produs NOU (fără editId încă) — nu există niciun rând în bază de actualizat până la
+// primul „Salvează produs" (creare completă), acolo draftul oricum se trimite normal, la fel ca înainte.
+async function persistSupplierSourcesDraft(actionLabel){
+  if(!editId){toast(`${actionLabel} — se va salva odată cu produsul nou, la „Salvează produs”`);return;}
+  try{
+    const sources=supplierSourcesDraft.slice(0,5);
+    await dbPatch(`produse?id=eq.${editId}`,{supplier_sources:sources});
+    const p=P.find(x=>x.id===editId);if(p)p.supplierSources=sources;
+    // Re-ancorează DOAR partea de supplierSources din starea „curată" (productEditorDirty) — sursele
+    // sunt DEJA salvate în bază acum, n-ar trebui să mai declanșeze avertismentul „Ai modificări
+    // nesalvate" doar pentru ele. Îmbinat cu snapshot-ul VECHI (nu suprascris complet cu formularul
+    // curent): dacă omul mai are ȘI alte câmpuri nesalvate în același formular (preț, nume…), acelea
+    // trebuie să rămână „murdare" — altfel ar putea închide modalul crezând greșit că totul e salvat.
+    try{
+      const prevSnap=productEditorSnapshot?JSON.parse(productEditorSnapshot):readProdFormData();
+      productEditorSnapshot=JSON.stringify({...prevSnap,supplierSources:sources});
+    }catch(e){/* snapshot vechi invalid — nu blocăm salvarea reușită pentru atât */}
+    toast(`✓ ${actionLabel}`);
+  }catch(e){toast(`${actionLabel} local, dar nu s-a salvat în bază: `+(e.message||e)+' — apasă „Salvează produs”','err');}
+}
+async function addSupplierSource(){
   const supplier=document.getElementById('f-alt-supplier')?.value.trim()||'',sku=document.getElementById('f-alt-sku')?.value.trim()||'',priceTTC=Math.max(0,Number(document.getElementById('f-alt-price')?.value)||0),url=document.getElementById('f-alt-url')?.value.trim()||'';
   if(!supplier||!sku||!priceTTC){toast('Completează furnizorul, codul extern și prețul cu TVA','err');return;}
   if(url&&!/^https?:\/\//i.test(url)){toast('Linkul trebuie să înceapă cu http:// sau https://','err');return;}
@@ -14714,8 +14740,13 @@ function addSupplierSource(){
   supplierSourcesDraft.push({supplier,sku,priceTTC,url});
   ['f-alt-supplier','f-alt-sku','f-alt-price','f-alt-url'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   renderSupplierSources();
+  await persistSupplierSourcesDraft('Sursă alternativă adăugată');
 }
-function removeSupplierSource(idx){supplierSourcesDraft.splice(idx,1);renderSupplierSources();}
+async function removeSupplierSource(idx){
+  supplierSourcesDraft.splice(idx,1);
+  renderSupplierSources();
+  await persistSupplierSourcesDraft('Sursă alternativă ștearsă');
+}
 function useSupplierSource(idx){
   const s=supplierSourcesDraft[idx];if(!s)return;
   document.getElementById('f-sup').value=s.supplier||'';
