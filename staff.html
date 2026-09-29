@@ -416,6 +416,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:422,date:'29.09.2026',text:'Fix urgent — regresie gravă din #421, raportată direct („ai dat de tot peste cap sistemul"): extinderea cozii active (fără limită de vechime pentru neîmpachetat/blocat) era corectă pentru comenzile eMAG/Trendyol (doar 18 rânduri neîmpachetate în total, toate recente, verificat live), dar Jurnalul (vânzări directe) avea 717 rânduri neîmpachetate ISTORIC, până în iunie 2026 — „impachetat" nu e un câmp întreținut consecvent acolo. Jurnalul a revenit strict la fereastra de dată (ca înainte de #421). Comenzile eMAG/Trendyol au primit, preventiv, o limită de 14 zile — nu schimbă nimic azi (curat), dar previne aceeași regresie pe viitor.'},
   {n:421,date:'29.09.2026',text:'Fix real pe termen lung, raportat direct cu date reale: comenzi neîmpachetate sau „în așteptare" (cu problemă nerezolvată) dispăreau complet din Staff doar prin trecerea unei zile — pragul cozii active era un filtru STRICT la interogare (created_at/data ≥ prag), fără nicio excepție pentru ce era încă activ. Verificat: 2 comenzi cu AWB deja asociat + 3 „în așteptare" (una chiar cu impachetat=true, blocată separat) lipseau din Staff exact din cauza asta. Interogarea (comenzi ȘI Jurnal) include acum orice rând neîmpachetat sau blocat, indiferent de vechime — rămân vizibile până sunt bifate manual ca livrate/rezolvate, exact cum s-a cerut.'},
   {n:420,date:'29.09.2026',text:'Cardul de împachetare — termen maxim de expediere (eMAG/Trendyol), cerut direct: „mai ai 1z 8h" sau „termen depășit cu X", sub caseta AWB — text static, recalculat la fiecare reîncărcare, NU un ceas care ticăie. Util ca reper de prioritizat ce împachetezi primul. Gol pe comenzi vechi, importate înainte de coloana nouă.'},
   {n:419,date:'24.09.2026',text:'Tab nou „↩️ Retururi", cerut direct — simplu și rapid: cauți produsul întors (nume, SKU sau cod intern), alegi cantitatea și motivul (Client a renunțat / Produs defect / Trimis greșit / Alt motiv), un buton îl adaugă înapoi în stoc. Scade din stocul vândut, nu adaugă la „Intrate total" — nu e marfă nouă de la furnizor. Apare imediat în „Mișcări de stoc" din Admin. Nu corectează automat Jurnalul/profitul vânzării originale (decizie asumată, pentru viteză).'},
@@ -1757,10 +1758,12 @@ function queueDate(){return String(staffQueueStartedAt||CUTOFF_DATE).slice(0,10)
 function afterStaffQueueStart(row){
   // Unele rânduri vechi de jurnal nu aveau created_at. Nu le tratăm ca fiind noi doar pentru că
   // au aceeași dată calendaristică; după reset, coada trebuie să fie efectiv goală.
-  if(row?.created_at&&String(row.created_at)>=String(staffQueueStartedAt))return true;
-  // Aceeași reparație ca la staffComenziUrl (comenzi platformă) — o vânzare directă neîmpachetată sau
-  // cu o problemă nerezolvată nu are voie să dispară doar prin trecerea unei zile.
-  return!!row&&(!row.impachetat||!!row.staff_blocked);
+  // Bug real, regresie gravă, raportată direct („ai dat de tot peste cap sistemul"): extinderea de mai
+  // jos (păstrează orice rând neîmpachetat, indiferent de vechime) era corectă pentru comenzile de
+  // platformă (18 rânduri neîmpachetate în total, toate recente), dar Jurnalul (vânzări directe) are
+  // 717 rânduri neîmpachetate ISTORIC, până în iunie 2026 — `impachetat` nu e un câmp întreținut
+  // consecvent acolo, ca la eMAG/Trendyol. Revenit STRICT la fereastra de dată pentru Jurnal.
+  return !!row?.created_at&&String(row.created_at)>=String(staffQueueStartedAt);
 }
 async function loadStaffQueueStart(){
   try{
@@ -1827,13 +1830,22 @@ async function checkAutoQueueReset(){
 // „în așteptare" (una dintre ele chiar cu impachetat=true, blocată separat) ieșeau din Staff doar prin
 // trecerea unei zile. Pragul de dată rămâne filtru de PERFORMANȚĂ doar pentru ce e cu adevărat încheiat
 // (impachetat=true, fără problemă activă) — orice altceva rămâne vizibil oricât timp ar trece.
+// Regresie gravă reparată imediat, raportată direct („ai dat de tot peste cap sistemul"): prima variantă
+// nu avea NICIO limită de vechime pentru „neîmpachetat/blocat” — sigur pe platforma_comenzi (doar 18
+// rânduri neîmpachetate în total, toate recente, verificat live), dar Jurnalul avea 717, până în iunie
+// 2026 (vezi staffJurnalUrl, revenit strict la fereastra de dată). Adăugat totuși aici, preventiv, un
+// prag de 14 zile — nu contează azi (platforma_comenzi e curat), dar previne exact aceeași regresie
+// dacă rândurile neîmpachetate vechi se acumulează cu timpul.
 function staffComenziUrl(){
-  return`platforma_comenzi?select=*&anulata=eq.false&or=(created_at.gte.${encodeURIComponent(staffQueueStartedAt)},impachetat.eq.false,staff_blocked.eq.true)&order=created_at.asc`;
+  const recentFloor=new Date(new Date(staffQueueStartedAt).getTime()-14*24*3600000).toISOString();
+  return`platforma_comenzi?select=*&anulata=eq.false&or=(created_at.gte.${encodeURIComponent(staffQueueStartedAt)},and(created_at.gte.${encodeURIComponent(recentFloor)},impachetat.eq.false),and(created_at.gte.${encodeURIComponent(recentFloor)},staff_blocked.eq.true))&order=created_at.asc`;
 }
-// Aceeași idee, pentru vânzările directe din Jurnal — `data` (ziua vânzării) e filtrul de performanță,
-// dar un rând neîmpachetat sau blocat rămâne vizibil oricât timp ar trece.
+// Jurnalul (vânzări directe) NU primește aceeași extindere — `impachetat` nu e un câmp întreținut
+// consecvent acolo (717 rânduri neîmpachetate istoric, până în iunie 2026, verificat live), spre
+// deosebire de comenzile eMAG/Trendyol, unde chiar reflectă starea reală de împachetare. Revenit strict
+// la fereastra de dată, exact cum era înainte de reparația de mai sus.
 function staffJurnalUrl(){
-  return`jurnal?select=*&anulata=eq.false&or=(data.gte.${queueDate()},impachetat.eq.false,staff_blocked.eq.true)&order=data.asc`;
+  return`jurnal?select=*&data=gte.${queueDate()}&anulata=eq.false&order=data.asc`;
 }
 
 async function refreshData(){
