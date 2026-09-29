@@ -428,6 +428,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:424,date:'29.09.2026',text:'Feature — cerut direct: „la căutare, să se poată căuta mult mai ușor — ultimele 4 cifre din AWB, primele 2-3 litere din numele clientului, sau firma de curierat (ex. DPD)". Căutarea (📋 tab Căutare) e acum diacritice-insensibilă (Gheorghiță = gheorghita), caută și după numele curierului (nou — nu era verificat deloc înainte) și după platformă (eMAG/Trendyol/Vinted). Rezultatele sunt SORTATE după relevanță (potrivire exactă sau la început de text înaintea unei potriviri oarecare în mijloc), iar la egalitate, cele mai recente primele. Cardul din rezultate arată acum și numele clientului (lipsea complet) și curierul lângă AWB, ca să confirmi rapid că ai găsit comanda corectă.'},
   {n:423,date:'29.09.2026',text:'Feature — cerut direct: „la fel ca butonul Reîncarcă din Staff, să avem și-n admin, ca staff-ul să vadă în timp real ce lucrăm noi". Admin are acum un buton „📤" care trimite un semnal — Staff îl verifică din fundal, la fiecare 6 secunde, și arată o bulină portocalie pulsatorie lângă „↻ Reîncarcă" când admin a trimis ceva nou. Reîncărcarea rămâne STRICT manuală — bulina e doar un indiciu că e ceva nou de adus, nu retrage lista singură de sub degetul celui care împachetează (exact decizia deliberată de la #421/#422). Dispare când apeși „↻ Reîncarcă".'},
   {n:422,date:'29.09.2026',text:'Fix urgent — regresie gravă din #421, raportată direct („ai dat de tot peste cap sistemul"): extinderea cozii active (fără limită de vechime pentru neîmpachetat/blocat) era corectă pentru comenzile eMAG/Trendyol (doar 18 rânduri neîmpachetate în total, toate recente, verificat live), dar Jurnalul (vânzări directe) avea 717 rânduri neîmpachetate ISTORIC, până în iunie 2026 — „impachetat" nu e un câmp întreținut consecvent acolo. Jurnalul a revenit strict la fereastra de dată (ca înainte de #421). Comenzile eMAG/Trendyol au primit, preventiv, o limită de 14 zile — nu schimbă nimic azi (curat), dar previne aceeași regresie pe viitor.'},
   {n:421,date:'29.09.2026',text:'Fix real pe termen lung, raportat direct cu date reale: comenzi neîmpachetate sau „în așteptare" (cu problemă nerezolvată) dispăreau complet din Staff doar prin trecerea unei zile — pragul cozii active era un filtru STRICT la interogare (created_at/data ≥ prag), fără nicio excepție pentru ce era încă activ. Verificat: 2 comenzi cu AWB deja asociat + 3 „în așteptare" (una chiar cu impachetat=true, blocată separat) lipseau din Staff exact din cauza asta. Interogarea (comenzi ȘI Jurnal) include acum orice rând neîmpachetat sau blocat, indiferent de vechime — rămân vizibile până sunt bifate manual ca livrate/rezolvate, exact cum s-a cerut.'},
@@ -1329,34 +1330,71 @@ function renderFinalizedTab(host){
 }
 
 /* ── Căutare ── */
-function matchOrder(o,q){
-  const s=q.toLowerCase();
-  if((o.comandaId||'').toLowerCase().includes(s))return true;
-  if((o.clientNume||'').toLowerCase().includes(s))return true;
-  // Bug real găsit pe drum, raportat direct („scanul AWB nu recunoaște, deși AWB-ul există"):
-  // codul de bare FIZIC de pe etichetă nu conține mereu exact AWB-ul salvat la noi — verificat direct,
-  // decodificând codurile reale de pe 3 etichete diferite (Sameday, FAN Courier, DPD): FAN Courier
-  // codifică "7000167148503" + "001F5159" (AWB + sufix intern curier), DPD codifică AWB-ul curat pe UN
-  // cod, dar și un cod de rutare mai lung care îl conține ca substring. Verificarea veche
-  // (awb.includes(text căutat)) mergea doar când textul căutat era mai scurt SAU egal cu AWB-ul salvat
-  // — un cod scanat cu sufix în plus (mai lung) nu putea fi niciodată "conținut" în AWB-ul mai scurt.
-  // Acum verificăm ambele direcții: AWB-ul salvat conține textul, SAU textul (scanat) conține AWB-ul.
-  const awbL=(o.awb||'').toLowerCase();
-  if(awbL&&(awbL.includes(s)||s.includes(awbL)))return true;
-  // Bug real găsit pe drum: placeholder-ul căutării promitea deja „...SKU sau cod intern", dar
-  // codul intern (internalCode) nu era de fapt verificat — util mai ales acum, la pre-împachetare,
-  // ca eticheta tipărită (care arată codul intern) să poată fi găsită manual când nu ai cameră.
-  // ean — codul de bare fizic de pe ambalajul produsului (diferit de SKU-ul intern) — verificat aici
-  // ca să funcționeze scanarea din cameră (📷 Scanează): cine scanează produsul, nu AWB-ul, trimite
-  // exact valoarea EAN ca text de căutare.
-  return o.lines.some(l=>{
-    const p=findProdus(l.produs_id);
-    return(l.produs_nume||l.titlu_extern||'').toLowerCase().includes(s)||(p?.sku||'').toLowerCase().includes(s)||(p?.internalCode||'').toLowerCase().includes(s)||(p?.ean||'').toLowerCase().includes(s);
-  });
+// Diacritice-insensibil (la fel ca fmFold din index.html) — cerut direct („căutarea să fie mult mai
+// ușoară la câteva caractere"): un client scris „Gheorghiță" în bază trebuie găsit și scriind
+// „gheorghita", fără diacritice, cum tastează majoritatea pe tabletă.
+function sFold(s){return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/ș/gi,'s').replace(/ț/gi,'t').toLowerCase();}
+// Doar cifrele — pentru „ultimele 4 cifre din AWB" (exemplul dat direct) să se potrivească indiferent
+// de eventuale spații/liniuțe cu care ar fi format AWB-ul la afișare, nu doar ca substring brut.
+function sDigits(s){return String(s||'').replace(/\D/g,'');}
+function platformLabel(pl){return pl==='emag'?'eMAG':pl==='trendyol'?'Trendyol':pl==='vinted'?'Vinted':'Extra';}
+// Scor de potrivire, nu doar da/nu (cerut direct — „rezultatul să fie mult mai ușor" la câteva
+// caractere, exemple date direct: ultimele cifre din AWB, primele litere din numele clientului, sau
+// numele curierului — „scriem DPD, să ne dea comenzile cu livrare la DPD"): comandă/AWB exacte sau la
+// început de text ies primele, apoi client, apoi curier, abia apoi produs/cod intern — cu multe
+// comenzi potrivite parțial, cele mai relevante s-ar putea pierde needitor într-o listă nesortată.
+function matchScoreOrder(o,q){
+  const s=sFold(q);if(!s)return 0;
+  const sDig=sDigits(q);
+  const comandaId=sFold(o.comandaId),clientNume=sFold(o.clientNume),awbDig=sDigits(o.awb),courier=sFold(o.awbCourier),plat=sFold(platformLabel(o.platforma));
+  // Bug real găsit pe drum, raportat direct („scanul AWB nu recunoaște, deși AWB-ul există"): codul de
+  // bare FIZIC de pe etichetă nu conține mereu exact AWB-ul salvat la noi — verificat direct, decodificând
+  // codurile reale de pe 3 etichete diferite (Sameday, FAN Courier, DPD): FAN Courier codifică
+  // "7000167148503" + "001F5159" (AWB + sufix intern curier), DPD codifică AWB-ul curat pe UN cod, dar și
+  // un cod de rutare mai lung care îl conține ca substring. Verificăm ambele direcții: AWB-ul salvat
+  // conține textul, SAU textul (scanat) conține AWB-ul.
+  const awbL=sFold(o.awb);
+  let best=0;
+  const bump=v=>{if(v>best)best=v;};
+  if(comandaId){
+    if(comandaId===s)bump(100);
+    else if(comandaId.startsWith(s))bump(90);
+    else if(comandaId.includes(s))bump(60);
+  }
+  if(awbL){
+    if(awbL===s)bump(100);
+    else if(sDig&&awbDig&&awbDig.length>=sDig.length&&awbDig.endsWith(sDig))bump(95); // exact exemplul dat: ultimele N cifre din AWB
+    else if(awbL.startsWith(s))bump(90);
+    else if(awbL.includes(s)||s.includes(awbL))bump(60);
+  }
+  if(clientNume){
+    if(clientNume===s)bump(95);
+    else if(clientNume.split(' ').some(w=>w.startsWith(s)))bump(85); // primele litere din prenume SAU din nume
+    else if(clientNume.includes(s))bump(55);
+  }
+  if(courier){
+    if(courier===s||courier.startsWith(s))bump(75); // „scriem DPD" → toate comenzile cu livrare la DPD
+    else if(courier.includes(s))bump(45);
+  }
+  if(plat&&(plat===s||plat.startsWith(s)))bump(50);
+  // Bug real găsit pe drum: placeholder-ul căutării promitea deja „...SKU sau cod intern", dar codul
+  // intern (internalCode) nu era de fapt verificat — util mai ales la pre-împachetare, ca eticheta
+  // tipărită (care arată codul intern) să poată fi găsită manual când nu ai cameră. ean — codul de bare
+  // fizic de pe ambalajul produsului (diferit de SKU-ul intern) — verificat ca să funcționeze scanarea
+  // din cameră (📷 Scanează): cine scanează produsul, nu AWB-ul, trimite exact valoarea EAN.
+  if(best<40){
+    const lineHit=o.lines.some(l=>{
+      const p=findProdus(l.produs_id);
+      return[sFold(l.produs_nume||l.titlu_extern),sFold(p?.sku),sFold(p?.internalCode),sFold(p?.ean)].some(v=>v&&v.includes(s));
+    });
+    if(lineHit)bump(40);
+  }
+  return best;
 }
+function matchOrder(o,q){return matchScoreOrder(o,q)>0;}
 function renderSearchTab(host){
   document.getElementById('search-dock').innerHTML=`<div class="search-row search-drop">
-    <input type="text" id="search-page-input" placeholder="Caută comandă, client, produs, SKU sau cod intern…" oninput="onSearchPageInput()" autofocus>
+    <input type="text" id="search-page-input" placeholder="Caută după client, AWB, curier (ex. DPD), comandă, produs sau cod…" oninput="onSearchPageInput()" autofocus>
     <button type="button" class="scan-open-btn" onclick="openScanner()" title="Scanează codul de bare (AWB sau produs)">📷</button>
   </div>`;
   host.innerHTML='<div class="search-page-list" id="search-page-results"></div>';
@@ -1365,20 +1403,30 @@ function onSearchPageInput(){
   const q=document.getElementById('search-page-input').value.trim();
   const box=document.getElementById('search-page-results');
   if(!q){box.innerHTML='';return;}
-  const hits=ORDERS.filter(o=>matchOrder(o,q));
+  // Sortate după relevanță (matchScoreOrder — comandă/AWB exact sau la început de text > client >
+  // curier > produs/cod), iar la scor egal, cele mai recente primele — „chiar dacă sunt noi, de azi
+  // sau de zilele trecute" înseamnă că trebuie găsite, dar cele proaspete sunt cel mai probabil ce
+  // caută omul chiar acum.
+  const hits=ORDERS.map(o=>({o,score:matchScoreOrder(o,q)})).filter(x=>x.score>0)
+    .sort((a,b)=>b.score-a.score||String(b.o.sortAt||'').localeCompare(String(a.o.sortAt||'')))
+    .map(x=>x.o);
   if(!hits.length){box.innerHTML=`<div class="empty"><div class="big">🔍</div><div>Nicio comandă găsită.</div></div>`;return;}
   box.innerHTML=hits.map(o=>{
     const l=o.lines[0];
     const p=findProdus(l.produs_id);
     const img=p&&p.img?`<img class="list-item-th" src="${esc(imgSrc(p.img))}" onerror="this.style.display='none'">`:`<div class="list-item-th-ph">📦</div>`;
-    const plLabel=o.platforma==='emag'?'eMAG':o.platforma==='trendyol'?'Trendyol':o.platforma==='vinted'?'Vinted':'Extra';
+    const plLabel=platformLabel(o.platforma);
     const nm=o.lines.map(x=>x.produs_nume).filter(Boolean).join(', ');
     const status=o.finalized?'✓ Finalizată':o.waiting?'⏸ În așteptare':'📦 De împachetat';
+    // Numele clientului lipsea complet din rezultat (doar produs + AWB) — greu de confirmat că ai găsit
+    // comanda corectă atunci când cauți exact după nume sau curier (acum căutabile, vezi
+    // matchScoreOrder), fără să vezi de fapt CE s-a potrivit.
+    const metaParts=[o.clientNume,nm,o.awb?`AWB ${o.awb}${o.awbCourier?' ('+o.awbCourier+')':''}`:''].filter(Boolean);
     return`<div class="list-item" onclick="jumpToOrder('${o.key}')">
       ${img}
       <div class="list-item-main">
         <div class="list-item-nm">${plLabel} ${o.comandaId?'· #'+esc(o.comandaId):''}</div>
-        <div class="list-item-meta">${esc(nm)}${o.awb?' · AWB '+esc(o.awb):''}</div>
+        <div class="list-item-meta">${esc(metaParts.join(' · '))}</div>
       </div>
       <div class="list-item-time">${status}</div>
     </div>`;
