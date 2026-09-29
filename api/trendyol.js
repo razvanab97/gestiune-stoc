@@ -30,7 +30,18 @@ function packageLines(pack){
   return lines.filter(line=>number(line.quantity)>0).map(line=>{
     const qty=number(line.quantity),vat=number(line.vatRate)>1?number(line.vatRate)/100:number(line.vatRate);
     const gross=number(line.lineUnitPrice)||number(line.lineGrossAmount)/(qty||1);
-    return{comandaId:String(pack.orderNumber||pack.shipmentPackageId||''),pachetId:String(pack.shipmentPackageId||pack.id||''),data:new Date(number(pack.orderDate)||number(pack.createdDate)||Date.now()).toISOString().slice(0,10),pnk:String(line.barcode||''),codProdus:String(line.stockCode||line.barcode||''),clientNume:customer,titluExtern:String(line.productName||''),cantitate:qty,pretFaraTva:round(gross/(1+(vat||0))),pretTotalCuTva:round(gross*qty),moneda:String(line.currencyCode||pack.currencyCode||'RON').toUpperCase(),tara:String(pack.shipmentAddress?.countryCode||pack.deliveryAddress?.countryCode||'RO').toUpperCase(),awb:String(pack.cargoTrackingNumber||''),status:String(pack.status||pack.shipmentPackageStatus||'')};
+    // termenExpediere — cerut direct („data maximă de finalizare, cu timer standard, nu tip ceas"):
+    // agreedDeliveryDate e câmpul oficial Trendyol (Unix ms), documentat în getShipmentPackages — exact
+    // termenul arătat ca „Timp rămas” în panoul lor de seller. Unix ms → nicio ambiguitate de fus orar.
+    // awb — NU se mai preia din cargoTrackingNumber (bug real, raportat direct de 2 ori, cu comenzi
+    // reale: AWB-ul afișat nu corespundea curierului folosit efectiv — ex. FanCourier). Verificat direct
+    // în documentația oficială Trendyol (endpoint "updateTrackingNumber"): sellerul trebuie să confirme
+    // EXPLICIT propriul curier + AWB real printr-un apel separat; până atunci, cargoTrackingNumber e un
+    // identificator PROVIZORIU al Trendyol, nu neapărat curierul/AWB-ul folosit efectiv la expediere —
+    // toate comenzile pe care le importăm sunt oricum în statusuri „încă deschise" (Created/Picking/
+    // Invoiced, vezi OPEN_STATUSES), niciodată „Shipped", deci niciodată sigur finalizat. AWB-ul real
+    // vine acum EXCLUSIV din „Asociază AWB-uri" (citirea etichetei fizice reale), exact ca la eMAG.
+    return{comandaId:String(pack.orderNumber||pack.shipmentPackageId||''),pachetId:String(pack.shipmentPackageId||pack.id||''),data:new Date(number(pack.orderDate)||number(pack.createdDate)||Date.now()).toISOString().slice(0,10),pnk:String(line.barcode||''),codProdus:String(line.stockCode||line.barcode||''),clientNume:customer,titluExtern:String(line.productName||''),cantitate:qty,pretFaraTva:round(gross/(1+(vat||0))),pretTotalCuTva:round(gross*qty),moneda:String(line.currencyCode||pack.currencyCode||'RON').toUpperCase(),tara:String(pack.shipmentAddress?.countryCode||pack.deliveryAddress?.countryCode||'RO').toUpperCase(),awb:'',status:String(pack.status||pack.shipmentPackageStatus||''),termenExpediere:number(pack.agreedDeliveryDate)?new Date(number(pack.agreedDeliveryDate)).toISOString():''};
   });
 }
 
