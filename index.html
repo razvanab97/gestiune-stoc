@@ -2352,6 +2352,7 @@ button.pcx-include-btn.included{border-color:var(--gr)}
   <button class="notif-bell" id="notepad-btn" style="margin-left:10px" onclick="toggleNotepad()" title="Notiță rapidă — scrie și copiază orice vrei să ții la îndemână">📝</button>
   <button class="notif-bell" id="pp-btn" style="margin-left:10px" onclick="togglePretPrivat()" title="Preț privat — lipește o poză de produs și vezi rapid prețul minim + profitabilitatea pentru extern">💸</button>
   <button class="notif-bell" id="smsg-btn" style="margin-left:10px" onclick="openStaffMsg()" title="Mesaje pentru Staff — trimite mesaje sau task-uri către angajați, apar direct pe tableta lor">📨</button>
+  <button class="notif-bell" id="staff-push-btn" style="margin-left:10px" onclick="pushStaffRefresh()" title="Trimite semnal către Staff — după o actualizare (ex. AWB asociat), apare un indiciu pe tabletă lângă „↻ Reîncarcă”, ca să știe că e ceva nou de adus">📤</button>
   <div class="zoom-wrap" title="Mărește/micșorează afișarea">
     <button class="zoom-btn" onclick="zoomOut()" title="Micșorează (Zoom -)">−</button>
     <span class="zoom-level" id="zoom-level" onclick="zoomReset()" title="Click pentru a reseta la 100%">100%</span>
@@ -3954,6 +3955,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:493,text:'Feature — cerut direct: „la fel ca butonul Reîncarcă din Staff, să avem și-n admin, ca staff-ul să vadă în timp real ce lucrăm noi". Buton nou 📤 în bara de sus: trimite un semnal ușor (setari_app, aceeași tehnică deja folosită la coada Staff) pe care tableta îl verifică din fundal, la fiecare 6 secunde, și arată o bulină pulsatorie lângă „↻ Reîncarcă" a lor. Reîncărcarea efectivă a listei rămâne STRICT manuală pe tabletă — decizie deliberată deja luată acolo, ca lista să nu se schimbe singură de sub degetul celui care împachetează; semnalul e doar un indiciu vizual, nu un refresh automat. Trimite semnalul și automat, tăcut, la fiecare mesaj/task trimis din 📨 „Mesaje pentru Staff" — un mesaj nou merită același indiciu ca orice altă actualizare.',date:'2026-09-29'},
   {n:492,text:'Continuare directă la feature-ul AI de recunoaștere AWB (#491), cerută explicit: „GLS, Cargus, FAN, Sameday, DPD, și cele din Ungaria — măcar să sesizeze că sunt de acolo" + „ce e Inclus în admin trebuie să fie 1 la 1 în Staff, iar la AWB-uri în plus, să primim informații și să putem asocia manual". (1) Bug real găsit verificând curier cu curier: formatul standard FAN Courier („AWB: X / Continut: Y") era singurul din tot sistemul care NU reținea deloc numele curierului — nici Staff, nici admin nu aveau ce arăta pe card, deși eticheta era recunoscută perfect; GLS, Cargus, Sameday, DPD și Ungaria (GLS crossborder + eMAG Ungaria prin Sameday) erau deja corect etichetate. (2) Reparat un al 4-lea loc (după cele 3 de la #489) unde o comandă asociată cu AWB putea rămâne invizibilă în Staff: calea NORMALĂ de asociere (comandă deja existentă în platforma_comenzi, nu doar „Neinclus") nu avansa niciodată created_at — o comandă importată ÎNAINTE de începutul cozii curente Staff (reset manual/automat 22:00), rezolvată abia acum cu AWB, ar fi rămas invizibilă chiar și cu AWB-ul scris corect în bază. (3) Notificarea de erori AWB (📮, clopoțel) avea până acum doar „✓ Rezolvată" (ascunde eroarea, fără să asocieze nimic) — adăugat „🔗 Asociază", care deschide același picker manual de căutare/alegere comandă și scrie efectiv AWB-ul (+ curier, fișier sursă) pe comanda aleasă, exact fluxul cerut „informații despre AWB, ca să-l verificăm și să-l asociem manual". Verificat cu 18 teste izolate suplimentare (recunoaștere FAN Courier vs. DPD pe același format ambiguu, avansare created_at pe comenzi vechi/recente, asociere pe comandă deja comisă și pe „Neinclus").',date:'2026-09-29'},
   {n:491,text:'Feature arhitecturală importantă, cerută direct („problema nu e doar la Trendyol, e la toate platformele, la toate AWB-urile — sistemul trebuie să recunoască toate AWB-urile pe baza numelui clientului, comenzii și sumei, indiferent de limbă — română, chirilic, grecesc, bulgar, maghiar, polonez, orice"): regulile scrise manual pentru citirea etichetelor (câte una per curier/limbă) nu scalează la orice limbă nouă. Adăugat un nivel nou, universal, ca ultimă plasă de siguranță — folosit STRICT când NICI regexul, NICI numele fișierului n-au reușit deja să recunoască eticheta: AI-ul citește textul etichetei (în orice limbă) și extrage exact numele clientului, numărul comenzii, AWB-ul și suma/moneda; dacă eticheta n-are chiar niciun număr de comandă tipărit, potrivim după nume+sumă (convertită la RON) cu comenzile nerezolvate din TOATE platformele — comise sau încă „Neinclus". Prag de ambiguitate identic cu restul sistemului (2 candidați la fel de buni → nicio potrivire automată, cere verificare manuală). Reparat și un bug real, găsit testând: comparația de nume folosită în tot restul sistemului elimină complet caracterele chirilice/grecești la normalizare (nu le transliterează) — două nume complet diferite, scrise doar în chirilic/grecesc, s-ar fi normalizat amândouă la text gol și ar fi primit scor perfect, exact genul de asociere greșită pe care tot acest sistem trebuie s-o elimine; adăugată o comparație directă pe textul brut pentru alfabetele nelatine. Verificat cu 10 teste izolate (nume latin/chirilic/grecesc, conversie valutară, ambiguitate, comenzi „Neinclus", comandă cu AWB deja pus).',date:'2026-09-29'},
   {n:490,text:'Fix real, foarte important, raportat direct de 2 ori, cu comenzi reale (AWB afișat pe o comandă Trendyol nu corespundea curierului folosit efectiv — „e clar că AWB-ul e altul, de la FanCourier"): la import, AWB-ul comenzilor Trendyol se prelua direct din câmpul lor `cargoTrackingNumber` — verificat direct în documentația oficială Trendyol (endpoint „updateTrackingNumber"): acest câmp e un identificator PROVIZORIU al Trendyol, valabil doar până sellerul confirmă explicit propriul curier + AWB real; comenzile pe care le importăm sunt oricum mereu în statusuri „încă deschise" (Created/Picking/Invoiced), niciodată „Shipped". AWB-ul Trendyol nu se mai preia acum deloc la import — vine EXCLUSIV din „Asociază AWB-uri" (citirea etichetei fizice reale), exact ca la eMAG. Curățat direct în bază, pe toate cele 10 comenzi Trendyol încă active cu acest AWB nesigur (cele deja finalizate au rămas neatinse — fără beneficiu operațional).',date:'2026-09-29'},
@@ -15097,11 +15099,33 @@ async function sendStaffMsg(){
     smsgDraft=[{text:'',tip:'mesaj'}];
     renderStaffMsgDraft();
     loadStaffMsgHistory();
+    // Un mesaj/task nou merită exact același indiciu ca orice altă actualizare — vezi pushStaffRefresh.
+    // Tăcut (fără toast propriu) — mesajul trimis are deja propria confirmare mai sus. Doar la succes —
+    // dacă trimiterea a eșuat (catch de mai jos), nu există nimic nou de semnalat.
+    pushStaffRefresh(true);
   }catch(e){
     hideLoading();
     console.error('sendStaffMsg error:',e);
     toast('Eroare la trimitere: '+(e.message||e),'err');
   }
+}
+// „📤 Trimite în Staff" (cerut direct — „la fel ca butonul Reîncarcă din Staff, dar din admin, ca
+// staff-ul să vadă în timp real ce lucrăm noi"): NU reîmprospătează nimic automat pe tabletă — Staff
+// și-a păstrat intenționat refresh-ul strict manual (vezi comentariul din staff.html, „lista nu se
+// schimbă de sub operator"). Scrie doar un semnal ușor în setari_app (aceeași tehnică deja folosită la
+// staff_queue_started_at); Staff îl verifică din fundal la fiecare 6s (checkPushSignal) și arată o
+// bulină pulsatorie lângă „↻ Reîncarcă" — omul de-acolo alege când o ia, lista nu se mișcă singură.
+// `silent=true` (folosit din sendStaffMsg) sare peste toast-ul propriu — mesajul trimis are deja unul.
+async function pushStaffRefresh(silent){
+  const btn=document.getElementById('staff-push-btn');
+  if(btn&&!silent){btn.disabled=true;btn.style.opacity='.5';}
+  try{
+    const now=new Date().toISOString();
+    const updated=await dbPatch('setari_app?key=eq.staff_push_refresh',{value:now});
+    if(!updated?.length)await dbPost('setari_app',{key:'staff_push_refresh',value:now});
+    if(!silent)toast('📤 Semnal trimis către Staff');
+  }catch(e){if(!silent)toast('Nu am putut trimite semnalul: '+(e.message||e),'err');}
+  finally{if(btn&&!silent){btn.disabled=false;btn.style.opacity='';}}
 }
 async function loadStaffMsgHistory(){
   const box=document.getElementById('smsg-hist');if(!box)return;

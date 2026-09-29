@@ -40,7 +40,12 @@ button{cursor:pointer}
 .hdr h1{font-size:27px;font-weight:700}
 .order-count{font-size:17px;color:var(--t3);font-weight:700;white-space:nowrap}
 .update-btn{border:1px solid var(--b2);background:var(--surf);color:var(--t2);border-radius:999px;padding:4px 9px;font-size:13px;font-weight:800;white-space:nowrap}.update-btn.new{border-color:var(--acc);background:var(--acc-light);color:var(--acc)}
-.refresh-btn{border:1px solid var(--b2);background:var(--surf);color:var(--t2);border-radius:999px;padding:6px 10px;font-size:14px;font-weight:800;white-space:nowrap}.refresh-btn:active{background:var(--acc-light);border-color:var(--acc);color:var(--acc)}.refresh-btn:disabled{opacity:.55;cursor:wait}.queue-reset-btn{border-color:#f1c9b8;color:#a44a21;background:#fffaf7}.queue-reset-btn:active{background:#fff0e8;border-color:#df8a60;color:#8d3612}
+.refresh-btn{position:relative;border:1px solid var(--b2);background:var(--surf);color:var(--t2);border-radius:999px;padding:6px 10px;font-size:14px;font-weight:800;white-space:nowrap}.refresh-btn:active{background:var(--acc-light);border-color:var(--acc);color:var(--acc)}.refresh-btn:disabled{opacity:.55;cursor:wait}.queue-reset-btn{border-color:#f1c9b8;color:#a44a21;background:#fffaf7}.queue-reset-btn:active{background:#fff0e8;border-color:#df8a60;color:#8d3612}
+/* „📤 Trimite în Staff" din admin — vezi checkPushSignal/STAFF_PUSH_KEY. Bulină pulsatorie, NU un
+   refresh automat — omul alege când apasă „↻ Reîncarcă"; indiciul dispare atunci, nu singur. */
+.refresh-ping{display:none;position:absolute;top:-3px;right:-3px;width:11px;height:11px;border-radius:50%;background:var(--or)}
+.refresh-ping.on{display:block;animation:refreshPingPulse 1.4s ease-in-out infinite}
+@keyframes refreshPingPulse{0%{box-shadow:0 0 0 0 rgba(247,144,9,.55)}70%{box-shadow:0 0 0 7px rgba(247,144,9,0)}100%{box-shadow:0 0 0 0 rgba(247,144,9,0)}}
 .sync-dot{width:11px;height:11px;border-radius:50%;display:inline-block;margin-right:6px;vertical-align:middle}
 .sync-dot.ok{background:var(--gr)}
 .sync-dot.err{background:var(--rd)}
@@ -284,7 +289,7 @@ button{cursor:pointer}
     <div class="hdr-title"><h1>📦 Comenzi de împachetat</h1><span class="order-count" id="progress-txt">Se încarcă…</span><button type="button" class="update-btn" id="staff-update-btn" onclick="openUpdatesSheet()"></button></div>
     <div style="display:flex;align-items:center;gap:10px">
       <button type="button" class="refresh-btn queue-reset-btn" id="staff-queue-reset-btn" onclick="resetStaffQueue()">↺ Coada nouă</button>
-      <button type="button" class="refresh-btn" id="staff-refresh-btn" onclick="refreshStaffNow()">↻ Reîncarcă</button>
+      <button type="button" class="refresh-btn" id="staff-refresh-btn" onclick="refreshStaffNow()">↻ Reîncarcă<span class="refresh-ping" id="refresh-ping"></span></button>
       <button type="button" class="staff-name-badge" id="staff-name-badge" onclick="editStaffName()"></button>
       <span class="sync-dot" id="sync-dot"></span>
     </div>
@@ -399,6 +404,13 @@ function deadlineBadgeHtml(iso){
 const CUTOFF_DATE='2026-08-27';
 const STAFF_QUEUE_KEY='staff_queue_started_at';
 let staffQueueStartedAt=CUTOFF_DATE+'T00:00:00.000Z';
+// „📤 Trimite în Staff" din admin (cerut direct — „la fel ca butonul Reîncarcă din Staff, dar din admin,
+// ca staff-ul să vadă în timp real ce lucrăm noi"): NU reîmprospătează lista automat — refresh-ul rămas
+// STRICT manual (vezi comentariul de la „Refresh-ul este intenționat manual" de mai jos) e o decizie
+// deliberată, ca lista să nu se schimbe sub degetul celui care împachetează. Semnalul e doar un INDICIU
+// vizual (bulină pulsatorie pe „↻ Reîncarcă" + un toast o singură dată) — omul alege când apasă reîncarcă.
+const STAFF_PUSH_KEY='staff_push_refresh';
+let lastPushSignal=null;
 const ISSUE_LABELS={stoc_zero:'Stoc zero',cantitate_insuficienta:'Cantitate insuficientă',produs_deteriorat:'Produs deteriorat',produs_gresit:'Produs greșit',nu_gasesc:'Nu găsesc produsul',alta:'Altă problemă'};
 
 let PRODUSE=[],COMENZI=[],JURNAL=[],ORDERS=[],PREPACK=[],STAFFMSG=[],FURNIZOR=[],curKey=null,activeTab='pack',activeImg={},stockCardIdx=0,stockSaveBusy=false,stockSwipeX=null,stockSortMode='alpha';
@@ -416,6 +428,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:423,date:'29.09.2026',text:'Feature — cerut direct: „la fel ca butonul Reîncarcă din Staff, să avem și-n admin, ca staff-ul să vadă în timp real ce lucrăm noi". Admin are acum un buton „📤" care trimite un semnal — Staff îl verifică din fundal, la fiecare 6 secunde, și arată o bulină portocalie pulsatorie lângă „↻ Reîncarcă" când admin a trimis ceva nou. Reîncărcarea rămâne STRICT manuală — bulina e doar un indiciu că e ceva nou de adus, nu retrage lista singură de sub degetul celui care împachetează (exact decizia deliberată de la #421/#422). Dispare când apeși „↻ Reîncarcă".'},
   {n:422,date:'29.09.2026',text:'Fix urgent — regresie gravă din #421, raportată direct („ai dat de tot peste cap sistemul"): extinderea cozii active (fără limită de vechime pentru neîmpachetat/blocat) era corectă pentru comenzile eMAG/Trendyol (doar 18 rânduri neîmpachetate în total, toate recente, verificat live), dar Jurnalul (vânzări directe) avea 717 rânduri neîmpachetate ISTORIC, până în iunie 2026 — „impachetat" nu e un câmp întreținut consecvent acolo. Jurnalul a revenit strict la fereastra de dată (ca înainte de #421). Comenzile eMAG/Trendyol au primit, preventiv, o limită de 14 zile — nu schimbă nimic azi (curat), dar previne aceeași regresie pe viitor.'},
   {n:421,date:'29.09.2026',text:'Fix real pe termen lung, raportat direct cu date reale: comenzi neîmpachetate sau „în așteptare" (cu problemă nerezolvată) dispăreau complet din Staff doar prin trecerea unei zile — pragul cozii active era un filtru STRICT la interogare (created_at/data ≥ prag), fără nicio excepție pentru ce era încă activ. Verificat: 2 comenzi cu AWB deja asociat + 3 „în așteptare" (una chiar cu impachetat=true, blocată separat) lipseau din Staff exact din cauza asta. Interogarea (comenzi ȘI Jurnal) include acum orice rând neîmpachetat sau blocat, indiferent de vechime — rămân vizibile până sunt bifate manual ca livrate/rezolvate, exact cum s-a cerut.'},
   {n:420,date:'29.09.2026',text:'Cardul de împachetare — termen maxim de expediere (eMAG/Trendyol), cerut direct: „mai ai 1z 8h" sau „termen depășit cu X", sub caseta AWB — text static, recalculat la fiecare reîncărcare, NU un ceas care ticăie. Util ca reper de prioritizat ce împachetezi primul. Gol pe comenzi vechi, importate înainte de coloana nouă.'},
@@ -1737,6 +1750,9 @@ async function refreshStaffNow(){
     // nu zilnică, nu merită încă un apel Supabase la fiecare tick doar pentru un caz de urgență.
     await loadStaffQueueStart();
     const ok=await refreshData();
+    // Tocmai am reîncărcat tot din ERP — orice actualizare trimisă din admin înainte de acest moment
+    // e deja aici, indiciul vizual (vezi checkPushSignal) nu mai are ce arăta.
+    document.getElementById('refresh-ping')?.classList.remove('on');
     if(ok)showToast(`✓ Staff actualizat · ${ORDERS.length} comenzi citite din ERP`);
     else showToast('Nu am putut reîncărca toate datele — verifică conexiunea');
   }catch(e){
@@ -1889,6 +1905,26 @@ async function refreshData(){
 // niciun efect vizibil, dacă nu s-a trecut încă de pragul zilei — reface ecranul o SINGURĂ dată pe zi,
 // exact în noaptea în care trece de ora 22, nu la fiecare tick.
 setInterval(()=>{if(!document.hidden)checkAutoQueueReset();},60000);
+// Semnal ușor „📤 Trimite în Staff" (setari_app, aceeași tehnică ca STAFF_QUEUE_KEY) — interogare de o
+// singură coloană, ieftină, la fiecare 6s, STRICT ca să afișeze un indiciu vizual, NU ca să retragă
+// lista automat (vezi comentariul de mai sus, „Refresh-ul este intenționat manual"). Prima citire, la
+// pornire, doar reține valoarea curentă (nu declanșează indiciul — nu există nimic „nou" imediat după
+// ce tocmai am încărcat tot din ERP).
+async function checkPushSignal(){
+  if(document.hidden)return;
+  try{
+    const rows=await sb('GET',`setari_app?key=eq.${STAFF_PUSH_KEY}&select=value`);
+    const v=rows?.[0]?.value;
+    if(!v)return;
+    if(lastPushSignal===null){lastPushSignal=v;return;}
+    if(v!==lastPushSignal){
+      lastPushSignal=v;
+      document.getElementById('refresh-ping')?.classList.add('on');
+      showToast('📤 Admin a trimis o actualizare — apasă „↻ Reîncarcă” când ești gata');
+    }
+  }catch(e){/* verificare de fundal, fără zgomot dacă eșuează ocazional */}
+}
+setInterval(checkPushSignal,6000);
 // Safari pe iPad nu micșorează mereu corect 100dvh la apariția tastaturii. Folosim viewportul real
 // vizibil, ca bara de Căutare să rămână imediat deasupra tastaturii și textul introdus să se vadă.
 function syncStaffViewport(){
