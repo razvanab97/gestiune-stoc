@@ -3955,6 +3955,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:495,text:'Feature — cerut direct („cum ne raportăm la costul produsului când avem stoc de la 2 furnizori diferiți, cu prețuri diferite"): reaprovizionarea (Adaugă stoc/Importă factură) nu mai SUPRASCRIE costul de achiziție cu ultimul preț plătit — acum îl calculează ca medie ponderată cu stocul deja rămas în depozit (weightedAvgCost). Exemplu: 20 buc. la 90,42 lei în stoc, intră 10 buc. noi la 60 lei de la alt furnizor → costul devine 80,28 lei, nu 60 — reflectă corect că majoritatea stocului tot de la furnizorul mai scump vine, în loc să umfle artificial marja pe stocul vechi. Media se face pe stocul FIZIC rămas (bought−sold la momentul intrării), nu pe tot ce s-a cumpărat vreodată. „Ultimul preț din listare/factură" (reperul afișat separat pe fișa produsului) rămâne neschimbat — prețul BRUT, real, plătit la ultima achiziție, nu media; la fel, valoarea înregistrată în Istoric comenzi pentru fiecare lot rămâne costul real plătit pentru ACEL lot, nu media rezultată. Fără stoc vechi sau fără cost anterior (produs nou/rămas fără stoc) → costul nou intră direct, exact ca înainte. Aplicat identic în ambele fluxuri de reaprovizionare (Adaugă stoc ȘI Importă factură, care duplicau separat aceeași logică). Verificat cu 23 de teste izolate (formula pe cazul exact discutat, stoc negativ/gol, fără cost anterior, ponderare pe stoc rămas nu pe total cumpărat vreodată, transport alocat inclus corect, istoricul comenzii păstrează costul brut al lotului).',date:'2026-09-29'},
   {n:494,text:'Fix real, foarte important, raportat direct cu captură de ecran („avem funcția de alt furnizor, doar că nu funcționează cum trebuie — se trimite informația de la un produs la altul"): când salvezi un produs cu un SKU care există deja pe ALT produs, sistemul actualizează acel produs existent în loc să creeze un duplicat (funcție intenționată, cu confirmare explicită) — dar „Alt furnizor" al produsului ȚINTĂ (surse reale, introduse anterior pentru el) era înlocuit ORBEȘTE cu draftul din formularul care era deschis (al produsului editat, nu al țintei), chiar și când acela era gol — fie lipea sursele altui produs fără nicio legătură, fie ștergea silențios surse reale. Verificat direct pe date live: în bază, niciun produs nu are încă „Alt furnizor" salvat (0 din 398) — nicio daună de reparat, doar bug-ul oprit înainte de următoarea lovitură. Adăugat și un avertisment nou la „+ Adaugă sursă": dacă același cod+furnizor e deja folosit pe alt produs, întreabă înainte să-l adaugi — exact ce previne potrivirea automată la import (findExistingProduct → cod extern, deja funcțională) să devină ambiguă. Verificat cu 16 teste izolate (scurgere/ștergere date între produse pe codul vechi vs. reparat, avertisment duplicat, potrivire automată după cod la import).',date:'2026-09-29'},
   {n:493,text:'Feature — cerut direct: „la fel ca butonul Reîncarcă din Staff, să avem și-n admin, ca staff-ul să vadă în timp real ce lucrăm noi". Buton nou 📤 în bara de sus: trimite un semnal ușor (setari_app, aceeași tehnică deja folosită la coada Staff) pe care tableta îl verifică din fundal, la fiecare 6 secunde, și arată o bulină pulsatorie lângă „↻ Reîncarcă" a lor. Reîncărcarea efectivă a listei rămâne STRICT manuală pe tabletă — decizie deliberată deja luată acolo, ca lista să nu se schimbe singură de sub degetul celui care împachetează; semnalul e doar un indiciu vizual, nu un refresh automat. Trimite semnalul și automat, tăcut, la fiecare mesaj/task trimis din 📨 „Mesaje pentru Staff" — un mesaj nou merită același indiciu ca orice altă actualizare.',date:'2026-09-29'},
   {n:492,text:'Continuare directă la feature-ul AI de recunoaștere AWB (#491), cerută explicit: „GLS, Cargus, FAN, Sameday, DPD, și cele din Ungaria — măcar să sesizeze că sunt de acolo" + „ce e Inclus în admin trebuie să fie 1 la 1 în Staff, iar la AWB-uri în plus, să primim informații și să putem asocia manual". (1) Bug real găsit verificând curier cu curier: formatul standard FAN Courier („AWB: X / Continut: Y") era singurul din tot sistemul care NU reținea deloc numele curierului — nici Staff, nici admin nu aveau ce arăta pe card, deși eticheta era recunoscută perfect; GLS, Cargus, Sameday, DPD și Ungaria (GLS crossborder + eMAG Ungaria prin Sameday) erau deja corect etichetate. (2) Reparat un al 4-lea loc (după cele 3 de la #489) unde o comandă asociată cu AWB putea rămâne invizibilă în Staff: calea NORMALĂ de asociere (comandă deja existentă în platforma_comenzi, nu doar „Neinclus") nu avansa niciodată created_at — o comandă importată ÎNAINTE de începutul cozii curente Staff (reset manual/automat 22:00), rezolvată abia acum cu AWB, ar fi rămas invizibilă chiar și cu AWB-ul scris corect în bază. (3) Notificarea de erori AWB (📮, clopoțel) avea până acum doar „✓ Rezolvată" (ascunde eroarea, fără să asocieze nimic) — adăugat „🔗 Asociază", care deschide același picker manual de căutare/alegere comandă și scrie efectiv AWB-ul (+ curier, fișier sursă) pe comanda aleasă, exact fluxul cerut „informații despre AWB, ca să-l verificăm și să-l asociem manual". Verificat cu 18 teste izolate suplimentare (recunoaștere FAN Courier vs. DPD pe același format ambiguu, avansare created_at pe comenzi vechi/recente, asociere pe comandă deja comisă și pe „Neinclus").',date:'2026-09-29'},
@@ -14985,10 +14986,15 @@ async function applyStockIntake(products,add,newCost,orderNumber,source){
     const data={...p,bought:(p.bought||0)+add};
     if(newCost>0){
       const oldCost=Number(p.priceBuyTTC)||0;
-      if(oldCost>0&&Math.abs(oldCost-newCost)>=0.005){data.priceBuyPrevTTC=oldCost;data.priceBuyChangedAt=new Date().toISOString();}
-      const prices=calcPrices(newCost);
-      data.priceBuyTTC=newCost;data.priceSell=prices.sell;data.priceEmag=prices.emag;data.priceTrendyol=prices.trendyol;data.priceRec=prices.rec;
-      // Vezi nota din applyInvoice — reaprovizionare reală, cu preț nou introdus explicit, mișcă și
+      // Cost mediu ponderat (weightedAvgCost), nu suprascriere — vezi nota de la funcție. `qty(p)` e
+      // stocul rămas ÎNAINTE de această intrare (p încă nemutat, doar `data` are bought-ul incrementat).
+      const blendedCost=weightedAvgCost(qty(p),oldCost,add,newCost);
+      if(oldCost>0&&Math.abs(oldCost-blendedCost)>=0.005){data.priceBuyPrevTTC=oldCost;data.priceBuyChangedAt=new Date().toISOString();}
+      const prices=calcPrices(blendedCost);
+      data.priceBuyTTC=blendedCost;data.priceSell=prices.sell;data.priceEmag=prices.emag;data.priceTrendyol=prices.trendyol;data.priceRec=prices.rec;
+      // lastInvoicePriceTTC rămâne prețul BRUT, real, de pe factura/listarea curentă (NU media) — e
+      // reperul „ce am plătit ultima dată", distinct de priceBuyTTC (costul mediu, folosit la marjă).
+      // Vezi și nota din applyInvoice — reaprovizionare reală, cu preț nou introdus explicit, mișcă și
       // reperul "blocat" al ultimei liste/facturi.
       data.lastInvoicePriceTTC=newCost;data.lastInvoicePriceAt=new Date().toISOString();
     }
@@ -20218,6 +20224,22 @@ function stockImportPlan(product,addQty){
   const compensated=before<0?Math.min(add,Math.abs(before)):0;
   return{before,add,after,compensated};
 }
+// Cost mediu ponderat la reaprovizionare (cerut direct — „cum ne raportăm la prețurile de la 2
+// furnizori diferiți", pentru stocul chiar încărcat în ERP): până acum, ultimul preț de achiziție
+// suprascria complet costul, indiferent câtă marfă mai era deja în stoc la prețul vechi — dacă mai
+// aveai 20 buc. la 90 lei și intrau 10 noi la 60 lei (alt furnizor), costul afișat devenea 60 lei
+// pentru TOATE cele 30, umflând artificial marja pe stocul vechi până se vindea. Acum costul reflectă
+// media ponderată cu stocul RĂMAS chiar înainte de intrare (`before`, nu `bought` — contor cumulativ
+// pe viață, nu stocul fizic actual), ca prețul de achiziție să rămână „ce m-a costat, în medie, ce am
+// acum în depozit", nu doar „ce am plătit ultima dată". Stoc rămas ≤0 (gol sau negativ — se poate
+// întâmpla, vezi stockImportPlan) sau fără cost anterior → nimic de mediat, costul nou intră direct,
+// exact ca înainte.
+function weightedAvgCost(oldStock,oldCost,addQty,newCost){
+  oldStock=Math.max(0,Number(oldStock)||0);oldCost=Math.max(0,Number(oldCost)||0);
+  addQty=Math.max(0,Number(addQty)||0);newCost=Math.max(0,Number(newCost)||0);
+  if(oldStock<=0||oldCost<=0||addQty<=0)return newCost;
+  return Math.round(((oldStock*oldCost+addQty*newCost)/(oldStock+addQty))*100)/100;
+}
 function priceChangeInfo(oldPrice,newPrice){
   oldPrice=Number(oldPrice)||0;newPrice=Number(newPrice)||0;
   if(oldPrice<=0||newPrice<=0||Math.abs(oldPrice-newPrice)<0.005)return null;
@@ -22413,10 +22435,16 @@ async function applyInvoice(){
         extraQty+=receipt.extra;
         if(costRon>0){
           const oldCost=oldCostBefore;
-          if(oldCost>0&&Math.abs(oldCost-costRon)>=0.005){P[idx].priceBuyPrevTTC=oldCost;P[idx].priceBuyChangedAt=new Date().toISOString();}
-          P[idx].priceBuyTTC=costRon;P[idx].priceSell=prices.sell;P[idx].priceEmag=prices.emag;P[idx].priceTrendyol=prices.trendyol;P[idx].priceRec=prices.rec;
+          // Cost mediu ponderat (weightedAvgCost) — cerut direct („cum ne raportăm la prețurile de la
+          // 2 furnizori diferiți"), nu suprascriere: stockPlan.before e stocul rămas ÎNAINTE de această
+          // intrare (calculat mai sus, la fel folosit și pentru raportul de negativ compensat).
+          const blendedCost=weightedAvgCost(stockPlan.before,oldCost,item.qty,costRon);
+          if(oldCost>0&&Math.abs(oldCost-blendedCost)>=0.005){P[idx].priceBuyPrevTTC=oldCost;P[idx].priceBuyChangedAt=new Date().toISOString();}
+          const blendedPrices=calcPrices(blendedCost);
+          P[idx].priceBuyTTC=blendedCost;P[idx].priceSell=blendedPrices.sell;P[idx].priceEmag=blendedPrices.emag;P[idx].priceTrendyol=blendedPrices.trendyol;P[idx].priceRec=blendedPrices.rec;
           // Preț „blocat" din ultima listare/factură (cerut direct) — spre deosebire de priceBuyTTC
-          // (poate fi corectat oricând manual din fișa produsului), acesta se mișcă STRICT aici, la o
+          // (costul mediu ponderat, folosit la marjă), acesta rămâne prețul BRUT, real, plătit pe
+          // factura curentă, ca reper „ce am plătit ultima dată" — mișcă STRICT aici, la o
           // reaprovizionare reală, ca reper stabil până la următoarea factură/listare a produsului.
           P[idx].lastInvoicePriceTTC=costRon;P[idx].lastInvoicePriceAt=new Date().toISOString();
           // Prețul original, în moneda facturii — dincolo de prețul RON deja salvat mai sus, cerut
