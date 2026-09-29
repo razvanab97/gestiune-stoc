@@ -30,7 +30,10 @@ function packageLines(pack){
   return lines.filter(line=>number(line.quantity)>0).map(line=>{
     const qty=number(line.quantity),vat=number(line.vatRate)>1?number(line.vatRate)/100:number(line.vatRate);
     const gross=number(line.lineUnitPrice)||number(line.lineGrossAmount)/(qty||1);
-    return{comandaId:String(pack.orderNumber||pack.shipmentPackageId||''),pachetId:String(pack.shipmentPackageId||pack.id||''),data:new Date(number(pack.orderDate)||number(pack.createdDate)||Date.now()).toISOString().slice(0,10),pnk:String(line.barcode||''),codProdus:String(line.stockCode||line.barcode||''),clientNume:customer,titluExtern:String(line.productName||''),cantitate:qty,pretFaraTva:round(gross/(1+(vat||0))),pretTotalCuTva:round(gross*qty),moneda:String(line.currencyCode||pack.currencyCode||'RON').toUpperCase(),tara:String(pack.shipmentAddress?.countryCode||pack.deliveryAddress?.countryCode||'RO').toUpperCase(),awb:String(pack.cargoTrackingNumber||''),status:String(pack.status||pack.shipmentPackageStatus||'')};
+    // termenExpediere — cerut direct („data maximă de finalizare, cu timer standard, nu tip ceas"):
+    // agreedDeliveryDate e câmpul oficial Trendyol (Unix ms), documentat în getShipmentPackages — exact
+    // termenul arătat ca „Timp rămas” în panoul lor de seller. Unix ms → nicio ambiguitate de fus orar.
+    return{comandaId:String(pack.orderNumber||pack.shipmentPackageId||''),pachetId:String(pack.shipmentPackageId||pack.id||''),data:new Date(number(pack.orderDate)||number(pack.createdDate)||Date.now()).toISOString().slice(0,10),pnk:String(line.barcode||''),codProdus:String(line.stockCode||line.barcode||''),clientNume:customer,titluExtern:String(line.productName||''),cantitate:qty,pretFaraTva:round(gross/(1+(vat||0))),pretTotalCuTva:round(gross*qty),moneda:String(line.currencyCode||pack.currencyCode||'RON').toUpperCase(),tara:String(pack.shipmentAddress?.countryCode||pack.deliveryAddress?.countryCode||'RO').toUpperCase(),awb:String(pack.cargoTrackingNumber||''),status:String(pack.status||pack.shipmentPackageStatus||''),termenExpediere:number(pack.agreedDeliveryDate)?new Date(number(pack.agreedDeliveryDate)).toISOString():''};
   });
 }
 

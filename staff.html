@@ -100,6 +100,10 @@ button{cursor:pointer}
 .awb-num{font-family:var(--mono);font-weight:800;font-size:29px;color:var(--t1);word-break:break-all}
 .awb-num-tail{font-size:41px;color:#1D4ED8;margin-left:2px}
 .awb-pending{color:var(--t3);font-size:17px;font-weight:600}
+.deadline-badge{font-size:16px;font-weight:700;padding:6px 12px;border-radius:999px;display:inline-block}
+.deadline-ok{color:var(--t3);background:var(--surf2)}
+.deadline-soon{color:var(--or);background:var(--or-bg)}
+.deadline-urgent,.deadline-overdue{color:var(--rd);background:var(--rd-bg)}
 
 .progress-mini{font-size:17px;color:var(--t3);font-weight:700}
 
@@ -368,6 +372,27 @@ function awbBoxHtml(awb,courier){
   return`<div class="awb-box"><div><div class="awb-lbl">${lbl}</div><div class="awb-num">${head}<span class="awb-num-tail">${tail}</span></div></div></div>`;
 }
 function td(){return new Date().toISOString().slice(0,10);}
+// Termen maxim de expediere (cerut direct — „data maximă de finalizare, cu timer standard, nu tip
+// ceas"): text static, recalculat la fiecare randare/refresh (NU un ceas care ticăie la secundă) — util
+// mai ales aici, în Staff, ca să prioritizezi ce împachetezi primul. Aceeași logică ca în index.html.
+function deadlineInfo(iso){
+  if(!iso)return null;
+  const target=new Date(iso).getTime();
+  if(!Number.isFinite(target))return null;
+  const diffMs=target-Date.now(),overdue=diffMs<0,absMs=Math.abs(diffMs);
+  const totalH=Math.floor(absMs/3600000),d=Math.floor(totalH/24),h=totalH%24,m=Math.floor((absMs%3600000)/60000);
+  const text=d>0?`${d}z ${h}h`:(totalH>0?`${totalH}h ${m}m`:`${m}m`);
+  const dt=new Date(iso);
+  const dateLabel=dt.toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit'})+' '+dt.toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'});
+  const level=overdue?'overdue':totalH<6?'urgent':totalH<24?'soon':'ok';
+  return{overdue,text,dateLabel,level};
+}
+function deadlineBadgeHtml(iso){
+  const info=deadlineInfo(iso);if(!info)return'';
+  const cls=info.overdue?'overdue':info.level;
+  const label=info.overdue?`⚠️ Termen depășit cu ${info.text}`:`⏱ Termen ${info.dateLabel} · mai ai ${info.text}`;
+  return`<div class="deadline-badge deadline-${cls}">${label}</div>`;
+}
 
 // Doar comenzile/vânzările de la această dată încolo intră în coadă. Valoarea inițială păstrează
 // compatibilitatea cu instalările vechi, iar pragul real se salvează în setari_app la „Coada nouă”.
@@ -391,6 +416,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:420,date:'29.09.2026',text:'Cardul de împachetare — termen maxim de expediere (eMAG/Trendyol), cerut direct: „mai ai 1z 8h" sau „termen depășit cu X", sub caseta AWB — text static, recalculat la fiecare reîncărcare, NU un ceas care ticăie. Util ca reper de prioritizat ce împachetezi primul. Gol pe comenzi vechi, importate înainte de coloana nouă.'},
   {n:419,date:'24.09.2026',text:'Tab nou „↩️ Retururi", cerut direct — simplu și rapid: cauți produsul întors (nume, SKU sau cod intern), alegi cantitatea și motivul (Client a renunțat / Produs defect / Trimis greșit / Alt motiv), un buton îl adaugă înapoi în stoc. Scade din stocul vândut, nu adaugă la „Intrate total" — nu e marfă nouă de la furnizor. Apare imediat în „Mișcări de stoc" din Admin. Nu corectează automat Jurnalul/profitul vânzării originale (decizie asumată, pentru viteză).'},
   {n:418,date:'24.09.2026',text:'În „Împachetare", cerut direct („să nu se mai folosească mouse-ul destul de mult"): tasta Space apăsată de 2 ori finalizează comanda curentă (la fel ca butonul „✓ Finalizează"), iar Backspace apăsat de 2 ori resetează împachetarea unei comenzi deja finalizate (la fel ca „↺ Reactivează"). O singură apăsare nu face nimic — trebuie 2, într-un interval scurt, ca o atingere din greșeală să nu schimbe starea comenzii. Ignorate automat cât timp tastezi într-un câmp.'},
   {n:417,date:'24.09.2026',text:'Bug real reparat, raportat direct: în „Împachetare", o comandă deja finalizată (în fereastra de 10s de anulare) tot arăta butonul activ de finalizare, apăsabil din nou. Acum arată clar „✓ Comandă finalizată" (needitabil) + un buton nou „↺ Reactivează pentru împachetare". Aceeași reactivare e disponibilă acum și din „Finalizate azi", pe orice comandă finalizată azi — nu doar în fereastra scurtă de anulare.'},
@@ -468,6 +494,10 @@ function computeOrders(){
     // AWB, ca să nu mai trebuiască dedus din primele cifre. Reținut la asociere (vezi awb_courier din
     // index.html); gol pe comenzi vechi, asociate înainte de această coloană.
     g.awbCourier=(g.lines.find(l=>l.awb_courier)||{}).awb_courier||'';
+    // Termen maxim de expediere (cerut direct) — la fel ca AWB/curier, aceeași valoare pe toate liniile
+    // pachetului; gol pe comenzi vechi, importate înainte de coloana asta (rulează migration_
+    // platforma_comenzi_termen.sql).
+    g.termenExpediere=(g.lines.find(l=>l.termen_expediere)||{}).termen_expediere||'';
     // Staff finalizează coletul ca întreg. Dacă eticheta nu a fost încă generată, comanda iese tot
     // din fluxul de împachetare ca „Finalizat fără AWB”; la importul ulterior din PDF devine completă.
     g.needsAwb=g.platforma!=='direct'&&!g.awb;
@@ -635,6 +665,7 @@ function renderPackTab(host){
     </div>
     <div id="lock-banner-slot"></div>
     ${ord.awb?awbBoxHtml(ord.awb,ord.awbCourier):(ord.platforma!=='direct'?`<div class="awb-box"><span class="awb-pending">AWB în așteptare</span></div>`:'')}
+    ${!ord.finalized?deadlineBadgeHtml(ord.termenExpediere):''}
     ${multi?`<div class="progress-mini">${ord.lines.length} produse în același colet</div>`:''}
     <div class="lines">${linesHtml}</div>
     ${bigBtnHtml}

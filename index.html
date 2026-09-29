@@ -3935,6 +3935,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:483,text:'Comenzi Platforme — termen maxim de expediere, cerut direct: „mai ai 1z 8h"/„termen depășit cu X" afișat pe cardul comenzii (eMAG și Trendyol), text static, recalculat la fiecare randare — NU un ceas care ticăie. Verificat direct pe date live, nu ghicit din documentație veche: eMAG expune `maximum_date_for_shipment` (confirmat: comandă 20.09 08:54 → termen 22.09 08:55, exact SLA de 48h), Trendyol expune `agreedDeliveryDate` (câmp oficial documentat). Necesită migration_platforma_comenzi_termen.sql + repornirea conectorului local eMAG (scripts/emag-local-connector.js, deja actualizat) ca să preia noul câmp.',date:'2026-09-29'},
   {n:482,text:'Fix pe termen lung, cerut direct („rezolvă și pe viitor"), raportat cu o comandă complet normală (#516985310, deja „✓ Inclus", cu AWB), care tot nu apărea în Staff — deci #481 nu acoperea toate cazurile: orice comandă neîmpachetată poate ieși din fereastra activă a Staff pur și simplu prin trecerea timpului (resetul zilnic al cozii), indiferent cum a fost creată/comisă — nu doar prin cele 3 fluxuri reparate la #481. Cardul „Comenzi rămase în urmă din Staff" (Comenzi Platforme) le arată deja pe toate automat — primește acum și un buton „↺ Readu la împachetare", care le readuce în fereastra activă dintr-un click, indiferent de cauză. Verificat direct în bază: 0 comenzi rămase blocate în acest fel, la momentul reparației.',date:'2026-09-24'},
   {n:481,text:'Fix real, raportat direct cu 2 comenzi reale: „➕ Adaugă în Comenzi Platforme" (#479) le făcea vizibile în admin, dar TOT nu apăreau în Staff. Cauza: Staff filtrează comenzile după created_at ≥ pragul cozii active, chiar la nivelul interogării — o comandă mai veche decât acel prag rămâne invizibilă în Staff indiferent ce altceva se schimbă pe ea (anulata/impachetat). reactivatePcomOrder avansa deja created_at în cazul lui, dar reconsiderPcomRow și noul pullPcomOrderToPreview nu — extras acum într-o singură funcție (staffQueueCreatedAtBump), aplicată consecvent la toate 3. Cele 2 comenzi reale reparate direct și în bază.',date:'2026-09-24'},
   {n:480,text:'„↺ Reactivează comandă finalizată" — aceeași căutare live pe eMAG de la #478, cerut direct: dacă numărul introdus nu există deloc în bază (nu doar lipsă din previzualizare), apare butonul „🔍 Caută pe eMAG după acest număr" — caută pe eMAG indiferent de status, aduce comanda direct în Comenzi Platforme, deja „✓ Inclus", gata de asociat AWB. Cele 2 puncte de intrare (#pcx-search și acest card) folosesc acum același nucleu comun.',date:'2026-09-24'},
@@ -6817,6 +6818,32 @@ function pcomChannelFor(platforma){return platforma==='trendyol'?'trendyol':plat
 // Etichetă de afișare pentru orice platformă din platforma_comenzi — Vinted calculează financiar pe
 // canalul 'direct' (vezi pcomChannelFor), dar tot merită eticheta ei proprie, nu „eMAG”/„Trendyol” greșit.
 function pcomPlatLabel(platforma){return platforma==='trendyol'?'Trendyol':platforma==='vinted'?'Vinted':'eMAG';}
+// Termen maxim de expediere (cerut direct — „hai să adăugăm și la eMAG și la Trendyol, data maximă de
+// finalizare cu timer, dar nu tip ceas, ceva mai standard"): text static, recalculat la fiecare randare/
+// resincronizare (NU un ceas care ticăie la secundă) — exact „mai ai 1z 8h" din panoul eMAG/Trendyol.
+// Surse reale, verificate direct pe date live (nu ghicite din documentație, care era incompletă/veche):
+// eMAG — `maximum_date_for_shipment` (confirmat pe o comandă reală: comandă 20.09 08:54 → termen 22.09
+// 08:55, exact SLA-ul de 48h); Trendyol — `agreedDeliveryDate` (câmp oficial documentat, Unix ms).
+function deadlineInfo(iso){
+  if(!iso)return null;
+  const target=new Date(iso).getTime();
+  if(!Number.isFinite(target))return null;
+  const diffMs=target-Date.now(),overdue=diffMs<0,absMs=Math.abs(diffMs);
+  const totalH=Math.floor(absMs/3600000),d=Math.floor(totalH/24),h=totalH%24,m=Math.floor((absMs%3600000)/60000);
+  const text=d>0?`${d}z ${h}h`:(totalH>0?`${totalH}h ${m}m`:`${m}m`);
+  const dt=new Date(iso);
+  const dateLabel=dt.toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit'})+' '+dt.toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'});
+  const level=overdue?'overdue':totalH<6?'urgent':totalH<24?'soon':'ok';
+  return{overdue,text,dateLabel,level};
+}
+// Marcaj compact, reutilizabil în orice card — culoare după urgență (verde/portocaliu/roșu), fără
+// nicio animație/ticking, ca să nu forțeze re-randări suplimentare doar pentru un ceas.
+function deadlineBadgeHtml(iso){
+  const info=deadlineInfo(iso);if(!info)return'';
+  const color=info.level==='overdue'?'var(--rd)':info.level==='urgent'?'var(--rd)':info.level==='soon'?'var(--or)':'var(--t3)';
+  const label=info.overdue?`⚠️ Termen depășit cu ${info.text}`:`⏱ Termen ${info.dateLabel} · mai ai ${info.text}`;
+  return`<span class="pcx-order-deadline" style="color:${color};font-weight:${info.overdue||info.level==='urgent'?700:500}" title="Termen maxim de expediere: ${esc(info.dateLabel)}">${label}</span>`;
+}
 function pcomSaleFinancials(p,it,platforma){
   const ch=pcomChannelFor(platforma);
   const tvaAcq=p.tvaAcq??0.21;
@@ -6843,7 +6870,8 @@ function dbToPcom(r){
     efecteAplicate:r.efecte_aplicate!==false,
     impachetat:!!r.impachetat,impachetatAt:r.impachetat_at||'',faraStoc:!!r.fara_stoc,faraStocAt:r.fara_stoc_at||'',
     awb:r.awb||'',staffBlocked:!!r.staff_blocked,staffIssueType:r.staff_issue_type||'',staffIssueNote:r.staff_issue_note||'',staffIssueResolved:!!r.staff_issue_resolved,
-    anulata:!!r.anulata,motivAnulare:r.motiv_anulare||'',staffInclusAt:r.staff_inclus_at||'',staffFinalizatAt:r.staff_finalizat_at||'',awbSourceFile:r.awb_source_file||'',awbSourcePage:r.awb_source_page||null,awbCourier:r.awb_courier||''};
+    anulata:!!r.anulata,motivAnulare:r.motiv_anulare||'',staffInclusAt:r.staff_inclus_at||'',staffFinalizatAt:r.staff_finalizat_at||'',awbSourceFile:r.awb_source_file||'',awbSourcePage:r.awb_source_page||null,awbCourier:r.awb_courier||'',
+    termenExpediere:r.termen_expediere||''};
 }
 function pcomToDb(o){
   return{platforma:o.platforma,data:o.data,comanda_id:o.comandaId||null,pnk:o.pnk||null,tara:o.tara||null,cod_produs:o.codProdus||null,
@@ -6853,7 +6881,8 @@ function pcomToDb(o){
     moneda:o.moneda||'RON',pret_total_cu_tva_ron:o.pretTotalCuTvaRon||0,
     profit_estimat:o.profitEstimat||0,marja_estimata:o.marjaEstimata||0,import_batch_id:o.importBatchId||null,
     awb:o.awb||null,staff_inclus_at:o.staffInclusAt||null,staff_finalizat_at:o.staffFinalizatAt||null,
-    awb_source_file:o.awbSourceFile||null,awb_source_page:o.awbSourcePage||null,awb_courier:o.awbCourier||null};
+    awb_source_file:o.awbSourceFile||null,awb_source_page:o.awbSourcePage||null,awb_courier:o.awbCourier||null,
+    termen_expediere:o.termenExpediere||null};
 }
 // eMAG operează pe 3 piețe (RO/HU/BG) — fișierul de comenzi nu are o coloană explicită de țară,
 // dar moneda o dă indirect: RON→România, HUF→Ungaria, EUR→Bulgaria (care a adoptat euro în 2026).
@@ -17309,7 +17338,8 @@ async function commitPcomLine(idx){
     const row=pcomToDb({platforma,data:it.data,comandaId:it.comandaId,pnk:it.pnk,tara:it.tara,codProdus:it.codProdus,
       clientNume:it.clientNume,titluExtern:it.titluExtern,produsId:p.id,produsNume:p.name,cantitate:it.cantitate,awb:it.awb,
       pretFaraTva:it.pretFaraTva,pretTotalCuTva:it.pretTotalCuTva,moneda:it.moneda,pretTotalCuTvaRon:totalRon,
-      profitEstimat:profit,marjaEstimata:margin,importBatchId:pcImpBatchIdFor(platforma),staffInclusAt:new Date().toISOString()});
+      profitEstimat:profit,marjaEstimata:margin,importBatchId:pcImpBatchIdFor(platforma),staffInclusAt:new Date().toISOString(),
+      termenExpediere:it.termenExpediere});
     // Marchează explicit că stocul/Jurnalul NU au fost încă atinse — abia „Aplică import" le scrie.
     // Fără asta, „Istoric importuri" nu poate distinge o comandă doar-confirmată de un import real
     // finalizat, și butonul „Șterge" de-acolo ar readăuga în stoc o cantitate care nu a fost scăzută
@@ -18287,6 +18317,7 @@ function pcxOrderCardHtml(idxs,gIdx){
       <span class="pcx-order-status ${statusCls}">${statusLbl}</span>
       <span class="pcx-order-expand">▾</span>
     </div>
+    ${deadlineBadgeHtml(it0.termenExpediere)?`<div class="pcx-order-awb-row">${deadlineBadgeHtml(it0.termenExpediere)}</div>`:''}
     ${awbChipHtml?`<div class="pcx-order-awb-row">${awbChipHtml}</div>`:''}
     <div class="pcx-order-body" style="${open?'':'display:none'}">
       ${multi?idxs.map(i=>pcxLineHtml(i,idxs)).join(''):pcxLineHtml(idxs[0],idxs)}
@@ -18730,7 +18761,7 @@ async function applyPcomImport(){
           const row=pcomToDb({platforma,data:it.data,comandaId:it.comandaId,pnk:it.pnk,tara:it.tara,codProdus:it.codProdus,
             clientNume:it.clientNume,titluExtern:it.titluExtern,produsId:p.id,produsNume:p.name,cantitate:it.cantitate,awb:it.awb,
             pretFaraTva:it.pretFaraTva,pretTotalCuTva:it.pretTotalCuTva,moneda:it.moneda,pretTotalCuTvaRon:totalRon,
-            profitEstimat:profit,marjaEstimata:margin,importBatchId:pcImpBatchIdFor(platforma)});
+            profitEstimat:profit,marjaEstimata:margin,importBatchId:pcImpBatchIdFor(platforma),termenExpediere:it.termenExpediere});
           row.efecte_aplicate=true;
           let inserted;
           try{
