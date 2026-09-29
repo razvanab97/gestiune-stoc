@@ -3954,6 +3954,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:488,text:'Asociere AWB — două completări, cerute direct cu un caz real (etichetă Sameday de pe piața Bulgaria, în bulgară, complet nerecunoscută de regex-urile tunate pe etichete românești). (1) Soluție universală nouă: fișierele din Desktop/AWB-uri sunt deja denumite „&lt;comandaId&gt;_&lt;curier&gt;_&lt;AWB&gt;.pdf" de sursa care le descarcă — extins acum la ORICE etichetă complet nerecunoscută (nu doar DPD fără „note:", ca înainte), citind direct comandaId+AWB din numele fișierului, indiferent de limbă/format. (2) „Dacă adăugăm 18 AWB-uri și avem 16 comenzi incluse, să primim notificare pentru celelalte": orice etichetă rămasă nerezolvată (negăsită, nerecunoscută sau anulată de curier) apare acum persistent în clopoțel — secțiune nouă „📮 AWB-uri nerezolvate" — nu doar în mesajul trecător din previzualizare.',date:'2026-09-29'},
   {n:487,text:'Fix real pe termen lung, raportat direct cu 6 comenzi lipsă din bază (deja apărute pe eMAG/Trendyol, niciodată aduse): reîmprospătarea silențioasă a comenzilor (eMAG + Trendyol) rula O SINGURĂ DATĂ, la încărcarea paginii — cu tab-ul de admin lăsat deschis toată ziua (foarte probabil), orice comandă apărută ULTERIOR nu mai avea nicio cale să ajungă automat în previzualizare, decât printr-un click manual sau o reîncărcare completă a paginii. Rulează acum și periodic (la 5 minute), pauzată cât timp tab-ul nu e vizibil — reutilizează exact aceleași funcții de import/potrivire, doar frecvența s-a schimbat.',date:'2026-09-29'},
   {n:486,text:'Comenzi Platforme — AWB-ul real asociat apare acum și în corpul cardului (nu doar în antetul îngust, ușor de ratat la scroll orizontal), cerut direct pentru eMAG. Fix real pe termen lung, raportat cu date reale („18 AWB-uri, dar doar 16 comenzi în Staff" + „comenzile în așteptare de ieri/alaltăieri dispar, ar trebui să rămână până le bifăm manual"): pragul zilnic al cozii Staff era un filtru STRICT la nivelul interogării către bază (created_at ≥ prag) — orice comandă mai veche dispărea din Staff, INDIFERENT de starea ei reală (neîmpachetată, sau chiar cu o problemă nerezolvată raportată explicit de Staff). Verificat direct pe date live: exact 2 comenzi cu AWB deja asociat + 3 „în așteptare" ieșiseră din Staff doar prin trecerea unei zile. Interogarea (comenzi ȘI Jurnal) include acum orice rând neîmpachetat sau blocat, indiferent de vechime — pragul de dată rămâne filtru de performanță STRICT pentru ce e cu adevărat încheiat.',date:'2026-09-29'},
   {n:485,text:'Comenzi Platforme — termen maxim de expediere, cerut direct: „mai ai 1z 8h"/„termen depășit cu X" afișat pe cardul comenzii (eMAG și Trendyol), text static, recalculat la fiecare randare — NU un ceas care ticăie. Verificat direct pe date live, nu ghicit din documentație veche: eMAG expune `maximum_date_for_shipment` (confirmat: comandă 20.09 08:54 → termen 22.09 08:55, exact SLA de 48h), Trendyol expune `agreedDeliveryDate` (câmp oficial documentat). Necesită migration_platforma_comenzi_termen.sql + repornirea conectorului local eMAG (scripts/emag-local-connector.js, deja actualizat) ca să preia noul câmp.',date:'2026-09-29'},
@@ -4772,15 +4773,21 @@ function notifRowHtml(a){
 // Aceleași etichete ca ISSUE_LABELS din staff.html — text identic, ca omul să recunoască problema.
 const ISSUE_LABELS_ADMIN={stoc_zero:'Stoc zero',cantitate_insuficienta:'Cantitate insuficientă',produs_deteriorat:'Produs deteriorat',produs_gresit:'Produs greșit',nu_gasesc:'Nu găsesc produsul',alta:'Altă problemă'};
 let STAFF_ISSUES=[];
-let FURNIZOR_ADMIN=[],FURNIZOR_ISSUES=[];
+let FURNIZOR_ADMIN=[],FURNIZOR_ISSUES=[],AWB_ISSUES=[];
 async function loadStaffIssues(){
   if(!sbReady)return;
   try{
-    const [comRows,jurRows,furRows]=await Promise.all([
+    const [comRows,jurRows,furRows,awbErrRows]=await Promise.all([
       dbGet('platforma_comenzi?select=id,platforma,comanda_id,produs_id,produs_nume,cantitate,staff_issue_type,staff_issue_note,staff_blocked_at&staff_blocked=eq.true&staff_issue_resolved=eq.false&order=staff_blocked_at.desc'),
       dbGet('jurnal?select=id,product_id,product_name,qty,staff_issue_type,staff_issue_note,staff_blocked_at&staff_blocked=eq.true&staff_issue_resolved=eq.false&order=staff_blocked_at.desc').catch(()=>[]),
-      dbGet('comenzi_furnizor?select=*&finalizat=eq.false&order=created_at.desc').catch(e=>{console.warn('comenzi_furnizor indisponibil (rulează migration_comenzi_furnizor.sql):',e);return[];})
+      dbGet('comenzi_furnizor?select=*&finalizat=eq.false&order=created_at.desc').catch(e=>{console.warn('comenzi_furnizor indisponibil (rulează migration_comenzi_furnizor.sql):',e);return[];}),
+      // Etichete AWB rămase nerezolvate după „Asociază AWB-urile" (cerut direct — „dacă adăugăm 18
+      // AWB-uri și avem 16 comenzi incluse, să primim notificare pentru celelalte") — vezi
+      // persistAwbErrors/applyAwbAssociation, acoperă acum toate 3 categoriile (negăsite, nerecunoscute,
+      // anulate de curier), nu doar prima.
+      dbGet('staff_awb_erori?resolved=eq.false&select=*&order=created_at.desc').catch(e=>{console.warn('staff_awb_erori indisponibil (rulează migration_platforma_staff_workflow.sql):',e);return[];})
     ]);
+    AWB_ISSUES=awbErrRows;
     STAFF_ISSUES=[
       ...comRows.map(r=>({table:'platforma_comenzi',id:r.id,comandaId:r.comanda_id||'',produsId:r.produs_id||null,cantitate:Number(r.cantitate)||1,nume:r.produs_nume||'',tip:r.staff_issue_type||'',nota:r.staff_issue_note||'',ts:r.staff_blocked_at||''})),
       ...jurRows.map(r=>({table:'jurnal',id:r.id,comandaId:'',produsId:r.product_id||null,cantitate:Number(r.qty)||1,nume:r.product_name||'',tip:r.staff_issue_type||'',nota:r.staff_issue_note||'',ts:r.staff_blocked_at||''}))
@@ -5156,6 +5163,25 @@ function notifFurnizorRowHtml(x){
   const dt=isNaN(d)?'':d.toLocaleString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
   return`<div class="notif-row notif-issue"><span class="notif-ic">📥</span><div><div class="notif-name">${esc(x.nume||'Produs')}</div><div class="notif-meta">Nu a ajuns${x.furnizor?' — '+esc(x.furnizor):''}${x.nota?' — '+esc(x.nota):''}${dt?' · '+dt:''}</div><div class="notif-issue-actions"><button type="button" class="notif-issue-btn" onclick="goToFurnizorStock()">Vezi</button><button type="button" class="notif-issue-btn" onclick="resolveFurnizorIssueAdmin(${x.id})">✓ Rezolvată</button></div></div></div>`;
 }
+// Cerut direct — „dacă adăugăm 18 AWB-uri și avem 16 comenzi incluse, să primim notificare pentru
+// celelalte, să avem atenție la ele, e posibil să fie erori": orice etichetă rămasă nerezolvată după
+// „Asociază AWB-urile" (negăsită, nerecunoscută sau anulată de curier — vezi applyAwbAssociation) rămâne
+// acum vizibilă aici, nu doar în mesajul trecător din previzualizare.
+function notifAwbErrorRowHtml(x){
+  const d=new Date(x.created_at);
+  const dt=isNaN(d)?'':d.toLocaleString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const loc=x.comanda_id?`Comanda #${x.comanda_id}`:(x.source_file?`${x.source_file}${x.source_page?' p.'+x.source_page:''}`:'Etichetă necunoscută');
+  const verLink=x.comanda_id?`<button type="button" class="notif-issue-btn" onclick="goToPcomIssue('${esc(x.comanda_id)}')">Vezi comanda</button>`:'';
+  return`<div class="notif-row notif-issue"><span class="notif-ic">📮</span><div><div class="notif-name">${esc(loc)}</div><div class="notif-meta">${esc(x.reason||'AWB nerezolvat')}${x.awb?' · AWB '+esc(x.awb):''}${dt?' · '+dt:''}</div><div class="notif-issue-actions">${verLink}<button type="button" class="notif-issue-btn" onclick="resolveAwbErrorAdmin(${x.id})">✓ Rezolvată</button></div></div></div>`;
+}
+async function resolveAwbErrorAdmin(id){
+  try{
+    await dbPatch(`staff_awb_erori?id=eq.${id}`,{resolved:true,resolved_at:new Date().toISOString()});
+    AWB_ISSUES=AWB_ISSUES.filter(x=>x.id!==id);
+    renderNotif();
+    toast('✓ Marcată rezolvată');
+  }catch(e){toast('Nu am putut marca rezolvată: '+(e.message||e),'err');}
+}
 // 3 secțiuni, cea mai urgentă sus (marfă furnizor blocată/probleme client), mișcările de stoc jos
 // (informativ, nu cere acțiune) — cerut direct, „hai să împărțim notificările pe 2-3 secțiuni”.
 function notifSectionHtml(title,count,rowsHtml){
@@ -5166,7 +5192,8 @@ function renderNotif(){
   const list=document.getElementById('notif-list');
   if(!list)return;
   const furHtml=notifSectionHtml('📥 Marfă furnizor',FURNIZOR_ISSUES.length,FURNIZOR_ISSUES.map(notifFurnizorRowHtml).join(''));
-  const issueHtml=notifSectionHtml('⛔ Probleme comenzi client',STAFF_ISSUES.length,STAFF_ISSUES.map(notifIssueRowHtml).join(''));
+  const issueHtml=notifSectionHtml('⛔ Probleme comenzi client',STAFF_ISSUES.length,STAFF_ISSUES.map(notifIssueRowHtml).join(''))
+    +notifSectionHtml('📮 AWB-uri nerezolvate',AWB_ISSUES.length,AWB_ISSUES.map(notifAwbErrorRowHtml).join(''));
   // Produse de comandat (cerut direct) — doar luna curentă, aceeași fereastră ca lista propriu-zisă
   // (renderReorderList) — un produs deja marcat „✓ Comandat" (scos din REORDER) nu mai apare aici.
   const reorderCur=REORDER.filter(r=>(r.addedAt||'').slice(0,7)===currentMonthKey());
@@ -5177,7 +5204,7 @@ function renderNotif(){
   // (ex. nicio problemă de la furnizor) nu lasă o coloană goală, inutilă, lângă celelalte.
   const cols=[furHtml,issueHtml,reorderHtml,actHtml].filter(Boolean).map(c=>`<div class="notif-col">${c}</div>`).join('');
   list.innerHTML=cols?`<div class="notif-cols">${cols}</div>`:'<div class="notif-empty">Nicio notificare încă.</div>';
-  const badge=document.getElementById('notif-badge'),unread=ACT.filter(a=>!a.seen).length+STAFF_ISSUES.length+FURNIZOR_ISSUES.length+reorderCur.length;
+  const badge=document.getElementById('notif-badge'),unread=ACT.filter(a=>!a.seen).length+STAFF_ISSUES.length+FURNIZOR_ISSUES.length+reorderCur.length+AWB_ISSUES.length;
   if(badge){badge.style.display=unread>0?'flex':'none';badge.textContent=unread>9?'9+':unread;}
 }
 // ── ISTORIC MODIFICĂRI DE PREȚ (achiziție/vânzare/eMAG/Trendyol, de oriunde ar veni) ──
@@ -20768,6 +20795,21 @@ function parseAwbLabelText(text){
   }
   return null;
 }
+// Ultimă soluție universală, folosită DOAR ca fallback când textul etichetei nu se potrivește cu NICIUN
+// format cunoscut de mai sus — raportat direct, cu o comandă reală: o etichetă Sameday de pe piața
+// Bulgaria (eMAG BG), în bulgară, nu se potrivește cu niciunul din regex-urile de mai sus, tunate pe
+// etichete în română. Fișierele din Desktop/AWB-uri sunt deja denumite „<comandaId>_<curier>_<awb>.pdf”
+// de sursa care le descarcă — verificat pe date reale, consecvent, indiferent de curier (DPD/Sameday/
+// eMAG Courier) — exact același tipar folosit deja mai sus, dar doar pentru DPD fără „note:”
+// (dpdNeedsFilenameId). Extins acum la ORICE etichetă complet nerecunoscută, nu doar DPD — dacă numele
+// fișierului se potrivește, comanda_id + AWB se iau direct de-acolo, fără să mai depindă deloc de
+// textul/limba etichetei. Scopat STRICT la un PDF cu o singură pagină (numele corespunde unei SINGURE
+// etichete, nu unui lot de mai multe) — apelat separat din handleAwbPdfFile/readAwbFolderPdfs.
+function awbFromFilename(fileName){
+  const m=String(fileName||'').match(/^(\d{6,})_([A-Za-z]+(?:[ _][A-Za-z]+)*)_([A-Za-z0-9]{6,})\.pdf$/i);
+  if(!m)return null;
+  return{comandaId:m[1],courier:m[2].replace(/_/g,' ').trim(),awb:m[3]};
+}
 // Rezolvă eticheta Vinted digitală (fără niciun ID de comandă propriu) la o comandă Vinted deja
 // importată, nerezolvată încă (fără AWB), prin potrivirea denumirii produsului — singura legătură
 // posibilă pentru acest format. Prag mai ridicat decât la matching-ul normal de produs intern (0.5,
@@ -20996,9 +21038,14 @@ async function handleAwbPdfFile(ev){
         // Un PDF ales manual are un nume de fișier, deci și DPD-ul fără „note:" poate fi
         // reconciliat când documentul a fost descărcat cu numărul comenzii la începutul numelui.
         if(p&&p.dpdNeedsFilenameId){const m=file.name.match(/^(\d{6,})/);p=m?{...p,comandaId:m[1]}:null;}
+        // Ultimă soluție, universală — vezi awbFromFilename: dacă textul etichetei nu s-a potrivit cu
+        // NICIUN format cunoscut (ex. etichetă într-o altă limbă, precum Sameday Bulgaria), dar fișierul
+        // e o SINGURĂ etichetă (nu un lot de mai multe pagini), numele fișierului poate da direct
+        // comandaId+AWB, fără să mai depindă deloc de textul/limba etichetei.
+        if(!p&&pages.length===1){const fb=awbFromFilename(file.name);if(fb)p={awb:fb.awb,comandaId:fb.comandaId,courier:fb.courier};}
         if(p&&p.courierCanceled)awbCanceledPages.push({label,awb:p.awb,comandaId:p.comandaId,file:file.name,page:i+1});
         else if(p)pairs.push({...p,file:file.name,page:i+1});
-        else awbUnrecognizedPages.push(label);
+        else awbUnrecognizedPages.push({label,file:file.name,page:i+1});
       });
     }
     if(!pairs.length&&!awbUnrecognizedPages.length&&!awbCanceledPages.length)throw new Error('PDF-ul pare gol.');
@@ -21124,13 +21171,18 @@ async function readAwbFolderPdfs(){
             const fileIdM=f.name.match(/^(\d{6,})/);
             p=fileIdM?{...p,comandaId:fileIdM[1]}:null;
           }
+          // Ultimă soluție, universală — vezi awbFromFilename: dacă textul etichetei nu s-a potrivit cu
+          // NICIUN format cunoscut (ex. etichetă într-o altă limbă, precum Sameday Bulgaria), dar fișierul
+          // e o SINGURĂ etichetă (nu un lot de mai multe pagini), numele fișierului poate da direct
+          // comandaId+AWB, fără să mai depindă deloc de textul/limba etichetei.
+          if(!p&&pages.length===1){const fb=awbFromFilename(f.name);if(fb)p={awb:fb.awb,comandaId:fb.comandaId,courier:fb.courier};}
           if(p&&p.courierCanceled)awbCanceledPages.push({label:`${f.name} p.${i+1}`,awb:p.awb,comandaId:p.comandaId});
           // Bug real, raportat direct („PDF AWB comenzi incluse” refuza toate comenzile deja incluse,
           // deși aveau AWB): spre deosebire de handleAwbPdfFile (selectare manuală), bucla asta nu reținea
           // NICIODATĂ numărul paginii — awb_source_page rămânea mereu null, deci activeAwbPrintOrders nu
           // găsea niciodată o pagină sursă de tipărit, oricâte comenzi ar fi fost incluse.
           else if(p)pairs.push({...p,file:f.name,page:i+1});
-          else awbUnrecognizedPages.push(`${f.name} p.${i+1}`);
+          else awbUnrecognizedPages.push({label:`${f.name} p.${i+1}`,file:f.name,page:i+1});
         });
       }catch(e){console.warn('PDF ignorat din dosar:',f.name,e);}
     }
@@ -21172,9 +21224,14 @@ function pcomAwbMatched(p){
   return!!(p?.rows?.length)&&!p.vintedAmbiguous&&new Set(p.rows.map(r=>r.platforma||'')).size===1;
 }
 function pcomAwbErrorKey(p){return[p.file||'manual',p.page||0,p.awb||'',p.comandaId||'fara-comanda'].join('|');}
+// Extins (cerut direct — „dacă adăugăm 18 AWB-uri și avem 16 comenzi incluse, să primim notificare
+// pentru celelalte, să avem atenție la ele"): înainte, doar categoria „găsită, dar comanda nu există"
+// se păstra aici — o etichetă complet nerecunoscută (altă limbă/format nou) sau anulată de curier
+// dispărea din vedere imediat ce se închidea previzualizarea, fără nicio urmă. Acum `p.reason`, dat
+// explicit de apelant, acoperă toate cele 3 categorii — vezi applyAwbAssociation.
 async function persistAwbErrors(rows){
   for(const p of rows){
-    const sourceKey=pcomAwbErrorKey(p),body={source_key:sourceKey,source_file:p.file||null,source_page:p.page||null,awb:p.awb||null,comanda_id:p.comandaId||null,platforma:null,courier:p.courier||null,reason:p.vintedAmbiguous?'Număr de comandă ambiguu între platforme':'Comanda nu există în Comenzi Platforme'};
+    const sourceKey=pcomAwbErrorKey(p),body={source_key:sourceKey,source_file:p.file||null,source_page:p.page||null,awb:p.awb||null,comanda_id:p.comandaId||null,platforma:null,courier:p.courier||null,reason:p.reason||(p.vintedAmbiguous?'Număr de comandă ambiguu între platforme':'Comanda nu există în Comenzi Platforme')};
     try{
       const old=await dbGet(`staff_awb_erori?source_key=eq.${encodeURIComponent(sourceKey)}&select=id`);
       if(old?.[0])await dbPatch(`staff_awb_erori?id=eq.${old[0].id}`,{resolved:false,updated_at:new Date().toISOString(),reason:body.reason});
@@ -21220,7 +21277,7 @@ function renderAwbPreview(){
   // parsare (AWB-ul se citește clar), ci un AWB pe care curierul l-a anulat/stornat înainte de preluare
   // — omul trebuie să regenereze AWB pentru acea comandă, nu doar să reîncerce citirea.
   if(awbCanceledPages.length)html+=`<div class="inv-prev-row" style="color:var(--rd);font-weight:700">🚫 ${awbCanceledPages.length} ${awbCanceledPages.length>1?'etichete anulate':'etichetă anulată'} de curier (fără livrare posibilă cu acest AWB) — regenerează AWB, nu se poate asocia automat: ${awbCanceledPages.map(p=>`${esc(p.label)}${p.comandaId?` — comanda ${esc(p.comandaId)}${p.clientNume?' ('+esc(p.clientNume)+')':''}`:''} (AWB ${esc(p.awb)})`).join(', ')}</div>`;
-  if(awbUnrecognizedPages.length)html+=`<div class="inv-prev-row" style="color:var(--t3)">❔ Format nerecunoscut, sărite (fără AWB/comandă identificabile) — ${awbUnrecognizedPages.length>1?'paginile':'pagina'} ${esc(awbUnrecognizedPages.join(', '))}</div>`;
+  if(awbUnrecognizedPages.length)html+=`<div class="inv-prev-row" style="color:var(--t3)">❔ Format nerecunoscut, sărite (fără AWB/comandă identificabile) — ${awbUnrecognizedPages.length>1?'paginile':'pagina'} ${esc(awbUnrecognizedPages.map(x=>x.label).join(', '))}</div>`;
   box.innerHTML=html;
   document.getElementById('pcmi-awb-info').textContent=`${matched.length} găsite, ${unmatched.length} negăsite${awbCanceledPages.length?`, ${awbCanceledPages.length} anulate de curier`:''}${awbUnrecognizedPages.length?`, ${awbUnrecognizedPages.length} nerecunoscute`:''}`;
   // Și un lot alcătuit numai din AWB-uri fără comandă trebuie confirmat: îl păstrăm ca eroare
@@ -21261,7 +21318,13 @@ async function applyAwbAssociation(){
       await patchAwbWithSource(`comanda_id=eq.${encodeURIComponent(p.comandaId)}&platforma=eq.${encodeURIComponent(platforma)}`,source);
       PCOM.filter(o=>o.comandaId===p.comandaId&&o.platforma===platforma).forEach(o=>Object.assign(o,{awb:p.awb,awbSourceFile:p.file||'',awbSourcePage:p.page||null,awbCourier:p.courier||''}));
     }
-    await persistAwbErrors(unmatched);
+    // Cerut direct — „dacă adăugăm 18 AWB-uri și avem 16 comenzi incluse, să primim notificare pentru
+    // celelalte": pe lângă „găsită, dar comanda nu există" (unmatched), acum se păstrează la fel și
+    // etichetele complet nerecunoscute (altă limbă/format nou) și cele anulate de curier — altfel
+    // dispăreau din vedere imediat ce se închidea previzualizarea, fără nicio urmă de reținut.
+    const unrecognizedAsErrors=awbUnrecognizedPages.map(x=>({file:x.file,page:x.page,awb:'',comandaId:'',reason:'Format de etichetă nerecunoscut — verifică manual'}));
+    const canceledAsErrors=awbCanceledPages.map(c=>({file:c.file,page:c.page,awb:c.awb,comandaId:c.comandaId,reason:'Etichetă anulată de curier — regenerează AWB'}));
+    await persistAwbErrors([...unmatched,...unrecognizedAsErrors,...canceledAsErrors]);
     toast(`${matched.length} AWB-uri asociate ✓`);
     // Fișierele au fost citite din Desktop/AWB-uri (nu selectate manual) — le mutăm în „procesate",
     // ca dosarul să rămână curat pentru ziua următoare și niciunul să nu fie recitit din greșeală.
