@@ -416,6 +416,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:421,date:'29.09.2026',text:'Fix real pe termen lung, raportat direct cu date reale: comenzi neîmpachetate sau „în așteptare" (cu problemă nerezolvată) dispăreau complet din Staff doar prin trecerea unei zile — pragul cozii active era un filtru STRICT la interogare (created_at/data ≥ prag), fără nicio excepție pentru ce era încă activ. Verificat: 2 comenzi cu AWB deja asociat + 3 „în așteptare" (una chiar cu impachetat=true, blocată separat) lipseau din Staff exact din cauza asta. Interogarea (comenzi ȘI Jurnal) include acum orice rând neîmpachetat sau blocat, indiferent de vechime — rămân vizibile până sunt bifate manual ca livrate/rezolvate, exact cum s-a cerut.'},
   {n:420,date:'29.09.2026',text:'Cardul de împachetare — termen maxim de expediere (eMAG/Trendyol), cerut direct: „mai ai 1z 8h" sau „termen depășit cu X", sub caseta AWB — text static, recalculat la fiecare reîncărcare, NU un ceas care ticăie. Util ca reper de prioritizat ce împachetezi primul. Gol pe comenzi vechi, importate înainte de coloana nouă.'},
   {n:419,date:'24.09.2026',text:'Tab nou „↩️ Retururi", cerut direct — simplu și rapid: cauți produsul întors (nume, SKU sau cod intern), alegi cantitatea și motivul (Client a renunțat / Produs defect / Trimis greșit / Alt motiv), un buton îl adaugă înapoi în stoc. Scade din stocul vândut, nu adaugă la „Intrate total" — nu e marfă nouă de la furnizor. Apare imediat în „Mișcări de stoc" din Admin. Nu corectează automat Jurnalul/profitul vânzării originale (decizie asumată, pentru viteză).'},
   {n:418,date:'24.09.2026',text:'În „Împachetare", cerut direct („să nu se mai folosească mouse-ul destul de mult"): tasta Space apăsată de 2 ori finalizează comanda curentă (la fel ca butonul „✓ Finalizează"), iar Backspace apăsat de 2 ori resetează împachetarea unei comenzi deja finalizate (la fel ca „↺ Reactivează"). O singură apăsare nu face nimic — trebuie 2, într-un interval scurt, ca o atingere din greșeală să nu schimbe starea comenzii. Ignorate automat cât timp tastezi într-un câmp.'},
@@ -1756,7 +1757,10 @@ function queueDate(){return String(staffQueueStartedAt||CUTOFF_DATE).slice(0,10)
 function afterStaffQueueStart(row){
   // Unele rânduri vechi de jurnal nu aveau created_at. Nu le tratăm ca fiind noi doar pentru că
   // au aceeași dată calendaristică; după reset, coada trebuie să fie efectiv goală.
-  return !!row?.created_at&&String(row.created_at)>=String(staffQueueStartedAt);
+  if(row?.created_at&&String(row.created_at)>=String(staffQueueStartedAt))return true;
+  // Aceeași reparație ca la staffComenziUrl (comenzi platformă) — o vânzare directă neîmpachetată sau
+  // cu o problemă nerezolvată nu are voie să dispară doar prin trecerea unei zile.
+  return!!row&&(!row.impachetat||!!row.staff_blocked);
 }
 async function loadStaffQueueStart(){
   try{
@@ -1815,6 +1819,22 @@ async function checkAutoQueueReset(){
     return false;
   }
 }
+// Reparație pe termen lung, raportată direct: pragul de dată (staffQueueStartedAt) era un filtru
+// STRICT la nivelul interogării (created_at >= prag), nu doar un reper de sortare — orice comandă mai
+// veche dispărea din Staff INDIFERENT de starea ei reală, chiar și una încă neîmpachetată sau cu o
+// problemă nerezolvată raportată de Staff însuși („în așteptare de ieri/alaltăieri trebuie să rămână
+// acolo până o bifăm manual"). Verificat direct pe date live: 2 comenzi cu AWB deja asociat + 3 comenzi
+// „în așteptare" (una dintre ele chiar cu impachetat=true, blocată separat) ieșeau din Staff doar prin
+// trecerea unei zile. Pragul de dată rămâne filtru de PERFORMANȚĂ doar pentru ce e cu adevărat încheiat
+// (impachetat=true, fără problemă activă) — orice altceva rămâne vizibil oricât timp ar trece.
+function staffComenziUrl(){
+  return`platforma_comenzi?select=*&anulata=eq.false&or=(created_at.gte.${encodeURIComponent(staffQueueStartedAt)},impachetat.eq.false,staff_blocked.eq.true)&order=created_at.asc`;
+}
+// Aceeași idee, pentru vânzările directe din Jurnal — `data` (ziua vânzării) e filtrul de performanță,
+// dar un rând neîmpachetat sau blocat rămâne vizibil oricât timp ar trece.
+function staffJurnalUrl(){
+  return`jurnal?select=*&anulata=eq.false&or=(data.gte.${queueDate()},impachetat.eq.false,staff_blocked.eq.true)&order=data.asc`;
+}
 
 async function refreshData(){
   // Două tick-uri apropiate, revenirea în tab sau un refresh cerut de un flux
@@ -1824,8 +1844,8 @@ async function refreshData(){
   refreshInFlight=true;let ok=false;
   try{
     const [comRows,jurnalRows,prepackRows,msgRows,furnizorRows]=await Promise.all([
-      sbComenzi(`platforma_comenzi?select=*&created_at=gte.${encodeURIComponent(staffQueueStartedAt)}&anulata=eq.false&order=created_at.asc`),
-      sbComenzi(`jurnal?select=*&data=gte.${queueDate()}&anulata=eq.false&order=data.asc`).catch(()=>JURNAL),
+      sbComenzi(staffComenziUrl()),
+      sbComenzi(staffJurnalUrl()).catch(()=>JURNAL),
       sb('GET','pre_impachetate?select=*&folosit_la=is.null&order=created_at.asc').catch(()=>PREPACK),
       sb('GET','staff_mesaje?select=*&rezolvat=is.false&order=created_at.asc').catch(()=>STAFFMSG),
       sb('GET','comenzi_furnizor?select=*&finalizat=eq.false&order=created_at.asc').catch(e=>{console.warn('comenzi_furnizor indisponibil (rulează migration_comenzi_furnizor.sql):',e);return FURNIZOR;})
@@ -1874,7 +1894,7 @@ async function load(){
     await loadStaffQueueStart();
     const [prodRows,comRows,prepackRows,msgRows,furnizorRows]=await Promise.all([
       sb('GET','produse?select=id,name,sku,ean,internal_code,img,images,bought,sold,price_buy_ttc,archived&order=id.asc'),
-      sbComenzi(`platforma_comenzi?select=*&created_at=gte.${encodeURIComponent(staffQueueStartedAt)}&anulata=eq.false&order=created_at.asc`),
+      sbComenzi(staffComenziUrl()),
       sb('GET','pre_impachetate?select=*&folosit_la=is.null&order=created_at.asc').catch(e=>{console.warn('pre_impachetate indisponibil:',e);return[];}),
       sb('GET','staff_mesaje?select=*&rezolvat=is.false&order=created_at.asc').catch(e=>{console.warn('staff_mesaje indisponibil:',e);return[];}),
       sb('GET','comenzi_furnizor?select=*&finalizat=eq.false&order=created_at.asc').catch(e=>{console.warn('comenzi_furnizor indisponibil (rulează migration_comenzi_furnizor.sql):',e);return[];}),
@@ -1885,7 +1905,7 @@ async function load(){
     STAFFMSG=msgRows;
     FURNIZOR=furnizorRows;
     try{
-      JURNAL=(await sbComenzi(`jurnal?select=*&data=gte.${queueDate()}&anulata=eq.false&order=data.asc`)).filter(afterStaffQueueStart);
+      JURNAL=(await sbComenzi(staffJurnalUrl())).filter(afterStaffQueueStart);
     }catch(e){
       JURNAL=[];
       console.warn('Nu am putut încărca vânzările directe din Jurnal (rulează migration_jurnal_packing.sql):',e);
