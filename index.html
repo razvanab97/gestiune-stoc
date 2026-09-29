@@ -3958,6 +3958,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:501,text:'Produse — cerut direct („sa nu se mai puna diacritice la produse"): nume, descriere, culori, mărimi, material și note se salvează acum fără diacritice (ă/â/î/ș/ț → a/a/i/s/t), indiferent de sursă — AI (Importă din link, Din screenshot, Importă factură, listare Research, Comandă furnizor, Compară catalog furnizor) sau tastat manual. Aplicat în două locuri: la fiecare completare automată din AI (vizibil imediat în formular, nu doar la salvare) ȘI încă o dată, garantat, la „Salvează produs" — indiferent pe unde a intrat textul. NU se aplică textului generat pentru anunțuri eMAG/Trendyol (Research/listing builder), unde diacriticele corecte contează pentru clienți.',date:'2026-09-29'},
   {n:500,text:'„Alt furnizor" — bug real reparat, raportat direct („și furnizorul să se salveze, să-mi fie recomandat"): lista de sugestii pentru câmpul „Furnizor" se completa DOAR din furnizorul principal al fiecărui produs — un furnizor adăugat STRICT ca sursă alternativă (ex. „Importio.pl") nu apărea niciodată ca sugestie, oricâte produse l-ar fi folosit deja acolo. Acum include și sursele alternative, actualizată imediat la adăugarea unei surse noi, nu doar la redeschiderea unui produs. Verificat direct, live, cu produsul real din raportare (#98, sursă Importio.pl) — apare corect în listă.',date:'2026-09-29'},
   {n:499,text:'„Alt furnizor" — diagnosticare, raportat direct („tot nu merge, la reîncărcare se șterge, e clar că nu se salvează în Supabase"): verificat de 2 ori, cu un test real, complet, către baza de date live (nu simulare) — chiar fluxul exact (deschide produs → adaugă sursă → reîncarcă pagina → redeschide produs) funcționează corect, informația supraviețuiește reîncărcării. Cauza rămasă e deci în afara acestui cod, undeva ce nu se poate verifica de la distanță. Adăugate log-uri explicite în consolă (F12 → Console) la fiecare pas al „+ Adaugă sursă" — buton apăsat, valori citite din formular, motiv exact dacă o validare eșuează, cerere trimisă către bază, răspuns primit, eroare dacă apare una — ca pasul exact unde se oprește fluxul (la tine, în browser) să devină vizibil, în loc să rămână o presupunere.',date:'2026-09-29'},
   {n:498,text:'„Alt furnizor" — două completări, raportate/cerute direct pe drum, testând #497. (1) Bug real suplimentar reparat: la salvarea imediată a unei surse, dacă filtrul PATCH (id=eq.editId) nu potrivea niciun rând, Supabase răspunde 200 OK cu listă GOALĂ, nu eroare — codul arăta greșit „✓ salvat" local, fără să fi scris de fapt nimic în bază (exact simptomul raportat: „în continuare nu se salvează"). Acum verifică explicit — 0 rânduri modificate → eroare clară, nu succes fals. (2) Câmp nou „Preț fără TVA" lângă „Preț cu TVA" (cerut direct — „fa la fel 2 secțiuni, pentru atunci când e cu TVA sau fără TVA"), sincronizat bidirecțional pe cota de TVA a produsului, exact ca la prețul principal de achiziție — introduci pe oricare din cele două, celălalt se completează singur; se salvează în continuare strict prețul cu TVA (schema neschimbată). Verificat cu 23 de teste izolate (0-rânduri-modificate tratat corect ca eroare, conversie cu/fără TVA în ambele sensuri, TVA 0% — reverse charge, câmp gol nu produce NaN).',date:'2026-09-29'},
@@ -7168,6 +7169,17 @@ const filterSyncPickDebounced=debounce(()=>filterSyncPick(),150);
 const filterMergePickDebounced=debounce(()=>filterMergePick(),150);
 const suggestSyncProductDebounced=debounce(()=>suggestSyncProduct(),220);
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+// Cerut direct — „sa nu se mai puna diacritice la produse": transliterare deterministă, nu o
+// instrucțiune către AI (AI-ul nu respectă mereu „fără diacritice" 100% din timp) — acoperă ambele
+// variante Unicode ale ș/ț (cu virgulă dedesubt, corectă, ȘI cu sedilă, mai veche/legacy), indiferent
+// de sursă (AI, tastat manual, lipit). Aplicată STRICT pe câmpurile interne ale produsului (nume,
+// descriere, culori, mărimi, material, note) — NU pe textul de anunț eMAG/Trendyol (Research/listing
+// builder), unde diacriticele corecte contează pentru clienți.
+function stripDiacritics(s){
+  if(!s)return s;
+  const map={'ă':'a','Ă':'A','â':'a','Â':'A','î':'i','Î':'I','ș':'s','Ș':'S','ş':'s','Ş':'S','ț':'t','Ț':'T','ţ':'t','Ţ':'T'};
+  return String(s).replace(/[ăĂâÂîÎșȘşŞțȚţŢ]/g,c=>map[c]);
+}
 function csvEsc(s){return String(s??'').replace(/"/g,'""');}
 function parseQtyVal(v,def=0){
   let s=String(v??'').trim().replace(',', '.');
@@ -7922,7 +7934,7 @@ Răspunde STRICT în formatul JSON:
 
     // Auto-fill fields if empty
     if(info.name&&!document.getElementById('f-name').value.trim()){
-      document.getElementById('f-name').value=info.name;
+      document.getElementById('f-name').value=stripDiacritics(info.name);
       suggestCatFromName();
     }
     if(info.sku_hint&&info.sku_hint!=='null'&&!document.getElementById('f-sku').value.trim()){
@@ -8041,7 +8053,7 @@ Răspunde STRICT cu JSON:
 
     // Auto-fill form fields
     if(productData.title){
-      document.getElementById('f-name').value=productData.title;
+      document.getElementById('f-name').value=stripDiacritics(productData.title);
       status.innerHTML=`<span style="color:var(--gr)">✓ Titlu: ${esc(productData.title)}</span>`;
     }
 
@@ -8089,7 +8101,7 @@ Răspunde STRICT cu JSON:
       suggestCatFromName();
     }
 
-    const setImported=(id,val)=>{if(val&&val!=='null')document.getElementById(id).value=val;};
+    const setImported=(id,val)=>{if(val&&val!=='null')document.getElementById(id).value=stripDiacritics(val);};
     setImported('f-material',productData.material);
     setImported('f-dims',productData.dimensions);
     setImported('f-colors',productData.colors);
@@ -8105,7 +8117,7 @@ Răspunde STRICT cu JSON:
       setImported('f-dims',specs['Dimensiuni']);
       setImported('f-colors',specs['Culoare']);
       if(listing.description){
-        document.getElementById('f-description').value=listing.description;
+        document.getElementById('f-description').value=stripDiacritics(listing.description);
         status.innerHTML+=`<br><span style="color:var(--gr)">✓ Descriere dezvoltată generată (${listing.description.length} caractere)</span>`;
       }
       if(!bestImg&&listing.main_image){
@@ -8212,7 +8224,7 @@ Răspunde STRICT cu JSON, fără text suplimentar, fără markdown:
     if(!jsonMatch)throw new Error('Nu am putut extrage datele din poză');
     const d=JSON.parse(jsonMatch[0]);
 
-    if(d.title){document.getElementById('f-name').value=d.title;status.innerHTML=`<span style="color:var(--gr)">✓ Titlu: ${esc(d.title)}</span>`;}
+    if(d.title){document.getElementById('f-name').value=stripDiacritics(d.title);status.innerHTML=`<span style="color:var(--gr)">✓ Titlu: ${esc(d.title)}</span>`;}
     else status.innerHTML='';
     if(d.sku&&d.sku!=='null'){document.getElementById('f-sku').value=d.sku;status.innerHTML+=`<br><span style="color:var(--gr)">✓ SKU: ${esc(d.sku)}</span>`;}
     if(d.supplier&&d.supplier!=='null')document.getElementById('f-sup').value=d.supplier;
@@ -8222,7 +8234,7 @@ Răspunde STRICT cu JSON, fără text suplimentar, fără markdown:
       if(cat)selectCat(cat);
       status.innerHTML+=`<br><span style="color:var(--gr)">✓ Categorie: ${esc(cat)}</span>`;
     }else if(d.title)suggestCatFromName();
-    const setImported=(id,val)=>{if(val&&val!=='null')document.getElementById(id).value=val;};
+    const setImported=(id,val)=>{if(val&&val!=='null')document.getElementById(id).value=stripDiacritics(val);};
     setImported('f-material',d.material);
     setImported('f-dims',d.dimensions);
     setImported('f-colors',d.colors);
@@ -13640,19 +13652,19 @@ function applyListingToProduct(){
   const proj=listingProjectId?researchProjects.find(p=>Number(p.id)===Number(listingProjectId)):null;
   openModal();
   setTimeout(()=>{
-    if(l.title)document.getElementById('f-name').value=l.title;
+    if(l.title)document.getElementById('f-name').value=stripDiacritics(l.title);
     const projImg=proj?(proj.cover_image||(proj.links||[]).find(x=>Array.isArray(x.images)&&x.images.length)?.images?.[0]):null;
     const img=l.main_image||(l.images||[])[0]||projImg||researchData?.img;
     if(img){document.getElementById('f-imgurl').value=img;onImgUrl();}
-    if(l.description)document.getElementById('f-description').value=l.description;
+    if(l.description)document.getElementById('f-description').value=stripDiacritics(l.description);
     // Galeria AI produs (dacă există) — imaginile APROBATE manual au prioritate, apoi restul din anunț.
     const approvedGallery=proj?galleryFor(proj.id).plan.filter(f=>f.approved&&f.url).map(f=>f.url):[];
     curImages=[...new Set([...approvedGallery,...(l.images||[])])].filter(u=>u&&u!==img).slice(0,10);
     renderImgGallery();
     const specs=l.specs||{};
-    if(specs.Material)document.getElementById('f-material').value=specs.Material;
+    if(specs.Material)document.getElementById('f-material').value=stripDiacritics(specs.Material);
     if(specs.Dimensiuni)document.getElementById('f-dims').value=specs.Dimensiuni;
-    if(specs.Culoare)document.getElementById('f-colors').value=specs.Culoare;
+    if(specs.Culoare)document.getElementById('f-colors').value=stripDiacritics(specs.Culoare);
     if(proj){
       if(proj.acquisition_price>0){document.getElementById('f-pbuy-ttc').value=Number(proj.acquisition_price).toFixed(2);syncAcqFields('ttc');}
       if(proj.supplier)document.getElementById('f-sup').value=proj.supplier;
@@ -14801,15 +14813,15 @@ function readProdFormData(){
   const oldCost=Number(existing?.priceBuyTTC)||0;
   const priceChanged=oldCost>0&&newCost>0&&Math.abs(oldCost-newCost)>=0.005;
   return{
-    name:document.getElementById('f-name').value.trim(),sku:document.getElementById('f-sku').value.trim(),ean:document.getElementById('f-ean').value.trim(),internalCode:existing?.internalCode||'',
+    name:stripDiacritics(document.getElementById('f-name').value.trim()),sku:document.getElementById('f-sku').value.trim(),ean:document.getElementById('f-ean').value.trim(),internalCode:existing?.internalCode||'',
     supplier:document.getElementById('f-sup').value.trim(),
-    colors:document.getElementById('f-colors').value.trim(),
-    sizes:document.getElementById('f-sizes').value.trim(),
-    material:document.getElementById('f-material').value.trim(),
+    colors:stripDiacritics(document.getElementById('f-colors').value.trim()),
+    sizes:stripDiacritics(document.getElementById('f-sizes').value.trim()),
+    material:stripDiacritics(document.getElementById('f-material').value.trim()),
     dims:document.getElementById('f-dims').value.trim(),
-    notes:document.getElementById('f-notes').value.trim(),
+    notes:stripDiacritics(document.getElementById('f-notes').value.trim()),
     supplierSources:supplierSourcesDraft.slice(0,5),
-    description:document.getElementById('f-description').value.trim(),
+    description:stripDiacritics(document.getElementById('f-description').value.trim()),
     images:curImages.slice(0,10),
     easyboxL:parseFloat(document.getElementById('f-eb-l').value)||0,
     easyboxW:parseFloat(document.getElementById('f-eb-w').value)||0,
@@ -19652,7 +19664,7 @@ function addProductFromMissing(id){
   const cand=PLIPSA.find(x=>x.id===id);if(!cand)return;
   pendingPlipsaCandidate=cand;
   openModal(null);
-  document.getElementById('f-name').value=cand.titluExtern.slice(0,240);
+  document.getElementById('f-name').value=stripDiacritics(cand.titluExtern.slice(0,240));
   toast('Completează prețul/stocul/poza, apoi Salvează — se leagă automat de listarea eMAG/Trendyol');
 }
 // „Compară catalog furnizor" (Raport stoc) — cerut direct: „vreau să comparăm sistemul nostru cu ce e
@@ -19731,7 +19743,7 @@ function renderCatalogScanResults(){
 function openAddProductFromCatalogScan(idx){
   const it=catalogScanResults[idx];if(!it)return;
   openModal(null);
-  document.getElementById('f-name').value=(it.name||'').slice(0,240);
+  document.getElementById('f-name').value=stripDiacritics((it.name||'').slice(0,240));
   if(it.image){showPrev(it.image);curImg=it.image;document.getElementById('f-imgurl').value=it.image;document.getElementById('ai-img-btn').disabled=false;}
   suggestCatFromName();
   toast('Completează prețul de achiziție și restul detaliilor, apoi Salvează');
@@ -20585,7 +20597,7 @@ async function scApplyRow(i){
     closeSupplierCompare();
     openModal(null);
     setTimeout(()=>{
-      document.getElementById('f-name').value=newName||'';
+      document.getElementById('f-name').value=stripDiacritics(newName||'');
       document.getElementById('f-sup').value=furnizor;
       document.getElementById('f-pbuy-ttc').value=ron.toFixed(2);
       syncAcqFields('ttc');
