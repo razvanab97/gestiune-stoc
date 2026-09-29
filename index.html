@@ -3954,6 +3954,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:487,text:'Fix real pe termen lung, raportat direct cu 6 comenzi lipsă din bază (deja apărute pe eMAG/Trendyol, niciodată aduse): reîmprospătarea silențioasă a comenzilor (eMAG + Trendyol) rula O SINGURĂ DATĂ, la încărcarea paginii — cu tab-ul de admin lăsat deschis toată ziua (foarte probabil), orice comandă apărută ULTERIOR nu mai avea nicio cale să ajungă automat în previzualizare, decât printr-un click manual sau o reîncărcare completă a paginii. Rulează acum și periodic (la 5 minute), pauzată cât timp tab-ul nu e vizibil — reutilizează exact aceleași funcții de import/potrivire, doar frecvența s-a schimbat.',date:'2026-09-29'},
   {n:486,text:'Comenzi Platforme — AWB-ul real asociat apare acum și în corpul cardului (nu doar în antetul îngust, ușor de ratat la scroll orizontal), cerut direct pentru eMAG. Fix real pe termen lung, raportat cu date reale („18 AWB-uri, dar doar 16 comenzi în Staff" + „comenzile în așteptare de ieri/alaltăieri dispar, ar trebui să rămână până le bifăm manual"): pragul zilnic al cozii Staff era un filtru STRICT la nivelul interogării către bază (created_at ≥ prag) — orice comandă mai veche dispărea din Staff, INDIFERENT de starea ei reală (neîmpachetată, sau chiar cu o problemă nerezolvată raportată explicit de Staff). Verificat direct pe date live: exact 2 comenzi cu AWB deja asociat + 3 „în așteptare" ieșiseră din Staff doar prin trecerea unei zile. Interogarea (comenzi ȘI Jurnal) include acum orice rând neîmpachetat sau blocat, indiferent de vechime — pragul de dată rămâne filtru de performanță STRICT pentru ce e cu adevărat încheiat.',date:'2026-09-29'},
   {n:485,text:'Comenzi Platforme — termen maxim de expediere, cerut direct: „mai ai 1z 8h"/„termen depășit cu X" afișat pe cardul comenzii (eMAG și Trendyol), text static, recalculat la fiecare randare — NU un ceas care ticăie. Verificat direct pe date live, nu ghicit din documentație veche: eMAG expune `maximum_date_for_shipment` (confirmat: comandă 20.09 08:54 → termen 22.09 08:55, exact SLA de 48h), Trendyol expune `agreedDeliveryDate` (câmp oficial documentat). Necesită migration_platforma_comenzi_termen.sql + repornirea conectorului local eMAG (scripts/emag-local-connector.js, deja actualizat) ca să preia noul câmp.',date:'2026-09-29'},
   {n:484,text:'Comenzi Platforme — bug real reparat, raportat direct pe o comandă reală (titlu „Set de 50 umerașe", potrivită cu produsul intern „Set 20 umerașe" — 2 comenzi Trendyol identice fuseseră deja aplicate cu cantitate 1 în loc de 1,5): titlul unei listări poate indica un pachet de ALTĂ mărime decât produsul intern potrivit, dar sugestia de cantitate (💡 „Titlul sugerează…") funcționa doar la importul din fișier Excel, NICIODATĂ la „Adu comenzi eMAG/Trendyol" (API) — acolo cantitatea rămânea mereu exact ce a cumpărat clientul din listare, fără nicio conversie. Acum ambele fluxuri calculează la fel: cantitate comandată × (mărimea pachetului din titlu ÷ mărimea pachetului din numele produsului intern, dacă produsul e el însuși un set). Pe drum, plafonul de detecție a mărimii pachetului a fost mărit de la 24 la 60 (găsit prea mic pe date reale: „Set de 30”/„Set de 50” ieșeau nedetectate). Rămâne doar SUGESTIE, cu buton „Aplică" — nimic aplicat automat; rutina zilnică semnalează acum explicit în rezumatul final câte linii au o cantitate de verificat, ca să nu treacă neobservate la „✓ Aplică tot". Cele 2 comenzi deja aplicate greșit NU au fost corectate automat (stoc deja scăzut) — de verificat manual dacă e nevoie. Verificat de 2 ori: sintaxă + recalcul direct pe datele reale din producție (comanda cu titlu „Set de 50”/produs „Set 20” → sugestie corectă 2,5; comanda „Set 30”/produs „Set 20” → sugestie corectă 3, testat live cu „Aplică").',date:'2026-09-25'},
@@ -16846,6 +16847,22 @@ async function searchEmagOrderFromReactivate(){
 // La fiecare deschidere/reîncărcare, refacem previzualizarea numai cu comenzile încă disponibile.
 // Nu există efect financiar aici: stocul și jurnalul se schimbă exclusiv la „Aplică import”.
 let pcomAutoRefreshStarted=false;
+// Fix real pe termen lung, raportat direct cu comenzi reale lipsă din bază (6 comenzi, apărute deja pe
+// eMAG/Trendyol, niciodată aduse automat): reîmprospătarea silențioasă rula O SINGURĂ DATĂ, la
+// încărcarea paginii — dacă tab-ul de admin rămâne deschis toată ziua (foarte probabil, e un dashboard
+// de lucru), orice comandă apărută ULTERIOR nu mai avea nicio cale să ajungă automat în previzualizare,
+// decât printr-un click manual pe „Adu comenzi” sau o reîncărcare completă a paginii. Acum rulează și
+// periodic (la 5 minute), nu doar o dată — pauzată cât timp tab-ul nu e vizibil (document.hidden), ca
+// să nu consume degeaba din cota API când nimeni nu se uită. Reutilizează EXACT aceleași funcții
+// (importEmagApiOrders/importTrendyolApiOrders, silent=true) — nimic nou de verificat în logica de
+// potrivire/comitere, doar frecvența la care rulează.
+async function runPcomSilentImport(){
+  // Golim o singură dată, aici, înainte de a porni ambele importuri — fiecare, rulat individual
+  // (silent=false, din buton), tot golește-și-retaghează ca înainte; doar varianta silențioasă,
+  // concurentă, sare peste acel pas ca să nu se șteargă reciproc flag-urile „NOU”.
+  pcImpParsed.forEach(x=>delete x._recentImport);
+  await Promise.allSettled([importEmagApiOrders(true),importTrendyolApiOrders(true)]);
+}
 async function refreshPcomAvailableOrdersOnLoad(){
   if(pcomAutoRefreshStarted||!sbReady)return;
   pcomAutoRefreshStarted=true;
@@ -16854,11 +16871,8 @@ async function refreshPcomAvailableOrdersOnLoad(){
   const trendStart=document.getElementById('pcx-trendyol-date-start'),trendEnd=document.getElementById('pcx-trendyol-date-end');
   if(trendStart&&!trendStart.value)trendStart.value=start;
   if(trendEnd&&!trendEnd.value)trendEnd.value=end;
-  // Golim o singură dată, aici, înainte de a porni ambele importuri — fiecare, rulat individual
-  // (silent=false, din buton), tot golește-și-retaghează ca înainte; doar varianta silențioasă,
-  // concurentă, sare peste acel pas ca să nu se șteargă reciproc flag-urile „NOU”.
-  pcImpParsed.forEach(x=>delete x._recentImport);
-  await Promise.allSettled([importEmagApiOrders(true),importTrendyolApiOrders(true)]);
+  await runPcomSilentImport();
+  setInterval(()=>{if(!document.hidden)runPcomSilentImport();},5*60000);
 }
 async function issueEmagAwb(){
   const orderId=(document.getElementById('pcx-emag-awb-order')?.value||'').trim(),weight=document.getElementById('pcx-emag-awb-weight')?.value,parcelNumber=document.getElementById('pcx-emag-awb-parcels')?.value,btn=document.getElementById('pcx-emag-awb-btn');
