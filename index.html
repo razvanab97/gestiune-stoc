@@ -3958,6 +3958,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:500,text:'„Alt furnizor" — bug real reparat, raportat direct („și furnizorul să se salveze, să-mi fie recomandat"): lista de sugestii pentru câmpul „Furnizor" se completa DOAR din furnizorul principal al fiecărui produs — un furnizor adăugat STRICT ca sursă alternativă (ex. „Importio.pl") nu apărea niciodată ca sugestie, oricâte produse l-ar fi folosit deja acolo. Acum include și sursele alternative, actualizată imediat la adăugarea unei surse noi, nu doar la redeschiderea unui produs. Verificat direct, live, cu produsul real din raportare (#98, sursă Importio.pl) — apare corect în listă.',date:'2026-09-29'},
   {n:499,text:'„Alt furnizor" — diagnosticare, raportat direct („tot nu merge, la reîncărcare se șterge, e clar că nu se salvează în Supabase"): verificat de 2 ori, cu un test real, complet, către baza de date live (nu simulare) — chiar fluxul exact (deschide produs → adaugă sursă → reîncarcă pagina → redeschide produs) funcționează corect, informația supraviețuiește reîncărcării. Cauza rămasă e deci în afara acestui cod, undeva ce nu se poate verifica de la distanță. Adăugate log-uri explicite în consolă (F12 → Console) la fiecare pas al „+ Adaugă sursă" — buton apăsat, valori citite din formular, motiv exact dacă o validare eșuează, cerere trimisă către bază, răspuns primit, eroare dacă apare una — ca pasul exact unde se oprește fluxul (la tine, în browser) să devină vizibil, în loc să rămână o presupunere.',date:'2026-09-29'},
   {n:498,text:'„Alt furnizor" — două completări, raportate/cerute direct pe drum, testând #497. (1) Bug real suplimentar reparat: la salvarea imediată a unei surse, dacă filtrul PATCH (id=eq.editId) nu potrivea niciun rând, Supabase răspunde 200 OK cu listă GOALĂ, nu eroare — codul arăta greșit „✓ salvat" local, fără să fi scris de fapt nimic în bază (exact simptomul raportat: „în continuare nu se salvează"). Acum verifică explicit — 0 rânduri modificate → eroare clară, nu succes fals. (2) Câmp nou „Preț fără TVA" lângă „Preț cu TVA" (cerut direct — „fa la fel 2 secțiuni, pentru atunci când e cu TVA sau fără TVA"), sincronizat bidirecțional pe cota de TVA a produsului, exact ca la prețul principal de achiziție — introduci pe oricare din cele două, celălalt se completează singur; se salvează în continuare strict prețul cu TVA (schema neschimbată). Verificat cu 23 de teste izolate (0-rânduri-modificate tratat corect ca eroare, conversie cu/fără TVA în ambele sensuri, TVA 0% — reverse charge, câmp gol nu produce NaN).',date:'2026-09-29'},
   {n:497,text:'Fix real, raportat direct („eu le adaug manual acum în alt furnizor, ca să se asocieze la factură — cum facem să se salveze și la manual"): „+ Adaugă sursă"/„×" din „Alt furnizor" modificau STRICT formularul deschis pe ecran — părea deja salvat (rândul apărea complet, cu buton „Folosește"), dar nimic nu ajungea de fapt în bază decât la apăsarea SEPARATĂ a „Salvează produs", de jos de tot — secțiune colapsată implicit, pas ușor de uitat. Verificat direct pe date live: produse editate chiar în ultimele minute tot arătau „Alt furnizor" gol în bază — confirmă exact acest raport. Acum orice adăugare/ștergere de sursă se salvează IMEDIAT în bază, fără să mai fie nevoie de „Salvează produs" separat pentru ele (celelalte câmpuri din formular, dacă au și ele modificări nesalvate în același timp, rămân corect semnalate ca atare — nu se ascund din greșeală). Verificat cu 19 teste izolate (salvare instant pe produs existent, produs nou fără rând încă în bază, eroare de rețea nu pierde draftul local, alte câmpuri nesalvate rămân corect semnalate) + o scriere reală de test pe produsul #144 direct în Supabase, verificată și restaurată.',date:'2026-09-29'},
@@ -14750,6 +14751,7 @@ async function persistSupplierSourcesDraft(actionLabel){
       const prevSnap=productEditorSnapshot?JSON.parse(productEditorSnapshot):readProdFormData();
       productEditorSnapshot=JSON.stringify({...prevSnap,supplierSources:sources});
     }catch(e){/* snapshot vechi invalid — nu blocăm salvarea reușită pentru atât */}
+    renderSupplierDatalist();
     toast(`✓ ${actionLabel}`);
   }catch(e){console.error('[AltFurnizor] EROARE la salvare:',e);toast(`${actionLabel} local, dar nu s-a salvat în bază: `+(e.message||e)+' — apasă „Salvează produs”','err');}
 }
@@ -19920,10 +19922,17 @@ function renderInvCatDatalist(){
 // furnizorii deja folosiți pe produse (P), nu o listă separată de întreținut; un furnizor nou tastat nu
 // are nevoie de „salvare" separată — devine el însuși o sugestie viitoare din momentul în care ajunge pe
 // vreun produs. Cei 3 din lista veche rămân mereu prezenți, ca punct de plecare, chiar și pe o bază goală.
+// Bug real, raportat direct („și furnizorul să se salveze, să-mi fie recomandat"): lista de sugestii
+// se completa DOAR din furnizorul principal al fiecărui produs — un furnizor adăugat STRICT ca „Alt
+// furnizor" (supplierSources, până la 5 pe produs) nu apărea niciodată aici, oricâte produse l-ar fi
+// folosit deja acolo. Acum include și sursele alternative, nu doar furnizorul principal.
 function renderSupplierDatalist(){
   const dl=document.getElementById('inv-supplier-list');if(!dl)return;
   const seen=new Set(['Jumbo','Maxy','Verk']);
-  P.forEach(p=>{if(p.supplier)seen.add(p.supplier);});
+  P.forEach(p=>{
+    if(p.supplier)seen.add(p.supplier);
+    (p.supplierSources||[]).forEach(s=>{if(s.supplier)seen.add(s.supplier);});
+  });
   dl.innerHTML=[...seen].sort((a,b)=>a.localeCompare(b,'ro')).map(s=>`<option value="${esc(s)}">`).join('');
 }
 
