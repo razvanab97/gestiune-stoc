@@ -3772,6 +3772,7 @@ button.pcx-include-btn.included{border-color:var(--gr)}
     <div class="invx-foot-stats" id="inv-info">Adaugă produse pentru previzualizare</div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-sm" id="inv-checklist-btn" onclick="generateInvChecklist()" disabled title="Listă printabilă — poză, titlu și cantitate pentru fiecare produs, cu bifă goală, de trimis la depozit ca să verifice recepția mărfii">🖨️ Listă verificare</button>
+      <button class="btn btn-sm" id="invx-ai-btn" onclick="invAiMatchUnmatched()" style="display:none" title="Trimite la AI titlurile liniilor rămase nerezolvate, separat de potrivirea inițială — util când formatul facturii a împiedicat potrivirea automată dintâi. Sugestiile rămân neconfirmate, verifici manual fiecare înainte de import.">🤖 Potrivește restul cu AI</button>
       <button class="btn btn-sm" id="inv-mark-new-btn" onclick="markAllUnresolvedAsNew()" style="display:none" title="Liniile rămase nerezolvate nu au nicio potrivire în stoc (nici SKU, nici titlu asemănător) — le marchează pe toate ca produse noi dintr-un click, ca la butonul 🆕 de pe fiecare linie în parte">🆕 Marchează toate ca produse noi</button>
       <button class="btn btn-sm" id="inv-cancel-btn" onclick="closeInvoice()">Anulează</button>
       <button class="btn btn-sm btn-acc" id="inv-apply-btn" onclick="applyInvoice()" disabled>Importă în stoc</button>
@@ -3958,6 +3959,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:502,text:'Importă factură — două completări cerute direct. (1) Buton nou „🤖 Potrivește restul cu AI", lângă „🆕 Marchează toate ca produse noi": pentru liniile rămase „⚠ alege produs" după potrivirea inițială (care rulează doar pe EAN/SKU exact + fuzzy pe nume, fără AI), trimite titlurile rămase la AI, separat — exact ca unealta identică deja existentă la Comenzi Platforme. Nicio sugestie nu se bifează/aplică automat, rămâne de verificat manual. (2) Coloana „SKU / Cod" e acum editabilă — dacă factura nu are un cod extern (arăta „—", needitabil), îl poți completa manual; dacă se potrivește exact cu un produs existent, linia se rezolvă imediat, fără AI.',date:'2026-09-29'},
   {n:501,text:'Produse — cerut direct („sa nu se mai puna diacritice la produse"): nume, descriere, culori, mărimi, material și note se salvează acum fără diacritice (ă/â/î/ș/ț → a/a/i/s/t), indiferent de sursă — AI (Importă din link, Din screenshot, Importă factură, listare Research, Comandă furnizor, Compară catalog furnizor) sau tastat manual. Aplicat în două locuri: la fiecare completare automată din AI (vizibil imediat în formular, nu doar la salvare) ȘI încă o dată, garantat, la „Salvează produs" — indiferent pe unde a intrat textul. NU se aplică textului generat pentru anunțuri eMAG/Trendyol (Research/listing builder), unde diacriticele corecte contează pentru clienți.',date:'2026-09-29'},
   {n:500,text:'„Alt furnizor" — bug real reparat, raportat direct („și furnizorul să se salveze, să-mi fie recomandat"): lista de sugestii pentru câmpul „Furnizor" se completa DOAR din furnizorul principal al fiecărui produs — un furnizor adăugat STRICT ca sursă alternativă (ex. „Importio.pl") nu apărea niciodată ca sugestie, oricâte produse l-ar fi folosit deja acolo. Acum include și sursele alternative, actualizată imediat la adăugarea unei surse noi, nu doar la redeschiderea unui produs. Verificat direct, live, cu produsul real din raportare (#98, sursă Importio.pl) — apare corect în listă.',date:'2026-09-29'},
   {n:499,text:'„Alt furnizor" — diagnosticare, raportat direct („tot nu merge, la reîncărcare se șterge, e clar că nu se salvează în Supabase"): verificat de 2 ori, cu un test real, complet, către baza de date live (nu simulare) — chiar fluxul exact (deschide produs → adaugă sursă → reîncarcă pagina → redeschide produs) funcționează corect, informația supraviețuiește reîncărcării. Cauza rămasă e deci în afara acestui cod, undeva ce nu se poate verifica de la distanță. Adăugate log-uri explicite în consolă (F12 → Console) la fiecare pas al „+ Adaugă sursă" — buton apăsat, valori citite din formular, motiv exact dacă o validare eșuează, cerere trimisă către bază, răspuns primit, eroare dacă apare una — ca pasul exact unde se oprește fluxul (la tine, în browser) să devină vizibil, în loc să rămână o presupunere.',date:'2026-09-29'},
@@ -22222,6 +22224,62 @@ function pickInvNewProduct(){
 // manuală rămâne (nimic nu se creează fără click, exact ca la #134), dar un click bulk economisește
 // confirmarea line-by-line pentru facturi cu multe produse noi deodată. Exclude explicit liniile
 // „onlyExisting" (mod care interzice explicit crearea de produse noi pentru linia respectivă).
+// „🤖 Potrivește restul cu AI" — cerut direct, pentru liniile rămase „⚠ alege produs" după potrivirea
+// inițială (care rulează DOAR pe EAN/SKU exact + fuzzy pe nume, fără AI). Aceeași logică deja folosită
+// la Comenzi Platforme (pcomAiMatchUnmatched) — trimite titlurile rămase + lista de inventar la AI, dar
+// NU bifează automat nimic: o sugestie greșită aici ar crea/actualiza produsul greșit la „Importă în
+// stoc", mai grav decât o linie rămasă nerezolvată. Omul confirmă manual fiecare sugestie.
+async function invAiMatchUnmatched(){
+  const idxs=invParsed.map((x,i)=>i).filter(i=>!invParsed[i].produsId&&!invParsed[i].newProduct&&!invParsed[i].onlyExisting);
+  if(!idxs.length){toast('Nu mai sunt linii nepotrivite','err');return;}
+  const btn=document.getElementById('invx-ai-btn');
+  if(btn)btn.disabled=true;
+  const prodList=P.filter(p=>!p.archived).map(p=>`${p.id}: ${p.name}`).join('\n');
+  const batchSize=25;
+  let matched=0;
+  try{
+    for(let b=0;b<idxs.length;b+=batchSize){
+      const batchIdxs=idxs.slice(b,b+batchSize);
+      if(btn)btn.textContent=`🤖 Se potrivesc ${b+1}-${Math.min(b+batchSize,idxs.length)} din ${idxs.length}…`;
+      const linesText=batchIdxs.map(i=>`${i}: ${invParsed[i].name||invParsed[i].sku||''}`).join('\n');
+      const prompt=`Ai o listă de produse din inventar (id: nume) și o listă de titluri de produse de pe o factură de la furnizor
+(unele pot fi în altă limbă — tradu-le mental în română ca să le poți compara). Pentru fiecare titlu,
+găsește produsul corespunzător din inventar DOAR dacă ești cu adevărat încrezător că e același produs.
+Un răspuns greșit e mai rău decât niciun răspuns — nu ghici un produs doar ca să completezi câmpul;
+dacă nu ești sigur sau nu găsești nimic clar asemănător, răspunde null.
+
+PRODUSE INVENTAR:
+${prodList}
+
+TITLURI FACTURĂ (index: titlu):
+${linesText}
+
+Răspunde STRICT cu JSON, fără markdown: {"matches":[{"index":<indexul liniei>,"produsId":<id din inventar sau null>}]}`;
+      const resp=await callAI([{role:'user',content:prompt}],'Ești expert în potrivirea denumirilor de produse multilingve. Răspunzi DOAR cu JSON valid.',2500,'analysis');
+      const objMatch=resp.match(/\{[\s\S]*\}/);
+      if(!objMatch)continue;
+      let parsed;try{parsed=JSON.parse(objMatch[0]);}catch(e){continue;}
+      if(!Array.isArray(parsed.matches))continue;
+      parsed.matches.forEach(m=>{
+        const i=Number(m.index);
+        if(!invParsed[i]||m.produsId==null)return;
+        const pid=Number(m.produsId);
+        const prod=P.find(p=>p.id===pid);if(!prod)return;
+        // sugestie AI — nu se bifează/aplică automat. `_match` se recalculează oricum la fiecare
+        // renderInvPreview (findExistingProduct pe numele curent) — nu-l mai setăm manual aici, ar fi
+        // suprascris imediat; eticheta arată „ales manual" sau „nume X%", după caz, ambele corecte.
+        invParsed[i].produsId=pid;
+        matched++;
+      });
+    }
+    renderInvPreview();
+    toast(`AI a găsit sugestii pentru ${matched} din ${idxs.length} linii — verifică-le înainte de „Importă în stoc"`);
+  }catch(err){
+    toast('Eroare AI: '+(err.message||err),'err');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='🤖 Potrivește restul cu AI';}
+  }
+}
 function markAllUnresolvedAsNew(){
   const idxs=invParsed.map((it,i)=>i).filter(i=>!invParsed[i].produsId&&!invParsed[i].newProduct&&!invParsed[i].onlyExisting);
   if(!idxs.length){toast('Nu mai există linii nerezolvate','err');return;}
@@ -22355,7 +22413,7 @@ function invxRowHtml(idx){
   // afișat mereu ca sumă (produs + transport), ca să se vadă exact ce se scrie ca priceBuyTTC la aplicare.
   const shippingLine=landedCost!==item.costRon?`<div class="invx-price-ron">${item.costRon.toFixed(2)} produs + ${(landedCost-item.costRon).toFixed(2)} transport</div>`:'';
   const col1=`<div class="invx-col invx-prod"><div>${rowImg}</div><div style="min-width:0"><div class="invx-prod-nm">${esc(nm)}</div><div class="invx-prod-tags">${tag}</div>${stockInfo}${extremeWarn}${aiWarnLines}${newProdForm}</div></div>`;
-  const col2=`<div class="invx-col"><div class="invx-col-lbl">SKU / Cod</div><div class="invx-code">${item.sku?esc(item.sku):'—'}</div>${item.ean?`<div class="invx-code" title="EAN — folosit prioritar la potrivire">EAN ${esc(item.ean)}</div>`:''}</div>`;
+  const col2=`<div class="invx-col"><div class="invx-col-lbl">SKU / Cod</div><input type="text" class="invx-price-input" style="font-family:var(--mono)" value="${esc(item.sku||'')}" placeholder="cod manual" onchange="setInvSku(${idx},this.value)" title="Codul extern al produsului — completează manual dacă lipsește din factură, ajută la potrivirea cu un produs existent">${item.ean?`<div class="invx-code" title="EAN — folosit prioritar la potrivire">EAN ${esc(item.ean)}</div>`:''}</div>`;
   const col3=`<div class="invx-col"><div class="invx-col-lbl">Cantitate</div><div class="invx-qty-step"><button type="button" onclick="adjustInvQty(${idx},-1)" title="Scade cantitatea">−</button><input type="number" min="1" step="1" value="${item.qty}" onchange="setInvQty(${idx},this.value)" title="Cantitatea comandată"><button type="button" onclick="adjustInvQty(${idx},1)" title="Crește cantitatea">+</button></div></div>`;
   const col4=`<div class="invx-col"><div class="invx-col-lbl">Buc./set</div><div class="invx-pieces" title="${item.piecesPerUnit>1?totalPieces+' piese fizice în total ('+item.qty+' × '+item.piecesPerUnit+')':'1 piesă per exemplar comandat'}">${item.piecesPerUnit>1?item.piecesPerUnit+' → '+totalPieces+' buc.':'—'}</div></div>`;
   const col5=`<div class="invx-col"><div class="invx-col-lbl">Preț unitar original</div><input type="number" min="0" step="0.01" class="invx-price-input" value="${item.priceBuy.toFixed(2)}" onchange="setInvUnitPriceOriginal(${idx},this.value)" title="Preț pe exemplar comandat, în moneda facturii">${item.currency==='EUR'?'<div class="invx-price-ron">EUR</div>':''}${item.calculatedFromTotal?'<div class="invx-calc-badge">Calculat din total ÷ cantitate</div>':''}</div>`;
@@ -22382,6 +22440,19 @@ function setInvUnitPriceOriginal(idx,val){
   item.priceBuy=Math.max(0,Number(val)||0);
   item.costRon=item.currency==='EUR'?Math.round(item.priceBuy*EUR_RON*100)/100:item.priceBuy;
   item.calculatedFromTotal=false;
+  setTimeout(renderInvPreview,0);
+}
+// Codul extern nu apare pe orice factură (cerut direct — „aici nu avem cod extern, sa ni se permita sa
+// adaugam codul manual"). Introdus manual, poate rezolva singur o potrivire pe care titlul n-a reușit-o
+// (EAN/SKU exact au prioritate față de fuzzy pe nume în findExistingProduct) — reîncercăm automat DOAR
+// dacă linia nu are deja un produs ales (nu suprascriem o alegere explicită a omului).
+function setInvSku(idx,val){
+  const item=invParsed[idx];if(!item)return;
+  item.sku=String(val||'').trim();
+  if(!item.produsId&&!item.newProduct&&item.sku){
+    const match=findExistingProduct({ean:item.ean,sku:item.sku,name:item.name});
+    if(match){item.produsId=match.product.id;item._match=match;item.onlyExisting=false;}
+  }
   setTimeout(renderInvPreview,0);
 }
 function removeInvParsedLine(idx){
@@ -22453,6 +22524,8 @@ function renderInvPreview(){
   document.getElementById('inv-info').innerHTML=`<span>${invParsed.length} produse</span><span><strong>${fmtQty(totalUnits)}</strong> unități comandate</span><span><strong>${fmtQty(totalPieces)}</strong> articole fizice</span><span class="invx-foot-total">${totalEstimatRon.toFixed(2)} RON</span>${missC?`<span style="color:var(--rd)">${missC} coduri negăsite</span>`:''}${unresolvedC?`<span style="color:var(--rd)">⚠ ${unresolvedC} fără produs ales</span>`:''}${receiptC?`<span>${fmtQty(receiptQty)} buc. recepționate din pe drum</span>`:''}`;
   const markNewBtn=document.getElementById('inv-mark-new-btn');
   if(markNewBtn)markNewBtn.style.display=unresolvedC?'':'none';
+  const aiBtn=document.getElementById('invx-ai-btn');
+  if(aiBtn)aiBtn.style.display=unresolvedC?'':'none';
   document.getElementById('inv-apply-btn').disabled=false;
   document.getElementById('inv-checklist-btn').disabled=false;
   updateInvxStatus();
