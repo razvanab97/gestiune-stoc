@@ -627,7 +627,7 @@ tr:hover td{background:var(--surf2)}
 .img-zone{border:1px solid #E9EDF3;border-radius:18px;cursor:pointer;background:#F8FAFC;position:relative;height:286px;display:flex;align-items:center;justify-content:center;overflow:hidden;transition:all .15s;margin-bottom:.85rem}
 .img-zone:hover{border-color:var(--acc);background:var(--acc-light)}
 .img-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;z-index:2;width:100%;height:100%}
-.img-prev{width:100%;height:100%;object-fit:contain;display:block}
+.img-prev{width:100%;height:100%;object-fit:contain;display:block;position:relative;z-index:3;cursor:zoom-in}
 .img-ph{text-align:center;pointer-events:none;padding:1.5rem}
 .img-ph-ic{font-size:122px;opacity:.2;margin-bottom:10px;line-height:1}
 .img-ph-t{font-size:27px;color:var(--t3);line-height:1.7}
@@ -3473,7 +3473,7 @@ button.pcx-include-btn.included{border-color:var(--gr)}
             <div class="sec">Fotografii produs</div>
             <div class="img-zone" id="img-zone">
               <input type="file" id="f-img" accept="image/*" onchange="onImgFile(event)" onclick="event.stopPropagation()">
-              <img id="f-prev" class="img-prev" style="display:none" alt="">
+              <img id="f-prev" class="img-prev" style="display:none" alt="" title="Click pentru mărire" onclick="event.stopPropagation();openImgZoom(this.src)">
               <div id="img-ph" class="img-ph">
                 <div class="img-ph-ic">🖼</div>
                 <div class="img-ph-t">Click pentru a alege o fotografie<br><small>JPG · PNG · WEBP · max 5 MB</small></div>
@@ -3713,6 +3713,12 @@ button.pcx-include-btn.included{border-color:var(--gr)}
     <div class="m-foot-actions"><button class="btn btn-acc" id="save-prod-btn" onclick="saveProd()">Salvează produs</button></div>
   </div>
 </div>
+</div>
+
+<!-- ZOOM POZĂ (cerut direct — „aici, când apas pe poză, să se facă mare"): reutilizabil, nu doar pentru
+poza principală a produsului — orice apel openImgZoom(src) deschide aceeași fereastră mare. -->
+<div class="ov" id="ov-imgzoom" style="z-index:300;align-items:center" onclick="if(event.target===this)closeImgZoom()">
+  <img id="imgzoom-src" alt="" style="max-width:92vw;max-height:92vh;object-fit:contain;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.45)">
 </div>
 
 <!-- INVOICE MODAL -->
@@ -3959,6 +3965,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:507,text:'Fișa produsului — poza principală, cerut direct: „aici, când apas pe poză, să se facă mare". Click pe poza deja încărcată deschide acum o fereastră mare, peste tot ecranul (închidere cu click pe fundal sau Escape) — înainte, click pe poză deschidea direct selectorul de fișiere (zona pozei are un input de fișier invizibil pe toată suprafața, ca să poți schimba poza dintr-un click); acum acel comportament rămâne valabil doar când NU există încă o poză — o dată ce poza e afișată, click pe ea mărește, schimbarea pozei rămâne posibilă separat (📋 lipește, ✕ șterge, câmpul de URL). Fereastra de zoom e generică (openImgZoom), reutilizabilă și în altă parte, dacă mai e nevoie. Verificat cu 4 teste izolate (deschidere cu src corect, închidere, src gol nu deschide nimic).',date:'2026-09-30'},
   {n:506,text:'Continuare directă la #505 (cantitatea din titlu), găsit verificând comanda reală raportată: linia era deja COMISĂ (confirmare instant, vizibilă în Staff) ÎNAINTE ca „Titlul sugerează…" să fie apăsat — corecția de cantitate/preț rămânea STRICT în previzualizarea locală, niciodată scrisă peste rândul deja existent din platforma_comenzi. profit_estimat/marja_estimata (folosite direct în Profit vânzări/Raport/Dashboard, nu doar în preview) rămâneau ÎNGHEȚATE la valoarea calculată cu cantitatea/prețul VECHI. Acum „Aplică" (și editarea manuală a cantității, din stepper) resincronizează complet o linie deja comisă — cantitate, preț ȘI profit/marjă recalculate, scrise direct în bază, nu doar cantitatea ca până acum. Corectată direct și comanda reală raportată (Robert Caracas, Trendyol, AWB 5043265767): profit_estimat 125,98→26,51 RON, marja_estimata 60,22%→12,67% — valorile corecte, verificate matematic cu motorul real de calcul al aplicației, nu estimate. Verificat cu 13 teste izolate suplimentare (linie deja comisă resincronizată complet, stoc deja scăzut rămâne blocat corect, cantitate schimbată manual tot recalculează profitul, chiar fără schimbare de preț).',date:'2026-09-30'},
   {n:505,text:'Comenzi Platforme — bug real reparat, raportat direct pe o comandă reală (titlu „Set 6 stații radio portabile", potrivit cu produsul intern „Statie radio 2x BF888S" — cantitate corectată de la 1 la 3 cu 💡 „Titlul sugerează…", dar profitul afișat ieșea +377.95 RON pe o vânzare de 297.79 RON — profit mai mare decât vânzarea, imposibil economic): butonul „Aplică" de la sugestia de cantitate schimba DOAR cantitatea, niciodată prețul liniei — acesta reprezenta banii plătiți pentru cantitatea VECHE (întregul pachet de 6, cumpărat ca „1 listare"), dar restul calculului (profit, marjă, comparație cu prețul minim, ȘI scrierea reală în bază la comitere) tratează prețul liniei ca preț PE BUCATA internă — rezultat: numărat dublu, o dată prin prețul rămas „pentru tot pachetul" tratat greșit ca preț unitar, a doua oară prin înmulțirea profitului (deja umflat) cu noua cantitate. Acum „Aplică" împarte și prețul liniei cu același raport cu care înmulțește cantitatea — banii totali plătiți rămân identici, doar reîmpărțiți corect pe bucățile fizice reale, ca „la 3 produse" să însemne chiar 3 produse peste tot în calcul (preview ȘI ce se scrie definitiv în platforma_comenzi la comitere), nu doar la stocul scăzut. Scopat strict la acest buton — ajustarea manuală a cantității din stepper rămâne neschimbată, cu semnificația ei separată. Verificat cu 8 teste izolate (numerele exacte din raportare, banii totali păstrați după împărțire, raport 1:1 fără efect, cantitate inițială 0 tratată defensiv).',date:'2026-09-30'},
   {n:504,text:'Comenzi Platforme → Expediere, secțiune nouă „IP conector (pentru whitelist eMAG)" — cerut direct: „observ că se tot schimbă IP-ul, să avem o secțiune unde îl putem verifica în timp real și să apăsăm butonul copy". eMAG (RO/BG/HU) respinge cererile venite de pe un IP neautorizat („Invalid vendor ip [X]") — la o rețea rezidențială, IP-ul se schimbă periodic, iar whitelist-ul din panoul eMAG trebuie actualizat manual, din nou, de fiecare dată. Buton „🔄 Verifică IP" — interoghează Conectorul local de pe Mac (nu browserul), care la rândul lui întreabă un serviciu extern (ipify, cu rezervă ipinfo.io) — exact IP-ul pe care îl vede eMAG la cererile reale. Buton „📋 Copiază" apare imediat lângă rezultat, gata de lipit în whitelist-ul eMAG. Necesită Conectorul local ACTUALIZAT (rulează `git pull` în folderul gestiune-stoc de pe Mac, apoi `launchctl kickstart -k gui/$(id -u)/ro.abhomes.emag-local-connector` ca să preia codul nou, fără să repornești tot Mac-ul) — până atunci, butonul arată „Rută necunoscută”, fără să afecteze restul funcțiilor conectorului. Verificat direct, live: IP-ul detectat de funcția nouă a fost identic, cifră cu cifră, cu cel din eroarea eMAG raportată.',date:'2026-09-29'},
@@ -19960,6 +19967,18 @@ function onImgUrl(){const u=document.getElementById('f-imgurl').value.trim();if(
 function showPrev(s){const el=document.getElementById('f-prev');el.onerror=()=>imgErr(el,s);el.src=imgSrc(s);el.style.display='block';document.getElementById('img-ph').style.display='none';}
 function hidePrev(){document.getElementById('f-prev').style.display='none';document.getElementById('img-ph').style.display='flex';}
 function clearImg(){curImg='';document.getElementById('f-img').value='';document.getElementById('f-imgurl').value='';document.getElementById('ai-img-btn').disabled=true;hidePrev();}
+// Zoom poză — cerut direct („aici, când apas pe poză, să se facă mare"): fereastră mare, generică,
+// reutilizabilă (orice apel openImgZoom(src), nu doar poza principală a produsului). Zona pozei
+// (#img-zone) are dedesubt un input de fișier invizibil, pe toată suprafața (ca să deschidă selectorul
+// de fișiere la click) — fără z-index mai mare pe #f-prev (vezi CSS .img-prev), click-ul pe poza deja
+// existentă ar fi ajuns tot la inputul de fișier, deschizând selectorul, nu zoom-ul.
+function openImgZoom(src){
+  if(!src)return;
+  const img=document.getElementById('imgzoom-src');
+  img.src=src;
+  document.getElementById('ov-imgzoom').classList.add('on');
+}
+function closeImgZoom(){document.getElementById('ov-imgzoom').classList.remove('on');}
 async function pasteImgFromClipboard(){
   if(!navigator.clipboard?.read){toast('Browserul nu suportă citirea directă din clipboard — încarcă manual fișierul','err');return;}
   try{
@@ -24059,7 +24078,7 @@ function toast(m,type){
   t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),type==='err'?6500:2800);
 }
 
-document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){closeModal();closeInvoice();}});
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){if(document.getElementById('ov-imgzoom')?.classList.contains('on')){closeImgZoom();return;}closeModal();closeInvoice();}});
 function rptCardKeyHandler(e){
   if(!document.getElementById('page-raport')?.classList.contains('on'))return;
   if(!rptCardProds.length)return;
