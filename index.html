@@ -3958,6 +3958,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:500,text:'„Alt furnizor" — cauza reală găsită, cu ajutorul consolei trimise direct: câmpurile din formular (Furnizor/Cod extern/Preț) se completau, dar „Salvează produs" (butonul mare, de jos) se apăsa direct, FĂRĂ click separat, în prealabil, pe „+ Adaugă sursă" (cel mic, de sub câmpuri) — fără care nimic din ele nu ajungea vreodată în listă, deci nici în bază, oricât de multe ori s-ar fi apăsat „Salvează produs". Acum „Salvează produs" adaugă singur, tăcut, orice rămâne completat dar netrimis în „Alt furnizor" — nu se mai poate pierde din cauza asta. Pe drum, găsit și separat, din aceeași captură de consolă: coloana `price_buy_eur` lipsește din baza de date (migrare veche, nerulată încă) — degradare grațioasă deja funcțională (restul produsului se salvează normal), dar rulează o dată, ca avertismentul să dispară: `alter table produse add column if not exists price_buy_eur numeric(10,2) default 0;`. Verificat cu 6 teste izolate (completat dar neadăugat → salvat automat la Salvează produs, formular gol → tăcut, fără nimic de adăugat, parțial completat → avertisment clar, nu pierdere silențioasă).',date:'2026-09-29'},
   {n:499,text:'„Alt furnizor" — diagnosticare, raportat direct („tot nu merge, la reîncărcare se șterge, e clar că nu se salvează în Supabase"): verificat de 2 ori, cu un test real, complet, către baza de date live (nu simulare) — chiar fluxul exact (deschide produs → adaugă sursă → reîncarcă pagina → redeschide produs) funcționează corect, informația supraviețuiește reîncărcării. Cauza rămasă e deci în afara acestui cod, undeva ce nu se poate verifica de la distanță. Adăugate log-uri explicite în consolă (F12 → Console) la fiecare pas al „+ Adaugă sursă" — buton apăsat, valori citite din formular, motiv exact dacă o validare eșuează, cerere trimisă către bază, răspuns primit, eroare dacă apare una — ca pasul exact unde se oprește fluxul (la tine, în browser) să devină vizibil, în loc să rămână o presupunere.',date:'2026-09-29'},
   {n:498,text:'„Alt furnizor" — două completări, raportate/cerute direct pe drum, testând #497. (1) Bug real suplimentar reparat: la salvarea imediată a unei surse, dacă filtrul PATCH (id=eq.editId) nu potrivea niciun rând, Supabase răspunde 200 OK cu listă GOALĂ, nu eroare — codul arăta greșit „✓ salvat" local, fără să fi scris de fapt nimic în bază (exact simptomul raportat: „în continuare nu se salvează"). Acum verifică explicit — 0 rânduri modificate → eroare clară, nu succes fals. (2) Câmp nou „Preț fără TVA" lângă „Preț cu TVA" (cerut direct — „fa la fel 2 secțiuni, pentru atunci când e cu TVA sau fără TVA"), sincronizat bidirecțional pe cota de TVA a produsului, exact ca la prețul principal de achiziție — introduci pe oricare din cele două, celălalt se completează singur; se salvează în continuare strict prețul cu TVA (schema neschimbată). Verificat cu 23 de teste izolate (0-rânduri-modificate tratat corect ca eroare, conversie cu/fără TVA în ambele sensuri, TVA 0% — reverse charge, câmp gol nu produce NaN).',date:'2026-09-29'},
   {n:497,text:'Fix real, raportat direct („eu le adaug manual acum în alt furnizor, ca să se asocieze la factură — cum facem să se salveze și la manual"): „+ Adaugă sursă"/„×" din „Alt furnizor" modificau STRICT formularul deschis pe ecran — părea deja salvat (rândul apărea complet, cu buton „Folosește"), dar nimic nu ajungea de fapt în bază decât la apăsarea SEPARATĂ a „Salvează produs", de jos de tot — secțiune colapsată implicit, pas ușor de uitat. Verificat direct pe date live: produse editate chiar în ultimele minute tot arătau „Alt furnizor" gol în bază — confirmă exact acest raport. Acum orice adăugare/ștergere de sursă se salvează IMEDIAT în bază, fără să mai fie nevoie de „Salvează produs" separat pentru ele (celelalte câmpuri din formular, dacă au și ele modificări nesalvate în același timp, rămân corect semnalate ca atare — nu se ascund din greșeală). Verificat cu 19 teste izolate (salvare instant pe produs existent, produs nou fără rând încă în bază, eroare de rețea nu pierde draftul local, alte câmpuri nesalvate rămân corect semnalate) + o scriere reală de test pe produsul #144 direct în Supabase, verificată și restaurată.',date:'2026-09-29'},
@@ -14753,14 +14754,23 @@ async function persistSupplierSourcesDraft(actionLabel){
     toast(`✓ ${actionLabel}`);
   }catch(e){console.error('[AltFurnizor] EROARE la salvare:',e);toast(`${actionLabel} local, dar nu s-a salvat în bază: `+(e.message||e)+' — apasă „Salvează produs”','err');}
 }
-async function addSupplierSource(){
-  console.log('[AltFurnizor] + Adaugă sursă apăsat');
+// Extras separat din addSupplierSource — cerut direct, raportat cu o captură de consolă reală: omul
+// completase Furnizor/Cod extern/Preț, dar apăsase direct „Salvează produs" (butonul mare, de jos),
+// fără click SEPARAT pe „+ Adaugă sursă" — fără de care nimic din acele câmpuri nu ajunge vreodată în
+// supplierSourcesDraft, deci nici în bază, oricât de multe ori s-ar apăsa „Salvează produs". Reutilizat
+// acum de AMBELE: butonul dedicat ȘI saveProd() (tăcut, `silentIfEmpty=true` — majoritatea salvărilor
+// n-au nimic de adăugat aici, nu trebuie avertizate pentru asta).
+function collectPendingSupplierSourceField(silentIfEmpty){
   const supplier=document.getElementById('f-alt-supplier')?.value.trim()||'',sku=document.getElementById('f-alt-sku')?.value.trim()||'',priceTTC=Math.max(0,Number(document.getElementById('f-alt-price')?.value)||0),url=document.getElementById('f-alt-url')?.value.trim()||'';
+  if(!supplier&&!sku&&!priceTTC&&!url){
+    if(!silentIfEmpty){console.warn('[AltFurnizor] validare eșuată — nimic completat');toast('Completează furnizorul, codul extern și prețul cu TVA','err');}
+    return false;
+  }
   console.log('[AltFurnizor] citit din formular:',{supplier,sku,priceTTC,url});
-  if(!supplier||!sku||!priceTTC){console.warn('[AltFurnizor] validare eșuată — lipsește furnizor/cod/preț');toast('Completează furnizorul, codul extern și prețul cu TVA','err');return;}
-  if(url&&!/^https?:\/\//i.test(url)){console.warn('[AltFurnizor] link invalid');toast('Linkul trebuie să înceapă cu http:// sau https://','err');return;}
-  if(supplierSourcesDraft.length>=5){console.warn('[AltFurnizor] limită de 5 surse atinsă');toast('Poți păstra maximum 5 surse alternative pe produs','err');return;}
-  if(supplierSourcesDraft.some(s=>String(s.supplier).toLowerCase()===supplier.toLowerCase()&&String(s.sku).toLowerCase()===sku.toLowerCase())){console.warn('[AltFurnizor] sursă deja există în draft');toast('Această sursă există deja','err');return;}
+  if(!supplier||!sku||!priceTTC){console.warn('[AltFurnizor] validare eșuată — lipsește furnizor/cod/preț');toast('„Alt furnizor" — completează furnizorul, codul extern și prețul cu TVA (sau golește câmpurile) — sursa nu a fost adăugată','err');return false;}
+  if(url&&!/^https?:\/\//i.test(url)){console.warn('[AltFurnizor] link invalid');toast('„Alt furnizor" — linkul trebuie să înceapă cu http:// sau https:// — sursa nu a fost adăugată','err');return false;}
+  if(supplierSourcesDraft.length>=5){console.warn('[AltFurnizor] limită de 5 surse atinsă');toast('Poți păstra maximum 5 surse alternative pe produs','err');return false;}
+  if(supplierSourcesDraft.some(s=>String(s.supplier).toLowerCase()===supplier.toLowerCase()&&String(s.sku).toLowerCase()===sku.toLowerCase())){console.log('[AltFurnizor] sursă deja există în draft, nimic nou de adăugat');return false;}
   // Avertisment — cerut direct („se trimite informația de la un produs la altul"): același cod extern,
   // de la același furnizor, introdus din greșeală pe DOUĂ produse diferite (ușor de întâmplat copiind
   // rapid dintr-o listă cu produse similare, ex. seturi de poker diferite) ar face ca „Adaugă produs cu
@@ -14770,12 +14780,18 @@ async function addSupplierSource(){
   const other=P.find(p=>p.id!==editId&&(p.supplierSources||[]).some(s=>String(s?.supplier||'').toLowerCase()===supplier.toLowerCase()&&String(s?.sku||'').toLowerCase()===skuKey));
   if(other){
     console.log('[AltFurnizor] conflict găsit cu produsul',other.id,other.name,'— arăt confirm()');
-    if(!confirm(`Codul „${sku}” de la „${supplier}” este deja folosit ca sursă alternativă pe alt produs: „${other.name}”. La import după acest cod, produsul găsit va fi ambiguu. Continui oricum?`)){console.log('[AltFurnizor] utilizator a ales Anulează la confirm — nimic salvat');return;}
+    if(!confirm(`Codul „${sku}” de la „${supplier}” este deja folosit ca sursă alternativă pe alt produs: „${other.name}”. La import după acest cod, produsul găsit va fi ambiguu. Continui oricum?`)){console.log('[AltFurnizor] utilizator a ales Anulează la confirm — nimic salvat');return false;}
   }
   supplierSourcesDraft.push({supplier,sku,priceTTC,url});
-  console.log('[AltFurnizor] adăugat în draft local, apelez persistSupplierSourcesDraft...');
+  console.log('[AltFurnizor] adăugat în draft local');
   ['f-alt-supplier','f-alt-sku','f-alt-price','f-alt-price-net','f-alt-url'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
   renderSupplierSources();
+  return true;
+}
+async function addSupplierSource(){
+  console.log('[AltFurnizor] + Adaugă sursă apăsat');
+  if(!collectPendingSupplierSourceField(false))return;
+  console.log('[AltFurnizor] apelez persistSupplierSourcesDraft...');
   await persistSupplierSourcesDraft('Sursă alternativă adăugată');
 }
 async function removeSupplierSource(idx){
@@ -14964,6 +14980,11 @@ function closeModal(force){
 
 async function saveProd(){
   if(savingProduct)return;
+  // „Alt furnizor" — cerut direct, raportat cu o captură de consolă reală: dacă au rămas valori
+  // completate, dar netrimise prin „+ Adaugă sursă" separat, le adăugăm acum, tăcut (silentIfEmpty),
+  // înainte de readProdFormData() — altfel „Salvează produs" le-ar ignora complet, fără nicio urmă,
+  // exact simptomul raportat („am completat, am salvat, la reîncărcare era gol").
+  collectPendingSupplierSourceField(true);
   const name=document.getElementById('f-name').value.trim();
   if(!name){document.getElementById('f-name').focus();return;}
   const existing=editId?P.find(p=>p.id===editId):null;
