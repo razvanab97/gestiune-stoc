@@ -18,12 +18,12 @@ Nu încărca doar `index.html`: funcțiile AI au nevoie și de folderul `api/` p
 ### Pasul 2: Configurează Supabase (OBLIGATORIU)
 
 Aplicația se conectează la Supabase deja configurat:
-- **Project URL**: `https://nuvgwytanlgvcffxeahs.supabase.co`
+- **Project URL**: `https://cbpavtvrfpkbaeueexlw.supabase.co`
 - **Anon Key**: (deja în cod)
 
 **⚠️ IMPORTANT:** Trebuie să rulezi SQL-ul pentru a crea tabelele!
 
-1. Mergi la [Supabase Dashboard](https://supabase.com/dashboard/project/nuvgwytanlgvcffxeahs)
+1. Mergi la [Supabase Dashboard](https://supabase.com/dashboard/project/cbpavtvrfpkbaeueexlw)
 2. Click pe **SQL Editor** (meniu stânga jos, iconița `</>`)
 3. Click **"+ New query"**
 4. Deschide fișierul `supabase_setup.sql`
@@ -75,7 +75,7 @@ Dacă vrei să folosești propriul proiect Supabase:
 1. Deschide `index.html` în editor text
 2. Caută rândurile:
 ```javascript
-const SUPA_URL='https://nuvgwytanlgvcffxeahs.supabase.co';
+const SUPA_URL='https://cbpavtvrfpkbaeueexlw.supabase.co';
 const SUPA_KEY='eyJhbGc...';
 ```
 3. Înlocuiește cu URL-ul și cheia ta (de la Supabase Dashboard → Settings → API)
