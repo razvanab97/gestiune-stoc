@@ -3772,6 +3772,7 @@ button.pcx-include-btn.included{border-color:var(--gr)}
     <div class="invx-foot-stats" id="inv-info">Adaugă produse pentru previzualizare</div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <button class="btn btn-sm" id="inv-checklist-btn" onclick="generateInvChecklist()" disabled title="Listă printabilă — poză, titlu și cantitate pentru fiecare produs, cu bifă goală, de trimis la depozit ca să verifice recepția mărfii">🖨️ Listă verificare</button>
+      <button class="btn btn-sm" id="invx-ai-btn" onclick="invAiMatchUnmatched()" style="display:none" title="Trimite la AI titlurile liniilor rămase nerezolvate, separat de potrivirea inițială — util când formatul facturii a împiedicat potrivirea automată dintâi. Sugestiile rămân neconfirmate, verifici manual fiecare înainte de import.">🤖 Potrivește restul cu AI</button>
       <button class="btn btn-sm" id="inv-mark-new-btn" onclick="markAllUnresolvedAsNew()" style="display:none" title="Liniile rămase nerezolvate nu au nicio potrivire în stoc (nici SKU, nici titlu asemănător) — le marchează pe toate ca produse noi dintr-un click, ca la butonul 🆕 de pe fiecare linie în parte">🆕 Marchează toate ca produse noi</button>
       <button class="btn btn-sm" id="inv-cancel-btn" onclick="closeInvoice()">Anulează</button>
       <button class="btn btn-sm btn-acc" id="inv-apply-btn" onclick="applyInvoice()" disabled>Importă în stoc</button>
@@ -3958,7 +3959,10 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
-  {n:500,text:'„Alt furnizor" — cauza reală găsită, cu ajutorul consolei trimise direct: câmpurile din formular (Furnizor/Cod extern/Preț) se completau, dar „Salvează produs" (butonul mare, de jos) se apăsa direct, FĂRĂ click separat, în prealabil, pe „+ Adaugă sursă" (cel mic, de sub câmpuri) — fără care nimic din ele nu ajungea vreodată în listă, deci nici în bază, oricât de multe ori s-ar fi apăsat „Salvează produs". Acum „Salvează produs" adaugă singur, tăcut, orice rămâne completat dar netrimis în „Alt furnizor" — nu se mai poate pierde din cauza asta. Pe drum, găsit și separat, din aceeași captură de consolă: coloana `price_buy_eur` lipsește din baza de date (migrare veche, nerulată încă) — degradare grațioasă deja funcțională (restul produsului se salvează normal), dar rulează o dată, ca avertismentul să dispară: `alter table produse add column if not exists price_buy_eur numeric(10,2) default 0;`. Verificat cu 6 teste izolate (completat dar neadăugat → salvat automat la Salvează produs, formular gol → tăcut, fără nimic de adăugat, parțial completat → avertisment clar, nu pierdere silențioasă).',date:'2026-09-29'},
+  {n:503,text:'„Alt furnizor" — cauza reală găsită, cu ajutorul consolei trimise direct: câmpurile din formular (Furnizor/Cod extern/Preț) se completau, dar „Salvează produs" (butonul mare, de jos) se apăsa direct, FĂRĂ click separat, în prealabil, pe „+ Adaugă sursă" (cel mic, de sub câmpuri) — fără care nimic din ele nu ajungea vreodată în listă, deci nici în bază, oricât de multe ori s-ar fi apăsat „Salvează produs". Acum „Salvează produs" adaugă singur, tăcut, orice rămâne completat dar netrimis în „Alt furnizor" — nu se mai poate pierde din cauza asta. Pe drum, găsit și separat, din aceeași captură de consolă: coloana `price_buy_eur` lipsește din baza de date (migrare veche, nerulată încă) — degradare grațioasă deja funcțională (restul produsului se salvează normal), dar rulează o dată, ca avertismentul să dispară: `alter table produse add column if not exists price_buy_eur numeric(10,2) default 0;`. Verificat cu 6 teste izolate (completat dar neadăugat → salvat automat la Salvează produs, formular gol → tăcut, fără nimic de adăugat, parțial completat → avertisment clar, nu pierdere silențioasă).',date:'2026-09-29'},
+  {n:502,text:'Importă factură — două completări cerute direct. (1) Buton nou „🤖 Potrivește restul cu AI", lângă „🆕 Marchează toate ca produse noi": pentru liniile rămase „⚠ alege produs" după potrivirea inițială (care rulează doar pe EAN/SKU exact + fuzzy pe nume, fără AI), trimite titlurile rămase la AI, separat — exact ca unealta identică deja existentă la Comenzi Platforme. Nicio sugestie nu se bifează/aplică automat, rămâne de verificat manual. (2) Coloana „SKU / Cod" e acum editabilă — dacă factura nu are un cod extern (arăta „—", needitabil), îl poți completa manual; dacă se potrivește exact cu un produs existent, linia se rezolvă imediat, fără AI.',date:'2026-09-29'},
+  {n:501,text:'Produse — cerut direct („sa nu se mai puna diacritice la produse"): nume, descriere, culori, mărimi, material și note se salvează acum fără diacritice (ă/â/î/ș/ț → a/a/i/s/t), indiferent de sursă — AI (Importă din link, Din screenshot, Importă factură, listare Research, Comandă furnizor, Compară catalog furnizor) sau tastat manual. Aplicat în două locuri: la fiecare completare automată din AI (vizibil imediat în formular, nu doar la salvare) ȘI încă o dată, garantat, la „Salvează produs" — indiferent pe unde a intrat textul. NU se aplică textului generat pentru anunțuri eMAG/Trendyol (Research/listing builder), unde diacriticele corecte contează pentru clienți.',date:'2026-09-29'},
+  {n:500,text:'„Alt furnizor" — bug real reparat, raportat direct („și furnizorul să se salveze, să-mi fie recomandat"): lista de sugestii pentru câmpul „Furnizor" se completa DOAR din furnizorul principal al fiecărui produs — un furnizor adăugat STRICT ca sursă alternativă (ex. „Importio.pl") nu apărea niciodată ca sugestie, oricâte produse l-ar fi folosit deja acolo. Acum include și sursele alternative, actualizată imediat la adăugarea unei surse noi, nu doar la redeschiderea unui produs. Verificat direct, live, cu produsul real din raportare (#98, sursă Importio.pl) — apare corect în listă.',date:'2026-09-29'},
   {n:499,text:'„Alt furnizor" — diagnosticare, raportat direct („tot nu merge, la reîncărcare se șterge, e clar că nu se salvează în Supabase"): verificat de 2 ori, cu un test real, complet, către baza de date live (nu simulare) — chiar fluxul exact (deschide produs → adaugă sursă → reîncarcă pagina → redeschide produs) funcționează corect, informația supraviețuiește reîncărcării. Cauza rămasă e deci în afara acestui cod, undeva ce nu se poate verifica de la distanță. Adăugate log-uri explicite în consolă (F12 → Console) la fiecare pas al „+ Adaugă sursă" — buton apăsat, valori citite din formular, motiv exact dacă o validare eșuează, cerere trimisă către bază, răspuns primit, eroare dacă apare una — ca pasul exact unde se oprește fluxul (la tine, în browser) să devină vizibil, în loc să rămână o presupunere.',date:'2026-09-29'},
   {n:498,text:'„Alt furnizor" — două completări, raportate/cerute direct pe drum, testând #497. (1) Bug real suplimentar reparat: la salvarea imediată a unei surse, dacă filtrul PATCH (id=eq.editId) nu potrivea niciun rând, Supabase răspunde 200 OK cu listă GOALĂ, nu eroare — codul arăta greșit „✓ salvat" local, fără să fi scris de fapt nimic în bază (exact simptomul raportat: „în continuare nu se salvează"). Acum verifică explicit — 0 rânduri modificate → eroare clară, nu succes fals. (2) Câmp nou „Preț fără TVA" lângă „Preț cu TVA" (cerut direct — „fa la fel 2 secțiuni, pentru atunci când e cu TVA sau fără TVA"), sincronizat bidirecțional pe cota de TVA a produsului, exact ca la prețul principal de achiziție — introduci pe oricare din cele două, celălalt se completează singur; se salvează în continuare strict prețul cu TVA (schema neschimbată). Verificat cu 23 de teste izolate (0-rânduri-modificate tratat corect ca eroare, conversie cu/fără TVA în ambele sensuri, TVA 0% — reverse charge, câmp gol nu produce NaN).',date:'2026-09-29'},
   {n:497,text:'Fix real, raportat direct („eu le adaug manual acum în alt furnizor, ca să se asocieze la factură — cum facem să se salveze și la manual"): „+ Adaugă sursă"/„×" din „Alt furnizor" modificau STRICT formularul deschis pe ecran — părea deja salvat (rândul apărea complet, cu buton „Folosește"), dar nimic nu ajungea de fapt în bază decât la apăsarea SEPARATĂ a „Salvează produs", de jos de tot — secțiune colapsată implicit, pas ușor de uitat. Verificat direct pe date live: produse editate chiar în ultimele minute tot arătau „Alt furnizor" gol în bază — confirmă exact acest raport. Acum orice adăugare/ștergere de sursă se salvează IMEDIAT în bază, fără să mai fie nevoie de „Salvează produs" separat pentru ele (celelalte câmpuri din formular, dacă au și ele modificări nesalvate în același timp, rămân corect semnalate ca atare — nu se ascund din greșeală). Verificat cu 19 teste izolate (salvare instant pe produs existent, produs nou fără rând încă în bază, eroare de rețea nu pierde draftul local, alte câmpuri nesalvate rămân corect semnalate) + o scriere reală de test pe produsul #144 direct în Supabase, verificată și restaurată.',date:'2026-09-29'},
@@ -7168,6 +7172,17 @@ const filterSyncPickDebounced=debounce(()=>filterSyncPick(),150);
 const filterMergePickDebounced=debounce(()=>filterMergePick(),150);
 const suggestSyncProductDebounced=debounce(()=>suggestSyncProduct(),220);
 function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+// Cerut direct — „sa nu se mai puna diacritice la produse": transliterare deterministă, nu o
+// instrucțiune către AI (AI-ul nu respectă mereu „fără diacritice" 100% din timp) — acoperă ambele
+// variante Unicode ale ș/ț (cu virgulă dedesubt, corectă, ȘI cu sedilă, mai veche/legacy), indiferent
+// de sursă (AI, tastat manual, lipit). Aplicată STRICT pe câmpurile interne ale produsului (nume,
+// descriere, culori, mărimi, material, note) — NU pe textul de anunț eMAG/Trendyol (Research/listing
+// builder), unde diacriticele corecte contează pentru clienți.
+function stripDiacritics(s){
+  if(!s)return s;
+  const map={'ă':'a','Ă':'A','â':'a','Â':'A','î':'i','Î':'I','ș':'s','Ș':'S','ş':'s','Ş':'S','ț':'t','Ț':'T','ţ':'t','Ţ':'T'};
+  return String(s).replace(/[ăĂâÂîÎșȘşŞțȚţŢ]/g,c=>map[c]);
+}
 function csvEsc(s){return String(s??'').replace(/"/g,'""');}
 function parseQtyVal(v,def=0){
   let s=String(v??'').trim().replace(',', '.');
@@ -7922,7 +7937,7 @@ Răspunde STRICT în formatul JSON:
 
     // Auto-fill fields if empty
     if(info.name&&!document.getElementById('f-name').value.trim()){
-      document.getElementById('f-name').value=info.name;
+      document.getElementById('f-name').value=stripDiacritics(info.name);
       suggestCatFromName();
     }
     if(info.sku_hint&&info.sku_hint!=='null'&&!document.getElementById('f-sku').value.trim()){
@@ -8041,7 +8056,7 @@ Răspunde STRICT cu JSON:
 
     // Auto-fill form fields
     if(productData.title){
-      document.getElementById('f-name').value=productData.title;
+      document.getElementById('f-name').value=stripDiacritics(productData.title);
       status.innerHTML=`<span style="color:var(--gr)">✓ Titlu: ${esc(productData.title)}</span>`;
     }
 
@@ -8089,7 +8104,7 @@ Răspunde STRICT cu JSON:
       suggestCatFromName();
     }
 
-    const setImported=(id,val)=>{if(val&&val!=='null')document.getElementById(id).value=val;};
+    const setImported=(id,val)=>{if(val&&val!=='null')document.getElementById(id).value=stripDiacritics(val);};
     setImported('f-material',productData.material);
     setImported('f-dims',productData.dimensions);
     setImported('f-colors',productData.colors);
@@ -8105,7 +8120,7 @@ Răspunde STRICT cu JSON:
       setImported('f-dims',specs['Dimensiuni']);
       setImported('f-colors',specs['Culoare']);
       if(listing.description){
-        document.getElementById('f-description').value=listing.description;
+        document.getElementById('f-description').value=stripDiacritics(listing.description);
         status.innerHTML+=`<br><span style="color:var(--gr)">✓ Descriere dezvoltată generată (${listing.description.length} caractere)</span>`;
       }
       if(!bestImg&&listing.main_image){
@@ -8212,7 +8227,7 @@ Răspunde STRICT cu JSON, fără text suplimentar, fără markdown:
     if(!jsonMatch)throw new Error('Nu am putut extrage datele din poză');
     const d=JSON.parse(jsonMatch[0]);
 
-    if(d.title){document.getElementById('f-name').value=d.title;status.innerHTML=`<span style="color:var(--gr)">✓ Titlu: ${esc(d.title)}</span>`;}
+    if(d.title){document.getElementById('f-name').value=stripDiacritics(d.title);status.innerHTML=`<span style="color:var(--gr)">✓ Titlu: ${esc(d.title)}</span>`;}
     else status.innerHTML='';
     if(d.sku&&d.sku!=='null'){document.getElementById('f-sku').value=d.sku;status.innerHTML+=`<br><span style="color:var(--gr)">✓ SKU: ${esc(d.sku)}</span>`;}
     if(d.supplier&&d.supplier!=='null')document.getElementById('f-sup').value=d.supplier;
@@ -8222,7 +8237,7 @@ Răspunde STRICT cu JSON, fără text suplimentar, fără markdown:
       if(cat)selectCat(cat);
       status.innerHTML+=`<br><span style="color:var(--gr)">✓ Categorie: ${esc(cat)}</span>`;
     }else if(d.title)suggestCatFromName();
-    const setImported=(id,val)=>{if(val&&val!=='null')document.getElementById(id).value=val;};
+    const setImported=(id,val)=>{if(val&&val!=='null')document.getElementById(id).value=stripDiacritics(val);};
     setImported('f-material',d.material);
     setImported('f-dims',d.dimensions);
     setImported('f-colors',d.colors);
@@ -13640,19 +13655,19 @@ function applyListingToProduct(){
   const proj=listingProjectId?researchProjects.find(p=>Number(p.id)===Number(listingProjectId)):null;
   openModal();
   setTimeout(()=>{
-    if(l.title)document.getElementById('f-name').value=l.title;
+    if(l.title)document.getElementById('f-name').value=stripDiacritics(l.title);
     const projImg=proj?(proj.cover_image||(proj.links||[]).find(x=>Array.isArray(x.images)&&x.images.length)?.images?.[0]):null;
     const img=l.main_image||(l.images||[])[0]||projImg||researchData?.img;
     if(img){document.getElementById('f-imgurl').value=img;onImgUrl();}
-    if(l.description)document.getElementById('f-description').value=l.description;
+    if(l.description)document.getElementById('f-description').value=stripDiacritics(l.description);
     // Galeria AI produs (dacă există) — imaginile APROBATE manual au prioritate, apoi restul din anunț.
     const approvedGallery=proj?galleryFor(proj.id).plan.filter(f=>f.approved&&f.url).map(f=>f.url):[];
     curImages=[...new Set([...approvedGallery,...(l.images||[])])].filter(u=>u&&u!==img).slice(0,10);
     renderImgGallery();
     const specs=l.specs||{};
-    if(specs.Material)document.getElementById('f-material').value=specs.Material;
+    if(specs.Material)document.getElementById('f-material').value=stripDiacritics(specs.Material);
     if(specs.Dimensiuni)document.getElementById('f-dims').value=specs.Dimensiuni;
-    if(specs.Culoare)document.getElementById('f-colors').value=specs.Culoare;
+    if(specs.Culoare)document.getElementById('f-colors').value=stripDiacritics(specs.Culoare);
     if(proj){
       if(proj.acquisition_price>0){document.getElementById('f-pbuy-ttc').value=Number(proj.acquisition_price).toFixed(2);syncAcqFields('ttc');}
       if(proj.supplier)document.getElementById('f-sup').value=proj.supplier;
@@ -14751,6 +14766,7 @@ async function persistSupplierSourcesDraft(actionLabel){
       const prevSnap=productEditorSnapshot?JSON.parse(productEditorSnapshot):readProdFormData();
       productEditorSnapshot=JSON.stringify({...prevSnap,supplierSources:sources});
     }catch(e){/* snapshot vechi invalid — nu blocăm salvarea reușită pentru atât */}
+    renderSupplierDatalist();
     toast(`✓ ${actionLabel}`);
   }catch(e){console.error('[AltFurnizor] EROARE la salvare:',e);toast(`${actionLabel} local, dar nu s-a salvat în bază: `+(e.message||e)+' — apasă „Salvează produs”','err');}
 }
@@ -14815,15 +14831,15 @@ function readProdFormData(){
   const oldCost=Number(existing?.priceBuyTTC)||0;
   const priceChanged=oldCost>0&&newCost>0&&Math.abs(oldCost-newCost)>=0.005;
   return{
-    name:document.getElementById('f-name').value.trim(),sku:document.getElementById('f-sku').value.trim(),ean:document.getElementById('f-ean').value.trim(),internalCode:existing?.internalCode||'',
+    name:stripDiacritics(document.getElementById('f-name').value.trim()),sku:document.getElementById('f-sku').value.trim(),ean:document.getElementById('f-ean').value.trim(),internalCode:existing?.internalCode||'',
     supplier:document.getElementById('f-sup').value.trim(),
-    colors:document.getElementById('f-colors').value.trim(),
-    sizes:document.getElementById('f-sizes').value.trim(),
-    material:document.getElementById('f-material').value.trim(),
+    colors:stripDiacritics(document.getElementById('f-colors').value.trim()),
+    sizes:stripDiacritics(document.getElementById('f-sizes').value.trim()),
+    material:stripDiacritics(document.getElementById('f-material').value.trim()),
     dims:document.getElementById('f-dims').value.trim(),
-    notes:document.getElementById('f-notes').value.trim(),
+    notes:stripDiacritics(document.getElementById('f-notes').value.trim()),
     supplierSources:supplierSourcesDraft.slice(0,5),
-    description:document.getElementById('f-description').value.trim(),
+    description:stripDiacritics(document.getElementById('f-description').value.trim()),
     images:curImages.slice(0,10),
     easyboxL:parseFloat(document.getElementById('f-eb-l').value)||0,
     easyboxW:parseFloat(document.getElementById('f-eb-w').value)||0,
@@ -19671,7 +19687,7 @@ function addProductFromMissing(id){
   const cand=PLIPSA.find(x=>x.id===id);if(!cand)return;
   pendingPlipsaCandidate=cand;
   openModal(null);
-  document.getElementById('f-name').value=cand.titluExtern.slice(0,240);
+  document.getElementById('f-name').value=stripDiacritics(cand.titluExtern.slice(0,240));
   toast('Completează prețul/stocul/poza, apoi Salvează — se leagă automat de listarea eMAG/Trendyol');
 }
 // „Compară catalog furnizor" (Raport stoc) — cerut direct: „vreau să comparăm sistemul nostru cu ce e
@@ -19750,7 +19766,7 @@ function renderCatalogScanResults(){
 function openAddProductFromCatalogScan(idx){
   const it=catalogScanResults[idx];if(!it)return;
   openModal(null);
-  document.getElementById('f-name').value=(it.name||'').slice(0,240);
+  document.getElementById('f-name').value=stripDiacritics((it.name||'').slice(0,240));
   if(it.image){showPrev(it.image);curImg=it.image;document.getElementById('f-imgurl').value=it.image;document.getElementById('ai-img-btn').disabled=false;}
   suggestCatFromName();
   toast('Completează prețul de achiziție și restul detaliilor, apoi Salvează');
@@ -19941,10 +19957,17 @@ function renderInvCatDatalist(){
 // furnizorii deja folosiți pe produse (P), nu o listă separată de întreținut; un furnizor nou tastat nu
 // are nevoie de „salvare" separată — devine el însuși o sugestie viitoare din momentul în care ajunge pe
 // vreun produs. Cei 3 din lista veche rămân mereu prezenți, ca punct de plecare, chiar și pe o bază goală.
+// Bug real, raportat direct („și furnizorul să se salveze, să-mi fie recomandat"): lista de sugestii
+// se completa DOAR din furnizorul principal al fiecărui produs — un furnizor adăugat STRICT ca „Alt
+// furnizor" (supplierSources, până la 5 pe produs) nu apărea niciodată aici, oricâte produse l-ar fi
+// folosit deja acolo. Acum include și sursele alternative, nu doar furnizorul principal.
 function renderSupplierDatalist(){
   const dl=document.getElementById('inv-supplier-list');if(!dl)return;
   const seen=new Set(['Jumbo','Maxy','Verk']);
-  P.forEach(p=>{if(p.supplier)seen.add(p.supplier);});
+  P.forEach(p=>{
+    if(p.supplier)seen.add(p.supplier);
+    (p.supplierSources||[]).forEach(s=>{if(s.supplier)seen.add(s.supplier);});
+  });
   dl.innerHTML=[...seen].sort((a,b)=>a.localeCompare(b,'ro')).map(s=>`<option value="${esc(s)}">`).join('');
 }
 
@@ -20597,7 +20620,7 @@ async function scApplyRow(i){
     closeSupplierCompare();
     openModal(null);
     setTimeout(()=>{
-      document.getElementById('f-name').value=newName||'';
+      document.getElementById('f-name').value=stripDiacritics(newName||'');
       document.getElementById('f-sup').value=furnizor;
       document.getElementById('f-pbuy-ttc').value=ron.toFixed(2);
       syncAcqFields('ttc');
@@ -22222,6 +22245,62 @@ function pickInvNewProduct(){
 // manuală rămâne (nimic nu se creează fără click, exact ca la #134), dar un click bulk economisește
 // confirmarea line-by-line pentru facturi cu multe produse noi deodată. Exclude explicit liniile
 // „onlyExisting" (mod care interzice explicit crearea de produse noi pentru linia respectivă).
+// „🤖 Potrivește restul cu AI" — cerut direct, pentru liniile rămase „⚠ alege produs" după potrivirea
+// inițială (care rulează DOAR pe EAN/SKU exact + fuzzy pe nume, fără AI). Aceeași logică deja folosită
+// la Comenzi Platforme (pcomAiMatchUnmatched) — trimite titlurile rămase + lista de inventar la AI, dar
+// NU bifează automat nimic: o sugestie greșită aici ar crea/actualiza produsul greșit la „Importă în
+// stoc", mai grav decât o linie rămasă nerezolvată. Omul confirmă manual fiecare sugestie.
+async function invAiMatchUnmatched(){
+  const idxs=invParsed.map((x,i)=>i).filter(i=>!invParsed[i].produsId&&!invParsed[i].newProduct&&!invParsed[i].onlyExisting);
+  if(!idxs.length){toast('Nu mai sunt linii nepotrivite','err');return;}
+  const btn=document.getElementById('invx-ai-btn');
+  if(btn)btn.disabled=true;
+  const prodList=P.filter(p=>!p.archived).map(p=>`${p.id}: ${p.name}`).join('\n');
+  const batchSize=25;
+  let matched=0;
+  try{
+    for(let b=0;b<idxs.length;b+=batchSize){
+      const batchIdxs=idxs.slice(b,b+batchSize);
+      if(btn)btn.textContent=`🤖 Se potrivesc ${b+1}-${Math.min(b+batchSize,idxs.length)} din ${idxs.length}…`;
+      const linesText=batchIdxs.map(i=>`${i}: ${invParsed[i].name||invParsed[i].sku||''}`).join('\n');
+      const prompt=`Ai o listă de produse din inventar (id: nume) și o listă de titluri de produse de pe o factură de la furnizor
+(unele pot fi în altă limbă — tradu-le mental în română ca să le poți compara). Pentru fiecare titlu,
+găsește produsul corespunzător din inventar DOAR dacă ești cu adevărat încrezător că e același produs.
+Un răspuns greșit e mai rău decât niciun răspuns — nu ghici un produs doar ca să completezi câmpul;
+dacă nu ești sigur sau nu găsești nimic clar asemănător, răspunde null.
+
+PRODUSE INVENTAR:
+${prodList}
+
+TITLURI FACTURĂ (index: titlu):
+${linesText}
+
+Răspunde STRICT cu JSON, fără markdown: {"matches":[{"index":<indexul liniei>,"produsId":<id din inventar sau null>}]}`;
+      const resp=await callAI([{role:'user',content:prompt}],'Ești expert în potrivirea denumirilor de produse multilingve. Răspunzi DOAR cu JSON valid.',2500,'analysis');
+      const objMatch=resp.match(/\{[\s\S]*\}/);
+      if(!objMatch)continue;
+      let parsed;try{parsed=JSON.parse(objMatch[0]);}catch(e){continue;}
+      if(!Array.isArray(parsed.matches))continue;
+      parsed.matches.forEach(m=>{
+        const i=Number(m.index);
+        if(!invParsed[i]||m.produsId==null)return;
+        const pid=Number(m.produsId);
+        const prod=P.find(p=>p.id===pid);if(!prod)return;
+        // sugestie AI — nu se bifează/aplică automat. `_match` se recalculează oricum la fiecare
+        // renderInvPreview (findExistingProduct pe numele curent) — nu-l mai setăm manual aici, ar fi
+        // suprascris imediat; eticheta arată „ales manual" sau „nume X%", după caz, ambele corecte.
+        invParsed[i].produsId=pid;
+        matched++;
+      });
+    }
+    renderInvPreview();
+    toast(`AI a găsit sugestii pentru ${matched} din ${idxs.length} linii — verifică-le înainte de „Importă în stoc"`);
+  }catch(err){
+    toast('Eroare AI: '+(err.message||err),'err');
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='🤖 Potrivește restul cu AI';}
+  }
+}
 function markAllUnresolvedAsNew(){
   const idxs=invParsed.map((it,i)=>i).filter(i=>!invParsed[i].produsId&&!invParsed[i].newProduct&&!invParsed[i].onlyExisting);
   if(!idxs.length){toast('Nu mai există linii nerezolvate','err');return;}
@@ -22355,7 +22434,7 @@ function invxRowHtml(idx){
   // afișat mereu ca sumă (produs + transport), ca să se vadă exact ce se scrie ca priceBuyTTC la aplicare.
   const shippingLine=landedCost!==item.costRon?`<div class="invx-price-ron">${item.costRon.toFixed(2)} produs + ${(landedCost-item.costRon).toFixed(2)} transport</div>`:'';
   const col1=`<div class="invx-col invx-prod"><div>${rowImg}</div><div style="min-width:0"><div class="invx-prod-nm">${esc(nm)}</div><div class="invx-prod-tags">${tag}</div>${stockInfo}${extremeWarn}${aiWarnLines}${newProdForm}</div></div>`;
-  const col2=`<div class="invx-col"><div class="invx-col-lbl">SKU / Cod</div><div class="invx-code">${item.sku?esc(item.sku):'—'}</div>${item.ean?`<div class="invx-code" title="EAN — folosit prioritar la potrivire">EAN ${esc(item.ean)}</div>`:''}</div>`;
+  const col2=`<div class="invx-col"><div class="invx-col-lbl">SKU / Cod</div><input type="text" class="invx-price-input" style="font-family:var(--mono)" value="${esc(item.sku||'')}" placeholder="cod manual" onchange="setInvSku(${idx},this.value)" title="Codul extern al produsului — completează manual dacă lipsește din factură, ajută la potrivirea cu un produs existent">${item.ean?`<div class="invx-code" title="EAN — folosit prioritar la potrivire">EAN ${esc(item.ean)}</div>`:''}</div>`;
   const col3=`<div class="invx-col"><div class="invx-col-lbl">Cantitate</div><div class="invx-qty-step"><button type="button" onclick="adjustInvQty(${idx},-1)" title="Scade cantitatea">−</button><input type="number" min="1" step="1" value="${item.qty}" onchange="setInvQty(${idx},this.value)" title="Cantitatea comandată"><button type="button" onclick="adjustInvQty(${idx},1)" title="Crește cantitatea">+</button></div></div>`;
   const col4=`<div class="invx-col"><div class="invx-col-lbl">Buc./set</div><div class="invx-pieces" title="${item.piecesPerUnit>1?totalPieces+' piese fizice în total ('+item.qty+' × '+item.piecesPerUnit+')':'1 piesă per exemplar comandat'}">${item.piecesPerUnit>1?item.piecesPerUnit+' → '+totalPieces+' buc.':'—'}</div></div>`;
   const col5=`<div class="invx-col"><div class="invx-col-lbl">Preț unitar original</div><input type="number" min="0" step="0.01" class="invx-price-input" value="${item.priceBuy.toFixed(2)}" onchange="setInvUnitPriceOriginal(${idx},this.value)" title="Preț pe exemplar comandat, în moneda facturii">${item.currency==='EUR'?'<div class="invx-price-ron">EUR</div>':''}${item.calculatedFromTotal?'<div class="invx-calc-badge">Calculat din total ÷ cantitate</div>':''}</div>`;
@@ -22382,6 +22461,19 @@ function setInvUnitPriceOriginal(idx,val){
   item.priceBuy=Math.max(0,Number(val)||0);
   item.costRon=item.currency==='EUR'?Math.round(item.priceBuy*EUR_RON*100)/100:item.priceBuy;
   item.calculatedFromTotal=false;
+  setTimeout(renderInvPreview,0);
+}
+// Codul extern nu apare pe orice factură (cerut direct — „aici nu avem cod extern, sa ni se permita sa
+// adaugam codul manual"). Introdus manual, poate rezolva singur o potrivire pe care titlul n-a reușit-o
+// (EAN/SKU exact au prioritate față de fuzzy pe nume în findExistingProduct) — reîncercăm automat DOAR
+// dacă linia nu are deja un produs ales (nu suprascriem o alegere explicită a omului).
+function setInvSku(idx,val){
+  const item=invParsed[idx];if(!item)return;
+  item.sku=String(val||'').trim();
+  if(!item.produsId&&!item.newProduct&&item.sku){
+    const match=findExistingProduct({ean:item.ean,sku:item.sku,name:item.name});
+    if(match){item.produsId=match.product.id;item._match=match;item.onlyExisting=false;}
+  }
   setTimeout(renderInvPreview,0);
 }
 function removeInvParsedLine(idx){
@@ -22453,6 +22545,8 @@ function renderInvPreview(){
   document.getElementById('inv-info').innerHTML=`<span>${invParsed.length} produse</span><span><strong>${fmtQty(totalUnits)}</strong> unități comandate</span><span><strong>${fmtQty(totalPieces)}</strong> articole fizice</span><span class="invx-foot-total">${totalEstimatRon.toFixed(2)} RON</span>${missC?`<span style="color:var(--rd)">${missC} coduri negăsite</span>`:''}${unresolvedC?`<span style="color:var(--rd)">⚠ ${unresolvedC} fără produs ales</span>`:''}${receiptC?`<span>${fmtQty(receiptQty)} buc. recepționate din pe drum</span>`:''}`;
   const markNewBtn=document.getElementById('inv-mark-new-btn');
   if(markNewBtn)markNewBtn.style.display=unresolvedC?'':'none';
+  const aiBtn=document.getElementById('invx-ai-btn');
+  if(aiBtn)aiBtn.style.display=unresolvedC?'':'none';
   document.getElementById('inv-apply-btn').disabled=false;
   document.getElementById('inv-checklist-btn').disabled=false;
   updateInvxStatus();
