@@ -428,6 +428,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:425,date:'30.09.2026',text:'Feature — cerut direct: „să apară comenzile în ordinea din admin — întâi eMAG, apoi Trendyol și apoi Vinted, să nu se mai încurce între ele". Coada de împachetare (și navigarea Anterioară/Următoare) se ordonează acum întâi după platformă — eMAG, apoi Trendyol, apoi Vinted, la fel ca în admin (Comenzi Platforme → Importă) — iar în interiorul aceleiași platforme rămâne ordinea de dinainte, după data/ora comenzii. Vânzările directe (fără platformă de marketplace) rămân ultimele.'},
   {n:424,date:'29.09.2026',text:'Feature — cerut direct: „la căutare, să se poată căuta mult mai ușor — ultimele 4 cifre din AWB, primele 2-3 litere din numele clientului, sau firma de curierat (ex. DPD)". Căutarea (📋 tab Căutare) e acum diacritice-insensibilă (Gheorghiță = gheorghita), caută și după numele curierului (nou — nu era verificat deloc înainte) și după platformă (eMAG/Trendyol/Vinted). Rezultatele sunt SORTATE după relevanță (potrivire exactă sau la început de text înaintea unei potriviri oarecare în mijloc), iar la egalitate, cele mai recente primele. Cardul din rezultate arată acum și numele clientului (lipsea complet) și curierul lângă AWB, ca să confirmi rapid că ai găsit comanda corectă.'},
   {n:423,date:'29.09.2026',text:'Feature — cerut direct: „la fel ca butonul Reîncarcă din Staff, să avem și-n admin, ca staff-ul să vadă în timp real ce lucrăm noi". Admin are acum un buton „📤" care trimite un semnal — Staff îl verifică din fundal, la fiecare 6 secunde, și arată o bulină portocalie pulsatorie lângă „↻ Reîncarcă" când admin a trimis ceva nou. Reîncărcarea rămâne STRICT manuală — bulina e doar un indiciu că e ceva nou de adus, nu retrage lista singură de sub degetul celui care împachetează (exact decizia deliberată de la #421/#422). Dispare când apeși „↻ Reîncarcă".'},
   {n:422,date:'29.09.2026',text:'Fix urgent — regresie gravă din #421, raportată direct („ai dat de tot peste cap sistemul"): extinderea cozii active (fără limită de vechime pentru neîmpachetat/blocat) era corectă pentru comenzile eMAG/Trendyol (doar 18 rânduri neîmpachetate în total, toate recente, verificat live), dar Jurnalul (vânzări directe) avea 717 rânduri neîmpachetate ISTORIC, până în iunie 2026 — „impachetat" nu e un câmp întreținut consecvent acolo. Jurnalul a revenit strict la fereastra de dată (ca înainte de #421). Comenzile eMAG/Trendyol au primit, preventiv, o limită de 14 zile — nu schimbă nimic azi (curat), dar previne aceeași regresie pe viitor.'},
@@ -467,6 +468,11 @@ let lockHeartbeatTimer=null,lockHeartbeatKey=null;
 
 function findProdus(id){return id?PRODUSE.find(p=>p.id===id):null;}
 
+// Ordinea cerută direct pentru coada Staff — identică cu ordinea din admin (Comenzi Platforme →
+// Importă: eMAG, Trendyol, Vinted). „direct" (vânzare directă, fără platformă de marketplace) rămâne
+// ultima, prin fallback-ul ??9 de la locul de folosire — nu apare deloc în selectorul din admin.
+const PLATFORM_ORDER={emag:0,trendyol:1,vinted:2};
+
 function computeOrders(){
   const groups={};
   COMENZI.forEach(o=>{
@@ -501,7 +507,14 @@ function computeOrders(){
     groups['j'+j.id]={key:'j'+j.id,comandaId:'',platforma:'direct',clientNume:'',data:j.data,sortAt:j.created_at||j.data,lines:[line]};
   });
 
-  ORDERS=Object.values(groups).sort((a,b)=>String(a.sortAt).localeCompare(String(b.sortAt))||a.key.localeCompare(b.key));
+  // Cerut direct — „să apară comenzile în ordinea din admin: întâi eMAG, apoi Trendyol și apoi Vinted,
+  // să nu se mai încurce între ele": înainte, coada se ordona STRICT după sortAt (data/ora comenzii),
+  // amestecând platformele — o comandă Trendyol mai veche putea apărea între două comenzi eMAG, greu
+  // de urmărit când lucrezi pe rând, pe platforme. Acum platforma e criteriul PRIMAR (aceeași ordine ca
+  // în selectorul din admin, Comenzi Platforme → Importă: eMAG, Trendyol, Vinted), iar data/ora rămâne
+  // criteriul secundar, ca înainte, DOAR între comenzi de pe aceeași platformă. Vânzările directe
+  // (fără platformă de marketplace) rămân ultimele — nu apar în selectorul din admin.
+  ORDERS=Object.values(groups).sort((a,b)=>(PLATFORM_ORDER[a.platforma]??9)-(PLATFORM_ORDER[b.platforma]??9)||String(a.sortAt).localeCompare(String(b.sortAt))||a.key.localeCompare(b.key));
   ORDERS.forEach(g=>{
     g.allDone=g.lines.every(l=>l.impachetat||l.staff_blocked);
     g.hasUnresolvedIssue=g.lines.some(l=>l.staff_blocked&&!l.staff_issue_resolved);
