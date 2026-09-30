@@ -3959,6 +3959,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:504,text:'Comenzi Platforme → Expediere, secțiune nouă „IP conector (pentru whitelist eMAG)" — cerut direct: „observ că se tot schimbă IP-ul, să avem o secțiune unde îl putem verifica în timp real și să apăsăm butonul copy". eMAG (RO/BG/HU) respinge cererile venite de pe un IP neautorizat („Invalid vendor ip [X]") — la o rețea rezidențială, IP-ul se schimbă periodic, iar whitelist-ul din panoul eMAG trebuie actualizat manual, din nou, de fiecare dată. Buton „🔄 Verifică IP" — interoghează Conectorul local de pe Mac (nu browserul), care la rândul lui întreabă un serviciu extern (ipify, cu rezervă ipinfo.io) — exact IP-ul pe care îl vede eMAG la cererile reale. Buton „📋 Copiază" apare imediat lângă rezultat, gata de lipit în whitelist-ul eMAG. Necesită Conectorul local ACTUALIZAT (rulează `git pull` în folderul gestiune-stoc de pe Mac, apoi `launchctl kickstart -k gui/$(id -u)/ro.abhomes.emag-local-connector` ca să preia codul nou, fără să repornești tot Mac-ul) — până atunci, butonul arată „Rută necunoscută”, fără să afecteze restul funcțiilor conectorului. Verificat direct, live: IP-ul detectat de funcția nouă a fost identic, cifră cu cifră, cu cel din eroarea eMAG raportată.',date:'2026-09-29'},
   {n:503,text:'„Alt furnizor" — cauza reală găsită, cu ajutorul consolei trimise direct: câmpurile din formular (Furnizor/Cod extern/Preț) se completau, dar „Salvează produs" (butonul mare, de jos) se apăsa direct, FĂRĂ click separat, în prealabil, pe „+ Adaugă sursă" (cel mic, de sub câmpuri) — fără care nimic din ele nu ajungea vreodată în listă, deci nici în bază, oricât de multe ori s-ar fi apăsat „Salvează produs". Acum „Salvează produs" adaugă singur, tăcut, orice rămâne completat dar netrimis în „Alt furnizor" — nu se mai poate pierde din cauza asta. Pe drum, găsit și separat, din aceeași captură de consolă: coloana `price_buy_eur` lipsește din baza de date (migrare veche, nerulată încă) — degradare grațioasă deja funcțională (restul produsului se salvează normal), dar rulează o dată, ca avertismentul să dispară: `alter table produse add column if not exists price_buy_eur numeric(10,2) default 0;`. Verificat cu 6 teste izolate (completat dar neadăugat → salvat automat la Salvează produs, formular gol → tăcut, fără nimic de adăugat, parțial completat → avertisment clar, nu pierdere silențioasă).',date:'2026-09-29'},
   {n:502,text:'Importă factură — două completări cerute direct. (1) Buton nou „🤖 Potrivește restul cu AI", lângă „🆕 Marchează toate ca produse noi": pentru liniile rămase „⚠ alege produs" după potrivirea inițială (care rulează doar pe EAN/SKU exact + fuzzy pe nume, fără AI), trimite titlurile rămase la AI, separat — exact ca unealta identică deja existentă la Comenzi Platforme. Nicio sugestie nu se bifează/aplică automat, rămâne de verificat manual. (2) Coloana „SKU / Cod" e acum editabilă — dacă factura nu are un cod extern (arăta „—", needitabil), îl poți completa manual; dacă se potrivește exact cu un produs existent, linia se rezolvă imediat, fără AI.',date:'2026-09-29'},
   {n:501,text:'Produse — cerut direct („sa nu se mai puna diacritice la produse"): nume, descriere, culori, mărimi, material și note se salvează acum fără diacritice (ă/â/î/ș/ț → a/a/i/s/t), indiferent de sursă — AI (Importă din link, Din screenshot, Importă factură, listare Research, Comandă furnizor, Compară catalog furnizor) sau tastat manual. Aplicat în două locuri: la fiecare completare automată din AI (vizibil imediat în formular, nu doar la salvare) ȘI încă o dată, garantat, la „Salvează produs" — indiferent pe unde a intrat textul. NU se aplică textului generat pentru anunțuri eMAG/Trendyol (Research/listing builder), unde diacriticele corecte contează pentru clienți.',date:'2026-09-29'},
@@ -17117,6 +17118,29 @@ async function issueEmagAwb(){
   }
   if(btn){btn.disabled=false;btn.textContent='Emite AWB';}
 }
+// IP public al Conectorului local — cerut direct („se tot schimbă IP-ul, o secțiune unde-l putem
+// verifica în timp real și să apăsăm butonul copy"): eMAG (RO/BG/HU) respinge cererile venite de pe
+// un IP neautorizat ("Invalid vendor ip [X]") — la o rețea rezidențială, IP-ul se schimbă periodic
+// (reconectare/reset router), iar whitelist-ul din panoul eMAG trebuie actualizat manual, din nou, de
+// fiecare dată. La cerere (buton), nu automat — interoghează Conectorul local (rulează chiar pe Mac-ul
+// care face cererile către eMAG), care la rândul lui întreabă un serviciu extern (ipify, cu rezervă
+// ipinfo.io) — exact IP-ul pe care îl vede eMAG, nu IP-ul browserului sau al routerului altui dispozitiv.
+async function checkEmagLocalIp(){
+  const el=document.getElementById('pcx-emag-ip-value'),btn=document.getElementById('pcx-emag-ip-check-btn'),copyBtn=document.getElementById('pcx-emag-ip-copy-btn');
+  if(!el)return;
+  el.textContent='Se verifică…';
+  if(copyBtn)copyBtn.style.display='none';
+  if(btn){btn.disabled=true;btn.textContent='Se verifică…';}
+  try{
+    const data=await localEmagJson('/public-ip',{},15000);
+    el.textContent=data.ip||'—';
+    if(data.ip&&copyBtn)copyBtn.style.display='';
+  }catch(e){
+    el.textContent='—';
+    toast('Nu am putut verifica IP-ul: '+(e.message||e),'err');
+  }
+  if(btn){btn.disabled=false;btn.textContent='🔄 Verifică IP';}
+}
 function pcomPickBtnHtml(idx){
   const it=pcImpParsed[idx];
   if(it.newProduct)return`<button type="button" class="smi-pick-btn" style="border-color:var(--or);color:var(--or)" onclick="openPcomPick(event,${idx})"><div class="smi-pick-th-ph">🆕</div><span class="smi-pick-nm">Produs nou — de adăugat</span><span class="smi-pick-car">▾</span></button>`;
@@ -18858,7 +18882,19 @@ function renderPcomRedesign(){
         <div class="pcx-shipping-grid">
           <section class="pcx-shipping-module"><h3>A. Asociază AWB-uri existente</h3><p>Încarcă PDF-uri de la FAN Courier, Trendyol sau alți curieri. Fișierele procesate din dosarul Mac rămân protejate împotriva recitirii.</p><div class="pcx-dropzone" onclick="document.getElementById('pcmi-awb-file').click()"><span class="ic">📮</span>Alege PDF-uri cu etichete AWB<span class="sub">Poți selecta mai multe PDF-uri deodată</span></div><div class="pcx-shipping-actions"><button type="button" class="btn btn-sm" id="pcx-awb-folder-btn" onclick="readAwbFolderPdfs()">📂 Citește din dosarul AWB-uri de pe Mac</button><button type="button" class="btn btn-sm" id="pcx-awb-print-btn" onclick="downloadActiveAwbPdf()">🖨️ PDF AWB comenzi incluse</button><button type="button" class="btn btn-sm" onclick="retrySavedAwbErrors()">↻ Reîncearcă erorile</button></div><div id="pcx-awb-parsing-slot"></div><div id="pcx-awb-preview-slot"></div><div id="pcx-awb-foot-slot" style="display:flex;justify-content:flex-end;margin-top:10px"></div></section>
           <section class="pcx-shipping-module"><h3>B. Generează etichetă GLS — Vinted</h3><p>Generează PDF-ul pentru comenzile Vinted expediate prin punct de depunere GLS.</p><div id="pcx-gls-label-slot"></div></section>
-          <section class="pcx-shipping-module"><h3>C. eMAG — Trimite AWB</h3><p>Emite direct o etichetă eMAG pentru o comandă confirmată.</p><div class="pcx-emag-awb-fields"><div class="pcx-fld"><label>Număr comandă</label><input id="pcx-emag-awb-order" inputmode="numeric" placeholder="ex. 123456789"></div><div class="pcx-fld"><label>Kg</label><input id="pcx-emag-awb-weight" type="number" min="0.01" step="0.01" value="1"></div><div class="pcx-fld"><label>Colete</label><input id="pcx-emag-awb-parcels" type="number" min="1" step="1" value="1"></div><button type="button" class="pcx-btn pcx-btn-primary" id="pcx-emag-awb-btn" onclick="issueEmagAwb()">Trimite AWB prin eMAG</button></div></section>
+          <section class="pcx-shipping-module"><h3>C. eMAG — Trimite AWB</h3><p>Emite direct o etichetă eMAG pentru o comandă confirmată.</p><div class="pcx-emag-awb-fields"><div class="pcx-fld"><label>Număr comandă</label><input id="pcx-emag-awb-order" inputmode="numeric" placeholder="ex. 123456789"></div><div class="pcx-fld"><label>Kg</label><input id="pcx-emag-awb-weight" type="number" min="0.01" step="0.01" value="1"></div><div class="pcx-fld"><label>Colete</label><input id="pcx-emag-awb-parcels" type="number" min="1" step="1" value="1"></div><button type="button" class="pcx-btn pcx-btn-primary" id="pcx-emag-awb-btn" onclick="issueEmagAwb()">Trimite AWB prin eMAG</button></div>
+          <!-- IP public al conectorului (cerut direct — „se tot schimbă IP-ul, o secțiune unde-l putem
+          verifica în timp real și să apăsăm butonul copy"): eMAG (RO/BG/HU) respinge cererile venite
+          de pe un IP neautorizat ("Invalid vendor ip [X]") — IP-ul de-acasă se schimbă periodic, iar
+          whitelist-ul din panoul eMAG trebuie actualizat manual, de fiecare dată. Verificare la cerere
+          (nu automată la fiecare încărcare) — interoghează un serviciu extern prin Conectorul local,
+          exact IP-ul pe care îl vede eMAG la cererile pornite de pe acest Mac, nu IP-ul browserului. -->
+          <div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:15px;padding-top:10px;border-top:1px solid var(--b1)">
+            <span style="color:var(--t3)">IP conector (pentru whitelist eMAG):</span>
+            <b id="pcx-emag-ip-value" style="font-family:var(--mono)">—</b>
+            <button type="button" class="btn btn-sm" id="pcx-emag-ip-check-btn" onclick="checkEmagLocalIp()">🔄 Verifică IP</button>
+            <button type="button" class="btn btn-sm" id="pcx-emag-ip-copy-btn" style="display:none" onclick="copyText(document.getElementById('pcx-emag-ip-value').textContent)">📋 Copiază</button>
+          </div></section>
         </div>
       </div>
       <div class="pcx-card pcx-card-preview">
