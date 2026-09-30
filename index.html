@@ -3965,6 +3965,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:508,text:'Comenzi Platforme — bug real reparat, raportat direct pe o comandă reală (Securetronix, AWB 4EMGLN189160615001, comanda eMAG #527247549 — „de ce nu apare AWB-ul?", plus „13+8 AWB-uri, doar 20 de comenzi"): când o etichetă AWB e citită din dosar pentru o comandă care nu există încă local, sistemul o caută direct pe eMAG după număr (indiferent de status) și o aduce automat — dar dacă produsul de pe ea nu se potrivea SIGUR cu unul intern (fără viaPnk/viaTitle/viaCode), linia rămânea „Neinclus", NECOMISĂ în bază — iar eticheta sursă era totuși arhivată din Desktop/AWB-uri ca „procesată cu succes". AWB-ul exista atunci DOAR în memoria browserului, pierdut definitiv la reîncărcarea paginii; comanda apărea mai târziu, adusă separat prin importul normal, de data asta fără AWB, cu eticheta sursă deja dispărută, fără nicio cale de recuperare. Acum se arhivează STRICT etichetele care au ajuns chiar scrise în bază — cele găsite dar neconfirmate rămân vizibile în previzualizare, cu mesaj distinct („comandă găsită, dar produsul nu s-a potrivit automat"), AWB-ul deja completat, gata de un „✓ Inclus" manual, iar fișierul rămâne în Desktop/AWB-uri, gata de reîncercat. Corectată direct și comanda reală raportată. Verificat cu 3 scenarii izolate, rulate de 2 ori pe funcția reală extrasă din cod (comis normal neschimbat, găsit-dar-nepotrivit acum reținut fără arhivare, negăsit deloc neschimbat).',date:'2026-09-30'},
   {n:507,text:'Fișa produsului — poza principală, cerut direct: „aici, când apas pe poză, să se facă mare". Click pe poza deja încărcată deschide acum o fereastră mare, peste tot ecranul (închidere cu click pe fundal sau Escape) — înainte, click pe poză deschidea direct selectorul de fișiere (zona pozei are un input de fișier invizibil pe toată suprafața, ca să poți schimba poza dintr-un click); acum acel comportament rămâne valabil doar când NU există încă o poză — o dată ce poza e afișată, click pe ea mărește, schimbarea pozei rămâne posibilă separat (📋 lipește, ✕ șterge, câmpul de URL). Fereastra de zoom e generică (openImgZoom), reutilizabilă și în altă parte, dacă mai e nevoie. Verificat cu 4 teste izolate (deschidere cu src corect, închidere, src gol nu deschide nimic).',date:'2026-09-30'},
   {n:506,text:'Continuare directă la #505 (cantitatea din titlu), găsit verificând comanda reală raportată: linia era deja COMISĂ (confirmare instant, vizibilă în Staff) ÎNAINTE ca „Titlul sugerează…" să fie apăsat — corecția de cantitate/preț rămânea STRICT în previzualizarea locală, niciodată scrisă peste rândul deja existent din platforma_comenzi. profit_estimat/marja_estimata (folosite direct în Profit vânzări/Raport/Dashboard, nu doar în preview) rămâneau ÎNGHEȚATE la valoarea calculată cu cantitatea/prețul VECHI. Acum „Aplică" (și editarea manuală a cantității, din stepper) resincronizează complet o linie deja comisă — cantitate, preț ȘI profit/marjă recalculate, scrise direct în bază, nu doar cantitatea ca până acum. Corectată direct și comanda reală raportată (Robert Caracas, Trendyol, AWB 5043265767): profit_estimat 125,98→26,51 RON, marja_estimata 60,22%→12,67% — valorile corecte, verificate matematic cu motorul real de calcul al aplicației, nu estimate. Verificat cu 13 teste izolate suplimentare (linie deja comisă resincronizată complet, stoc deja scăzut rămâne blocat corect, cantitate schimbată manual tot recalculează profitul, chiar fără schimbare de preț).',date:'2026-09-30'},
   {n:505,text:'Comenzi Platforme — bug real reparat, raportat direct pe o comandă reală (titlu „Set 6 stații radio portabile", potrivit cu produsul intern „Statie radio 2x BF888S" — cantitate corectată de la 1 la 3 cu 💡 „Titlul sugerează…", dar profitul afișat ieșea +377.95 RON pe o vânzare de 297.79 RON — profit mai mare decât vânzarea, imposibil economic): butonul „Aplică" de la sugestia de cantitate schimba DOAR cantitatea, niciodată prețul liniei — acesta reprezenta banii plătiți pentru cantitatea VECHE (întregul pachet de 6, cumpărat ca „1 listare"), dar restul calculului (profit, marjă, comparație cu prețul minim, ȘI scrierea reală în bază la comitere) tratează prețul liniei ca preț PE BUCATA internă — rezultat: numărat dublu, o dată prin prețul rămas „pentru tot pachetul" tratat greșit ca preț unitar, a doua oară prin înmulțirea profitului (deja umflat) cu noua cantitate. Acum „Aplică" împarte și prețul liniei cu același raport cu care înmulțește cantitatea — banii totali plătiți rămân identici, doar reîmpărțiți corect pe bucățile fizice reale, ca „la 3 produse" să însemne chiar 3 produse peste tot în calcul (preview ȘI ce se scrie definitiv în platforma_comenzi la comitere), nu doar la stocul scăzut. Scopat strict la acest buton — ajustarea manuală a cantității din stepper rămâne neschimbată, cu semnificația ei separată. Verificat cu 8 teste izolate (numerele exacte din raportare, banii totali păstrați după împărțire, raport 1:1 fără efect, cantitate inițială 0 tratată defensiv).',date:'2026-09-30'},
@@ -17009,11 +17010,11 @@ async function importEmagApiOrders(silent=false){
 // status (rută nouă /order-by-id pe conectorul local), și o adaugă ca linie nouă de import, cu AWB deja
 // completat — exact ca o comandă adusă normal, gata de „✓ Inclus”/„Aplică import” ca să scadă stocul.
 async function pcomFetchAndCreateEmagOrderById(comandaId,awb,file,page,courier){
-  if(pcImpParsed.some(x=>x.platforma==='emag'&&x.comandaId===comandaId))return 0;
+  if(pcImpParsed.some(x=>x.platforma==='emag'&&x.comandaId===comandaId))return{found:0,committed:0};
   let resp;
   try{resp=await localEmagJson('/order-by-id',{orderId:comandaId},20000);}
-  catch(e){console.warn('Căutare eMAG după număr eșuată pentru '+comandaId+':',e);return 0;}
-  if(!resp?.found||!Array.isArray(resp.lines)||!resp.lines.length)return 0;
+  catch(e){console.warn('Căutare eMAG după număr eșuată pentru '+comandaId+':',e);return{found:0,committed:0};}
+  if(!resp?.found||!Array.isArray(resp.lines)||!resp.lines.length)return{found:0,committed:0};
   const newLines=[];
   resp.lines.forEach(raw=>{
     const line={...pcomEmagMatchLine(raw),_source:'api',awb:awb||'',awbSourceFile:file||'',awbSourcePage:page||null,awbCourier:courier||''};
@@ -17027,7 +17028,16 @@ async function pcomFetchAndCreateEmagOrderById(comandaId,awb,file,page,courier){
   // verifică deja _committedId) — apelanții care comitea deja separat (searchEmagOrderByNumberCore) nu
   // sunt afectați, doar redundanți acum.
   await autoCommitConfidentPcomLines(newLines);
-  return resp.lines.length;
+  // Bug real, grav, găsit direct pe date reale (comanda Securetronix #527247549, AWB
+  // 4EMGLN189160615001 — „de ce nu apare AWB-ul?"): înainte întorceam resp.lines.length necondiționat,
+  // chiar dacă NICIUNA dintre liniile de mai sus n-a ajuns comisă (produs fără potrivire sigură — vezi
+  // pcomEmagMatchLine, rămâne „Neinclus" până la un „✓ Inclus" manual). Apelantul din readAwbFolderPdfs
+  // trata orice număr >0 ca succes deplin și ARHIVA eticheta din Desktop/AWB-uri — dar AWB-ul exista
+  // DOAR în pcImpParsed, în memoria browserului, pierdut definitiv la orice reîncărcare a paginii.
+  // Comanda apărea mai târziu, adusă separat prin importul normal („Adu comenzi eMAG"), de data asta
+  // FĂRĂ AWB — iar eticheta sursă dispăruse deja din dosar, fără nicio cale de recuperare. Acum
+  // distingem „găsită pe eMAG" de „chiar comisă (cu AWB scris în bază)" — vezi cei 2 apelanți mai jos.
+  return{found:resp.lines.length,committed:newLines.filter(l=>l._committedId).length};
 }
 // Căutare manuală directă (cerut direct — „dacă pun un număr de comandă eMAG care nu e în admin, să se
 // ducă să o caute în eMAG în toate secțiunile"): reutilizează EXACT pcomFetchAndCreateEmagOrderById
@@ -17040,21 +17050,22 @@ async function pcomFetchAndCreateEmagOrderById(comandaId,awb,file,page,courier){
 async function searchEmagOrderByNumberCore(q,btnId){
   const btn=btnId?document.getElementById(btnId):null;
   if(btn){btn.disabled=true;btn.textContent='Se caută pe eMAG…';}
-  let count=0;
+  let found=0;
   try{
     const before=pcImpParsed.length;
-    count=await pcomFetchAndCreateEmagOrderById(q,'','',null,'');
-    if(count){
+    const r=await pcomFetchAndCreateEmagOrderById(q,'','',null,'');
+    found=r.found;
+    if(found){
       const newLines=pcImpParsed.slice(before);
       await autoCommitConfidentPcomLines(newLines);
       renderPcomImportPreview();
-      toast(`✓ Comanda eMAG ${q} găsită și adusă în Comenzi Platforme (${count} ${count===1?'produs':'produse'})`);
+      toast(`✓ Comanda eMAG ${q} găsită și adusă în Comenzi Platforme (${found} ${found===1?'produs':'produse'})`);
     }else{
       toast(`Nicio comandă eMAG cu numărul „${q}" găsită (verifică numărul, sau conectorul local/IP-ul autorizat)`,'err');
     }
   }catch(e){toast('Eroare la căutarea pe eMAG: '+(e.message||e),'err');}
   if(btn){btn.disabled=false;btn.textContent='🔍 Caută pe eMAG după acest număr';}
-  return count>0;
+  return found>0;
 }
 async function searchEmagOrderByNumber(){
   const q=(document.getElementById('pcx-search')?.value||'').trim();
@@ -21688,8 +21699,15 @@ async function readAwbFolderPdfs(){
       // indiferent de status — dacă o găsim, o adăugăm ca linie nouă de import (cu AWB deja completat),
       // exact ca un import normal, gata de „✓ Inclus"/„Aplică import" ca să scadă și stocul.
       if(!rows.length){
-        const createdCount=await pcomFetchAndCreateEmagOrderById(p.comandaId,p.awb,p.file,p.page,p.courier);
-        if(createdCount){awbEmagLookupCreated+=createdCount;awbEmagLookupFileNames.push(p.file);continue;}
+        const r=await pcomFetchAndCreateEmagOrderById(p.comandaId,p.awb,p.file,p.page,p.courier);
+        if(r.committed){awbEmagLookupCreated+=r.committed;awbEmagLookupFileNames.push(p.file);continue;}
+        // Comandă GĂSITĂ pe eMAG, dar produsul nu s-a potrivit sigur (viaPnk/viaTitle/viaCode) — linia a
+        // rămas „Neinclus" în Comenzi Platforme, cu AWB-ul deja completat pe ea, gata de un „✓ Inclus"
+        // manual (care va scrie atunci și AWB-ul). NU arhivăm eticheta acum — dacă am arhiva-o, AWB-ul ar
+        // rămâne doar în memoria browserului, pierdut definitiv la orice reîncărcare a paginii, exact
+        // bug-ul găsit direct pe date reale (Securetronix #527247549, AWB 4EMGLN189160615001 — arhivat
+        // fără ca AWB-ul să fi ajuns vreodată în bază, vezi pcomFetchAndCreateEmagOrderById).
+        if(r.found){results.push({...p,rows:[],emagFoundUnmatched:true,reason:'Comandă eMAG găsită, dar produsul nu a fost recunoscut automat — verifică „Comenzi Platforme" (linia a rămas „Neinclus", cu AWB-ul deja completat)'});continue;}
       }
       results.push({...p,rows});
     }
@@ -21749,6 +21767,10 @@ function renderAwbPreview(){
       // Citire AI (orice limbă), fără număr de comandă pe etichetă — vezi aiFallbackAwbMatch/
       // resolveAwbByNameAndAmount: numele+suma se potrivesc la fel de bine cu MAI MULTE comenzi.
       else if(p.aiAmbiguous)msg=`⚠️ Etichetă citită de AI${p.courier?` (${esc(p.courier)})`:''} — „${esc(p.aiClientNume||'?')}"${p.aiSuma!=null?` (${esc(p.aiSuma)} ${esc(p.aiMoneda||'')})`:''} se potrivește la fel de bine cu MAI MULTE comenzi nerezolvate (AWB ${esc(p.awb)})`;
+      // Comandă găsită pe eMAG după număr, dar produsul n-a fost recunoscut automat — distinct de
+      // „negăsită", ca omul să știe exact unde să se ducă (Comenzi Platforme, linia „Neinclus"), nu să
+      // caute degeaba o comandă care de fapt EXISTĂ deja, doar neconfirmată — vezi readAwbFolderPdfs.
+      else if(p.emagFoundUnmatched)msg=`⚠️ Comanda eMAG ${esc(p.comandaId)} (AWB ${esc(p.awb)}) — găsită, dar produsul nu s-a potrivit automat. Verifică „Comenzi Platforme" (a rămas „Neinclus", cu AWB-ul deja completat)`;
       else{const source=p.file?` · ${esc(p.file)} p.${esc(p.page||'?')}`:'';msg=`⚠️ Comanda ${esc(p.comandaId)} (AWB ${esc(p.awb)}) — negăsită sau ambiguă în Comenzi Platforme${source}`;}
       return`<div class="inv-prev-row" style="color:var(--rd);flex-wrap:wrap;gap:8px"><span style="flex:1;min-width:260px">${msg}</span><button type="button" class="btn btn-sm awb-pick-trigger" style="flex-shrink:0" onclick="openAwbPick(event,${idx})">🔗 Asociază manual</button></div>`;
     }
