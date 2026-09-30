@@ -133,7 +133,48 @@ function offerLine(offer,market){const product=offer?.product||offer?.details||{
 async function readActiveOffers(config,market){const all=[],seenPages=new Set();for(let page=1;page<=20;page++){const data=await emag(config,market,'/product_offer/read',{currentPage:page,itemsPerPage:100,status:1}),rows=Array.isArray(data.results)?data.results:(Array.isArray(data.offers)?data.offers:[]),pageKey=rows.slice(0,5).map(x=>x.vendor_ext_id||x.part_number_key||x.part_number||x.id||x.name||'').join('|');if(pageKey&&seenPages.has(pageKey))break;if(pageKey)seenPages.add(pageKey);all.push(...rows);if(rows.length<100)break}return all.filter(activeOffer).map(x=>offerLine(x,market)).filter(x=>x.titluExtern)}
 async function readAllActiveOffers(config,onlyMarket=null){const marketKeys=onlyMarket?[onlyMarket]:Object.keys(MARKETS);const result=await Promise.all(marketKeys.map(async market=>{try{const rows=await readActiveOffers(config,market);return{market,offers:rows.length,rows,ok:true}}catch(e){return{market,offers:0,rows:[],ok:false,error:e.message||'Eroare necunoscută'}}})),markets=result.map(({rows,...m})=>m),offers=result.flatMap(x=>x.rows);if(!markets.some(x=>x.ok))throw new Error(markets.map(x=>`${x.market}: ${x.error}`).join(' · '));return{scope:'active_offers',offers,markets}}
 function awbReceiver(order){const c=order.customer||{},street=c.shipping_street||order.shipping_street||order.shipping_address||c.billing_street,localityId=Number(c.shipping_locality_id||order.shipping_locality_id||c.billing_locality_id||0);if(!street||!localityId)throw new Error('Comanda nu conține suficientă adresă pentru AWB.');return{name:c.name||c.shipping_contact,contact:c.shipping_contact||c.name,phone1:String(c.shipping_phone||c.phone_1||'').replace(/\s/g,''),legal_entity:Number(c.legal_entity)||0,locality_id:localityId,street,zipcode:c.shipping_postal_code||c.billing_postal_code||''}}
-async function issueAwb(config,body){if(!config.sender?.name||!config.sender?.contact||!config.sender?.phone1||!(config.sender?.address_id||config.sender?.locality_id))throw new Error('Adresa expeditorului nu este configurată. Rulează: node scripts/emag-local-connector.js sender');const orderId=Number(body.orderId);if(!orderId)throw new Error('Alege o comandă eMAG validă');const data=await emag(config,'RO','/order/read',{id:orderId,currentPage:1,itemsPerPage:1,type:3}),order=(data.results||[])[0];if(!order)throw new Error('Comanda nu a fost găsită în eMAG.');const payload={order_id:orderId,sender:config.sender,receiver:awbReceiver(order),is_oversize:body.oversize?1:0,envelope_number:0,parcel_number:Math.max(1,Math.floor(num(body.parcelNumber)||1)),cod:Math.max(0,num(body.cod)),weight:Math.max(.01,num(body.weight)||1),currency:'RON'};if(order.details?.locker_id)payload.locker_id=order.details.locker_id;const result=await emag(config,'RO','/awb/save',{data:[payload]});return{orderId:String(orderId),result:result.results||result}}
+async function issueAwb(config,body){
+  if(!config.sender?.name||!config.sender?.contact||!config.sender?.phone1||!(config.sender?.address_id||config.sender?.locality_id))throw new Error('Adresa expeditorului nu este configurată. Rulează: node scripts/emag-local-connector.js sender');
+  const orderId=Number(body.orderId);if(!orderId)throw new Error('Alege o comandă eMAG validă');
+  const data=await emag(config,'RO','/order/read',{id:orderId,currentPage:1,itemsPerPage:1,type:3}),order=(data.results||[])[0];
+  if(!order)throw new Error('Comanda nu a fost găsită în eMAG.');
+  const payload={order_id:orderId,sender:config.sender,receiver:awbReceiver(order),is_oversize:body.oversize?1:0,envelope_number:0,parcel_number:Math.max(1,Math.floor(num(body.parcelNumber)||1)),cod:Math.max(0,num(body.cod)),weight:Math.max(.01,num(body.weight)||1),currency:'RON'};
+  if(order.details?.locker_id)payload.locker_id=order.details.locker_id;
+  const result=await emag(config,'RO','/awb/save',{data:[payload]});
+  // PDF-ul etichetei — cerut direct, raportat cu o comandă reală rămasă fără fișier sursă („13+8
+  // AWB-uri, dar doar 20 tipăribile, una de ieri"): un AWB emis direct din eMAG (spre deosebire de o
+  // etichetă citită dintr-un PDF descărcat manual de la curier) n-avea NICIODATĂ un fișier local
+  // asociat — awb_source_file/page rămâneau goale definitiv, deci „🖨️ PDF AWB comenzi incluse" nu
+  // găsea niciodată eticheta lui. Documentat oficial (eMAG Marketplace API, „6.3. Reading AWB PDF
+  // files"): GET /awb/read_pdf?emag_id=X&awb_format=A4 întoarce direct PDF-ul — dar NUMAI cu emag_id-ul
+  // AWB-ului, nu order_id (verificat direct, live, pe o comandă reală: /awb/read nu acceptă deloc
+  // order_id ca filtru — emag_id-ul e disponibil STRICT chiar acum, din răspunsul lui /awb/save,
+  // niciodată recuperabil retroactiv mai târziu). Salvăm PDF-ul chiar acum, direct în Desktop/AWB-uri,
+  // cu numele exact „<comandaId>_eMAG_<awb>.pdf" (convenția deja recunoscută de awbFromFilename) — la
+  // următoarea „📂 Citește din dosar", se asociază singur, cu fișier sursă complet, tipăribil normal.
+  const rawSaved=JSON.stringify(result.results||result);
+  const awbNumber=(rawSaved.match(/"awb_number"\s*:\s*"?([^",}]+)/)||rawSaved.match(/"awb"\s*:\s*"?([^",}]+)/)||[])[1]||'';
+  const emagAwbId=(rawSaved.match(/"emag_id"\s*:\s*"?(\d+)/)||[])[1]||'';
+  let pdfSaved=false,pdfFileName=null;
+  if(awbNumber&&emagAwbId){
+    try{
+      const pdfUrl=MARKETS.RO.base.replace(/\/api-3$/,'')+`/awb/read_pdf?emag_id=${encodeURIComponent(emagAwbId)}&awb_format=A4`;
+      const pdfResp=await fetch(pdfUrl,{method:'GET',headers:{authorization:auth(config)}});
+      if(pdfResp.ok){
+        const buf=Buffer.from(await pdfResp.arrayBuffer());
+        // Un răspuns de eroare eMAG (JSON) poate veni tot cu status 200 — verificăm semnătura reală de
+        // PDF ("%PDF"), nu doar statusul HTTP, înainte să-l salvăm ca etichetă validă.
+        if(buf.slice(0,4).toString('latin1')==='%PDF'){
+          ensureAwbFolder();
+          pdfFileName=`${orderId}_eMAG_${awbNumber}.pdf`;
+          fs.writeFileSync(path.join(AWB_FOLDER,pdfFileName),buf);
+          pdfSaved=true;
+        }
+      }
+    }catch(e){/* AWB-ul tot s-a emis cu succes — PDF-ul e doar un bonus, nu blocăm operațiunea principală pentru atât */}
+  }
+  return{orderId:String(orderId),result:result.results||result,pdfSaved,pdfFileName};
+}
 function headers(origin){return{'content-type':'application/json; charset=utf-8','access-control-allow-origin':origin||'null','access-control-allow-methods':'GET, POST, OPTIONS','access-control-allow-headers':'content-type','access-control-allow-private-network':'true','cache-control':'no-store'}}
 function send(res,status,data,origin){res.writeHead(status,headers(origin));res.end(JSON.stringify(data))}
 function ensureCertificate(){if(fs.existsSync(CERT_KEY)&&fs.existsSync(CERT_FILE))return;fs.mkdirSync(CERT_DIR,{recursive:true,mode:0o700});execFileSync('/usr/bin/openssl',['req','-x509','-newkey','rsa:2048','-sha256','-nodes','-keyout',CERT_KEY,'-out',CERT_FILE,'-days','825','-subj','/CN=localhost','-addext','subjectAltName=DNS:localhost,IP:127.0.0.1'],{stdio:'ignore'});fs.chmodSync(CERT_KEY,0o600);execFileSync('/usr/bin/security',['add-trusted-cert','-d','-r','trustRoot','-k',LOGIN_KEYCHAIN,CERT_FILE],{stdio:'inherit'});console.log('Certificat local HTTPS adăugat în Keychain pentru localhost.')}
