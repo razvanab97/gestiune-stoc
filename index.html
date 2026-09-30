@@ -3959,6 +3959,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:506,text:'Continuare directă la #505 (cantitatea din titlu), găsit verificând comanda reală raportată: linia era deja COMISĂ (confirmare instant, vizibilă în Staff) ÎNAINTE ca „Titlul sugerează…" să fie apăsat — corecția de cantitate/preț rămânea STRICT în previzualizarea locală, niciodată scrisă peste rândul deja existent din platforma_comenzi. profit_estimat/marja_estimata (folosite direct în Profit vânzări/Raport/Dashboard, nu doar în preview) rămâneau ÎNGHEȚATE la valoarea calculată cu cantitatea/prețul VECHI. Acum „Aplică" (și editarea manuală a cantității, din stepper) resincronizează complet o linie deja comisă — cantitate, preț ȘI profit/marjă recalculate, scrise direct în bază, nu doar cantitatea ca până acum. Corectată direct și comanda reală raportată (Robert Caracas, Trendyol, AWB 5043265767): profit_estimat 125,98→26,51 RON, marja_estimata 60,22%→12,67% — valorile corecte, verificate matematic cu motorul real de calcul al aplicației, nu estimate. Verificat cu 13 teste izolate suplimentare (linie deja comisă resincronizată complet, stoc deja scăzut rămâne blocat corect, cantitate schimbată manual tot recalculează profitul, chiar fără schimbare de preț).',date:'2026-09-30'},
   {n:505,text:'Comenzi Platforme — bug real reparat, raportat direct pe o comandă reală (titlu „Set 6 stații radio portabile", potrivit cu produsul intern „Statie radio 2x BF888S" — cantitate corectată de la 1 la 3 cu 💡 „Titlul sugerează…", dar profitul afișat ieșea +377.95 RON pe o vânzare de 297.79 RON — profit mai mare decât vânzarea, imposibil economic): butonul „Aplică" de la sugestia de cantitate schimba DOAR cantitatea, niciodată prețul liniei — acesta reprezenta banii plătiți pentru cantitatea VECHE (întregul pachet de 6, cumpărat ca „1 listare"), dar restul calculului (profit, marjă, comparație cu prețul minim, ȘI scrierea reală în bază la comitere) tratează prețul liniei ca preț PE BUCATA internă — rezultat: numărat dublu, o dată prin prețul rămas „pentru tot pachetul" tratat greșit ca preț unitar, a doua oară prin înmulțirea profitului (deja umflat) cu noua cantitate. Acum „Aplică" împarte și prețul liniei cu același raport cu care înmulțește cantitatea — banii totali plătiți rămân identici, doar reîmpărțiți corect pe bucățile fizice reale, ca „la 3 produse" să însemne chiar 3 produse peste tot în calcul (preview ȘI ce se scrie definitiv în platforma_comenzi la comitere), nu doar la stocul scăzut. Scopat strict la acest buton — ajustarea manuală a cantității din stepper rămâne neschimbată, cu semnificația ei separată. Verificat cu 8 teste izolate (numerele exacte din raportare, banii totali păstrați după împărțire, raport 1:1 fără efect, cantitate inițială 0 tratată defensiv).',date:'2026-09-30'},
   {n:504,text:'Comenzi Platforme → Expediere, secțiune nouă „IP conector (pentru whitelist eMAG)" — cerut direct: „observ că se tot schimbă IP-ul, să avem o secțiune unde îl putem verifica în timp real și să apăsăm butonul copy". eMAG (RO/BG/HU) respinge cererile venite de pe un IP neautorizat („Invalid vendor ip [X]") — la o rețea rezidențială, IP-ul se schimbă periodic, iar whitelist-ul din panoul eMAG trebuie actualizat manual, din nou, de fiecare dată. Buton „🔄 Verifică IP" — interoghează Conectorul local de pe Mac (nu browserul), care la rândul lui întreabă un serviciu extern (ipify, cu rezervă ipinfo.io) — exact IP-ul pe care îl vede eMAG la cererile reale. Buton „📋 Copiază" apare imediat lângă rezultat, gata de lipit în whitelist-ul eMAG. Necesită Conectorul local ACTUALIZAT (rulează `git pull` în folderul gestiune-stoc de pe Mac, apoi `launchctl kickstart -k gui/$(id -u)/ro.abhomes.emag-local-connector` ca să preia codul nou, fără să repornești tot Mac-ul) — până atunci, butonul arată „Rută necunoscută”, fără să afecteze restul funcțiilor conectorului. Verificat direct, live: IP-ul detectat de funcția nouă a fost identic, cifră cu cifră, cu cel din eroarea eMAG raportată.',date:'2026-09-29'},
   {n:503,text:'„Alt furnizor" — cauza reală găsită, cu ajutorul consolei trimise direct: câmpurile din formular (Furnizor/Cod extern/Preț) se completau, dar „Salvează produs" (butonul mare, de jos) se apăsa direct, FĂRĂ click separat, în prealabil, pe „+ Adaugă sursă" (cel mic, de sub câmpuri) — fără care nimic din ele nu ajungea vreodată în listă, deci nici în bază, oricât de multe ori s-ar fi apăsat „Salvează produs". Acum „Salvează produs" adaugă singur, tăcut, orice rămâne completat dar netrimis în „Alt furnizor" — nu se mai poate pierde din cauza asta. Pe drum, găsit și separat, din aceeași captură de consolă: coloana `price_buy_eur` lipsește din baza de date (migrare veche, nerulată încă) — degradare grațioasă deja funcțională (restul produsului se salvează normal), dar rulează o dată, ca avertismentul să dispară: `alter table produse add column if not exists price_buy_eur numeric(10,2) default 0;`. Verificat cu 6 teste izolate (completat dar neadăugat → salvat automat la Salvează produs, formular gol → tăcut, fără nimic de adăugat, parțial completat → avertisment clar, nu pierdere silențioasă).',date:'2026-09-29'},
@@ -17269,6 +17270,14 @@ function pcomOpenAddProductForLine(idx){
 // pas separat, ulterior), noua cantitate se scrie direct în platforma_comenzi. Dacă stocul a fost deja
 // scăzut cu vechea cantitate, editarea e blocată — un ajustaj retroactiv al stocului ar fi un calcul
 // mult mai riscant, netratat aici; omul trebuie să corecteze stocul manual în acel caz.
+// Bug real suplimentar, găsit reparând #505 (cantitatea corectată din titlul listării): pe o linie
+// DEJA comisă (confirmare instant — vezi autoCommitConfidentPcomLines), scrisă în bază la cantitatea
+// inițială (de obicei 1), orice corecție ulterioară a cantității (manual, de-aici, sau din 💡 „Titlul
+// sugerează…") actualiza DOAR coloana cantitate — profit_estimat/marja_estimata (folosite direct în
+// Profit vânzări/Raport/Dashboard, nu doar în preview) rămâneau ÎNGHEȚATE la valoarea calculată la
+// cantitatea veche, nemaifiind niciodată recalculate. Acum recalculăm și scriem și pe-acestea, plus
+// prețul liniei (poate fi ȘI el schimbat separat, de applyPcomSuggestedQty) — totul rămâne sincron cu
+// starea curentă a liniei, nu doar cantitatea.
 async function pcomPersistQtyIfCommitted(idx){
   const it=pcImpParsed[idx];
   if(!it._committedId)return;
@@ -17281,8 +17290,19 @@ async function pcomPersistQtyIfCommitted(idx){
     return;
   }
   try{
-    await dbPatch(`platforma_comenzi?id=eq.${it._committedId}`,{cantitate:it.cantitate});
-    row.cantitate=it.cantitate;
+    const patch={cantitate:it.cantitate,pret_fara_tva:it.pretFaraTva,pret_total_cu_tva:it.pretTotalCuTva};
+    const p=it.produsId?P.find(x=>x.id===it.produsId):null;
+    if(p){
+      const totalRon=pcomToRon(it.pretTotalCuTva,it.moneda);
+      const fin=pcomSaleFinancials(p,it,it.platforma||row.platforma||pcImpPlatforma);
+      patch.pret_total_cu_tva_ron=totalRon;
+      patch.profit_estimat=Math.round(fin.profit*it.cantitate*100)/100;
+      patch.marja_estimata=fin.marja;
+    }
+    await dbPatch(`platforma_comenzi?id=eq.${it._committedId}`,patch);
+    row.cantitate=it.cantitate;row.pretFaraTva=it.pretFaraTva;row.pretTotalCuTva=it.pretTotalCuTva;
+    if(patch.pret_total_cu_tva_ron!==undefined)row.pretTotalCuTvaRon=patch.pret_total_cu_tva_ron;
+    if(patch.profit_estimat!==undefined){row.profitEstimat=patch.profit_estimat;row.marjaEstimata=patch.marja_estimata;}
   }catch(e){toast('Nu am putut salva cantitatea: '+(e.message||e),'err');}
 }
 function pcomAdjustQty(idx,delta){
@@ -17379,7 +17399,7 @@ function pcomVintedGroupFinancialsHtml(groupIdxs){
 // înmulțește cantitatea — banii totali plătiți rămân identici (preț/bucată × bucăți = constant),
 // doar reîmpărțiți corect pe bucățile fizice reale, ca „la 3 produse" să însemne chiar 3 produse
 // peste tot în calcul, nu doar la stocul scăzut.
-function applyPcomSuggestedQty(idx){
+async function applyPcomSuggestedQty(idx){
   const it=pcImpParsed[idx];if(!it?.suggestedCantitate)return;
   const ratio=it.suggestedCantitate/(Number(it.cantitate)||1);
   it.cantitate=it.suggestedCantitate;it.suggestedCantitate=null;
@@ -17388,6 +17408,11 @@ function applyPcomSuggestedQty(idx){
     it.pretTotalCuTva=Math.round((Number(it.pretTotalCuTva)||0)/ratio*100)/100;
   }
   renderPcomImportPreview();
+  // Linia poate fi deja comisă (confirmare instant, vezi autoCommitConfidentPcomLines) — hint-ul
+  // „Titlul sugerează" nu se ascunde la comitere, deci „Aplică" se poate apăsa și DUPĂ ce comanda e
+  // deja vizibilă în Staff. Fără sincronizarea asta, corecția rămânea STRICT în previzualizarea
+  // locală — exact bug-ul deja reparat la #505, dar pe calea „deja comisă", nu doar la prima potrivire.
+  await pcomPersistQtyIfCommitted(idx);
 }
 // Titlul care se pune pe AWB la expediere — cantitatea (corectată mai sus, poate diferi de cea din
 // comandă când eMAG vinde seturi/pachete cu altă granularitate decât stocul intern) + numele/SKU-ul
