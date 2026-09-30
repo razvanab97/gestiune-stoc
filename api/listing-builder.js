@@ -297,7 +297,10 @@ async function repairJsonWithAI(raw,mode){
   const ai=await fetch('https://api.openai.com/v1/responses',{
     method:'POST',
     headers:{'content-type':'application/json','authorization':'Bearer '+process.env.OPENAI_API_KEY},
-    body:JSON.stringify({model:modelForMode(mode),max_output_tokens:2200,input:[{role:'user',content:[{type:'input_text',text:prompt}]}]})
+    // reasoning:effort 'low' + plafon 5000 — aceeași cauză ca în apelul principal de mai jos: fără effort setat
+    // jos, gpt-5.6-* poate consuma tot bugetul pe raționament și întoarce text gol; iar 2200 era sub răspunsul
+    // 'synthesize' (4200) pe care tocmai trebuie să-l repare, deci reparația ieșea ea însăși trunchiată.
+    body:JSON.stringify({model:modelForMode(mode),reasoning:{effort:'low'},max_output_tokens:5000,input:[{role:'user',content:[{type:'input_text',text:prompt}]}]})
   });
   const data=await ai.json();
   if(!ai.ok)throw new Error('Repararea JSON a eșuat');
