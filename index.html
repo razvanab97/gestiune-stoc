@@ -3965,6 +3965,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:511,text:'Asociere AWB — 2 bug-uri reale reparate, raportate direct pe comenzi Vinted reale. (1) Format Cargus „Click & Collect" nou, varianta „Outbound Internațional" (etichetă reală trimisă — „acesta este un AWB Cargus, atașez formatul să se recunoască pe viitor"): rămânea „format nerecunoscut" din 2 motive — „Cargus” apare doar cu literă mică (originalul cerea CARGUS cu majuscule), iar „Serviciu Click & Collect” apare fără „:" după „Serviciu" (originalul cerea „Serviciu:"); perechea de numere echivalentă AWB-ului nu mai stă pe aceeași linie cu „/" ca-n formatul vechi, ci pe 2 rânduri diferite, cu încă un rând intercalat între ele (orașele rutei) — reconstruită acum manual. (2) O etichetă Vinted/eMAG Ungaria deja asociată cu o comandă (AWB deja scris, vizibilă în Staff), recitită din orice motiv (fișier nearhivat încă, pus din nou în dosar), apărea fals ca „nepotrivită" — căutarea de match se uita STRICT printre comenzi nerezolvate (fără AWB încă), excluzând exact comanda deja corect asociată. Acum se verifică întâi, separat, dacă AWB-ul e deja scris exact pe o comandă — dacă da, asocierea se confirmă direct (rescriere fără efect), fără avertisment fals, și fișierul se arhivează normal data asta. Verificat cu 9 teste izolate (eticheta Cargus reală, formatul vechi neafectat, etichetă anulată, text fără „cargus" rămâne nerecunoscut, comandă deja asociată Vinted/eMAG HU găsită direct, comandă încă „Neinclus" cu același AWB, fără nicio potrivire rămâne negăsit), rulate de 2 ori.',date:'2026-10-01'},
   {n:510,text:'Listing builder (Research / import produs din URL) — reparat „JSON AI invalid și nereparabil": pasul de auto-reparare a JSON-ului nu seta nivelul de raționament jos (modelele gpt-5.6 puteau consuma tot bugetul și întoarce răspuns gol) și avea un plafon de 2200 tokeni, sub răspunsul „synthesize" (4200) pe care trebuia să-l repare. Acum: effort low + plafon 5000.',date:'2026-09-30'},
   {n:509,text:'Comenzi Platforme → Expediere — „Trimite AWB prin eMAG" salvează acum și PDF-ul etichetei, nu doar codul AWB (cerut direct, aceeași cauză raportată ca la „13+8 AWB-uri, doar 20 de comenzi"): un AWB emis din acest buton nu avea NICIODATĂ fișier sursă local — trebuia descărcat manual din Seller Center și adăugat separat în Desktop/AWB-uri ca să devină tipăribil din „🖨️ PDF AWB comenzi incluse". Conectorul local cere acum PDF-ul direct de la eMAG (endpoint oficial `/awb/read_pdf`, documentat „6.3. Reading AWB PDF files") imediat după emitere — momentul e obligatoriu, `emag_id`-ul necesar nu mai poate fi recuperat mai târziu — și îl salvează direct în Desktop/AWB-uri. Admin asociază sursa pe loc, fără să mai fie nevoie de „📂 Citește din dosar" separat — AWB-ul e imediat tipăribil. Dacă salvarea PDF-ului eșuează (rar — Conector neactualizat, rețea), AWB-ul tot se emite și se salvează normal, doar fără fișier sursă automat, cu avertisment clar. Necesită Conectorul local ACTUALIZAT pe Mac (`git pull` + `launchctl kickstart -k gui/$(id -u)/ro.abhomes.emag-local-connector`); nu recuperează retroactiv AWB-urile emise înainte de acest fix. Verificat cu 3 scenarii izolate (PDF salvat automat, PDF eșuat, fără AWB deloc), rulate de 2 ori pe funcția reală din cod, plus sintaxa conectorului verificată de 2 ori.',date:'2026-09-30'},
   {n:508,text:'Comenzi Platforme — bug real reparat, raportat direct pe o comandă reală (Securetronix, AWB 4EMGLN189160615001, comanda eMAG #527247549 — „de ce nu apare AWB-ul?", plus „13+8 AWB-uri, doar 20 de comenzi"): când o etichetă AWB e citită din dosar pentru o comandă care nu există încă local, sistemul o caută direct pe eMAG după număr (indiferent de status) și o aduce automat — dar dacă produsul de pe ea nu se potrivea SIGUR cu unul intern (fără viaPnk/viaTitle/viaCode), linia rămânea „Neinclus", NECOMISĂ în bază — iar eticheta sursă era totuși arhivată din Desktop/AWB-uri ca „procesată cu succes". AWB-ul exista atunci DOAR în memoria browserului, pierdut definitiv la reîncărcarea paginii; comanda apărea mai târziu, adusă separat prin importul normal, de data asta fără AWB, cu eticheta sursă deja dispărută, fără nicio cale de recuperare. Acum se arhivează STRICT etichetele care au ajuns chiar scrise în bază — cele găsite dar neconfirmate rămân vizibile în previzualizare, cu mesaj distinct („comandă găsită, dar produsul nu s-a potrivit automat"), AWB-ul deja completat, gata de un „✓ Inclus" manual, iar fișierul rămâne în Desktop/AWB-uri, gata de reîncercat. Corectată direct și comanda reală raportată. Verificat cu 3 scenarii izolate, rulate de 2 ori pe funcția reală extrasă din cod (comis normal neschimbat, găsit-dar-nepotrivit acum reținut fără arhivare, negăsit deloc neschimbat).',date:'2026-09-30'},
@@ -21220,10 +21221,24 @@ function parseAwbLabelText(text){
   // internă Cargus — și de codul de bare de sub ea) se potrivește EXACT (nu fuzzy pe titlu) cu awb-ul
   // deja cunoscut al comenzii Vinted, salvat la citirea capturii din aplicația Vinted (vezi
   // resolveCargusClickCollectMatch).
-  if(/CARGUS/.test(text)&&/Serviciu:\s*Click\s*&\s*Collect/i.test(text)){
-    const cargusM=text.match(/(\d{5,8}\s*\/\s*\d{5,8})/);
+  // Extins (cerut direct — „acesta este un AWB Cargus, atașez formatul să se recunoască pe viitor",
+  // fișier real trimis, rămas „format nerecunoscut" înainte de acest fix): varianta „Outbound
+  // Internațional" a aceleiași etichete Click & Collect diferă de cea originală în 2 feluri, verificate
+  // direct pe eticheta reală (extragere identică cu extractPdfPagesText) — (1) „Cargus” apare DOAR cu
+  // literă mică la început (Cargus SRL), niciodată tot cu majuscule ca pe eticheta originală, deci
+  // /CARGUS/ (fără „i") nu se potrivea niciodată; (2) „Serviciu Click & Collect” apare FĂRĂ „:” după
+  // „Serviciu” (originalul avea „Serviciu:”). Perechea de numere (echivalentul AWB-ului, cerut explicit
+  // de Vinted — vezi comentariul de mai jos) nu mai apare pe ACEEAȘI linie cu „/” între ele ca la
+  // original, ci „Tel.: 0219330” pe un rând, apoi — cu încă un rând („Iasi Brasov”, orașele rutei)
+  // intercalat între ele, verificat direct pe eticheta reală — „0219282” la începutul altui rând mai
+  // jos. Reconstruim manual formatul „X / Y” așteptat de resolveCargusClickCollectMatch (identic cu ce
+  // reține vintedRunRecognition din captura Vinted), indiferent care din cele 2 așezări a generat
+  // textul; fereastra scurtă ({0,60}) dintre cele 2 numere evită să prindă din greșeală o altă pereche
+  // de cifre mult mai departe în document.
+  if(/cargus/i.test(text)&&/Serviciu:?\s*Click\s*&\s*Collect/i.test(text)){
+    const cargusM=text.match(/(\d{5,8})\s*\/\s*(\d{5,8})/)||text.match(/Tel\.:\s*(\d{5,8})[\s\S]{0,60}?\n\s*(\d{5,8})\b/);
     if(cargusM){
-      const awb=cargusM[1].replace(/\s+/g,' ').trim();
+      const awb=`${cargusM[1]} / ${cargusM[2]}`;
       return canceled?{courierCanceled:true,awb}:{cargusClickCollectLabel:true,courier:'Cargus',awb};
     }
   }
@@ -21302,6 +21317,19 @@ function pendingImportRowSnapshot(comandaId){
   return[{platforma:it.platforma,client_nume:it.clientNume||'',produs_nume:it.titluExtern||prodName||'',awb:it.awb||''}];
 }
 function resolveVintedDigitalLabelMatch(p){
+  // Bug real, raportat direct („nu se găsește comanda în lista de asociere" — deși AWB-ul era deja
+  // scris pe comandă, vizibilă în Staff): eticheta poate fi recitită (fișier nearhivat încă din orice
+  // motiv, sau pus din nou în dosar din greșeală) pentru o comandă DEJA asociată — căutarea de mai jos
+  // caută STRICT printre comenzi NEREZOLVATE (fără AWB încă, prin !o.awb), deci o comandă deja asociată
+  // cu EXACT acest AWB nu mai apărea niciodată ca „potrivire", ci ca avertisment fals „niciun produs
+  // Vinted nerezolvat nu se potrivește”, deși treaba era deja făcută. La fel ca la
+  // resolveCargusClickCollectMatch (verificare identică, deja corectă acolo) — verificăm întâi, separat,
+  // dacă AWB-ul e deja scris exact pe o comandă Vinted (comisă sau încă „Neinclus”) — dacă da, ne
+  // întoarcem direct la ea (rescrierea e un no-op sigur), fără avertisment și fără matching fuzzy.
+  const exactHit=PCOM.find(o=>o.platforma==='vinted'&&!o.anulata&&String(o.awb||'').trim()===p.awb);
+  if(exactHit)return{...p,comandaId:exactHit.comandaId};
+  const exactPendingHit=pendingVintedCandidates().find(it=>String(it.awb||'').trim()===p.awb);
+  if(exactPendingHit)return{...p,comandaId:exactPendingHit.comandaId,_pendingMatch:true};
   const committedScored=PCOM.filter(o=>o.platforma==='vinted'&&!o.awb&&!o.anulata&&!o.impachetat)
     .map(o=>({comandaId:o.comandaId,pending:false,score:Math.max(fuzzyMatch(p.produs,o.titluExtern||''),fuzzyMatch(p.produs,o.produsNume||''))}));
   const pendingScored=pendingVintedCandidates().map(it=>{
@@ -21326,6 +21354,13 @@ function resolveVintedDigitalLabelMatch(p){
 // Vinted (0.5) și toleranță mică pe sumă (rotunjiri FT) — o potrivire greșită ar asocia AWB-ul unui
 // client la comanda altuia.
 function resolveEmagHuLabelMatch(p){
+  // Aceeași reparație ca la resolveVintedDigitalLabelMatch (vezi comentariul de acolo, aceeași clasă de
+  // bug) — o etichetă deja asociată, recitită, nu mai trebuie tratată ca „nepotrivită” doar fiindcă
+  // lista de candidați de mai jos exclude liniile deja rezolvate (fără AWB încă).
+  if(p.awb){
+    const exactHit=PCOM.find(o=>o.platforma==='emag'&&(o.tara==='HU'||String(o.moneda||'').toUpperCase()==='HUF')&&!o.anulata&&String(o.awb||'').trim()===p.awb);
+    if(exactHit)return{...p,comandaId:exactHit.comandaId};
+  }
   const candidates=PCOM.filter(o=>o.platforma==='emag'&&(o.tara==='HU'||String(o.moneda||'').toUpperCase()==='HUF')&&!o.awb&&!o.anulata&&!o.impachetat);
   const groups=new Map();
   candidates.forEach(o=>{
