@@ -1,6 +1,10 @@
 #!/bin/zsh
 set -euo pipefail
 
+# launchd porneste scriptul cu un PATH minimal (/usr/bin:/bin...), fara Homebrew — `node` (folosit mai jos
+# la encodarea numelor din Storage) nu era gasit si backupul nocturn cadea din 16.09.2026 cu exit 127.
+export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
+
 # Backup rotativ A/B: două copii complete, ultima și penultima zi.
 PROJECT_REF="cbpavtvrfpkbaeueexlw"
 DB_HOST="aws-1-eu-west-1.pooler.supabase.com"
