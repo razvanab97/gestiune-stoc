@@ -55,6 +55,12 @@ button{cursor:pointer}
 .progress-bar-fill{height:100%;background:linear-gradient(90deg,var(--acc2),var(--acc));border-radius:999px;transition:width .3s}
 .progress-pct{font-family:var(--mono);font-size:17px;color:var(--t3);font-weight:700;flex-shrink:0}
 
+/* Bară curieri azi — evidență „au venit" (cerut direct), ascunsă complet cât timp nu există încă
+   niciun AWB azi (vezi renderCourierBar). */
+.courier-bar{display:none;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.courier-chip{padding:8px 14px;border-radius:999px;border:1.5px solid var(--b2);background:var(--surf2);color:var(--t2);font-size:14px;font-weight:700;white-space:nowrap}
+.courier-chip.on{border-color:var(--gr);background:var(--gr-bg);color:var(--gr)}
+
 /* NAV — 5 secțiuni, simplu, touch-friendly */
 .tabbar{display:flex;gap:8px;margin-bottom:18px;background:var(--glass-strong);backdrop-filter:var(--glass-blur);-webkit-backdrop-filter:var(--glass-blur);border:1px solid var(--glass-bd);box-shadow:var(--sh2);border-radius:var(--r2);padding:6px;overflow-x:auto}
 .tab-btn{flex:1;min-width:84px;padding:12px 6px;border-radius:var(--r);border:none;background:transparent;color:var(--t3);font-size:16px;font-weight:700;display:flex;flex-direction:column;align-items:center;gap:3px;white-space:nowrap}
@@ -299,6 +305,8 @@ button{cursor:pointer}
     <span class="progress-pct" id="progress-pct"></span>
   </div>
 
+  <div class="courier-bar" id="courier-bar"></div>
+
   <div class="tabbar">
     <button class="tab-btn on" data-tab="pack" onclick="setTab('pack')"><span class="ic">📦</span>Împachetare</button>
     <button class="tab-btn" data-tab="waiting" onclick="setTab('waiting')"><span class="ic">⏸</span>În așteptare<span class="tab-badge" id="waiting-badge" style="display:none"></span></button>
@@ -428,6 +436,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:426,date:'01.10.2026',text:'Bară nouă „Curieri azi", sub bara de progres, cerut direct: „o bară unde avem toți curierii pentru care avem AWB-uri într-o zi și să se selecteze atunci când au venit, pentru a avea o evidență". Lista nu e fixă — apare automat orice curier (FAN Courier/DPD/Sameday/GLS/Cargus/eMAG Courier etc.) care are măcar un AWB în coada activă de azi; dispare singură dacă nu există încă niciun AWB. Un tap marchează „✓ Nume curier · ora" (verde) când a venit să ridice coletele; încă un tap anulează, dacă a fost din greșeală. Reținut în bază (nu doar pe tabletă), scopat strict pe ziua curentă — se golește singur a doua zi, fără nicio curățare manuală; vizibil la fel pe orice dispozitiv (tabletă/telefon) care deschide Staff. Verificat cu 9 teste izolate pe funcțiile reale din cod, plus un test complet live pe baza de date reală (scriere/citire/suprascriere/ștergere), toate rulate de 2 ori.'},
   {n:425,date:'30.09.2026',text:'Feature — cerut direct: „să apară comenzile în ordinea din admin — întâi eMAG, apoi Trendyol și apoi Vinted, să nu se mai încurce între ele". Coada de împachetare (și navigarea Anterioară/Următoare) se ordonează acum întâi după platformă — eMAG, apoi Trendyol, apoi Vinted, la fel ca în admin (Comenzi Platforme → Importă) — iar în interiorul aceleiași platforme rămâne ordinea de dinainte, după data/ora comenzii. Vânzările directe (fără platformă de marketplace) rămân ultimele.'},
   {n:424,date:'29.09.2026',text:'Feature — cerut direct: „la căutare, să se poată căuta mult mai ușor — ultimele 4 cifre din AWB, primele 2-3 litere din numele clientului, sau firma de curierat (ex. DPD)". Căutarea (📋 tab Căutare) e acum diacritice-insensibilă (Gheorghiță = gheorghita), caută și după numele curierului (nou — nu era verificat deloc înainte) și după platformă (eMAG/Trendyol/Vinted). Rezultatele sunt SORTATE după relevanță (potrivire exactă sau la început de text înaintea unei potriviri oarecare în mijloc), iar la egalitate, cele mai recente primele. Cardul din rezultate arată acum și numele clientului (lipsea complet) și curierul lângă AWB, ca să confirmi rapid că ai găsit comanda corectă.'},
   {n:423,date:'29.09.2026',text:'Feature — cerut direct: „la fel ca butonul Reîncarcă din Staff, să avem și-n admin, ca staff-ul să vadă în timp real ce lucrăm noi". Admin are acum un buton „📤" care trimite un semnal — Staff îl verifică din fundal, la fiecare 6 secunde, și arată o bulină portocalie pulsatorie lângă „↻ Reîncarcă" când admin a trimis ceva nou. Reîncărcarea rămâne STRICT manuală — bulina e doar un indiciu că e ceva nou de adus, nu retrage lista singură de sub degetul celui care împachetează (exact decizia deliberată de la #421/#422). Dispare când apeși „↻ Reîncarcă".'},
@@ -583,6 +592,57 @@ function renderProgress(){
   if(fbadge){if(fc){fbadge.style.display='inline-block';fbadge.textContent=fc;}else{fbadge.style.display='none';}}
 }
 
+// Bară „Curieri azi" — cerut direct: „o bară unde avem toți curierii pentru care avem AWB-uri
+// într-o zi și să se selecteze atunci când au venit, pentru a avea o evidență". Lista de curieri NU
+// e fixă/predefinită — se calculează din AWB-urile chiar prezente acum în coada activă (awbCourier,
+// completat automat la asociere/emitere — vezi awb_courier din index.html), deci se potrivește mereu
+// exact cu ce lucrează ziua respectivă, indiferent ce curieri apar. „A venit" e un simplu comutator
+// (reversibil, pentru o apăsare din greșeală), reținut în setari_app, cu cheia scopată pe ZIUA
+// curentă (același tipar ca staff_queue_started_at/emag_id_counter din index.html) — se golește
+// singur a doua zi, fără nicio curățare manuală.
+let COURIER_ARRIVALS={};
+function courierArrivalsKey(){return'curieri_sosire_'+td();}
+async function loadCourierArrivals(){
+  try{
+    const rows=await sb('GET',`setari_app?key=eq.${courierArrivalsKey()}&select=value`);
+    // setari_app.value e coloană text (nu jsonb) — la fel ca PCOM_DRAFT_SETTINGS_KEY din index.html,
+    // valoarea structurată se ține ca JSON serializat manual, nu ca obiect trimis direct.
+    COURIER_ARRIVALS=rows?.[0]?.value?JSON.parse(rows[0].value):{};
+  }catch(e){console.warn('Nu am putut încărca sosirile curierilor de azi:',e);COURIER_ARRIVALS={};}
+}
+function couriersTodayList(){
+  const set=new Set();
+  ORDERS.forEach(o=>{if(o.awbCourier)set.add(o.awbCourier);});
+  return[...set].sort((a,b)=>a.localeCompare(b,'ro'));
+}
+async function toggleCourierArrived(courier){
+  const next={...COURIER_ARRIVALS};
+  if(next[courier])delete next[courier];else next[courier]=new Date().toISOString();
+  COURIER_ARRIVALS=next;
+  renderCourierBar();
+  try{
+    const key=courierArrivalsKey();
+    const value=JSON.stringify(next);
+    const updated=await sb('PATCH',`setari_app?key=eq.${key}`,{value});
+    if(!updated?.length)await sb('POST','setari_app',{key,value});
+  }catch(e){
+    console.warn('Nu am putut salva sosirea curierului:',e);
+    showToast('Nu s-a salvat — încearcă din nou');
+  }
+}
+function renderCourierBar(){
+  const host=document.getElementById('courier-bar');
+  if(!host)return;
+  const couriers=couriersTodayList();
+  if(!couriers.length){host.style.display='none';host.innerHTML='';return;}
+  host.style.display='flex';
+  host.innerHTML=couriers.map(c=>{
+    const at=COURIER_ARRIVALS[c];
+    const label=at?`✓ ${esc(c)} · ${new Date(at).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'})}`:esc(c);
+    return`<button type="button" class="courier-chip ${at?'on':''}" onclick="toggleCourierArrived('${esc(c)}')">${label}</button>`;
+  }).join('');
+}
+
 function setTab(tab){
   activeTab=tab;
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('on',b.dataset.tab===tab));
@@ -612,6 +672,7 @@ function renderMain(resetScroll=false){
   const oldScroll=resetScroll?0:host.scrollTop;
   if(activeTab!=='search')searchDock.innerHTML='';
   renderProgress();
+  renderCourierBar();
   if(curKey!==lastLockedKey){
     lastLockedKey=curKey;
     if(curKey)claimOrderLock(curKey);else stopLockHeartbeat();
@@ -1810,6 +1871,9 @@ async function refreshStaffNow(){
     // reîmprospătare automată (25s/visibilitychange/online) — „Coadă nouă” a devenit o acțiune rară,
     // nu zilnică, nu merită încă un apel Supabase la fiecare tick doar pentru un caz de urgență.
     await loadStaffQueueStart();
+    // Alt telefon/tabletă poate fi cel care a bifat un curier ca „a venit" — reîncărcăm și asta, nu
+    // doar comenzile, ca evidența să rămână la fel pe orice dispozitiv.
+    await loadCourierArrivals();
     const ok=await refreshData();
     // Tocmai am reîncărcat tot din ERP — orice actualizare trimisă din admin înainte de acest moment
     // e deja aici, indiciul vizual (vezi checkPushSignal) nu mai are ce arăta.
@@ -2007,6 +2071,7 @@ async function load(){
       sb('GET','pre_impachetate?select=*&folosit_la=is.null&order=created_at.asc').catch(e=>{console.warn('pre_impachetate indisponibil:',e);return[];}),
       sb('GET','staff_mesaje?select=*&rezolvat=is.false&order=created_at.asc').catch(e=>{console.warn('staff_mesaje indisponibil:',e);return[];}),
       sb('GET','comenzi_furnizor?select=*&finalizat=eq.false&order=created_at.asc').catch(e=>{console.warn('comenzi_furnizor indisponibil (rulează migration_comenzi_furnizor.sql):',e);return[];}),
+      loadCourierArrivals(),
     ]);
     PRODUSE=prodRows.map(p=>({...p,internalCode:p.internal_code}));
     COMENZI=comRows;
