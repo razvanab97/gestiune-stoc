@@ -34,7 +34,7 @@ body{position:fixed;inset:0;font-family:var(--font);color:var(--t1);font-size:23
 }
 button,input,select,textarea,optgroup,option{font-family:inherit}
 button{cursor:pointer}
-.wrap{width:100%;max-width:1120px;height:var(--staff-vh,100dvh);min-height:0;margin:0 auto;padding:calc(14px + env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) calc(14px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));display:grid;grid-template-rows:auto auto auto auto minmax(0,1fr);overflow:hidden}
+.wrap{width:100%;max-width:1120px;height:var(--staff-vh,100dvh);min-height:0;margin:0 auto;padding:calc(14px + env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) calc(14px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));display:grid;grid-template-rows:auto auto auto auto auto minmax(0,1fr);overflow:hidden}
 .hdr{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap}
 .hdr-title{display:flex;align-items:baseline;gap:10px;min-width:0}
 .hdr h1{font-size:27px;font-weight:700}
@@ -55,9 +55,13 @@ button{cursor:pointer}
 .progress-bar-fill{height:100%;background:linear-gradient(90deg,var(--acc2),var(--acc));border-radius:999px;transition:width .3s}
 .progress-pct{font-family:var(--mono);font-size:17px;color:var(--t3);font-weight:700;flex-shrink:0}
 
-/* Bară curieri azi — evidență „au venit" (cerut direct), ascunsă complet cât timp nu există încă
-   niciun AWB azi (vezi renderCourierBar). */
-.courier-bar{display:none;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+/* Bară curieri azi — evidență „au venit" (cerut direct), vezi renderCourierBar. display:flex PERMANENT
+   (NU display:none) — .wrap e un grid cu un rând dedicat exact acestui element (vezi grid-template-rows
+   mai sus); un display:none l-ar scoate complet din grid, lăsând #main-area să cadă într-un rând greșit
+   (bug real găsit direct: „de ce s-a dereglat poziționarea în pagină"). Golit (:empty, fără niciun AWB
+   azi) colabează singur la 0 înălțime, vizual identic cu „ascuns”. */
+.courier-bar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.courier-bar:empty{margin-bottom:0}
 .courier-chip{padding:8px 14px;border-radius:999px;border:1.5px solid var(--b2);background:var(--surf2);color:var(--t2);font-size:14px;font-weight:700;white-space:nowrap}
 .courier-chip.on{border-color:var(--gr);background:var(--gr-bg);color:var(--gr)}
 
@@ -272,7 +276,7 @@ button{cursor:pointer}
    Pentru comenzile cu mai multe produse păstrăm lista completă; dacă sunt excepțional de multe linii,
    doar lista internă poate derula, fără să mute antetul, navigația sau butonul de confirmare. */
 @media (min-width:768px) and (max-width:1366px) and (orientation:landscape){
-  .wrap{padding-top:calc(7px + env(safe-area-inset-top));padding-bottom:calc(7px + env(safe-area-inset-bottom));grid-template-rows:auto auto auto auto minmax(0,1fr)}
+  .wrap{padding-top:calc(7px + env(safe-area-inset-top));padding-bottom:calc(7px + env(safe-area-inset-bottom));grid-template-rows:auto auto auto auto auto minmax(0,1fr)}
   .hdr{margin-bottom:1px}.hdr h1{font-size:18px}.hdr-title{gap:7px}.order-count{font-size:14px}.update-btn{font-size:11px;padding:3px 7px}.refresh-btn{font-size:12px;padding:4px 8px}.staff-name-badge{font-size:13px;padding:4px 9px}.sync-dot{width:8px;height:8px}
   .progress-bar-wrap{gap:8px;margin:2px 0 5px}.progress-bar{height:5px}.progress-pct{font-size:13px}
   .tabbar{gap:3px;padding:3px;margin-bottom:6px;border-radius:10px;overflow:hidden}.tab-btn{min-width:0;min-height:40px;padding:5px 3px;flex-direction:row;justify-content:center;gap:3px;font-size:12px;line-height:1.05}.tab-btn .ic{font-size:15px}.tab-badge{font-size:10px;min-width:13px;padding:0 3px;margin-left:0}
@@ -436,6 +440,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:427,date:'01.10.2026',text:'2 bug-uri reale reparate, raportate direct cu screenshot. (1) Poziționarea paginii s-a dereglat complet (card de comandă împins jos, cu un gol mare deasupra) — cauza: bara „Curieri azi" (#426) a adăugat un element nou în layout-ul paginii, fără să actualizeze și structura de rânduri din spate — rezolvat complet, re-așezat corect. (2) „De ce apar 24 de comenzi deși avem doar 13/14 încărcate azi prin Inclus" — comenzi din zilele trecute, încă neîmpachetate (păstrate intenționat, ca să nu dispară niciodată din greșeală — vezi #421/#422), se amestecau direct în Împachetare cu cele de azi, umflând numărul total. Acum, cerut direct („dacă rămân comenzi din zilele trecute, să se ducă automat în așteptare și le verificăm de acolo când e cazul"): orice comandă mai veche decât coada curentă (de la ultima „Coadă nouă"/reset automat 22:00) și încă neterminată trece automat în „În așteptare", cu motiv distinct afișat („📅 Comandă din ziua anterioară"), separat de comenzile chiar blocate pe o problemă. Verificat cu 5 teste izolate pe funcția reală din cod, rulate de 2 ori, inclusiv reproducerea exactă a raportului (4 comenzi, 2 noi + 2 vechi → doar cele 2 noi rămân în Împachetare).'},
   {n:426,date:'01.10.2026',text:'Bară nouă „Curieri azi", sub bara de progres, cerut direct: „o bară unde avem toți curierii pentru care avem AWB-uri într-o zi și să se selecteze atunci când au venit, pentru a avea o evidență". Lista nu e fixă — apare automat orice curier (FAN Courier/DPD/Sameday/GLS/Cargus/eMAG Courier etc.) care are măcar un AWB în coada activă de azi; dispare singură dacă nu există încă niciun AWB. Un tap marchează „✓ Nume curier · ora" (verde) când a venit să ridice coletele; încă un tap anulează, dacă a fost din greșeală. Reținut în bază (nu doar pe tabletă), scopat strict pe ziua curentă — se golește singur a doua zi, fără nicio curățare manuală; vizibil la fel pe orice dispozitiv (tabletă/telefon) care deschide Staff. Verificat cu 9 teste izolate pe funcțiile reale din cod, plus un test complet live pe baza de date reală (scriere/citire/suprascriere/ștergere), toate rulate de 2 ori.'},
   {n:425,date:'30.09.2026',text:'Feature — cerut direct: „să apară comenzile în ordinea din admin — întâi eMAG, apoi Trendyol și apoi Vinted, să nu se mai încurce între ele". Coada de împachetare (și navigarea Anterioară/Următoare) se ordonează acum întâi după platformă — eMAG, apoi Trendyol, apoi Vinted, la fel ca în admin (Comenzi Platforme → Importă) — iar în interiorul aceleiași platforme rămâne ordinea de dinainte, după data/ora comenzii. Vânzările directe (fără platformă de marketplace) rămân ultimele.'},
   {n:424,date:'29.09.2026',text:'Feature — cerut direct: „la căutare, să se poată căuta mult mai ușor — ultimele 4 cifre din AWB, primele 2-3 litere din numele clientului, sau firma de curierat (ex. DPD)". Căutarea (📋 tab Căutare) e acum diacritice-insensibilă (Gheorghiță = gheorghita), caută și după numele curierului (nou — nu era verificat deloc înainte) și după platformă (eMAG/Trendyol/Vinted). Rezultatele sunt SORTATE după relevanță (potrivire exactă sau la început de text înaintea unei potriviri oarecare în mijloc), iar la egalitate, cele mai recente primele. Cardul din rezultate arată acum și numele clientului (lipsea complet) și curierul lângă AWB, ca să confirmi rapid că ai găsit comanda corectă.'},
@@ -542,7 +547,18 @@ function computeOrders(){
     g.finalized=g.allDone&&!g.hasUnresolvedIssue;
     g.finalizedWithoutAwb=g.finalized&&g.needsAwb;
     g.complete=g.finalized&&!g.needsAwb;
-    g.waiting=g.hasUnresolvedIssue;
+    // Cerut direct — raportat cu date reale („apar 24 de comenzi deși avem doar 13/14 încărcate azi
+    // prin Inclus... dacă rămân comenzi din zilele trecute, să se ducă automat în așteptare"): extinderea
+    // de 14 zile de mai sus (staffComenziUrl, #421/#422 — păstrează orice comandă neîmpachetată/blocată,
+    // indiferent de vechime, ca să nu dispară niciodată din greșeală) aducea corect orice restanță veche
+    // în COMENZI, dar fără acest flag intrau direct în Împachetare, amestecate cu coada de azi — umflând
+    // numărul total și obligând la scroll prin comenzi vechi ca să ajungi la cele noi. O comandă (grup)
+    // „carry-over” — mai veche decât pragul curent al cozii (staffQueueStartedAt, setat la ultima „Coadă
+    // nouă"/reset automat 22:00) ȘI încă neterminată — trece acum automat în „În așteptare", exact ca o
+    // comandă blocată, dar cu un motiv distinct afișat (vezi waitingListItemHtml) — rămâne acolo, la
+    // verificare manuală, în loc să umple coada activă de azi.
+    g.isCarryover=!g.finalized&&String(g.sortAt)<String(staffQueueStartedAt);
+    g.waiting=g.hasUnresolvedIssue||g.isCarryover;
     const lastPackedAt=g.lines.map(l=>l.impachetat_at).filter(Boolean).sort().slice(-1)[0]||'';
     g.finalizedToday=g.finalized&&lastPackedAt.slice(0,10)===td();
   });
@@ -634,8 +650,9 @@ function renderCourierBar(){
   const host=document.getElementById('courier-bar');
   if(!host)return;
   const couriers=couriersTodayList();
-  if(!couriers.length){host.style.display='none';host.innerHTML='';return;}
-  host.style.display='flex';
+  // NU display:none — vezi comentariul de la .courier-bar din CSS (rândul de grid dedicat). Golit, :empty
+  // colabează singur vizual; innerHTML gol e suficient.
+  if(!couriers.length){host.innerHTML='';return;}
   host.innerHTML=couriers.map(c=>{
     const at=COURIER_ARRIVALS[c];
     const label=at?`✓ ${esc(c)} · ${new Date(at).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'})}`:esc(c);
@@ -1341,7 +1358,7 @@ function renderWaitingTab(host){
     <div class="ord-hdr">
       <span class="ord-pl ${ord.platforma}">${plLabel}</span>
       ${ord.comandaId?`<span class="ord-num">#${esc(ord.comandaId)}</span>`:''}
-      <span class="ord-waiting-badge">⏸ În așteptare</span>
+      <span class="ord-waiting-badge">${ord.isCarryover&&!ord.hasUnresolvedIssue?'📅 Din ziua anterioară':'⏸ În așteptare'}</span>
     </div>
     <div id="lock-banner-slot"></div>
     ${ord.awb?awbBoxHtml(ord.awb,ord.awbCourier):''}
@@ -1350,6 +1367,22 @@ function renderWaitingTab(host){
   </div>`;
 }
 function waitingListItemHtml(o){
+  // Comandă „carry-over" (din ziua anterioară, nicio problemă raportată — vezi computeOrders) — motiv
+  // distinct de afișat, ca să nu arate fals ca „⛔ Problemă" (text generic rezervat mai jos liniilor
+  // chiar blocate de cineva din Staff).
+  if(o.isCarryover&&!o.hasUnresolvedIssue){
+    const line=o.lines[0];
+    const p=findProdus(line.produs_id);
+    const img=p&&p.img?`<img class="list-item-th" src="${esc(imgSrc(p.img))}" onerror="this.style.display='none'">`:`<div class="list-item-th-ph">📦</div>`;
+    return`<div class="list-item" onclick="curKey='${o.key}';renderMain()">
+      ${img}
+      <div class="list-item-main">
+        <div class="list-item-nm">${o.comandaId?'#'+esc(o.comandaId)+' · ':''}${esc(line.produs_nume||'')}</div>
+        <div class="list-item-issue" style="color:var(--t3)">📅 Comandă din ${esc(o.data||'')} — verifică și reia manual</div>
+      </div>
+      <div class="list-item-time">${esc(timeAgo(o.sortAt))}</div>
+    </div>`;
+  }
   const blockedLine=o.lines.find(l=>l.staff_blocked&&!l.staff_issue_resolved)||o.lines[0];
   const p=findProdus(blockedLine.produs_id);
   const img=p&&p.img?`<img class="list-item-th" src="${esc(imgSrc(p.img))}" onerror="this.style.display='none'">`:`<div class="list-item-th-ph">📦</div>`;
