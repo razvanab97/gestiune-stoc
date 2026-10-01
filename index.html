@@ -3965,6 +3965,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:512,text:'Previzualizare vizuală AWB în Staff, cerut direct: „pe lângă numărul AWB-ului, care nu e de cele mai multe ori cel mai ușor de identificat, să apară și previzualizarea AWB-ului, mai mică, în timp real, astfel încât să fie ușor de asociat". Interviu complet de design în .tmp/grill-me/staff-awb-preview.md. La citirea etichetelor (📂 Citește din dosar / Alege PDF-uri), pe lângă AWB-ul în sine, se randează acum REAL pagina etichetei (PDF.js, deja folosit la extragerea textului — page.render pe canvas, nicio bibliotecă nouă) și se urcă în Supabase Storage (bucket nou, awb-labels — aceeași tehnică deja folosită la pozele de produs, niciodată base64 în bază). Randare întotdeauna la lățime fixă (700px), indiferent de formatul nativ al curierului (DPD/Sameday/FAN/GLS/Cargus/eMAG Courier au dimensiuni foarte diferite) — verificat direct, cu etichete reale de pe disc, pe 2 formate diferite (Sameday A4, DPD termică), ambele perfect lizibile. Previzualizarea se generează ÎN FUNDAL, pe măsură ce se asociază AWB-urile (la „Asociază AWB-urile") — nu încetinește fluxul principal, scrisă separat, cheiată pe comandă+platformă+AWB (nu suprascrie o asociere ulterioară diferită). Necesită 2 pași în Supabase (coloană nouă + bucket de Storage — vezi mesajul din chat); până atunci, codul degradează grațios (AWB-ul se asociază normal, doar fără previzualizare).',date:'2026-10-01'},
   {n:511,text:'Asociere AWB — 2 bug-uri reale reparate, raportate direct pe comenzi Vinted reale. (1) Format Cargus „Click & Collect" nou, varianta „Outbound Internațional" (etichetă reală trimisă — „acesta este un AWB Cargus, atașez formatul să se recunoască pe viitor"): rămânea „format nerecunoscut" din 2 motive — „Cargus” apare doar cu literă mică (originalul cerea CARGUS cu majuscule), iar „Serviciu Click & Collect” apare fără „:" după „Serviciu" (originalul cerea „Serviciu:"); perechea de numere echivalentă AWB-ului nu mai stă pe aceeași linie cu „/" ca-n formatul vechi, ci pe 2 rânduri diferite, cu încă un rând intercalat între ele (orașele rutei) — reconstruită acum manual. (2) O etichetă Vinted/eMAG Ungaria deja asociată cu o comandă (AWB deja scris, vizibilă în Staff), recitită din orice motiv (fișier nearhivat încă, pus din nou în dosar), apărea fals ca „nepotrivită" — căutarea de match se uita STRICT printre comenzi nerezolvate (fără AWB încă), excluzând exact comanda deja corect asociată. Acum se verifică întâi, separat, dacă AWB-ul e deja scris exact pe o comandă — dacă da, asocierea se confirmă direct (rescriere fără efect), fără avertisment fals, și fișierul se arhivează normal data asta. Verificat cu 9 teste izolate (eticheta Cargus reală, formatul vechi neafectat, etichetă anulată, text fără „cargus" rămâne nerecunoscut, comandă deja asociată Vinted/eMAG HU găsită direct, comandă încă „Neinclus" cu același AWB, fără nicio potrivire rămâne negăsit), rulate de 2 ori.',date:'2026-10-01'},
   {n:510,text:'Listing builder (Research / import produs din URL) — reparat „JSON AI invalid și nereparabil": pasul de auto-reparare a JSON-ului nu seta nivelul de raționament jos (modelele gpt-5.6 puteau consuma tot bugetul și întoarce răspuns gol) și avea un plafon de 2200 tokeni, sub răspunsul „synthesize" (4200) pe care trebuia să-l repare. Acum: effort low + plafon 5000.',date:'2026-09-30'},
   {n:509,text:'Comenzi Platforme → Expediere — „Trimite AWB prin eMAG" salvează acum și PDF-ul etichetei, nu doar codul AWB (cerut direct, aceeași cauză raportată ca la „13+8 AWB-uri, doar 20 de comenzi"): un AWB emis din acest buton nu avea NICIODATĂ fișier sursă local — trebuia descărcat manual din Seller Center și adăugat separat în Desktop/AWB-uri ca să devină tipăribil din „🖨️ PDF AWB comenzi incluse". Conectorul local cere acum PDF-ul direct de la eMAG (endpoint oficial `/awb/read_pdf`, documentat „6.3. Reading AWB PDF files") imediat după emitere — momentul e obligatoriu, `emag_id`-ul necesar nu mai poate fi recuperat mai târziu — și îl salvează direct în Desktop/AWB-uri. Admin asociază sursa pe loc, fără să mai fie nevoie de „📂 Citește din dosar" separat — AWB-ul e imediat tipăribil. Dacă salvarea PDF-ului eșuează (rar — Conector neactualizat, rețea), AWB-ul tot se emite și se salvează normal, doar fără fișier sursă automat, cu avertisment clar. Necesită Conectorul local ACTUALIZAT pe Mac (`git pull` + `launchctl kickstart -k gui/$(id -u)/ro.abhomes.emag-local-connector`); nu recuperează retroactiv AWB-urile emise înainte de acest fix. Verificat cu 3 scenarii izolate (PDF salvat automat, PDF eșuat, fără AWB deloc), rulate de 2 ori pe funcția reală din cod, plus sintaxa conectorului verificată de 2 ori.',date:'2026-09-30'},
@@ -6734,6 +6735,66 @@ async function uploadProductImageToStorage(dataUrl){
   });
   if(!r.ok)throw new Error('Storage upload a eșuat: '+await r.text());
   return `${SUPA_URL}/storage/v1/object/public/product-images/${filename}`;
+}
+// Previzualizare vizuală AWB în Staff — cerut direct (vezi .tmp/grill-me/staff-awb-preview.md):
+// „pe lângă numărul AWB, care nu e de cele mai multe ori cel mai ușor de identificat, să apară și
+// previzualizarea AWB-ului, mai mic, ca să fie ușor de asociat [vizual coletul cu comanda]". Randăm
+// REAL pagina etichetei (nu un cod de bare generat din text) — reutilizează EXACT PDF.js deja
+// încărcat de extractPdfPagesText, dar randează pe canvas în loc să extragă text (page.render, nativ
+// în PDF.js, fără bibliotecă nouă). Lățime țintă fixă (nu scale fix) — etichetele termice 10x15cm și
+// paginile A4 au dimensiuni native foarte diferite; normalizăm la o imagine de mărime consecventă
+// indiferent de formatul curierului (DPD/FAN/Sameday/GLS/Cargus/eMAG Courier).
+async function renderPdfPageToImageDataUrl(blob,pageNum){
+  if(!window.pdfjsLib){
+    await new Promise((resolve,reject)=>{
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+      s.onload=resolve;s.onerror=reject;
+      document.head.appendChild(s);
+    });
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
+  const arrayBuffer=await blob.arrayBuffer();
+  const pdf=await window.pdfjsLib.getDocument({data:arrayBuffer}).promise;
+  const page=await pdf.getPage(pageNum||1);
+  const baseViewport=page.getViewport({scale:1});
+  const scale=700/baseViewport.width;
+  const viewport=page.getViewport({scale});
+  const canvas=document.createElement('canvas');
+  canvas.width=viewport.width;canvas.height=viewport.height;
+  await page.render({canvasContext:canvas.getContext('2d'),viewport}).promise;
+  return canvas.toDataURL('image/jpeg',.82);
+}
+// Upload direct în Storage, bucket separat (awb-labels) — aceeași tehnică ca uploadProductImageToStorage.
+async function uploadAwbPreviewToStorage(dataUrl){
+  const m=dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+  if(!m)throw new Error('Format imagine invalid');
+  const mime=m[1],ext=mime.split('/')[1]||'jpg';
+  const bin=atob(m[2]);
+  const bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+  const filename=Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.'+ext;
+  const r=await fetch(`${SUPA_URL}/storage/v1/object/awb-labels/${filename}`,{
+    method:'POST',
+    headers:{apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY,'Content-Type':mime},
+    body:bytes
+  });
+  if(!r.ok)throw new Error('Storage upload a eșuat: '+await r.text());
+  return `${SUPA_URL}/storage/v1/object/public/awb-labels/${filename}`;
+}
+// Orchestrează randare+upload+scriere, ÎN FUNDAL, FĂRĂ să blocheze fluxul principal de asociere AWB
+// (cerut direct — „rezultatul apare imediat, pozele apar treptat"): apelanții NU așteaptă această
+// funcție (fire-and-forget). Scrierea finală e cheiată pe comandaId+platforma+awb (nu pe o referință
+// păstrată din momentul citirii) — găsește rândul corect indiferent CÂND se termină randarea+upload-ul
+// (poate fi mult după ce AWB-ul în sine s-a scris deja, mai ales pe etichete care au așteptat
+// asociere manuală), și NU suprascrie dacă între timp acel AWB a fost deja înlocuit cu altceva.
+async function generateAwbPreviewInBackground(blob,pageNum,awb,comandaId,platforma){
+  if(!comandaId||!platforma||!awb)return;
+  try{
+    const dataUrl=await renderPdfPageToImageDataUrl(blob,pageNum);
+    const url=await uploadAwbPreviewToStorage(dataUrl);
+    await patchAwbWithSource(`comanda_id=eq.${encodeURIComponent(comandaId)}&platforma=eq.${encodeURIComponent(platforma)}&awb=eq.${encodeURIComponent(awb)}`,{awb_preview_url:url});
+  }catch(e){console.warn('Previzualizare AWB eșuată (fără impact asupra asocierii AWB în sine):',e);}
 }
 
 // ── MAP DB ↔ APP ──
@@ -21568,7 +21629,9 @@ async function handleAwbPdfFile(ev){
         // limbă) și extrage exact aceste semnale. Fără un cod AWB citit, nu are sens — nimic de asociat.
         if(!p)p=await aiFallbackAwbMatch(text);
         if(p&&p.courierCanceled)awbCanceledPages.push({label,awb:p.awb,comandaId:p.comandaId,file:file.name,page:i+1});
-        else if(p)pairs.push({...p,file:file.name,page:i+1});
+        // _blob — reținut și pentru previzualizarea vizuală AWB (randată mai târziu, la
+        // applyAwbAssociation — vezi generateAwbPreviewInBackground); `file` e deja un Blob (File).
+        else if(p)pairs.push({...p,file:file.name,page:i+1,_blob:file});
         else awbUnrecognizedPages.push({label,file:file.name,page:i+1});
       }
     }
@@ -21680,7 +21743,10 @@ async function readAwbFolderPdfs(){
     const awbCreatedVintedComandaIds=[];
     for(const f of files){
       try{
-        const pages=await extractPdfPagesText(base64ToBlob(f.data,'application/pdf'));
+        // Reținut și pentru previzualizarea vizuală AWB (randată mai târziu, la applyAwbAssociation —
+        // vezi generateAwbPreviewInBackground), ca să nu mai decodăm base64 a doua oară.
+        const blob=base64ToBlob(f.data,'application/pdf');
+        const pages=await extractPdfPagesText(blob);
         for(let i=0;i<pages.length;i++){
           const text=pages[i];
           let p=parseAwbLabelText(text);
@@ -21714,7 +21780,7 @@ async function readAwbFolderPdfs(){
           // deși aveau AWB): spre deosebire de handleAwbPdfFile (selectare manuală), bucla asta nu reținea
           // NICIODATĂ numărul paginii — awb_source_page rămânea mereu null, deci activeAwbPrintOrders nu
           // găsea niciodată o pagină sursă de tipărit, oricâte comenzi ar fi fost incluse.
-          else if(p)pairs.push({...p,file:f.name,page:i+1});
+          else if(p)pairs.push({...p,file:f.name,page:i+1,_blob:blob});
           else awbUnrecognizedPages.push({label:`${f.name} p.${i+1}`,file:f.name,page:i+1});
         }
       }catch(e){console.warn('PDF ignorat din dosar:',f.name,e);}
@@ -21851,10 +21917,11 @@ function renderAwbPreview(){
 async function patchAwbWithSource(filter,source){
   try{return await dbPatch(`platforma_comenzi?${filter}`,source);}
   catch(e){
-    // Migrațiile noi (fișier+pagină, apoi curier) pot fi rulate treptat — dacă o coloană încă nu
-    // există, o scoatem din body și reîncercăm, fără să pierdem restul câmpurilor care CHIAR există.
-    // AWB-ul în sine rămâne mai important decât trasabilitatea suplimentară, deci nu blocăm operațiunea.
-    const m=String(e.message||e).match(/Could not find the '(awb_source_file|awb_source_page|awb_courier)' column/i);
+    // Migrațiile noi (fișier+pagină, apoi curier, apoi previzualizare) pot fi rulate treptat — dacă o
+    // coloană încă nu există, o scoatem din body și reîncercăm, fără să pierdem restul câmpurilor care
+    // CHIAR există. AWB-ul în sine rămâne mai important decât trasabilitatea/previzualizarea
+    // suplimentară, deci nu blocăm operațiunea principală pentru atât.
+    const m=String(e.message||e).match(/Could not find the '(awb_source_file|awb_source_page|awb_courier|awb_preview_url)' column/i);
     if(m){const rest={...source};delete rest[m[1]];return patchAwbWithSource(filter,rest);}
     throw e;
   }
@@ -21883,6 +21950,11 @@ async function applyAwbAssociation(){
           // lăsată să aștepte un „✓ Inclus” manual separat.
           const idx=pcImpParsed.indexOf(it);
           if(idx>=0){it.include=true;await syncPcomLineCommitState(idx);}
+          // Previzualizare vizuală AWB — ÎN FUNDAL, nu blocăm restul asocierilor pentru atât (cerut
+          // direct, vezi .tmp/grill-me/staff-awb-preview.md). p._blob există doar pe liniile venite
+          // dintr-un PDF chiar citit (readAwbFolderPdfs/handleAwbPdfFile) — lipsește pe cele reconstruite
+          // altfel (ex. AI fallback fără fișier reținut), caz în care funcția iese tăcut, fără eroare.
+          if(p._blob)generateAwbPreviewInBackground(p._blob,p.page,p.awb,p.comandaId,it.platforma);
           continue;
         }
         // Linia a fost între timp comisă manual („✓ Inclus") — există acum în PCOM, tratată normal mai jos.
@@ -21900,6 +21972,8 @@ async function applyAwbAssociation(){
       if(bump)source.created_at=bump;
       await patchAwbWithSource(`comanda_id=eq.${encodeURIComponent(p.comandaId)}&platforma=eq.${encodeURIComponent(platforma)}`,source);
       PCOM.filter(o=>o.comandaId===p.comandaId&&o.platforma===platforma).forEach(o=>Object.assign(o,{awb:p.awb,awbSourceFile:p.file||'',awbSourcePage:p.page||null,awbCourier:p.courier||'',...(bump?{createdAt:bump}:{})}));
+      // Previzualizare vizuală AWB — ÎN FUNDAL, vezi comentariul de mai sus (ramura „Neinclus").
+      if(p._blob)generateAwbPreviewInBackground(p._blob,p.page,p.awb,p.comandaId,platforma);
     }
     // Cerut direct — „dacă adăugăm 18 AWB-uri și avem 16 comenzi incluse, să primim notificare pentru
     // celelalte": pe lângă „găsită, dar comanda nu există" (unmatched), acum se păstrează la fel și

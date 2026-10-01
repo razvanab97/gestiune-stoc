@@ -115,6 +115,15 @@ button{cursor:pointer}
 .awb-num{font-family:var(--mono);font-weight:800;font-size:29px;color:var(--t1);word-break:break-all}
 .awb-num-tail{font-size:41px;color:#1D4ED8;margin-left:2px}
 .awb-pending{color:var(--t3);font-size:17px;font-weight:600}
+/* Previzualizare vizuală AWB — cerut direct (vezi .tmp/grill-me/staff-awb-preview.md): „pe lângă
+   numărul AWB... să apară și previzualizarea, mai mic, ca să fie ușor de asociat". Thumbnail/
+   placeholder în ACEEAȘI casetă ca textul AWB (rândul flex existent, cu spațiu liber azi). */
+.awb-preview-thumb{width:56px;height:56px;border-radius:10px;object-fit:cover;border:1.5px solid rgba(118,87,246,.3);flex-shrink:0;cursor:zoom-in;background:#fff}
+.awb-preview-placeholder{width:56px;height:56px;border-radius:10px;border:1.5px dashed var(--b3);background:var(--surf2);color:var(--t3);font-size:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.awb-zoom-overlay{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:270;display:none;align-items:center;justify-content:center;padding:20px}
+.awb-zoom-overlay.on{display:flex}
+.awb-zoom-overlay img{max-width:100%;max-height:100%;border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,.5)}
+.awb-photo-capture-btn{position:absolute;left:50%;bottom:calc(30px + env(safe-area-inset-bottom));transform:translateX(-50%);width:76px;height:76px;border-radius:50%;background:#fff;border:4px solid rgba(255,255,255,.4);font-size:30px;display:flex;align-items:center;justify-content:center;z-index:2}
 .deadline-badge{font-size:16px;font-weight:700;padding:6px 12px;border-radius:999px;display:inline-block}
 .deadline-ok{color:var(--t3);background:var(--surf2)}
 .deadline-soon{color:var(--or);background:var(--or-bg)}
@@ -337,6 +346,18 @@ button{cursor:pointer}
   <div class="scan-status" id="scan-status"></div>
 </div>
 
+<!-- Previzualizare vizuală AWB — zoom (tap pe thumbnail) + foto live (buton „adaugă poză" pe
+     placeholder, cerut direct, vezi .tmp/grill-me/staff-awb-preview.md). -->
+<div class="awb-zoom-overlay" id="awb-zoom-overlay" onclick="closeAwbPreviewZoom()">
+  <img id="awb-zoom-img" src="">
+</div>
+<div class="scan-overlay" id="awb-photo-overlay">
+  <video class="scan-video" id="awb-photo-video" muted playsinline></video>
+  <div class="scan-top-bar"><button type="button" class="scan-close-btn" onclick="closeAwbPreviewCapture()">✕ Închide</button></div>
+  <div class="scan-status" id="awb-photo-status">Fotografiază eticheta AWB</div>
+  <button type="button" class="awb-photo-capture-btn" onclick="captureAwbPreviewPhoto()">📸</button>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <div class="msg-overlay" id="msg-overlay">
@@ -382,11 +403,86 @@ function imgSrc(url){if(!url)return'';if(url.startsWith('data:'))return url;if(u
 // Cerut direct: numele curierului (Sameday/DPD/FAN Courier/GLS/Cargus…) afișat înaintea numărului, ca
 // să nu mai trebuiască dedus din primele cifre ale AWB-ului. Gol pe comenzi vechi/asociate manual,
 // unde curierul nu a fost reținut — eticheta rămâne „AWB", ca înainte.
-function awbBoxHtml(awb,courier){
+// previewUrl/comandaId/platforma — previzualizare vizuală AWB, cerut direct (vezi .tmp/grill-me/
+// staff-awb-preview.md). Fără poză (AWB emis direct prin eMAG, comenzi vechi, sau fără comandaId/
+// platforma cunoscute — ex. linie din Jurnal, „direct") → placeholder cu buton „adaugă poză" live.
+function awbBoxHtml(awb,courier,previewUrl,comandaId,platforma){
   if(!awb)return'';
   const s=esc(awb),head=s.slice(0,-4),tail=s.slice(-4);
   const lbl=courier?`${esc(courier)} · AWB`:'AWB';
-  return`<div class="awb-box"><div><div class="awb-lbl">${lbl}</div><div class="awb-num">${head}<span class="awb-num-tail">${tail}</span></div></div></div>`;
+  const previewHtml=previewUrl
+    ?`<img class="awb-preview-thumb" src="${esc(previewUrl)}" onclick="event.stopPropagation();openAwbPreviewZoom('${esc(previewUrl)}')" onerror="this.style.display='none'">`
+    :(comandaId&&platforma?`<button type="button" class="awb-preview-placeholder" onclick="event.stopPropagation();openAwbPreviewCapture('${esc(comandaId)}','${esc(platforma)}')" title="Adaugă poză etichetă">📷</button>`:'');
+  return`<div class="awb-box"><div><div class="awb-lbl">${lbl}</div><div class="awb-num">${head}<span class="awb-num-tail">${tail}</span></div></div>${previewHtml}</div>`;
+}
+let awbPhotoStream=null,awbPhotoComandaId='',awbPhotoPlatforma='';
+function openAwbPreviewZoom(url){
+  const img=document.getElementById('awb-zoom-img');
+  if(!img)return;
+  img.src=url;
+  document.getElementById('awb-zoom-overlay')?.classList.add('on');
+}
+function closeAwbPreviewZoom(){document.getElementById('awb-zoom-overlay')?.classList.remove('on');}
+async function openAwbPreviewCapture(comandaId,platforma){
+  if(!navigator.mediaDevices?.getUserMedia){showToast('Camera nu e disponibilă în acest browser');return;}
+  awbPhotoComandaId=comandaId;awbPhotoPlatforma=platforma;
+  const overlay=document.getElementById('awb-photo-overlay'),video=document.getElementById('awb-photo-video'),status=document.getElementById('awb-photo-status');
+  overlay?.classList.add('on');
+  if(status)status.textContent='Fotografiază eticheta AWB';
+  try{
+    // Cameră din spate (environment), la fel ca la scanarea codurilor de bare (#409) — eticheta e
+    // fizic în fața telefonului/tabletei, nu a operatorului.
+    awbPhotoStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'}}});
+    if(video){video.srcObject=awbPhotoStream;await video.play();}
+  }catch(e){
+    closeAwbPreviewCapture();
+    showToast('Nu s-a putut porni camera: '+(e.message||e));
+  }
+}
+function closeAwbPreviewCapture(){
+  document.getElementById('awb-photo-overlay')?.classList.remove('on');
+  try{awbPhotoStream?.getTracks().forEach(t=>t.stop());}catch(e){}
+  awbPhotoStream=null;
+}
+// Upload direct în Supabase Storage (bucket awb-labels) — aceeași tehnică/bucket ca
+// uploadAwbPreviewToStorage din index.html (fișiere separate, fără modul JS comun între ele).
+async function uploadAwbPreviewToStorageStaff(dataUrl){
+  const m=dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+  if(!m)throw new Error('Format imagine invalid');
+  const mime=m[1],ext=mime.split('/')[1]||'jpg';
+  const bin=atob(m[2]);
+  const bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+  const filename=Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.'+ext;
+  const r=await fetch(`${SUPA_URL}/storage/v1/object/awb-labels/${filename}`,{
+    method:'POST',
+    headers:{apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY,'Content-Type':mime},
+    body:bytes
+  });
+  if(!r.ok)throw new Error('Storage upload a eșuat: '+await r.text());
+  return `${SUPA_URL}/storage/v1/object/public/awb-labels/${filename}`;
+}
+async function captureAwbPreviewPhoto(){
+  const video=document.getElementById('awb-photo-video'),status=document.getElementById('awb-photo-status');
+  if(!video||!video.videoWidth)return;
+  const comandaId=awbPhotoComandaId,platforma=awbPhotoPlatforma;
+  if(status)status.textContent='Se urcă poza…';
+  try{
+    const canvas=document.createElement('canvas');
+    canvas.width=video.videoWidth;canvas.height=video.videoHeight;
+    canvas.getContext('2d').drawImage(video,0,0);
+    const dataUrl=canvas.toDataURL('image/jpeg',.85);
+    const url=await uploadAwbPreviewToStorageStaff(dataUrl);
+    const updated=await sb('PATCH',`platforma_comenzi?comanda_id=eq.${encodeURIComponent(comandaId)}&platforma=eq.${encodeURIComponent(platforma)}`,{awb_preview_url:url});
+    if(!updated?.length){showToast('Nu am găsit comanda — poza nu s-a salvat');closeAwbPreviewCapture();return;}
+    COMENZI.filter(o=>o.comanda_id===comandaId&&o.platforma===platforma).forEach(o=>o.awb_preview_url=url);
+    closeAwbPreviewCapture();
+    showToast('✓ Poză etichetă salvată');
+    renderMain();
+  }catch(e){
+    showToast('Nu am putut salva poza: '+(e.message||e));
+    if(status)status.textContent='Fotografiază eticheta AWB';
+  }
 }
 function td(){return new Date().toISOString().slice(0,10);}
 // Termen maxim de expediere (cerut direct — „data maximă de finalizare, cu timer standard, nu tip
@@ -440,6 +536,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:430,date:'01.10.2026',text:'Previzualizare vizuală AWB, cerut direct: „pe lângă numărul AWB-ului, care nu e de cele mai multe ori cel mai ușor de identificat, să apară și previzualizarea AWB-ului, mai mică, în timp real, astfel încât să fie ușor de asociat". Pe lângă caseta cu numărul AWB (ca înainte), apare acum și o poză mică a etichetei chiar asociate — nu un cod de bare oarecare, ci randarea reală a PDF-ului curierului (verificat direct, pe etichete reale — perfect lizibilă). Un tap pe ea o mărește pe tot ecranul. Pentru comenzile fără previzualizare încă (AWB emis direct prin eMAG, sau comenzi mai vechi) apare un buton „📷" — deschide camera (aceeași folosită la scanarea codurilor de bare, #409), fotografiezi eticheta fizică, se salvează direct. Verificat cu 5 teste izolate pe funcția reală din cod (toate cele 3 stări posibile — poză, buton foto, caseta goală — plus protecție la caractere speciale), rulate de 2 ori. Necesită migrarea rulată în Supabase (vezi admin); până atunci, previzualizările nu apar, dar restul funcționează normal.'},
   {n:429,date:'01.10.2026',text:'Bug real, grav, reparat — continuare directă la #427, raportat direct: „nu mai apar nici AWB-urile acum... ele au fost introduse astăzi și asociate". Cauza: „carry-over" (comandă din ziua anterioară → În așteptare, #427) compara cu ORA EXACTĂ a ultimei „Coadă nouă", nu cu ziua calendaristică — un reset manual la mijlocul dimineții lăsa comenzi importate și asociate cu AWB cu doar câteva minute ÎNAINTE de click, tot din ziua curentă, etichetate greșit „din ziua anterioară" și împinse în „În așteptare", invizibile acolo unde erau căutate. Acum compară strict cu ziua calendaristică (td()) — indiferent câte „Coadă nouă" se apasă în aceeași zi, nimic din ziua curentă nu mai poate ajunge greșit în așteptare. Verificat live, direct pe date reale: AWB-urile de azi sunt confirmate corect scrise în bază (11 din 13 comenzi active, verificat prin interogare directă — stocul neatins, nicio pierdere de date). Verificat cu 3 teste izolate suplimentare (exact scenariul regresiei — reset la mijlocul zilei cu comenzi importate 2 minute înainte, rămân corect NU în așteptare), plus cele 5 teste anterioare de la #427, toate rulate de 2 ori, fără nicio regresie.'},
   {n:428,date:'01.10.2026',text:'Continuare directă la #427 (comenzi vechi → „În așteptare"), raportat direct: „s-au mutat și în așteptare și cu toate astea, tot apar — repară". Mutarea era corectă — comenzile vechi chiar dispăruseră din Împachetare — dar numărul de sus („X comenzi") continua să adune TOTAL comenzi nefinalizate, adică Împachetare + În așteptare LA UN LOC, nu doar coada activă. Pe datele reale verificate live: 21 comenzi vechi (corect mutate în așteptare) + 2 comenzi noi de azi = 23, afișat ca atare în capul paginii, deși Împachetarea arăta corect doar 2. Acum numărul de sus (și procentul X/Y) exclude complet „În așteptare" — reflectă STRICT ce mai e de împachetat acum, cu „În așteptare" rămas vizibil separat, pe propriul buton (badge-ul roșu, neschimbat). Verificat cu 4 teste izolate, rulate de 2 ori, inclusiv reproducerea exactă a cifrelor reale (21 + 2 → capul paginii arată „2 comenzi”, nu 23).'},
   {n:427,date:'01.10.2026',text:'2 bug-uri reale reparate, raportate direct cu screenshot. (1) Poziționarea paginii s-a dereglat complet (card de comandă împins jos, cu un gol mare deasupra) — cauza: bara „Curieri azi" (#426) a adăugat un element nou în layout-ul paginii, fără să actualizeze și structura de rânduri din spate — rezolvat complet, re-așezat corect. (2) „De ce apar 24 de comenzi deși avem doar 13/14 încărcate azi prin Inclus" — comenzi din zilele trecute, încă neîmpachetate (păstrate intenționat, ca să nu dispară niciodată din greșeală — vezi #421/#422), se amestecau direct în Împachetare cu cele de azi, umflând numărul total. Acum, cerut direct („dacă rămân comenzi din zilele trecute, să se ducă automat în așteptare și le verificăm de acolo când e cazul"): orice comandă mai veche decât coada curentă (de la ultima „Coadă nouă"/reset automat 22:00) și încă neterminată trece automat în „În așteptare", cu motiv distinct afișat („📅 Comandă din ziua anterioară"), separat de comenzile chiar blocate pe o problemă. Verificat cu 5 teste izolate pe funcția reală din cod, rulate de 2 ori, inclusiv reproducerea exactă a raportului (4 comenzi, 2 noi + 2 vechi → doar cele 2 noi rămân în Împachetare).'},
@@ -539,6 +636,10 @@ function computeOrders(){
     // AWB, ca să nu mai trebuiască dedus din primele cifre. Reținut la asociere (vezi awb_courier din
     // index.html); gol pe comenzi vechi, asociate înainte de această coloană.
     g.awbCourier=(g.lines.find(l=>l.awb_courier)||{}).awb_courier||'';
+    // Previzualizare vizuală AWB — cerut direct (vezi .tmp/grill-me/staff-awb-preview.md), aceeași
+    // valoare pe toate liniile pachetului, la fel ca AWB/curier; lipsește (gol) pe comenzi fără sursă
+    // de etichetă (AWB emis direct prin eMAG, comenzi vechi) — degradează la placeholder în awbBoxHtml.
+    g.awbPreviewUrl=(g.lines.find(l=>l.awb_preview_url)||{}).awb_preview_url||'';
     // Termen maxim de expediere (cerut direct) — la fel ca AWB/curier, aceeași valoare pe toate liniile
     // pachetului; gol pe comenzi vechi, importate înainte de coloana asta (rulează migration_
     // platforma_comenzi_termen.sql).
@@ -786,7 +887,7 @@ function renderPackTab(host){
       ${ord.clientNume?`<div class="ord-client">${esc(ord.clientNume)}</div>`:''}
     </div>
     <div id="lock-banner-slot"></div>
-    ${ord.awb?awbBoxHtml(ord.awb,ord.awbCourier):(ord.platforma!=='direct'?`<div class="awb-box"><span class="awb-pending">AWB în așteptare</span></div>`:'')}
+    ${ord.awb?awbBoxHtml(ord.awb,ord.awbCourier,ord.awbPreviewUrl,ord.comandaId,ord.platforma):(ord.platforma!=='direct'?`<div class="awb-box"><span class="awb-pending">AWB în așteptare</span></div>`:'')}
     ${!ord.finalized?deadlineBadgeHtml(ord.termenExpediere):''}
     ${multi?`<div class="progress-mini">${ord.lines.length} produse în același colet</div>`:''}
     <div class="lines">${linesHtml}</div>
@@ -1376,7 +1477,7 @@ function renderWaitingTab(host){
       <span class="ord-waiting-badge">${ord.isCarryover&&!ord.hasUnresolvedIssue?'📅 Din ziua anterioară':'⏸ În așteptare'}</span>
     </div>
     <div id="lock-banner-slot"></div>
-    ${ord.awb?awbBoxHtml(ord.awb,ord.awbCourier):''}
+    ${ord.awb?awbBoxHtml(ord.awb,ord.awbCourier,ord.awbPreviewUrl,ord.comandaId,ord.platforma):''}
     <div class="lines">${linesHtml}</div>
     <button type="button" class="nav-btn" onclick="curKey=null;renderMain()">← Înapoi la listă</button>
   </div>`;
