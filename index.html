@@ -3965,6 +3965,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:519,text:'RESET TOTAL al sistemului Staff/Packing — reproiectare completă, cerută direct, cu specificație detaliată, pe un bug real grav, raportat cu o captură: „ce caută aceste comenzi în staff la de împachetat în condițiile în care acestea sunt de astăzi?" — o comandă din 21.09 (Cosma Andreea, #516973668) a apărut direct în coada ACTIVĂ de azi, deși nimeni n-a atins-o — doar pentru că i s-a reasociat un AWB printr-o citire în masă din arhivă (🔁 Repune AWB-uri din arhivă, #517/#518), care a „bump-uit" automat created_at, mecanismul folosit de ani de zile ca să readucă o comandă în „fereastra activă" a Staff. Cauza reală, de fond: vizibilitatea în Staff s-a bazat ÎNTOTDEAUNA pe status (neîmpachetat) + o fereastră de dată (created_at ≥ un prag de coadă) — orice acțiune care atingea created_at, chiar fără intenție, putea readuce o comandă veche direct în coada de azi. Reproiectat de la zero, nu doar reparat local: Staff se alimentează ACUM strict dintr-un eveniment explicit — `staff_trimis_at`, scris O SINGURĂ DATĂ, exact în momentul în care o comandă e trimisă spre împachetare — niciodată dedus din status, niciodată atins ca efect secundar al altceva (asociere/emitere AWB, #519 elimină complet „staffQueueCreatedAtBump" din toate cele 8 locuri unde exista). O comandă nouă, comisă prin fluxul normal („✓ Inclus"/„Aplică import"), primește automat acest eveniment — nicio frecare suplimentară pentru cazul obișnuit. O comandă veche, care nu l-a primit niciodată, NU mai apare NICIODATĂ automat în Staff, indiferent cât timp trece sau ce i se mai întâmplă — reapare DOAR printr-o trimitere explicită, manuală, o comandă o dată („📦 Trimite la împachetare", din cardul „comenzi netrimise încă spre Staff" din Comenzi Platforme — fostul card „ieșite din Staff", repurpus complet). Eliminat complet din staff.html întregul sistem vechi, nu doar ascuns: „↺ Coadă nouă" (manual + automat la 22:00), pragul de coadă (staff_queue_started_at), fereastra de 14 zile, „carry-over"/„📅 Din ziua anterioară" — nicio sursă de recuperare/reconstrucție automată a vreunui backlog nu mai există nicăieri. „În așteptare" înseamnă acum STRICT o problemă raportată de Staff, nimic legat de dată/vechime. NECESITĂ migrarea din Supabase (coloană nouă pe 2 tabele — vezi mesajul din chat) ÎNAINTE de folosire — până atunci, Staff → Împachetare rămâne gol/eroare de conexiune, intenționat (nu există încă nicio comandă cu acest eveniment scris). Verificat cu 13 teste izolate (interogările reale către bază construite corect, fără nicio comandă veche recuperată automat, o comandă retrimisă manual se așază corect în coada de AZI nu după data ei originală, o problemă raportată rămâne în așteptare indiferent de dată, regresie pe comenzi deja finalizate, maparea completă DB↔aplicație pentru noul câmp), rulate de 2 ori, plus sintaxa ambelor fișiere verificată de 2 ori după fiecare set de editări.',date:'2026-10-02'},
   {n:518,text:'Continuare directă la #517 („🔁 Repune AWB-uri din arhivă"), cerut imediat după primul test real: „mă interesează doar AWB-urile din ziua de azi, nu altele". Prima variantă citea ultimele 14 zile din arhivă (același prag folosit la coada Staff) — pe datele reale ale contului asta a scos 161 de etichete, majoritatea vechi și deja asociate corect, doar zgomot și risc de „înlocuiește AWB-ul corect cu el însuși" degeaba, pentru un buton gândit ca reparație punctuală, nu recitire în masă. Scopat acum STRICT la ziua curentă (oră locală a Mac-ului) — Conectorul local citește direct folderul `procesate/<azi>`, nu mai parcurge deloc zilele anterioare. Verificat live, de 2 ori, pe conectorul real repornit: exact cele 10 fișiere de azi (cele 9 AWB-uri raportate + 1 etichetă nerelacionată), nicio zi anterioară amestecată.',date:'2026-10-02'},
   {n:517,text:'Expediere → buton nou „🔁 Repune AWB-uri din arhivă", cerut direct: „tot nu apar AWB-urile, adaugă buton de repunere de AWB-uri atunci când dispar, ele fiind deja în folder". Cauza reală găsită live, pe cele 9 comenzi raportate (inclusiv #533198344, Bogdan Teodorov, din captura trimisă): eticheta AWB a fost descărcată automat de pe Mac cu ore înainte ca admin-ul să importe efectiv acea comandă din eMAG/Trendyol (#509) — fișierul ajunge direct în Desktop/AWB-uri/procesate/<zi>, corect arhivat, dar „📂 Citește din dosar" refuză intenționat să recitească arhiva (protecție împotriva recitirii duble) — AWB-ul rămânea orfan definitiv, fără nicio cale de recuperare din aplicație. Butonul nou rulează exact același motor de citire/potrivire, DOAR cu sursa schimbată — Desktop/AWB-uri/procesate, ultimele 14 zile (prag nou în Conectorul local, necesită `git pull` + `launchctl kickstart -k gui/$(id -u)/ro.abhomes.emag-local-connector`) — nu mută/șterge nimic din arhivă, doar completează AWB-uri lipsă pe comenzi deja existente. Verificat live, de 2 ori, direct pe conectorul real repornit: noul endpoint găsește corect toate cele 9 fișiere de azi (plus 110 din ultimele 13 zile), iar textul REAL extras dintr-unul dintre ele (533198344_eMAG_Courier_...) conține exact „AWB_533198344_...", confirmând că se va asocia corect cu comanda reală raportată, nu doar teoretic.',date:'2026-10-02'},
   {n:516,text:'Continuare directă la #515, pe raportarea reală că s-a mai întâmplat: a mai apărut o comandă-fantomă Vinted ("Robert Mihai", produs greșit "Garaj parcare 4 niveluri") — exact același bug, DEȘI fix-ul de la #515 era deja scris. Cauza: tab-ul de admin era încă deschis dintr-o sesiune de dinainte de deploy — pagina e un singur fișier static, încărcat o singură dată, deci codul vechi, cu bug-ul, a rămas în execuție în memoria browserului până la o reîncărcare manuală. Rândul fantomă a fost șters live din bază (efecte_aplicate=false, fără impact pe stoc), iar cele 2 etichete-sursă care au produs ambele comenzi-fantomă (Alexandra Bahrim și Robert Mihai, ambele din formatul Vinted „fără produs" de la #514) au fost mutate înapoi din Desktop/AWB-uri/procesate în Desktop/AWB-uri, ca să fie reprocesate corect, de data asta sub codul reparat (fie auto-asociate cu o comandă deja încărcată cu produs+preț, fie oferite spre selecție manuală — niciodată o comandă nouă). Dacă fix-ul de la #515/#516 pare să nu funcționeze din nou, cauza cea mai probabilă e aceeași: reîncarcă pagina (Cmd+Shift+R) înainte de a citi etichete AWB. Pe lângă asta, raportat direct și verificat live, separat: (1) „AWB în așteptare" pe o comandă anume (eMAG #533198344, Bogdan Teodorov) era corect — comanda chiar nu are AWB asociat încă, nu o pierdere de date; (2) 9 comenzi eMAG/Trendyol reale, vechi de 2-4 zile, stau neîmpachetate în Staff → „În așteptare" — nu un bug (acolo intră intenționat, #427/#429), dar o restanță reală de verificat manual; (3) previzualizarea vizuală AWB (#512) nu a afișat NICIODATĂ nimic pentru că pasul de configurare din Supabase (coloană nouă + bucket de Storage) nu fusese încă rulat — SQL-ul exact, din nou, mai jos în chat. Corectat și în Staff (vezi #431 acolo) un text de confirmare la „↺ Coadă nouă" care era pur și simplu greșit/înșelător de la #421/#422 încoace („comenzile nu vor mai apărea" — fals, rămân vizibile, doar mutate în alt tab dacă sunt vechi) — probabil o sursă reală de confuzie suplimentară.',date:'2026-10-02'},
@@ -4951,45 +4952,42 @@ function renderCancelledPcomList(){
     return`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(p?p.name:(o.produsNume||o.titluExtern||'Produs'))}</strong> <span style="color:var(--t3);font-family:var(--mono)">· ${esc(o.platforma)}${o.comandaId?' #'+esc(o.comandaId):''}</span><div class="jp-meta">${o.motivAnulare?'Motiv: '+esc(o.motivAnulare):'Fără motiv notat'}${dt?' · '+dt:''}</div></div><button type="button" class="btn btn-sm" onclick="reconsiderPcomRow(${o.id})">↺ Reconsideră</button></div>`;
   }).join('');
 }
-// Comenzi „rămase în urmă" din Staff — cerut direct: Staff nu trebuie atins (coada lui trebuie să
-// rămână simplă, cu resetul zilnic la 22:00, cum s-a cerut), dar admin-ul nu are voie să piardă din
-// vedere ce dispare din ea. O comandă neîmpachetată, creată ÎNAINTE de ultimul prag de coadă (manual
-// sau automat), nu mai apare NICĂIERI în Staff după acel reset — rămâne corectă în bază, dar invizibilă
-// operațional. Găsit direct pe date reale: 261 de comenzi acumulate din 17 august până acum, niciuna
-// semnalată până la această listă. Sortate cele mai vechi primele — cele cu risc mai mare de penalizare
-// eMAG/Trendyol pentru întârziere ies primele la vedere.
+// RESET TOTAL al sistemului Staff/Packing (#519), cerut direct, pe un bug real găsit chiar prin
+// comenzi care au apărut aici: „o comandă neîmpachetată, ieșită din fereastra activă a Staff" NU mai
+// înseamnă „created_at sub un prag de coadă" (bump-uibil din greșeală, ca azi, de orice reasociere AWB
+// în masă) — înseamnă strict „nu are încă staffTrimisAt", adică nu a fost NICIODATĂ trimisă spre
+// împachetare. Staff însuși citește ACUM strict după staff_trimis_at (vezi staffComenziUrl din
+// staff.html) — cardul ăsta e singurul loc din admin unde se văd, cu singura acțiune corectă posibilă:
+// trimitere EXPLICITĂ, manuală, o comandă o dată, niciodată automat/în bloc.
 function renderStaleStaffOrdersCard(){
   const card=document.getElementById('pcx-stale-staff-card'),list=document.getElementById('pcx-stale-staff-list');
   if(!card||!list)return;
-  const rows=STAFF_QUEUE_STARTED_AT?PCOM.filter(o=>!o.impachetat&&!o.anulata&&o.createdAt&&o.createdAt<STAFF_QUEUE_STARTED_AT):[];
+  const rows=PCOM.filter(o=>!o.impachetat&&!o.anulata&&!o.staffTrimisAt);
   card.style.display=rows.length?'':'none';
   if(!rows.length){list.innerHTML='';return;}
   const sorted=rows.slice().sort((a,b)=>String(a.createdAt).localeCompare(String(b.createdAt)));
-  list.innerHTML=`<div style="font-weight:700;color:var(--rd);margin-bottom:8px">${sorted.length} ${sorted.length>1?'comenzi neîmpachetate, ieșite din Staff':'comandă neîmpachetată, ieșită din Staff'}</div>`+sorted.map(o=>{
+  list.innerHTML=`<div style="font-weight:700;color:var(--rd);margin-bottom:8px">${sorted.length} ${sorted.length>1?'comenzi neîmpachetate, netrimise încă spre Staff':'comandă neîmpachetată, netrimisă încă spre Staff'}</div>`+sorted.map(o=>{
     const p=o.produsId?P.find(x=>x.id===o.produsId):null;
     const dt=o.createdAt?new Date(o.createdAt).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric'}):'';
     return`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(p?p.name:(o.produsNume||o.titluExtern||'Produs'))}</strong> <span style="color:var(--t3);font-family:var(--mono)">· ${esc(pcomPlatLabel(o.platforma))}${o.comandaId?' #'+esc(o.comandaId):''}</span><div class="jp-meta">${o.clientNume?esc(o.clientNume)+' · ':''}${dt}</div>
       <div class="rpt-card-search-wrap" style="max-width:320px;margin-top:6px"><input type="text" class="rpt-card-search" placeholder="✏️ Schimbă produsul asociat…" oninput="staleReassignSearch(${o.id},this.value)" onkeydown="if(event.key==='Escape'){this.value='';staleReassignSearch(${o.id},'')}" onblur="setTimeout(()=>{const b=document.getElementById('stale-reassign-results-${o.id}');if(b)b.style.display='none';},180)"><div id="stale-reassign-results-${o.id}" class="rpt-card-search-results" style="display:none"></div></div>
-    </div><div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn btn-sm btn-acc" onclick="reactivateStaleOrder(${o.id})" title="Avansează data comenzii ca să reintre în fereastra activă a Staff, gata de împachetat">↺ Readu la împachetare</button><button type="button" class="btn btn-sm" onclick="markPcomOrderPacked(${o.id})" title="Confirmă doar dacă știi sigur, fizic, că a fost deja împachetată/expediată">✓ Marchează împachetat</button></div></div>`;
+    </div><div style="display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn btn-sm btn-acc" onclick="reactivateStaleOrder(${o.id})" title="Trimite explicit comanda spre împachetare — apare de-acum în Staff, în coada de azi">📦 Trimite la împachetare</button><button type="button" class="btn btn-sm" onclick="markPcomOrderPacked(${o.id})" title="Confirmă doar dacă știi sigur, fizic, că a fost deja împachetată/expediată">✓ Marchează împachetat</button></div></div>`;
   }).join('');
 }
-// Reparație pe termen lung (cerut direct — „rezolvă și pe viitor"), NU doar un patch punctual pe o
-// comandă anume: orice comandă neîmpachetată, ieșită din fereastra activă a Staff (created_at sub
-// pragul cozii — vezi staffQueueCreatedAtBump), ajunge AUTOMAT aici, indiferent cum a fost creată sau
-// comisă (import normal, „✓ Inclus" manual, sau oricare din fluxurile mai noi — reactivatePcomOrder/
-// reconsiderPcomRow/pullPcomOrderToPreview, deja reparate separat). Butonul readuce comanda în coada
-// activă fără s-o marcheze împachetată — spre deosebire de markPcomOrderPacked (pentru una deja
-// expediată fizic), asta e pentru una care CHIAR trebuie împachetată acum.
+// Trimitere EXPLICITĂ, manuală, spre Staff (#519) — exact cerința „o selectăm noi manual pentru
+// împachetare... primește un nou eveniment de trimitere și intră normal în coada de astăzi". Scrie
+// staff_trimis_at = acum, o singură dată, pe ACEASTĂ comandă — niciodată în bloc, niciodată ca efect
+// secundar al altceva (asociere AWB, reconsiderare, etc. — vezi #519 pentru restul fluxurilor
+// corectate la fel: reactivatePcomOrder/reconsiderPcomRow/pullPcomOrderToPreview).
 async function reactivateStaleOrder(id){
   const o=PCOM.find(x=>x.id===id);if(!o)return;
-  const bump=staffQueueCreatedAtBump(o);
-  if(!bump){toast('Comanda e deja în fereastra activă a Staff');renderStaleStaffOrdersCard();return;}
+  const sentAt=new Date().toISOString();
   try{
-    await dbPatch(`platforma_comenzi?id=eq.${id}`,{created_at:bump});
-    o.createdAt=bump;
+    await dbPatch(`platforma_comenzi?id=eq.${id}`,{staff_trimis_at:sentAt});
+    o.staffTrimisAt=sentAt;
     renderStaleStaffOrdersCard();
-    toast('✓ Comandă readusă în coada activă — disponibilă pentru împachetat în Staff');
-  }catch(e){toast('Nu am putut readuce comanda: '+(e.message||e),'err');}
+    toast('✓ Comandă trimisă spre împachetare — disponibilă acum în Staff');
+  }catch(e){toast('Nu am putut trimite comanda: '+(e.message||e),'err');}
 }
 // Reasociere produs (cerut direct — „comanda e greșit asociată ca produs, cum reasociem?"), scopat aici
 // la comenzile rămase în urmă. Caută pe tot inventarul (nu doar produse active — o comandă veche putea
@@ -5028,26 +5026,21 @@ async function markPcomOrderPacked(id){
     toast('✓ Marcată ca împachetată');
   }catch(e){toast('Nu am putut marca comanda: '+(e.message||e),'err');}
 }
-// O comandă mai veche decât pragul curent al cozii Staff (STAFF_QUEUE_STARTED_AT) nu redevine vizibilă
-// în Staff doar prin schimbarea altor câmpuri (anulata/impachetat) — Staff filtrează dur după
-// created_at, chiar la nivelul interogării (sbComenzi din staff.html, cerere directă la Supabase, nu
-// doar randare locală). Orice acțiune care trebuie să aducă o comandă înapoi lucrabilă în Staff are
-// nevoie și de avansarea acestui câmp, dacă e cazul — `data` (data reală a comenzii, folosită de Profit
-// vânzări/Total încasări) rămâne mereu neatinsă. Extras dintr-o singură funcție (reactivatePcomOrder)
-// ca să nu se repete separat, incomplet, la fiecare acțiune similară — bug real, raportat direct: două
-// comenzi „reactivate"/„aduse în admin" (pullPcomOrderToPreview, reconsiderPcomRow) tot nu apăreau în
-// Staff, exact din cauza asta.
-function staffQueueCreatedAtBump(o){
-  return(STAFF_QUEUE_STARTED_AT&&o.createdAt&&o.createdAt<STAFF_QUEUE_STARTED_AT)?new Date().toISOString():null;
-}
+// RESET TOTAL (#519) — „staffQueueCreatedAtBump" (fudging created_at ca să reintre în fereastra activă
+// Staff) a fost chiar mecanismul care a produs bug-ul raportat direct („de ce apare o comandă din
+// septembrie în coada de azi" — o reasociere AWB în masă, prin „🔁 Repune AWB-uri din arhivă", a
+// bump-uit created_at la o comandă veche, fără nicio intenție explicită de a o trimite la împachetare).
+// Eliminat complet — `data`/`created_at` rămân mereu neatinse, povestea reală a comenzii. Vizibilitatea
+// în Staff e acum strict staff_trimis_at (vezi staffComenziUrl din staff.html) — orice acțiune de mai
+// jos care trebuie să aducă o comandă înapoi, lucrabilă, în Staff, scrie DIRECT acest câmp, explicit,
+// fără nicio condiție „dacă era deja ieșită din fereastră" (nu mai există nicio fereastră de verificat).
 async function reconsiderPcomRow(id){
   try{
     const o=PCOM.find(x=>x.id===id);
-    const body={anulata:false,motiv_anulare:null};
-    const bump=o?staffQueueCreatedAtBump(o):null;
-    if(bump)body.created_at=bump;
+    const sentAt=new Date().toISOString();
+    const body={anulata:false,motiv_anulare:null,staff_trimis_at:sentAt};
     await dbPatch(`platforma_comenzi?id=eq.${id}`,body);
-    if(o){o.anulata=false;o.motivAnulare='';if(bump)o.createdAt=bump;}
+    if(o){o.anulata=false;o.motivAnulare='';o.staffTrimisAt=sentAt;}
     // Și lista din cardul dedicat, și rezultatul căutării (#pcx-search, dacă tocmai a găsit-o acolo —
     // vezi pcxSearchFallbackHtml) trebuie actualizate, nu doar cardul — altfel mesajul „găsită în
     // comenzile anulate" rămâne pe ecran, needitor, deși comanda tocmai a fost reactivată.
@@ -5098,14 +5091,12 @@ async function reactivatePcomOrder(idsStr){
   if(!ids.length)return;
   if(!confirm(`Trimiți din nou ${ids.length>1?'aceste '+ids.length+' linii':'această comandă'} în coada activă din Staff?`))return;
   try{
+    const sentAt=new Date().toISOString();
     for(const id of ids){
       const o=PCOM.find(x=>x.id===id);if(!o)continue;
-      const body={impachetat:false,impachetat_at:null};
-      const bump=staffQueueCreatedAtBump(o);
-      if(bump)body.created_at=bump;
+      const body={impachetat:false,impachetat_at:null,staff_trimis_at:sentAt};
       await dbPatch(`platforma_comenzi?id=eq.${id}`,body);
-      Object.assign(o,{impachetat:false,impachetatAt:null});
-      if(bump)o.createdAt=bump;
+      Object.assign(o,{impachetat:false,impachetatAt:null,staffTrimisAt:sentAt});
     }
     renderStaleStaffOrdersCard();
     searchPcomReactivate();
@@ -5136,13 +5127,11 @@ async function pullPcomOrderToPreview(idsStr){
     const o=PCOM.find(x=>x.id===id);if(!o)continue;
     if(pcImpParsed.some(x=>x._committedId===id))continue;
     // Bug real, raportat direct — comanda devenea vizibilă în ADMIN, dar TOT lipsea din Staff: fără
-    // asta, a face comanda „lucrabilă în admin" nu o face automat și „vizibilă în Staff" dacă created_at
-    // a rămas mai vechi decât pragul cozii active (vezi staffQueueCreatedAtBump).
-    const bump=staffQueueCreatedAtBump(o);
-    if(bump){
-      try{await dbPatch(`platforma_comenzi?id=eq.${id}`,{created_at:bump});o.createdAt=bump;}
-      catch(e){console.warn('Nu am putut avansa created_at pentru comanda '+id+':',e);}
-    }
+    // asta, a face comanda „lucrabilă în admin" nu o face automat și „vizibilă în Staff" (vezi #519 —
+    // acum strict staff_trimis_at, nu created_at/un prag de fereastră).
+    const sentAt=new Date().toISOString();
+    try{await dbPatch(`platforma_comenzi?id=eq.${id}`,{staff_trimis_at:sentAt});o.staffTrimisAt=sentAt;}
+    catch(e){console.warn('Nu am putut trimite spre împachetare comanda '+id+':',e);}
     pcImpParsed.push(pcomLineFromCommittedOrder(o));
     added++;
   }
@@ -7033,6 +7022,15 @@ function dbToPcom(r){
     impachetat:!!r.impachetat,impachetatAt:r.impachetat_at||'',faraStoc:!!r.fara_stoc,faraStocAt:r.fara_stoc_at||'',
     awb:r.awb||'',staffBlocked:!!r.staff_blocked,staffIssueType:r.staff_issue_type||'',staffIssueNote:r.staff_issue_note||'',staffIssueResolved:!!r.staff_issue_resolved,
     anulata:!!r.anulata,motivAnulare:r.motiv_anulare||'',staffInclusAt:r.staff_inclus_at||'',staffFinalizatAt:r.staff_finalizat_at||'',awbSourceFile:r.awb_source_file||'',awbSourcePage:r.awb_source_page||null,awbCourier:r.awb_courier||'',
+    // RESET TOTAL al sistemului Staff/Packing, cerut direct — „nu mai trebuie recuperată, afișată sau
+    // introdusă automat în Packing nicio comandă veche doar fiindcă are status neîmpachetat". Sursă unică
+    // de adevăr pentru „e vizibilă în Staff": NU created_at/impachetat (status), ci acest câmp explicit —
+    // setat o singură dată, la momentul REAL în care comanda a fost trimisă spre împachetare (comitere
+    // nouă — vezi commitPcomLine/applyPcomImport — sau retrimitere manuală explicită — vezi
+    // reactivateStaleOrder/reactivatePcomOrder/pullPcomOrderToPreview/reconsiderPcomRow). NICIODATĂ
+    // atins doar ca efect secundar al altceva (asociere/emitere AWB) — vezi #519, cauza reală a bug-ului
+    // „de ce apare o comandă din septembrie în coada de azi" (staffQueueCreatedAtBump, acum eliminat).
+    staffTrimisAt:r.staff_trimis_at||'',
     termenExpediere:r.termen_expediere||''};
 }
 function pcomToDb(o){
@@ -7044,6 +7042,7 @@ function pcomToDb(o){
     profit_estimat:o.profitEstimat||0,marja_estimata:o.marjaEstimata||0,import_batch_id:o.importBatchId||null,
     awb:o.awb||null,staff_inclus_at:o.staffInclusAt||null,staff_finalizat_at:o.staffFinalizatAt||null,
     awb_source_file:o.awbSourceFile||null,awb_source_page:o.awbSourcePage||null,awb_courier:o.awbCourier||null,
+    staff_trimis_at:o.staffTrimisAt||null,
     termen_expediere:o.termenExpediere||null};
 }
 // eMAG operează pe 3 piețe (RO/HU/BG) — fișierul de comenzi nu are o coloană explicită de țară,
@@ -7802,7 +7801,12 @@ async function saveJurnalEntry(p, q){
     if(ex&&ex.length>0){
       await dbPatch(`jurnal?id=eq.${ex[0].id}`,{qty:ex[0].qty+q});
     }else{
-      await dbPost('jurnal',{data:ds,product_id:p.id,product_name:p.name,category:p.category||'',price_sell:p.priceSell||0,img:p.img||'',qty:q});
+      // staffTrimisAt (vezi RESET TOTAL, #519) — o vânzare directă nouă e „trimisă spre împachetare"
+      // chiar în momentul vânzării, la fel ca o comandă nouă de platformă; rândurile-ecou scrise automat
+      // la aplicarea unei comenzi eMAG/Trendyol (CLAUDE.md — „se scriu automat și în Jurnal") primesc
+      // aceeași marcă, dar oricum nu formează propriul card în Staff (vezi coveredByPlatform din
+      // computeOrders) — inofensiv, nu doar corect.
+      await dbPost('jurnal',{data:ds,product_id:p.id,product_name:p.name,category:p.category||'',price_sell:p.priceSell||0,img:p.img||'',qty:q,staff_trimis_at:new Date().toISOString()});
     }
     // actualizează local, fără re-descărcare completă — jurnalul poate avea mii de rânduri după luni
     // de utilizare, iar refetch-ul întregii tabele la fiecare vânzare (inclusiv la import în bloc din
@@ -17259,13 +17263,15 @@ async function issueEmagAwb(){
       // mai fie nevoie de un „📂 Citește din dosar" separat, ca orice AWB emis prin acest buton să fie
       // IMEDIAT tipăribil din „🖨️ PDF AWB comenzi incluse" (bug real, raportat direct: „13+8 AWB-uri,
       // doar 20 de comenzi" — AWB-urile emise de aici nu aveau NICIODATĂ fișier sursă local).
-      const existingForBump=PCOM.find(o=>o.platforma==='emag'&&o.comandaId===orderId);
-      const bump=existingForBump?staffQueueCreatedAtBump(existingForBump):null;
+      // RESET TOTAL (#519) — emiterea unui AWB NU mai avansează nimic legat de vizibilitatea în Staff
+      // (nici created_at, nici staff_trimis_at): sunt 2 acțiuni complet separate acum. Comanda asta e
+      // deja confirmată („✓ Inclus"), deci are deja staff_trimis_at din momentul comiterii — dacă din
+      // vreun motiv NU are (comandă foarte veche, dinainte de #519), rămâne așa până e trimisă explicit
+      // (📦 Trimite la împachetare, din cardul „comenzi netrimise încă" — vezi renderStaleStaffOrdersCard).
       const source={awb};
       if(r.pdfSaved&&r.pdfFileName)Object.assign(source,{awb_source_file:r.pdfFileName,awb_source_page:1,awb_courier:'eMAG Courier'});
-      if(bump)source.created_at=bump;
       await patchAwbWithSource(`platforma=eq.emag&comanda_id=eq.${encodeURIComponent(orderId)}`,source);
-      PCOM.filter(o=>o.platforma==='emag'&&o.comandaId===orderId).forEach(o=>Object.assign(o,{awb,...(r.pdfSaved&&r.pdfFileName?{awbSourceFile:r.pdfFileName,awbSourcePage:1,awbCourier:'eMAG Courier'}:{}),...(bump?{createdAt:bump}:{})}));
+      PCOM.filter(o=>o.platforma==='emag'&&o.comandaId===orderId).forEach(o=>Object.assign(o,{awb,...(r.pdfSaved&&r.pdfFileName?{awbSourceFile:r.pdfFileName,awbSourcePage:1,awbCourier:'eMAG Courier'}:{})}));
       if(pcImpParsed.length)renderPcomImportPreview();
       toast(r.pdfSaved?`AWB ${awb} emis, PDF salvat și asociat ✓ — gata de tipărit`:`AWB ${awb} emis și salvat ✓ (PDF-ul nu s-a salvat automat local — verifică Conectorul local e la zi)`);
     }catch(e){
@@ -17845,11 +17851,14 @@ async function commitPcomLine(idx){
     const totalRon=pcomToRon(it.pretTotalCuTva,it.moneda);
     const fin=pcomSaleFinancials(p,it,platforma);
     const profit=Math.round(fin.profit*it.cantitate*100)/100,margin=fin.marja;
+    // staffTrimisAt — vezi RESET TOTAL (#519): o comandă NOUĂ, comisă chiar acum prin fluxul normal al
+    // aplicației („✓ Inclus"), e exact momentul „trimisă explicit spre împachetare" cerut — nu un
+    // fallback pe status, un eveniment real, o singură dată, la creare.
     const row=pcomToDb({platforma,data:it.data,comandaId:it.comandaId,pnk:it.pnk,tara:it.tara,codProdus:it.codProdus,
       clientNume:it.clientNume,titluExtern:it.titluExtern,produsId:p.id,produsNume:p.name,cantitate:it.cantitate,awb:it.awb,
       pretFaraTva:it.pretFaraTva,pretTotalCuTva:it.pretTotalCuTva,moneda:it.moneda,pretTotalCuTvaRon:totalRon,
       profitEstimat:profit,marjaEstimata:margin,importBatchId:pcImpBatchIdFor(platforma),staffInclusAt:new Date().toISOString(),
-      termenExpediere:it.termenExpediere});
+      staffTrimisAt:new Date().toISOString(),termenExpediere:it.termenExpediere});
     // Marchează explicit că stocul/Jurnalul NU au fost încă atinse — abia „Aplică import" le scrie.
     // Fără asta, „Istoric importuri" nu poate distinge o comandă doar-confirmată de un import real
     // finalizat, și butonul „Șterge" de-acolo ar readăuga în stoc o cantitate care nu a fost scăzută
@@ -19420,10 +19429,14 @@ async function applyPcomImport(){
           const totalRon=pcomToRon(it.pretTotalCuTva,it.moneda);
           const fin=pcomSaleFinancials(p,it,platforma);
           const profit=Math.round(fin.profit*it.cantitate*100)/100,margin=fin.marja;
+          // staffTrimisAt — vezi RESET TOTAL (#519): linie NICIODATĂ comisă individual prin „✓ Inclus”
+          // (import în bloc, direct pe „Aplică import”) — tot o comandă NOUĂ, chiar acum, prin fluxul
+          // normal al aplicației, deci la fel de „trimisă explicit spre împachetare” ca la commitPcomLine.
           const row=pcomToDb({platforma,data:it.data,comandaId:it.comandaId,pnk:it.pnk,tara:it.tara,codProdus:it.codProdus,
             clientNume:it.clientNume,titluExtern:it.titluExtern,produsId:p.id,produsNume:p.name,cantitate:it.cantitate,awb:it.awb,
             pretFaraTva:it.pretFaraTva,pretTotalCuTva:it.pretTotalCuTva,moneda:it.moneda,pretTotalCuTvaRon:totalRon,
-            profitEstimat:profit,marjaEstimata:margin,importBatchId:pcImpBatchIdFor(platforma),termenExpediere:it.termenExpediere});
+            profitEstimat:profit,marjaEstimata:margin,importBatchId:pcImpBatchIdFor(platforma),
+            staffTrimisAt:new Date().toISOString(),termenExpediere:it.termenExpediere});
           row.efecte_aplicate=true;
           let inserted;
           try{
@@ -21674,12 +21687,11 @@ async function associateAwbErrorToOrder(x,o){
         if(idx>=0){it.include=true;await syncPcomLineCommitState(idx);}
       }
     }else{
+      // RESET TOTAL (#519) — rezolvarea manuală a unei erori AWB NU mai avansează nimic legat de
+      // vizibilitatea în Staff (vezi comentariul identic din issueEmagAwb).
       const source={awb:x.awb||null,awb_source_file:x.source_file||null,awb_source_page:x.source_page||null,awb_courier:x.courier||null};
-      const existing=PCOM.find(p2=>p2.comandaId===o.comandaId&&p2.platforma===o.platforma);
-      const bump=existing?staffQueueCreatedAtBump(existing):null;
-      if(bump)source.created_at=bump;
       await patchAwbWithSource(`comanda_id=eq.${encodeURIComponent(o.comandaId)}&platforma=eq.${encodeURIComponent(o.platforma)}`,source);
-      PCOM.filter(p2=>p2.comandaId===o.comandaId&&p2.platforma===o.platforma).forEach(p2=>Object.assign(p2,{awb:x.awb||'',awbSourceFile:x.source_file||'',awbSourcePage:x.source_page||null,awbCourier:x.courier||'',...(bump?{createdAt:bump}:{})}));
+      PCOM.filter(p2=>p2.comandaId===o.comandaId&&p2.platforma===o.platforma).forEach(p2=>Object.assign(p2,{awb:x.awb||'',awbSourceFile:x.source_file||'',awbSourcePage:x.source_page||null,awbCourier:x.courier||''}));
     }
     await dbPatch(`staff_awb_erori?id=eq.${x.id}`,{resolved:true,resolved_at:new Date().toISOString()});
     AWB_ISSUES=AWB_ISSUES.filter(e=>e.id!==x.id);
@@ -22113,17 +22125,16 @@ async function applyAwbAssociation(){
       }
       const source={awb:p.awb,awb_source_file:p.file||null,awb_source_page:p.page||null,awb_courier:p.courier||null};
       const platforma=p.rows[0].platforma;
-      // Comandă deja existentă în platforma_comenzi (nu „Neinclus" — vezi mai sus), dar importată
-      // POSIBIL înainte de începutul cozii curente Staff (reset manual/automat la 22:00) — un PATCH
-      // obișnuit NU schimbă created_at, deci fără avansarea asta comanda ar rămâne invizibilă chiar și
-      // după ce tocmai i-am asociat AWB-ul: exact cerința „ce e Inclus în admin trebuie să fie 1 la 1 în
-      // Staff". Aceeași reparație ca la reconsiderPcomRow/reactivatePcomOrder/pullPcomOrderToPreview,
-      // aplicată acum și pe calea NORMALĂ (nu doar reactivare) de asociere AWB.
-      const existingForBump=PCOM.find(o=>o.comandaId===p.comandaId&&o.platforma===platforma);
-      const bump=existingForBump?staffQueueCreatedAtBump(existingForBump):null;
-      if(bump)source.created_at=bump;
+      // RESET TOTAL (#519) — ACESTA era mecanismul EXACT care a produs bug-ul real, raportat direct, cu
+      // o captură: „ce caută aceste comenzi în staff la de împachetat în condițiile în care acestea sunt
+      // de astăzi?" — o comandă din 21.09, neatinsă de nimic altceva, și-a avansat singură created_at la
+      // „acum" doar pentru că i s-a (re)asociat un AWB printr-o citire în masă (🔁 Repune AWB-uri din
+      // arhivă, înainte de #518), reapărând direct în coada activă de azi din Staff. Asocierea unui AWB
+      // e o acțiune DIFERITĂ de „trimite spre împachetare" — nu mai face asta, niciodată, implicit. O
+      // comandă deja comisă are deja staff_trimis_at din momentul comiterii; una foarte veche, fără el,
+      // rămâne așa până e trimisă explicit (vezi renderStaleStaffOrdersCard/reactivateStaleOrder).
       await patchAwbWithSource(`comanda_id=eq.${encodeURIComponent(p.comandaId)}&platforma=eq.${encodeURIComponent(platforma)}`,source);
-      PCOM.filter(o=>o.comandaId===p.comandaId&&o.platforma===platforma).forEach(o=>Object.assign(o,{awb:p.awb,awbSourceFile:p.file||'',awbSourcePage:p.page||null,awbCourier:p.courier||'',...(bump?{createdAt:bump}:{})}));
+      PCOM.filter(o=>o.comandaId===p.comandaId&&o.platforma===platforma).forEach(o=>Object.assign(o,{awb:p.awb,awbSourceFile:p.file||'',awbSourcePage:p.page||null,awbCourier:p.courier||''}));
       // Previzualizare vizuală AWB — ÎN FUNDAL, vezi comentariul de mai sus (ramura „Neinclus").
       if(p._blob)generateAwbPreviewInBackground(p._blob,p.page,p.awb,p.comandaId,platforma);
     }

@@ -40,7 +40,7 @@ button{cursor:pointer}
 .hdr h1{font-size:27px;font-weight:700}
 .order-count{font-size:17px;color:var(--t3);font-weight:700;white-space:nowrap}
 .update-btn{border:1px solid var(--b2);background:var(--surf);color:var(--t2);border-radius:999px;padding:4px 9px;font-size:13px;font-weight:800;white-space:nowrap}.update-btn.new{border-color:var(--acc);background:var(--acc-light);color:var(--acc)}
-.refresh-btn{position:relative;border:1px solid var(--b2);background:var(--surf);color:var(--t2);border-radius:999px;padding:6px 10px;font-size:14px;font-weight:800;white-space:nowrap}.refresh-btn:active{background:var(--acc-light);border-color:var(--acc);color:var(--acc)}.refresh-btn:disabled{opacity:.55;cursor:wait}.queue-reset-btn{border-color:#f1c9b8;color:#a44a21;background:#fffaf7}.queue-reset-btn:active{background:#fff0e8;border-color:#df8a60;color:#8d3612}
+.refresh-btn{position:relative;border:1px solid var(--b2);background:var(--surf);color:var(--t2);border-radius:999px;padding:6px 10px;font-size:14px;font-weight:800;white-space:nowrap}.refresh-btn:active{background:var(--acc-light);border-color:var(--acc);color:var(--acc)}.refresh-btn:disabled{opacity:.55;cursor:wait}
 /* „📤 Trimite în Staff" din admin — vezi checkPushSignal/STAFF_PUSH_KEY. Bulină pulsatorie, NU un
    refresh automat — omul alege când apasă „↻ Reîncarcă"; indiciul dispare atunci, nu singur. */
 .refresh-ping{display:none;position:absolute;top:-3px;right:-3px;width:11px;height:11px;border-radius:50%;background:var(--or)}
@@ -307,7 +307,6 @@ button{cursor:pointer}
   <div class="hdr">
     <div class="hdr-title"><h1>📦 Comenzi de împachetat</h1><span class="order-count" id="progress-txt">Se încarcă…</span><button type="button" class="update-btn" id="staff-update-btn" onclick="openUpdatesSheet()"></button></div>
     <div style="display:flex;align-items:center;gap:10px">
-      <button type="button" class="refresh-btn queue-reset-btn" id="staff-queue-reset-btn" onclick="resetStaffQueue()">↺ Coada nouă</button>
       <button type="button" class="refresh-btn" id="staff-refresh-btn" onclick="refreshStaffNow()">↻ Reîncarcă<span class="refresh-ping" id="refresh-ping"></span></button>
       <button type="button" class="staff-name-badge" id="staff-name-badge" onclick="editStaffName()"></button>
       <span class="sync-dot" id="sync-dot"></span>
@@ -507,11 +506,6 @@ function deadlineBadgeHtml(iso){
   return`<div class="deadline-badge deadline-${cls}">${label}</div>`;
 }
 
-// Doar comenzile/vânzările de la această dată încolo intră în coadă. Valoarea inițială păstrează
-// compatibilitatea cu instalările vechi, iar pragul real se salvează în setari_app la „Coada nouă”.
-const CUTOFF_DATE='2026-08-27';
-const STAFF_QUEUE_KEY='staff_queue_started_at';
-let staffQueueStartedAt=CUTOFF_DATE+'T00:00:00.000Z';
 // „📤 Trimite în Staff" din admin (cerut direct — „la fel ca butonul Reîncarcă din Staff, dar din admin,
 // ca staff-ul să vadă în timp real ce lucrăm noi"): NU reîmprospătează lista automat — refresh-ul rămas
 // STRICT manual (vezi comentariul de la „Refresh-ul este intenționat manual" de mai jos) e o decizie
@@ -536,6 +530,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:432,date:'02.10.2026',text:'RESET TOTAL al sistemului de Packing — reproiectare completă, cerută direct, cu specificație detaliată, pe un bug real grav: „ce caută aceste comenzi în staff la de împachetat în condițiile în care acestea sunt de astăzi?" — o comandă din 21.09 a apărut direct în coada ACTIVĂ de azi, deși nimeni n-a atins-o. „02.10.2026 este punctul zero": Împachetarea nu se mai alimentează după status (neîmpachetat) sau după o fereastră de dată — se alimentează STRICT din comenzi trimise EXPLICIT spre împachetare (din admin, la comandă nouă automat, sau manual pentru una veche — „📦 Trimite la împachetare"). Eliminat complet, nu doar ascuns: „↺ Coadă nouă" (manual + automat la 22:00) și tot sistemul din spatele lui — nicio comandă veche nu mai poate reapărea automat în coadă, din niciun motiv (reîncărcare, delogare, resincronizare marketplace, polling). „În așteptare" înseamnă acum STRICT o problemă raportată de Staff, nu „comandă veche" — eticheta „📅 Din ziua anterioară" a dispărut, nu mai există conceptul. O comandă trimisă explicit, chiar dacă foarte veche, rămâne vizibilă nelimitat cât timp nu e împachetată. NECESITĂ migrarea din Supabase (vezi admin) — până atunci, Împachetarea rămâne goală, intenționat. Verificat cu 13 teste izolate pe funcțiile reale din cod, rulate de 2 ori.'},
   {n:431,date:'02.10.2026',text:'Bug real reparat, raportat direct, cu frustrare, pe un caz real: „produsele incluse nu mai ajung sau se resetează... nu înțeleg de ce nu mai apar". Cauza găsită: textul de confirmare al „↺ Coadă nouă" spunea „comenzile deja existente... nu vor mai apărea în Staff" — ADEVĂRAT cândva, dar FALS de la #421/#422 încoace, care păstrează orice comandă încă neîmpachetată vizibilă (doar mutată din Împachetare în „În așteptare" dacă e mai veche de azi, niciodată ascunsă complet). Avertismentul fals putea convinge pe cineva să creadă că a pierdut comenzi deja incluse, deși ele erau doar într-un tab diferit. Text corectat (confirmare ȘI mesajul de succes de după), să reflecte exact ce se întâmplă acum. Pe drum, verificat live, direct pe date reale: (1) comanda din captura trimisă (eMAG #533198344, Bogdan Teodorov) chiar NU are AWB asociat încă în bază — „AWB în așteptare" era corect, nu un bug; (2) găsită și reparată o comandă-fantomă NOUĂ (Vinted, „Robert Mihai", produs greșit „Garaj parcare" — același bug reparat azi mai devreme în admin, fuzzyMatch text gol — provenită dintr-un tab admin încă nereîmprospătat după fix), ștearsă din bază, eticheta sursă mutată înapoi în dosarul AWB pentru reprocesare corectă; (3) găsite 9 comenzi eMAG/Trendyol reale, vechi de 2-4 zile, încă neîmpachetate — tocmai de-asta apar în „În așteptare", nu un bug, dar o restanță reală de verificat manual.'},
   {n:430,date:'01.10.2026',text:'Previzualizare vizuală AWB, cerut direct: „pe lângă numărul AWB-ului, care nu e de cele mai multe ori cel mai ușor de identificat, să apară și previzualizarea AWB-ului, mai mică, în timp real, astfel încât să fie ușor de asociat". Pe lângă caseta cu numărul AWB (ca înainte), apare acum și o poză mică a etichetei chiar asociate — nu un cod de bare oarecare, ci randarea reală a PDF-ului curierului (verificat direct, pe etichete reale — perfect lizibilă). Un tap pe ea o mărește pe tot ecranul. Pentru comenzile fără previzualizare încă (AWB emis direct prin eMAG, sau comenzi mai vechi) apare un buton „📷" — deschide camera (aceeași folosită la scanarea codurilor de bare, #409), fotografiezi eticheta fizică, se salvează direct. Verificat cu 5 teste izolate pe funcția reală din cod (toate cele 3 stări posibile — poză, buton foto, caseta goală — plus protecție la caractere speciale), rulate de 2 ori. Necesită migrarea rulată în Supabase (vezi admin); până atunci, previzualizările nu apar, dar restul funcționează normal.'},
   {n:429,date:'01.10.2026',text:'Bug real, grav, reparat — continuare directă la #427, raportat direct: „nu mai apar nici AWB-urile acum... ele au fost introduse astăzi și asociate". Cauza: „carry-over" (comandă din ziua anterioară → În așteptare, #427) compara cu ORA EXACTĂ a ultimei „Coadă nouă", nu cu ziua calendaristică — un reset manual la mijlocul dimineții lăsa comenzi importate și asociate cu AWB cu doar câteva minute ÎNAINTE de click, tot din ziua curentă, etichetate greșit „din ziua anterioară" și împinse în „În așteptare", invizibile acolo unde erau căutate. Acum compară strict cu ziua calendaristică (td()) — indiferent câte „Coadă nouă" se apasă în aceeași zi, nimic din ziua curentă nu mai poate ajunge greșit în așteptare. Verificat live, direct pe date reale: AWB-urile de azi sunt confirmate corect scrise în bază (11 din 13 comenzi active, verificat prin interogare directă — stocul neatins, nicio pierdere de date). Verificat cu 3 teste izolate suplimentare (exact scenariul regresiei — reset la mijlocul zilei cu comenzi importate 2 minute înainte, rămân corect NU în așteptare), plus cele 5 teste anterioare de la #427, toate rulate de 2 ori, fără nicio regresie.'},
@@ -593,10 +588,16 @@ function computeOrders(){
     // Numărul unei comenzi nu este global unic între marketplace-uri. Fără platformă în cheie,
     // o comandă eMAG și una Trendyol cu același ID se puteau împacheta ca un singur colet.
     const key=o.comanda_id?`platforma:${o.platforma||'necunoscut'}:${o.comanda_id}`:('_row'+o.id);
-    if(!groups[key])groups[key]={key,comandaId:o.comanda_id||'',platforma:o.platforma,clientNume:o.client_nume||'',data:o.data,sortAt:o.created_at||o.data,lines:[]};
+    // sortAt preferă staff_trimis_at (RESET TOTAL, #519) — momentul CHIAR al trimiterii spre
+    // împachetare, nu data originală a comenzii. Pentru o comandă nouă, normală, cele două coincid
+    // practic (ambele scrise „acum", la comitere — vezi commitPcomLine/applyPcomImport). Diferența
+    // contează STRICT pentru o comandă veche retrimisă manual (📦 Trimite la împachetare) — trebuie să
+    // se așeze cronologic în coada de AZI, nu rătăcită undeva după data ei originală, veche.
+    const lineSortAt=o.staff_trimis_at||o.created_at||o.data;
+    if(!groups[key])groups[key]={key,comandaId:o.comanda_id||'',platforma:o.platforma,clientNume:o.client_nume||'',data:o.data,sortAt:lineSortAt,lines:[]};
     o._table='platforma_comenzi';
     groups[key].lines.push(o);
-    if(String(o.created_at||o.data)<String(groups[key].sortAt))groups[key].sortAt=o.created_at||o.data;
+    if(String(lineSortAt)<String(groups[key].sortAt))groups[key].sortAt=lineSortAt;
   });
 
   // Comenzile eMAG/Trendyol se scriu automat și în Jurnal la import (ca să existe evidența zilnică
@@ -618,7 +619,7 @@ function computeOrders(){
       impachetat:!!j.impachetat,impachetat_at:j.impachetat_at||'',fara_stoc:!!j.fara_stoc,
       staff_blocked:!!j.staff_blocked,staff_blocked_at:j.staff_blocked_at||'',staff_issue_type:j.staff_issue_type||'',
       staff_issue_note:j.staff_issue_note||'',staff_issue_resolved:!!j.staff_issue_resolved,_table:'jurnal'};
-    groups['j'+j.id]={key:'j'+j.id,comandaId:'',platforma:'direct',clientNume:'',data:j.data,sortAt:j.created_at||j.data,lines:[line]};
+    groups['j'+j.id]={key:'j'+j.id,comandaId:'',platforma:'direct',clientNume:'',data:j.data,sortAt:j.staff_trimis_at||j.created_at||j.data,lines:[line]};
   });
 
   // Cerut direct — „să apară comenzile în ordinea din admin: întâi eMAG, apoi Trendyol și apoi Vinted,
@@ -651,30 +652,20 @@ function computeOrders(){
     g.finalized=g.allDone&&!g.hasUnresolvedIssue;
     g.finalizedWithoutAwb=g.finalized&&g.needsAwb;
     g.complete=g.finalized&&!g.needsAwb;
-    // Cerut direct — raportat cu date reale („apar 24 de comenzi deși avem doar 13/14 încărcate azi
-    // prin Inclus... dacă rămân comenzi din zilele trecute, să se ducă automat în așteptare"): extinderea
-    // de 14 zile de mai sus (staffComenziUrl, #421/#422 — păstrează orice comandă neîmpachetată/blocată,
-    // indiferent de vechime, ca să nu dispară niciodată din greșeală) aducea corect orice restanță veche
-    // în COMENZI, dar fără acest flag intrau direct în Împachetare, amestecate cu coada de azi — umflând
-    // numărul total și obligând la scroll prin comenzi vechi ca să ajungi la cele noi. O comandă (grup)
-    // „carry-over” — mai veche decât ZIUA curentă (nu ora exactă a ultimului reset!) ȘI încă neterminată
-    // — trece acum automat în „În așteptare", exact ca o comandă blocată, dar cu un motiv distinct afișat
-    // (vezi waitingListItemHtml) — rămâne acolo, la verificare manuală, în loc să umple coada activă de azi.
-    // Bug real, grav, găsit direct („nu mai apar nici AWB-urile acum... ele au fost introduse astăzi și
-    // asociate"): prima variantă compara cu staffQueueStartedAt (ora EXACTĂ a ultimei „Coadă nouă"), nu
-    // cu ziua calendaristică — un reset manual la mijlocul dimineții (cerut separat, între timp, ca
-    // reacție la #427/#428) lăsa comenzi importate cu doar câteva minute ÎNAINTE de click, tot din ZIUA
-    // CURENTĂ, etichetate greșit „din ziua anterioară” și împinse în așteptare, deși erau proaspăt
-    // asociate cu AWB chiar atunci. td() (ziua calendaristică UTC, același tipar folosit peste tot în
-    // aplicație) nu depinde deloc de câte ori se apasă „Coadă nouă” în aceeași zi.
-    g.isCarryover=!g.finalized&&String(g.sortAt).slice(0,10)<td();
-    g.waiting=g.hasUnresolvedIssue||g.isCarryover;
+    // RESET TOTAL (#519), cerut direct, cu o captură reală („ce caută aceste comenzi în staff la de
+    // împachetat în condițiile în care acestea sunt de astăzi?" — o comandă din 21.09 apărută în coada
+    // ACTIVĂ de azi): „carry-over”/isCarryover (comparație de dată pe sortAt) a fost chiar mecanismul
+    // care putea reclasifica greșit — orice comandă, indiferent de vechime, ajungea automat în coadă
+    // doar fiindcă exista „neîmpachetată", apoi era doar RE-sortată activ/așteptare după o dată. Eliminat
+    // complet, nu doar reparat: COMENZI (vezi staffComenziUrl mai jos) conține ACUM strict comenzi cu
+    // staff_trimis_at — adică deja, explicit, trimise spre împachetare — nu mai există nicio comandă
+    // „veche, recuperată automat" de reclasificat aici. „În așteptare” înseamnă STRICT o problemă
+    // raportată de Staff, nimic legat de dată/vechime.
+    g.waiting=g.hasUnresolvedIssue;
     const lastPackedAt=g.lines.map(l=>l.impachetat_at).filter(Boolean).sort().slice(-1)[0]||'';
     g.finalizedToday=g.finalized&&lastPackedAt.slice(0,10)===td();
   });
 }
-// Pragul salvat la „Coada nouă” este fluxul real: toate comenzile introduse în ERP după acel moment
-// trebuie pregătite, indiferent de ziua în care clientul le-a plasat pe marketplace.
 function packQueue(){return ORDERS.filter(o=>!o.finalized&&!o.waiting);}
 function waitingQueue(){return ORDERS.filter(o=>o.waiting);}
 // listă completă (inclusiv comenzi deja împachetate) pt. navigare Anterioară/Următoare —
@@ -700,13 +691,12 @@ function showToast(msg,undoFn){
 function hideToast(){document.getElementById('toast').classList.remove('on');}
 
 function renderProgress(){
-  // Bug real, raportat direct („tot 26 apar, de ce?" — după #427, care deja mutase corect comenzile
-  // vechi în „În așteptare"): numărul de sus continua să adune TOTAL comenzi nefinalizate (ORDERS.length
-  // - finalizate), ADICĂ Împachetare + În așteptare LA UN LOC — comenzile mutate în așteptare tot
-  // contau aici, deși dispăruseră vizual din Împachetare. finalized și waiting sunt mereu reciproc
-  // exclusive (vezi computeOrders: isCarryover cere explicit !finalized, la fel hasUnresolvedIssue face
-  // finalized=false), deci excluderea completă a celor „în așteptare" de aici e sigură — nu ascunde
-  // nimic, rămân vizibile separat, cu propriul contor (badge-ul de mai jos).
+  // Bug real, raportat direct („tot 26 apar, de ce?"): numărul de sus continua să adune TOTAL comenzi
+  // nefinalizate (ORDERS.length - finalizate), ADICĂ Împachetare + În așteptare LA UN LOC — comenzile
+  // în așteptare tot contau aici, deși dispăruseră vizual din Împachetare. finalized și waiting sunt
+  // mereu reciproc exclusive (vezi computeOrders: hasUnresolvedIssue face finalized=false), deci
+  // excluderea completă a celor „în așteptare" de aici e sigură — nu ascunde nimic, rămân vizibile
+  // separat, cu propriul contor (badge-ul de mai jos).
   const waitingCount=waitingQueue().length;
   const total=ORDERS.length-waitingCount;
   const done=ORDERS.filter(o=>o.finalized).length;
@@ -1475,7 +1465,7 @@ function renderWaitingTab(host){
     <div class="ord-hdr">
       <span class="ord-pl ${ord.platforma}">${plLabel}</span>
       ${ord.comandaId?`<span class="ord-num">#${esc(ord.comandaId)}</span>`:''}
-      <span class="ord-waiting-badge">${ord.isCarryover&&!ord.hasUnresolvedIssue?'📅 Din ziua anterioară':'⏸ În așteptare'}</span>
+      <span class="ord-waiting-badge">⏸ În așteptare</span>
     </div>
     <div id="lock-banner-slot"></div>
     ${ord.awb?awbBoxHtml(ord.awb,ord.awbCourier,ord.awbPreviewUrl,ord.comandaId,ord.platforma):''}
@@ -1483,23 +1473,9 @@ function renderWaitingTab(host){
     <button type="button" class="nav-btn" onclick="curKey=null;renderMain()">← Înapoi la listă</button>
   </div>`;
 }
+// RESET TOTAL (#519) — „În așteptare” înseamnă acum STRICT o problemă raportată de Staff (ramura
+// „carry-over”/isCarryover a fost eliminată din computeOrders, nu doar ascunsă aici).
 function waitingListItemHtml(o){
-  // Comandă „carry-over" (din ziua anterioară, nicio problemă raportată — vezi computeOrders) — motiv
-  // distinct de afișat, ca să nu arate fals ca „⛔ Problemă" (text generic rezervat mai jos liniilor
-  // chiar blocate de cineva din Staff).
-  if(o.isCarryover&&!o.hasUnresolvedIssue){
-    const line=o.lines[0];
-    const p=findProdus(line.produs_id);
-    const img=p&&p.img?`<img class="list-item-th" src="${esc(imgSrc(p.img))}" onerror="this.style.display='none'">`:`<div class="list-item-th-ph">📦</div>`;
-    return`<div class="list-item" onclick="curKey='${o.key}';renderMain()">
-      ${img}
-      <div class="list-item-main">
-        <div class="list-item-nm">${o.comandaId?'#'+esc(o.comandaId)+' · ':''}${esc(line.produs_nume||'')}</div>
-        <div class="list-item-issue" style="color:var(--t3)">📅 Comandă din ${esc(o.data||'')} — verifică și reia manual</div>
-      </div>
-      <div class="list-item-time">${esc(timeAgo(o.sortAt))}</div>
-    </div>`;
-  }
   const blockedLine=o.lines.find(l=>l.staff_blocked&&!l.staff_issue_resolved)||o.lines[0];
   const p=findProdus(blockedLine.produs_id);
   const img=p&&p.img?`<img class="list-item-th" src="${esc(imgSrc(p.img))}" onerror="this.style.display='none'">`:`<div class="list-item-th-ph">📦</div>`;
@@ -1992,19 +1968,6 @@ document.addEventListener('click',ev=>{
 document.addEventListener('dblclick',ev=>ev.preventDefault(),{passive:false});
 document.addEventListener('gesturestart',ev=>ev.preventDefault(),{passive:false});
 
-function startPolling(){
-  clearInterval(pollTimer);
-  pollTimer=setInterval(async()=>{
-    // nu reîmprospăta peste un sheet deschis, un undo în așteptare sau camera de scanare — ar smulge
-    // ecranul de sub deget (sau ar rescrie #main-area cât timp video-ul de scanare stă peste el)
-    if(document.hidden||sheetCtx||pendingUndo||scannerOpen||document.activeElement?.matches('input,textarea,select'))return;
-    // checkAutoQueueReset face deja un refreshData() intern dacă resetează — evităm un al doilea,
-    // redundant, imediat după.
-    const didAutoReset=await checkAutoQueueReset();
-    if(!didAutoReset)refreshData();
-  },25000);
-}
-
 function setStaffRefreshButton(busy){
   const b=document.getElementById('staff-refresh-btn');if(!b)return;
   b.disabled=!!busy;b.textContent=busy?'↻ Se încarcă…':'↻ Reîncarcă';
@@ -2017,10 +1980,6 @@ async function refreshStaffNow(){
     // disponibil pe Staff imediat, fără refresh de browser și fără cache local intermediar.
     const prodRows=await sb('GET','produse?select=id,name,sku,ean,internal_code,img,images,bought,sold,price_buy_ttc,archived&order=id.asc');
     PRODUSE=prodRows.map(p=>({...p,internalCode:p.internal_code}));
-    // Pragul de coadă se verifică doar aici și la încărcarea inițială (load()), nu la fiecare
-    // reîmprospătare automată (25s/visibilitychange/online) — „Coadă nouă” a devenit o acțiune rară,
-    // nu zilnică, nu merită încă un apel Supabase la fiecare tick doar pentru un caz de urgență.
-    await loadStaffQueueStart();
     // Alt telefon/tabletă poate fi cel care a bifat un curier ca „a venit" — reîncărcăm și asta, nu
     // doar comenzile, ca evidența să rămână la fel pe orice dispozitiv.
     await loadCourierArrivals();
@@ -2045,104 +2004,29 @@ async function sbComenzi(url){
     throw e;
   }
 }
-function queueDate(){return String(staffQueueStartedAt||CUTOFF_DATE).slice(0,10);}
-function afterStaffQueueStart(row){
-  // Unele rânduri vechi de jurnal nu aveau created_at. Nu le tratăm ca fiind noi doar pentru că
-  // au aceeași dată calendaristică; după reset, coada trebuie să fie efectiv goală.
-  // Bug real, regresie gravă, raportată direct („ai dat de tot peste cap sistemul"): extinderea de mai
-  // jos (păstrează orice rând neîmpachetat, indiferent de vechime) era corectă pentru comenzile de
-  // platformă (18 rânduri neîmpachetate în total, toate recente), dar Jurnalul (vânzări directe) are
-  // 717 rânduri neîmpachetate ISTORIC, până în iunie 2026 — `impachetat` nu e un câmp întreținut
-  // consecvent acolo, ca la eMAG/Trendyol. Revenit STRICT la fereastra de dată pentru Jurnal.
-  return !!row?.created_at&&String(row.created_at)>=String(staffQueueStartedAt);
-}
-async function loadStaffQueueStart(){
-  try{
-    const rows=await sb('GET',`setari_app?key=eq.${STAFF_QUEUE_KEY}&select=value`);
-    const v=rows?.[0]?.value;
-    if(v&&!Number.isNaN(new Date(v).getTime()))staffQueueStartedAt=v;
-  }catch(e){console.warn('prag coadă Staff indisponibil:',e);}
-}
-async function resetStaffQueue(){
-  // Text corectat, raportat direct ca înșelător („nu înțeleg de ce nu mai apar"): textul vechi
-  // spunea „nu vor mai apărea în Staff", dar de la #421/#422 încoace asta nu mai e adevărat — orice
-  // comandă încă neîmpachetată rămâne vizibilă (Împachetare, dacă e de azi, altfel În așteptare, vezi
-  // isCarryover mai sus); doar pragul „azi" se mută înainte. Avertismentul fals putea convinge un om
-  // să NU apese butonul de teamă că pierde comenzi deja incluse — sau, apăsat oricum, să creadă apoi
-  // că a pierdut ceva ce de fapt era doar mutat într-un tab diferit.
-  const text='Pornești o coadă nouă de acum? Comenzile deja incluse, dar ÎNCĂ NEÎMPACHETATE, NU dispar — cele de azi rămân în Împachetare, cele mai vechi trec în „În așteptare". Doar pragul „azi" se mută înainte.';
-  if(!confirm(text))return;
-  const b=document.getElementById('staff-queue-reset-btn');if(b)b.disabled=true;
-  const startedAt=new Date().toISOString();
-  try{
-    const updated=await sb('PATCH',`setari_app?key=eq.${STAFF_QUEUE_KEY}`,{value:startedAt});
-    if(!updated?.length)await sb('POST','setari_app',{key:STAFF_QUEUE_KEY,value:startedAt});
-    staffQueueStartedAt=startedAt;
-    curKey=null;
-    await refreshData();
-    showToast('✓ Coadă nouă pornită. Comenzile neîmpachetate rămân vizibile (Împachetare/În așteptare) — doar pragul s-a mutat înainte.');
-  }catch(e){
-    console.error(e);showToast('Nu am putut reseta coada — încearcă din nou');
-  }finally{if(b)b.disabled=false;}
-}
-// Coadă nouă automată zilnic la 22:00 — cerut direct („comenzile împachetate să se reseteze în
-// fiecare zi la ora 16 și să pregătească platforma pentru ziua următoare", pragul mutat ulterior de la
-// 16:00 la 22:00, tot cerut direct). Aceeași acțiune ca „↺ Coadă nouă" manual, dar fără confirm()
-// (rulează singură, nesupravegheată) și fără să se repete la fiecare tick de poll după ce a trecut ora
-// 22 — se declanșează o SINGURĂ dată, comparând pragul curent (staffQueueStartedAt) cu 22:00 de azi:
-// dacă ultimul reset e deja după acel prag, nu mai repetă.
-// Verificată atât la încărcarea inițială (tableta pornită/reîmprospătată după ora 22), cât și la
-// fiecare tick de poll (tableta rămasă deschisă peste ora 22). Întoarce true dacă a resetat, ca
-// apelantul din poll să nu mai ceară și un refreshData() separat, redundant.
-// Bug real reparat, raportat direct ca recurent („iarăși nu s-a sincronizat comenzi Staff — trebuia la
-// ora 22"): pragul se calcula mereu ca ora 22:00 DIN ZIUA CURENTĂ — dacă tableta nu era deschisă/vizibilă
-// exact în jurul orei 22 (ex. pusă la încărcat peste noapte), iar cineva o deschidea abia a doua zi
-// dimineața, „azi la 22" era deja în viitor, funcția ieșea imediat („now<threshold"), iar resetul din
-// noaptea trecută rămânea PERMANENT ratat — nu exista nicio recuperare ulterioară, oricât timp trecea.
-// Acum pragul e cel mai recent 22:00 deja trecut (azi, dacă a trecut ora 22; altfel ieri) — la orice
-// deschidere/poll ulterior, oricât de târziu, resetul se recuperează corect o singură dată.
-function lastQueueThreshold(){const d=new Date();d.setHours(22,0,0,0);if(d>new Date())d.setDate(d.getDate()-1);return d;}
-async function checkAutoQueueReset(){
-  const threshold=lastQueueThreshold();
-  if(staffQueueStartedAt&&new Date(staffQueueStartedAt)>=threshold)return false;
-  const startedAt=new Date().toISOString();
-  try{
-    const updated=await sb('PATCH',`setari_app?key=eq.${STAFF_QUEUE_KEY}`,{value:startedAt});
-    if(!updated?.length)await sb('POST','setari_app',{key:STAFF_QUEUE_KEY,value:startedAt});
-    staffQueueStartedAt=startedAt;
-    curKey=null;
-    await refreshData();
-    showToast('🕓 Coadă nouă pornită automat (22:00) — platforma e pregătită pentru ziua următoare.');
-    return true;
-  }catch(e){
-    console.warn('Reset automat coadă eșuat (reîncearcă la următorul ciclu):',e);
-    return false;
-  }
-}
-// Reparație pe termen lung, raportată direct: pragul de dată (staffQueueStartedAt) era un filtru
-// STRICT la nivelul interogării (created_at >= prag), nu doar un reper de sortare — orice comandă mai
-// veche dispărea din Staff INDIFERENT de starea ei reală, chiar și una încă neîmpachetată sau cu o
-// problemă nerezolvată raportată de Staff însuși („în așteptare de ieri/alaltăieri trebuie să rămână
-// acolo până o bifăm manual"). Verificat direct pe date live: 2 comenzi cu AWB deja asociat + 3 comenzi
-// „în așteptare" (una dintre ele chiar cu impachetat=true, blocată separat) ieșeau din Staff doar prin
-// trecerea unei zile. Pragul de dată rămâne filtru de PERFORMANȚĂ doar pentru ce e cu adevărat încheiat
-// (impachetat=true, fără problemă activă) — orice altceva rămâne vizibil oricât timp ar trece.
-// Regresie gravă reparată imediat, raportată direct („ai dat de tot peste cap sistemul"): prima variantă
-// nu avea NICIO limită de vechime pentru „neîmpachetat/blocat” — sigur pe platforma_comenzi (doar 18
-// rânduri neîmpachetate în total, toate recente, verificat live), dar Jurnalul avea 717, până în iunie
-// 2026 (vezi staffJurnalUrl, revenit strict la fereastra de dată). Adăugat totuși aici, preventiv, un
-// prag de 14 zile — nu contează azi (platforma_comenzi e curat), dar previne exact aceeași regresie
-// dacă rândurile neîmpachetate vechi se acumulează cu timpul.
+// RESET TOTAL al sistemului Staff/Packing (#519), cerut direct, cu spec detaliat, pe un bug real
+// (căptură: „ce caută aceste comenzi în staff la de împachetat în condițiile în care acestea sunt de
+// astăzi?" — o comandă din 21.09 apărută în coada ACTIVĂ de azi, doar pentru că i s-a reasociat un AWB).
+// „02.10.2026 este punctul zero": de-acum, Packing se alimentează STRICT din comenzi trimise EXPLICIT
+// spre împachetare (staff_trimis_at NOT NULL — vezi index.html: commitPcomLine/applyPcomImport la
+// comitere nouă, reactivateStaleOrder/reactivatePcomOrder/pullPcomOrderToPreview/reconsiderPcomRow la
+// retrimitere manuală), NICIODATĂ după status (neîmpachetat/pending) sau după o fereastră de dată
+// (created_at ≥ un prag care se putea avansa accidental, de orice altă acțiune — exact bug-ul de mai
+// sus). Eliminat complet întregul sistem vechi, nu doar ascuns în UI: „↺ Coadă nouă" (manual + automat
+// 22:00), staffQueueStartedAt/STAFF_QUEUE_KEY/CUTOFF_DATE, queueDate/afterStaffQueueStart — nicio sursă
+// de recuperare/reconstrucție automată a vreunui backlog nu mai există. O comandă trimisă explicit
+// rămâne vizibilă NELIMITAT cât timp nu e împachetată — recentFloor de mai jos e STRICT un bound de
+// performanță pentru ce e deja ÎNCHEIAT (împachetat), nu un filtru de vizibilitate.
 function staffComenziUrl(){
-  const recentFloor=new Date(new Date(staffQueueStartedAt).getTime()-14*24*3600000).toISOString();
-  return`platforma_comenzi?select=*&anulata=eq.false&or=(created_at.gte.${encodeURIComponent(staffQueueStartedAt)},and(created_at.gte.${encodeURIComponent(recentFloor)},impachetat.eq.false),and(created_at.gte.${encodeURIComponent(recentFloor)},staff_blocked.eq.true))&order=created_at.asc`;
+  const recentFloor=new Date(Date.now()-90*24*3600000).toISOString();
+  return`platforma_comenzi?select=*&anulata=eq.false&staff_trimis_at=not.is.null&or=(impachetat.eq.false,created_at.gte.${encodeURIComponent(recentFloor)})&order=created_at.asc`;
 }
-// Jurnalul (vânzări directe) NU primește aceeași extindere — `impachetat` nu e un câmp întreținut
-// consecvent acolo (717 rânduri neîmpachetate istoric, până în iunie 2026, verificat live), spre
-// deosebire de comenzile eMAG/Trendyol, unde chiar reflectă starea reală de împachetare. Revenit strict
-// la fereastra de dată, exact cum era înainte de reparația de mai sus.
+// Aceeași sursă unică de adevăr și pentru vânzările directe (Jurnal) — staff_trimis_at se scrie automat
+// la fiecare vânzare nouă (vezi saveJurnalEntry din index.html), deci rândurile istorice, dinainte de
+// #519, rămân corect NEvizibile (null), fără nicio migrare retroactivă.
 function staffJurnalUrl(){
-  return`jurnal?select=*&data=gte.${queueDate()}&anulata=eq.false&order=data.asc`;
+  const recentFloor=new Date(Date.now()-90*24*3600000).toISOString().slice(0,10);
+  return`jurnal?select=*&staff_trimis_at=not.is.null&anulata=eq.false&or=(impachetat.eq.false,data.gte.${recentFloor})&order=data.asc`;
 }
 
 async function refreshData(){
@@ -2159,7 +2043,7 @@ async function refreshData(){
       sb('GET','staff_mesaje?select=*&rezolvat=is.false&order=created_at.asc').catch(()=>STAFFMSG),
       sb('GET','comenzi_furnizor?select=*&finalizat=eq.false&order=created_at.asc').catch(e=>{console.warn('comenzi_furnizor indisponibil (rulează migration_comenzi_furnizor.sql):',e);return FURNIZOR;})
     ]);
-    COMENZI=comRows;JURNAL=jurnalRows.filter(afterStaffQueueStart);PREPACK=prepackRows;STAFFMSG=msgRows;FURNIZOR=furnizorRows;
+    COMENZI=comRows;JURNAL=jurnalRows;PREPACK=prepackRows;STAFFMSG=msgRows;FURNIZOR=furnizorRows;
     document.getElementById('sync-dot').className='sync-dot ok';
     computeOrders();
     renderMain();
@@ -2177,20 +2061,13 @@ async function refreshData(){
 
 // Refresh-ul este intenționat manual: Staff nu schimbă lista de sub operator când revine în tab,
 // reapare rețeaua sau trece timpul. Butonul „↻ Reîncarcă” aduce numai informația cerută explicit.
-// Reparație (raportată direct: „comenzile de ieri, unele deja împachetate, tot apar" + „ce s-a
-// întâmplat cu resetul de la 22:00?"): eliminarea pollingului de mai sus (fostul startPolling, scos la
-// trecerea pe refresh manual) a lăsat verificarea pragului de 22:00 (checkAutoQueueReset) fără NICIUN
-// declanșator cât timp tableta rămâne deschisă peste noapte — doar o reîncărcare completă de pagină
-// după ora 22 mai prindea reset-ul. Interval SEPARAT, dedicat STRICT acestei verificări (nu reface
-// lista, nu are legătură cu refresh-ul manual de mai sus): checkAutoQueueReset iese imediat, fără
-// niciun efect vizibil, dacă nu s-a trecut încă de pragul zilei — reface ecranul o SINGURĂ dată pe zi,
-// exact în noaptea în care trece de ora 22, nu la fiecare tick.
-setInterval(()=>{if(!document.hidden)checkAutoQueueReset();},60000);
-// Semnal ușor „📤 Trimite în Staff" (setari_app, aceeași tehnică ca STAFF_QUEUE_KEY) — interogare de o
-// singură coloană, ieftină, la fiecare 6s, STRICT ca să afișeze un indiciu vizual, NU ca să retragă
-// lista automat (vezi comentariul de mai sus, „Refresh-ul este intenționat manual"). Prima citire, la
-// pornire, doar reține valoarea curentă (nu declanșează indiciul — nu există nimic „nou" imediat după
-// ce tocmai am încărcat tot din ERP).
+// RESET TOTAL (#519) — fostul interval dedicat verificării pragului de 22:00 (checkAutoQueueReset) a
+// fost eliminat odată cu întregul sistem „Coadă nouă": nu mai există niciun prag de resetat automat —
+// vizibilitatea e strict staff_trimis_at (vezi staffComenziUrl), netrebuind nicio verificare periodică.
+// Semnal ușor „📤 Trimite în Staff" (setari_app) — interogare de o singură coloană, ieftină, la fiecare
+// 6s, STRICT ca să afișeze un indiciu vizual, NU ca să retragă lista automat (vezi comentariul de mai
+// sus, „Refresh-ul este intenționat manual"). Prima citire, la pornire, doar reține valoarea curentă
+// (nu declanșează indiciul — nu există nimic „nou" imediat după ce tocmai am încărcat tot din ERP).
 async function checkPushSignal(){
   if(document.hidden)return;
   try{
@@ -2220,7 +2097,6 @@ window.addEventListener('orientationchange',()=>setTimeout(syncStaffViewport,150
 async function load(){
   renderStaffNameBadge();
   try{
-    await loadStaffQueueStart();
     const [prodRows,comRows,prepackRows,msgRows,furnizorRows]=await Promise.all([
       sb('GET','produse?select=id,name,sku,ean,internal_code,img,images,bought,sold,price_buy_ttc,archived&order=id.asc'),
       sbComenzi(staffComenziUrl()),
@@ -2235,7 +2111,7 @@ async function load(){
     STAFFMSG=msgRows;
     FURNIZOR=furnizorRows;
     try{
-      JURNAL=(await sbComenzi(staffJurnalUrl())).filter(afterStaffQueueStart);
+      JURNAL=await sbComenzi(staffJurnalUrl());
     }catch(e){
       JURNAL=[];
       console.warn('Nu am putut încărca vânzările directe din Jurnal (rulează migration_jurnal_packing.sql):',e);
@@ -2245,9 +2121,6 @@ async function load(){
     pickInitialOrder(packQueue());
     renderMain();
     renderMsgPopup();
-    // Tableta poate fi pornită/reîncărcată DUPĂ ora 22 (nu doar rămasă deschisă peste ea) — verificăm
-    // și aici, nu doar în poll, ca reset-ul automat să nu aștepte până la 25 de secunde degeaba.
-    checkAutoQueueReset();
   }catch(e){
     document.getElementById('sync-dot').className='sync-dot err';
     document.getElementById('progress-txt').textContent='Eroare de conexiune';
