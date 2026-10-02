@@ -3965,6 +3965,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:513,text:'Safety net nou, cerut direct pe un caz real: „orice selecție Inclus din ziua precedentă, dacă nu este dus la Aplică import până seara la ora 22, importul să se facă automat, ca să nu mai avem astfel de erori pe viitor". Până acum, o comandă confirmată prin „✓ Inclus" (confirmare instant), dar niciodată dusă până la „Aplică import", rămânea la nesfârșit cu stocul/Jurnalul neatinse, dacă era uitată — exact ce s-a întâmplat ieri. Acum, la fiecare deschidere a paginii, se verifică automat cel mai recent prag de 22:00 (oră locală) deja trecut — exact aceeași tehnică deja dovedită în Staff (reset automat 22:00, #410/#414) — și orice comandă confirmată rămasă de dinaintea acelui prag se aplică singură (stoc scăzut, Jurnal/Vânzări azi completate), cu un mesaj clar. Comenzile din ziua curentă (încă neajunse la 22:00) nu sunt atinse — rămân la latitudinea omului, ca până acum. Pornește „curat" de azi încolo (2026-10-02) — NU atinge un backlog real, găsit live, de 11 comenzi uitate mai vechi (5-28 septembrie, unele clar suspecte de duplicat), lăsate intenționat pentru revizuire separată, manuală. Verificat cu 8 teste izolate pe funcția reală din cod (inclusiv cazul critic — backlog vechi exclus definitiv, grație respectată pentru ziua curentă, doar ce a trecut cu adevărat de prag se aplică), rulate de 2 ori. Pe drum, corectate live, direct în bază, 5 comenzi incluse din greșeală ieri și aplicate înainte de a fi revizuite (cerere directă, verificată și reparată separat).',date:'2026-10-02'},
   {n:512,text:'Previzualizare vizuală AWB în Staff, cerut direct: „pe lângă numărul AWB-ului, care nu e de cele mai multe ori cel mai ușor de identificat, să apară și previzualizarea AWB-ului, mai mică, în timp real, astfel încât să fie ușor de asociat". Interviu complet de design în .tmp/grill-me/staff-awb-preview.md. La citirea etichetelor (📂 Citește din dosar / Alege PDF-uri), pe lângă AWB-ul în sine, se randează acum REAL pagina etichetei (PDF.js, deja folosit la extragerea textului — page.render pe canvas, nicio bibliotecă nouă) și se urcă în Supabase Storage (bucket nou, awb-labels — aceeași tehnică deja folosită la pozele de produs, niciodată base64 în bază). Randare întotdeauna la lățime fixă (700px), indiferent de formatul nativ al curierului (DPD/Sameday/FAN/GLS/Cargus/eMAG Courier au dimensiuni foarte diferite) — verificat direct, cu etichete reale de pe disc, pe 2 formate diferite (Sameday A4, DPD termică), ambele perfect lizibile. Previzualizarea se generează ÎN FUNDAL, pe măsură ce se asociază AWB-urile (la „Asociază AWB-urile") — nu încetinește fluxul principal, scrisă separat, cheiată pe comandă+platformă+AWB (nu suprascrie o asociere ulterioară diferită). Necesită 2 pași în Supabase (coloană nouă + bucket de Storage — vezi mesajul din chat); până atunci, codul degradează grațios (AWB-ul se asociază normal, doar fără previzualizare).',date:'2026-10-01'},
   {n:511,text:'Asociere AWB — 2 bug-uri reale reparate, raportate direct pe comenzi Vinted reale. (1) Format Cargus „Click & Collect" nou, varianta „Outbound Internațional" (etichetă reală trimisă — „acesta este un AWB Cargus, atașez formatul să se recunoască pe viitor"): rămânea „format nerecunoscut" din 2 motive — „Cargus” apare doar cu literă mică (originalul cerea CARGUS cu majuscule), iar „Serviciu Click & Collect” apare fără „:" după „Serviciu" (originalul cerea „Serviciu:"); perechea de numere echivalentă AWB-ului nu mai stă pe aceeași linie cu „/" ca-n formatul vechi, ci pe 2 rânduri diferite, cu încă un rând intercalat între ele (orașele rutei) — reconstruită acum manual. (2) O etichetă Vinted/eMAG Ungaria deja asociată cu o comandă (AWB deja scris, vizibilă în Staff), recitită din orice motiv (fișier nearhivat încă, pus din nou în dosar), apărea fals ca „nepotrivită" — căutarea de match se uita STRICT printre comenzi nerezolvate (fără AWB încă), excluzând exact comanda deja corect asociată. Acum se verifică întâi, separat, dacă AWB-ul e deja scris exact pe o comandă — dacă da, asocierea se confirmă direct (rescriere fără efect), fără avertisment fals, și fișierul se arhivează normal data asta. Verificat cu 9 teste izolate (eticheta Cargus reală, formatul vechi neafectat, etichetă anulată, text fără „cargus" rămâne nerecunoscut, comandă deja asociată Vinted/eMAG HU găsită direct, comandă încă „Neinclus" cu același AWB, fără nicio potrivire rămâne negăsit), rulate de 2 ori.',date:'2026-10-01'},
   {n:510,text:'Listing builder (Research / import produs din URL) — reparat „JSON AI invalid și nereparabil": pasul de auto-reparare a JSON-ului nu seta nivelul de raționament jos (modelele gpt-5.6 puteau consuma tot bugetul și întoarce răspuns gol) și avea un plafon de 2200 tokeni, sub răspunsul „synthesize" (4200) pe care trebuia să-l repare. Acum: effort low + plafon 5000.',date:'2026-09-30'},
@@ -7443,6 +7444,8 @@ async function load(){
     checkSupplierRestockAlerts();
     checkEditProductDeepLink();
     startLiveSync();
+    // Fire-and-forget — nu blochează restul încărcării paginii pentru o verificare de fundal.
+    autoApplyStalePendingImports();
   }catch(err){
     setSyncStatus('err','Eroare conexiune');
     hideLoading();
@@ -16573,6 +16576,61 @@ async function deletePcomBatch(batchId){
   }catch(err){
     toast('Eroare la ștergere: '+err.message,'err');
   }
+}
+// Safety net cerut direct, pe un caz real: 5 comenzi confirmate prin „✓ Inclus" (confirmare instant)
+// au rămas NICIODATĂ duse până la „Aplică import" (stoc/Jurnal neatinse) — uitate o zi întreagă, apoi
+// (altă problemă, separată, deja rezolvată) aplicate din greșeală ODATĂ CU alt lot, la momentul nepotrivit.
+// „Dacă rămân comenzi din ziua precedentă neduse la Aplică import până seara la 22:00, să se aplice
+// automat" — exact aceeași tehnică deja dovedită în staff.html (checkAutoQueueReset/lastQueueThreshold,
+// #410/#414): pragul e cel mai recent 22:00 (oră locală) deja trecut — la orice deschidere a paginii,
+// oricât de târziu, recuperarea e corectă, o singură dată, fără să repete inutil la fiecare reîncărcare.
+// Nu se ocupă de comenzi din ZIUA CURENTĂ (încă neajunse la 22:00) — acelea rămân normal la latitudinea
+// omului, ca până acum; doar ce a rămas „Inclus" peste pragul de 22:00 se aplică singur.
+// AUTO_APPLY_CUTOFF — decizie directă, verificată live: la introducerea acestei funcții existau deja 11
+// comenzi „uitate" vechi (5-28 septembrie), unele clar suspecte (2 linii identice „Set umerașe pentru
+// haine", la 10 secunde distanță — posibil duplicat, nu o comandă reală). Aplicarea lor oarbă, fără
+// verificare, ar fi putut strica stocul pe date vechi. Funcția nu atinge NICIODATĂ comenzi dinainte de
+// acest prag — pornește „curat", doar de-acum încolo; cele 11 vechi rămân de revizuit separat, manual.
+const AUTO_APPLY_CUTOFF='2026-10-02T00:00:00.000Z';
+const LAST_AUTO_APPLY_KEY='last_auto_apply_checked_at';
+function lastApplyThreshold(){const d=new Date();d.setHours(22,0,0,0);if(d>new Date())d.setDate(d.getDate()-1);return d;}
+async function autoApplyStalePendingImports(){
+  if(!sbReady)return;
+  try{
+    const threshold=lastApplyThreshold();
+    const checkRows=await dbGet(`setari_app?key=eq.${LAST_AUTO_APPLY_KEY}&select=value`);
+    const lastChecked=checkRows?.[0]?.value;
+    if(lastChecked&&new Date(lastChecked)>=threshold)return;
+    const stale=await dbGet(`platforma_comenzi?efecte_aplicate=eq.false&anulata=eq.false&created_at=gte.${encodeURIComponent(AUTO_APPLY_CUTOFF)}&created_at=lt.${encodeURIComponent(threshold.toISOString())}&select=*`);
+    let applied=0;
+    for(const row of stale){
+      const it=dbToPcom(row);
+      const p=P.find(x=>x.id===it.produsId);
+      if(!p)continue;
+      try{
+        // Aceeași secvență ca la Aplică import manual (applyPcomImport) — stoc, Jurnal, Vânzări azi,
+        // mișcare de stoc, apoi marcată aplicată — doar declanșată singură, nu de un click.
+        p.sold=(p.sold||0)+it.cantitate;
+        await dbPatch(`produse?id=eq.${p.id}`,{sold:p.sold});
+        await logMove('out',p.name,it.cantitate,`Vânzare ${pcomPlatLabel(it.platforma)} (comandă ${it.comandaId||'—'}) — aplicată automat la 22:00, rămasă neconfirmată`,p.id);
+        TS[p.id]=(TS[p.id]||0)+it.cantitate;
+        await saveTodaySale(p.id,TS[p.id]);
+        await saveJurnalEntry(p,it.cantitate);
+        await dbPatch(`platforma_comenzi?id=eq.${row.id}`,{efecte_aplicate:true});
+        const ex=PCOM.find(o=>o.id===row.id);if(ex)ex.efecteAplicate=true;
+        applied++;
+      }catch(e){console.warn('Nu am putut auto-aplica comanda',it.comandaId,e);}
+    }
+    if(applied){
+      toast(applied>1
+        ?`🕓 ${applied} comenzi confirmate „Inclus", dar niciodată duse până la Aplică import — aplicate automat la 22:00, stoc și Jurnal actualizate.`
+        :'🕓 O comandă confirmată „Inclus", dar niciodată dusă până la Aplică import — aplicată automat la 22:00, stoc și Jurnal actualizate.','warn');
+      renderTable();renderToday();renderDashboard();
+    }
+    const nowIso=new Date().toISOString();
+    const updated=await dbPatch(`setari_app?key=eq.${LAST_AUTO_APPLY_KEY}`,{value:nowIso});
+    if(!updated?.length)await dbPost('setari_app',{key:LAST_AUTO_APPLY_KEY,value:nowIso});
+  }catch(e){console.warn('Verificare auto-aplicare comenzi uitate eșuată:',e);}
 }
 function pcomParseDate(v){
   if(!v)return'';
