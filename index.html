@@ -3965,6 +3965,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:515,text:'Comenzi Platforme (Vinted) — bug real grav reparat, raportat direct pe o comandă reală (continuare la #514, eticheta Vinted fără linie de produs): „tu acum când mi-ai dat AWB-ul, de fapt nu s-o asociat cu comenzile care existau deja încărcate de către mine. S-o creat o comandă nouă, ceea ce e relativ greșit. Pentru că eu deja încărcasem acele comenzi cu produsul plus prețul." Cauza reală: fuzzyMatch(a,b) — în JS orice text „include" string-ul gol (`\'oricetext\'.includes(\'\')` e mereu true) — o etichetă fără produs (text gol) „potrivea" astfel aproape orice produs din stoc, cu scor 0.95, aproape perfect, creând o comandă fantomă în loc să caute comanda deja existentă. Reparat la sursă, o singură dată, chiar în fuzzyMatch (text gol → scor 0, nu „potrivește orice") — elimină toată clasa de bug peste tot unde se folosește funcția, nu doar la locul prins; findExistingProduct nu mai încearcă deloc potrivirea fuzzy fără nume (EAN/SKU rămân neatinse). Rezultat: o etichetă fără produs NU mai creează nimic nou de-acum — cade direct pe fluxul deja existent de recomandare/selecție manuală (#511/#514), exact cum s-a cerut explicit: „nu știe să se asocieze automat, nu-i problemă. Mai bine oferă varianta aia de recomandare și selectăm noi... așa trebuie să lucrăm, nu să facă altele noi". Șterse live, direct din bază, cele 2 comenzi-fantomă deja create de acest bug. Pe lângă asta, cerut tot direct, în aceeași situație („dăm încă o funcție la Vinted de a adăuga manual prețul... ca să poți face calcul pe total"): prețul (și moneda) unei linii Vinted rămân editabile și DUPĂ ce linia e deja comisă (✓ Inclus), nu doar înainte — exact cazul unei comenzi create fără preț, altfel înghețată la 0 la nesfârșit, cu profit/marjă mereu greșite; cumpărător/cod rămân needitabile după comitere, ca până acum (doar preț/monedă au sens de corectat ulterior). Verificat cu 14 teste izolate (query/nume gol → scor 0, nu produsul găsit din greșeală; eticheta reală reprodusă exact, fără comandă nouă creată; preț editat pe linie deja comisă se salvează acum în bază — inclusiv recalcul profit/marjă —, pe linie necomisă rămâne local ca înainte, pe linie cu stoc deja aplicat refuzat corect; grup de linii sincronizat complet, inclusiv schimbarea de monedă), rulate de 2 ori.',date:'2026-10-02'},
   {n:514,text:'Asociere AWB — al 9-lea format de etichetă Vinted recunoscut, raportat direct cu etichetă reală atașată: „AWB de la Vinted, de ce nu l-a recunoscut?". Unele etichete digitale Vinted (confirmat FAN Courier) nu au deloc o linie de produs — doar curier, „Destinatar", nume, apoi strict codul de urmărire. Regex-ul existent cerea obligatoriu o linie de produs după destinatar, deci eșuează mereu pe acest format, rămânând tăcut „format nerecunoscut". Acum, când eticheta nu are nicio linie de produs, potrivirea trece automat de la titlul produsului la NUMELE destinatarului (safeNameScore — aceeași protecție deja aplicată la alte potriviri de nume, chirilic/grecesc inclus), comparat cu numele clienților din comenzile Vinted nerezolvate. Mesajul de „nepotrivit"/„ambiguu" reflectă și el corect cazul (numele, nu un produs gol, confuz). Verificat cu 8 teste izolate — inclusiv pe eticheta reală trimisă, extrasă identic cu extractPdfPagesText din fișierul chiar de pe disc — plus formatul vechi (cu produs) confirmat complet neafectat, rulate de 2 ori.',date:'2026-10-02'},
   {n:513,text:'Safety net nou, cerut direct pe un caz real: „orice selecție Inclus din ziua precedentă, dacă nu este dus la Aplică import până seara la ora 22, importul să se facă automat, ca să nu mai avem astfel de erori pe viitor". Până acum, o comandă confirmată prin „✓ Inclus" (confirmare instant), dar niciodată dusă până la „Aplică import", rămânea la nesfârșit cu stocul/Jurnalul neatinse, dacă era uitată — exact ce s-a întâmplat ieri. Acum, la fiecare deschidere a paginii, se verifică automat cel mai recent prag de 22:00 (oră locală) deja trecut — exact aceeași tehnică deja dovedită în Staff (reset automat 22:00, #410/#414) — și orice comandă confirmată rămasă de dinaintea acelui prag se aplică singură (stoc scăzut, Jurnal/Vânzări azi completate), cu un mesaj clar. Comenzile din ziua curentă (încă neajunse la 22:00) nu sunt atinse — rămân la latitudinea omului, ca până acum. Pornește „curat" de azi încolo (2026-10-02) — NU atinge un backlog real, găsit live, de 11 comenzi uitate mai vechi (5-28 septembrie, unele clar suspecte de duplicat), lăsate intenționat pentru revizuire separată, manuală. Verificat cu 8 teste izolate pe funcția reală din cod (inclusiv cazul critic — backlog vechi exclus definitiv, grație respectată pentru ziua curentă, doar ce a trecut cu adevărat de prag se aplică), rulate de 2 ori. Pe drum, corectate live, direct în bază, 5 comenzi incluse din greșeală ieri și aplicate înainte de a fi revizuite (cerere directă, verificată și reparată separat).',date:'2026-10-02'},
   {n:512,text:'Previzualizare vizuală AWB în Staff, cerut direct: „pe lângă numărul AWB-ului, care nu e de cele mai multe ori cel mai ușor de identificat, să apară și previzualizarea AWB-ului, mai mică, în timp real, astfel încât să fie ușor de asociat". Interviu complet de design în .tmp/grill-me/staff-awb-preview.md. La citirea etichetelor (📂 Citește din dosar / Alege PDF-uri), pe lângă AWB-ul în sine, se randează acum REAL pagina etichetei (PDF.js, deja folosit la extragerea textului — page.render pe canvas, nicio bibliotecă nouă) și se urcă în Supabase Storage (bucket nou, awb-labels — aceeași tehnică deja folosită la pozele de produs, niciodată base64 în bază). Randare întotdeauna la lățime fixă (700px), indiferent de formatul nativ al curierului (DPD/Sameday/FAN/GLS/Cargus/eMAG Courier au dimensiuni foarte diferite) — verificat direct, cu etichete reale de pe disc, pe 2 formate diferite (Sameday A4, DPD termică), ambele perfect lizibile. Previzualizarea se generează ÎN FUNDAL, pe măsură ce se asociază AWB-urile (la „Asociază AWB-urile") — nu încetinește fluxul principal, scrisă separat, cheiată pe comandă+platformă+AWB (nu suprascrie o asociere ulterioară diferită). Necesită 2 pași în Supabase (coloană nouă + bucket de Storage — vezi mesajul din chat); până atunci, codul degradează grațios (AWB-ul se asociază normal, doar fără previzualizare).',date:'2026-10-01'},
@@ -17502,11 +17503,21 @@ function pcomSetVintedPret(idx,val){
     it.pretTotalCuTva=pret;it.pretFaraTva=faraTva;
   }
   setTimeout(renderPcomImportPreview,0);
+  // Cerut direct („dăm încă o funcție la Vinted de a adăuga manual prețul... ca să poți face calcul
+  // pe total"): editarea trebuie să funcționeze și pe o linie DEJA comisă (✓ Inclus), nu doar pe cea
+  // „Neinclus" — exact cazul unei comenzi Vinted create fără preț (din etichetă, fără captură — vezi
+  // pcomCreateVintedLineFromLabel). Reutilizează EXACT același mecanism deja construit pentru
+  // cantitate (pcomPersistQtyIfCommitted patch-uiește deja preț+profit+marjă, nu doar cantitatea) —
+  // no-op sigur dacă linia tot nu e comisă încă (vezi garda proprie a funcției). Toate liniile
+  // grupului (nu doar cea editată) — fiecare e propriul rând în platforma_comenzi, cu propriul preț.
+  pcomVintedGroupSiblings(idx).forEach(i=>pcomPersistQtyIfCommitted(i));
 }
 function pcomSetVintedMoneda(idx,val){
   const it=pcImpParsed[idx];if(!it)return;
-  pcomVintedGroupSiblings(idx).forEach(i=>{pcImpParsed[i].moneda=val;});
+  const siblings=pcomVintedGroupSiblings(idx);
+  siblings.forEach(i=>{pcImpParsed[i].moneda=val;});
   renderPcomImportPreview();
+  siblings.forEach(i=>pcomPersistQtyIfCommitted(i));
 }
 // Cumpărător/cod — text liber, fără efect vizual în altă parte a rândului, deci scrise direct în
 // stare, FĂRĂ re-randare — un re-render la fiecare literă ar arunca focusul din input la mijlocul
@@ -17708,11 +17719,17 @@ function pcomRowHtml(idx,showOwnAwb){
   // Vinted, cât timp linia nu e încă confirmată: prețul/moneda vin din citirea AI a unei capturi, nu
   // dintr-un export autoritar ca la eMAG/Trendyol — trebuie corectabile direct aici, nu doar cantitatea.
   const isVintedPending=it.platforma==='vinted'&&!it._committedId;
+  // Cerut direct („dăm încă o funcție la Vinted de a adăuga manual prețul... ca să poți face calcul pe
+  // total"): PREȚUL rămâne editabil și DUPĂ ce linia e deja comisă (✓ Inclus) — spre deosebire de
+  // cumpărător/cod (mai jos, rămase scopate strict la isVintedPending) — exact cazul unei comenzi
+  // Vinted create direct dintr-o etichetă fără preț (fără nicio captură de unde să-l citească AI-ul —
+  // vezi pcomCreateVintedLineFromLabel), unde profitul/marja rămân altfel 0 la nesfârșit.
+  const isVintedPriceEditable=it.platforma==='vinted';
   // Preț consolidat (vezi comentariul de mai sus) — DOAR liniile dintr-un „Grupează N articole" arată
   // rezumatul spre linia 1; liniile din lotul manual (preț real, propriu, per produs) rămân normale.
   const priceDisplay=(isVintedPriceConsolidated&&!isVintedGroupFirst)
     ?`<span style="color:var(--t3)">preț pe linia 1</span>`
-    :isVintedPending
+    :isVintedPriceEditable
       ?`<input type="text" inputmode="decimal" value="${it.pretTotalCuTva||''}" onchange="pcomSetVintedPret(${idx},this.value)" style="width:64px;font-family:var(--mono);font-size:21px;padding:2px 6px;border:1px solid var(--b2);border-radius:3px;background:var(--surf);color:var(--t1)"> <select onchange="pcomSetVintedMoneda(${idx},this.value)" style="font-size:21px;padding:2px 4px;border:1px solid var(--b2);border-radius:3px;background:var(--surf);color:var(--t1)"><option value="RON"${it.moneda==='RON'?' selected':''}>RON</option><option value="EUR"${it.moneda==='EUR'?' selected':''}>EUR</option></select>${it.moneda!=='RON'?' ('+pcomToRon(it.pretTotalCuTva,it.moneda).toFixed(2)+' RON)':''}`
       :`${it.pretTotalCuTva.toFixed(2)} ${esc(it.moneda)}${it.moneda!=='RON'?' ('+pcomToRon(it.pretTotalCuTva,it.moneda).toFixed(2)+' RON)':''}`;
   const priceInfoHtml=`${qtyStepper} · ${priceDisplay}`;
@@ -18807,12 +18824,16 @@ function pcxLineHtml(idx,groupIdxs){
   const isVintedGroupFirst=!isVintedMultiLine||vintedGroupIdxs[0]===idx;
   const isVintedPriceConsolidated=isVintedMultiLine&&!!it.pretConsolidated;
   const isVintedPending=it.platforma==='vinted'&&!it._committedId;
+  // Cerut direct („dăm încă o funcție la Vinted de a adăuga manual prețul... ca să poți face calcul pe
+  // total") — vezi comentariul identic de la cealaltă cale de randare (pcomRowHtml) mai sus: prețul
+  // rămâne editabil și pe o linie deja comisă, spre deosebire de cumpărător/cod.
+  const isVintedPriceEditable=it.platforma==='vinted';
   // Zonă alungită (cerut direct, „zona, nu cifra") — control tip pastilă, vezi .pcx-qty-stepper.
   const qtyHtml=`<div class="pcx-qty-stepper"><button type="button" onclick="pcomAdjustQty(${idx},-0.5)" title="Scade cantitatea">−</button><input type="number" step="0.5" min="0.5" value="${it.cantitate}" onchange="pcomSetQty(${idx},this.value)" title="Cantitate de stoc"><button type="button" onclick="pcomAdjustQty(${idx},0.5)" title="Crește cantitatea">+</button></div>`;
   let priceHtml;
   if(isVintedPriceConsolidated&&!isVintedGroupFirst){
     priceHtml=`<span style="color:var(--t3)">preț pe prima linie a comenzii</span>`;
-  }else if(isVintedPending){
+  }else if(isVintedPriceEditable){
     priceHtml=`<input type="text" inputmode="decimal" value="${it.pretTotalCuTva||''}" onchange="pcomSetVintedPret(${idx},this.value)" style="width:72px;font-family:var(--mono);padding:3px 6px;border:1px solid var(--b2);border-radius:4px"> <select onchange="pcomSetVintedMoneda(${idx},this.value)" style="padding:3px;border:1px solid var(--b2);border-radius:4px"><option value="RON"${it.moneda==='RON'?' selected':''}>RON</option><option value="EUR"${it.moneda==='EUR'?' selected':''}>EUR</option></select>`;
   }else{
     priceHtml=`<b>${it.pretTotalCuTva.toFixed(2)} ${esc(it.moneda)}</b>${it.moneda!=='RON'?' ('+pcomToRon(it.pretTotalCuTva,it.moneda).toFixed(2)+' RON)':''}`;
@@ -20520,6 +20541,17 @@ function fmNumbers(s){
 }
 function fuzzyMatch(a,b){
   const na=fmNorm(a),nb=fmNorm(b);
+  // Bug real, grav, găsit direct pe date reale („s-a creat o comandă nouă, ceea ce e relativ greșit" —
+  // o etichetă Vinted FĂRĂ nicio linie de produs a „găsit" totuși un produs, cu scor 0.95, creând o
+  // comandă complet fantomă): în JS, ORICE string „include” string-ul gol (`'oricetext'.includes('')`
+  // e mereu true) — un query gol (sau text ce normalizează la gol, ex. doar punctuație) „potrivea”
+  // astfel orice produs din stoc, cu scor aproape perfect, deși n-are nimic de-a face cu el. Restul
+  // codului se apără deja de asta ÎNAINTE de a apela fuzzyMatch (ex. linia 4573 — verificare explicită
+  // „if(!query)return” înainte de orice scor) — niciun apelant nu se bazează, intenționat, pe faptul că
+  // text gol ar trebui să „potrivească orice”; era doar o gaură ratată la UN apelant (findExistingProduct,
+  // fără acea gardă). Reparat la sursă, o singură dată — elimină întreaga clasă de bug, peste tot unde
+  // se folosește fuzzyMatch, nu doar la locul unde a fost prins.
+  if(!na||!nb)return 0;
   if(na===nb)return 1;
   if(na.includes(nb)||nb.includes(na))return 0.95;
   const wa=new Set(fmTokens(a));
@@ -20579,10 +20611,19 @@ function findExistingProduct(item){
     const bySupplierSku=P.find(p=>(p.supplierSources||[]).some(s=>String(s?.sku||'').toLowerCase()===key));
     if(bySupplierSku)return{product:bySupplierSku,confidence:'supplier_sku',score:1};
   }
+  // Bug real, grav, găsit direct pe date reale („s-a creat o comandă nouă, ceea ce e relativ greșit" —
+  // o etichetă Vinted FĂRĂ nicio linie de produs a „găsit" totuși un produs, cu scor perfect, creând o
+  // comandă complet fantomă): fuzzyMatch normalizează text fără litere/cifre latine la string GOL —
+  // exact aceeași clasă de bug deja reparată la potrivirea de nume (safeNameScore, chirilic/grecesc).
+  // Un query GOL (item.name='') s-ar putea „potrivi perfect" cu orice produs al cărui text de căutare
+  // normalizează și el la gol (metadate minime/lipsă) — niciodată o potrivire reală, doar un artefact.
+  // Fără nume, pur și simplu nu încercăm deloc potrivirea fuzzy (EAN/SKU de mai sus rămân neatinse).
   let best=null,bestScore=0;
-  for(const p of P){
-    const score=fuzzyMatch(item.name||'',productMatchText(p));
-    if(score>bestScore){bestScore=score;best=p;}
+  if(item.name&&String(item.name).trim()){
+    for(const p of P){
+      const score=fuzzyMatch(item.name,productMatchText(p));
+      if(score>bestScore){bestScore=score;best=p;}
+    }
   }
   if(bestScore>=0.7)return{product:best,confidence:'name',score:bestScore};
   return null;
