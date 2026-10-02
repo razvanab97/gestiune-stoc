@@ -3965,6 +3965,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:517,text:'Expediere → buton nou „🔁 Repune AWB-uri din arhivă", cerut direct: „tot nu apar AWB-urile, adaugă buton de repunere de AWB-uri atunci când dispar, ele fiind deja în folder". Cauza reală găsită live, pe cele 9 comenzi raportate (inclusiv #533198344, Bogdan Teodorov, din captura trimisă): eticheta AWB a fost descărcată automat de pe Mac cu ore înainte ca admin-ul să importe efectiv acea comandă din eMAG/Trendyol (#509) — fișierul ajunge direct în Desktop/AWB-uri/procesate/<zi>, corect arhivat, dar „📂 Citește din dosar" refuză intenționat să recitească arhiva (protecție împotriva recitirii duble) — AWB-ul rămânea orfan definitiv, fără nicio cale de recuperare din aplicație. Butonul nou rulează exact același motor de citire/potrivire, DOAR cu sursa schimbată — Desktop/AWB-uri/procesate, ultimele 14 zile (prag nou în Conectorul local, necesită `git pull` + `launchctl kickstart -k gui/$(id -u)/ro.abhomes.emag-local-connector`) — nu mută/șterge nimic din arhivă, doar completează AWB-uri lipsă pe comenzi deja existente. Verificat live, de 2 ori, direct pe conectorul real repornit: noul endpoint găsește corect toate cele 9 fișiere de azi (plus 110 din ultimele 13 zile), iar textul REAL extras dintr-unul dintre ele (533198344_eMAG_Courier_...) conține exact „AWB_533198344_...", confirmând că se va asocia corect cu comanda reală raportată, nu doar teoretic.',date:'2026-10-02'},
   {n:516,text:'Continuare directă la #515, pe raportarea reală că s-a mai întâmplat: a mai apărut o comandă-fantomă Vinted ("Robert Mihai", produs greșit "Garaj parcare 4 niveluri") — exact același bug, DEȘI fix-ul de la #515 era deja scris. Cauza: tab-ul de admin era încă deschis dintr-o sesiune de dinainte de deploy — pagina e un singur fișier static, încărcat o singură dată, deci codul vechi, cu bug-ul, a rămas în execuție în memoria browserului până la o reîncărcare manuală. Rândul fantomă a fost șters live din bază (efecte_aplicate=false, fără impact pe stoc), iar cele 2 etichete-sursă care au produs ambele comenzi-fantomă (Alexandra Bahrim și Robert Mihai, ambele din formatul Vinted „fără produs" de la #514) au fost mutate înapoi din Desktop/AWB-uri/procesate în Desktop/AWB-uri, ca să fie reprocesate corect, de data asta sub codul reparat (fie auto-asociate cu o comandă deja încărcată cu produs+preț, fie oferite spre selecție manuală — niciodată o comandă nouă). Dacă fix-ul de la #515/#516 pare să nu funcționeze din nou, cauza cea mai probabilă e aceeași: reîncarcă pagina (Cmd+Shift+R) înainte de a citi etichete AWB. Pe lângă asta, raportat direct și verificat live, separat: (1) „AWB în așteptare" pe o comandă anume (eMAG #533198344, Bogdan Teodorov) era corect — comanda chiar nu are AWB asociat încă, nu o pierdere de date; (2) 9 comenzi eMAG/Trendyol reale, vechi de 2-4 zile, stau neîmpachetate în Staff → „În așteptare" — nu un bug (acolo intră intenționat, #427/#429), dar o restanță reală de verificat manual; (3) previzualizarea vizuală AWB (#512) nu a afișat NICIODATĂ nimic pentru că pasul de configurare din Supabase (coloană nouă + bucket de Storage) nu fusese încă rulat — SQL-ul exact, din nou, mai jos în chat. Corectat și în Staff (vezi #431 acolo) un text de confirmare la „↺ Coadă nouă" care era pur și simplu greșit/înșelător de la #421/#422 încoace („comenzile nu vor mai apărea" — fals, rămân vizibile, doar mutate în alt tab dacă sunt vechi) — probabil o sursă reală de confuzie suplimentară.',date:'2026-10-02'},
   {n:515,text:'Comenzi Platforme (Vinted) — bug real grav reparat, raportat direct pe o comandă reală (continuare la #514, eticheta Vinted fără linie de produs): „tu acum când mi-ai dat AWB-ul, de fapt nu s-o asociat cu comenzile care existau deja încărcate de către mine. S-o creat o comandă nouă, ceea ce e relativ greșit. Pentru că eu deja încărcasem acele comenzi cu produsul plus prețul." Cauza reală: fuzzyMatch(a,b) — în JS orice text „include" string-ul gol (`\'oricetext\'.includes(\'\')` e mereu true) — o etichetă fără produs (text gol) „potrivea" astfel aproape orice produs din stoc, cu scor 0.95, aproape perfect, creând o comandă fantomă în loc să caute comanda deja existentă. Reparat la sursă, o singură dată, chiar în fuzzyMatch (text gol → scor 0, nu „potrivește orice") — elimină toată clasa de bug peste tot unde se folosește funcția, nu doar la locul prins; findExistingProduct nu mai încearcă deloc potrivirea fuzzy fără nume (EAN/SKU rămân neatinse). Rezultat: o etichetă fără produs NU mai creează nimic nou de-acum — cade direct pe fluxul deja existent de recomandare/selecție manuală (#511/#514), exact cum s-a cerut explicit: „nu știe să se asocieze automat, nu-i problemă. Mai bine oferă varianta aia de recomandare și selectăm noi... așa trebuie să lucrăm, nu să facă altele noi". Șterse live, direct din bază, cele 2 comenzi-fantomă deja create de acest bug. Pe lângă asta, cerut tot direct, în aceeași situație („dăm încă o funcție la Vinted de a adăuga manual prețul... ca să poți face calcul pe total"): prețul (și moneda) unei linii Vinted rămân editabile și DUPĂ ce linia e deja comisă (✓ Inclus), nu doar înainte — exact cazul unei comenzi create fără preț, altfel înghețată la 0 la nesfârșit, cu profit/marjă mereu greșite; cumpărător/cod rămân needitabile după comitere, ca până acum (doar preț/monedă au sens de corectat ulterior). Verificat cu 14 teste izolate (query/nume gol → scor 0, nu produsul găsit din greșeală; eticheta reală reprodusă exact, fără comandă nouă creată; preț editat pe linie deja comisă se salvează acum în bază — inclusiv recalcul profit/marjă —, pe linie necomisă rămâne local ca înainte, pe linie cu stoc deja aplicat refuzat corect; grup de linii sincronizat complet, inclusiv schimbarea de monedă), rulate de 2 ori.',date:'2026-10-02'},
   {n:514,text:'Asociere AWB — al 9-lea format de etichetă Vinted recunoscut, raportat direct cu etichetă reală atașată: „AWB de la Vinted, de ce nu l-a recunoscut?". Unele etichete digitale Vinted (confirmat FAN Courier) nu au deloc o linie de produs — doar curier, „Destinatar", nume, apoi strict codul de urmărire. Regex-ul existent cerea obligatoriu o linie de produs după destinatar, deci eșuează mereu pe acest format, rămânând tăcut „format nerecunoscut". Acum, când eticheta nu are nicio linie de produs, potrivirea trece automat de la titlul produsului la NUMELE destinatarului (safeNameScore — aceeași protecție deja aplicată la alte potriviri de nume, chirilic/grecesc inclus), comparat cu numele clienților din comenzile Vinted nerezolvate. Mesajul de „nepotrivit"/„ambiguu" reflectă și el corect cazul (numele, nu un produs gol, confuz). Verificat cu 8 teste izolate — inclusiv pe eticheta reală trimisă, extrasă identic cu extractPdfPagesText din fișierul chiar de pe disc — plus formatul vechi (cu produs) confirmat complet neafectat, rulate de 2 ori.',date:'2026-10-02'},
@@ -19096,7 +19097,7 @@ function renderPcomRedesign(){
       <div class="pcx-card">
         <div class="pcx-card-hd"><div><div class="pcx-card-title">Expediere</div><div class="pcx-card-sub">Asociază AWB-urile existente sau generează etichete pentru expediere.</div></div><button type="button" class="pcx-help-btn" onclick="pcxToggleHelp('awb')">Cum funcționează?</button></div><div class="pcx-help" id="pcx-help-awb" style="display:none">${PCX_HELP.awb}</div>
         <div class="pcx-shipping-grid">
-          <section class="pcx-shipping-module"><h3>A. Asociază AWB-uri existente</h3><p>Încarcă PDF-uri de la FAN Courier, Trendyol sau alți curieri. Fișierele procesate din dosarul Mac rămân protejate împotriva recitirii.</p><div class="pcx-dropzone" onclick="document.getElementById('pcmi-awb-file').click()"><span class="ic">📮</span>Alege PDF-uri cu etichete AWB<span class="sub">Poți selecta mai multe PDF-uri deodată</span></div><div class="pcx-shipping-actions"><button type="button" class="btn btn-sm" id="pcx-awb-folder-btn" onclick="readAwbFolderPdfs()">📂 Citește din dosarul AWB-uri de pe Mac</button><button type="button" class="btn btn-sm" id="pcx-awb-print-btn" onclick="downloadActiveAwbPdf()">🖨️ PDF AWB comenzi incluse</button><button type="button" class="btn btn-sm" onclick="retrySavedAwbErrors()">↻ Reîncearcă erorile</button></div><div id="pcx-awb-parsing-slot"></div><div id="pcx-awb-preview-slot"></div><div id="pcx-awb-foot-slot" style="display:flex;justify-content:flex-end;margin-top:10px"></div></section>
+          <section class="pcx-shipping-module"><h3>A. Asociază AWB-uri existente</h3><p>Încarcă PDF-uri de la FAN Courier, Trendyol sau alți curieri. Fișierele procesate din dosarul Mac rămân protejate împotriva recitirii.</p><div class="pcx-dropzone" onclick="document.getElementById('pcmi-awb-file').click()"><span class="ic">📮</span>Alege PDF-uri cu etichete AWB<span class="sub">Poți selecta mai multe PDF-uri deodată</span></div><div class="pcx-shipping-actions"><button type="button" class="btn btn-sm" id="pcx-awb-folder-btn" onclick="readAwbFolderPdfs()">📂 Citește din dosarul AWB-uri de pe Mac</button><button type="button" class="btn btn-sm" id="pcx-awb-archive-btn" onclick="readAwbFolderPdfs(true)" title="Pentru AWB-uri deja descărcate (arhivate automat), dar care lipsesc de pe o comandă — caută direct în Desktop/AWB-uri/procesate, ultimele 14 zile">🔁 Repune AWB-uri din arhivă</button><button type="button" class="btn btn-sm" id="pcx-awb-print-btn" onclick="downloadActiveAwbPdf()">🖨️ PDF AWB comenzi incluse</button><button type="button" class="btn btn-sm" onclick="retrySavedAwbErrors()">↻ Reîncearcă erorile</button></div><div id="pcx-awb-parsing-slot"></div><div id="pcx-awb-preview-slot"></div><div id="pcx-awb-foot-slot" style="display:flex;justify-content:flex-end;margin-top:10px"></div></section>
           <section class="pcx-shipping-module"><h3>B. Generează etichetă GLS — Vinted</h3><p>Generează PDF-ul pentru comenzile Vinted expediate prin punct de depunere GLS.</p><div id="pcx-gls-label-slot"></div></section>
           <section class="pcx-shipping-module"><h3>C. eMAG — Trimite AWB</h3><p>Emite direct o etichetă eMAG pentru o comandă confirmată.</p><div class="pcx-emag-awb-fields"><div class="pcx-fld"><label>Număr comandă</label><input id="pcx-emag-awb-order" inputmode="numeric" placeholder="ex. 123456789"></div><div class="pcx-fld"><label>Kg</label><input id="pcx-emag-awb-weight" type="number" min="0.01" step="0.01" value="1"></div><div class="pcx-fld"><label>Colete</label><input id="pcx-emag-awb-parcels" type="number" min="1" step="1" value="1"></div><button type="button" class="pcx-btn pcx-btn-primary" id="pcx-emag-awb-btn" onclick="issueEmagAwb()">Trimite AWB prin eMAG</button></div>
           <!-- IP public al conectorului (cerut direct — „se tot schimbă IP-ul, o secțiune unde-l putem
@@ -21839,23 +21840,39 @@ async function downloadActiveAwbPdf(){
 // Alternativă la selectarea manuală, fișier cu fișier — citește TOATE PDF-urile puse în dosarul
 // Desktop/AWB-uri de pe Mac (prin Conectorul local, singurul cu acces la sistemul de fișiere) și le
 // procesează pe rând prin ACEEAȘI logică de extragere/potrivire ca la un fișier ales manual.
-async function readAwbFolderPdfs(){
-  const btn=document.getElementById('pcx-awb-folder-btn'),parsing=document.getElementById('pcmi-awb-parsing');
+// Bug real, grav, raportat direct, de 2 ori: „tot nu apar AWB-urile... adaugă buton de repunere de
+// AWB-uri atunci când dispar, ele fiind deja în folder". Cauza găsită live, pe date reale: eticheta
+// poate ajunge arhivată în procesate/<zi> ÎNAINTE ca admin-ul să fi importat încă acea comandă (#509 —
+// descărcată automat, cu ore înainte) — sau comanda locală a fost ștearsă/recreată între timp (vezi
+// #515/#516). Eticheta e corect arhivată, dar „Citește din dosar" refuză INTENȚIONAT să recitească
+// procesate/ (protecție împotriva recitirii duble) — AWB-ul rămânea orfan definitiv, fără nicio cale
+// de recuperare. `fromArchive=true` (🔁 Repune AWB-uri din arhivă) rulează EXACT același motor de
+// citire/potrivire de mai jos, DOAR cu sursa de fișiere schimbată (procesate/, ultimele 14 zile — vezi
+// readAwbArchive din conector — același prag folosit și de coada Staff) — nu mută/șterge nimic din
+// arhivă, doar completează AWB-uri lipsă pe comenzi care deja există. Fișierele de-acolo NU se
+// rearhivează la final (sunt deja la locul corect) — vezi flag-ul awbFilesFromArchive, verificat în
+// applyAwbAssociation.
+let awbFilesFromArchive=false;
+async function readAwbFolderPdfs(fromArchive){
+  awbFilesFromArchive=!!fromArchive;
+  const btn=document.getElementById(fromArchive?'pcx-awb-archive-btn':'pcx-awb-folder-btn'),parsing=document.getElementById('pcmi-awb-parsing');
   if(btn)btn.disabled=true;
   if(parsing)parsing.style.display='block';
   document.getElementById('pcmi-awb-preview').innerHTML='';
   document.getElementById('pcmi-awb-foot').style.display='none';
   try{
-    const data=await localEmagJson('/awb-folder',{},60000);
+    const data=fromArchive?await localEmagJson('/awb-archive',{days:14},60000):await localEmagJson('/awb-folder',{},60000);
     const files=Array.isArray(data.files)?data.files:[];
     if(!files.length){
+      if(fromArchive){toast('Nicio etichetă în arhivă (Desktop/AWB-uri/procesate), din ultimele 14 zile.');return;}
       // Caz real, raportat direct: un PDF ajuns din greșeală în arhiva zilei (procesate/<azi>), nu în
       // Desktop/AWB-uri — dosarul principal ieșea gol, fără niciun indiciu vizibil de ce. Nu recitim
-      // arhiva (ar strica protecția împotriva recitirii) — doar avertizăm, ca omul să știe unde să caute.
+      // arhiva aici (ar strica protecția împotriva recitirii) — doar avertizăm, cu sugestia explicită
+      // spre „🔁 Repune AWB-uri din arhivă” de-alături, dacă chiar acolo trebuie căutat.
       // Data locală, nu td() (UTC) — trebuie să coincidă cu folderul „procesate/<zi>" al conectorului,
       // care e tot pe oră locală (vezi archiveAwbFiles/todayProcessedCount).
       const localDay=(d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`)(new Date());
-      toast(data.todayProcessedCount?`Niciun PDF nou în Desktop/AWB-uri — dar sunt ${data.todayProcessedCount} fișiere în arhiva de azi (Desktop/AWB-uri/procesate/${localDay}). Verifică să nu le fi pus acolo din greșeală, în loc de Desktop/AWB-uri.`:'Niciun PDF nou în Desktop/AWB-uri.',data.todayProcessedCount?'warn':undefined);
+      toast(data.todayProcessedCount?`Niciun PDF nou în Desktop/AWB-uri — dar sunt ${data.todayProcessedCount} fișiere în arhiva de azi (Desktop/AWB-uri/procesate/${localDay}). Încearcă „🔁 Repune AWB-uri din arhivă” dacă AWB-ul unei comenzi lipsește.`:'Niciun PDF nou în Desktop/AWB-uri.',data.todayProcessedCount?'warn':undefined);
       return;
     }
     const pairs=[];
@@ -21956,7 +21973,7 @@ async function readAwbFolderPdfs(){
     awbFolderFileNames=files.map(f=>f.name);
     renderAwbPreview();
     if(awbCreatedVintedFileNames.length||awbEmagLookupCreated)renderPcomImportPreview();
-    toast(`${files.length} PDF-uri citite din dosar · ${results.length} etichete recunoscute${awbCreatedVintedFileNames.length?` · ${awbCreatedVintedFileNames.length} comenzi Vinted noi create din etichetă`:''}${awbEmagLookupCreated?` · ${awbEmagLookupCreated} comenzi eMAG găsite direct după număr (indiferent de status)`:''}`);
+    toast(`${files.length} PDF-uri citite ${fromArchive?'din arhivă':'din dosar'} · ${results.length} etichete recunoscute${awbCreatedVintedFileNames.length?` · ${awbCreatedVintedFileNames.length} comenzi Vinted noi create din etichetă`:''}${awbEmagLookupCreated?` · ${awbEmagLookupCreated} comenzi eMAG găsite direct după număr (indiferent de status)`:''}`);
   }catch(e){
     toast('Eroare la citirea dosarului AWB: '+(e.message||e),'err');
   }
@@ -22122,7 +22139,12 @@ async function applyAwbAssociation(){
     // Acum arhivăm STRICT fișierele care au contribuit cu minim o asociere scrisă în bază — restul
     // rămân la vedere în Desktop/AWB-uri, gata de reîncercat (ex. după o reparație de parsare, sau după
     // ce comanda ajunge și ea importată).
-    if(awbFolderFileNames.length){
+    // Fișierele venite din arhivă (🔁 Repune AWB-uri din arhivă — vezi readAwbFolderPdfs/
+    // awbFilesFromArchive) sunt deja la locul corect (procesate/<zi>, exact ziua lor originală) — a le
+    // „arhiva" acum le-ar muta greșit în ziua CURENTĂ, amestecând organizarea istorică pe zile, degeaba
+    // (nu există protecție de recitire dublă de ocolit, procesate/ nu se recitește oricum din dosarul
+    // principal). Skip complet pentru lotul ăsta.
+    if(awbFolderFileNames.length&&!awbFilesFromArchive){
       // Include și fișierele care au creat o comandă Vinted nouă din etichetă (vezi
       // pcomCreateVintedLineFromLabel/readAwbFolderPdfs), sau o comandă eMAG găsită direct după număr,
       // indiferent de status (vezi pcomFetchAndCreateEmagOrderById) — la fel „procesate cu succes" ca o
@@ -22133,8 +22155,9 @@ async function applyAwbAssociation(){
         try{await localEmagJson('/awb-folder-archive',{names:toArchive},20000);}
         catch(e){console.warn('Nu am putut muta fișierele AWB procesate:',e);}
       }
-      awbFolderFileNames=[];
     }
+    awbFolderFileNames=[];
+    awbFilesFromArchive=false;
     awbCreatedVintedFileNames=[];
     awbEmagLookupFileNames=[];
     awbParsed=[];
