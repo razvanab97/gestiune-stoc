@@ -4412,6 +4412,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:525,text:'Bug real GRAV reparat, raportat direct pe date reale, pornind de la o întrebare aparent simplă („de ce apar doar 7 comenzi dacă sunt 28-29 în total?") — investigând, a ieșit la iveală mult mai mult: „nu am făcut eu asta — AI-ul doar trebuie să le potrivească, rutina zilnică trebuie să își ducă treaba la capăt DOAR dacă sunt AWB-urile în sistem". Erau 2 bug-uri separate, amândouă reparate acum. (1) Safety net-ul de la 22:00 (autoApplyStalePendingImports, #513) aplica orice comandă „✓ Inclus" uitată peste prag INDIFERENT dacă avea AWB — verificat live: 22 de comenzi eMAG+Trendyol, NICIUNA cu etichetă de expediere, aplicate automat. Acum cere explicit AWB prezent înainte de a aplica. (2) Mult mai grav, găsit investigând mai departe: „Aplică import"/„✓ Aplică tot" NU verifica NICIODATĂ dacă o linie era deja aplicată — un al doilea click (sau safety net-ul rulat aproape simultan cu un click manual) scădea stocul ÎNCĂ O DATĂ, fără nicio protecție. Verificat live: 43 de comenzi cu stocul scăzut de 2 până la 6 ori pentru ACEEAȘI vânzare reală — 70 de aplicări eronate, într-o singură dimineață. Ambele funcții au acum o gardă de concurență identică: marcarea „aplicat" se face ACUM întâi, condiționat direct în bază (filtru suplimentar `efecte_aplicate=eq.false` chiar în PATCH, nu doar o verificare în memorie, ocolibilă de 2 apeluri concurente) — dacă răspunsul vine gol, comanda era deja aplicată de altundeva: se sare direct peste, stocul nu se mai atinge a doua oară. Corectate direct, live, toate cele 36 de comenzi afectate azi (22 eMAG + 14 Trendyol, 24 produse, 105 bucăți) — stoc restaurat exact, Jurnal și „Vânzări azi" corectate (șterse complet, fiecare verificat că nu avea NIMIC legitim amestecat), toate 37 de linii puse înapoi „✓ Inclus, neaplicat" — rămân normal, așteptând AWB. Comenzile din 02-04.10 (anterioare zilei curente) au fost lăsate intenționat neatinse, la cerere directă. Verificat cu 7 teste izolate pe funcțiile reale din cod (linie liberă se aplică normal, linie deja aplicată e sărită complet — fără niciun decrement — linie nouă neatinsă de gardă), rulate de 2 ori, plus mecanismul de bază (PATCH condiționat) confirmat live, direct pe o comandă reală, de 2 ori la rând (a doua oară a găsit corect 0 rânduri).',date:'2026-10-05'},
   {n:524,text:'Comenzi Platforme — comenzile din previzualizare apar acum în aceeași ordine ca în Seller Center eMAG, cerut direct, cu o comparație directă între cele două ecrane: „cum am putea face ca comenzile să apară ca în Emag în aceeași ordine, să fie mai ușor de identificat și lucrat pe ele". Cauza găsită live, pe date reale: API-ul eMAG (și, la fel, Trendyol) întorc comenzile cu cele mai VECHI primele — exact opusul Seller Center, care le arată implicit cu cele mai noi primele — iar admin-ul nu reordona deloc, păstra pur și simplu ordinea brută de sosire de la API. Comenzile apar acum sortate descrescător după ora EXACTĂ a plasării (nu doar ziua — o comandă din aceeași zi, dar cu câteva ore mai devreme/târziu, se distinge acum corect, informație care exista deja la eMAG/Trendyol dar era trunchiată la zi înainte de a ajunge în previzualizare). Platforma rămâne criteriul principal ca până acum (eMAG, apoi Trendyol, apoi Vinted) — doar ordinea DIN interiorul fiecărei platforme s-a schimbat. Necesită Conectorul local eMAG actualizat pe Mac (`git pull` + `launchctl kickstart -k gui/$(id -u)/ro.abhomes.emag-local-connector`); Trendyol (server, Vercel) se aplică automat la acest deploy. Verificat cu 5 teste izolate, inclusiv cu exact comenzile reale verificate live pe conectorul real (ordinea rezultată coincide exact cu cea din Seller Center), rulate de 2 ori.',date:'2026-10-05'},
   {n:523,text:'Taburi — iconițe moderne în loc de emoji-urile vechi, cerut direct: „modifică emoticoanele de la taburi, sunt învechite". Emoji-urile (📊🛒🧮📖📦📈🔄🛍️🔍📰🗄️⚙️) din meniul din stânga, taburile Comenzi Platforme (Import / Profit / Total încasări / Produse de comandat), taburile Research (Dosare / Generator anunțuri / Research produs / Scorecard / Decizie) și taburile sursă din Import comenzi (eMAG / Trendyol / Vinted / Fișier / Manual) sunt înlocuite cu iconițe SVG în stil linie, din același set, care moștenesc culoarea textului (deci se schimbă singure la hover / tab activ / culoarea platformei). În meniul din stânga fiecare iconiță stă într-un mic „tile" rotunjit, iar tabul activ primește tile cu degrade mov. Sprite-ul de iconițe e un singur bloc SVG la începutul paginii, fără nicio bibliotecă externă. Mecanismul de navigare e neschimbat (aceleași clase, data-page, onclick); ecranul Setări → „Ordinea paginilor" afișează acum și iconița fiecărui tab. Verificat de 2 ori: sintaxă CSS/JS + test funcțional automat pe toate cele 12 pagini (click pe fiecare tab din meniu: pagina corectă se deschide, hash-ul se schimbă, 0 erori JS), pe sub-taburile Calculator (3), Jurnal (2), Comenzi Platforme (4), sursele de import (5) și Research (5), plus comutatoarele din Dashboard / Raport vânzări; meniul-sertar pe mobil (390px) verificat vizual.',date:'2026-10-03'},
   {n:522,text:'Comenzi Platforme + Research — upgrade vizual „premium", cerut direct: „un upgrade al design-ului și mai agresiv... mai premium și mai plăcut vizual, dar păstrezi funcționalitatea; poți adăuga, dar nu poți scoate nimic". Strat de stil ADĂUGAT la final (blocul „PREMIUM SKIN", scopat strict pe #page-pcom și #page-research — restul aplicației nu e atins): fundal cu aurora mov/cyan/roz discretă și grain fin, titluri cu degrade, taburi „pastilă" de sticlă cu degrade pe cel activ, carduri de sticlă cu umbre stratificate, butoane principale cu degrade și luciu, câmpuri cu inel de focus, cardul „Rulează rutina zilnică" ca element hero cu contur luminos și pulsație discretă, comenzile cu margine colorată pe platformă (eMAG mov / Trendyol portocaliu / Vinted verde) și strălucire când sunt incluse, bara „Aplică import" plutitoare de sticlă, KPI-urile din Research și Profit/Total încasări recalibrate. În drum au fost reparate și defecte de layout vechi, vizibile doar acum: modulele de la „Expediere" aveau butoane și text la 25-27px care ieșeau din coloană (câmpurile Kg/Colete din modulul eMAG nu încăpeau); antetul cardului de comandă avea 10 elemente pe 9 coloane (săgeata cădea pe rândul următor); cardurile „Comenzi rămase în urmă / Anulate / Reactivează" erau cu fonturi uriașe; cifrele din Profit/Total încasări se rupeau pe două rânduri, iar al 4-lea card „Combinat" cădea sub celelalte; lista de dosare Research devenea de ~1900px lățime (scroll orizontal pe toată pagina) când un dosar avea tabel lat. NIMIC nu a fost scos: diff-ul conține doar adăugări CSS + două linii de titlu în care emoji-ul a fost învelit într-un element span (textul identic). Animațiile de intrare respectă „reduce motion". Verificat de 2 ori: sintaxă CSS/JS + parcurs vizual în browser pe toate taburile ambelor pagini (desktop și mobil 390px), cu comenzi/dosare de test doar în memorie (nimic scris în bază).',date:'2026-10-03'},
@@ -17052,6 +17053,14 @@ async function deletePcomBatch(batchId){
 // haine", la 10 secunde distanță — posibil duplicat, nu o comandă reală). Aplicarea lor oarbă, fără
 // verificare, ar fi putut strica stocul pe date vechi. Funcția nu atinge NICIODATĂ comenzi dinainte de
 // acest prag — pornește „curat", doar de-acum încolo; cele 11 vechi rămân de revizuit separat, manual.
+// Bug real, grav, raportat direct pe date reale („nu am facut eu asta — AI-ul doar trebuie sa le
+// potriveasca, rutina zilnica trebuie sa isi duca treaba la capat DOAR daca sunt AWB-urile in sistem"):
+// funcția aplica orice comandă „✓ Inclus" uitată peste pragul de 22:00, INDIFERENT dacă avea sau nu
+// AWB — o comandă fără etichetă de expediere încă (deci posibil nici măcar sigură că se va livra) își
+// vedea stocul scăzut și vânzarea scrisă în Jurnal fără nicio implicare umană. Verificat live: 22 de
+// comenzi eMAG + Trendyol, NICIUNA cu AWB, aplicate automat azi. Acum cere explicit `awb=not.is.null` —
+// o comandă fără AWB rămâne „✓ Inclus", neaplicată, la nesfârșit, până capătă o etichetă (moment în care
+// safety net-ul o prinde normal) sau e aplicată manual, deliberat, de om.
 const AUTO_APPLY_CUTOFF='2026-10-02T00:00:00.000Z';
 const LAST_AUTO_APPLY_KEY='last_auto_apply_checked_at';
 function lastApplyThreshold(){const d=new Date();d.setHours(22,0,0,0);if(d>new Date())d.setDate(d.getDate()-1);return d;}
@@ -17062,23 +17071,34 @@ async function autoApplyStalePendingImports(){
     const checkRows=await dbGet(`setari_app?key=eq.${LAST_AUTO_APPLY_KEY}&select=value`);
     const lastChecked=checkRows?.[0]?.value;
     if(lastChecked&&new Date(lastChecked)>=threshold)return;
-    const stale=await dbGet(`platforma_comenzi?efecte_aplicate=eq.false&anulata=eq.false&created_at=gte.${encodeURIComponent(AUTO_APPLY_CUTOFF)}&created_at=lt.${encodeURIComponent(threshold.toISOString())}&select=*`);
+    const stale=await dbGet(`platforma_comenzi?efecte_aplicate=eq.false&anulata=eq.false&awb=not.is.null&created_at=gte.${encodeURIComponent(AUTO_APPLY_CUTOFF)}&created_at=lt.${encodeURIComponent(threshold.toISOString())}&select=*`);
     let applied=0;
     for(const row of stale){
       const it=dbToPcom(row);
       const p=P.find(x=>x.id===it.produsId);
       if(!p)continue;
       try{
+        // Gardă de concurență (idempotență) — bug real, grav, găsit live pe aceeași raportare: acest
+        // safety net și „Aplică import"/„✓ Aplică tot" (applyPcomImport) puteau rula amândouă, aproape
+        // simultan (tab reîncărcat chiar când rula verificarea de 22:00, sau rutina zilnică apăsată
+        // manual la scurt timp după) — fiecare pornea cu aceeași stare „neaplicat" din memorie, deci
+        // AMBELE scădeau stocul, pentru ACEEAȘI comandă. Verificat live: 43 de comenzi, stoc scăzut de
+        // 2 până la 6 ori pentru aceeași vânzare reală, 70 de aplicări în plus, eronate, într-o singură
+        // dimineață. Marcarea „aplicat" se face ACUM întâi, condiționat direct în bază (filtrul
+        // `&efecte_aplicate=eq.false` din PATCH, nu doar o verificare în memorie, ocolibilă de 2 apeluri
+        // concurente) — dacă răspunsul vine gol, altcineva a aplicat-o deja între timp: sărim direct
+        // peste, stocul NU se mai atinge a doua oară.
+        const marked=await dbPatch(`platforma_comenzi?id=eq.${row.id}&efecte_aplicate=eq.false`,{efecte_aplicate:true});
+        if(!marked?.length)continue;
+        const ex=PCOM.find(o=>o.id===row.id);if(ex)ex.efecteAplicate=true;
         // Aceeași secvență ca la Aplică import manual (applyPcomImport) — stoc, Jurnal, Vânzări azi,
-        // mișcare de stoc, apoi marcată aplicată — doar declanșată singură, nu de un click.
+        // mișcare de stoc — doar declanșată singură, nu de un click.
         p.sold=(p.sold||0)+it.cantitate;
         await dbPatch(`produse?id=eq.${p.id}`,{sold:p.sold});
         await logMove('out',p.name,it.cantitate,`Vânzare ${pcomPlatLabel(it.platforma)} (comandă ${it.comandaId||'—'}) — aplicată automat la 22:00, rămasă neconfirmată`,p.id);
         TS[p.id]=(TS[p.id]||0)+it.cantitate;
         await saveTodaySale(p.id,TS[p.id]);
         await saveJurnalEntry(p,it.cantitate);
-        await dbPatch(`platforma_comenzi?id=eq.${row.id}`,{efecte_aplicate:true});
-        const ex=PCOM.find(o=>o.id===row.id);if(ex)ex.efecteAplicate=true;
         applied++;
       }catch(e){console.warn('Nu am putut auto-aplica comanda',it.comandaId,e);}
     }
@@ -19946,10 +19966,23 @@ async function applyPcomImport(){
         // chiar înainte să scădem stocul, o marcăm ca aplicată. Dacă migrarea coloanei nu a rulat încă,
         // eșuează silențios — stocul tot se scade normal mai jos, doar „Istoric importuri" rămâne
         // neprecis până se rulează migrarea.
+        // Gardă de concurență (idempotență) — bug real, grav, raportat direct, pe date reale: acest
+        // buton („Aplică import"/„✓ Aplică tot") nu verifica NICIODATĂ dacă linia era deja aplicată —
+        // un al doilea click (sau safety net-ul de la 22:00, autoApplyStalePendingImports, rulat aproape
+        // simultan) scădea stocul ÎNCĂ O DATĂ, fără nicio protecție. Verificat live: 43 de comenzi cu
+        // stocul scăzut de 2-6 ori pentru aceeași vânzare reală, corectate direct. Filtrul suplimentar
+        // `&efecte_aplicate=eq.false` din PATCH face marcarea CONDIȚIONATĂ, atomic, direct în bază — nu
+        // doar o verificare în memorie, ocolibilă de 2 apeluri concurente: dacă răspunsul vine gol,
+        // linia era deja aplicată (de acest buton mai devreme, sau de safety net) — sărim peste linia
+        // asta, fără să mai atingem stocul/Jurnalul a doua oară.
         if(markAppliedId){
           try{
-            await dbPatch(`platforma_comenzi?id=eq.${markAppliedId}`,{efecte_aplicate:true});
+            const marked=await dbPatch(`platforma_comenzi?id=eq.${markAppliedId}&efecte_aplicate=eq.false`,{efecte_aplicate:true});
             const ex=PCOM.find(o=>o.id===markAppliedId);if(ex)ex.efecteAplicate=true;
+            if(!marked?.length){
+              console.warn('Linia',it.comandaId,'era deja aplicată — stocul NU a fost scăzut a doua oară.');
+              ok++;succeeded.add(it);continue;
+            }
           }catch(e){console.warn('Nu am putut marca linia ca aplicată (poate migrarea nu a rulat):',e);}
         }
         // scade stocul — o vânzare reală s-a produs
