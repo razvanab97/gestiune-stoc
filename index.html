@@ -4412,6 +4412,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:526,text:'Staff → Împachetare — regulă clară, cerută direct, pe un caz real: „de ce 71 de comenzi în Staff când sunt mult mai puține? NU mai adu alte comenzi decât cele pe care le lucrăm sau le aducem manual!!! Doar ce e inclus de noi." Cauza: RESET TOTAL (#519) trimitea spre Staff ORICE comandă comisă, inclusiv cele potrivite 100% automat, fără niciun click uman — la rularea „▶️ Rulează rutina zilnică" (pasul 4, potrivirile sigure) sau la reîmprospătarea silențioasă de fundal, zeci de comenzi „săreau" direct în coada activă, niciodată revizuite de cineva. Verificat live: ~37-53 de linii exact așa, incluse în rafale de 1-6 deodată, exact tiparul unei rulări automate, nu al unor click-uri individuale. Acum, trimiterea spre Staff e condiționată explicit de `sendToStaff` — implicit TRUE (păstrat) doar pentru acțiuni umane directe, individuale (bifare „✓ Inclus", picker de produs, „✓ Selectează toate" — un om a apăsat ceva, conștient), dar FALSE la toate cele 4 fluxuri 100% automate, fără niciun click: potrivirea automată după import (autoCommitConfidentPcomLines), pasul 4 al rutinei zilnice (pcomAutoIncludeConfident), crearea automată a unei comenzi Vinted direct dintr-o etichetă citită și confirmarea automată a unei potriviri AWB pe o linie încă „Neinclus" la asocierea în masă. Comanda tot se scrie în bază, cu produsul potrivit — doar nu mai „sare" singură în Staff; rămâne vizibilă în „comenzi netrimise încă spre Staff" (Comenzi Platforme), gata de trimis EXPLICIT, cu „📦 Trimite la împachetare", când cineva chiar o verifică. Verificat cu 4 teste izolate pe funcția reală extrasă din cod (comitere implicită/explicită → trimisă, comitere automată → NU trimisă, restul câmpurilor neafectate), rulate de 2 ori.',date:'2026-10-05'},
   {n:525,text:'Bug real GRAV reparat, raportat direct pe date reale, pornind de la o întrebare aparent simplă („de ce apar doar 7 comenzi dacă sunt 28-29 în total?") — investigând, a ieșit la iveală mult mai mult: „nu am făcut eu asta — AI-ul doar trebuie să le potrivească, rutina zilnică trebuie să își ducă treaba la capăt DOAR dacă sunt AWB-urile în sistem". Erau 2 bug-uri separate, amândouă reparate acum. (1) Safety net-ul de la 22:00 (autoApplyStalePendingImports, #513) aplica orice comandă „✓ Inclus" uitată peste prag INDIFERENT dacă avea AWB — verificat live: 22 de comenzi eMAG+Trendyol, NICIUNA cu etichetă de expediere, aplicate automat. Acum cere explicit AWB prezent înainte de a aplica. (2) Mult mai grav, găsit investigând mai departe: „Aplică import"/„✓ Aplică tot" NU verifica NICIODATĂ dacă o linie era deja aplicată — un al doilea click (sau safety net-ul rulat aproape simultan cu un click manual) scădea stocul ÎNCĂ O DATĂ, fără nicio protecție. Verificat live: 43 de comenzi cu stocul scăzut de 2 până la 6 ori pentru ACEEAȘI vânzare reală — 70 de aplicări eronate, într-o singură dimineață. Ambele funcții au acum o gardă de concurență identică: marcarea „aplicat" se face ACUM întâi, condiționat direct în bază (filtru suplimentar `efecte_aplicate=eq.false` chiar în PATCH, nu doar o verificare în memorie, ocolibilă de 2 apeluri concurente) — dacă răspunsul vine gol, comanda era deja aplicată de altundeva: se sare direct peste, stocul nu se mai atinge a doua oară. Corectate direct, live, toate cele 36 de comenzi afectate azi (22 eMAG + 14 Trendyol, 24 produse, 105 bucăți) — stoc restaurat exact, Jurnal și „Vânzări azi" corectate (șterse complet, fiecare verificat că nu avea NIMIC legitim amestecat), toate 37 de linii puse înapoi „✓ Inclus, neaplicat" — rămân normal, așteptând AWB. Comenzile din 02-04.10 (anterioare zilei curente) au fost lăsate intenționat neatinse, la cerere directă. Verificat cu 7 teste izolate pe funcțiile reale din cod (linie liberă se aplică normal, linie deja aplicată e sărită complet — fără niciun decrement — linie nouă neatinsă de gardă), rulate de 2 ori, plus mecanismul de bază (PATCH condiționat) confirmat live, direct pe o comandă reală, de 2 ori la rând (a doua oară a găsit corect 0 rânduri).',date:'2026-10-05'},
   {n:524,text:'Comenzi Platforme — comenzile din previzualizare apar acum în aceeași ordine ca în Seller Center eMAG, cerut direct, cu o comparație directă între cele două ecrane: „cum am putea face ca comenzile să apară ca în Emag în aceeași ordine, să fie mai ușor de identificat și lucrat pe ele". Cauza găsită live, pe date reale: API-ul eMAG (și, la fel, Trendyol) întorc comenzile cu cele mai VECHI primele — exact opusul Seller Center, care le arată implicit cu cele mai noi primele — iar admin-ul nu reordona deloc, păstra pur și simplu ordinea brută de sosire de la API. Comenzile apar acum sortate descrescător după ora EXACTĂ a plasării (nu doar ziua — o comandă din aceeași zi, dar cu câteva ore mai devreme/târziu, se distinge acum corect, informație care exista deja la eMAG/Trendyol dar era trunchiată la zi înainte de a ajunge în previzualizare). Platforma rămâne criteriul principal ca până acum (eMAG, apoi Trendyol, apoi Vinted) — doar ordinea DIN interiorul fiecărei platforme s-a schimbat. Necesită Conectorul local eMAG actualizat pe Mac (`git pull` + `launchctl kickstart -k gui/$(id -u)/ro.abhomes.emag-local-connector`); Trendyol (server, Vercel) se aplică automat la acest deploy. Verificat cu 5 teste izolate, inclusiv cu exact comenzile reale verificate live pe conectorul real (ordinea rezultată coincide exact cu cea din Seller Center), rulate de 2 ori.',date:'2026-10-05'},
   {n:523,text:'Taburi — iconițe moderne în loc de emoji-urile vechi, cerut direct: „modifică emoticoanele de la taburi, sunt învechite". Emoji-urile (📊🛒🧮📖📦📈🔄🛍️🔍📰🗄️⚙️) din meniul din stânga, taburile Comenzi Platforme (Import / Profit / Total încasări / Produse de comandat), taburile Research (Dosare / Generator anunțuri / Research produs / Scorecard / Decizie) și taburile sursă din Import comenzi (eMAG / Trendyol / Vinted / Fișier / Manual) sunt înlocuite cu iconițe SVG în stil linie, din același set, care moștenesc culoarea textului (deci se schimbă singure la hover / tab activ / culoarea platformei). În meniul din stânga fiecare iconiță stă într-un mic „tile" rotunjit, iar tabul activ primește tile cu degrade mov. Sprite-ul de iconițe e un singur bloc SVG la începutul paginii, fără nicio bibliotecă externă. Mecanismul de navigare e neschimbat (aceleași clase, data-page, onclick); ecranul Setări → „Ordinea paginilor" afișează acum și iconița fiecărui tab. Verificat de 2 ori: sintaxă CSS/JS + test funcțional automat pe toate cele 12 pagini (click pe fiecare tab din meniu: pagina corectă se deschide, hash-ul se schimbă, 0 erori JS), pe sub-taburile Calculator (3), Jurnal (2), Comenzi Platforme (4), sursele de import (5) și Research (5), plus comutatoarele din Dashboard / Raport vânzări; meniul-sertar pe mobil (390px) verificat vizual.',date:'2026-10-03'},
@@ -18324,7 +18325,7 @@ async function pcomPostWithFallback(row){
   }
   throw new Error('Prea multe coloane lipsă la inserarea comenzii');
 }
-async function commitPcomLine(idx){
+async function commitPcomLine(idx,sendToStaff=true){
   const it=pcImpParsed[idx];if(!it||it._committedId||it._committing||!it.produsId||it.amanat)return;
   const p=P.find(x=>x.id===it.produsId);if(!p)return;
   it._committing=true;renderPcomImportPreview();
@@ -18333,14 +18334,18 @@ async function commitPcomLine(idx){
     const totalRon=pcomToRon(it.pretTotalCuTva,it.moneda);
     const fin=pcomSaleFinancials(p,it,platforma);
     const profit=Math.round(fin.profit*it.cantitate*100)/100,margin=fin.marja;
-    // staffTrimisAt — vezi RESET TOTAL (#519): o comandă NOUĂ, comisă chiar acum prin fluxul normal al
-    // aplicației („✓ Inclus"), e exact momentul „trimisă explicit spre împachetare" cerut — nu un
-    // fallback pe status, un eveniment real, o singură dată, la creare.
+    // staffTrimisAt — vezi RESET TOTAL (#519), DAR condiționat acum de `sendToStaff` (regulă clară,
+    // #525/#526 — „doar ce e inclus de noi"): o comandă comisă printr-o acțiune umană EXPLICITĂ,
+    // individuală pe EA (bifare „✓ Inclus”, picker de produs, „✓ Selectează toate” — un om a apăsat
+    // ceva, conștient) e exact momentul „trimisă explicit spre împachetare". O comandă comisă 100%
+    // automat, fără niciun click (potrivire sigură la rularea rutinei zilnice, citire de etichetă/AWB
+    // în masă) rămâne scrisă în bază, matchuită, DAR nu mai „sare" singură în Staff — vezi apelanții lui
+    // syncPcomLineCommitState pentru care parte din fiecare caz.
     const row=pcomToDb({platforma,data:it.data,comandaId:it.comandaId,pnk:it.pnk,tara:it.tara,codProdus:it.codProdus,
       clientNume:it.clientNume,titluExtern:it.titluExtern,produsId:p.id,produsNume:p.name,cantitate:it.cantitate,awb:it.awb,
       pretFaraTva:it.pretFaraTva,pretTotalCuTva:it.pretTotalCuTva,moneda:it.moneda,pretTotalCuTvaRon:totalRon,
       profitEstimat:profit,marjaEstimata:margin,importBatchId:pcImpBatchIdFor(platforma),staffInclusAt:new Date().toISOString(),
-      staffTrimisAt:new Date().toISOString(),termenExpediere:it.termenExpediere});
+      staffTrimisAt:sendToStaff?new Date().toISOString():null,termenExpediere:it.termenExpediere});
     // Marchează explicit că stocul/Jurnalul NU au fost încă atinse — abia „Aplică import" le scrie.
     // Fără asta, „Istoric importuri" nu poate distinge o comandă doar-confirmată de un import real
     // finalizat, și butonul „Șterge" de-acolo ar readăuga în stoc o cantitate care nu a fost scăzută
@@ -18416,25 +18421,40 @@ async function uncommitPcomLine(idx){
   it._committing=false;
   renderPcomImportPreview();
 }
-async function syncPcomLineCommitState(idx){
+// sendToStaff — cerut direct, regulă clară, pe un bug real grav: „de ce 71 de comenzi în staff când
+// sunt mult mai puține? NU mai adu alte comenzi decât cele pe care le lucrăm sau le aducem manual!!!
+// Doar ce e inclus de noi." Până acum, ORICE comitere (inclusiv potrivirea 100% automată, fără niciun
+// click uman — vezi autoCommitConfidentPcomLines/pcomAutoIncludeConfident mai jos) trimitea comanda
+// direct în Staff, prin RESET TOTAL (#519) — „o comandă nouă, comisă prin fluxul normal, primește
+// automat acest eveniment". Exact asta a umplut Staff cu zeci de comenzi NICIODATĂ revizuite de un om,
+// doar potrivite automat de sistem la rularea rutinei zilnice. Acum, implicit TRUE (păstrează
+// comportamentul pentru singurul caz care chiar e „adus manual" — bifarea „✓ Inclus"/pickerul de produs/
+// „✓ Selectează toate" — un om a apăsat ceva, conștient, pentru ACEA comandă sau pentru tot lotul),
+// dar FALSE explicit la cele 4 fluxuri 100% automate, fără niciun click: autoCommitConfidentPcomLines,
+// pcomAutoIncludeConfident (pasul 4 al rutinei zilnice), crearea automată de comandă Vinted direct
+// dintr-o etichetă citită (readAwbFolderPdfs) și confirmarea automată a unei potriviri AWB încă
+// „Neinclus" (applyAwbAssociation). Comanda tot se scrie în bază, cu produsul potrivit — doar nu mai
+// „sare" singură în Staff; rămâne vizibilă în „comenzi netrimise încă spre Staff" (Comenzi Platforme),
+// gata de trimis EXPLICIT, cu „📦 Trimite la împachetare", quando un om chiar o verifică.
+async function syncPcomLineCommitState(idx,sendToStaff=true){
   const it=pcImpParsed[idx];if(!it)return;
   const shouldCommit=it.include&&it.produsId&&!it.amanat;
-  if(shouldCommit&&!it._committedId)await commitPcomLine(idx);
+  if(shouldCommit&&!it._committedId)await commitPcomLine(idx,sendToStaff);
   else if(!shouldCommit&&it._committedId)await uncommitPcomLine(idx);
 }
 // Confirmare instant pentru liniile cu potrivire sigură (cerut direct — „confirmare instant, pentru
-// cele care se pot confirma instant, pe lângă cele care se vor confirma prin inclus”): scrie comanda
-// (devine vizibilă/împachetabilă în Staff), FĂRĂ să atingă stocul — exact ca la bifarea manuală
-// „✓ Inclus” (efecte_aplicate=false, reversibil oricând prin „🚫 Anulează”/debifare). Rulează pe liniile
-// deja marcate include:true la construcție (viaPnk/viaTitle/viaCode — vezi pcomEmagMatchLine/
-// pcomTrendyolMatchLine/handlePcomImportFile), atât din import manual, cât și din reîmprospătarea
-// silențioasă de fundal — o comandă pentru un produs deja cunoscut ajunge în Staff fără să mai fie
-// nevoie ca cineva să deschidă pagina și să apese ceva. Primește obiecte (nu indici): un import cu
-// sortare ulterioară (ex. „mixte”) schimbă pozițiile, indicii de dinainte de sortare ar fi greșiți.
+// cele care se pot confirma instant, pe lângă cele care se vor confirma prin inclus”): scrie comanda,
+// FĂRĂ să atingă stocul — exact ca la bifarea manuală „✓ Inclus” (efecte_aplicate=false, reversibil
+// oricând prin „🚫 Anulează”/debifare). Rulează pe liniile deja marcate include:true la construcție
+// (viaPnk/viaTitle/viaCode — vezi pcomEmagMatchLine/pcomTrendyolMatchLine/handlePcomImportFile), atât
+// din import manual, cât și din reîmprospătarea silențioasă de fundal — scrisă în bază, matchuită, dar
+// NU mai „sare" singură în Staff (sendToStaff=false, vezi comentariul de mai sus) — rămâne de trimis
+// explicit. Primește obiecte (nu indici): un import cu sortare ulterioară (ex. „mixte”) schimbă
+// pozițiile, indicii de dinainte de sortare ar fi greșiți.
 async function autoCommitConfidentPcomLines(lines){
   const idxs=(lines||[]).map(l=>pcImpParsed.indexOf(l)).filter(i=>i>=0&&pcImpParsed[i].include&&!pcImpParsed[i]._committedId);
   if(!idxs.length)return;
-  for(const i of idxs)await syncPcomLineCommitState(i);
+  for(const i of idxs)await syncPcomLineCommitState(i,false);
   renderPcomImportPreview();
 }
 async function togglePcomInclude(idx){
@@ -18530,7 +18550,7 @@ async function pcomAutoIncludeConfident(){
   if(!idxs.length)return 0;
   idxs.forEach(i=>{pcImpParsed[i].include=true;});
   renderPcomImportPreview();
-  for(const i of idxs)await syncPcomLineCommitState(i);
+  for(const i of idxs)await syncPcomLineCommitState(i,false);
   renderPcomImportPreview();
   return idxs.length;
 }
@@ -22442,10 +22462,11 @@ async function readAwbFolderPdfs(fromArchive){
     // rămâneau „Neinclus” la nesfârșit — o etichetă fizică scanată, un produs găsit, dar NICIODATĂ scrise
     // în platforma_comenzi fără un „✓ Inclus” manual separat, ușor de ratat. Comit imediat, la fel ca la
     // _pendingMatch (applyAwbAssociation) — un AWB real, deja atașat, e un semnal la fel de sigur ca o
-    // potrivire exactă de produs.
+    // potrivire exactă de produs. sendToStaff=false — comandă creată automat, din citirea unui dosar,
+    // fără nicio confirmare individuală umană (regulă clară, #525/#526 — „doar ce e inclus de noi").
     for(const cid of awbCreatedVintedComandaIds){
       const idx=pcImpParsed.findIndex(x=>x.platforma==='vinted'&&x.comandaId===cid);
-      if(idx>=0){pcImpParsed[idx].include=true;await syncPcomLineCommitState(idx);}
+      if(idx>=0){pcImpParsed[idx].include=true;await syncPcomLineCommitState(idx,false);}
     }
     const results=[];
     let awbEmagLookupCreated=0;
@@ -22603,12 +22624,12 @@ async function applyAwbAssociation(){
           Object.assign(it,{awb:p.awb,awbSourceFile:p.file||'',awbSourcePage:p.page||null,awbCourier:p.courier||''});
           // Bug real, foarte important, raportat direct („sincronizate prin citire AWB, dar nu apar în
           // Staff"): fără asta, AWB-ul se scria DOAR pe linia din previzualizarea locală a adminului —
-          // comanda rămânea „Neinclus”, deci NICIODATĂ scrisă în platforma_comenzi. Părea „asociată” în
-          // admin (AWB-ul se vedea acolo), dar Staff nu vedea nici comanda, nici AWB-ul. Un AWB confirmat
-          // e un semnal la fel de sigur ca un produs potrivit exact — comanda trebuie scrisă acum, nu
-          // lăsată să aștepte un „✓ Inclus” manual separat.
+          // comanda rămânea „Neinclus”, deci NICIODATĂ scrisă în platforma_comenzi. Comanda tot trebuie
+          // scrisă acum (altfel AWB-ul se pierde), dar sendToStaff=false — potrivirea AWB-ului s-a
+          // întâmplat automat, în masă, din citirea unui dosar, fără nicio confirmare individuală umană
+          // (regulă clară, #525/#526 — „doar ce e inclus de noi"); rămâne de trimis explicit spre Staff.
           const idx=pcImpParsed.indexOf(it);
-          if(idx>=0){it.include=true;await syncPcomLineCommitState(idx);}
+          if(idx>=0){it.include=true;await syncPcomLineCommitState(idx,false);}
           // Previzualizare vizuală AWB — ÎN FUNDAL, nu blocăm restul asocierilor pentru atât (cerut
           // direct, vezi .tmp/grill-me/staff-awb-preview.md). p._blob există doar pe liniile venite
           // dintr-un PDF chiar citit (readAwbFolderPdfs/handleAwbPdfFile) — lipsește pe cele reconstruite
