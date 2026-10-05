@@ -4412,6 +4412,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:527,text:'Asociază AWB-uri — două reparații cerute direct, pe un caz real, cu captură: comanda eMAG #1027195753 „găsită, dar produsul nu s-a potrivit automat", unde picker-ul manual de căutare ("Константин Кирчев") răspundea „Nicio comandă nerezolvată găsită" deși comanda chiar exista. (1) „un sistem de confirmare a comenzilor prin AWB-uri... unde nu se confirmă automat și selectăm noi manual comanda, să se includă automat": când AWB-ul asociat unei comenzi NU se potrivește singur și omul o alege EXPLICIT din picker (vezi pickAwbOrder/`_manualPick`), acum ASTA contează ca și confirmarea individuală cerută de regula #525/#526 — comanda e trimisă automat spre Staff (`staff_trimis_at` setat), pe ambele căi posibile (comandă încă „Neinclus" sau deja comisă). O potrivire AWB complet automată, în masă, dintr-un dosar citit fără nicio alegere umană, rămâne neconfirmată, ca până acum. (2) „sistemul acesta de recunoaștere și regăsire a comenzilor, atât pe numere cât și pe nume, să fie funcțional — nu se găsește o comandă deși ea există în sistem": cauza reală — o comandă „găsită, dar nepotrivită automat" trăiește STRICT în memoria browserului (`pcImpParsed`), niciodată scrisă în bază; orice schimbare de pagină/reîmprospătare între citirea etichetei și căutarea manuală o pierdea definitiv, fără urmă, din lista locală a picker-ului. Căutarea e acum în 2 pași: local, instant, ca până acum, PLUS — pentru căutări de minim 3 caractere — o interogare live directă în `platforma_comenzi` (fără AWB încă, neanulate, după comandă/client/produs/titlu), exact ca o comandă „din sistem" să fie găsită oricând, indiferent ce s-a pierdut din memoria sesiunii curente. Verificat cu 9+17 teste izolate pe funcțiile reale extrase din cod (confirmare automată vs. manuală pe ambele ramuri ale asocierii AWB, căutare locală/live/gol/scurt, deduplicare, protecție la răspuns întârziat dintr-o căutare mai veche), rulate de 2 ori fiecare.',date:'2026-10-05'},
   {n:526,text:'Staff → Împachetare — regulă clară, cerută direct, pe un caz real: „de ce 71 de comenzi în Staff când sunt mult mai puține? NU mai adu alte comenzi decât cele pe care le lucrăm sau le aducem manual!!! Doar ce e inclus de noi." Cauza: RESET TOTAL (#519) trimitea spre Staff ORICE comandă comisă, inclusiv cele potrivite 100% automat, fără niciun click uman — la rularea „▶️ Rulează rutina zilnică" (pasul 4, potrivirile sigure) sau la reîmprospătarea silențioasă de fundal, zeci de comenzi „săreau" direct în coada activă, niciodată revizuite de cineva. Verificat live: ~37-53 de linii exact așa, incluse în rafale de 1-6 deodată, exact tiparul unei rulări automate, nu al unor click-uri individuale. Acum, trimiterea spre Staff e condiționată explicit de `sendToStaff` — implicit TRUE (păstrat) doar pentru acțiuni umane directe, individuale (bifare „✓ Inclus", picker de produs, „✓ Selectează toate" — un om a apăsat ceva, conștient), dar FALSE la toate cele 4 fluxuri 100% automate, fără niciun click: potrivirea automată după import (autoCommitConfidentPcomLines), pasul 4 al rutinei zilnice (pcomAutoIncludeConfident), crearea automată a unei comenzi Vinted direct dintr-o etichetă citită și confirmarea automată a unei potriviri AWB pe o linie încă „Neinclus" la asocierea în masă. Comanda tot se scrie în bază, cu produsul potrivit — doar nu mai „sare" singură în Staff; rămâne vizibilă în „comenzi netrimise încă spre Staff" (Comenzi Platforme), gata de trimis EXPLICIT, cu „📦 Trimite la împachetare", când cineva chiar o verifică. Verificat cu 4 teste izolate pe funcția reală extrasă din cod (comitere implicită/explicită → trimisă, comitere automată → NU trimisă, restul câmpurilor neafectate), rulate de 2 ori.',date:'2026-10-05'},
   {n:525,text:'Bug real GRAV reparat, raportat direct pe date reale, pornind de la o întrebare aparent simplă („de ce apar doar 7 comenzi dacă sunt 28-29 în total?") — investigând, a ieșit la iveală mult mai mult: „nu am făcut eu asta — AI-ul doar trebuie să le potrivească, rutina zilnică trebuie să își ducă treaba la capăt DOAR dacă sunt AWB-urile în sistem". Erau 2 bug-uri separate, amândouă reparate acum. (1) Safety net-ul de la 22:00 (autoApplyStalePendingImports, #513) aplica orice comandă „✓ Inclus" uitată peste prag INDIFERENT dacă avea AWB — verificat live: 22 de comenzi eMAG+Trendyol, NICIUNA cu etichetă de expediere, aplicate automat. Acum cere explicit AWB prezent înainte de a aplica. (2) Mult mai grav, găsit investigând mai departe: „Aplică import"/„✓ Aplică tot" NU verifica NICIODATĂ dacă o linie era deja aplicată — un al doilea click (sau safety net-ul rulat aproape simultan cu un click manual) scădea stocul ÎNCĂ O DATĂ, fără nicio protecție. Verificat live: 43 de comenzi cu stocul scăzut de 2 până la 6 ori pentru ACEEAȘI vânzare reală — 70 de aplicări eronate, într-o singură dimineață. Ambele funcții au acum o gardă de concurență identică: marcarea „aplicat" se face ACUM întâi, condiționat direct în bază (filtru suplimentar `efecte_aplicate=eq.false` chiar în PATCH, nu doar o verificare în memorie, ocolibilă de 2 apeluri concurente) — dacă răspunsul vine gol, comanda era deja aplicată de altundeva: se sare direct peste, stocul nu se mai atinge a doua oară. Corectate direct, live, toate cele 36 de comenzi afectate azi (22 eMAG + 14 Trendyol, 24 produse, 105 bucăți) — stoc restaurat exact, Jurnal și „Vânzări azi" corectate (șterse complet, fiecare verificat că nu avea NIMIC legitim amestecat), toate 37 de linii puse înapoi „✓ Inclus, neaplicat" — rămân normal, așteptând AWB. Comenzile din 02-04.10 (anterioare zilei curente) au fost lăsate intenționat neatinse, la cerere directă. Verificat cu 7 teste izolate pe funcțiile reale din cod (linie liberă se aplică normal, linie deja aplicată e sărită complet — fără niciun decrement — linie nouă neatinsă de gardă), rulate de 2 ori, plus mecanismul de bază (PATCH condiționat) confirmat live, direct pe o comandă reală, de 2 ori la rând (a doua oară a găsit corect 0 rânduri).',date:'2026-10-05'},
   {n:524,text:'Comenzi Platforme — comenzile din previzualizare apar acum în aceeași ordine ca în Seller Center eMAG, cerut direct, cu o comparație directă între cele două ecrane: „cum am putea face ca comenzile să apară ca în Emag în aceeași ordine, să fie mai ușor de identificat și lucrat pe ele". Cauza găsită live, pe date reale: API-ul eMAG (și, la fel, Trendyol) întorc comenzile cu cele mai VECHI primele — exact opusul Seller Center, care le arată implicit cu cele mai noi primele — iar admin-ul nu reordona deloc, păstra pur și simplu ordinea brută de sosire de la API. Comenzile apar acum sortate descrescător după ora EXACTĂ a plasării (nu doar ziua — o comandă din aceeași zi, dar cu câteva ore mai devreme/târziu, se distinge acum corect, informație care exista deja la eMAG/Trendyol dar era trunchiată la zi înainte de a ajunge în previzualizare). Platforma rămâne criteriul principal ca până acum (eMAG, apoi Trendyol, apoi Vinted) — doar ordinea DIN interiorul fiecărei platforme s-a schimbat. Necesită Conectorul local eMAG actualizat pe Mac (`git pull` + `launchctl kickstart -k gui/$(id -u)/ro.abhomes.emag-local-connector`); Trendyol (server, Vercel) se aplică automat la acest deploy. Verificat cu 5 teste izolate, inclusiv cu exact comenzile reale verificate live pe conectorul real (ordinea rezultată coincide exact cu cea din Seller Center), rulate de 2 ori.',date:'2026-10-05'},
@@ -22161,12 +22162,9 @@ function openAwbErrorPick(ev,id){
   awbPickErrorRow=x;
   openAwbPickDropdownAt(ev.currentTarget);
 }
-function filterAwbPick(){
-  const q=(document.getElementById('awb-pick-search')?.value||'').toLowerCase().trim();
-  const list=document.getElementById('awb-pick-list');if(!list)return;
-  const pool=awbPickCandidates();
-  const matches=(q?pool.filter(o=>(o.clientNume||'').toLowerCase().includes(q)||(o.comandaId||'').toLowerCase().includes(q)||(o.produsNume||'').toLowerCase().includes(q)||(o.titluExtern||'').toLowerCase().includes(q)):pool).slice(0,80);
+function awbPickRenderList(matches){
   awbPickVisible=matches;
+  const list=document.getElementById('awb-pick-list');if(!list)return;
   list.innerHTML=matches.map((o,i)=>{
     const plat=o.platforma==='emag'?'eMAG':o.platforma==='trendyol'?'Trendyol':'Vinted';
     const nm=o.clientNume||o.produsNume||o.titluExtern||'(fără nume)';
@@ -22174,6 +22172,38 @@ function filterAwbPick(){
     const sub=[o.comandaId,o.produsNume||o.titluExtern,o.pretTotalCuTva?o.pretTotalCuTva.toFixed(2)+' '+(o.moneda||'RON'):''].filter(Boolean).join(' · ');
     return`<div class="smi-pick-item" style="flex-direction:column;align-items:flex-start" onclick="pickAwbOrder(${i})"><span class="smi-pick-item-nm" style="font-weight:700">${esc(plat)} · ${esc(nm)}</span><span class="smi-pick-item-nm" style="font-size:19px;color:var(--t3)">${esc(sub)}${pendingTag}</span></div>`;
   }).join('')||`<div class="smi-pick-item" style="color:var(--t3);cursor:default">Nicio comandă nerezolvată găsită</div>`;
+}
+// Căutare în 2 pași, cerut direct, pe un bug real: „sistemul acesta de recunoaștere și regăsire a
+// comenzilor, atât pe numere cât și pe nume, să fie funcțional — nu se găsește o comandă deși ea
+// există în sistem". Pasul 1 (instant, local) rămâne neschimbat — caută în `awbPickCandidates()`
+// (comenzi deja comise, fără AWB, PLUS linii încă „Neinclus” din previzualizarea curentă a
+// browserului). Problema reală: o comandă „găsită pe eMAG, dar nepotrivită automat" (vezi
+// emagFoundUnmatched) trăiește STRICT în memoria browserului (pcImpParsed), niciodată scrisă în bază —
+// orice reîncărcare/resincronizare/schimbare de pagină între momentul citirii etichetei și momentul
+// căutării manuale o pierde definitiv, fără nicio urmă. Pasul 2 (live, direct în bază) nu mai depinde
+// de ce a supraviețuit în memoria ACESTEI sesiuni — caută direct în platforma_comenzi (fără AWB încă,
+// neanulate), după comandă/client/produs, exact ca o comandă „din sistem" ar trebui găsită oricând,
+// indiferent de ce s-a întâmplat în browser între timp. `seq` ignoră un răspuns întârziat dintr-o
+// tastare anterioară, ca să nu suprascrie rezultatul unei căutări mai noi.
+let awbPickSeq=0;
+async function filterAwbPick(){
+  const q=(document.getElementById('awb-pick-search')?.value||'').toLowerCase().trim();
+  if(!document.getElementById('awb-pick-list'))return;
+  const pool=awbPickCandidates();
+  const localMatches=(q?pool.filter(o=>(o.clientNume||'').toLowerCase().includes(q)||(o.comandaId||'').toLowerCase().includes(q)||(o.produsNume||'').toLowerCase().includes(q)||(o.titluExtern||'').toLowerCase().includes(q)):pool).slice(0,80);
+  const seq=++awbPickSeq;
+  awbPickRenderList(localMatches);
+  if(!q||q.length<3)return;
+  try{
+    const like=encodeURIComponent(`*${q}*`);
+    const extra=await dbGet(`platforma_comenzi?select=id,platforma,comanda_id,client_nume,produs_nume,titlu_extern,pret_total_cu_tva,moneda,data,awb&awb=is.null&anulata=eq.false&or=(comanda_id.ilike.${like},client_nume.ilike.${like},produs_nume.ilike.${like},titlu_extern.ilike.${like})&limit=30`);
+    if(seq!==awbPickSeq)return;
+    const known=new Set(localMatches.map(o=>o.platforma+'|'+o.comandaId));
+    const extraMapped=extra.filter(r=>!known.has(r.platforma+'|'+r.comanda_id)).map(r=>({
+      comandaId:r.comanda_id,platforma:r.platforma,clientNume:r.client_nume||'',produsNume:r.produs_nume||'',
+      titluExtern:r.titlu_extern||'',pretTotalCuTva:r.pret_total_cu_tva||0,moneda:r.moneda||'RON',data:r.data||'',awb:r.awb||'',_pending:false}));
+    if(extraMapped.length)awbPickRenderList([...localMatches,...extraMapped].slice(0,80));
+  }catch(e){console.warn('Căutare live suplimentară în picker eșuată:',e);}
 }
 const filterAwbPickDebounced=debounce(()=>filterAwbPick(),150);
 function pickAwbOrder(i){
@@ -22625,11 +22655,15 @@ async function applyAwbAssociation(){
           // Bug real, foarte important, raportat direct („sincronizate prin citire AWB, dar nu apar în
           // Staff"): fără asta, AWB-ul se scria DOAR pe linia din previzualizarea locală a adminului —
           // comanda rămânea „Neinclus”, deci NICIODATĂ scrisă în platforma_comenzi. Comanda tot trebuie
-          // scrisă acum (altfel AWB-ul se pierde), dar sendToStaff=false — potrivirea AWB-ului s-a
-          // întâmplat automat, în masă, din citirea unui dosar, fără nicio confirmare individuală umană
-          // (regulă clară, #525/#526 — „doar ce e inclus de noi"); rămâne de trimis explicit spre Staff.
+          // scrisă acum (altfel AWB-ul se pierde). sendToStaff=`p._manualPick` — cerut direct („un sistem
+          // de confirmare a comenzilor prin AWB-uri... unde nu se confirmă automat și selectăm noi manual
+          // comanda, să se includă automat"): dacă potrivirea a venit din picker-ul manual (omul a ales
+          // EXPLICIT comanda asta, dintr-o listă, pentru ACEST AWB — vezi pickAwbOrder/_manualPick),
+          // asta E confirmarea individuală cerută — trimite spre Staff. Dacă a venit dintr-o potrivire
+          // automată, în masă (citire de dosar, fără nicio alegere umană), rămâne neconfirmată, ca până
+          // acum (regulă clară, #525/#526).
           const idx=pcImpParsed.indexOf(it);
-          if(idx>=0){it.include=true;await syncPcomLineCommitState(idx,false);}
+          if(idx>=0){it.include=true;await syncPcomLineCommitState(idx,!!p._manualPick);}
           // Previzualizare vizuală AWB — ÎN FUNDAL, nu blocăm restul asocierilor pentru atât (cerut
           // direct, vezi .tmp/grill-me/staff-awb-preview.md). p._blob există doar pe liniile venite
           // dintr-un PDF chiar citit (readAwbFolderPdfs/handleAwbPdfFile) — lipsește pe cele reconstruite
@@ -22646,11 +22680,12 @@ async function applyAwbAssociation(){
       // de astăzi?" — o comandă din 21.09, neatinsă de nimic altceva, și-a avansat singură created_at la
       // „acum" doar pentru că i s-a (re)asociat un AWB printr-o citire în masă (🔁 Repune AWB-uri din
       // arhivă, înainte de #518), reapărând direct în coada activă de azi din Staff. Asocierea unui AWB
-      // e o acțiune DIFERITĂ de „trimite spre împachetare" — nu mai face asta, niciodată, implicit. O
-      // comandă deja comisă are deja staff_trimis_at din momentul comiterii; una foarte veche, fără el,
-      // rămâne așa până e trimisă explicit (vezi renderStaleStaffOrdersCard/reactivateStaleOrder).
+      // e o acțiune DIFERITĂ de „trimite spre împachetare" — nu mai face asta, niciodată, implicit, DOAR
+      // dacă potrivirea a venit dintr-o alegere manuală, individuală, a omului (picker-ul — vezi
+      // comentariul identic de mai sus), caz în care chiar e confirmarea explicită cerută.
+      if(p._manualPick)source.staff_trimis_at=new Date().toISOString();
       await patchAwbWithSource(`comanda_id=eq.${encodeURIComponent(p.comandaId)}&platforma=eq.${encodeURIComponent(platforma)}`,source);
-      PCOM.filter(o=>o.comandaId===p.comandaId&&o.platforma===platforma).forEach(o=>Object.assign(o,{awb:p.awb,awbSourceFile:p.file||'',awbSourcePage:p.page||null,awbCourier:p.courier||''}));
+      PCOM.filter(o=>o.comandaId===p.comandaId&&o.platforma===platforma).forEach(o=>Object.assign(o,{awb:p.awb,awbSourceFile:p.file||'',awbSourcePage:p.page||null,awbCourier:p.courier||'',...(source.staff_trimis_at?{staffTrimisAt:source.staff_trimis_at}:{})}));
       // Previzualizare vizuală AWB — ÎN FUNDAL, vezi comentariul de mai sus (ramura „Neinclus").
       if(p._blob)generateAwbPreviewInBackground(p._blob,p.page,p.awb,p.comandaId,platforma);
     }
