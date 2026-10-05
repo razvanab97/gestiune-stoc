@@ -41,7 +41,11 @@ function packageLines(pack){
     // toate comenzile pe care le importăm sunt oricum în statusuri „încă deschise" (Created/Picking/
     // Invoiced, vezi OPEN_STATUSES), niciodată „Shipped", deci niciodată sigur finalizat. AWB-ul real
     // vine acum EXCLUSIV din „Asociază AWB-uri" (citirea etichetei fizice reale), exact ca la eMAG.
-    return{comandaId:String(pack.orderNumber||pack.shipmentPackageId||''),pachetId:String(pack.shipmentPackageId||pack.id||''),data:new Date(number(pack.orderDate)||number(pack.createdDate)||Date.now()).toISOString().slice(0,10),pnk:String(line.barcode||''),codProdus:String(line.stockCode||line.barcode||''),clientNume:customer,titluExtern:String(line.productName||''),cantitate:qty,pretFaraTva:round(gross/(1+(vat||0))),pretTotalCuTva:round(gross*qty),moneda:String(line.currencyCode||pack.currencyCode||'RON').toUpperCase(),tara:String(pack.shipmentAddress?.countryCode||pack.deliveryAddress?.countryCode||'RO').toUpperCase(),awb:'',status:String(pack.status||pack.shipmentPackageStatus||''),termenExpediere:number(pack.agreedDeliveryDate)?new Date(number(pack.agreedDeliveryDate)).toISOString():''};
+    // plasataLa — aceeași nevoie ca la eMAG (cerut direct: „să apară ca în Emag, în aceeași ordine"):
+    // `data` de mai sus e trunchiată la zi, pierde ora exactă a plasării, folosită STRICT la sortarea
+    // din previzualizarea admin (pcomComputeGroups din index.html), niciodată scrisă în bază.
+    const orderTs=number(pack.orderDate)||number(pack.createdDate)||Date.now();
+    return{comandaId:String(pack.orderNumber||pack.shipmentPackageId||''),pachetId:String(pack.shipmentPackageId||pack.id||''),data:new Date(orderTs).toISOString().slice(0,10),plasataLa:new Date(orderTs).toISOString(),pnk:String(line.barcode||''),codProdus:String(line.stockCode||line.barcode||''),clientNume:customer,titluExtern:String(line.productName||''),cantitate:qty,pretFaraTva:round(gross/(1+(vat||0))),pretTotalCuTva:round(gross*qty),moneda:String(line.currencyCode||pack.currencyCode||'RON').toUpperCase(),tara:String(pack.shipmentAddress?.countryCode||pack.deliveryAddress?.countryCode||'RO').toUpperCase(),awb:'',status:String(pack.status||pack.shipmentPackageStatus||''),termenExpediere:number(pack.agreedDeliveryDate)?new Date(number(pack.agreedDeliveryDate)).toISOString():''};
   });
 }
 
