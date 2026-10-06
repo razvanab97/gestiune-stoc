@@ -307,6 +307,7 @@ button{cursor:pointer}
   <div class="hdr">
     <div class="hdr-title"><h1>📦 Comenzi de împachetat</h1><span class="order-count" id="progress-txt">Se încarcă…</span><button type="button" class="update-btn" id="staff-update-btn" onclick="openUpdatesSheet()"></button></div>
     <div style="display:flex;align-items:center;gap:10px">
+      <button type="button" class="refresh-btn" id="staff-newqueue-btn" onclick="newQueueNow()" title="Pornește coada nouă: împachetatele dispar din listă, cele neîmpachetate trec în „În așteptare">↺ Coadă nouă</button>
       <button type="button" class="refresh-btn" id="staff-refresh-btn" onclick="refreshStaffNow()">↻ Reîncarcă<span class="refresh-ping" id="refresh-ping"></span></button>
       <button type="button" class="staff-name-badge" id="staff-name-badge" onclick="editStaffName()"></button>
       <span class="sync-dot" id="sync-dot"></span>
@@ -484,6 +485,43 @@ async function captureAwbPreviewPhoto(){
   }
 }
 function td(){return new Date().toISOString().slice(0,10);}
+/* ── Coadă nouă / reset zilnic la 22:00 (ora României) ──
+   Pragul se calculează DIN CEAS (ultima oră 22:00 la București) — nu depinde de o pagină deschisă la 22:00,
+   deci nu se mai poate „pierde" ca intervalul vechi: la primul render de după 22:00 totul e deja resetat.
+   „↺ Coadă nouă" (manual) avansează același prag la „acum", păstrat în setari_app, partajat între dispozitive.
+   Prag = max(ultimul 22:00, ultimul reset manual). Se aplică DOAR clasificării din computeOrders (vezi
+   g.carried/g.oldDone) — nu șterge și nu modifică nicio comandă în bază. */
+const QUEUE_RESET_HOUR=22,QUEUE_TZ='Europe/Bucharest',STAFF_QUEUE_KEY='staff_queue_started_at';
+let STAFF_QUEUE_MANUAL=null,lastBoundaryMs=null;
+function tzParts(ms){
+  const o={};new Intl.DateTimeFormat('en-GB',{timeZone:QUEUE_TZ,hourCycle:'h23',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit'}).formatToParts(new Date(ms)).forEach(x=>{o[x.type]=x.value;});
+  return o;
+}
+function tzWallMs(p){return Date.UTC(+p.year,+p.month-1,+p.day,(+p.hour)%24,+p.minute,+p.second);}
+function tzOffsetMs(ms){return tzWallMs(tzParts(ms))-Math.floor(ms/1000)*1000;}
+function lastAutoReset(ms=Date.now()){
+  const p=tzParts(ms);
+  let wall=Date.UTC(+p.year,+p.month-1,+p.day,QUEUE_RESET_HOUR,0,0);
+  if(wall>tzWallMs(p))wall-=86400000;
+  let inst=wall-tzOffsetMs(ms);
+  inst=wall-tzOffsetMs(inst); // offset-ul de la momentul real al pragului (trecerea la ora de iarnă/vară)
+  return inst;
+}
+function queueBoundary(ms=Date.now()){
+  const a=lastAutoReset(ms),m=Date.parse(STAFF_QUEUE_MANUAL||'');
+  return Math.max(a,isFinite(m)?Math.min(m,ms):0);
+}
+// ID-ul „zilei de lucru" (data de după ultimul 22:00) — cheia barei „Curieri azi", ca să se golească la 22:00.
+function queueDayId(ms=Date.now()){
+  const p=tzParts(lastAutoReset(ms)+3*3600000);
+  return`${p.year}-${p.month}-${p.day}`;
+}
+async function loadQueueMarker(){
+  try{
+    const rows=await sb('GET',`setari_app?key=eq.${STAFF_QUEUE_KEY}&select=value`);
+    STAFF_QUEUE_MANUAL=rows?.[0]?.value||null;
+  }catch(e){console.warn('Nu am putut citi ultimul reset de coadă:',e);}
+}
 // Termen maxim de expediere (cerut direct — „data maximă de finalizare, cu timer standard, nu tip
 // ceas"): text static, recalculat la fiecare randare/refresh (NU un ceas care ticăie la secundă) — util
 // mai ales aici, în Staff, ca să prioritizezi ce împachetezi primul. Aceeași logică ca în index.html.
@@ -530,6 +568,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:435,date:'06.10.2026',text:'↺ Coadă nouă + resetul zilnic de la 22:00 — readuse, cerut direct („aveam o regulă: în fiecare zi la 22:00 toată pagina să se reseteze, ce s-a întâmplat?"). Au fost eliminate din greșeală-prin-consecință odată cu rescrierea din #432, care a scos tot sistemul „Coadă nouă", inclusiv resetul de 22:00 — de aceea ecranul arăta încă comenzile de ieri (39 / 44), cumulate de la 02.10. Acum, la 22:00 (ora României) pagina pornește curat: contorul revine la 0 / 0, comenzile împachetate dispar din listă și din „Finalizate azi" (rămân găsibile în Căutare), iar comenzile rămase NEîmpachetate trec în „În așteptare" — cu mențiunea „📅 Din ziua anterioară" — și rămân acolo, nelimitat, până le marchezi împachetate chiar de acolo („✓ Finalizează coletul"). Pragul se calculează DIN CEAS (ultima oră 22:00 la București, corect și la trecerea orei de vară/iarnă), nu depinde de o pagină deschisă la 22:00 — motivul pentru care intervalul vechi se putea „pierde"; o pagină deschisă peste noapte se resetează singură la 22:00. Butonul manual „↺ Coadă nouă" (în antet, cu confirmare) face același reset oricând și e partajat între dispozitive. Bara „Curieri azi" se golește și ea la 22:00. Garanția din #432 rămâne: nicio comandă nu reapare singură în „Împachetare" — o comandă veche revine doar printr-o retrimitere explicită („📦 Trimite la împachetare"). Nimic nu se șterge sau modifică în bază. Verificat de 2 ori: sintaxă + 18 teste pe funcțiile reale din cod (prag la 22:00 inclusiv ziua trecerii la ora de iarnă; clasificare pe datele reale de ieri: 39 / 44 înainte de reset → 0 / 0 și 5 comenzi în „În așteptare" după; marcare împachetat din Așteptare; comandă nouă; retrimitere; „Coadă nouă" manual) și redare în aplicația reală, în citire.'},
   {n:434,date:'05.10.2026',text:'„📥 Marfă furnizor" — comenzile fără număr de comandă nu se mai sparg în câte un card pe produs, raportat direct (captură cu Maxy: fiecare produs apărea sub propriul „Maxy"). Cauza: liniile se grupau după furnizor + numărul comenzii, iar când numărul lipsea (Maxy nu are unul; câmpul e „opțional" la import) fiecare linie devenea un grup separat — 23 de produse din UN singur import apăreau ca 23 de comenzi, fiecare cu propriul „Tot restul a ajuns". Acum liniile fără număr, scrise de același import (același moment exact de salvare), rămân împreună într-un singur card, cu data și numărul de produse în antet. Comenzile care au număr (e-jumbo, Jumbo, maxy.eu) sunt neschimbate. Verificat pe datele reale: 77 de linii active → 6 carduri.'},
   {n:433,date:'02.10.2026',text:'Căutare — completare directă la #432 (RESET TOTAL), cerută imediat: „cel împachetat, totuși să rămână salvate ca informații... să găsim pe baza AWB-ului, a numărului de comandă, a numelui clientului... să vedem că de fapt a fost împachetată, ca să știm de unde și încotro mergem". De la #432, căutarea de sus caută STRICT în coada activă de azi (ce a fost trimis explicit spre împachetare) — corect pentru lucrul curent, dar nu mai acoperă istoricul complet. Acum, orice căutare de minim 3 caractere pornește și o interogare LIVE, separată, direct către toate comenzile din bază (fără nicio legătură cu coada activă) — apare o secțiune nouă „📜 Din istoric", cu statusul real al fiecărei comenzi găsite (✓ împachetată, cu data; 🚫 anulată; sau neîmpachetată, în afara cozii active). Orice comandă, oricât de veche, rămâne găsibilă permanent după client/AWB/număr comandă/produs. Verificat cu 6 teste izolate (comandă istorică găsită corect cu statusul ei real, fără dublare cu rezultatul din coada activă, răspuns întârziat dintr-o căutare veche ignorat corect), rulate de 2 ori, plus verificat live, direct pe date reale din bază.'},
   {n:432,date:'02.10.2026',text:'RESET TOTAL al sistemului de Packing — reproiectare completă, cerută direct, cu specificație detaliată, pe un bug real grav: „ce caută aceste comenzi în staff la de împachetat în condițiile în care acestea sunt de astăzi?" — o comandă din 21.09 a apărut direct în coada ACTIVĂ de azi, deși nimeni n-a atins-o. „02.10.2026 este punctul zero": Împachetarea nu se mai alimentează după status (neîmpachetat) sau după o fereastră de dată — se alimentează STRICT din comenzi trimise EXPLICIT spre împachetare (din admin, la comandă nouă automat, sau manual pentru una veche — „📦 Trimite la împachetare"). Eliminat complet, nu doar ascuns: „↺ Coadă nouă" (manual + automat la 22:00) și tot sistemul din spatele lui — nicio comandă veche nu mai poate reapărea automat în coadă, din niciun motiv (reîncărcare, delogare, resincronizare marketplace, polling). „În așteptare" înseamnă acum STRICT o problemă raportată de Staff, nu „comandă veche" — eticheta „📅 Din ziua anterioară" a dispărut, nu mai există conceptul. O comandă trimisă explicit, chiar dacă foarte veche, rămâne vizibilă nelimitat cât timp nu e împachetată. NECESITĂ migrarea din Supabase (vezi admin) — până atunci, Împachetarea rămâne goală, intenționat. Verificat cu 13 teste izolate pe funcțiile reale din cod, rulate de 2 ori.'},
@@ -663,9 +702,22 @@ function computeOrders(){
     // staff_trimis_at — adică deja, explicit, trimise spre împachetare — nu mai există nicio comandă
     // „veche, recuperată automat" de reclasificat aici. „În așteptare” înseamnă STRICT o problemă
     // raportată de Staff, nimic legat de dată/vechime.
-    g.waiting=g.hasUnresolvedIssue;
+    // Reset zilnic 22:00 / „↺ Coadă nouă" (cerut direct: „cele care nu sunt împachetate, să se mute în
+    // așteptare, până când le setăm acolo ca împachetate"): pragul B nu atinge nicio comandă din bază, doar
+    // o clasifică. Neîmpachetată + trimisă ÎNAINTEA lui B → „În așteptare" (g.carried), rămâne acolo
+    // nelimitat până e marcată împachetată; împachetată ÎNAINTEA lui B → istoric (g.oldDone), iese din
+    // contor/navigare/„Finalizate azi" dar rămâne găsibilă în Căutare. O retrimitere explicită
+    // („📦 Trimite la împachetare") rescrie staff_trimis_at = acum, deci revine în coada de azi.
+    const B=queueBoundary();
+    const sentAt=g.platforma==='direct'?g.sortAt:g.lines.map(l=>l.staff_trimis_at||l.created_at||l.data||'').sort().slice(-1)[0];
+    g.sentAt=sentAt||'';
+    const sentMs=Date.parse(g.sentAt)||0;
     const lastPackedAt=g.lines.map(l=>l.impachetat_at).filter(Boolean).sort().slice(-1)[0]||'';
-    g.finalizedToday=g.finalized&&lastPackedAt.slice(0,10)===td();
+    const packedMs=Date.parse(lastPackedAt)||0;
+    g.carried=!g.finalized&&sentMs<B;
+    g.waiting=g.hasUnresolvedIssue||g.carried;
+    g.oldDone=g.finalized&&packedMs<B;
+    g.finalizedToday=g.finalized&&packedMs>=B;
   });
 }
 function packQueue(){return ORDERS.filter(o=>!o.finalized&&!o.waiting);}
@@ -673,7 +725,7 @@ function waitingQueue(){return ORDERS.filter(o=>o.waiting);}
 // listă completă (inclusiv comenzi deja împachetate) pt. navigare Anterioară/Următoare —
 // packQueue() se golește pe măsură ce lucrezi, așa că butonul "Anterioară" ar rămâne mereu
 // dezactivat dacă ar naviga tot peste packQueue (nu mai există "înainte" în coada care se micșorează)
-function navQueue(){return ORDERS.filter(o=>!o.waiting);}
+function navQueue(){return ORDERS.filter(o=>!o.waiting&&!o.oldDone);}
 function finalizedTodayQueue(){return ORDERS.filter(o=>o.finalizedToday).sort((a,b)=>{
   const at=a=>a.lines.map(l=>l.impachetat_at).filter(Boolean).sort().slice(-1)[0]||'';
   return at(b).localeCompare(at(a));
@@ -700,8 +752,10 @@ function renderProgress(){
   // excluderea completă a celor „în așteptare" de aici e sigură — nu ascunde nimic, rămân vizibile
   // separat, cu propriul contor (badge-ul de mai jos).
   const waitingCount=waitingQueue().length;
-  const total=ORDERS.length-waitingCount;
-  const done=ORDERS.filter(o=>o.finalized).length;
+  // Doar „ziua de lucru" curentă (după ultimul 22:00 / „Coadă nouă"): comenzile împachetate înainte de
+  // prag (oldDone) nu mai intră în contor, ca să pornească de la 0 / 0.
+  const total=ORDERS.filter(o=>!o.waiting&&!o.oldDone).length;
+  const done=ORDERS.filter(o=>o.finalized&&!o.oldDone).length;
   const remaining=packQueue().length;
   document.getElementById('progress-txt').textContent=total?`${remaining} comenzi`:'Nicio comandă';
   const pct=total?Math.round(done/total*100):0;
@@ -726,7 +780,7 @@ function renderProgress(){
 // curentă (același tipar ca staff_queue_started_at/emag_id_counter din index.html) — se golește
 // singur a doua zi, fără nicio curățare manuală.
 let COURIER_ARRIVALS={};
-function courierArrivalsKey(){return'curieri_sosire_'+td();}
+function courierArrivalsKey(){return'curieri_sosire_'+queueDayId();}
 async function loadCourierArrivals(){
   try{
     const rows=await sb('GET',`setari_app?key=eq.${courierArrivalsKey()}&select=value`);
@@ -1471,16 +1525,33 @@ function renderWaitingTab(host){
       <span class="ord-pl ${ord.platforma}">${plLabel}</span>
       ${ord.comandaId?`<span class="ord-num">#${esc(ord.comandaId)}</span>`:''}
       <span class="ord-waiting-badge">⏸ În așteptare</span>
+      ${ord.carried?`<span class="ord-waiting-badge">📅 Din ziua anterioară</span>`:''}
     </div>
     <div id="lock-banner-slot"></div>
     ${ord.awb?awbBoxHtml(ord.awb,ord.awbCourier,ord.awbPreviewUrl,ord.comandaId,ord.platforma):''}
+    ${ord.carried&&ord.hasUnresolvedIssue?'':deadlineBadgeHtml(ord.termenExpediere)}
     <div class="lines">${linesHtml}</div>
+    ${ord.carried&&!ord.hasUnresolvedIssue?`<button type="button" class="big-pack-btn" ${lineBusy['order_'+ord.key]?'disabled':''} onclick="finalizeOrder('${ord.key}')">${ord.awb?'✓ Finalizează coletul':'✓ Marchează împachetat'}</button>`:''}
     <button type="button" class="nav-btn" onclick="curKey=null;renderMain()">← Înapoi la listă</button>
   </div>`;
 }
 // RESET TOTAL (#519) — „În așteptare” înseamnă acum STRICT o problemă raportată de Staff (ramura
 // „carry-over”/isCarryover a fost eliminată din computeOrders, nu doar ascunsă aici).
 function waitingListItemHtml(o){
+  if(o.carried&&!o.hasUnresolvedIssue){
+    const l0=o.lines[0],p0=findProdus(l0.produs_id);
+    const im=p0&&p0.img?`<img class="list-item-th" src="${esc(imgSrc(p0.img))}" onerror="this.style.display='none'">`:`<div class="list-item-th-ph">📦</div>`;
+    const nm=o.lines.map(x=>x.produs_nume).filter(Boolean).join(', ');
+    const pl=o.platforma==='emag'?'eMAG':o.platforma==='trendyol'?'Trendyol':o.platforma==='vinted'?'Vinted':'Extra';
+    return`<div class="list-item" onclick="curKey='${o.key}';renderMain()">
+      ${im}
+      <div class="list-item-main">
+        <div class="list-item-nm">${pl}${o.comandaId?' · #'+esc(o.comandaId):''} · ${esc(nm)}</div>
+        <div class="list-item-issue">📅 Din ziua anterioară — neîmpachetată</div>
+      </div>
+      <div class="list-item-time">${o.sentAt?esc(timeAgo(o.sentAt)):''}</div>
+    </div>`;
+  }
   const blockedLine=o.lines.find(l=>l.staff_blocked&&!l.staff_issue_resolved)||o.lines[0];
   const p=findProdus(blockedLine.produs_id);
   const img=p&&p.img?`<img class="list-item-th" src="${esc(imgSrc(p.img))}" onerror="this.style.display='none'">`:`<div class="list-item-th-ph">📦</div>`;
@@ -2087,7 +2158,7 @@ async function refreshData(){
   refreshInFlight=true;let ok=false;
   try{
     const [comRows,jurnalRows,prepackRows,msgRows,furnizorRows]=await Promise.all([
-      sbComenzi(staffComenziUrl()),
+      loadQueueMarker().then(()=>sbComenzi(staffComenziUrl())),
       sbComenzi(staffJurnalUrl()).catch(()=>JURNAL),
       sb('GET','pre_impachetate?select=*&folosit_la=is.null&order=created_at.asc').catch(()=>PREPACK),
       sb('GET','staff_mesaje?select=*&rezolvat=is.false&order=created_at.asc').catch(()=>STAFFMSG),
@@ -2095,7 +2166,7 @@ async function refreshData(){
     ]);
     COMENZI=comRows;JURNAL=jurnalRows;PREPACK=prepackRows;STAFFMSG=msgRows;FURNIZOR=furnizorRows;
     document.getElementById('sync-dot').className='sync-dot ok';
-    computeOrders();
+    computeOrders();lastBoundaryMs=queueBoundary();
     renderMain();
     renderMsgPopup();
     ok=true;
@@ -2109,6 +2180,41 @@ async function refreshData(){
   return ok;
 }
 
+// „↺ Coadă nouă" manual — același reset ca cel automat de la 22:00, oricând. Avansează pragul la „acum"
+// (setari_app, partajat între dispozitive). Nu șterge nicio comandă: împachetatele ies din listă, cele
+// neîmpachetate trec în „În așteptare" până sunt marcate împachetate.
+async function newQueueNow(){
+  if(!confirm('Pornești coada nouă?\n\n• comenzile deja împachetate dispar din listă și din contor\n• cele încă neîmpachetate trec în „În așteptare”, până le marchezi împachetate\n\nNicio comandă nu se șterge.'))return;
+  const prev=STAFF_QUEUE_MANUAL,now=new Date().toISOString();
+  try{
+    const updated=await sb('PATCH',`setari_app?key=eq.${STAFF_QUEUE_KEY}`,{value:now});
+    if(!updated?.length)await sb('POST','setari_app',{key:STAFF_QUEUE_KEY,value:now});
+    STAFF_QUEUE_MANUAL=now;
+    onNewQueueDay('↺ Coadă nouă pornită — neîmpachetatele au trecut în „În așteptare”');
+  }catch(e){
+    STAFF_QUEUE_MANUAL=prev;
+    console.error(e);showToast('Nu s-a putut porni coada nouă — încearcă din nou');
+  }
+}
+function onNewQueueDay(msg){
+  lastBoundaryMs=queueBoundary();
+  loadCourierArrivals().finally(()=>{
+    computeOrders();
+    curKey=null;
+    pickInitialOrder(packQueue());
+    renderMain(true);
+    if(msg)showToast(msg);
+  });
+}
+// Resetul automat de 22:00: pragul vine din ceas, deci orice render de după 22:00 e deja corect; verificarea
+// asta doar RE-DESENEAZĂ pagina deschisă când trece pragul (la 22:00 sau la revenirea în tab).
+function checkQueueBoundary(){
+  const b=queueBoundary();
+  if(lastBoundaryMs===null){lastBoundaryMs=b;return;}
+  if(b!==lastBoundaryMs)onNewQueueDay('🌙 Coadă nouă — ziua următoare. Neîmpachetatele au trecut în „În așteptare”');
+}
+setInterval(checkQueueBoundary,30000);
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkQueueBoundary();});
 // Refresh-ul este intenționat manual: Staff nu schimbă lista de sub operator când revine în tab,
 // reapare rețeaua sau trece timpul. Butonul „↻ Reîncarcă” aduce numai informația cerută explicit.
 // RESET TOTAL (#519) — fostul interval dedicat verificării pragului de 22:00 (checkAutoQueueReset) a
@@ -2153,7 +2259,7 @@ async function load(){
       sb('GET','pre_impachetate?select=*&folosit_la=is.null&order=created_at.asc').catch(e=>{console.warn('pre_impachetate indisponibil:',e);return[];}),
       sb('GET','staff_mesaje?select=*&rezolvat=is.false&order=created_at.asc').catch(e=>{console.warn('staff_mesaje indisponibil:',e);return[];}),
       sb('GET','comenzi_furnizor?select=*&finalizat=eq.false&order=created_at.asc').catch(e=>{console.warn('comenzi_furnizor indisponibil (rulează migration_comenzi_furnizor.sql):',e);return[];}),
-      loadCourierArrivals(),
+      loadQueueMarker().then(()=>loadCourierArrivals()),
     ]);
     PRODUSE=prodRows.map(p=>({...p,internalCode:p.internal_code}));
     COMENZI=comRows;
@@ -2167,7 +2273,7 @@ async function load(){
       console.warn('Nu am putut încărca vânzările directe din Jurnal (rulează migration_jurnal_packing.sql):',e);
     }
     document.getElementById('sync-dot').className='sync-dot ok';
-    computeOrders();
+    computeOrders();lastBoundaryMs=queueBoundary();
     pickInitialOrder(packQueue());
     renderMain();
     renderMsgPopup();
