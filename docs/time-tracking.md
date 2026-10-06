@@ -1,0 +1,69 @@
+# Time tracking per proiect
+
+Un sistem partajat între toate aplicațiile tale: **trackerul de pe Mac** detectează la ce proiect lucrezi efectiv,
+**Supabase** păstrează sesiunile, iar **fiecare aplicație** își arată propriul „Timp azi" și are acces la statistici.
+
+```
+Tracker Mac (scripts/time-tracker.js)  →  Supabase (time_sessions)  →  widget „Timp azi" (time-tracking.js) în fiecare aplicație
+                                                       ↓
+                                          time_daily (view) → statistici: azi / 7 zile / luna / total / comparație
+```
+
+## Activare (o singură dată)
+
+1. **Baza de date** — rulează `migration_time_tracking.sql` în Supabase → SQL Editor (idempotent). Creează
+   `time_projects`, `time_sessions`, view-ul `time_daily` și indexul unic „o singură sesiune deschisă per dispozitiv".
+2. **Trackerul** — pe Mac, din folderul repo-ului:
+   ```bash
+   node scripts/time-tracker.js run --dry      # test: arată ce detectează, fără să scrie nimic
+   node scripts/time-tracker.js install        # pornește automat la logare (launchd, ro.abhomes.time-tracker)
+   node scripts/time-tracker.js status         # timpul de azi pe proiect, din baza de date
+   node scripts/time-tracker.js uninstall
+   ```
+   Log: `~/.ab-homes/time-tracker/tracker.log`. Configurare opțională: `~/.ab-homes/time-tracker/config.json`
+   (suprascrie orice din `DEFAULTS` — ferestre de timp, aplicații de lucru, lista de proiecte).
+3. **Aplicația** — „Timp azi" apare singur în Stoc Manager (sidebar, deasupra „Update #N").
+
+## Cum decide trackerul proiectul activ
+
+Fără permisiuni macOS speciale și fără să citească conținutul conversațiilor — doar *când* s-au scris sesiunile Claude Code
+(`~/.claude/projects/<cwd>/*.jsonl`, inclusiv desktop și extensia din IDE) și Codex (`~/.codex/sessions/.../rollout-*.jsonl`).
+
+- **Lucrezi efectiv** = activitate recentă pe proiect (ultimele 2 min) **sau** tastezi/folosești mouse-ul într-o aplicație de
+  lucru la cel mult 15 min după ultima activitate. Fără input peste 5 min → nu se numără nimic.
+- **Un singur proiect activ**: cel cu activitatea cea mai recentă; schimbarea e imediată, dar nu mai des de 30 s.
+  În plus, baza de date refuză două sesiuni deschise pe același dispozitiv (index unic).
+- **Sleep / pauză sistem**: intervalul ratat nu se numără. **Schimbarea zilei** (miezul nopții, ora României): sesiunea se
+  împarte, „Timp azi" repornește de la 00:00:00, istoricul zilei anterioare rămâne.
+- **Crash / oprire bruscă**: sesiunea rămasă deschisă se închide la ultimul heartbeat la următoarea pornire; heartbeat-ul
+  salvează progresul la fiecare 15 s, deci se pierd cel mult câteva secunde.
+
+Limită cunoscută: trackerul vede *activitatea AI pe proiect*, nu ce tab e în față în aplicația Claude. Timpul petrecut doar
+privind un tab fără activitate sau fără input nu se numără. (Detectarea după titlul ferestrei ar cere permisiunea macOS
+Accesibilitate; se poate adăuga ulterior ca semnal suplimentar.)
+
+## Conectarea unui alt proiect (ex. AB Textile)
+
+1. În `scripts/time-tracker.js` (sau în `~/.ab-homes/time-tracker/config.json`) proiectul trebuie să existe în `projects`:
+   `{id:'ab-textile', name:'AB Textile', match:['spalatorie-ab-textile']}` — `match` = numele folderului repo-ului. Cele 5
+   proiecte curente sunt deja definite.
+2. În `index.html`-ul aplicației, înainte de `</body>`:
+   ```html
+   <script src="https://gestiune-stoc-pi.vercel.app/time-tracking.js" data-project="ab-textile" defer></script>
+   ```
+   Opțiuni `data-*`: `label` (implicit „Timp azi"), `mount` (selector CSS unde se montează; implicit un element fix în colț),
+   `supa-url` / `supa-key` (implicit baza comună). Stilul moștenește variabilele CSS ale aplicației.
+3. (Opțional) un rând în `time_projects` pentru nume/culoare în statistici.
+
+Fiecare aplicație își arată doar propriul „Timp azi", dar panoul de statistici (click pe cronometru) compară toate proiectele.
+
+## Model de date
+
+`time_sessions`: `id`, `project_id`, `device`, `started_at`, `last_seen_at` (heartbeat), `ended_at` (NULL cât e deschisă),
+`duration_seconds` (timp activ acumulat, fără pauze), `date` (ziua în Europe/Bucharest), `source` (claude-code / codex).
+Statisticile se calculează din aceste sesiuni (view-ul `time_daily` = suma pe proiect/zi).
+
+## Teste
+
+`node scripts/time-tracker.test.js` — nucleul trackerului cu ceas și bază simulate: scenariul „intru → 2 min → schimb proiectul
+→ 1 min → revin → refresh → statistici", sleep, inactivitate, miezul nopții, rețea căzută, sesiuni paralele, potrivirea proiectelor.
