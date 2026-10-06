@@ -76,6 +76,19 @@ Accesibilitate; se poate adăuga ulterior ca semnal suplimentar.)
    `supa-url` / `supa-key` (implicit baza comună). Stilul moștenește variabilele CSS ale aplicației.
 3. (Opțional) un rând în `time_projects` pentru nume/culoare în statistici.
 
+### Aplicații Next.js / React (ex. ContaFlow)
+Scriptul se încarcă cu `next/script` în layout-ul rădăcină, iar cronometrul se montează într-un container din UI, ca să stea în sidebar,
+nu plutitor. `mount-only` îl afișează DOAR în container și îl reatașează singur dacă React îl recreează (ex. după login):
+```tsx
+<Script src="https://gestiune-stoc-pi.vercel.app/time-tracking.js" data-project="contaflow"
+        data-mount="#tt-mount" data-mount-only="true" strategy="lazyOnload" />
+// în sidebar: <div id="tt-mount" className="tt-mount" />
+```
+Culorile widget-ului vin din variabile generice (`--surf`, `--b2`, `--t1`, `--acc`, ...); aplicația le mapează pe propriile token-uri într-un
+bloc CSS scurt (vezi `.tt-mount .tt-widget` în `contaflow/app/globals.css`) ca să urmeze tema.
+
+**Conectate acum:** `gestiune-stoc` (Stoc Manager), `contaflow`.
+
 Fiecare aplicație își arată doar propriul „Timp azi", dar panoul de statistici (click pe cronometru) compară toate proiectele.
 
 ## Model de date

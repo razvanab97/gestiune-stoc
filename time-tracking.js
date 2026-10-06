@@ -14,6 +14,8 @@
      <script src="https://gestiune-stoc-pi.vercel.app/time-tracking.js" data-project="ab-textile" defer></script>
    Opțiuni (data-*): project (obligatoriu) · label · mount (selector CSS; implicit element fix în colț) ·
    mode ("tab" = măsoară și salvează [implicit], "view" = doar afișează) · idle (secunde fără input, implicit 180) ·
+   mount-only ("true" = se afișează DOAR în containerul din data-mount; se reatașează singur dacă aplicația (React etc.) îl
+   recreează sau apare mai târziu, ex. după login — fără el, fără container, cade pe un element fix în colț) ·
    supa-url / supa-key (implicit baza comună). Stilul moștenește variabilele CSS ale aplicației (--surf, --b2, --acc, ...). */
 (function(){
   'use strict';
@@ -91,6 +93,7 @@
     project:script.dataset.project,
     label:script.dataset.label||'Timp azi',
     mount:script.dataset.mount||'',
+    mountOnly:script.dataset.mountOnly==='true',
     mode:script.dataset.mode==='view'?'view':'tab',
     idleMs:(Number(script.dataset.idle)||180)*1000,
     url:(script.dataset.supaUrl||'https://cbpavtvrfpkbaeueexlw.supabase.co').replace(/\/$/,'')+'/rest/v1',
@@ -260,7 +263,7 @@
   /* ── UI ── */
   var CSS=[
     '.tt-widget{position:fixed;left:14px;bottom:14px;z-index:150;font-family:var(--font,system-ui,sans-serif)}',
-    '.tt-widget.tt-inline{position:static}',
+    '.tt-widget.tt-inline{position:relative}',
     '.tt-btn{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;text-align:left;background:var(--surf,#fff);border:1px solid var(--b2,#e4e7ec);border-radius:var(--r2,14px);padding:8px 14px 9px;cursor:pointer;box-shadow:var(--sh,0 1px 2px rgba(16,24,40,.06));font-family:inherit;transition:border-color .15s,box-shadow .15s}',
     '.tt-btn:hover{border-color:var(--acc,#7657F6)}',
     '.tt-lbl{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--t3,#667085)}',
@@ -314,9 +317,15 @@
     panel.onclick=function(e){e.stopPropagation();};
     document.addEventListener('click',function(){if(state.panel)openStats(false);});
     document.addEventListener('keydown',function(e){if(e.key==='Escape'&&state.panel)openStats(false);});
-    var host=CFG.mount?document.querySelector(CFG.mount):null;
-    if(host){root.classList.add('tt-inline');host.appendChild(root);}else document.body.appendChild(root);
     el={root:root,btn:btn,time:time,st:stl,panel:panel,body:body};
+    attach();
+    if(CFG.mount)setInterval(attach,1500); // containerul poate apărea mai târziu / poate fi recreat de aplicație
+  }
+  function attach(){
+    var host=CFG.mount?document.querySelector(CFG.mount):null;
+    if(host){if(el.root.parentNode!==host||!el.root.isConnected){el.root.classList.add('tt-inline');host.appendChild(el.root);}}
+    else if(!CFG.mountOnly){if(!el.root.isConnected){el.root.classList.remove('tt-inline');document.body.appendChild(el.root);}}
+    else if(el.root.isConnected)el.root.remove();
   }
   function start(){
     build();
