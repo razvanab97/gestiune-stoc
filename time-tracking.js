@@ -1,29 +1,108 @@
-/* TIME TRACKING — widget „Timp azi" + statistici, partajat între toate aplicațiile/proiectele.
-   Citește sesiunile salvate de trackerul de pe Mac (scripts/time-tracker.js) din Supabase (time_sessions /
-   time_daily / time_projects — vezi migration_time_tracking.sql). NU măsoară nimic singur: faptul că aplicația
-   e deschisă într-un tab nu înseamnă timp lucrat; sursa adevărului e trackerul + baza de date.
+/* TIME TRACKING — „Timp azi" + statistici, partajat între toate aplicațiile/proiectele.
+
+   Ce măsoară (modul implicit, „tab"): timpul în care TU lucrezi efectiv în această aplicație = pagina e vizibilă (tabul
+   e cel selectat), fereastra are focus și ai input real (mouse/tastatură/scroll) în ultimele „idle" secunde.
+   Când pleci pe alt tab / altă aplicație / minimizezi, cronometrul se oprește IMEDIAT (Page Visibility + blur + pagehide);
+   când revii, continuă de unde a rămas. Taburile pot rămâne deschise/fixate în fundal fără să acumuleze nimic.
+   Sesiunile se salvează în Supabase (time_sessions, source='web') — nu doar în browser: refresh, închidere, alt dispozitiv
+   nu pierd nimic. Integritatea NU depinde de beforeunload: progresul se salvează la 15 s (heartbeat) + la fiecare ieșire.
+
+   Separat, trackerul de pe Mac (scripts/time-tracker.js) scrie sesiuni source='claude-code'/'codex' = timp de DEZVOLTARE cu AI
+   pe proiect; apar în statistici ca „Dezvoltare AI", nu se amestecă în „Timp azi".
 
    Conectare într-o aplicație (o singură linie, cu id-ul propriu al proiectului):
      <script src="https://gestiune-stoc-pi.vercel.app/time-tracking.js" data-project="ab-textile" defer></script>
-   Opțiuni (data-*): project (obligatoriu) · label · mount (selector CSS; implicit un element fix în colț) ·
+   Opțiuni (data-*): project (obligatoriu) · label · mount (selector CSS; implicit element fix în colț) ·
+   mode ("tab" = măsoară și salvează [implicit], "view" = doar afișează) · idle (secunde fără input, implicit 180) ·
    supa-url / supa-key (implicit baza comună). Stilul moștenește variabilele CSS ale aplicației (--surf, --b2, --acc, ...). */
 (function(){
   'use strict';
+
+  /* ═════════ NUCLEUL (fără DOM — testabil în Node: scripts/time-tracking.test.js) ═════════ */
+  // Un singur proiect, o singură sesiune deschisă la un moment dat. Sesiunea durează cât timp isActive() e adevărat.
+  function createEngine(o){
+    var cur=null,lastTick=null,lastHb=0,closing=[],recovered=false,history=[],nextTry=0,log=o.log||function(){};
+    var hbMs=o.heartbeatMs||15000;
+    function row(s){return{id:s.id,project_id:o.project,device:o.device,source:o.source||'web',started_at:new Date(s.startedAt).toISOString(),
+      last_seen_at:new Date(s.lastSeen).toISOString(),ended_at:s.endedAt?new Date(s.endedAt).toISOString():null,duration_seconds:Math.round(s.acc),date:s.date};}
+    function stop(reason){
+      if(!cur)return;
+      cur.endedAt=cur.lastSeen;closing.push(cur);
+      history.push({id:cur.id,acc:cur.acc,date:cur.date});
+      log('■ '+Math.round(cur.acc)+'s ('+reason+')');cur=null;
+    }
+    // sesiunile rămase deschise de un tab crăpat/închis brusc pe ACELAȘI dispozitiv se închid la ultimul heartbeat
+    async function recover(){
+      var open=await o.db.openOwn();
+      for(var i=0;i<open.length;i++){if(cur&&open[i].id===cur.id)continue;await o.db.closeStale(open[i].id,open[i].last_seen_at);}
+      recovered=true;
+    }
+    async function flush(t,keepalive){
+      if(!keepalive&&t<nextTry)return; // după o eroare reîncercăm la fiecare heartbeat, nu în fiecare secundă
+      try{
+        if(!recovered)await recover();
+        while(closing.length){await o.db.upsert(row(closing[0]),keepalive);closing.shift();}
+        nextTry=0;
+        if(cur){
+          if(!cur.persisted){await o.db.upsert(row(cur),keepalive);cur.persisted=true;lastHb=t;}
+          else if(t-lastHb>=hbMs){await o.db.upsert(row(cur),keepalive);lastHb=t;}
+        }
+      }catch(e){
+        if(/409|23505|one_open/.test(String(e&&(e.message||e.body)||'')))recovered=false; // conflict de sesiune deschisă: reîncercăm după recover()
+        nextTry=t+hbMs;log('db: '+(e&&e.message));
+      }
+    }
+    async function tick(){
+      var t=o.now(),dt=lastTick==null?0:t-lastTick;lastTick=t;
+      var act=!!o.isActive(),gap=dt>5000; // timer întârziat (tab înghețat / sleep): intervalul ratat nu se numără
+      var day=o.dayOf(t);
+      if(cur&&(gap||!act||cur.date!==day))stop(gap?'pauză':!act?'inactiv':'schimbarea zilei');
+      if(!cur&&act)cur={id:o.uuid(),startedAt:t,lastSeen:t,endedAt:null,acc:0,date:day,persisted:false};
+      else if(cur){cur.acc+=Math.min(dt,2000)/1000;cur.lastSeen=t;}
+      await flush(t,false);
+      return cur;
+    }
+    // ieșire (tab ascuns / blur / pagehide): închide imediat și salvează cu keepalive, fără să aștepte următorul tick
+    async function leave(){stop('ieșire din tab');await flush(o.now(),true);}
+    return{tick:tick,leave:leave,current:function(){return cur;},history:function(){return history;},pending:function(){return closing.length;}};
+  }
+
+  // Secundele de „azi" pentru acest proiect: sesiunile din bază + cele locale, FĂRĂ dublă numărare (id-ul local are prioritate).
+  function combineSeconds(dbRows,engine,nowMs,liveSeconds,day){
+    var m={},live=false,me=engine&&engine.current();
+    (dbRows||[]).forEach(function(s){
+      var d=s.duration_seconds||0;
+      if(!s.ended_at){var age=(nowMs-Date.parse(s.last_seen_at))/1000;if(age>-5&&age<=liveSeconds){d+=Math.max(0,age);live=true;}}
+      m[s.id]=d;
+    });
+    if(engine)engine.history().forEach(function(h){if(h.date===day)m[h.id]=h.acc;});
+    if(me&&me.date===day){m[me.id]=me.acc;live=true;}
+    var sum=0;for(var k in m)sum+=m[k];
+    return{seconds:sum,live:live};
+  }
+
+  if(typeof module==='object'&&module.exports){module.exports={createEngine:createEngine,combineSeconds:combineSeconds};}
+  if(typeof document==='undefined')return;
+
+  /* ═════════ WIDGET (DOM) ═════════ */
   var script=document.currentScript||document.querySelector('script[data-project][src*="time-tracking"]');
   if(!script||!script.dataset.project){console.warn('time-tracking: lipsește data-project');return;}
   var CFG={
     project:script.dataset.project,
     label:script.dataset.label||'Timp azi',
     mount:script.dataset.mount||'',
+    mode:script.dataset.mode==='view'?'view':'tab',
+    idleMs:(Number(script.dataset.idle)||180)*1000,
     url:(script.dataset.supaUrl||'https://cbpavtvrfpkbaeueexlw.supabase.co').replace(/\/$/,'')+'/rest/v1',
     key:script.dataset.supaKey||'sb_publishable_m7_oRHyxmrrvuGpudY9V1g_LM85ubbr',
     tz:'Europe/Bucharest',
-    liveSeconds:45,        // un heartbeat mai vechi de atât ⇒ trackerul nu mai rulează ⇒ cronometrul stă
+    liveSeconds:45,        // (modul „view") un heartbeat mai vechi de atât ⇒ sesiunea nu mai e activă
     refreshMs:20000
   };
   var PALETTE=['#7657F6','#F79009','#12B76A','#0BA5EC','#EE46BC','#F04438','#667085'];
-  var state={sessions:[],loaded:false,error:null,day:'',skew:0,panel:false,range:'today',daily:null,projects:null};
-  var el={};
+  var DEV_SOURCES=['claude-code','codex'];
+  var state={sessions:[],loaded:false,error:null,day:'',skew:0,panel:false,range:'today',src:'web',noSrc:false,daily:null,projects:null};
+  var el={},engine=null,lastInput=Date.now();
 
   /* ── helpers ── */
   function dayOf(ms){return new Intl.DateTimeFormat('en-CA',{timeZone:CFG.tz,year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(ms));}
@@ -32,66 +111,93 @@
   function hm(s){s=Math.max(0,Math.round(s));var h=Math.floor(s/3600),m=Math.floor(s%3600/60);if(h)return h+'h '+pad(m)+'m';if(m)return m+'m';return s?'<1m':'0m';}
   function now(){return Date.now()+state.skew;}
   function headers(){return{apikey:CFG.key,Authorization:'Bearer '+CFG.key};}
+  function chk(r){if(r.ok)return Promise.resolve(r);return r.text().then(function(t){var e=new Error('HTTP '+r.status+' '+t.slice(0,160));e.status=r.status;e.body=t;throw e;});}
   function get(path){
     return fetch(CFG.url+'/'+path,{headers:headers()}).then(function(r){
-      var d=r.headers.get('date');if(d){var sv=Date.parse(d);if(sv){var k=sv-Date.now();state.skew=Math.abs(k)<3000?0:k;}} // antetul Date are rezoluție de 1s: ignorăm diferențele mici (aceeași mașină)
-      if(!r.ok)return r.text().then(function(t){var e=new Error('HTTP '+r.status);e.status=r.status;e.body=t;throw e;});
-      return r.json();
+      var d=r.headers.get('date');if(d){var sv=Date.parse(d);if(sv){var k=sv-Date.now();state.skew=Math.abs(k)<3000?0:k;}} // antetul Date are rezoluție de 1s: ignorăm diferențele mici
+      return chk(r).then(function(r){return r.json();});
     });
+  }
+  function uuid(){
+    if(window.crypto&&crypto.randomUUID)return crypto.randomUUID();
+    return'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var r=Math.random()*16|0;return(c==='x'?r:(r&3|8)).toString(16);});
+  }
+  function deviceId(){ // un browser = un „dispozitiv"; indexul unic din bază interzice 2 sesiuni deschise pe același dispozitiv
+    var id=null;try{id=localStorage.getItem('tt_device');if(!id){id='web-'+uuid().slice(0,8);localStorage.setItem('tt_device',id);}}catch(e){}
+    return id||('web-'+uuid().slice(0,8));
+  }
+
+  /* ── măsurarea (modul „tab"): activ = vizibil + focus + input recent ── */
+  function isActive(){return document.visibilityState==='visible'&&document.hasFocus()&&(Date.now()-lastInput)<=CFG.idleMs;}
+  function startEngine(){
+    var device=deviceId();
+    engine=createEngine({project:CFG.project,device:device,source:'web',now:now,dayOf:dayOf,isActive:isActive,uuid:uuid,heartbeatMs:15000,
+      db:{
+        upsert:function(row,keepalive){return fetch(CFG.url+'/time_sessions?on_conflict=id',{method:'POST',keepalive:!!keepalive,
+          headers:Object.assign({'Content-Type':'application/json',Prefer:'resolution=merge-duplicates,return=minimal'},headers()),body:JSON.stringify(row)}).then(chk);},
+        openOwn:function(){return get('time_sessions?device=eq.'+encodeURIComponent(device)+'&ended_at=is.null&select=id,last_seen_at');},
+        closeStale:function(id,iso){return fetch(CFG.url+'/time_sessions?id=eq.'+id,{method:'PATCH',
+          headers:Object.assign({'Content-Type':'application/json',Prefer:'return=minimal'},headers()),body:JSON.stringify({ended_at:iso})}).then(chk);}
+      }});
+    var bump=function(){lastInput=Date.now();};
+    ['mousemove','mousedown','keydown','wheel','scroll','touchstart','pointerdown'].forEach(function(ev){window.addEventListener(ev,bump,{passive:true,capture:true});});
+    // revenirea pe tab / în fereastră e ea însăși o acțiune a utilizatorului
+    var back=function(){lastInput=Date.now();engine.tick().then(paint);};
+    var away=function(){engine.leave().then(paint);};
+    document.addEventListener('visibilitychange',function(){if(document.visibilityState==='hidden')away();else back();});
+    window.addEventListener('blur',away);window.addEventListener('pagehide',away);window.addEventListener('focus',back);
+    setInterval(function(){engine.tick().then(paint);},1000);
   }
 
   /* ── cronometrul: azi, pentru acest proiect ── */
   function load(){
     var day=dayOf(now());state.day=day;
-    return get('time_sessions?project_id=eq.'+encodeURIComponent(CFG.project)+'&date=eq.'+day+'&select=id,started_at,last_seen_at,ended_at,duration_seconds')
+    return get('time_sessions?project_id=eq.'+encodeURIComponent(CFG.project)+'&source=eq.web&date=eq.'+day+'&select=id,started_at,last_seen_at,ended_at,duration_seconds')
       .then(function(rows){state.sessions=rows||[];state.loaded=true;state.error=null;paint();})
       .catch(function(e){state.error=e;state.loaded=true;paint();});
   }
-  function total(){
-    var t=now(),sum=0,live=false;
-    state.sessions.forEach(function(s){
-      var d=s.duration_seconds||0;
-      if(!s.ended_at){var age=(t-Date.parse(s.last_seen_at))/1000;if(age>-5&&age<=CFG.liveSeconds){d+=Math.max(0,age);live=true;}}
-      sum+=d;
-    });
-    return{seconds:sum,live:live};
-  }
+  function total(){return combineSeconds(state.sessions,engine,now(),CFG.liveSeconds,state.day||dayOf(now()));}
   function paint(){
     if(!el.root)return;
     if(state.error){el.root.dataset.state='off';el.time.textContent='--:--:--';
-      el.btn.title=(state.error.status===404||/42P01|time_sessions/.test(state.error.body||''))?'Time tracking neactivat: rulează migration_time_tracking.sql în Supabase.':'Nu pot citi timpul acum — se reîncearcă automat.';return;}
+      el.btn.title=(state.error.status===404||/42P01|PGRST205|time_sessions/.test(state.error.body||''))?'Time tracking neactivat: rulează migration_time_tracking.sql în Supabase.':'Nu pot citi timpul acum — se reîncearcă automat.';return;}
     if(dayOf(now())!==state.day){load();return;}   // s-a schimbat ziua: „Timp azi" repornește de la 00:00:00, istoricul rămâne în bază
-    var r=total();
-    el.root.dataset.state=r.live?'live':'idle';
+    var r=total(),me=engine&&engine.current();
+    var st=CFG.mode==='tab'?(me?'live':'paused'):(r.live?'live':'idle');
+    el.root.dataset.state=st;
     el.time.textContent=clock(r.seconds);
-    el.btn.title=r.live?'Se lucrează acum la acest proiect — click pentru statistici':'Timp lucrat azi la acest proiect — click pentru statistici';
-    if(state.panel&&r.live)paintPanelToday();
+    el.st.textContent=st==='paused'?'· pauză':'';
+    el.btn.title=st==='live'?'Se lucrează acum în această aplicație — click pentru statistici':st==='paused'?'Cronometru în pauză (tab/fereastră inactivă sau fără activitate) — click pentru statistici':'Timp lucrat azi în această aplicație — click pentru statistici';
+    if(state.panel&&st==='live')paintPanelToday();
   }
 
   /* ── statistici (panou) ── */
   function colorOf(id,i){var p=(state.projects||{})[id];return(p&&p.color)||PALETTE[i%PALETTE.length];}
   function nameOf(id){var p=(state.projects||{})[id];return(p&&p.name)||id;}
+  function srcOk(s){return state.noSrc||state.src==='all'||(state.src==='web'?s==='web':DEV_SOURCES.indexOf(s)>=0);}
   function loadStats(){
-    return Promise.all([
-      get('time_daily?select=project_id,date,seconds&order=date.desc&limit=5000'),
-      get('time_projects?select=id,name,color,sort').catch(function(){return[];})
-    ]).then(function(res){
-      state.daily=res[0]||[];state.projects={};(res[1]||[]).forEach(function(p){state.projects[p.id]=p;});
-      state.statsError=null;paintPanel();
-    }).catch(function(e){state.statsError=e;paintPanel();});
+    var q='order=date.desc&limit=5000';
+    return get('time_daily_src?select=project_id,date,source,seconds&'+q).catch(function(e){
+      if(e.status===404||/PGRST205|time_daily_src/.test(e.body||'')){state.noSrc=true;return get('time_daily?select=project_id,date,seconds&'+q);}throw e;
+    }).then(function(rows){
+      state.daily=rows||[];
+      return get('time_projects?select=id,name,color,sort').catch(function(){return[];});
+    }).then(function(ps){state.projects={};(ps||[]).forEach(function(p){state.projects[p.id]=p;});state.statsError=null;paintPanel();})
+      .catch(function(e){state.statsError=e;paintPanel();});
   }
   function rangeTotals(range){
-    var today=dayOf(now()),out={};
-    var from;
+    var today=dayOf(now()),out={},from;
     if(range==='today')from=today;
     else if(range==='7d')from=dayOf(now()-6*86400000);
     else if(range==='month')from=today.slice(0,8)+'01';
     else from='0000-00-00';
-    (state.daily||[]).forEach(function(r){if(r.date>=from&&r.date<=today)out[r.project_id]=(out[r.project_id]||0)+(r.seconds||0);});
+    (state.daily||[]).forEach(function(r){if(srcOk(r.source)&&r.date>=from&&r.date<=today)out[r.project_id]=(out[r.project_id]||0)+(r.seconds||0);});
     // pentru ACEST proiect, „azi" include și minutele curente (sesiunea deschisă nu e încă în agregatul pe zi)
-    var daily=0;(state.daily||[]).forEach(function(r){if(r.project_id===CFG.project&&r.date===today)daily+=r.seconds||0;});
-    var extra=Math.max(0,total().seconds-daily);
-    if(extra>0)out[CFG.project]=(out[CFG.project]||0)+extra;
+    if(state.src!=='dev'){
+      var daily=0;(state.daily||[]).forEach(function(r){if(srcOk(r.source)&&r.project_id===CFG.project&&r.date===today&&(state.noSrc||r.source==='web'))daily+=r.seconds||0;});
+      var extra=Math.max(0,total().seconds-daily);
+      if(extra>0)out[CFG.project]=(out[CFG.project]||0)+extra;
+    }
     return out;
   }
   function icon(){ // cronometru (stil linie, ca iconițele din meniu) — moștenește culoarea textului
@@ -101,16 +207,20 @@
     return s;
   }
   function h(tag,cls,text){var e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e;}
-  function paintPanelToday(){if(state.panel&&state.range==='today'&&state.daily)paintPanel();}
+  function paintPanelToday(){ // cel mult o dată la 10s: panoul nu trebuie să tremure sub mouse
+    var t=Date.now();if(state.panel&&state.range==='today'&&state.daily&&t-(state.panelAt||0)>10000){state.panelAt=t;paintPanel();}
+  }
+  function segmented(cls,items,cur,onPick){
+    var box=h('div',cls);
+    items.forEach(function(t){var b=h('button','tt-tab'+(cur===t[0]?' on':''),t[1]);b.type='button';b.onclick=function(){onPick(t[0]);};box.appendChild(b);});
+    return box;
+  }
   function paintPanel(){
     var body=el.body;body.textContent='';
     if(state.statsError){body.appendChild(h('div','tt-empty','Statisticile nu se pot citi încă. Rulează migration_time_tracking.sql în Supabase.'));return;}
     if(!state.daily){body.appendChild(h('div','tt-empty','Se încarcă…'));return;}
-    var tabs=h('div','tt-tabs');
-    [['today','Azi'],['7d','7 zile'],['month','Luna aceasta'],['all','Total']].forEach(function(t){
-      var b=h('button','tt-tab'+(state.range===t[0]?' on':''),t[1]);b.type='button';b.onclick=function(){state.range=t[0];paintPanel();};tabs.appendChild(b);
-    });
-    body.appendChild(tabs);
+    body.appendChild(segmented('tt-tabs',[['today','Azi'],['7d','7 zile'],['month','Luna aceasta'],['all','Total']],state.range,function(v){state.range=v;paintPanel();}));
+    if(!state.noSrc)body.appendChild(segmented('tt-tabs tt-src',[['web','În aplicație'],['dev','Dezvoltare AI'],['all','Toate']],state.src,function(v){state.src=v;paintPanel();}));
     var totals=rangeTotals(state.range),ids=Object.keys(totals).sort(function(a,b){return totals[b]-totals[a];}),sum=0,max=0;
     ids.forEach(function(id){sum+=totals[id];max=Math.max(max,totals[id]);});
     var list=h('div','tt-list');
@@ -124,10 +234,11 @@
     });
     if(ids.length>1){var t=h('div','tt-row tt-total');var tp=h('div','tt-row-top');tp.appendChild(h('span','tt-nm','TOTAL'));tp.appendChild(h('span','tt-val',hm(sum)));t.appendChild(tp);list.appendChild(t);}
     body.appendChild(list);
-    // istoric pe zile pentru ACEST proiect (ultimele 14 zile) — graficul de distribuție în timp
+    // istoric pe zile pentru ACEST proiect (ultimele 14 zile) — distribuția în timp
     var days=[],today=dayOf(now()),map={};
-    (state.daily||[]).forEach(function(r){if(r.project_id===CFG.project)map[r.date]=(map[r.date]||0)+(r.seconds||0);});
-    var liveTot=total().seconds;if(liveTot>(map[today]||0))map[today]=liveTot;
+    (state.daily||[]).forEach(function(r){if(r.project_id===CFG.project&&srcOk(r.source))map[r.date]=(map[r.date]||0)+(r.seconds||0);});
+    if(state.src!=='dev'){var liveTot=total().seconds,dw=0;(state.daily||[]).forEach(function(r){if(r.project_id===CFG.project&&r.date===today&&(state.noSrc||r.source==='web'))dw+=r.seconds||0;});
+      if(liveTot>dw)map[today]=(map[today]||0)+(liveTot-dw);}
     for(var i=13;i>=0;i--){var d=dayOf(now()-i*86400000);days.push({d:d,s:map[d]||0});}
     var dmax=Math.max.apply(null,days.map(function(x){return x.s;}).concat([1]));
     var sec=h('div','tt-sec');sec.appendChild(h('div','tt-sec-t','Pe zile — '+nameOf(CFG.project)));
@@ -153,6 +264,7 @@
     '.tt-btn{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;text-align:left;background:var(--surf,#fff);border:1px solid var(--b2,#e4e7ec);border-radius:var(--r2,14px);padding:8px 14px 9px;cursor:pointer;box-shadow:var(--sh,0 1px 2px rgba(16,24,40,.06));font-family:inherit;transition:border-color .15s,box-shadow .15s}',
     '.tt-btn:hover{border-color:var(--acc,#7657F6)}',
     '.tt-lbl{display:flex;align-items:center;gap:7px;font-size:13px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--t3,#667085)}',
+    '.tt-st{font-weight:600;letter-spacing:0;text-transform:none;color:#B54708}',
     '.tt-time{font-family:var(--mono,ui-monospace,SFMono-Regular,Menlo,monospace);font-size:24px;font-weight:700;letter-spacing:.01em;color:var(--t1,#101828);font-variant-numeric:tabular-nums;line-height:1.15}',
     '.tt-ic{width:1.15em;height:1.15em;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}',
     '.tt-ttl{display:flex;align-items:center;gap:8px}',
@@ -160,6 +272,8 @@
     '.tt-widget[data-state=live] .tt-btn{border-color:var(--acc,#7657F6);box-shadow:0 0 0 3px var(--acc-light,rgba(118,87,246,.12))}',
     '.tt-widget[data-state=live] .tt-time{color:var(--acc,#7657F6)}',
     '.tt-widget[data-state=live] .tt-dot{background:#12B76A;animation:ttPulse 1.6s ease-in-out infinite}',
+    '.tt-widget[data-state=paused] .tt-dot{background:#F79009}',
+    '.tt-widget[data-state=paused] .tt-time{color:var(--t3,#667085)}',
     '.tt-widget[data-state=off] .tt-time{color:var(--t3,#98a2b3)}',
     '@keyframes ttPulse{0%,100%{box-shadow:0 0 0 0 rgba(18,183,106,.5)}50%{box-shadow:0 0 0 5px rgba(18,183,106,0)}}',
     '.tt-panel{position:absolute;left:0;bottom:calc(100% + 8px);width:min(380px,92vw);max-height:72vh;overflow:auto;background:var(--surf,#fff);border:1px solid var(--b2,#e4e7ec);border-radius:var(--r2,14px);box-shadow:0 18px 50px rgba(16,24,40,.18);padding:14px 16px 16px;z-index:160;font-size:15px;color:var(--t1,#101828)}',
@@ -167,9 +281,10 @@
     '.tt-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}',
     '.tt-head b{font-size:16px;font-weight:800}',
     '.tt-x{border:0;background:none;font-size:20px;line-height:1;cursor:pointer;color:var(--t3,#667085);padding:2px 6px}',
-    '.tt-tabs{display:flex;gap:4px;background:var(--surf2,#f2f4f7);border-radius:10px;padding:3px;margin-bottom:12px}',
+    '.tt-tabs{display:flex;gap:4px;background:var(--surf2,#f2f4f7);border-radius:10px;padding:3px;margin-bottom:10px}',
     '.tt-tab{flex:1;border:0;background:none;border-radius:8px;padding:6px 4px;font:inherit;font-size:13px;font-weight:700;color:var(--t2,#475467);cursor:pointer}',
     '.tt-tab.on{background:var(--surf,#fff);color:var(--acc,#7657F6);box-shadow:0 1px 2px rgba(16,24,40,.1)}',
+    '.tt-src{margin-bottom:12px}.tt-src .tt-tab{font-size:12px;font-weight:600}',
     '.tt-row{margin-bottom:11px}.tt-row-top{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:5px}',
     '.tt-nm{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px}.tt-row.me .tt-nm{color:var(--acc,#7657F6)}',
     '.tt-pdot{width:9px;height:9px;border-radius:3px;flex:none}',
@@ -189,7 +304,7 @@
     var st=document.createElement('style');st.textContent=CSS;document.head.appendChild(st);
     var root=h('div','tt-widget');root.dataset.state='idle';
     var btn=h('button','tt-btn');btn.type='button';
-    var lbl=h('span','tt-lbl');lbl.appendChild(h('span','tt-dot'));lbl.appendChild(icon());lbl.appendChild(document.createTextNode(CFG.label));
+    var lbl=h('span','tt-lbl');lbl.appendChild(h('span','tt-dot'));lbl.appendChild(icon());lbl.appendChild(document.createTextNode(CFG.label));var stl=h('span','tt-st');lbl.appendChild(stl);
     var time=h('span','tt-time','00:00:00');btn.appendChild(lbl);btn.appendChild(time);
     var panel=h('div','tt-panel');panel.hidden=true;
     var head=h('div','tt-head');var ttl=h('b','tt-ttl');ttl.appendChild(icon());ttl.appendChild(document.createTextNode('Time tracking'));head.appendChild(ttl);var x=h('button','tt-x','×');x.type='button';x.setAttribute('aria-label','Închide');x.onclick=function(){openStats(false);};head.appendChild(x);
@@ -201,14 +316,16 @@
     document.addEventListener('keydown',function(e){if(e.key==='Escape'&&state.panel)openStats(false);});
     var host=CFG.mount?document.querySelector(CFG.mount):null;
     if(host){root.classList.add('tt-inline');host.appendChild(root);}else document.body.appendChild(root);
-    el={root:root,btn:btn,time:time,panel:panel,body:body};
+    el={root:root,btn:btn,time:time,st:stl,panel:panel,body:body};
   }
   function start(){
-    build();load();
-    setInterval(function(){if(!document.hidden)paint();},1000);
-    setInterval(function(){if(!document.hidden)load();},CFG.refreshMs);
-    document.addEventListener('visibilitychange',function(){if(!document.hidden)load();});
-    window.TimeTracking={project:CFG.project,refresh:load,openStats:openStats,seconds:function(){return total().seconds;}};
+    build();
+    if(CFG.mode==='tab')startEngine();
+    load();
+    setInterval(function(){paint();},1000);
+    setInterval(function(){if(document.visibilityState==='visible')load();},CFG.refreshMs);
+    document.addEventListener('visibilitychange',function(){if(document.visibilityState==='visible')load();});
+    window.TimeTracking={project:CFG.project,mode:CFG.mode,refresh:load,openStats:openStats,seconds:function(){return total().seconds;},engine:function(){return engine;}};
   }
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start);else start();
 })();

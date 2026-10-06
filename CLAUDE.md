@@ -74,7 +74,7 @@ All AI requests go through the Vercel serverless endpoint `/api/openai`; the API
 
 ## Time tracking (partajat între proiecte)
 
-Cronometrul „⏱ Timp azi" din sidebar (deasupra „Update #N") și statisticile din panoul lui vin din `time-tracking.js` (widget partajat, conectat în `index.html` cu `data-project="gestiune-stoc"`), care citește `time_sessions`/`time_daily`/`time_projects` din Supabase (`migration_time_tracking.sql`). Sesiunile le scrie trackerul local de pe Mac, `scripts/time-tracker.js` (detectează proiectul activ din activitatea sesiunilor Claude Code/Codex; teste: `node scripts/time-tracker.test.js`). Un alt proiect se conectează cu un `<script ... data-project="<id>">` și o intrare în lista de proiecte a trackerului — vezi `docs/time-tracking.md`.
+Cronometrul „Timp azi" din sidebar (deasupra „Update #N") vine din `time-tracking.js` (widget partajat, conectat în `index.html` cu `data-project="gestiune-stoc"`). El **măsoară singur** timpul de lucru în aplicație — doar cât tabul e vizibil + în focus + input recent; se oprește imediat la plecarea de pe tab — și îl salvează în Supabase (`time_sessions`, `source='web'`; `migration_time_tracking.sql`). Trackerul local de pe Mac, `scripts/time-tracker.js`, scrie separat timpul de dezvoltare cu AI (`source='claude-code'/'codex'`); statisticile (click pe cronometru) le arată distinct. Teste: `node scripts/time-tracking.test.js` și `node scripts/time-tracker.test.js`. Un alt proiect se conectează cu un `<script ... data-project="<id>">` — vezi `docs/time-tracking.md`.
 
 ## Conventions
 

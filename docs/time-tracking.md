@@ -1,10 +1,31 @@
 # Time tracking per proiect
 
-Un sistem partajat între toate aplicațiile tale: **trackerul de pe Mac** detectează la ce proiect lucrezi efectiv,
-**Supabase** păstrează sesiunile, iar **fiecare aplicație** își arată propriul „Timp azi" și are acces la statistici.
+Două tipuri de timp, **separate** în statistici:
+
+| Sursă | Ce măsoară | Cine îl scrie |
+|---|---|---|
+| **În aplicație** (`source='web'`) — cronometrul „Timp azi" | Cât lucrezi TU efectiv în aplicația respectivă: tabul e cel selectat, fereastra are focus și ai input real. **Se oprește imediat când pleci de pe tab** (taburile fixate rămân deschise în fundal fără să acumuleze nimic) și continuă când revii. | `time-tracking.js`, direct din pagină |
+| **Dezvoltare AI** (`source='claude-code'/'codex'`) | Cât lucrezi cu AI la codul proiectului (activitatea sesiunilor Claude Code / Codex). | trackerul de pe Mac, `scripts/time-tracker.js` |
+
+Totul se salvează în **Supabase** (proiectul `cbpavtvrfpkbaeueexlw`, tabelul `time_sessions`), nu doar în browser.
+
+## Cum măsoară „Timp azi" (în aplicație)
+
+Activ = `document.visibilityState==='visible'` ȘI `document.hasFocus()` ȘI input (mouse/tastatură/scroll) în ultimele 180 s.
+- Pleci pe alt tab / altă aplicație / minimizezi → `visibilitychange` / `blur` / `pagehide` închid sesiunea **imediat**, cu salvare `keepalive`.
+- Integritatea nu depinde de `beforeunload`: progresul se salvează și la fiecare 15 s (heartbeat). Un tab crăpat lasă cel mult ~15 s nesalvate; sesiunea rămasă deschisă se închide la următoarea deschidere.
+- Ceas întârziat (laptop închis / tab suspendat) → intervalul ratat nu se numără. Miezul nopții (ora României) → sesiunea se împarte, „Timp azi" repornește de la 00:00:00, istoricul rămâne.
+- Un „dispozitiv" = un browser (id în `localStorage`); indexul unic din bază interzice două sesiuni deschise pe același dispozitiv.
+- Parametri (`data-*` pe `<script>`): `idle` (secunde fără input, implicit 180), `mode` (`tab` = măsoară și salvează [implicit], `view` = doar afișează).
+
+## Arhitectură
+
+Un sistem partajat între toate aplicațiile tale: fiecare aplicație își măsoară și arată propriul „Timp azi"; trackerul de pe Mac
+adaugă separat timpul de dezvoltare cu AI; **Supabase** păstrează sesiunile și din ele se calculează statisticile.
 
 ```
-Tracker Mac (scripts/time-tracker.js)  →  Supabase (time_sessions)  →  widget „Timp azi" (time-tracking.js) în fiecare aplicație
+Tab-ul aplicației (time-tracking.js) ┐
+Tracker Mac (scripts/time-tracker.js) ┴→  Supabase (time_sessions)  →  widget „Timp azi" + statistici în fiecare aplicație
                                                        ↓
                                           time_daily (view) → statistici: azi / 7 zile / luna / total / comparație
 ```
@@ -24,7 +45,7 @@ Tracker Mac (scripts/time-tracker.js)  →  Supabase (time_sessions)  →  widge
    (suprascrie orice din `DEFAULTS` — ferestre de timp, aplicații de lucru, lista de proiecte).
 3. **Aplicația** — „Timp azi" apare singur în Stoc Manager (sidebar, deasupra „Update #N").
 
-## Cum decide trackerul proiectul activ
+## Trackerul de pe Mac („Dezvoltare AI") — cum decide proiectul activ
 
 Fără permisiuni macOS speciale și fără să citească conținutul conversațiilor — doar *când* s-au scris sesiunile Claude Code
 (`~/.claude/projects/<cwd>/*.jsonl`, inclusiv desktop și extensia din IDE) și Codex (`~/.codex/sessions/.../rollout-*.jsonl`).

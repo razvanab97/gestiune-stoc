@@ -42,11 +42,19 @@ create or replace view time_daily as
   from time_sessions
   group by project_id, date;
 
+-- La fel, dar cu sursa: 'web' = timp lucrat ÎN aplicație (tab activ, măsurat de time-tracking.js);
+-- 'claude-code' / 'codex' = timp de DEZVOLTARE cu AI (măsurat de trackerul de pe Mac). Statisticile le arată separat.
+create or replace view time_daily_src as
+  select project_id, date, coalesce(source, '') as source, sum(duration_seconds)::integer as seconds, count(*)::integer as sessions
+  from time_sessions
+  group by project_id, date, coalesce(source, '');
+
 -- Aplicație single-user cu cheie anonimă (ca restul bazei): fără RLS, permisiuni explicite.
 alter table time_projects disable row level security;
 alter table time_sessions disable row level security;
 grant select, insert, update, delete on time_projects, time_sessions to anon, authenticated;
 grant select on time_daily to anon, authenticated;
+grant select on time_daily_src to anon, authenticated;
 
 insert into time_projects (id, name, color, sort) values
   ('gestiune-stoc', 'Stoc Manager', '#7657F6', 1),
@@ -56,4 +64,4 @@ insert into time_projects (id, name, color, sort) values
   ('agentie-imobiliara-ai', 'Agenție imobiliară AI', '#EE46BC', 5)
 on conflict (id) do nothing;
 
-select 'Time tracking pregătit: time_projects, time_sessions, time_daily.' as status;
+select 'Time tracking pregătit: time_projects, time_sessions, time_daily, time_daily_src.' as status;
