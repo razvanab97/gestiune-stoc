@@ -568,6 +568,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:436,date:'06.10.2026',text:'„⏸ În așteptare" — navigare între comenzi, raportat direct („nu pot trece la următoarea, apare doar 1 comandă"). Cardul din „În așteptare" avea doar „← Înapoi la listă", fără „Anterioară / Următoare" ca în „Împachetare" — cu cele 5 comenzi trecute în așteptare la resetul de 22:00 se putea lucra doar una câte una, întorcându-te de fiecare dată la listă. Acum cardul are „◀ Anterioară", „☰ Lista" și „Următoare ▶" (dezactivate la capete), contorul „Comanda 2 din 5 în așteptare" și tastele ←/→ ca la Împachetare. Butonul „Înapoi" nu mai e întins pe tot cardul. După „Finalizează coletul" din Așteptare, comanda rămâne pe ecran cu „✓ Comandă finalizată" în fereastra de 10s de anulare (în loc să sară brusc în listă), iar Următoare/Anterioară merg normal de acolo. Verificat de 2 ori: sintaxă + parcurs complet 1→5 și înapoi, tastele ←/→, capetele listei și starea de după finalizare (simulată în memorie, fără scrieri în bază).'},
   {n:435,date:'06.10.2026',text:'↺ Coadă nouă + resetul zilnic de la 22:00 — readuse, cerut direct („aveam o regulă: în fiecare zi la 22:00 toată pagina să se reseteze, ce s-a întâmplat?"). Au fost eliminate din greșeală-prin-consecință odată cu rescrierea din #432, care a scos tot sistemul „Coadă nouă", inclusiv resetul de 22:00 — de aceea ecranul arăta încă comenzile de ieri (39 / 44), cumulate de la 02.10. Acum, la 22:00 (ora României) pagina pornește curat: contorul revine la 0 / 0, comenzile împachetate dispar din listă și din „Finalizate azi" (rămân găsibile în Căutare), iar comenzile rămase NEîmpachetate trec în „În așteptare" — cu mențiunea „📅 Din ziua anterioară" — și rămân acolo, nelimitat, până le marchezi împachetate chiar de acolo („✓ Finalizează coletul"). Pragul se calculează DIN CEAS (ultima oră 22:00 la București, corect și la trecerea orei de vară/iarnă), nu depinde de o pagină deschisă la 22:00 — motivul pentru care intervalul vechi se putea „pierde"; o pagină deschisă peste noapte se resetează singură la 22:00. Butonul manual „↺ Coadă nouă" (în antet, cu confirmare) face același reset oricând și e partajat între dispozitive. Bara „Curieri azi" se golește și ea la 22:00. Garanția din #432 rămâne: nicio comandă nu reapare singură în „Împachetare" — o comandă veche revine doar printr-o retrimitere explicită („📦 Trimite la împachetare"). Nimic nu se șterge sau modifică în bază. Verificat de 2 ori: sintaxă + 18 teste pe funcțiile reale din cod (prag la 22:00 inclusiv ziua trecerii la ora de iarnă; clasificare pe datele reale de ieri: 39 / 44 înainte de reset → 0 / 0 și 5 comenzi în „În așteptare" după; marcare împachetat din Așteptare; comandă nouă; retrimitere; „Coadă nouă" manual) și redare în aplicația reală, în citire.'},
   {n:434,date:'05.10.2026',text:'„📥 Marfă furnizor" — comenzile fără număr de comandă nu se mai sparg în câte un card pe produs, raportat direct (captură cu Maxy: fiecare produs apărea sub propriul „Maxy"). Cauza: liniile se grupau după furnizor + numărul comenzii, iar când numărul lipsea (Maxy nu are unul; câmpul e „opțional" la import) fiecare linie devenea un grup separat — 23 de produse din UN singur import apăreau ca 23 de comenzi, fiecare cu propriul „Tot restul a ajuns". Acum liniile fără număr, scrise de același import (același moment exact de salvare), rămân împreună într-un singur card, cu data și numărul de produse în antet. Comenzile care au număr (e-jumbo, Jumbo, maxy.eu) sunt neschimbate. Verificat pe datele reale: 77 de linii active → 6 carduri.'},
   {n:433,date:'02.10.2026',text:'Căutare — completare directă la #432 (RESET TOTAL), cerută imediat: „cel împachetat, totuși să rămână salvate ca informații... să găsim pe baza AWB-ului, a numărului de comandă, a numelui clientului... să vedem că de fapt a fost împachetată, ca să știm de unde și încotro mergem". De la #432, căutarea de sus caută STRICT în coada activă de azi (ce a fost trimis explicit spre împachetare) — corect pentru lucrul curent, dar nu mai acoperă istoricul complet. Acum, orice căutare de minim 3 caractere pornește și o interogare LIVE, separată, direct către toate comenzile din bază (fără nicio legătură cu coada activă) — apare o secțiune nouă „📜 Din istoric", cu statusul real al fiecărei comenzi găsite (✓ împachetată, cu data; 🚫 anulată; sau neîmpachetată, în afara cozii active). Orice comandă, oricât de veche, rămâne găsibilă permanent după client/AWB/număr comandă/produs. Verificat cu 6 teste izolate (comandă istorică găsită corect cu statusul ei real, fără dublare cu rezultatul din coada activă, răspuns întârziat dintr-o căutare veche ignorat corect), rulate de 2 ori, plus verificat live, direct pe date reale din bază.'},
@@ -948,7 +949,21 @@ function renderPackTab(host){
   </div>`;
 }
 
+// Vecinul (anterior/următor) al comenzii curente în „În așteptare". Comanda curentă poate să NU mai fie în
+// listă (tocmai finalizată, în fereastra de 10s de anulare) — atunci căutăm după poziția ei în ORDERS.
+function waitingNeighbor(dir){
+  const q=waitingQueue();
+  const idx=q.findIndex(o=>o.key===curKey);
+  if(idx>=0)return q[idx+dir]||null;
+  const pos=ORDERS.findIndex(o=>o.key===curKey);
+  return dir>0?(q.find(o=>ORDERS.indexOf(o)>pos)||null):([...q].reverse().find(o=>ORDERS.indexOf(o)<pos)||null);
+}
 function navStep(dir){
+  if(activeTab==='waiting'){
+    const n=waitingNeighbor(dir);
+    if(n){curKey=n.key;renderMain(true);}
+    return;
+  }
   const q=navQueue();
   const idx=q.findIndex(o=>o.key===curKey);
   const ni=idx+dir;
@@ -1510,11 +1525,13 @@ async function resolveIssue(lk){
 function renderWaitingTab(host){
   const q=waitingQueue();
   if(!q.length){host.innerHTML=`<div class="empty"><div class="big">✅</div><div>Nicio comandă în așteptare.</div></div>`;return;}
-  if(!currentOrder()||!q.some(o=>o.key===curKey)){
+  const justDone=!!(pendingUndo&&pendingUndo.orderKey===curKey&&currentOrder());
+  if(!currentOrder()||(!q.some(o=>o.key===curKey)&&!justDone)){
     host.innerHTML=`<div class="search-page-list">${q.map(o=>waitingListItemHtml(o)).join('')}</div>`;
     return;
   }
   const ord=currentOrder();
+  const wIdx=q.findIndex(o=>o.key===ord.key);
   const plLabel=ord.platforma==='emag'?'eMAG':ord.platforma==='trendyol'?'Trendyol':ord.platforma==='vinted'?'Vinted':'Extra';
   const linesHtml=ord.lines.map(l=>{
     const state=l.impachetat?'done':(l.staff_blocked?'blocked':'');
@@ -1531,8 +1548,13 @@ function renderWaitingTab(host){
     ${ord.awb?awbBoxHtml(ord.awb,ord.awbCourier,ord.awbPreviewUrl,ord.comandaId,ord.platforma):''}
     ${ord.carried&&ord.hasUnresolvedIssue?'':deadlineBadgeHtml(ord.termenExpediere)}
     <div class="lines">${linesHtml}</div>
-    ${ord.carried&&!ord.hasUnresolvedIssue?`<button type="button" class="big-pack-btn" ${lineBusy['order_'+ord.key]?'disabled':''} onclick="finalizeOrder('${ord.key}')">${ord.awb?'✓ Finalizează coletul':'✓ Marchează împachetat'}</button>`:''}
-    <button type="button" class="nav-btn" onclick="curKey=null;renderMain()">← Înapoi la listă</button>
+    ${ord.finalized?`<button type="button" class="big-pack-btn done" disabled>✓ Comandă finalizată</button>`:(ord.carried&&!ord.hasUnresolvedIssue?`<button type="button" class="big-pack-btn" ${lineBusy['order_'+ord.key]?'disabled':''} onclick="finalizeOrder('${ord.key}')">${ord.awb?'✓ Finalizează coletul':'✓ Marchează împachetat'}</button>`:'')}
+    <div class="nav-row">
+      <button type="button" class="nav-btn" onclick="navStep(-1)" ${waitingNeighbor(-1)?'':'disabled'}>◀ Anterioară</button>
+      <button type="button" class="nav-btn" onclick="curKey=null;renderMain()">☰ Lista</button>
+      <button type="button" class="nav-btn" onclick="navStep(1)" ${waitingNeighbor(1)?'':'disabled'}>Următoare ▶</button>
+    </div>
+    ${wIdx>=0?`<div style="text-align:center;color:var(--t3);font-size:16px">Comanda ${wIdx+1} din ${q.length} în așteptare</div>`:''}
   </div>`;
 }
 // RESET TOTAL (#519) — „În așteptare” înseamnă acum STRICT o problemă raportată de Staff (ramura
@@ -2308,7 +2330,7 @@ document.addEventListener('keydown',e=>{
   if(e.key==='ArrowLeft'||e.key==='ArrowRight'){
     if(typing)return;
     const dir=e.key==='ArrowLeft'?-1:1;
-    if(activeTab==='pack')navStep(dir);
+    if(activeTab==='pack'||activeTab==='waiting')navStep(dir);
     else if(activeTab==='stock')stockStep(dir);
     return;
   }
