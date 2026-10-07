@@ -4421,6 +4421,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+   {n:533,text:'Comenzi Platforme — comanda se poate modifica ȘI după ce stocul a fost deja scăzut, cerut direct („să se poată modifica și după ce a fost deja scăzut stocul"). Până acum, pe o linie al cărei stoc fusese scăzut, cantitatea nu se putea schimba (apărea „stocul a fost deja scăzut... nu se mai poate edita de aici"), iar schimbarea produsului modifica doar ecranul, nu și comanda din bază. Acum: (1) CANTITATE — modifici cantitatea (− / + sau direct), confirmi, iar diferența se corectează retroactiv pe tot lanțul: stocul produsului (se scad încă / se readaugă bucățile), rândul din Jurnal (ziua în care s-a scris scăderea), „Vânzări azi", jurnalul de activitate („Corecție comandă …"), profitul și marja comenzii; (2) PRODUS — alegi alt produs din listă: după confirmare, cantitatea se readaugă la produsul vechi și se scade din cel nou (stoc + Jurnal), iar comanda din bază (deci și Staff) trece pe produsul nou; (3) PREȚ — se salvează fără nicio atingere a stocului. Dacă salvarea comenzii eșuează după corecția de stoc, corecția se anulează automat, ca stocul și comanda să nu rămână necorelate; dacă refuzi confirmarea, nu se scrie nimic. Pe linii al căror stoc e deja scăzut, în loc de „Stoc actual X → după vânzare Y" (care ar fi scăzut cantitatea a doua oară pe ecran) apare „Stoc actual X · deja scăzut pentru această comandă". Bug vecin reparat: schimbarea produsului pe o linie deja creată (dar încă neaplicată) se făcea doar în ecran — comanda din bază și Staff rămâneau pe produsul vechi, iar „Aplică import" scădea stocul din produsul nou; acum se scrie și în bază. Verificat de 2 ori: sintaxă + 35 de teste pe funcțiile reale din cod (creștere/scădere, fără rând de Jurnal, confirmare refuzată, eșec la salvare cu anulare, doar preț, schimbare produs cu/ fără stoc scăzut) + test în pagina reală (click pe „+", schimbare produs), cu toate scrierile interceptate — confirmat că în baza reală nu s-a atins nimic.',date:'2026-10-07'},
    {n:532,text:'Time tracking — conectat și ContaFlow. Scriptul partajat (time-tracking.js) primește opțiunea „mount-only”: cronometrul se afișează doar într-un container din aplicația gazdă (ex. subsolul sidebar-ului) și se reatașează singur dacă aplicația îl recreează sau apare mai târziu (ex. după login), în loc să plutească în colț; fără opțiunea nouă, Stoc Manager se comportă exact ca înainte. ContaFlow măsoară separat (id-ul „contaflow”) și salvează în același Supabase. Verificat: 26 de teste pe nucleul de măsurare + test în ContaFlow (montare în sidebar, temele dark / light / glass, pauză la plecarea de pe tab).',date:'2026-10-06'},
    {n:531,text:'Time tracking — cronometrul se oprește când pleci de pe tabul aplicației, cerut direct („când nu mai sunt pe tabul aplicației timerul să se oprească, taburile rămân deschise în Safari fixate"). Înainte, „Timp azi" venea doar din trackerul de pe Mac (activitatea AI pe proiect), deci nu ținea cont de ce tab ai în față. Acum aplicația își măsoară SINGURĂ timpul de lucru: contează doar cât tabul e cel selectat, fereastra are focus și ai input real (mouse/tastatură/scroll în ultimele 3 minute). Pleci pe alt tab / altă aplicație / minimizezi → cronometrul se oprește IMEDIAT (Page Visibility + blur + pagehide, cu salvare garantată), arată „pauză", iar când revii continuă de unde a rămas; un tab fixat în fundal nu mai acumulează nimic. Se salvează în Supabase (time_sessions, source=\'web\'): progresul la fiecare 15 s + la fiecare ieșire, deci nu depinde de beforeunload; refresh / închiderea browserului nu pierd nimic. Un singur proiect activ (index unic în bază), ceas întârziat sau laptop suspendat nu se numără, miezul nopții împarte sesiunea. Timpul de dezvoltare cu AI (trackerul de pe Mac) rămâne separat și apare în panoul de statistici sub „Dezvoltare AI" — comutator „În aplicație / Dezvoltare AI / Toate" — ca să nu se amestece cu timpul de lucru în aplicație. NECESITĂ re-rularea migration_time_tracking.sql în Supabase (adaugă view-ul time_daily_src pentru defalcarea pe sursă; până atunci statisticile arată totalul unit, fără comutator). Verificat de 2 ori: sintaxă + 26 de teste pe nucleul de măsurare din pagină (plec/revin, două aplicații fără suprapunere, inactivitate, ceas întârziat, miezul nopții, rețea căzută, sesiune rămasă deschisă) + 33 pe tracker, plus test în pagina reală (intrare / plecare / revenire / refresh / panou) cu o greșeală reală prinsă și reparată pe drum.',date:'2026-10-06'},
    {n:530,text:'Time tracking automat pe proiect — cerut direct: un cronometru discret „⏱ Timp azi" în sidebar, jos, imediat deasupra „Update #N", cu timpul lucrat ASTĂZI exclusiv la acest proiect (Stoc Manager), salvat în Supabase și păstrat pe zile. Arhitectura e partajată, ca să se conecteze ușor și celelalte aplicații: (1) un tracker local pe Mac (scripts/time-tracker.js) detectează la ce proiect lucrezi EFECTIV — din activitatea sesiunilor Claude Code și Codex, plus input real (tastatură/mouse) într-o aplicație de lucru; fără permisiuni macOS speciale; exact UN proiect activ, schimbarea se face automat, pauză la inactivitate / sleep, sesiunea se împarte la miezul nopții; (2) Supabase păstrează sesiunile (time_sessions: pornire, ultimul heartbeat, durată activă, zi) cu un index unic care interzice două sesiuni deschise pe același dispozitiv; (3) fiecare aplicație își arată propriul „Timp azi" printr-un singur script partajat (time-tracking.js, un rând de HTML + id-ul proiectului), iar un click pe cronometru deschide statisticile: Azi / 7 zile / Luna aceasta / Total, comparație pe proiecte cu bare, grafic pe ultimele 14 zile și istoric pe zile. La schimbarea zilei cronometrul repornește de la 00:00:00, iar istoricul zilelor precedente rămâne permanent. Cronometrul curge local din ultimul heartbeat (fără cerere la bază în fiecare secundă) și se oprește singur dacă trackerul nu mai rulează. IMPORTANT: necesită rularea migration_time_tracking.sql în Supabase și pornirea trackerului (node scripts/time-tracker.js install) — până atunci cronometrul arată „--:--:--" cu explicație, fără erori. Detalii în docs/time-tracking.md. Verificat de 2 ori: sintaxă + 33 de teste pe nucleul trackerului (scenariul de 8 pași, sleep, inactivitate, miezul nopții, rețea căzută, sesiuni paralele, potrivirea proiectelor), test end-to-end cu trackerul real prin HTTP pe un server Supabase simulat, totalurile 7 zile/lună/total verificate independent, redare în aplicație (desktop + mobil).',date:'2026-10-06'},
@@ -17811,7 +17812,12 @@ function pcomStockWarningHtml(idx){
   if(!it.produsId)return'';
   const p=P.find(x=>x.id===it.produsId);
   if(!p)return'';
-  const cur=qty(p),proj=cur-(Number(it.cantitate)||0);
+  const cur=qty(p);
+  // Linie al cărei stoc a fost DEJA scăzut — stocul actual include deja vânzarea, deci nu mai afișăm o
+  // proiecție „după vânzare" (ar scădea cantitatea a doua oară pe ecran) și nici „Amână livrarea".
+  const appliedRow=it._committedId?PCOM.find(o=>o.id===it._committedId):null;
+  if(appliedRow&&appliedRow.efecteAplicate&&!appliedRow.anulata)return`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:5px"><span style="font-size:21px;color:var(--t3);font-variant-numeric:tabular-nums">Stoc actual ${fmtQty(cur)} · deja scăzut pentru această comandă — poți modifica cantitatea sau produsul</span></div>`;
+  const proj=cur-(Number(it.cantitate)||0);
   const problem=proj<=0;
   const stockLbl=`<span style="font-size:21px;font-weight:${problem?700:400};color:var(${problem?'--rd':'--t3'});font-variant-numeric:tabular-nums">${problem?'⚠️ ':''}Stoc actual ${fmtQty(cur)} → după vânzare ${fmtQty(proj)}</span>`;
   const btn=it.amanat
@@ -17917,10 +17923,10 @@ function pcomOpenAddProductForLine(idx){
 // Staff tot arată valoarea veche"): înainte, modificarea rămânea STRICT în previzualizarea locală
 // (pcImpParsed) — chipul „AWB Nx produs" arăta valoarea nouă, dând impresia că a mers, dar baza de date
 // (și Staff, care citește de-acolo) rămâneau cu valoarea veche, nescrisă niciodată. Acum, dacă linia e
-// deja comisă ȘI stocul încă NU a fost scăzut pentru ea (efecte_aplicate=false — „Aplică import" e un
-// pas separat, ulterior), noua cantitate se scrie direct în platforma_comenzi. Dacă stocul a fost deja
-// scăzut cu vechea cantitate, editarea e blocată — un ajustaj retroactiv al stocului ar fi un calcul
-// mult mai riscant, netratat aici; omul trebuie să corecteze stocul manual în acel caz.
+// deja comisă, noua cantitate se scrie direct în platforma_comenzi. Dacă stocul a fost deja scăzut cu
+// vechea cantitate (efecte_aplicate=true), editarea NU mai e blocată (cerut direct — „să se poată
+// modifica și după ce a fost deja scăzut stocul"): după confirmare, diferența se corectează retroactiv
+// pe stoc + Jurnal + „Vânzări azi" + jurnalul de activitate (vezi pcomAdjustAppliedStock).
 // Bug real suplimentar, găsit reparând #505 (cantitatea corectată din titlul listării): pe o linie
 // DEJA comisă (confirmare instant — vezi autoCommitConfidentPcomLines), scrisă în bază la cantitatea
 // inițială (de obicei 1), orice corecție ulterioară a cantității (manual, de-aici, sau din 💡 „Titlul
@@ -17934,11 +17940,16 @@ async function pcomPersistQtyIfCommitted(idx){
   if(!it._committedId)return;
   const row=PCOM.find(o=>o.id===it._committedId);
   if(!row)return;
-  if(row.efecteAplicate){
-    toast('Stocul a fost deja scăzut pentru comanda asta — cantitatea nu se mai poate edita de aici','err');
-    it.cantitate=row.cantitate;
-    renderPcomImportPreview();
-    return;
+  const delta=Math.round(((Number(it.cantitate)||0)-(Number(row.cantitate)||0))*100)/100;
+  const revert=()=>{it.cantitate=row.cantitate;renderPcomImportPreview();};
+  const appliedProd=row.efecteAplicate&&delta?P.find(x=>x.id===row.produsId):null;
+  if(row.efecteAplicate&&delta){
+    // Stocul a fost deja scăzut cu vechea cantitate — corectăm DOAR diferența, după confirmare explicită.
+    if(!appliedProd){toast('Produsul comenzii nu mai există în inventar — nu pot corecta stocul','err');revert();return;}
+    if(!sbReady){toast('Necesită conexiune Supabase activă pentru a corecta stocul','err');revert();return;}
+    if(!confirm(`Stocul a fost deja scăzut pentru această comandă (${fmtQty(row.cantitate)} buc).\n\nCorectezi cantitatea de la ${fmtQty(row.cantitate)} la ${fmtQty(it.cantitate)}?\n\n„${appliedProd.name}": ${delta>0?'se scad încă':'se readaugă'} ${fmtQty(Math.abs(delta))} buc din stoc, iar Jurnalul și profitul se actualizează.`)){revert();return;}
+    try{await pcomAdjustAppliedStock(row,appliedProd,delta);}
+    catch(e){toast('Nu am putut corecta stocul: '+(e.message||e),'err');revert();return;}
   }
   try{
     const patch={cantitate:it.cantitate,pret_fara_tva:it.pretFaraTva,pret_total_cu_tva:it.pretTotalCuTva};
@@ -17954,7 +17965,71 @@ async function pcomPersistQtyIfCommitted(idx){
     row.cantitate=it.cantitate;row.pretFaraTva=it.pretFaraTva;row.pretTotalCuTva=it.pretTotalCuTva;
     if(patch.pret_total_cu_tva_ron!==undefined)row.pretTotalCuTvaRon=patch.pret_total_cu_tva_ron;
     if(patch.profit_estimat!==undefined){row.profitEstimat=patch.profit_estimat;row.marjaEstimata=patch.marja_estimata;}
-  }catch(e){toast('Nu am putut salva cantitatea: '+(e.message||e),'err');}
+    if(appliedProd){
+      renderTable();renderToday();renderDashboard();renderJurnal();renderPcomImportPreview();
+      toast(`Cantitate corectată: ${fmtQty(it.cantitate-delta)} → ${fmtQty(it.cantitate)} ✓ — stoc, Jurnal și profit actualizate`);
+    }
+  }catch(e){
+    toast('Nu am putut salva cantitatea: '+(e.message||e),'err');
+    // stocul fusese deja corectat mai sus — îl readucem, ca stocul și comanda să nu rămână necorelate
+    if(appliedProd){try{await pcomAdjustAppliedStock(row,appliedProd,-delta);}catch(e2){console.warn('Nu am putut anula corecția de stoc:',e2);}revert();}
+  }
+}
+// Corecție RETROACTIVĂ de stoc pe o comandă ale cărei efecte (stoc + Jurnal) sunt DEJA aplicate. delta > 0 =
+// s-a vândut mai mult decât s-a scăzut (se scade încă stoc); delta < 0 = se readaugă stoc. Atinge exact ce
+// atinge și „Aplică import": produse.sold, rândul din Jurnal (ziua în care s-a scris scăderea — căutat
+// începând cu ziua creării comenzii, nu presupus), „Vânzări azi" (TS) și jurnalul de activitate (logMove).
+// Rândul de Jurnal e citit din BAZĂ (nu din JL local, care poate să nu conțină acea zi); dacă pe scădere
+// nu există niciun rând acoperitor, se corectează doar stocul — Jurnalul nu are de unde scădea.
+async function pcomAdjustAppliedStock(row,p,delta){
+  if(!p||!delta)return;
+  const from=String(row.createdAt||'').slice(0,10)||td();
+  let js=[];
+  try{js=(await dbGet(`jurnal?product_id=eq.${p.id}&data=gte.${from}&select=id,data,qty&order=data.asc`))||[];}catch(e){console.warn('Nu am putut citi Jurnalul pentru corecție:',e);}
+  // Stocul întâi — dacă scrierea eșuează, nu s-a atins nimic altceva.
+  const oldSold=p.sold||0;
+  p.sold=Math.max(0,oldSold+delta);
+  try{await dbPatch(`produse?id=eq.${p.id}`,{sold:p.sold});}catch(e){p.sold=oldSold;throw e;}
+  const hit=delta<0?js.find(j=>Number(j.qty)>=-delta):js[0];
+  if(hit){
+    const newQty=Math.round((Number(hit.qty)+delta)*100)/100;
+    if(newQty>0)await dbPatch(`jurnal?id=eq.${hit.id}`,{qty:newQty});else await dbDelete(`jurnal?id=eq.${hit.id}`);
+    const jd=JL.find(d=>d.date===hit.data),en=jd&&jd.entries.find(e=>e.id===p.id);
+    if(en){en.qty=newQty;if(en.qty<=0){jd.entries=jd.entries.filter(e=>e!==en);if(!jd.entries.length)JL=JL.filter(d=>d!==jd);}}
+    if(hit.data===td()){TS[p.id]=Math.max(0,(TS[p.id]||0)+delta);try{await saveTodaySale(p.id,TS[p.id]);}catch(e){console.warn('Nu am putut actualiza „Vânzări azi”:',e);}}
+  }else if(delta>0){
+    TS[p.id]=(TS[p.id]||0)+delta;
+    try{await saveTodaySale(p.id,TS[p.id]);}catch(e){console.warn('Nu am putut actualiza „Vânzări azi”:',e);}
+    await saveJurnalEntry(p,delta);
+  }
+  await logMove(delta>0?'out':'in',p.name,Math.abs(delta),`Corecție comandă ${pcomPlatLabel(row.platforma)} (comandă ${row.comandaId||'—'})`,p.id);
+}
+// Schimbarea produsului pe o linie DEJA comisă (vizibilă în Staff). Înainte, alegerea unui alt produs
+// modifica doar previzualizarea locală — rândul din platforma_comenzi (și deci Staff) rămânea pe produsul
+// vechi, iar „Aplică import" scădea stocul din produsul NOU, nu din cel scris în comandă (inconsecvență
+// reală). Acum se scrie și în bază. Dacă stocul e deja scăzut: după confirmare, se readaugă cantitatea la
+// produsul vechi și se scade din cel nou (stoc + Jurnal), apoi comanda trece pe produsul nou.
+async function pcomReassignCommittedProduct(idx,oldProdId){
+  const it=pcImpParsed[idx];if(!it||!it._committedId)return;
+  const row=PCOM.find(o=>o.id===it._committedId);if(!row)return;
+  const newP=P.find(x=>x.id===it.produsId),oldP=P.find(x=>x.id===(row.produsId||oldProdId));
+  const revert=()=>{it.produsId=row.produsId||oldProdId||null;renderPcomImportPreview();};
+  if(!newP||newP.id===row.produsId)return;
+  if(!sbReady){toast('Necesită conexiune Supabase activă','err');revert();return;}
+  const applied=!!row.efecteAplicate;
+  if(applied&&!confirm(`Stocul a fost deja scăzut pentru această comandă (${fmtQty(row.cantitate)} buc din „${oldP?oldP.name:'produsul vechi'}").\n\nMuți comanda pe „${newP.name}"?\n\nSe readaugă ${fmtQty(row.cantitate)} buc la „${oldP?oldP.name:'produsul vechi'}" și se scad ${fmtQty(row.cantitate)} buc din „${newP.name}" (stoc + Jurnal).`)){revert();return;}
+  try{
+    if(applied){
+      if(oldP)await pcomAdjustAppliedStock(row,oldP,-row.cantitate);
+      await pcomAdjustAppliedStock(row,newP,row.cantitate);
+    }
+    const fin=pcomSaleFinancials(newP,it,it.platforma||row.platforma||pcImpPlatforma);
+    const patch={produs_id:newP.id,produs_nume:newP.name,profit_estimat:Math.round(fin.profit*it.cantitate*100)/100,marja_estimata:fin.marja};
+    await dbPatch(`platforma_comenzi?id=eq.${row.id}`,patch);
+    row.produsId=newP.id;row.produsNume=newP.name;row.profitEstimat=patch.profit_estimat;row.marjaEstimata=patch.marja_estimata;
+    renderTable();renderToday();renderDashboard();renderJurnal();renderPcomImportPreview();
+    toast(applied?`Comandă mutată pe „${newP.name}” ✓ — stoc și Jurnal corectate la ambele produse`:`Produs schimbat pe „${newP.name}” ✓ — salvat și în Staff`);
+  }catch(e){toast('Nu am putut schimba produsul: '+(e.message||e),'err');revert();}
 }
 function pcomAdjustQty(idx,delta){
   const it=pcImpParsed[idx];
@@ -19831,6 +19906,7 @@ async function pcomPickRecognizeImage(){
 async function pickPcomProduct(id){
   if(pcomPickIdx==null)return;
   const idx=pcomPickIdx;
+  const oldProdId=pcImpParsed[idx].produsId||null;
   pcImpParsed[idx].produsId=id||null;
   pcImpParsed[idx].newProduct=false;
   pcImpParsed[idx].score=1;
@@ -19839,6 +19915,7 @@ async function pickPcomProduct(id){
   document.getElementById('pcmi-pickdrop').classList.remove('on');
   pcomPickIdx=null;
   renderPcomImportPreview();
+  if(id&&pcImpParsed[idx]._committedId&&id!==oldProdId){await pcomReassignCommittedProduct(idx,oldProdId);return;}
   await syncPcomLineCommitState(idx);
 }
 async function pickPcomNewProduct(){
