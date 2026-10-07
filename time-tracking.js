@@ -177,7 +177,9 @@
   /* ── statistici (panou) ── */
   function colorOf(id,i){var p=(state.projects||{})[id];return(p&&p.color)||PALETTE[i%PALETTE.length];}
   function nameOf(id){var p=(state.projects||{})[id];return(p&&p.name)||id;}
-  function srcOk(s){return state.noSrc||state.src==='all'||(state.src==='web'?s==='web':DEV_SOURCES.indexOf(s)>=0);}
+  function srcOk(s){ // „prep” = cronometrul manual „Pregătire comenzi” (alt tip de măsurătoare) — NU intră în „Toate”
+    return state.noSrc||(state.src==='all'?s!=='prep':(state.src==='web'?s==='web':DEV_SOURCES.indexOf(s)>=0));
+  }
   function loadStats(){
     var q='order=date.desc&limit=5000';
     return get('time_daily_src?select=project_id,date,source,seconds&'+q).catch(function(e){

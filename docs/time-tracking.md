@@ -9,6 +9,14 @@ Două tipuri de timp, **separate** în statistici:
 
 Totul se salvează în **Supabase** (proiectul `cbpavtvrfpkbaeueexlw`, tabelul `time_sessions`), nu doar în browser.
 
+## Cronometrul manual „Start comenzi" (doar în Stoc Manager)
+
+Un timer separat, mic, imediat deasupra „Timp azi": îl pornești cu **Start comenzi** când începi să pregătești comenzile zilei și apeși **✓ Gata** când ai terminat.
+Măsoară **ceas de perete** între Start și Gata (include și cât lucrezi în paralel în eMAG) — nu depinde de tabul activ. Se salvează în `time_sessions` cu
+`source='prep'` și `device='prep'` (indexul unic „o singură sesiune deschisă per dispozitiv" garantează o singură rundă deschisă), deci **nu cere SQL nou** și
+nu intră în statisticile „Time tracking" (nici în „Toate"). Butonul cu ceas arată istoricul: azi, medie / zi, cea mai rapidă / lungă zi, ultimele 14 zile.
+Test: `node scripts/prep-timer.test.js`.
+
 ## Cum măsoară „Timp azi" (în aplicație)
 
 Activ = `document.visibilityState==='visible'` ȘI `document.hasFocus()` ȘI input (mouse/tastatură/scroll) în ultimele 180 s.

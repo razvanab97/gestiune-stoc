@@ -123,7 +123,7 @@ function makeDb(cfg){
     upsert:s=>req('POST','time_sessions?on_conflict=id',row(s),{Prefer:'resolution=merge-duplicates,return=minimal'}),
     openSessions:device=>req('GET',`time_sessions?device=eq.${encodeURIComponent(device)}&ended_at=is.null&select=id,last_seen_at,duration_seconds`),
     closeStale:(id,endedAt)=>req('PATCH',`time_sessions?id=eq.${id}`,{ended_at:endedAt},{Prefer:'return=minimal'}),
-    today:(day)=>req('GET',`time_daily?date=eq.${day}&select=project_id,seconds`)
+    today:(day)=>req('GET',`time_daily_src?date=eq.${day}&select=project_id,source,seconds`)
   };
 }
 
@@ -188,7 +188,8 @@ async function run(dry){
 async function status(){
   const cfg=loadConfig(),rows=await makeDb(cfg).today(dayOf(Date.now(),cfg.timezone));
   const fmt=s=>`${String(Math.floor(s/3600)).padStart(2,'0')}:${String(Math.floor(s%3600/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
-  console.log('Timp azi pe proiect:');rows.forEach(r=>console.log('  '+r.project_id.padEnd(26)+fmt(r.seconds)));
+  console.log('Timp azi pe proiect și sursă (web = în aplicație · claude-code/codex = dezvoltare AI · prep = „Pregătire comenzi”):');
+  rows.forEach(r=>console.log('  '+r.project_id.padEnd(26)+String(r.source||'?').padEnd(14)+fmt(r.seconds)));
   if(!rows.length)console.log('  (nimic înregistrat încă)');
 }
 const PLIST=path.join(HOME,'Library','LaunchAgents','ro.abhomes.time-tracker.plist');
