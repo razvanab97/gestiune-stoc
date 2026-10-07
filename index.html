@@ -2648,6 +2648,9 @@ button.pcx-include-btn.included{border-color:var(--gr)}
   border-radius:999px;padding:6px 14px;
 }
 #page-pcom .pcx-counter b{color:var(--pm-v3);font-size:1.08em}
+.pcx-counter-btn{cursor:pointer;font-family:inherit;color:var(--rd)!important;border-color:rgba(240,68,56,.35)!important;background:transparent!important;transition:background .15s}
+.pcx-counter-btn:hover:not(:disabled){background:rgba(240,68,56,.08)!important}
+.pcx-counter-btn:disabled{opacity:.45;cursor:default}
 #page-pcom .pcx-plat-divider{border-top:0;position:relative}
 #page-pcom .pcx-plat-divider::after{content:"";flex:1;height:2px;border-radius:2px;background:linear-gradient(90deg,rgba(118,87,246,.35),transparent)}
 #page-pcom .pcx-plat-divider-count{background:rgba(255,255,255,.75);border:1px solid rgba(118,87,246,.14)}
@@ -4461,6 +4464,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+   {n:535,text:'Comenzi Platforme → Previzualizare — buton „↺ Debifează toate", cerut direct („am cerut un buton prin care să putem să debifăm toate incluse" — nu exista: doar „✓ Selectează toate" avea pereche în Sincronizare). Apare în două locuri: lângă contorul „✓ Incluse N" din antet și în bara de jos, lângă „✓ Selectează toate". Un click cere confirmare cu numerele exacte și apoi debifează în bloc: comenzile deja create (vizibile în Staff) se scot din Staff — comanda se șterge din bază, exact ca la debifarea unei singure linii, iar AWB-ul asociat rămâne reținut pe ecran și revine la o nouă bifare; liniile doar bifate (încă nescrise) se debifează local. Protecție: liniile al căror stoc e DEJA scăzut, cele deja împachetate și cele cu o problemă raportată de Staff NU se ating (rămân incluse, se tratează individual cu „🚫 Anulează" / „↺ Reactivează") — mesajul final spune câte au rămas neatinse. Dacă ștergerea unei comenzi eșuează, linia rămâne inclusă, iar restul se debifează normal; dacă toate cele incluse sunt protejate, explică de ce în loc să facă ceva. Verificat de 2 ori: sintaxă + 15 teste pe funcțiile reale (inclusiv eșec de ștergere, confirmare refuzată, toate protejate) + test în pagina reală cu ștergerile interceptate (șterse doar cele sigure, nimic atins în baza reală).',date:'2026-10-07'},
    {n:534,text:'Cronometru „Start comenzi” — cerut direct: un timer mic, în sidebar, imediat deasupra „Timp azi”, pe care îl apeși când începi să pregătești comenzile zilei și apeși „✓ Gata” când ai terminat, ca să vezi cât durează de fapt (inclusiv când lucrezi în paralel în eMAG). Măsoară ceas de perete între Start și Gata — NU depinde de tabul în care te afli. Cât rulează arată ceasul (și ora de pornire la hover); „✕” anulează o pornire greșită fără să salveze nimic. Se salvează în Supabase, deci supraviețuiește refresh-ului, închiderii browserului sau altui dispozitiv; o singură rundă poate fi deschisă o dată (index unic în bază). Poți face mai multe runde pe zi („Din nou · azi 38 min”). Butonul cu ceas deschide istoricul: azi, media pe zi, cea mai rapidă și cea mai lungă zi, plus totalul pe ultimele 14 zile. Dacă uiți cronometrul pornit peste 12 ore, apare avertisment roșu „ai uitat?”. Nu necesită SQL nou: refolosește tabelul time_sessions (source=\'prep\', dispozitiv propriu), iar timpul acesta NU se amestecă în statisticile „Time tracking” (nici în „Toate”). Comanda `node scripts/time-tracker.js status` arată acum timpul pe proiect ȘI pe sursă. Verificat de 2 ori: sintaxă + 26 de teste pe funcțiile reale (Start/Gata/anulare, erori de salvare care păstrează runda, a doua rundă respinsă, medie/min/max) + test pe baza reală (inserare, respingerea celei de-a doua runde deschise, închidere, citire, ștergere — rândul de test șters imediat) + test în pagina reală cu scrierile interceptate.',date:'2026-10-07'},
    {n:533,text:'Comenzi Platforme — comanda se poate modifica ȘI după ce stocul a fost deja scăzut, cerut direct („să se poată modifica și după ce a fost deja scăzut stocul"). Până acum, pe o linie al cărei stoc fusese scăzut, cantitatea nu se putea schimba (apărea „stocul a fost deja scăzut... nu se mai poate edita de aici"), iar schimbarea produsului modifica doar ecranul, nu și comanda din bază. Acum: (1) CANTITATE — modifici cantitatea (− / + sau direct), confirmi, iar diferența se corectează retroactiv pe tot lanțul: stocul produsului (se scad încă / se readaugă bucățile), rândul din Jurnal (ziua în care s-a scris scăderea), „Vânzări azi", jurnalul de activitate („Corecție comandă …"), profitul și marja comenzii; (2) PRODUS — alegi alt produs din listă: după confirmare, cantitatea se readaugă la produsul vechi și se scade din cel nou (stoc + Jurnal), iar comanda din bază (deci și Staff) trece pe produsul nou; (3) PREȚ — se salvează fără nicio atingere a stocului. Dacă salvarea comenzii eșuează după corecția de stoc, corecția se anulează automat, ca stocul și comanda să nu rămână necorelate; dacă refuzi confirmarea, nu se scrie nimic. Pe linii al căror stoc e deja scăzut, în loc de „Stoc actual X → după vânzare Y" (care ar fi scăzut cantitatea a doua oară pe ecran) apare „Stoc actual X · deja scăzut pentru această comandă". Bug vecin reparat: schimbarea produsului pe o linie deja creată (dar încă neaplicată) se făcea doar în ecran — comanda din bază și Staff rămâneau pe produsul vechi, iar „Aplică import" scădea stocul din produsul nou; acum se scrie și în bază. Verificat de 2 ori: sintaxă + 35 de teste pe funcțiile reale din cod (creștere/scădere, fără rând de Jurnal, confirmare refuzată, eșec la salvare cu anulare, doar preț, schimbare produs cu/ fără stoc scăzut) + test în pagina reală (click pe „+", schimbare produs), cu toate scrierile interceptate — confirmat că în baza reală nu s-a atins nimic.',date:'2026-10-07'},
    {n:532,text:'Time tracking — conectat și ContaFlow. Scriptul partajat (time-tracking.js) primește opțiunea „mount-only”: cronometrul se afișează doar într-un container din aplicația gazdă (ex. subsolul sidebar-ului) și se reatașează singur dacă aplicația îl recreează sau apare mai târziu (ex. după login), în loc să plutească în colț; fără opțiunea nouă, Stoc Manager se comportă exact ca înainte. ContaFlow măsoară separat (id-ul „contaflow”) și salvează în același Supabase. Verificat: 26 de teste pe nucleul de măsurare + test în ContaFlow (montare în sidebar, temele dark / light / glass, pauză la plecarea de pe tab).',date:'2026-10-06'},
@@ -18624,6 +18628,48 @@ async function includeAllPcomPlatform(plat){
   for(const i of idxs)await syncPcomLineCommitState(i);
   renderPcomImportPreview();
 }
+// Debifare în bloc a tuturor liniilor „✓ Inclus” (cerut direct) — oglinda lui includeAllPcom. Debifarea unei
+// linii deja create ȘTERGE comanda din bază (uncommitPcomLine) ⇒ iese și din Staff, deci în bloc trebuie
+// protecție: liniile cu stoc DEJA scăzut (efecteAplicate), deja împachetate sau cu o problemă raportată de
+// Staff NU se ating — acelea se tratează individual („🚫 Anulează”, „↺ Reactivează”). Cere confirmare cu
+// numerele exacte; AWB-ul unei comenzi șterse rămâne reținut pe linie (uncommitPcomLine), deci revine la
+// o nouă bifare. Linii care eșuează la ștergere rămân incluse (uncommitPcomLine le re-bifează).
+let pcomExcluding=false;
+function pcomExcludeProtection(it){
+  const row=it._committedId?PCOM.find(o=>o.id===it._committedId):null;
+  if(!row)return'';
+  if(row.efecteAplicate)return'stoc scăzut';
+  if(row.impachetat)return'împachetată';
+  if(row.staffBlocked&&!row.staffIssueResolved)return'problemă Staff';
+  return'';
+}
+async function excludeAllPcom(){
+  if(pcomExcluding)return;
+  const inc=pcImpParsed.map((x,i)=>i).filter(i=>pcImpParsed[i].include&&!pcImpParsed[i]._committing);
+  if(!inc.length){toast('Nu există comenzi incluse de debifat');return;}
+  const local=inc.filter(i=>!pcImpParsed[i]._committedId);
+  const created=inc.filter(i=>pcImpParsed[i]._committedId&&!pcomExcludeProtection(pcImpParsed[i]));
+  const skipped=inc.filter(i=>pcImpParsed[i]._committedId&&pcomExcludeProtection(pcImpParsed[i]));
+  const total=local.length+created.length;
+  if(!total){toast(`Nu pot debifa nimic în bloc: cele ${skipped.length} incluse au stocul deja scăzut, sunt împachetate sau au o problemă din Staff`,'err');return;}
+  const msg=`Debifezi ${total} ${total===1?'comandă inclusă':'comenzi incluse'}?\n\n`
+    +(created.length?`• ${created.length} deja create (vizibile în Staff) se scot din Staff — comanda se șterge din bază; AWB-ul asociat rămâne reținut pe ecran\n`:'')
+    +(local.length?`• ${local.length} doar bifate (încă nescrise în bază) se debifează\n`:'')
+    +(skipped.length?`\n${skipped.length} RĂMÂN neatinse (stoc deja scăzut / împachetate / cu problemă din Staff) — se tratează individual.`:'');
+  if(!confirm(msg))return;
+  pcomExcluding=true;renderPcomImportPreview();
+  let ok=0,fail=0;
+  try{
+    for(const i of local){pcImpParsed[i].include=false;ok++;}
+    renderPcomImportPreview();
+    for(const i of created){
+      const it=pcImpParsed[i];it.include=false;
+      await uncommitPcomLine(i);
+      if(it.include||it._committedId)fail++;else ok++;   // uncommitPcomLine re-bifează linia dacă ștergerea a eșuat
+    }
+  }finally{pcomExcluding=false;renderPcomImportPreview();}
+  toast(`${ok} ${ok===1?'comandă debifată':'comenzi debifate'} ✓${fail?` · ${fail} nu s-au putut debifa (încearcă din nou)`:''}${skipped.length?` · ${skipped.length} neatinse (stoc scăzut / împachetate / problemă Staff)`:''}`,fail?'err':undefined);
+}
 // Acțiunea globală din redesign: include numai liniile care au deja un produs local ales. Cele fără
 // produs nu pot fi importate corect, iar cele amânate nu trebuie reactivate în bloc din greșeală.
 async function includeAllPcom(){
@@ -19699,7 +19745,7 @@ function pcxRenderOrders(){
   // manual cardurile cu eticheta „Inclus”.
   const includedCount=pcImpParsed.filter(x=>x.include).length;
   const counters=document.getElementById('pcx-counters');
-  if(counters)counters.innerHTML=`<span class="pcx-counter">Total <b>${total}</b></span>${Object.entries(byPlat).map(([pl,c])=>`<span class="pcx-counter">${esc(pcomPlatLabel(pl))} <b>${c}</b></span>`).join('')}<span class="pcx-counter" style="color:var(--gr);border-color:rgba(34,197,94,.35)">✓ Incluse <b>${includedCount}</b></span>${unmatched?`<span class="pcx-counter" style="color:var(--rd);border-color:rgba(240,68,56,.3)">⚠ Fără produs <b>${unmatched}</b></span>`:''}${archivedCount?`<span class="pcx-counter" style="color:var(--or);border-color:rgba(247,144,9,.35)">⚠️ Arhivate <b>${archivedCount}</b></span>`:''}`;
+  if(counters)counters.innerHTML=`<span class="pcx-counter">Total <b>${total}</b></span>${Object.entries(byPlat).map(([pl,c])=>`<span class="pcx-counter">${esc(pcomPlatLabel(pl))} <b>${c}</b></span>`).join('')}<span class="pcx-counter" style="color:var(--gr);border-color:rgba(34,197,94,.35)">✓ Incluse <b>${includedCount}</b></span>${includedCount?`<button type="button" class="pcx-counter pcx-counter-btn" id="pcx-deselect-chip" onclick="excludeAllPcom()" ${pcomExcluding?'disabled':''} title="Debifează toate comenzile incluse (cele cu stoc deja scăzut sau împachetate rămân neatinse)">↺ Debifează toate</button>`:''}${unmatched?`<span class="pcx-counter" style="color:var(--rd);border-color:rgba(240,68,56,.3)">⚠ Fără produs <b>${unmatched}</b></span>`:''}${archivedCount?`<span class="pcx-counter" style="color:var(--or);border-color:rgba(247,144,9,.35)">⚠️ Arhivate <b>${archivedCount}</b></span>`:''}`;
   // Bară de acțiuni sticky — reflectă EXACT aceleași condiții ca updPcomImportInfo()/#pcmi-foot,
   // butoanele apelează exact aceleași handlere (resetPcomImportPage/pcomAiMatchUnmatched/applyPcomImport).
   const bar=document.getElementById('pcx-stickybar');
@@ -19715,6 +19761,8 @@ function pcxRenderOrders(){
     if(applyBtn)applyBtn.disabled=(n+amanate+newProd)===0;
     const selectAllBtn=document.getElementById('pcx-select-all-btn');
     if(selectAllBtn)selectAllBtn.disabled=!pcImpParsed.some(x=>x.produsId&&!x.include&&!x.amanat);
+    const deselectAllBtn=document.getElementById('pcx-deselect-all-btn');
+    if(deselectAllBtn)deselectAllBtn.disabled=pcomExcluding||!pcImpParsed.some(x=>x.include);
   }
 }
 // Scheletul se construiește O SINGURĂ DATĂ (verificat prin #pcx-orders-list) — conține din start
@@ -19838,6 +19886,7 @@ function renderPcomRedesign(){
       <div class="pcx-stickybar-actions">
         <button type="button" class="pcx-btn" onclick="resetPcomImportPage()" title="Golește previzualizarea curentă — rămâne salvată automat altfel">↻ Resetează</button>
         <button type="button" class="pcx-btn" id="pcx-select-all-btn" onclick="includeAllPcom()" title="Selectează toate comenzile care au deja un produs asociat. Cele fără produs sau amânate rămân pentru confirmare.">✓ Selectează toate</button>
+        <button type="button" class="pcx-btn" id="pcx-deselect-all-btn" onclick="excludeAllPcom()" title="Debifează toate comenzile incluse. Cele deja create se scot din Staff; cele cu stoc scăzut sau împachetate rămân neatinse.">↺ Debifează toate</button>
         <button type="button" class="pcx-btn" id="pcx-ai-btn" onclick="pcomAiMatchUnmatched()" style="display:none">🤖 Potrivește restul cu AI</button>
         <button type="button" class="pcx-btn pcx-btn-primary" id="pcx-apply-btn" onclick="applyPcomImport()" disabled>Aplică import</button>
       </div>
