@@ -4464,6 +4464,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:537,text:'Asociază AWB-uri — picker-ul manual asociază ȘI include instant, plus corectare dacă ai greșit, cerut direct, pe doi pași din aceeași conversație. (1) „asocierea trebuie să se facă fără să mai [trebuiască] Inclus [separat]. Activăm Inclus o dată cu asocierea comenzii": alegerea unei comenzi din „🔗 Asociază manual" scria AWB-ul doar vizual în previzualizare — comanda tot rămânea nescrisă în bază până la click-ul separat pe „✓ Asociază AWB-urile" de mai jos. Acum, alegerea din picker E confirmarea explicită — scrie direct (comandă + Inclus + trimis spre Staff), fără să mai aștepte butonul de jos. (2) Interjectat imediat, pe un caz real, cu captură (aceeași clientă, 2 etichete diferite, ambele potrivite pe ACEEAȘI comandă): „să poți selecta din nou, acolo unde e posibil să fi greșit asocierea manuală". Fiecare linie deja rezolvată (automat sau manual) are acum un buton „🔄 Altă comandă" — redeschide picker-ul, iar alegerea unei comenzi noi desface ÎNTÂI greșeala veche (comanda creată doar de acel pick se șterge; una deja existentă rămâne Inclusă, doar i se curăță AWB-ul greșit, cu filtru suplimentar ca să nu atingă un AWB scris între timp de altceva), apoi scrie noua asociere — niciodată 2 comenzi cu același AWB deodată. Verificat cu 22 de teste izolate pe funcțiile reale extrase din cod (re-alegere pe comandă nou-creată vs. deja existentă, aceeași comandă aleasă din nou = no-op, prima alegere pe o linie încă nerezolvată, modul picker al erorilor din clopoțel neatins, plus o gardă defensivă descoperită chiar în timpul testării — linia aleasă dispărută între deschiderea picker-ului și click nu mai poate bloca restul), rulate de 2 ori.',date:'2026-10-08'},
   {n:536,text:'Asociază AWB-uri — NOUĂ LOGICĂ cerută direct: „AWB încărcat → AWB asociat automat unei comenzi → comanda devine Inclusă → comanda apare automat în Staff... AWB asociat cu succes = comandă inclusă automat. Nu mai vreau să fie necesară o acțiune manuală separată." Întoarce parțial regula #525/#526 ("doar ce e inclus de noi"), DOAR pentru fluxul AWB: acolo semnalul de certitudine nu mai e o simplă potrivire de produs, ci un AWB real — o etichetă de expediere chiar emisă pentru acea comandă — exact tipul de confirmare individuală cerut de regula veche, doar că acum vine din citirea etichetei, nu dintr-un click separat. Când o comandă e asociată cu un AWB printr-o potrivire CERTĂ (comandaId exact de pe etichetă eMAG/Trendyol, sau potrivire fuzzy nume+sumă FĂRĂ niciun candidat ambiguu — mecanismul de potrivire existent, nemodificat, vezi pcomAwbMatched/resolveVintedDigitalLabelMatch/resolveEmagHuLabelMatch), comanda devine automat Inclusă ȘI e trimisă automat spre Staff, fie că potrivirea a fost complet automată, fie dintr-o alegere manuală din picker — certitudinea e aceeași. Dacă AWB-ul NU se poate asocia cu certitudine (ambiguu, sau nicio comandă găsită), NU se schimbă nimic — rămâne „Neinclus"/eroare AWB, exact ca până acum, pentru rezolvare manuală. Fluxurile de import PUR (XLSX/API eMAG-Trendyol, căutare manuală după număr, fără niciun AWB implicat) rămân neschimbate — tot NU trimit automat spre Staff, regula veche încă se aplică acolo. Comenzile vechi, deja în bază, NU sunt afectate — automatizarea se declanșează STRICT de citirea unui AWB real, acum, în sesiunea curentă, niciodată de o baleiere/migrare (🔁 Repune AWB-uri din arhivă citește STRICT arhiva zilei curente, nu istoricul). Verificat cu 16+11 teste izolate pe funcțiile reale extrase din cod (potrivire automată/manuală — ambele sendToStaff=true; nepotrivit/ambiguu — niciun efect; AWB real vs. căutare manuală fără AWB — distincția corectă; regresii pe linii multiple), rulate de 2 ori fiecare.',date:'2026-10-08'},
   {n:535,text:'Comenzi Platforme → Previzualizare — buton „↺ Debifează toate", cerut direct („am cerut un buton prin care să putem să debifăm toate incluse" — nu exista: doar „✓ Selectează toate" avea pereche în Sincronizare). Apare în două locuri: lângă contorul „✓ Incluse N" din antet și în bara de jos, lângă „✓ Selectează toate". Un click cere confirmare cu numerele exacte și apoi debifează în bloc: comenzile deja create (vizibile în Staff) se scot din Staff — comanda se șterge din bază, exact ca la debifarea unei singure linii, iar AWB-ul asociat rămâne reținut pe ecran și revine la o nouă bifare; liniile doar bifate (încă nescrise) se debifează local. Protecție: liniile al căror stoc e DEJA scăzut, cele deja împachetate și cele cu o problemă raportată de Staff NU se ating (rămân incluse, se tratează individual cu „🚫 Anulează" / „↺ Reactivează") — mesajul final spune câte au rămas neatinse. Dacă ștergerea unei comenzi eșuează, linia rămâne inclusă, iar restul se debifează normal; dacă toate cele incluse sunt protejate, explică de ce în loc să facă ceva. Verificat de 2 ori: sintaxă + 15 teste pe funcțiile reale (inclusiv eșec de ștergere, confirmare refuzată, toate protejate) + test în pagina reală cu ștergerile interceptate (șterse doar cele sigure, nimic atins în baza reală).',date:'2026-10-07'},
    {n:534,text:'Cronometru „Start comenzi” — cerut direct: un timer mic, în sidebar, imediat deasupra „Timp azi”, pe care îl apeși când începi să pregătești comenzile zilei și apeși „✓ Gata” când ai terminat, ca să vezi cât durează de fapt (inclusiv când lucrezi în paralel în eMAG). Măsoară ceas de perete între Start și Gata — NU depinde de tabul în care te afli. Cât rulează arată ceasul (și ora de pornire la hover); „✕” anulează o pornire greșită fără să salveze nimic. Se salvează în Supabase, deci supraviețuiește refresh-ului, închiderii browserului sau altui dispozitiv; o singură rundă poate fi deschisă o dată (index unic în bază). Poți face mai multe runde pe zi („Din nou · azi 38 min”). Butonul cu ceas deschide istoricul: azi, media pe zi, cea mai rapidă și cea mai lungă zi, plus totalul pe ultimele 14 zile. Dacă uiți cronometrul pornit peste 12 ore, apare avertisment roșu „ai uitat?”. Nu necesită SQL nou: refolosește tabelul time_sessions (source=\'prep\', dispozitiv propriu), iar timpul acesta NU se amestecă în statisticile „Time tracking” (nici în „Toate”). Comanda `node scripts/time-tracker.js status` arată acum timpul pe proiect ȘI pe sursă. Verificat de 2 ori: sintaxă + 26 de teste pe funcțiile reale (Start/Gata/anulare, erori de salvare care păstrează runda, a doua rundă respinsă, medie/min/max) + test pe baza reală (inserare, respingerea celei de-a doua runde deschise, închidere, citire, ștergere — rândul de test șters imediat) + test în pagina reală cu scrierile interceptate.',date:'2026-10-07'},
@@ -22421,7 +22422,31 @@ async function filterAwbPick(){
   }catch(e){console.warn('Căutare live suplimentară în picker eșuată:',e);}
 }
 const filterAwbPickDebounced=debounce(()=>filterAwbPick(),150);
-function pickAwbOrder(i){
+// Desface o potrivire AWB↔comandă deja aplicată (scrisă în bază) — cerut direct, pe un caz real (2
+// etichete diferite, aceeași clientă „Denisa Marginean", potrivite AMÂNDOUĂ pe aceeași comandă):
+// „să poți selecta din nou, acolo unde e posibil să fi greșit asocierea manuală". Apelată DOAR când omul
+// alege o comandă DIFERITĂ pentru o linie deja rezolvată (vezi pickAwbOrder) — altfel AWB-ul ar rămâne
+// scris pe 2 comenzi deodată (cea veche, greșită, ȘI cea nouă, corectă).
+async function undoAwbMatch(p){
+  if(!p||!pcomAwbMatched(p))return;
+  const plat=p.rows?.[0]?.platforma;
+  if(p._pendingMatch){
+    // Comanda a fost CREATĂ chiar de acest pick (nu exista înainte) — nu mai are niciun rost fără AWB-ul
+    // greșit, ștergem direct (uncommitPcomLine, exact ca la debifarea manuală „✓ Inclus").
+    const it=pcImpParsed.find(x=>x.comandaId===p.comandaId&&(!plat||x.platforma===plat)&&x._committedId);
+    if(it)await uncommitPcomLine(pcImpParsed.indexOf(it));
+    return;
+  }
+  // Comanda EXISTA deja dinainte — doar îi curățăm AWB-ul greșit, nu o atingem altfel (rămâne Inclusă,
+  // doar fără AWB, ca înainte de acest pick). Filtru suplimentar `awb=eq.` — nu ștergem orbește: doar
+  // dacă AWB-ul de pe comandă e încă EXACT cel greșit pe care l-am scris noi, nu altceva scris între timp.
+  if(!plat)return;
+  try{
+    await patchAwbWithSource(`comanda_id=eq.${encodeURIComponent(p.comandaId)}&platforma=eq.${encodeURIComponent(plat)}&awb=eq.${encodeURIComponent(p.awb)}`,{awb:null,awb_source_file:null,awb_source_page:null,awb_courier:null});
+    PCOM.filter(o=>o.comandaId===p.comandaId&&o.platforma===plat&&o.awb===p.awb).forEach(o=>Object.assign(o,{awb:'',awbSourceFile:'',awbSourcePage:null,awbCourier:''}));
+  }catch(e){console.warn('Nu am putut curăța asocierea AWB greșită anterioară:',e);}
+}
+async function pickAwbOrder(i){
   const o=awbPickVisible?.[i];if(!o)return;
   document.getElementById('awb-pickdrop').classList.remove('on');
   if(awbPickMode==='error'){
@@ -22429,8 +22454,19 @@ function pickAwbOrder(i){
     return;
   }
   const p=awbParsed[awbPickIdx];if(!p)return;
+  // Re-alegere pe o linie deja rezolvată (vezi „🔄 Altă comandă"/undoAwbMatch de mai sus) — desfacem
+  // ÎNTÂI greșeala veche, DOAR dacă alegerea nouă chiar schimbă comanda (același comandaId ales din nou
+  // nu are nimic de desfăcut).
+  if(pcomAwbMatched(p)&&p.comandaId!==o.comandaId)await undoAwbMatch(p);
   const rows=o._pending?pendingImportRowSnapshot(o.comandaId):[{id:o.id,platforma:o.platforma,client_nume:o.clientNume,produs_nume:o.produsNume,awb:o.awb}];
   awbParsed[awbPickIdx]={...p,comandaId:o.comandaId,rows,vintedAmbiguous:false,emagHuAmbiguous:false,_manualPick:true,_pendingMatch:!!o._pending};
+  // Cerut direct — „asocierea trebuie să se facă fără să mai [trebuiască] Inclus [separat]. Activăm
+  // Inclus o dată cu asocierea comenzii": alegerea manuală E confirmarea explicită — scriem direct acum
+  // (comandă + Inclus + trimis spre Staff), fără să mai aștepte „✓ Asociază AWB-urile" de mai jos.
+  // Gardă defensivă, aceeași verificare ca la applyAwbAssociation (matched=awbParsed.filter(pcomAwbMatched))
+  // — în cazul rar în care `rows` iese gol (ex. linia „Neinclus” aleasă tocmai a dispărut între deschiderea
+  // picker-ului și click, cursă improbabilă dar posibilă), nu trimitem mai departe un rând fără platformă.
+  if(pcomAwbMatched(awbParsed[awbPickIdx]))await applyOneAwbMatch(awbParsed[awbPickIdx]);
   renderAwbPreview();
 }
 // Scrie efectiv AWB-ul unei erori (📮, clopoțel) pe comanda aleasă manual din picker — fie o comandă
@@ -22830,7 +22866,13 @@ function renderAwbPreview(){
     // inclusă automat"): nu mai trebuie un „✓ Inclus" separat după asta — un singur click de aici include
     // automat comanda ȘI o trimite spre Staff.
     const pendingNote=p._pendingMatch?` <span style="color:var(--acc);font-weight:700">(comandă nouă — va fi inclusă automat și trimisă spre Staff)</span>`:'';
-    return`<div class="inv-prev-row">✓ Comanda ${esc(p.comandaId)} — ${esc(nm)} → AWB ${esc(p.awb)}${already?` <span style="color:var(--t3)">(înlocuiește ${esc(already)})</span>`:''}${matchNote}${pendingNote}</div>`;
+    // „🔄 Altă comandă" — cerut direct, pe un caz real (2 etichete diferite, aceeași clientă, potrivite
+    // amândouă pe ACEEAȘI comandă): „să poți selecta din nou, acolo unde e posibil să fi greșit
+    // asocierea manuală". O potrivire (automată sau manuală) poate fi greșită — fără acest buton, o linie
+    // deja „rezolvată" vizual n-avea NICIO cale de corectare, nici înainte, nici după comitere. Deschide
+    // ACELAȘI picker ca la „🔗 Asociază manual" (openAwbPick) — pickAwbOrder desface singur asocierea
+    // veche, corect, înainte să scrie noua alegere (vezi undoAwbMatch).
+    return`<div class="inv-prev-row" style="flex-wrap:wrap;gap:8px"><span style="flex:1;min-width:260px">✓ Comanda ${esc(p.comandaId)} — ${esc(nm)} → AWB ${esc(p.awb)}${already?` <span style="color:var(--t3)">(înlocuiește ${esc(already)})</span>`:''}${matchNote}${pendingNote}</span><button type="button" class="btn btn-sm awb-pick-trigger" style="flex-shrink:0" onclick="openAwbPick(event,${idx})">🔄 Altă comandă</button></div>`;
   }).join('');
   // Etichetă anulată de curier — raportat direct, extins de la DPD la orice curier („nu doar DPD ci
   // peste tot, dacă apar erori"): secțiune separată de „format nerecunoscut", aici NU e o problemă de
@@ -22857,67 +22899,76 @@ async function patchAwbWithSource(filter,source){
     throw e;
   }
 }
+// Scrie efectiv O SINGURĂ potrivire AWB↔comandă CERTĂ (apelantul garantează asta — vezi pcomAwbMatched)
+// — comandă+Inclus+trimitere spre Staff, pe ambele ramuri posibile (comandă încă „Neinclus" sau deja
+// comisă). Extrasă din applyAwbAssociation (era corpul buclei `for(const p of matched)`) ca să poată fi
+// chemată și INDIVIDUAL, imediat, dintr-un singur pick manual — vezi pickAwbOrder/comentariul de-acolo.
+// Idempotentă: rechemată pe un `p` deja aplicat (ex. la „✓ Asociază AWB-urile" de mai jos, peste o linie
+// deja rezolvată individual), syncPcomLineCommitState/commitPcomLine nu mai scriu a doua oară (verifică
+// _committedId), iar PATCH-ul pe ramura „deja comisă" doar rescrie aceleași valori — sigur de rulat de 2
+// ori pe aceeași comandă.
+async function applyOneAwbMatch(p){
+  // Comandă încă necomisă („Neinclus" — vezi resolveVintedDigitalLabelMatch/
+  // resolveCargusClickCollectMatch/picker-ul manual) — nu există niciun rând în platforma_comenzi
+  // de PATCH-uit; scriem direct pe linia din previzualizare, ca „✓ Inclus", ulterior, să scrie deja
+  // AWB-ul real, nu placeholder-ul Vinted. Lookup general (orice platformă — picker-ul manual poate
+  // alege și o linie eMAG/Trendyol încă necomisă), prin comandaId (nu index reținut) — corect chiar
+  // dacă lista s-a schimbat între timp.
+  if(p._pendingMatch){
+    const it=findPendingImportLineByComandaId(p.comandaId);
+    if(it){
+      Object.assign(it,{awb:p.awb,awbSourceFile:p.file||'',awbSourcePage:p.page||null,awbCourier:p.courier||''});
+      // Bug real, foarte important, raportat direct („sincronizate prin citire AWB, dar nu apar în
+      // Staff"): fără asta, AWB-ul se scria DOAR pe linia din previzualizarea locală a adminului —
+      // comanda rămânea „Neinclus”, deci NICIODATĂ scrisă în platforma_comenzi. Comanda tot trebuie
+      // scrisă acum (altfel AWB-ul se pierde). sendToStaff=true necondiționat — NOUA LOGICĂ, cerută
+      // direct: „AWB încărcat → AWB asociat automat unei comenzi → comanda devine Inclusă → comanda
+      // apare automat în Staff... AWB asociat cu succes = comandă inclusă automat. Nu mai vreau să
+      // fie necesară o acțiune manuală separată." Orice `p` ajuns AICI a trecut deja de filtrul
+      // `matched=awbParsed.filter(pcomAwbMatched)` al apelantului — adică potrivirea e deja CERTĂ (nu
+      // ambiguă, nu aproximativă — vezi pcomAwbMatched/resolveVintedDigitalLabelMatch/
+      // resolveEmagHuLabelMatch, care resping explicit orice potrivire cu 2+ candidați la fel de
+      // buni). Fie că potrivirea a venit automat (comandaId exact de pe etichetă eMAG/Trendyol) sau
+      // dintr-o alegere manuală din picker (_manualPick), certitudinea e aceeași — nu mai există
+      // niciun motiv să le tratăm diferit (înlocuiește distincția din #525/#526, păstrată DOAR la
+      // fluxurile de import pur, fără AWB — vezi autoCommitConfidentPcomLines).
+      const idx=pcImpParsed.indexOf(it);
+      if(idx>=0){it.include=true;await syncPcomLineCommitState(idx,true);}
+      // Previzualizare vizuală AWB — ÎN FUNDAL, nu blocăm restul asocierilor pentru atât (cerut
+      // direct, vezi .tmp/grill-me/staff-awb-preview.md). p._blob există doar pe liniile venite
+      // dintr-un PDF chiar citit (readAwbFolderPdfs/handleAwbPdfFile) — lipsește pe cele reconstruite
+      // altfel (ex. AI fallback fără fișier reținut), caz în care funcția iese tăcut, fără eroare.
+      if(p._blob)generateAwbPreviewInBackground(p._blob,p.page,p.awb,p.comandaId,it.platforma);
+      return;
+    }
+    // Linia a fost între timp comisă manual („✓ Inclus") — există acum în PCOM, tratată normal mai jos.
+  }
+  const source={awb:p.awb,awb_source_file:p.file||null,awb_source_page:p.page||null,awb_courier:p.courier||null};
+  const platforma=p.rows[0].platforma;
+  // RESET TOTAL (#519) — ACESTA era mecanismul EXACT care a produs bug-ul real, raportat direct, cu
+  // o captură: „ce caută aceste comenzi în staff la de împachetat în condițiile în care acestea sunt
+  // de astăzi?" — o comandă din 21.09, neatinsă de nimic altceva, și-a avansat singură created_at la
+  // „acum" doar pentru că i s-a (re)asociat un AWB printr-o citire în masă (🔁 Repune AWB-uri din
+  // arhivă, înainte de #518), reapărând direct în coada activă de azi din Staff. NOUA LOGICĂ (cerută
+  // direct, vezi comentariul identic de mai sus): acum chiar ASTA e comportamentul dorit — „AWB
+  // asociat cu succes = comandă inclusă automat", indiferent dacă potrivirea a fost automată sau
+  // dintr-o alegere manuală (`p._manualPick`). Un AWB real, nou citit ACUM, pe o comandă încă
+  // neîmpachetată, e exact semnalul „se expediază azi" — merită să fie în coada activă de azi. Rămâne
+  // sigur față de #519: `matched`/pcomAwbMatched nu include NICIODATĂ comenzi ambigue, iar o comandă
+  // deja împachetată (`impachetat=true`) tot nu apare în coada activă din Staff, oricât s-ar rescrie
+  // staff_trimis_at pe ea (filtrul de acolo cere explicit `impachetat=false`).
+  source.staff_trimis_at=new Date().toISOString();
+  await patchAwbWithSource(`comanda_id=eq.${encodeURIComponent(p.comandaId)}&platforma=eq.${encodeURIComponent(platforma)}`,source);
+  PCOM.filter(o=>o.comandaId===p.comandaId&&o.platforma===platforma).forEach(o=>Object.assign(o,{awb:p.awb,awbSourceFile:p.file||'',awbSourcePage:p.page||null,awbCourier:p.courier||'',...(source.staff_trimis_at?{staffTrimisAt:source.staff_trimis_at}:{})}));
+  // Previzualizare vizuală AWB — ÎN FUNDAL, vezi comentariul de mai sus (ramura „Neinclus").
+  if(p._blob)generateAwbPreviewInBackground(p._blob,p.page,p.awb,p.comandaId,platforma);
+}
 async function applyAwbAssociation(){
   const matched=awbParsed.filter(pcomAwbMatched),unmatched=awbParsed.filter(p=>!pcomAwbMatched(p));
   const btn=document.getElementById('pcmi-awb-apply-btn');
   btn.disabled=true;
   try{
-    for(const p of matched){
-      // Comandă încă necomisă („Neinclus" — vezi resolveVintedDigitalLabelMatch/
-      // resolveCargusClickCollectMatch/picker-ul manual) — nu există niciun rând în platforma_comenzi
-      // de PATCH-uit; scriem direct pe linia din previzualizare, ca „✓ Inclus", ulterior, să scrie deja
-      // AWB-ul real, nu placeholder-ul Vinted. Lookup general (orice platformă — picker-ul manual poate
-      // alege și o linie eMAG/Trendyol încă necomisă), prin comandaId (nu index reținut) — corect chiar
-      // dacă lista s-a schimbat între timp.
-      if(p._pendingMatch){
-        const it=findPendingImportLineByComandaId(p.comandaId);
-        if(it){
-          Object.assign(it,{awb:p.awb,awbSourceFile:p.file||'',awbSourcePage:p.page||null,awbCourier:p.courier||''});
-          // Bug real, foarte important, raportat direct („sincronizate prin citire AWB, dar nu apar în
-          // Staff"): fără asta, AWB-ul se scria DOAR pe linia din previzualizarea locală a adminului —
-          // comanda rămânea „Neinclus”, deci NICIODATĂ scrisă în platforma_comenzi. Comanda tot trebuie
-          // scrisă acum (altfel AWB-ul se pierde). sendToStaff=true necondiționat — NOUA LOGICĂ, cerută
-          // direct: „AWB încărcat → AWB asociat automat unei comenzi → comanda devine Inclusă → comanda
-          // apare automat în Staff... AWB asociat cu succes = comandă inclusă automat. Nu mai vreau să
-          // fie necesară o acțiune manuală separată." Orice `p` ajuns AICI a trecut deja de filtrul
-          // `matched=awbParsed.filter(pcomAwbMatched)` de mai sus — adică potrivirea e deja CERTĂ (nu
-          // ambiguă, nu aproximativă — vezi pcomAwbMatched/resolveVintedDigitalLabelMatch/
-          // resolveEmagHuLabelMatch, care resping explicit orice potrivire cu 2+ candidați la fel de
-          // buni). Fie că potrivirea a venit automat (comandaId exact de pe etichetă eMAG/Trendyol) sau
-          // dintr-o alegere manuală din picker (_manualPick), certitudinea e aceeași — nu mai există
-          // niciun motiv să le tratăm diferit (înlocuiește distincția din #525/#526, păstrată DOAR la
-          // fluxurile de import pur, fără AWB — vezi autoCommitConfidentPcomLines).
-          const idx=pcImpParsed.indexOf(it);
-          if(idx>=0){it.include=true;await syncPcomLineCommitState(idx,true);}
-          // Previzualizare vizuală AWB — ÎN FUNDAL, nu blocăm restul asocierilor pentru atât (cerut
-          // direct, vezi .tmp/grill-me/staff-awb-preview.md). p._blob există doar pe liniile venite
-          // dintr-un PDF chiar citit (readAwbFolderPdfs/handleAwbPdfFile) — lipsește pe cele reconstruite
-          // altfel (ex. AI fallback fără fișier reținut), caz în care funcția iese tăcut, fără eroare.
-          if(p._blob)generateAwbPreviewInBackground(p._blob,p.page,p.awb,p.comandaId,it.platforma);
-          continue;
-        }
-        // Linia a fost între timp comisă manual („✓ Inclus") — există acum în PCOM, tratată normal mai jos.
-      }
-      const source={awb:p.awb,awb_source_file:p.file||null,awb_source_page:p.page||null,awb_courier:p.courier||null};
-      const platforma=p.rows[0].platforma;
-      // RESET TOTAL (#519) — ACESTA era mecanismul EXACT care a produs bug-ul real, raportat direct, cu
-      // o captură: „ce caută aceste comenzi în staff la de împachetat în condițiile în care acestea sunt
-      // de astăzi?" — o comandă din 21.09, neatinsă de nimic altceva, și-a avansat singură created_at la
-      // „acum" doar pentru că i s-a (re)asociat un AWB printr-o citire în masă (🔁 Repune AWB-uri din
-      // arhivă, înainte de #518), reapărând direct în coada activă de azi din Staff. NOUA LOGICĂ (cerută
-      // direct, vezi comentariul identic de mai sus): acum chiar ASTA e comportamentul dorit — „AWB
-      // asociat cu succes = comandă inclusă automat", indiferent dacă potrivirea a fost automată sau
-      // dintr-o alegere manuală (`p._manualPick`). Un AWB real, nou citit ACUM, pe o comandă încă
-      // neîmpachetată, e exact semnalul „se expediază azi" — merită să fie în coada activă de azi. Rămâne
-      // sigur față de #519: `matched`/pcomAwbMatched nu include NICIODATĂ comenzi ambigue, iar o comandă
-      // deja împachetată (`impachetat=true`) tot nu apare în coada activă din Staff, oricât s-ar rescrie
-      // staff_trimis_at pe ea (filtrul de acolo cere explicit `impachetat=false`).
-      source.staff_trimis_at=new Date().toISOString();
-      await patchAwbWithSource(`comanda_id=eq.${encodeURIComponent(p.comandaId)}&platforma=eq.${encodeURIComponent(platforma)}`,source);
-      PCOM.filter(o=>o.comandaId===p.comandaId&&o.platforma===platforma).forEach(o=>Object.assign(o,{awb:p.awb,awbSourceFile:p.file||'',awbSourcePage:p.page||null,awbCourier:p.courier||'',...(source.staff_trimis_at?{staffTrimisAt:source.staff_trimis_at}:{})}));
-      // Previzualizare vizuală AWB — ÎN FUNDAL, vezi comentariul de mai sus (ramura „Neinclus").
-      if(p._blob)generateAwbPreviewInBackground(p._blob,p.page,p.awb,p.comandaId,platforma);
-    }
+    for(const p of matched)await applyOneAwbMatch(p);
     // Cerut direct — „dacă adăugăm 18 AWB-uri și avem 16 comenzi incluse, să primim notificare pentru
     // celelalte": pe lângă „găsită, dar comanda nu există" (unmatched), acum se păstrează la fel și
     // etichetele complet nerecunoscute (altă limbă/format nou) și cele anulate de curier — altfel
