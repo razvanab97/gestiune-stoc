@@ -4464,6 +4464,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:540,text:'Staff — „vânzări directe" fantomă eliminate, bug real grav, raportat direct: „dacă noi avem 13 comenzi incluse, de ce apar în Staff 19?" → „e greșeală dacă există vânzări directe azi, că nu au fost setate nici măcar 1". Investigat live, comandă cu comandă: toate cele 6 „vânzări directe" din coadă erau de fapt ECOUL scris automat în Jurnal la aplicarea unor comenzi eMAG/Trendyol VECHI (comise cu o zi sau mai mult în urmă, aplicate abia în dimineața asta de safety net-ul de 22:00) — câteva corespundeau unor comenzi deja ÎMPACHETATE. Cauza: Jurnalul primea „trimis spre Staff" necondiționat la orice scriere, inclusiv la aceste ecouri automate — protecția existentă (din computeOrders, staff.html) care ar fi trebuit să le anuleze compară pe ziua ORIGINALĂ a comenzii, dar ecoul se scrie mereu cu ziua APLICĂRII — aproape mereu diferite când o comandă se aplică a doua zi sau mai târziu. Acum, trimiterea spre Staff e condiționată explicit (același tipar ca #525/#526): implicit TRUE, păstrat DOAR pentru o vânzare directă REALĂ (din căutare, „+1" rapid, corecție „Vânzări azi"), FALSE la toate cele 3 ecouri automate (aplicare comandă, safety net 22:00, corecție retroactivă de stoc pe o comandă deja aplicată) — plus o reparație vecină găsită la scriere: dacă o vânzare reală cade pe aceeași zi+produs cu un ecou mai vechi, acum e promovată corect spre Staff, în loc să rămână tăcut invizibilă pe un rând neobservat. Corectate direct, live, cele 6 rânduri de azi (verificate unul câte unul — fiecare urmărit până la comanda de platformă reală din spate) — DOAR flagul de vizibilitate în Staff a fost atins, cantitatea/evidența din Jurnal rămân identice. Staff a revenit exact la 13, cum era de așteptat. Verificat cu 14 teste izolate pe funcția reală extrasă din cod (vânzare reală vs. ecou pe rând nou, aceleași cazuri pe rând deja existent, promovarea unei vânzări reale peste un ecou mai vechi, un ecou ulterior nu poate retrage o trimitere reală deja făcută), rulate de 2 ori, plus numărătoarea finală confirmată live cu logica reală din staff.html rulată pe date live.',date:'2026-10-09'},
   {n:539,text:'Asociază AWB-uri — recunoaște un curier nou, cerut direct, pe un caz real, cu captură: eticheta „012EMGXL23176005001.pdf" cădea complet în „❔ Format nerecunoscut, sărite (fără AWB/comandă identificabile)" — fără text de citit (scanată) și fără structura de nume cu „_" deja cunoscută (comandă_curier_AWB.pdf), nu rămânea NICIO acțiune posibilă, nici măcar „🔗 Asociază manual". „Aici să ne permită să alegem noi comanda și pe viitor să înțeleagă cum funcționează și să asocieze": numele fișierului CHIAR conține codul AWB (generat de Sameday prin integrarea eMAG — format confirmat pe 2 etichete reale, „012EMGXB..."/„012EMGXL..."), doar fără comandă/curier în față, ca la celelalte. Recunoscut acum direct din nume — linia intră pe fluxul normal „negăsită", cu „🔗 Asociază manual" (alegi tu comanda) și mesaj dedicat, clar („AWB citit din numele fișierului, fără niciun număr de comandă pe etichetă" — nu „Comanda  (AWB...)" gol, confuz). Pe viitor, orice etichetă din acest curier cu același tipar de nume e recunoscută automat, din prima, fără să mai fie nevoie să fie raportată din nou. Verificat cu 23 de teste izolate pe funcțiile reale extrase din cod (ambele etichete reale confirmate, formatul vechi neschimbat, nume nelegate de niciun format tot resping corect — nu devine prea permisiv, mesaj dedicat randat corect, butonul de asociere manuală prezent), rulate de 2 ori.',date:'2026-10-09'},
   {n:538,text:'Asociază AWB-uri — re-verificare live chiar înainte de a renunța, cerut direct, pe un caz real, cu captură: 6 comenzi Trendyol arătau „negăsită sau ambiguă în Comenzi Platforme" în previzualizare, deși EXISTAU deja în bază, cu AWB-ul deja scris corect — verificat direct în Supabase, comandă cu comandă — „să se asocieze toate automat cu comenzile din sistem". Cauza: o comandă poate apărea în sistem (import separat, API/XLSX) ÎNTRE momentul citirii etichetei AWB și momentul la care apeși „✓ Asociază AWB-urile" — căutarea inițială, făcută o singură dată la citire, nu mai reflectă starea reală de atunci încolo. Acum, chiar înainte să marcheze definitiv o etichetă ca eroare de rezolvat manual, orice linie „negăsită" care TOTUȘI are un cod de comandă citit de pe etichetă primește o ultimă interogare live, directă în bază — dacă între timp comanda a apărut, se asociază și se include exact ca o potrivire găsită de la început, fără nicio diferență. O etichetă complet nerecunoscută (fără niciun cod de comandă citit) nu are ce re-verifica, rămâne neschimbată. Verificat cu 17 teste izolate pe funcția reală extrasă din cod (comandă apărută între timp → găsită și asociată; comandă genuin inexistentă → rămâne eroare; etichetă fără cod → fără interogare inutilă; linie deja potrivită la citire → neatinsă; eșec de rețea la re-verificare → nu blochează restul), rulate de 2 ori.',date:'2026-10-09'},
   {n:537,text:'Asociază AWB-uri — picker-ul manual asociază ȘI include instant, plus corectare dacă ai greșit, cerut direct, pe doi pași din aceeași conversație. (1) „asocierea trebuie să se facă fără să mai [trebuiască] Inclus [separat]. Activăm Inclus o dată cu asocierea comenzii": alegerea unei comenzi din „🔗 Asociază manual" scria AWB-ul doar vizual în previzualizare — comanda tot rămânea nescrisă în bază până la click-ul separat pe „✓ Asociază AWB-urile" de mai jos. Acum, alegerea din picker E confirmarea explicită — scrie direct (comandă + Inclus + trimis spre Staff), fără să mai aștepte butonul de jos. (2) Interjectat imediat, pe un caz real, cu captură (aceeași clientă, 2 etichete diferite, ambele potrivite pe ACEEAȘI comandă): „să poți selecta din nou, acolo unde e posibil să fi greșit asocierea manuală". Fiecare linie deja rezolvată (automat sau manual) are acum un buton „🔄 Altă comandă" — redeschide picker-ul, iar alegerea unei comenzi noi desface ÎNTÂI greșeala veche (comanda creată doar de acel pick se șterge; una deja existentă rămâne Inclusă, doar i se curăță AWB-ul greșit, cu filtru suplimentar ca să nu atingă un AWB scris între timp de altceva), apoi scrie noua asociere — niciodată 2 comenzi cu același AWB deodată. Verificat cu 22 de teste izolate pe funcțiile reale extrase din cod (re-alegere pe comandă nou-creată vs. deja existentă, aceeași comandă aleasă din nou = no-op, prima alegere pe o linie încă nerezolvată, modul picker al erorilor din clopoțel neatins, plus o gardă defensivă descoperită chiar în timpul testării — linia aleasă dispărută între deschiderea picker-ului și click nu mai poate bloca restul), rulate de 2 ori.',date:'2026-10-08'},
@@ -8308,7 +8309,21 @@ function applyJurnalEntryLocal(ds,p,q){
 // comenzi (indiferent din ce zi e comanda pe eMAG/Trendyol) trebuie să se vadă în Jurnal/Vânzări azi
 // exact în ziua în care CHIAR încarci fișierul, ca să urmărești evoluția stocului pe zilele tale de
 // lucru, nu pe datele originale ale comenzilor.
-async function saveJurnalEntry(p, q){
+// sendToStaff — bug real, grav, raportat direct: „daca noi avem 13 comenzi incluse, de ce apar in
+// staff 19?" → „e greseala daca exista vanzari directe astazi, ca nu au fost setate nici macar 1".
+// Investigat live, pe date reale: toate cele 6 „vânzări directe" fantomă erau de fapt ECOUL scris aici
+// la aplicarea unor comenzi eMAG/Trendyol VECHI (comise cu o zi+ în urmă, aplicate abia azi-dimineață de
+// safety net-ul de 22:00 — autoApplyStalePendingImports) — câteva chiar deja ÎMPACHETATE pe comanda
+// reală. Comentariul vechi de mai jos presupunea ecoul „inofensiv" pentru că `coveredByPlatform` din
+// computeOrders (staff.html) l-ar anula — DAR acel dedup compară pe ZIUA comenzii ORIGINALE
+// (platforma_comenzi.created_at), în timp ce ecoul se scrie mereu cu `ds=td()` (ziua APLICĂRII) — quasi
+// mereu diferite când o comandă se aplică a doua zi sau mai târziu, exact cazul safety net-ului de
+// 22:00. Rezultat: Staff arăta o „vânzare directă" fantomă, duplicat al unei comenzi deja urmărite (sau
+// deja împachetate) în altă parte a cozii. Acum parametrizat (același tipar ca la #525/#526,
+// commitPcomLine/sendToStaff): implicit TRUE, păstrat NUMAI pentru o vânzare directă REALĂ, inițiată de
+// un om (sellSearch/qSell/updateTQ) — FALSE explicit la toate cele 3 ecouri automate, fără nicio
+// vânzare reală în spate (autoApplyStalePendingImports, applyPcomImport, pcomAdjustAppliedStock).
+async function saveJurnalEntry(p, q, sendToStaff=true){
   const ds=td();
   if(!sbReady){
     applyJurnalEntryLocal(ds,p,q);
@@ -8317,16 +8332,22 @@ async function saveJurnalEntry(p, q){
   }
   try{
     // check if entry exists today for this product
-    const ex=await dbGet(`jurnal?data=eq.${ds}&product_id=eq.${p.id}&select=id,qty`);
+    const ex=await dbGet(`jurnal?data=eq.${ds}&product_id=eq.${p.id}&select=id,qty,staff_trimis_at`);
     if(ex&&ex.length>0){
-      await dbPatch(`jurnal?id=eq.${ex[0].id}`,{qty:ex[0].qty+q});
+      const patchBody={qty:ex[0].qty+q};
+      // Altfel o vânzare directă REALĂ, care se întâmplă să cadă pe ACEEAȘI zi+produs cu un ecou mai
+      // devreme (sendToStaff=false, ex. o comandă veche aplicată dimineața de safety net), ar doar
+      // ADĂUGA cantitate pe un rând care nu a ajuns NICIODATĂ vizibil în Staff — vânzarea reală s-ar
+      // pierde tăcut din coada de împachetat. O dată trimis real spre Staff în ziua asta, rămâne așa —
+      // un ecou ULTERIOR (sendToStaff=false) nu-l mai poate retrage.
+      if(sendToStaff&&!ex[0].staff_trimis_at)patchBody.staff_trimis_at=new Date().toISOString();
+      await dbPatch(`jurnal?id=eq.${ex[0].id}`,patchBody);
     }else{
-      // staffTrimisAt (vezi RESET TOTAL, #519) — o vânzare directă nouă e „trimisă spre împachetare"
-      // chiar în momentul vânzării, la fel ca o comandă nouă de platformă; rândurile-ecou scrise automat
-      // la aplicarea unei comenzi eMAG/Trendyol (CLAUDE.md — „se scriu automat și în Jurnal") primesc
-      // aceeași marcă, dar oricum nu formează propriul card în Staff (vezi coveredByPlatform din
-      // computeOrders) — inofensiv, nu doar corect.
-      await dbPost('jurnal',{data:ds,product_id:p.id,product_name:p.name,category:p.category||'',price_sell:p.priceSell||0,img:p.img||'',qty:q,staff_trimis_at:new Date().toISOString()});
+      // staffTrimisAt (vezi RESET TOTAL, #519) — o vânzare directă REALĂ e „trimisă spre împachetare"
+      // chiar în momentul vânzării, la fel ca o comandă nouă de platformă. `sendToStaff` distinge asta
+      // de rândurile-ecou scrise automat la aplicarea unei comenzi eMAG/Trendyol (CLAUDE.md — „se scriu
+      // automat și în Jurnal") — vezi comentariul de mai sus, acelea NU mai primesc marca.
+      await dbPost('jurnal',{data:ds,product_id:p.id,product_name:p.name,category:p.category||'',price_sell:p.priceSell||0,img:p.img||'',qty:q,staff_trimis_at:sendToStaff?new Date().toISOString():null});
     }
     // actualizează local, fără re-descărcare completă — jurnalul poate avea mii de rânduri după luni
     // de utilizare, iar refetch-ul întregii tabele la fiecare vânzare (inclusiv la import în bloc din
@@ -17165,7 +17186,11 @@ async function autoApplyStalePendingImports(){
         await logMove('out',p.name,it.cantitate,`Vânzare ${pcomPlatLabel(it.platforma)} (comandă ${it.comandaId||'—'}) — aplicată automat la 22:00, rămasă neconfirmată`,p.id);
         TS[p.id]=(TS[p.id]||0)+it.cantitate;
         await saveTodaySale(p.id,TS[p.id]);
-        await saveJurnalEntry(p,it.cantitate);
+        // sendToStaff=false — ecou de Jurnal al unei comenzi de platformă deja urmărite în Staff prin
+        // propriul rând (vezi comentariul de la saveJurnalEntry); comanda asta tocmai confirmată aici e
+        // adesea mai veche de o zi, deci ziua ecoului NU mai coincide cu ziua comenzii — fără acest
+        // parametru, ar apărea ca o „vânzare directă" fantomă, duplicat.
+        await saveJurnalEntry(p,it.cantitate,false);
         applied++;
       }catch(e){console.warn('Nu am putut auto-aplica comanda',it.comandaId,e);}
     }
@@ -18056,7 +18081,9 @@ async function pcomAdjustAppliedStock(row,p,delta){
   }else if(delta>0){
     TS[p.id]=(TS[p.id]||0)+delta;
     try{await saveTodaySale(p.id,TS[p.id]);}catch(e){console.warn('Nu am putut actualiza „Vânzări azi”:',e);}
-    await saveJurnalEntry(p,delta);
+    // sendToStaff=false — ecou de corecție pe o comandă de platformă deja urmărită în Staff, nu o
+    // vânzare directă nouă (vezi comentariul de la saveJurnalEntry).
+    await saveJurnalEntry(p,delta,false);
   }
   await logMove(delta>0?'out':'in',p.name,Math.abs(delta),`Corecție comandă ${pcomPlatLabel(row.platforma)} (comandă ${row.comandaId||'—'})`,p.id);
 }
@@ -20233,7 +20260,10 @@ async function applyPcomImport(){
         // urmărească evoluția stocului pe zilele lui de lucru, nu pe datele originale ale comenzilor.
         TS[p.id]=(TS[p.id]||0)+it.cantitate;
         await saveTodaySale(p.id,TS[p.id]);
-        await saveJurnalEntry(p,it.cantitate);
+        // sendToStaff=false — ecou de Jurnal al comenzii tocmai aplicate, deja urmărită în Staff prin
+        // propriul rând din platforma_comenzi (vezi comentariul de la saveJurnalEntry) — nu o vânzare
+        // directă nouă, separată.
+        await saveJurnalEntry(p,it.cantitate,false);
         ok++;
         succeeded.add(it);
       }catch(errLine){
