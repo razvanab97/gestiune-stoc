@@ -4237,7 +4237,7 @@ poza principală a produsului — orice apel openImgZoom(src) deschide aceeași 
     <div class="invx-summary">
       <div class="invx-summary-card">
         <div class="invx-summary-lbl">Număr factură</div>
-        <input type="text" id="inv-number" class="invx-summary-input" placeholder="ex: FAC-2026-00123">
+        <input type="text" id="inv-number" class="invx-summary-input" placeholder="ex: FAC-2026-00123" oninput="renderInvPreview()">
       </div>
       <div class="invx-summary-card">
         <div class="invx-summary-lbl">Cost transport</div>
@@ -4250,7 +4250,7 @@ poza principală a produsului — orice apel openImgZoom(src) deschide aceeași 
       </div>
       <div class="invx-summary-card">
         <div class="invx-summary-lbl">Furnizor</div>
-        <input type="text" id="inv-supplier" class="invx-summary-input" list="inv-supplier-list" placeholder="ex: Maxy">
+        <input type="text" id="inv-supplier" class="invx-summary-input" list="inv-supplier-list" placeholder="ex: Maxy" oninput="renderInvPreview()">
       </div>
     </div>
     <div class="inv-drop">
@@ -4464,6 +4464,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:543,text:'Importă factură — avertisment dacă factura pare deja încărcată, cerut direct: „în caz că se aseamănă o comandă sau chiar e aceeași factură, să ne notifice platforma precum că deja a fost încărcată". Compară automat, pe loc (fără nicio scriere în bază), cu tot istoricul deja încărcat din „Comenzi stoc": (1) EXACT — același număr de factură + același furnizor (dacă ambele sunt completate) — avertisment roșu, cu data/cantitatea/valoarea importului anterior, indiferent cât de vechi e. (2) ASEMĂNĂTOARE — același furnizor, recent (ultimele 7 zile), ȘI (produse comune ≥60% din factura curentă SAU valoare totală foarte apropiată, ≤3%) — avertisment portocaliu, mai discret. Praguri deliberat stricte (aceeași logică folosită deja la potrivirea AWB-urilor) — o reaprovizionare normală, periodică, de la același furnizor nu declanșează avertismentul degeaba, doar un import genuin suspect de duplicat. Verificarea rulează automat după orice parsare (PDF/CSV/poze) și se reactualizează live dacă editezi manual numărul facturii sau furnizorul. Verificat cu 18 teste izolate pe funcțiile reale extrase din cod (potrivire exactă indiferent de vechime, furnizor diferit nu contează ca exact, produse comune recente → similar, aceleași produse dar vechi → fără avertisment, produse diferite → fără avertisment, mesajele și culorile corecte pe fiecare caz), rulate de 2 ori.',date:'2026-10-12'},
   {n:542,text:'Jurnal → „Comenzi stoc" — poza reală a produsului apare acum pe fiecare linie, cerut direct: „să apară imaginile și aici, să văd despre ce-i vorba mai ușor". Fiecare produs dintr-o comandă de stoc (factură importată, poze de comandă, adăugare manuală) arăta mereu aceeași cutie placeholder 📦, indiferent dacă produsul chiar avea poză reală în Inventar — doar liniile „produs nou" păstrau o poză proprie (din formularul completat la import); liniile „actualizat" (marea majoritate) n-o aveau niciodată. Acum se caută produsul curent și se arată poza LUI de ACUM (nu una înghețată din momentul comenzii — dacă poza s-a adăugat/schimbat între timp, aici apare mereu cea actuală), exact același tipar (click pe poză → deschide produsul pentru editare) deja folosit la tab-ul „Vânzări" din aceeași pagină. O linie „cod negăsit"/nerezolvată (fără niciun produs identificat) rămâne cu placeholder, dar fără click — nimic de editat. Verificat cu 13 teste izolate pe funcția reală extrasă din cod (poză reală afișată corect, produs fără poză încă rămâne placeholder dar clickabil, „produs nou" cu poză proprie pe detaliu, linie nerezolvată rămâne neclickabilă, restul rândului neschimbat), rulate de 2 ori.',date:'2026-10-12'},
   {n:541,text:'Picker-ul de asociere AWB ("🔗 Asociază manual"/"🔄 Altă comandă") caută acum și după platformă, cerut direct: „să funcționeze și mai bine, să se găsească după nume platformă, nume client, produs — să fie complet sistemul de căutare, să găsim ușor". Căutarea acoperea deja comandă/client/produs/titlu, dar nu și platforma (eMAG/Trendyol/Vinted) — scris „trendyol" nu restrângea deloc lista la comenzile de pe Trendyol. Acum funcționează indiferent cum e scris (majuscule/minuscule, „eMAG" sau „emag"), atât în căutarea locală instant, cât și în interogarea live suplimentară (pentru căutări de minim 3 caractere). Textul din câmpul de căutare a fost actualizat să reflecte asta („Caută după platformă, client, comandă sau produs"). Verificat cu 6 teste izolate pe funcția reală extrasă din cod (platformă găsită local, insensibil la majuscule, restul criteriilor neschimbate, platformă inclusă și în interogarea live, căutare goală neafectată), rulate de 2 ori.',date:'2026-10-09'},
   {n:540,text:'Staff — „vânzări directe" fantomă eliminate, bug real grav, raportat direct: „dacă noi avem 13 comenzi incluse, de ce apar în Staff 19?" → „e greșeală dacă există vânzări directe azi, că nu au fost setate nici măcar 1". Investigat live, comandă cu comandă: toate cele 6 „vânzări directe" din coadă erau de fapt ECOUL scris automat în Jurnal la aplicarea unor comenzi eMAG/Trendyol VECHI (comise cu o zi sau mai mult în urmă, aplicate abia în dimineața asta de safety net-ul de 22:00) — câteva corespundeau unor comenzi deja ÎMPACHETATE. Cauza: Jurnalul primea „trimis spre Staff" necondiționat la orice scriere, inclusiv la aceste ecouri automate — protecția existentă (din computeOrders, staff.html) care ar fi trebuit să le anuleze compară pe ziua ORIGINALĂ a comenzii, dar ecoul se scrie mereu cu ziua APLICĂRII — aproape mereu diferite când o comandă se aplică a doua zi sau mai târziu. Acum, trimiterea spre Staff e condiționată explicit (același tipar ca #525/#526): implicit TRUE, păstrat DOAR pentru o vânzare directă REALĂ (din căutare, „+1" rapid, corecție „Vânzări azi"), FALSE la toate cele 3 ecouri automate (aplicare comandă, safety net 22:00, corecție retroactivă de stoc pe o comandă deja aplicată) — plus o reparație vecină găsită la scriere: dacă o vânzare reală cade pe aceeași zi+produs cu un ecou mai vechi, acum e promovată corect spre Staff, în loc să rămână tăcut invizibilă pe un rând neobservat. Corectate direct, live, cele 6 rânduri de azi (verificate unul câte unul — fiecare urmărit până la comanda de platformă reală din spate) — DOAR flagul de vizibilitate în Staff a fost atins, cantitatea/evidența din Jurnal rămân identice. Staff a revenit exact la 13, cum era de așteptat. Verificat cu 14 teste izolate pe funcția reală extrasă din cod (vânzare reală vs. ecou pe rând nou, aceleași cazuri pe rând deja existent, promovarea unei vânzări reale peste un ecou mai vechi, un ecou ulterior nu poate retrage o trimitere reală deja făcută), rulate de 2 ori, plus numărătoarea finală confirmată live cu logica reală din staff.html rulată pe date live.',date:'2026-10-09'},
@@ -23798,6 +23799,51 @@ function removeInvParsedLine(idx){
   invParsed.splice(idx,1);
   renderInvPreview();
 }
+// Detectare factură/comandă deja încărcată — cerut direct: „în caz că se aseamănă o comandă sau chiar
+// e aceeași factură, să ne notifice platforma precum că deja a fost încărcată". Rulează pe loc, la
+// fiecare randare a previzualizării (parsare nouă SAU editare manuală a numărului/furnizorului) — fără
+// nicio scriere în bază, doar o comparație cu istoricul deja încărcat (OI, „Comenzi stoc"). Două praguri
+// distincte: (1) EXACT — același număr de factură (+ același furnizor, dacă ambele sunt completate) —
+// semnal cert, indiferent cât de vechi e importul anterior. (2) SIMILAR — același furnizor, recent
+// (≤7 zile) ȘI (SKU-uri comune ≥60% din factura curentă SAU valoare totală apropiată, ≤3%) — praguri
+// deliberat stricte, ca o reaprovizionare normală, periodică, de la același furnizor (produse comune,
+// dar o comandă nouă, reală) să nu declanșeze avertismentul degeaba — exact logica deja folosită la
+// potrivirea AWB-urilor (nu marca nimic „probabil" dacă există risc real de fals pozitiv).
+function invoiceDuplicateMatches(){
+  const num=(document.getElementById('inv-number')?.value||'').trim().toLowerCase();
+  const sup=(document.getElementById('inv-supplier')?.value||'').trim().toLowerCase();
+  if(!num&&!sup)return{exact:null,similar:null};
+  const curSkus=new Set(invParsed.map(it=>(it.sku||'').toLowerCase()).filter(Boolean));
+  const curTotal=invParsed.reduce((a,it)=>a+(Number(it.qty)||0)*(Number(it.costRon)||0),0);
+  let exact=null,similar=null;
+  OI.forEach(o=>{
+    const oNum=(o.invoiceNumber||'').trim().toLowerCase();
+    const oSup=(o.supplier||'').trim().toLowerCase();
+    if(num&&oNum&&oNum===num&&(!sup||!oSup||oSup===sup)){
+      if(!exact||new Date(o.createdAt)>new Date(exact.createdAt))exact=o;
+      return;
+    }
+    if(sup&&oSup&&oSup===sup){
+      const daysAgo=(Date.now()-new Date(o.createdAt||0).getTime())/86400000;
+      if(daysAgo>7)return;
+      const oSkus=new Set((o.details||[]).map(d=>(d.sku||'').toLowerCase()).filter(Boolean));
+      const overlap=curSkus.size?[...curSkus].filter(s=>oSkus.has(s)).length/curSkus.size:0;
+      const valClose=curTotal>0&&o.totalValue>0&&Math.abs(o.totalValue-curTotal)<=Math.max(curTotal,o.totalValue)*0.03;
+      if((overlap>=0.6||valClose)&&(!similar||new Date(o.createdAt)>new Date(similar.createdAt)))similar=o;
+    }
+  });
+  return{exact,similar};
+}
+function invoiceDuplicateBannerHtml(){
+  const{exact,similar}=invoiceDuplicateMatches();
+  const hit=exact||similar;
+  if(!hit)return'';
+  const dt=new Date(hit.createdAt||Date.now()).toLocaleString('ro-RO',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'});
+  const label=exact
+    ?`⚠️ Această factură pare DEJA ÎNCĂRCATĂ — același număr${hit.supplier?' și furnizor':''}: „${esc(hit.invoiceNumber)}"${hit.supplier?' · '+esc(hit.supplier):''}, pe ${dt} (${fmtQty(hit.totalQty)} buc. · ${Number(hit.totalValue||0).toFixed(2)} RON). Verifică înainte să imporți din nou, ca stocul să nu intre de 2 ori.`
+    :`ℹ️ O comandă ASEMĂNĂTOARE de la ${esc(hit.supplier)} a fost încărcată pe ${dt} (${fmtQty(hit.totalQty)} buc. · ${Number(hit.totalValue||0).toFixed(2)} RON) — verifică dacă nu cumva e aceeași factură.`;
+  return`<div class="inv-prev-row" style="color:${exact?'var(--rd)':'var(--or)'};font-weight:700;flex-wrap:wrap;gap:8px;margin-bottom:10px">${label}</div>`;
+}
 function renderInvPreview(){
   const prev=document.getElementById('inv-preview');
   const tableHead=document.getElementById('invx-table-head');
@@ -23853,7 +23899,7 @@ function renderInvPreview(){
   const missC=invParsed.filter(i=>!i.produsId&&!i.newProduct&&i.onlyExisting).length;
   const receiptC=invParsed.filter(i=>i.produsId&&invoiceReceiptPlan(P.find(x=>x.id===i.produsId),i.qty).fromIncoming>0).length;
   const receiptQty=invParsed.reduce((n,i)=>{const p=i.produsId?P.find(x=>x.id===i.produsId):null;return n+(p?invoiceReceiptPlan(p,i.qty).fromIncoming:0);},0);
-  prev.innerHTML=rows;
+  prev.innerHTML=invoiceDuplicateBannerHtml()+rows;
   // Footer sticky — X produse / Y unități comandate / Z articole fizice / Total estimat, cerut explicit
   const totalUnits=invParsed.reduce((s,i)=>s+(Number(i.qty)||0),0);
   const totalPieces=invParsed.reduce((s,i)=>s+(Number(i.qty)||0)*(Number(i.piecesPerUnit)||1),0);
