@@ -414,9 +414,21 @@ function awbBoxHtml(awb,courier,previewUrl,comandaId,platforma){
   const s=esc(awb),head=s.slice(0,-4),tail=s.slice(-4);
   const lbl=courier?`${esc(courier)} · AWB`:'AWB';
   const previewHtml=previewUrl
-    ?`<img class="awb-preview-thumb" src="${esc(previewUrl)}" onclick="event.stopPropagation();openAwbPreviewZoom('${esc(previewUrl)}')" onerror="this.style.display='none'">`
+    ?`<img class="awb-preview-thumb" src="${esc(previewUrl)}" data-comanda-id="${esc(comandaId)}" data-platforma="${esc(platforma)}" onclick="event.stopPropagation();openAwbPreviewZoom('${esc(previewUrl)}')" onerror="replaceBrokenAwbPreview(this)">`
     :(comandaId&&platforma?`<button type="button" class="awb-preview-placeholder" onclick="event.stopPropagation();openAwbPreviewCapture('${esc(comandaId)}','${esc(platforma)}')" title="Adaugă poză etichetă">📷</button>`:'');
   return`<div class="awb-box"><div><div class="awb-lbl">${lbl}</div><div class="awb-num">${head}<span class="awb-num-tail">${tail}</span></div></div>${previewHtml}</div>`;
+}
+function replaceBrokenAwbPreview(img){
+  const comandaId=img?.dataset?.comandaId,platforma=img?.dataset?.platforma;
+  if(!img)return;
+  // Un link Storage vechi/șters nu mai lasă iconița stricată în card. Pentru o comandă identificabilă
+  // rămâne alternativa reală de salvare a etichetei de pe tabletă; Adminul va încerca separat refacerea
+  // automată din PDF-ul arhivat pe Mac.
+  if(!comandaId||!platforma){img.remove();return;}
+  const b=document.createElement('button');
+  b.type='button';b.className='awb-preview-placeholder';b.title='Poză etichetă indisponibilă — adaugă una';b.textContent='📷';
+  b.onclick=e=>{e.stopPropagation();openAwbPreviewCapture(comandaId,platforma);};
+  img.replaceWith(b);
 }
 let awbPhotoStream=null,awbPhotoComandaId='',awbPhotoPlatforma='';
 function openAwbPreviewZoom(url){

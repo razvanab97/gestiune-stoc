@@ -4464,6 +4464,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:548,text:'Staff — previzualizarea AWB se recuperează acum automat, nu mai depinde de apăsarea unui buton: pe comanda reală eMAG #1027256621 din 12 octombrie, AWB-ul și PDF-ul-sursă existau corect, însă awb_preview_url rămăsese gol după asociere, iar tableta afișa doar un pătrățel fără etichetă. La pornirea Adminului, sistemul caută tăcut comenzile active cu AWB+PDF-sursă, dar fără miniatură, recitește pagina exactă din arhiva locală a Mac-ului și o urcă în Storage; procesul nu schimbă AWB-ul, comanda, stocul sau arhiva. Pentru etichetele noi rămân și reîncercările de upload existente. În Staff, un URL de imagine invalid nu mai lasă iconiță stricată: revine elegant la opțiunea de fotografiere a etichetei. Verificat pe date reale: PDF-ul sursă al comenzii raportate există în arhiva locală și poate fi reconstituit.',date:'2026-10-12'},
   {n:547,text:'Asociază AWB-uri — previzualizarea se „auto-vindecă" singură, bug real găsit reverificând direct cerința de la #538: „de ce nu s-au inclus automat comenzile pentru care am adăugat AWB?... așa am stabilit... se includ singure, astfel încât să apară în Staff". Investigat live, comandă cu comandă (535103193 și altele 9): toate ERAU de fapt deja asociate+incluse+trimise spre Staff corect — verificat direct în Supabase — dar previzualizarea TOT arăta „negăsită", confuz, pentru că re-verificarea live din #538 rula DOAR la click-ul „✓ Asociază AWB-urile", nu și cât timp previzualizarea pur și simplu stă deschisă (sau se recitește același dosar) — dacă o comandă se rezolva pe alt drum (import normal, rulat aproape simultan) ÎNTRE citirea etichetei și acel click, avertismentul rămânea afișat mult timp după ce nu mai era valabil. Acum aceeași verificare rulează la FIECARE randare a previzualizării, nu doar la final — orice linie „negăsită" cu un cod de comandă se re-verifică automat, în fundal, iar dacă între timp chiar s-a rezolvat, dispare singură din lista de erori și se include automat, fără niciun click. Verificat cu 18 teste izolate pe funcțiile reale extrase din cod (comandă rezolvată automat la simpla randare, fără re-verificări suprapuse, fără re-randări inutile quando nimic nu s-a schimbat), plus suita completă de 17 teste de la #538 re-rulată pe codul refactorizat — toate verzi, rulate de 2 ori.',date:'2026-10-12'},
   {n:546,text:'Comenzi Platforme → picker-ul de alegere produs recomandă acum primele produsele cele mai comandate, cerut direct: „atunci când căutăm după text, să ni se recomande în prima parte întâi produsele cele mai comandate — care au mai fost selectate în ultima perioadă". Lista era sortată strict alfabetic — un produs căutat des (ex. „Statie radio...") apărea amestecat printre zeci de rezultate text-identice, fără nicio prioritate reală, greu de găsit rapid în liste lungi. Acum numără comenzile reale de platformă (nu doar stoc adăugat) din ultimele 90 de zile, per produs — frecvență și recență într-un singur semnal — și arată primele cele cu cele mai multe comenzi recente; produsele fără nicio comandă recentă rămân la coadă, tot alfabetic, ca până acum. Căutarea text rămâne identică — orice căutare moștenește automat noua prioritate, fără nicio schimbare la logica de filtrare în sine. Verificat cu 9 teste izolate pe funcțiile reale extrase din cod (produs comandat des apare primul la căutare, fallback alfabetic neschimbat, comenzi anulate nu contează, comenzi mai vechi de 90 de zile nu contează, produs nou fără nicio comandă nu crapă), rulate de 2 ori.',date:'2026-10-12'},
   {n:545,text:'Safety net-ul de 22:00 (autoApplyStalePendingImports) rulează acum fiabil, re-confirmat direct: „am stabilit că dacă nu se dă Aplică import până seara la ora 22:00, să se adauge automat importul pentru produsele care au AWB-uri". Mecanismul exista deja, corect — dar se declanșa STRICT o singură dată, la deschiderea/reîncărcarea paginii. Pe un tab lăsat deschis toată ziua, fără reîncărcare (exact modul normal de lucru, cu Dashboard-ul deschis permanent), pragul de 22:00 putea trece complet neobservat — verificarea abia rula a doua zi, la următoarea deschidere a paginii, mult după ora stabilită. Acum rulează și independent, la fiecare 5 minute, indiferent dacă tab-ul e activ, ascuns sau în fundal — nu mai depinde de un reload care s-ar putea să nu se întâmple deloc în seara respectivă. Funcția rămâne exact ce era (nicio comandă nouă auto-aplicată fără AWB, aceeași gardă de concurență) — doar momentul la care chiar ajunge să ruleze e acum garantat, nu opțional. Verificat: nicio comandă stale rămasă în bază chiar acum (confirmat live, 0 rezultate la aceeași interogare pe care o face funcția), plus 8 teste izolate pe funcția reală (interval corect de 5 minute, chemarea reală a auto-aplicării, nicio chemare dacă Supabase nu e conectat la momentul exact al verificării, fără timere duplicate la o a doua pornire), rulate de 2 ori.',date:'2026-10-12'},
@@ -7321,11 +7322,25 @@ async function uploadAwbPreviewToStorage(dataUrl){
 // asociere manuală), și NU suprascrie dacă între timp acel AWB a fost deja înlocuit cu altceva.
 async function generateAwbPreviewInBackground(blob,pageNum,awb,comandaId,platforma){
   if(!comandaId||!platforma||!awb)return;
-  try{
-    const dataUrl=await renderPdfPageToImageDataUrl(blob,pageNum);
-    const url=await uploadAwbPreviewToStorage(dataUrl);
-    await patchAwbWithSource(`comanda_id=eq.${encodeURIComponent(comandaId)}&platforma=eq.${encodeURIComponent(platforma)}&awb=eq.${encodeURIComponent(awb)}`,{awb_preview_url:url});
-  }catch(e){console.warn('Previzualizare AWB eșuată (fără impact asupra asocierii AWB în sine):',e);}
+  // Patru încercări — bug real, raportat direct, de 2 ori („iarăși nu apare poza AWB-ului"):
+  // verificat live, ~42% din comenzile cu sursă cunoscută (112 din 267) rămăseseră fără poză, deși
+  // mecanismul chiar funcționează (155 au reușit) — consistent cu eșecuri TRANZITORII (rețea, sau omul
+  // trece rapid la următoarea asociere cât timp randarea+upload-ul PDF-ului încă rula în fundal, la un
+  // lot mare), nu cu o cauză permanentă. Reîncercările cu pauze scurte prind exact genul
+  // ăsta de eșec, fără să transforme fluxul principal într-unul blocant (tot fire-and-forget) — vezi și
+  // backfillMissingAwbPreviews, pentru golurile deja existente, de dinainte de acest fix.
+  for(let attempt=1;attempt<=4;attempt++){
+    try{
+      const dataUrl=await renderPdfPageToImageDataUrl(blob,pageNum);
+      const url=await uploadAwbPreviewToStorage(dataUrl);
+      await patchAwbWithSource(`comanda_id=eq.${encodeURIComponent(comandaId)}&platforma=eq.${encodeURIComponent(platforma)}&awb=eq.${encodeURIComponent(awb)}`,{awb_preview_url:url});
+      return true;
+    }catch(e){
+      if(attempt===4)console.warn('Previzualizare AWB eșuată (fără impact asupra asocierii AWB în sine):',e);
+      else await new Promise(r=>setTimeout(r,attempt*1500));
+    }
+  }
+  return false;
 }
 
 // ── MAP DB ↔ APP ──
@@ -7979,7 +7994,7 @@ async function load(){
     hideLoading();
     buildCats('');renderToday();renderTable();buildJMonths();if(document.getElementById('page-raport')?.classList.contains('on')){buildRaportCats();renderRaport();}
     renderSupplierDatalist();
-    renderUpdWidget();renderNotif();renderDashboard();loadPcomImportState().finally(()=>{pcomApplyImportUiMode();refreshPcomAvailableOrdersOnLoad();});loadSyncImportState();loadStaffIssues();
+    renderUpdWidget();renderNotif();renderDashboard();loadPcomImportState().finally(()=>{pcomApplyImportUiMode();refreshPcomAvailableOrdersOnLoad();scheduleAwbPreviewBackfill();});loadSyncImportState();loadStaffIssues();
     pcomApplyImportUiMode();
     checkSupplierRestockAlerts();
     checkEditProductDeepLink();
@@ -19890,7 +19905,7 @@ function renderPcomRedesign(){
       <div class="pcx-card">
         <div class="pcx-card-hd"><div><div class="pcx-card-title">Expediere</div><div class="pcx-card-sub">Asociază AWB-urile existente sau generează etichete pentru expediere.</div></div><button type="button" class="pcx-help-btn" onclick="pcxToggleHelp('awb')">Cum funcționează?</button></div><div class="pcx-help" id="pcx-help-awb" style="display:none">${PCX_HELP.awb}</div>
         <div class="pcx-shipping-grid">
-          <section class="pcx-shipping-module"><h3>A. Asociază AWB-uri existente</h3><p>Încarcă PDF-uri de la FAN Courier, Trendyol sau alți curieri. Fișierele procesate din dosarul Mac rămân protejate împotriva recitirii.</p><div class="pcx-dropzone" onclick="document.getElementById('pcmi-awb-file').click()"><span class="ic">📮</span>Alege PDF-uri cu etichete AWB<span class="sub">Poți selecta mai multe PDF-uri deodată</span></div><div class="pcx-shipping-actions"><button type="button" class="btn btn-sm" id="pcx-awb-folder-btn" onclick="readAwbFolderPdfs()">📂 Citește din dosarul AWB-uri de pe Mac</button><button type="button" class="btn btn-sm" id="pcx-awb-archive-btn" onclick="readAwbFolderPdfs(true)" title="Pentru AWB-uri deja descărcate (arhivate automat), dar care lipsesc de pe o comandă — caută direct în Desktop/AWB-uri/procesate, STRICT ziua de azi">🔁 Repune AWB-uri din arhivă (azi)</button><button type="button" class="btn btn-sm" id="pcx-awb-print-btn" onclick="downloadActiveAwbPdf()">🖨️ PDF AWB comenzi incluse</button><button type="button" class="btn btn-sm" onclick="retrySavedAwbErrors()">↻ Reîncearcă erorile</button></div><div id="pcx-awb-parsing-slot"></div><div id="pcx-awb-preview-slot"></div><div id="pcx-awb-foot-slot" style="display:flex;justify-content:flex-end;margin-top:10px"></div></section>
+          <section class="pcx-shipping-module"><h3>A. Asociază AWB-uri existente</h3><p>Încarcă PDF-uri de la FAN Courier, Trendyol sau alți curieri. Fișierele procesate din dosarul Mac rămân protejate împotriva recitirii.</p><div class="pcx-dropzone" onclick="document.getElementById('pcmi-awb-file').click()"><span class="ic">📮</span>Alege PDF-uri cu etichete AWB<span class="sub">Poți selecta mai multe PDF-uri deodată</span></div><div class="pcx-shipping-actions"><button type="button" class="btn btn-sm" id="pcx-awb-folder-btn" onclick="readAwbFolderPdfs()">📂 Citește din dosarul AWB-uri de pe Mac</button><button type="button" class="btn btn-sm" id="pcx-awb-archive-btn" onclick="readAwbFolderPdfs(true)" title="Pentru AWB-uri deja descărcate (arhivate automat), dar care lipsesc de pe o comandă — caută direct în Desktop/AWB-uri/procesate, STRICT ziua de azi">🔁 Repune AWB-uri din arhivă (azi)</button><button type="button" class="btn btn-sm" id="pcx-awb-print-btn" onclick="downloadActiveAwbPdf()">🖨️ PDF AWB comenzi incluse</button><button type="button" class="btn btn-sm" onclick="retrySavedAwbErrors()">↻ Reîncearcă erorile</button><button type="button" class="btn btn-sm" id="pcx-awb-backfill-btn" onclick="backfillMissingAwbPreviews()" title="Completează poza etichetei pentru comenzi care au AWB asociat, dar la care generarea pozei a eșuat — recitește eticheta originală din arhiva de pe Mac">🖼️ Completează poze AWB lipsă</button></div><div id="pcx-awb-parsing-slot"></div><div id="pcx-awb-preview-slot"></div><div id="pcx-awb-foot-slot" style="display:flex;justify-content:flex-end;margin-top:10px"></div></section>
           <section class="pcx-shipping-module"><h3>B. Generează etichetă GLS — Vinted</h3><p>Generează PDF-ul pentru comenzile Vinted expediate prin punct de depunere GLS.</p><div id="pcx-gls-label-slot"></div></section>
           <section class="pcx-shipping-module"><h3>C. eMAG — Trimite AWB</h3><p>Emite direct o etichetă eMAG pentru o comandă confirmată.</p><div class="pcx-emag-awb-fields"><div class="pcx-fld"><label>Număr comandă</label><input id="pcx-emag-awb-order" inputmode="numeric" placeholder="ex. 123456789"></div><div class="pcx-fld"><label>Kg</label><input id="pcx-emag-awb-weight" type="number" min="0.01" step="0.01" value="1"></div><div class="pcx-fld"><label>Colete</label><input id="pcx-emag-awb-parcels" type="number" min="1" step="1" value="1"></div><button type="button" class="pcx-btn pcx-btn-primary" id="pcx-emag-awb-btn" onclick="issueEmagAwb()">Trimite AWB prin eMAG</button></div>
           <!-- IP public al conectorului (cerut direct — „se tot schimbă IP-ul, o secțiune unde-l putem
@@ -22703,6 +22718,74 @@ async function handleAwbPdfFile(ev){
 }
 function base64ToBlob(b64,type){
   return new Blob([Uint8Array.from(atob(b64),c=>c.charCodeAt(0))],{type});
+}
+// Reparație/backfill pentru pozele AWB lipsă — cerut direct, de 2 ori: „iarăși nu apare poza AWB-ului
+// în comenzile din Staff - repară - să apară mereu atunci când avem". Verificat live: generarea
+// inițială (generateAwbPreviewInBackground, la momentul asocierii) eșuează TĂCUT destul de des — 112
+// din 267 de comenzi cu sursă cunoscută (~42%) rămăseseră fără poză, deși mecanismul chiar funcționează
+// (155 au reușit) — consistent cu eșecuri TRANZITORII (rețea, sau omul trece rapid la următoarea
+// asociere într-un lot mare, cât timp randarea+upload-ul PDF-ului încă rula în fundal). Adăugat și o a
+// doua încercare automată la generarea inițială (vezi generateAwbPreviewInBackground) — asta de-aici
+// completează golurile deja existente, de DINAINTE de acel fix, plus orice mai scapă în viitor.
+// Spre deosebire de generarea inițială (care are deja blob-ul PDF-ului în memorie, din citirea curentă),
+// aici RE-CITIM fișierul sursă direct de pe Mac, din arhiva locală (/awb-archive — același mecanism ca
+// „🔁 Repune AWB-uri din arhivă") — awb_source_file/awb_source_page sunt deja salvate exact pentru asta,
+// indiferent cât timp a trecut de la asociere. Grupat pe zi (câte un singur apel către conector per zi
+// distinctă, nu unul per comandă), ca să nu încarce degeaba conectorul local pentru un lot mare. Ziua
+// se calculează din created_at, dar convertită corect în ora României (nu doar ziua UTC — o comandă
+// scrisă aproape de miezul nopții ar căuta altfel în ziua greșită de arhivă).
+function romaniaDayOf(isoUtc){
+  if(!isoUtc)return'';
+  try{return new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Bucharest'}).format(new Date(isoUtc));}
+  catch(e){return String(isoUtc).slice(0,10);}
+}
+let awbPreviewBackfillScheduled=false;
+function scheduleAwbPreviewBackfill(){
+  if(awbPreviewBackfillScheduled||!sbReady)return;
+  awbPreviewBackfillScheduled=true;
+  // Doar Adminul de pe Mac poate citi arhiva locală AWB. Nu blocăm pornirea ERP-ului și nu afișăm
+  // mesaje pe tabletă: este o reparație de întreținere pentru preview-uri, nu un import nou.
+  setTimeout(()=>backfillMissingAwbPreviews({silent:true,limit:80}),2500);
+}
+async function backfillMissingAwbPreviews(opts={}){
+  const silent=!!opts.silent,limit=Math.max(1,Math.min(Number(opts.limit)||40,80));
+  const btn=document.getElementById('pcx-awb-backfill-btn');
+  if(btn){btn.disabled=true;btn.textContent='Se completează…';}
+  try{
+    const rows=await dbGet(`platforma_comenzi?select=id,comanda_id,awb,awb_source_file,awb_source_page,created_at&awb_preview_url=is.null&awb_source_file=not.is.null&anulata=eq.false&order=created_at.desc&limit=${limit}`);
+    if(!rows.length){if(!silent)toast('Nicio poză AWB lipsă de completat ✓');return{done:0,failed:0};}
+    const byDay={};
+    rows.forEach(r=>{
+      const day=romaniaDayOf(r.created_at);if(!day)return;
+      (byDay[day]=byDay[day]||[]).push(r);
+    });
+    let done=0,failed=0;
+    for(const day of Object.keys(byDay)){
+      let archived;
+      try{archived=await localEmagJson('/awb-archive',{day},60000);}
+      catch(e){console.warn('Nu am putut citi arhiva AWB pentru '+day+':',e);failed+=byDay[day].length;continue;}
+      const files=archived?.files||[];
+      for(const r of byDay[day]){
+        const f=files.find(x=>x.name===r.awb_source_file);
+        if(!f){failed++;continue;}
+        try{
+          const blob=base64ToBlob(f.data,'application/pdf');
+          const dataUrl=await renderPdfPageToImageDataUrl(blob,r.awb_source_page||1);
+          const url=await uploadAwbPreviewToStorage(dataUrl);
+          await patchAwbWithSource(`id=eq.${r.id}`,{awb_preview_url:url});
+          done++;
+        }catch(e){console.warn('Nu am putut genera poza pentru comanda '+r.comandaId+':',e);failed++;}
+      }
+    }
+    if(!silent)toast(`${done} ${done===1?'poză AWB completată':'poze AWB completate'} ✓${failed?` · ${failed} nu s-au putut completa (etichetă nu mai e în arhivă sau eroare)`:''}`,failed&&!done?'err':undefined);
+    return{done,failed};
+  }catch(e){
+    if(!silent)toast('Eroare la completarea pozelor AWB: '+(e.message||e),'err');
+    console.warn('Nu am putut completa automat pozele AWB lipsă:',e);
+    return{done:0,failed:0,error:e};
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='🖼️ Completează poze AWB lipsă';}
+  }
 }
 // Tipărește într-un singur fișier doar etichetele comenzilor confirmate cu „Inclus” în Admin.
 // Nu depinde de statusul de pe tabletă și copiem exact pagina originală a curierului, reținută
