@@ -4464,6 +4464,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:546,text:'Comenzi Platforme → picker-ul de alegere produs recomandă acum primele produsele cele mai comandate, cerut direct: „atunci când căutăm după text, să ni se recomande în prima parte întâi produsele cele mai comandate — care au mai fost selectate în ultima perioadă". Lista era sortată strict alfabetic — un produs căutat des (ex. „Statie radio...") apărea amestecat printre zeci de rezultate text-identice, fără nicio prioritate reală, greu de găsit rapid în liste lungi. Acum numără comenzile reale de platformă (nu doar stoc adăugat) din ultimele 90 de zile, per produs — frecvență și recență într-un singur semnal — și arată primele cele cu cele mai multe comenzi recente; produsele fără nicio comandă recentă rămân la coadă, tot alfabetic, ca până acum. Căutarea text rămâne identică — orice căutare moștenește automat noua prioritate, fără nicio schimbare la logica de filtrare în sine. Verificat cu 9 teste izolate pe funcțiile reale extrase din cod (produs comandat des apare primul la căutare, fallback alfabetic neschimbat, comenzi anulate nu contează, comenzi mai vechi de 90 de zile nu contează, produs nou fără nicio comandă nu crapă), rulate de 2 ori.',date:'2026-10-12'},
   {n:545,text:'Safety net-ul de 22:00 (autoApplyStalePendingImports) rulează acum fiabil, re-confirmat direct: „am stabilit că dacă nu se dă Aplică import până seara la ora 22:00, să se adauge automat importul pentru produsele care au AWB-uri". Mecanismul exista deja, corect — dar se declanșa STRICT o singură dată, la deschiderea/reîncărcarea paginii. Pe un tab lăsat deschis toată ziua, fără reîncărcare (exact modul normal de lucru, cu Dashboard-ul deschis permanent), pragul de 22:00 putea trece complet neobservat — verificarea abia rula a doua zi, la următoarea deschidere a paginii, mult după ora stabilită. Acum rulează și independent, la fiecare 5 minute, indiferent dacă tab-ul e activ, ascuns sau în fundal — nu mai depinde de un reload care s-ar putea să nu se întâmple deloc în seara respectivă. Funcția rămâne exact ce era (nicio comandă nouă auto-aplicată fără AWB, aceeași gardă de concurență) — doar momentul la care chiar ajunge să ruleze e acum garantat, nu opțional. Verificat: nicio comandă stale rămasă în bază chiar acum (confirmat live, 0 rezultate la aceeași interogare pe care o face funcția), plus 8 teste izolate pe funcția reală (interval corect de 5 minute, chemarea reală a auto-aplicării, nicio chemare dacă Supabase nu e conectat la momentul exact al verificării, fără timere duplicate la o a doua pornire), rulate de 2 ori.',date:'2026-10-12'},
   {n:544,text:'„Valoare stoc" (Dashboard și Inventar) — bug real reparat, raportat direct: „cred că e ceva greșit în sumă - reverifică calculul stocului". Cauza, confirmată live, pe date reale: 19 produse cu stoc NEGATIV (vândute vreodată mai mult decât a fost cumpărat vreodată — „stoc pe minus") aveau cantitatea negativă ÎNMULȚITĂ cu prețul de achiziție și SCĂZUTĂ din totalul „Valoare stoc"/„La preț de vânzare" — fizic imposibil (nu poți avea -3 bucăți pe un raft), dar suma chiar arăta asta: ~4.567 RON scăzuți degeaba din total, chiar acum, pe stocul real. Acum cantitatea se limitează la minimum 0 STRICT pentru acest calcul, la fel cum se face deja la stocul trimis spre eMAG (o listare nu poate arăta stoc negativ) — un produs cu stoc negativ contribuie 0 la valoarea totală, nu o valoare negativă. Stocul negativ rămâne vizibil normal peste tot altundeva (fișa produsului, Raport stoc, avertismentul „stoc pe minus" la vânzare) — doar suma totală de aici nu mai coboară artificial sub valoarea reală existentă. Verificat cu 9 teste izolate pe formula reală extrasă din cod, inclusiv rulate direct pe exportul live din Supabase (diferența exactă reprodusă: 4.566,95 RON, identică cu cea găsită prin verificare manuală), rulate de 2 ori.',date:'2026-10-12'},
   {n:543,text:'Importă factură — avertisment dacă factura pare deja încărcată, cerut direct: „în caz că se aseamănă o comandă sau chiar e aceeași factură, să ne notifice platforma precum că deja a fost încărcată". Compară automat, pe loc (fără nicio scriere în bază), cu tot istoricul deja încărcat din „Comenzi stoc": (1) EXACT — același număr de factură + același furnizor (dacă ambele sunt completate) — avertisment roșu, cu data/cantitatea/valoarea importului anterior, indiferent cât de vechi e. (2) ASEMĂNĂTOARE — același furnizor, recent (ultimele 7 zile), ȘI (produse comune ≥60% din factura curentă SAU valoare totală foarte apropiată, ≤3%) — avertisment portocaliu, mai discret. Praguri deliberat stricte (aceeași logică folosită deja la potrivirea AWB-urilor) — o reaprovizionare normală, periodică, de la același furnizor nu declanșează avertismentul degeaba, doar un import genuin suspect de duplicat. Verificarea rulează automat după orice parsare (PDF/CSV/poze) și se reactualizează live dacă editezi manual numărul facturii sau furnizorul. Verificat cu 18 teste izolate pe funcțiile reale extrase din cod (potrivire exactă indiferent de vechime, furnizor diferit nu contează ca exact, produse comune recente → similar, aceleași produse dar vechi → fără avertisment, produse diferite → fără avertisment, mesajele și culorile corecte pe fiecare caz), rulate de 2 ori.',date:'2026-10-12'},
@@ -20027,10 +20028,30 @@ function resetPcomImportPage(){
   toast('Previzualizare golită ✓');
 }
 let pcomPickIdx=null,pcomPickProds=null;
+// Prioritizare, cerut direct — „atunci când căutăm după text, să ni se recomande în prima parte întâi
+// produsele cele mai comandate, care au mai fost selectate în ultima perioadă": lista de bază
+// (pcomPickProds) era sortată STRICT alfabetic — un produs căutat des (ex. „Statie radio...") apărea
+// amestecat printre zeci de rezultate text-identice, fără nicio prioritate reală. Numărăm comenzile
+// REALE de platformă (PCOM, nu doar stoc adăugat) din ultimele 90 de zile, per produs — frecvență +
+// recență într-un singur semnal, exact cum a fost cerut. Produsele fără nicio comandă recentă rămân la
+// coadă, tot alfabetic, ca până acum — nimic nu regresează pentru ele.
+function pcomRecentOrderCounts(){
+  const cutoff=Date.now()-90*86400000;
+  const counts=new Map();
+  PCOM.forEach(o=>{
+    if(!o.produsId||o.anulata)return;
+    const t=Date.parse(o.createdAt||o.data||'');
+    if(!isFinite(t)||t<cutoff)return;
+    counts.set(o.produsId,(counts.get(o.produsId)||0)+1);
+  });
+  return counts;
+}
 function openPcomPick(ev,idx){
   ev.stopPropagation();
   pcomPickIdx=idx;
-  if(!pcomPickProds)pcomPickProds=P.slice().sort((a,b)=>a.name.localeCompare(b.name));
+  // filterPcomPick() rămâne neschimbat — Array.filter() păstrează ordinea sursei, deci orice căutare
+  // moștenește automat prioritatea de mai jos, fără cod suplimentar acolo.
+  if(!pcomPickProds){const oc=pcomRecentOrderCounts();pcomPickProds=P.slice().sort((a,b)=>(oc.get(b.id)||0)-(oc.get(a.id)||0)||a.name.localeCompare(b.name));}
   const drop=document.getElementById('pcmi-pickdrop');
   const btn=ev.currentTarget.getBoundingClientRect();
   let left=btn.left,top=btn.bottom+4;
@@ -20066,7 +20087,7 @@ function filterPcomPick(){
 async function pcomPickRecognizeImage(){
   try{
     const query=await recognizeProductQueryFromClipboard();
-    if(!pcomPickProds)pcomPickProds=P.slice().sort((a,b)=>a.name.localeCompare(b.name));
+    if(!pcomPickProds){const oc=pcomRecentOrderCounts();pcomPickProds=P.slice().sort((a,b)=>(oc.get(b.id)||0)-(oc.get(a.id)||0)||a.name.localeCompare(b.name));}
     const scored=pcomPickProds.map(p=>({p,score:fuzzyMatch(query,productMatchText(p))})).filter(x=>x.score>=0.2).sort((a,b)=>b.score-a.score);
     const search=document.getElementById('pcmi-pick-search');if(search)search.value=query;
     renderPcomPickRows(scored.length?scored.slice(0,20).map(x=>x.p):pcomPickProds.slice(0,20));
