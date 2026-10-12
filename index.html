@@ -4464,6 +4464,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:547,text:'Asociază AWB-uri — previzualizarea se „auto-vindecă" singură, bug real găsit reverificând direct cerința de la #538: „de ce nu s-au inclus automat comenzile pentru care am adăugat AWB?... așa am stabilit... se includ singure, astfel încât să apară în Staff". Investigat live, comandă cu comandă (535103193 și altele 9): toate ERAU de fapt deja asociate+incluse+trimise spre Staff corect — verificat direct în Supabase — dar previzualizarea TOT arăta „negăsită", confuz, pentru că re-verificarea live din #538 rula DOAR la click-ul „✓ Asociază AWB-urile", nu și cât timp previzualizarea pur și simplu stă deschisă (sau se recitește același dosar) — dacă o comandă se rezolva pe alt drum (import normal, rulat aproape simultan) ÎNTRE citirea etichetei și acel click, avertismentul rămânea afișat mult timp după ce nu mai era valabil. Acum aceeași verificare rulează la FIECARE randare a previzualizării, nu doar la final — orice linie „negăsită" cu un cod de comandă se re-verifică automat, în fundal, iar dacă între timp chiar s-a rezolvat, dispare singură din lista de erori și se include automat, fără niciun click. Verificat cu 18 teste izolate pe funcțiile reale extrase din cod (comandă rezolvată automat la simpla randare, fără re-verificări suprapuse, fără re-randări inutile quando nimic nu s-a schimbat), plus suita completă de 17 teste de la #538 re-rulată pe codul refactorizat — toate verzi, rulate de 2 ori.',date:'2026-10-12'},
   {n:546,text:'Comenzi Platforme → picker-ul de alegere produs recomandă acum primele produsele cele mai comandate, cerut direct: „atunci când căutăm după text, să ni se recomande în prima parte întâi produsele cele mai comandate — care au mai fost selectate în ultima perioadă". Lista era sortată strict alfabetic — un produs căutat des (ex. „Statie radio...") apărea amestecat printre zeci de rezultate text-identice, fără nicio prioritate reală, greu de găsit rapid în liste lungi. Acum numără comenzile reale de platformă (nu doar stoc adăugat) din ultimele 90 de zile, per produs — frecvență și recență într-un singur semnal — și arată primele cele cu cele mai multe comenzi recente; produsele fără nicio comandă recentă rămân la coadă, tot alfabetic, ca până acum. Căutarea text rămâne identică — orice căutare moștenește automat noua prioritate, fără nicio schimbare la logica de filtrare în sine. Verificat cu 9 teste izolate pe funcțiile reale extrase din cod (produs comandat des apare primul la căutare, fallback alfabetic neschimbat, comenzi anulate nu contează, comenzi mai vechi de 90 de zile nu contează, produs nou fără nicio comandă nu crapă), rulate de 2 ori.',date:'2026-10-12'},
   {n:545,text:'Safety net-ul de 22:00 (autoApplyStalePendingImports) rulează acum fiabil, re-confirmat direct: „am stabilit că dacă nu se dă Aplică import până seara la ora 22:00, să se adauge automat importul pentru produsele care au AWB-uri". Mecanismul exista deja, corect — dar se declanșa STRICT o singură dată, la deschiderea/reîncărcarea paginii. Pe un tab lăsat deschis toată ziua, fără reîncărcare (exact modul normal de lucru, cu Dashboard-ul deschis permanent), pragul de 22:00 putea trece complet neobservat — verificarea abia rula a doua zi, la următoarea deschidere a paginii, mult după ora stabilită. Acum rulează și independent, la fiecare 5 minute, indiferent dacă tab-ul e activ, ascuns sau în fundal — nu mai depinde de un reload care s-ar putea să nu se întâmple deloc în seara respectivă. Funcția rămâne exact ce era (nicio comandă nouă auto-aplicată fără AWB, aceeași gardă de concurență) — doar momentul la care chiar ajunge să ruleze e acum garantat, nu opțional. Verificat: nicio comandă stale rămasă în bază chiar acum (confirmat live, 0 rezultate la aceeași interogare pe care o face funcția), plus 8 teste izolate pe funcția reală (interval corect de 5 minute, chemarea reală a auto-aplicării, nicio chemare dacă Supabase nu e conectat la momentul exact al verificării, fără timere duplicate la o a doua pornire), rulate de 2 ori.',date:'2026-10-12'},
   {n:544,text:'„Valoare stoc" (Dashboard și Inventar) — bug real reparat, raportat direct: „cred că e ceva greșit în sumă - reverifică calculul stocului". Cauza, confirmată live, pe date reale: 19 produse cu stoc NEGATIV (vândute vreodată mai mult decât a fost cumpărat vreodată — „stoc pe minus") aveau cantitatea negativă ÎNMULȚITĂ cu prețul de achiziție și SCĂZUTĂ din totalul „Valoare stoc"/„La preț de vânzare" — fizic imposibil (nu poți avea -3 bucăți pe un raft), dar suma chiar arăta asta: ~4.567 RON scăzuți degeaba din total, chiar acum, pe stocul real. Acum cantitatea se limitează la minimum 0 STRICT pentru acest calcul, la fel cum se face deja la stocul trimis spre eMAG (o listare nu poate arăta stoc negativ) — un produs cu stoc negativ contribuie 0 la valoarea totală, nu o valoare negativă. Stocul negativ rămâne vizibil normal peste tot altundeva (fișa produsului, Raport stoc, avertismentul „stoc pe minus" la vânzare) — doar suma totală de aici nu mai coboară artificial sub valoarea reală existentă. Verificat cu 9 teste izolate pe formula reală extrasă din cod, inclusiv rulate direct pe exportul live din Supabase (diferența exactă reprodusă: 4.566,95 RON, identică cu cea găsită prin verificare manuală), rulate de 2 ori.',date:'2026-10-12'},
@@ -22922,6 +22923,7 @@ async function persistAwbErrors(rows){
     }catch(e){console.warn('Nu am putut păstra eroarea AWB (rulează migration_platforma_staff_workflow.sql):',e);}
   }
 }
+let awbPreviewHealing=false;
 function renderAwbPreview(){
   const box=document.getElementById('pcmi-awb-preview');
   const matched=awbParsed.filter(pcomAwbMatched);
@@ -22996,6 +22998,28 @@ function renderAwbPreview(){
   // reconciliabilă, nu îl pierdem doar fiindcă nu există încă nicio asociere reușită.
   document.getElementById('pcmi-awb-apply-btn').disabled=!(matched.length||unmatched.length);
   document.getElementById('pcmi-awb-foot').style.display='flex';
+  // Auto-vindecare, cerut direct, pe un caz real, cu captură: 10 comenzi arătau „negăsită" chiar și
+  // câteva minute DUPĂ ce fuseseră deja asociate+incluse+trimise spre Staff pe alt drum — „de ce nu
+  // s-au inclus automat comenzile pentru care am adăugat AWB... așa am stabilit... se includ singure".
+  // Vezi comentariul complet de la awbReverifyUnmatchedLive — înainte, verificarea asta rula DOAR la
+  // click-ul „✓ Asociază AWB-urile"; acum rulează la FIECARE randare a previzualizării, fire-and-forget
+  // (nu blochează randarea sincronă de mai sus). O singură trecere activă deodată (awbPreviewHealing) —
+  // re-randări dese nu pornesc zeci de verificări paralele; următoarea randare naturală reia oricum
+  // verificarea dacă prima a ratat ceva. La rezolvare, înlocuiește STRICT linia curentă din awbParsed
+  // (căutată din nou, prin comandaId, în starea LIVE — nu prin indexul/referința de la pornirea
+  // verificării, care ar putea fi deja depășite de alte acțiuni petrecute între timp).
+  if(!awbPreviewHealing&&unmatched.some(p=>p.comandaId)){
+    awbPreviewHealing=true;
+    awbReverifyUnmatchedLive(unmatched).then(rv=>{
+      if(!rv.resolved.length)return;
+      let changed=false;
+      rv.resolved.forEach(r=>{
+        const idx=awbParsed.findIndex(p=>p.comandaId===r.comandaId&&!pcomAwbMatched(p));
+        if(idx>=0){awbParsed[idx]=r;changed=true;}
+      });
+      if(changed)renderAwbPreview();
+    }).finally(()=>{awbPreviewHealing=false;});
+  }
 }
 async function patchAwbWithSource(filter,source){
   try{return await dbPatch(`platforma_comenzi?${filter}`,source);}
@@ -23073,6 +23097,37 @@ async function applyOneAwbMatch(p){
   // Previzualizare vizuală AWB — ÎN FUNDAL, vezi comentariul de mai sus (ramura „Neinclus").
   if(p._blob)generateAwbPreviewInBackground(p._blob,p.page,p.awb,p.comandaId,platforma);
 }
+// Re-verificare live, extrasă ca funcție separată — cerut inițial pe un caz real, cu captură: 6 comenzi
+// Trendyol arătau „negăsită sau ambiguă" deși EXISTAU deja în bază (importate separat, între momentul
+// citirii etichetei și acest moment) — „să se asocieze toate automat cu comenzile din sistem". Extins
+// imediat după, pe un al doilea caz real, la fel de concret, cu captură: 10 comenzi (535103193 și altele)
+// arătau TOT „negăsită" în previzualizare, deși o verificare directă în Supabase confirma că erau DEJA
+// asociate+incluse+trimise spre Staff corect — „de ce nu s-au inclus automat comenzile pentru care am
+// adăugat AWB... așa am stabilit... se includ singure, astfel încât să apară în Staff". Cauza reală:
+// re-verificarea rula DOAR la „✓ Asociază AWB-urile" (click explicit) — dacă previzualizarea rămânea pur
+// și simplu deschisă (sau se recitea același dosar) ÎNTRE momentul inițial de citire și acel click,
+// omul vedea avertismentul „negăsită" mult timp după ce comanda era deja, de fapt, complet rezolvată pe
+// alt drum (ex. importul normal eMAG/Trendyol, rulat separat, aproape simultan) — confuz, părea că
+// mecanismul „AWB asociat = inclusă automat" nu funcționează, deși funcționa corect, doar previzualizarea
+// nu se mai actualiza singură ca să reflecte asta. Acum apelată și din renderAwbPreview() (vezi mai jos),
+// nu doar la click — previzualizarea se „auto-vindecă" singură, de îndată ce randează, nu doar la finalul
+// fluxului. O comandă „negăsită" la citirea inițială a etichetei poate exista oricând până la acest punct
+// — o interogare live suplimentară, per comandă CU un comandaId citit (nu are rost pentru etichetele
+// complet nerecunoscute, fără niciun cod de comandă deloc), rezolvă exact cazul ăsta, oricând apare.
+async function awbReverifyUnmatchedLive(unmatched){
+  const resolved=[],stillUnmatched=[];
+  for(const p of unmatched){
+    if(p.comandaId){
+      try{
+        const rows=await dbGet(`platforma_comenzi?comanda_id=eq.${encodeURIComponent(p.comandaId)}&select=id,platforma,client_nume,produs_nume,awb`);
+        const p2={...p,rows};
+        if(pcomAwbMatched(p2)){await applyOneAwbMatch(p2);resolved.push(p2);continue;}
+      }catch(e){console.warn('Re-verificare live eșuată pentru comanda '+p.comandaId+':',e);}
+    }
+    stillUnmatched.push(p);
+  }
+  return{resolved,stillUnmatched};
+}
 async function applyAwbAssociation(){
   const matched=awbParsed.filter(pcomAwbMatched);
   let unmatched=awbParsed.filter(p=>!pcomAwbMatched(p));
@@ -23080,25 +23135,10 @@ async function applyAwbAssociation(){
   btn.disabled=true;
   try{
     for(const p of matched)await applyOneAwbMatch(p);
-    // Re-verificare live, chiar înainte de a renunța definitiv — cerut direct, pe un caz real, cu
-    // captură: 6 comenzi Trendyol arătau „negăsită sau ambiguă" în previzualizare deși EXISTAU deja în
-    // bază (importate separat, între momentul citirii etichetei și acest moment) — „să se asocieze toate
-    // automat cu comenzile din sistem". O comandă „negăsită" la citirea inițială a etichetei poate exista
-    // oricând până la acest punct — o interogare live suplimentară, per comandă CU un comandaId citit
-    // (nu are rost pentru etichetele complet nerecunoscute, fără niciun cod de comandă deloc), chiar
-    // înainte de a le marca definitiv ca eroare de rezolvat manual, rezolvă exact cazul ăsta.
-    const stillUnmatched=[];
-    for(const p of unmatched){
-      if(p.comandaId){
-        try{
-          const rows=await dbGet(`platforma_comenzi?comanda_id=eq.${encodeURIComponent(p.comandaId)}&select=id,platforma,client_nume,produs_nume,awb`);
-          const p2={...p,rows};
-          if(pcomAwbMatched(p2)){await applyOneAwbMatch(p2);matched.push(p2);continue;}
-        }catch(e){console.warn('Re-verificare live eșuată pentru comanda '+p.comandaId+':',e);}
-      }
-      stillUnmatched.push(p);
-    }
-    unmatched=stillUnmatched;
+    // Chiar înainte de a renunța definitiv — vezi comentariul de la awbReverifyUnmatchedLive.
+    const rv=await awbReverifyUnmatchedLive(unmatched);
+    matched.push(...rv.resolved);
+    unmatched=rv.stillUnmatched;
     // Cerut direct — „dacă adăugăm 18 AWB-uri și avem 16 comenzi incluse, să primim notificare pentru
     // celelalte": pe lângă „găsită, dar comanda nu există" (unmatched), acum se păstrează la fel și
     // etichetele complet nerecunoscute (altă limbă/format nou) și cele anulate de curier — altfel
