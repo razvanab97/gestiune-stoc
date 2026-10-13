@@ -4464,6 +4464,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:549,text:'Comenzi Platforme — căutarea unei comenzi deja scrise în bază primește acum acțiune, nu doar text, cerut direct cu captură: „să apară secțiunea de reactivează sau adu la împachetat și aici" (căutând #535894515 în previzualizare, mesajul era strict „Găsită deja în bază… — deja aplicată", fără nimic de apăsat). Aceleași acțiuni care existau deja pe cardul „comenzi rămase în urmă din Staff" apar acum și direct în rezultatul căutării: o comandă scrisă în bază, dar niciodată trimisă spre Staff, primește „📦 Trimite la împachetare"/„✓ Marchează împachetat"; una deja împachetată/finalizată primește „↺ Reactivează" (grupat pe comandaId+platformă — o comandă cu mai multe produse se retrimite toată deodată); una deja activă în coadă nu mai arată niciun buton, fiindcă n-are nimic de făcut. Pe drum, reparat și un bug mic de randare: acțiunile astea, declanșate din oricare din cele 2 locuri (cardul dedicat sau căutarea de-aici), reîmprospătau doar cardul original — acum reîmprospătează amândouă suprafețele, altfel mesajul din căutare rămânea cu un buton deja apăsat încă pe ecran. Verificat cu 9 teste izolate pe funcția reală extrasă din cod (toate cele 3 stări posibile — neconfirmat, în coadă activă, finalizat — plus gruparea corectă pe comandă cu mai multe produse, și regresie pe cazurile vechi: comandă anulată, nicio comandă găsită, căutare goală), rulate de 2 ori.',date:'2026-10-13'},
   {n:548,text:'Staff — previzualizarea AWB se recuperează acum automat, nu mai depinde de apăsarea unui buton: pe comanda reală eMAG #1027256621 din 12 octombrie, AWB-ul și PDF-ul-sursă existau corect, însă awb_preview_url rămăsese gol după asociere, iar tableta afișa doar un pătrățel fără etichetă. La pornirea Adminului, sistemul caută tăcut comenzile active cu AWB+PDF-sursă, dar fără miniatură, recitește pagina exactă din arhiva locală a Mac-ului și o urcă în Storage; procesul nu schimbă AWB-ul, comanda, stocul sau arhiva. Pentru etichetele noi rămân și reîncercările de upload existente. În Staff, un URL de imagine invalid nu mai lasă iconiță stricată: revine elegant la opțiunea de fotografiere a etichetei. Verificat pe date reale: PDF-ul sursă al comenzii raportate există în arhiva locală și poate fi reconstituit.',date:'2026-10-12'},
   {n:547,text:'Asociază AWB-uri — previzualizarea se „auto-vindecă" singură, bug real găsit reverificând direct cerința de la #538: „de ce nu s-au inclus automat comenzile pentru care am adăugat AWB?... așa am stabilit... se includ singure, astfel încât să apară în Staff". Investigat live, comandă cu comandă (535103193 și altele 9): toate ERAU de fapt deja asociate+incluse+trimise spre Staff corect — verificat direct în Supabase — dar previzualizarea TOT arăta „negăsită", confuz, pentru că re-verificarea live din #538 rula DOAR la click-ul „✓ Asociază AWB-urile", nu și cât timp previzualizarea pur și simplu stă deschisă (sau se recitește același dosar) — dacă o comandă se rezolva pe alt drum (import normal, rulat aproape simultan) ÎNTRE citirea etichetei și acel click, avertismentul rămânea afișat mult timp după ce nu mai era valabil. Acum aceeași verificare rulează la FIECARE randare a previzualizării, nu doar la final — orice linie „negăsită" cu un cod de comandă se re-verifică automat, în fundal, iar dacă între timp chiar s-a rezolvat, dispare singură din lista de erori și se include automat, fără niciun click. Verificat cu 18 teste izolate pe funcțiile reale extrase din cod (comandă rezolvată automat la simpla randare, fără re-verificări suprapuse, fără re-randări inutile quando nimic nu s-a schimbat), plus suita completă de 17 teste de la #538 re-rulată pe codul refactorizat — toate verzi, rulate de 2 ori.',date:'2026-10-12'},
   {n:546,text:'Comenzi Platforme → picker-ul de alegere produs recomandă acum primele produsele cele mai comandate, cerut direct: „atunci când căutăm după text, să ni se recomande în prima parte întâi produsele cele mai comandate — care au mai fost selectate în ultima perioadă". Lista era sortată strict alfabetic — un produs căutat des (ex. „Statie radio...") apărea amestecat printre zeci de rezultate text-identice, fără nicio prioritate reală, greu de găsit rapid în liste lungi. Acum numără comenzile reale de platformă (nu doar stoc adăugat) din ultimele 90 de zile, per produs — frecvență și recență într-un singur semnal — și arată primele cele cu cele mai multe comenzi recente; produsele fără nicio comandă recentă rămân la coadă, tot alfabetic, ca până acum. Căutarea text rămâne identică — orice căutare moștenește automat noua prioritate, fără nicio schimbare la logica de filtrare în sine. Verificat cu 9 teste izolate pe funcțiile reale extrase din cod (produs comandat des apare primul la căutare, fallback alfabetic neschimbat, comenzi anulate nu contează, comenzi mai vechi de 90 de zile nu contează, produs nou fără nicio comandă nu crapă), rulate de 2 ori.',date:'2026-10-12'},
@@ -5515,6 +5516,9 @@ async function reactivateStaleOrder(id){
     await dbPatch(`platforma_comenzi?id=eq.${id}`,{staff_trimis_at:sentAt});
     o.staffTrimisAt=sentAt;
     renderStaleStaffOrdersCard();
+    // Același buton apare acum și în rezultatul căutării (#pcx-search, vezi pcxSearchFallbackHtml) —
+    // trebuie re-randat și acela, altfel mesajul rămâne cu acțiunea deja făcută încă afișată pe ecran.
+    pcxRenderOrders();
     toast('✓ Comandă trimisă spre împachetare — disponibilă acum în Staff');
   }catch(e){toast('Nu am putut trimite comanda: '+(e.message||e),'err');}
 }
@@ -5552,6 +5556,7 @@ async function markPcomOrderPacked(id){
     await dbPatch(`platforma_comenzi?id=eq.${id}`,{impachetat:true,impachetat_at:at});
     const o=PCOM.find(x=>x.id===id);if(o){o.impachetat=true;o.impachetatAt=at;}
     renderStaleStaffOrdersCard();
+    pcxRenderOrders(); // vezi comentariul din reactivateStaleOrder — același buton, aceeași nevoie de refresh
     toast('✓ Marcată ca împachetată');
   }catch(e){toast('Nu am putut marca comanda: '+(e.message||e),'err');}
 }
@@ -5629,6 +5634,7 @@ async function reactivatePcomOrder(idsStr){
     }
     renderStaleStaffOrdersCard();
     searchPcomReactivate();
+    pcxRenderOrders(); // vezi comentariul din reactivateStaleOrder — același buton, aceeași nevoie de refresh
     toast('✓ Comandă reactivată — vizibilă din nou în Staff');
   }catch(e){toast('Nu am putut reactiva comanda: '+(e.message||e),'err');}
 }
@@ -19787,7 +19793,20 @@ function pcxSearchFallbackHtml(q){
     const label=`<strong>${esc(nm)}</strong> · ${esc(pcomPlatLabel(dbHit.platforma))}${dbHit.comandaId?' #'+esc(dbHit.comandaId):''}`;
     if(dbHit.anulata)return`<div class="pcx-empty">Găsită în comenzile anulate: ${label}${dbHit.motivAnulare?' — motiv: '+esc(dbHit.motivAnulare):''}<br><button type="button" class="btn btn-sm btn-acc" style="margin-top:10px" onclick="reconsiderPcomRow(${dbHit.id})">↺ Reconsideră — readu-o la împachetare</button></div>`;
     const stare=dbHit.impachetat?'deja împachetată':dbHit.efecteAplicate===false?'confirmată, în așteptare la „Aplică import"':'deja aplicată';
-    return`<div class="pcx-empty">Găsită deja în bază: ${label} — ${stare}</div>`;
+    // Cerut direct, pe o comandă reală căutată aici care nu avea nicio acțiune posibilă (doar text):
+    // aceleași acțiuni de „readu la împachetare" de pe cardul „comenzi rămase în urmă din Staff" trebuie
+    // să fie disponibile și direct din căutare, nu doar scrolând până acolo. O comandă deja ÎMPACHETATĂ/
+    // finalizată ia acțiunea „reactivatePcomOrder" (grupat pe comandaId+platformă — o comandă cu mai
+    // multe produse se retrimite toată deodată, la fel ca finalizeOrder); una scrisă în bază dar
+    // niciodată trimisă spre Staff ia exact cele 2 butoane din renderStaleStaffOrdersCard.
+    let actionsHtml='';
+    if(dbHit.impachetat){
+      const ids=PCOM.filter(o=>o.comandaId&&o.comandaId===dbHit.comandaId&&o.platforma===dbHit.platforma&&o.impachetat).map(o=>o.id).join(',')||dbHit.id;
+      actionsHtml=`<br><button type="button" class="btn btn-sm btn-acc" style="margin-top:10px" onclick="reactivatePcomOrder('${ids}')">↺ Reactivează — readu la împachetare</button>`;
+    }else if(!dbHit.staffTrimisAt){
+      actionsHtml=`<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap"><button type="button" class="btn btn-sm btn-acc" onclick="reactivateStaleOrder(${dbHit.id})" title="Trimite explicit comanda spre împachetare — apare de-acum în Staff, în coada de azi">📦 Trimite la împachetare</button><button type="button" class="btn btn-sm" onclick="markPcomOrderPacked(${dbHit.id})" title="Confirmă doar dacă știi sigur, fizic, că a fost deja împachetată/expediată">✓ Marchează împachetat</button></div>`;
+    }
+    return`<div class="pcx-empty">Găsită deja în bază: ${label} — ${stare}${actionsHtml}</div>`;
   }
   return`<div class="pcx-empty">Nicio comandă nu corespunde căutării „${esc(q)}" — nici în previzualizare, nici în comenzile deja din bază.<br><button type="button" class="btn btn-sm btn-acc" id="pcx-emag-search-btn" style="margin-top:10px" onclick="searchEmagOrderByNumber()">🔍 Caută pe eMAG după acest număr</button></div>`;
 }
