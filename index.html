@@ -4496,6 +4496,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:557,text:'Picker-ul „🔗 Asociază manual" (AWB-uri) caută acum pe cuvinte, nu doar pe un singur text literal, cerut direct, pe un caz real: căutarea „set 500" nu găsea comanda OLX cu titlul „Set complet de poker Texas Hold\'em de 500 jetoane" — cuvintele „set" și „500" nu erau alăturate în titlu, deci vechea comparație (tot textul căutat, dintr-o bucată, trebuia să existe exact așa) eșua, deși comanda chiar exista, corect scrisă în bază (verificat direct, live, în Supabase — comanda #1309). Acum fiecare cuvânt din căutare trebuie să apară undeva în comandă (număr + client + produs + platformă, combinate), în orice ordine — „set 500", „popa poker" sau doar codul OLX funcționează la fel de bine. Căutarea live suplimentară (pentru interogări de minim 3 caractere) folosește primul cuvânt ca plasă mai largă, apoi filtrează local cu toate cuvintele, înainte de afișare — niciun rezultat fals-pozitiv. Verificat cu 10 teste izolate pe funcțiile reale extrase din cod (cazul real raportat — „set 500" —, căutare pe un singur cuvânt din titlu, combinație client+produs, 2 cuvinte unde unul nu se potrivește → corect gol, căutare pe platformă, regresie pe comenzi deja rezolvate — cu AWB — excluse corect, filtrarea locală după interogarea live elimină corect falșii-pozitivi), rulate de 2 ori.',date:'2026-10-13'},
   {n:556,text:'Comenzi Platforme — cardul „↺ Reactivează comandă finalizată" mutat înaintea „Comenzi rămase în urmă din Staff", cerut direct: „du această comandă de reactivează înainte de comenzi rămase în staff". Pur vizual (ordine de afișare) — nimic funcțional schimbat.',date:'2026-10-13'},
   {n:555,text:'Comenzi Platforme — 2 completări directe la comenzile OLX (#554), pe o captură reală cu 3 comenzi deodată: „aici sunt 3 comenzi - sa le preia pe toate". (1) Recunoașterea OLX citește acum o LISTĂ întreagă dintr-o singură captură (exact ca la Vinted), nu doar un ecran de detaliu — toate comenzile distincte din imagine se adaugă deodată, cu numărătoare clară în mesaj (ex. „3 comenzi OLX adăugate · 2 cu produs asociat · 1 deja adăugată"); o comandă deja existentă din listă e ignorată individual, fără să blocheze restul. (2) Reparat pe loc, verificând eticheta FAN Courier atașată caracter cu caracter: câmpul „CONTINUT" de pe etichetă conține chiar ID-ul real al comenzii OLX (confirmat identic cu „ILN3AESJ55", văzut și în captura cu cele 3 comenzi) — regexul de recunoaștere a etichetelor FAN Courier (folosit de ani de zile pentru Trendyol/eMAG) accepta doar cifre acolo și cerea obligatoriu „:", format pe care eticheta reală NU îl are deloc (scrie „AWB 123" / „CONTINUT ABC", fără două puncte, tot cu majuscule) — extins acum să accepte și litere, cu „:" opțional; o potrivire alfanumerică înseamnă clar OLX (Trendyol/eMAG au mereu cod numeric), deci primește automat prefixul „OLX-", pentru asociere EXACTĂ cu comanda, nu doar fuzzy după nume+sumă (care, pentru OLX, poate rata — suma de pe etichetă e rambursul, nu neapărat prețul exact al produsului). Formatele vechi (Trendyol/eMAG, cu „:" și cifre) rămân identice, verificate explicit neatinse. Verificat cu 8+9 teste izolate noi pe funcțiile reale extrase din cod (captură cu 3 comenzi — cazul exact raportat —, mix comenzi noi+duplicat în aceeași captură, rând gol sărit fără să oprească restul, eticheta FAN Courier/OLX reală atașată verbatim, regresie pe formatul vechi exact + disambiguarea DPD + celelalte 3 formate de curier, neatinse), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-13'},
   {n:554,text:'Comenzi Platforme — comenzile OLX intră acum în fluxul de lucru, cerut direct, cu captură de ecran OLX + etichetă FAN Courier reale atașate: „adaugă și comenzi OLX, au formatul acesta și AWB-urile... să intre în fluxul de lucru normal... în secțiunea Vinted — cu recunoaștere AWB ș.a.m.d". OLX, ca și Vinted, nu are nicio integrare API aici — captură de ecran e singura cale. Secțiunea Vinted primește acum un al doilea buton, „📋 Adaugă din clipboard (OLX)" (plus selector de fișiere), care citește ecranul de detaliu al unei comenzi OLX (ID, produs, preț, cumpărător) — spre deosebire de Vinted, OLX arată un ID de comandă REAL, folosit direct (prefixat „OLX-"), cu verificare exactă de duplicat dacă aceeași captură se lipește de două ori. Comenzile OLX intră STRICT în aceeași platformă („vinted", nu una nouă) — niciuna din cele ~60 de locuri din cod care tratează deja Vinted nu a fost atinsă, deci Staff/statistici/potrivire AWB funcționează identic, fără cod nou acolo. Verificat direct, pe eticheta FAN Courier reală atașată: formatul ei standard („AWB 4285600033825"/„CONTINUT ILN3AESJ55", fără „:" și cu litere în câmpul de conținut) NU se potrivește cu niciunul din cele 5 formate recunoscute prin regex — cade corect pe calea deja existentă, universală, bazată pe AI (extractAwbLabelDataWithAI → resolveAwbByNameAndAmount, deja platform-agnostic), care potrivește după numele destinatarului, exact mecanismul „recunoaștere AWB" cerut, fără nicio modificare suplimentară. Verificat cu 10 teste izolate pe funcția reală extrasă din cod (comandă nouă cu/fără produs potrivit, potrivire exactă + fallback fuzzy, duplicat exact pe comandaId — inclusiv regresie pe comandă anulată, care nu blochează —, ID lipsă → fallback sintetic, captură complet goală, preț lipsă, produs arhivat ignorat), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-13'},
@@ -22951,6 +22952,17 @@ function awbPickRenderList(matches){
 // neanulate), după comandă/client/produs, exact ca o comandă „din sistem" ar trebui găsită oricând,
 // indiferent de ce s-a întâmplat în browser între timp. `seq` ignoră un răspuns întârziat dintr-o
 // tastare anterioară, ca să nu suprascrie rezultatul unei căutări mai noi.
+// Textul combinat de căutat dintr-o comandă — comandă + client + produs + platformă, într-un singur
+// string. Combinate (nu verificate separat per câmp) ca să funcționeze o căutare pe mai multe cuvinte,
+// fiecare din alt câmp (ex. „popa poker” — numele clientului + o parte din titlul produsului).
+function awbPickSearchText(o){
+  return[o.comandaId,o.clientNume,o.produsNume,o.titluExtern,pcomPlatLabel(o.platforma)].filter(Boolean).join(' ').toLowerCase();
+}
+// Fiecare cuvânt din căutare trebuie să apară UNDEVA în text, indiferent de ordine/distanță — nu un
+// singur substring literal (vezi filterAwbPick, de ce contează).
+function awbPickWordsMatch(text,words){
+  return words.every(w=>text.includes(w));
+}
 let awbPickSeq=0;
 async function filterAwbPick(){
   const q=(document.getElementById('awb-pick-search')?.value||'').toLowerCase().trim();
@@ -22960,18 +22972,27 @@ async function filterAwbPick(){
   // pe lângă comandă/client/produs/titlu, caută acum și după platformă (eMAG/Trendyol/Vinted) —
   // pcomPlatLabel(...).toLowerCase() acoperă în aceeași comparație atât eticheta afișată („eMAG"), cât
   // și valoarea brută din bază („emag"), fără cod separat pentru fiecare variantă de scriere.
-  const localMatches=(q?pool.filter(o=>(o.clientNume||'').toLowerCase().includes(q)||(o.comandaId||'').toLowerCase().includes(q)||(o.produsNume||'').toLowerCase().includes(q)||(o.titluExtern||'').toLowerCase().includes(q)||pcomPlatLabel(o.platforma).toLowerCase().includes(q)):pool).slice(0,80);
+  // Căutare „pe cuvinte", nu doar substring literal — cerut direct, pe un caz real: „set 500" nu
+  // găsea „Set complet de poker Texas Hold'em de 500 jetoane" (cuvintele nu erau alăturate, un
+  // .includes() simplu pe tot query-ul eșua) — fiecare cuvânt din căutare trebuie să apară UNDEVA în
+  // textul combinat al comenzii, în orice ordine, nu neapărat lipite.
+  const words=q?q.split(/\s+/).filter(Boolean):[];
+  const localMatches=(words.length?pool.filter(o=>awbPickWordsMatch(awbPickSearchText(o),words)):pool).slice(0,80);
   const seq=++awbPickSeq;
   awbPickRenderList(localMatches);
-  if(!q||q.length<3)return;
+  if(!words.length||q.length<3)return;
   try{
-    const like=encodeURIComponent(`*${q}*`);
+    // PostgREST nu poate exprima ușor direct „toate cuvintele, în orice coloană" — lărgim plasa live cu
+    // primul cuvânt (cel mai probabil discriminant), apoi filtrăm local cu ACELEAȘI cuvinte complete,
+    // înainte de afișare — niciun fals-pozitiv nu ajunge vizibil, doar aducem mai mulți candidați.
+    const like=encodeURIComponent(`*${words[0]}*`);
     const extra=await dbGet(`platforma_comenzi?select=id,platforma,comanda_id,client_nume,produs_nume,titlu_extern,pret_total_cu_tva,moneda,data,awb&awb=is.null&anulata=eq.false&or=(comanda_id.ilike.${like},client_nume.ilike.${like},produs_nume.ilike.${like},titlu_extern.ilike.${like},platforma.ilike.${like})&limit=30`);
     if(seq!==awbPickSeq)return;
     const known=new Set(localMatches.map(o=>o.platforma+'|'+o.comandaId));
     const extraMapped=extra.filter(r=>!known.has(r.platforma+'|'+r.comanda_id)).map(r=>({
       comandaId:r.comanda_id,platforma:r.platforma,clientNume:r.client_nume||'',produsNume:r.produs_nume||'',
-      titluExtern:r.titlu_extern||'',pretTotalCuTva:r.pret_total_cu_tva||0,moneda:r.moneda||'RON',data:r.data||'',awb:r.awb||'',_pending:false}));
+      titluExtern:r.titlu_extern||'',pretTotalCuTva:r.pret_total_cu_tva||0,moneda:r.moneda||'RON',data:r.data||'',awb:r.awb||'',_pending:false}))
+      .filter(r=>awbPickWordsMatch(awbPickSearchText(r),words));
     if(extraMapped.length)awbPickRenderList([...localMatches,...extraMapped].slice(0,80));
   }catch(e){console.warn('Căutare live suplimentară în picker eșuată:',e);}
 }
