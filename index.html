@@ -4496,6 +4496,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:555,text:'Comenzi Platforme — 2 completări directe la comenzile OLX (#554), pe o captură reală cu 3 comenzi deodată: „aici sunt 3 comenzi - sa le preia pe toate". (1) Recunoașterea OLX citește acum o LISTĂ întreagă dintr-o singură captură (exact ca la Vinted), nu doar un ecran de detaliu — toate comenzile distincte din imagine se adaugă deodată, cu numărătoare clară în mesaj (ex. „3 comenzi OLX adăugate · 2 cu produs asociat · 1 deja adăugată"); o comandă deja existentă din listă e ignorată individual, fără să blocheze restul. (2) Reparat pe loc, verificând eticheta FAN Courier atașată caracter cu caracter: câmpul „CONTINUT" de pe etichetă conține chiar ID-ul real al comenzii OLX (confirmat identic cu „ILN3AESJ55", văzut și în captura cu cele 3 comenzi) — regexul de recunoaștere a etichetelor FAN Courier (folosit de ani de zile pentru Trendyol/eMAG) accepta doar cifre acolo și cerea obligatoriu „:", format pe care eticheta reală NU îl are deloc (scrie „AWB 123" / „CONTINUT ABC", fără două puncte, tot cu majuscule) — extins acum să accepte și litere, cu „:" opțional; o potrivire alfanumerică înseamnă clar OLX (Trendyol/eMAG au mereu cod numeric), deci primește automat prefixul „OLX-", pentru asociere EXACTĂ cu comanda, nu doar fuzzy după nume+sumă (care, pentru OLX, poate rata — suma de pe etichetă e rambursul, nu neapărat prețul exact al produsului). Formatele vechi (Trendyol/eMAG, cu „:" și cifre) rămân identice, verificate explicit neatinse. Verificat cu 8+9 teste izolate noi pe funcțiile reale extrase din cod (captură cu 3 comenzi — cazul exact raportat —, mix comenzi noi+duplicat în aceeași captură, rând gol sărit fără să oprească restul, eticheta FAN Courier/OLX reală atașată verbatim, regresie pe formatul vechi exact + disambiguarea DPD + celelalte 3 formate de curier, neatinse), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-13'},
   {n:554,text:'Comenzi Platforme — comenzile OLX intră acum în fluxul de lucru, cerut direct, cu captură de ecran OLX + etichetă FAN Courier reale atașate: „adaugă și comenzi OLX, au formatul acesta și AWB-urile... să intre în fluxul de lucru normal... în secțiunea Vinted — cu recunoaștere AWB ș.a.m.d". OLX, ca și Vinted, nu are nicio integrare API aici — captură de ecran e singura cale. Secțiunea Vinted primește acum un al doilea buton, „📋 Adaugă din clipboard (OLX)" (plus selector de fișiere), care citește ecranul de detaliu al unei comenzi OLX (ID, produs, preț, cumpărător) — spre deosebire de Vinted, OLX arată un ID de comandă REAL, folosit direct (prefixat „OLX-"), cu verificare exactă de duplicat dacă aceeași captură se lipește de două ori. Comenzile OLX intră STRICT în aceeași platformă („vinted", nu una nouă) — niciuna din cele ~60 de locuri din cod care tratează deja Vinted nu a fost atinsă, deci Staff/statistici/potrivire AWB funcționează identic, fără cod nou acolo. Verificat direct, pe eticheta FAN Courier reală atașată: formatul ei standard („AWB 4285600033825"/„CONTINUT ILN3AESJ55", fără „:" și cu litere în câmpul de conținut) NU se potrivește cu niciunul din cele 5 formate recunoscute prin regex — cade corect pe calea deja existentă, universală, bazată pe AI (extractAwbLabelDataWithAI → resolveAwbByNameAndAmount, deja platform-agnostic), care potrivește după numele destinatarului, exact mecanismul „recunoaștere AWB" cerut, fără nicio modificare suplimentară. Verificat cu 10 teste izolate pe funcția reală extrasă din cod (comandă nouă cu/fără produs potrivit, potrivire exactă + fallback fuzzy, duplicat exact pe comandaId — inclusiv regresie pe comandă anulată, care nu blochează —, ID lipsă → fallback sintetic, captură complet goală, preț lipsă, produs arhivat ignorat), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-13'},
   {n:553,text:'Comenzi Platforme — căutarea unei comenzi deja scrise în bază arată acum și istoricul, cerut direct: „să apară istoric, când a fost împachetată" (căutând o comandă Vinted, mesajul arăta doar „deja aplicată", fără nicio dată). Acum, lângă statusul găsit, apare data exactă a evenimentului relevant pentru acea stare: o comandă deja împachetată arată când anume a fost împachetată; una confirmată, încă neaplicată, arată când a fost confirmată; una deja activă în Staff (nu stale) arată când a fost trimisă spre împachetare. O comandă fără nicio dată disponibilă rămâne exact ca până acum, fără paranteză goală. Verificat cu 5 teste noi, izolate, pe funcția reală extrasă din cod (toate cele 3 stări cu dată + regresie pe lipsă totală de date + regresie pe comanda anulată, neatinsă), plus suita completă de 9 teste de la #550 re-rulată — toate verzi, rulate de 2 ori.',date:'2026-10-13'},
   {n:552,text:'Nou — tab „📈 Aprovizionare": istoric de vânzări eMAG + Trendyol, cu medie lunară și recomandare de stoc, cerut direct: „vreau să aducem comenzile din ani trecuți... să facem o medie lunară de vânzare a unor produse, ca să știu în noiembrie, respectiv decembrie, câte produse ar trebui să aduc din anumite categorii". Un buton „📥 Adu istoricul" citește comenzile FINALIZATE de pe eMAG (status 4, pe toate cele 3 piețe) și Trendyol (status Delivered) de la 1 ianuarie anul trecut până azi, potrivește fiecare linie cu produsul activ (aceeași logică de potrivire PNK/titlu/cod ca la Comenzi Platforme) — iar dacă produsul a fost între timp discontinuat/redenumit, linia tot intră în statistică, sub o categorie dedusă din titlul original, ca media pe categorie să rămână corectă. Rezultatul (agregat STRICT lunar — cantitate, fără valoare RON, cum s-a cerut explicit) se scrie într-o tabelă nouă, separată — `vanzari_istoric_lunar` — niciodată în `platforma_comenzi`, deci zero risc ca o comandă de-acum un an să „scape" vizibilă în Staff sau în „comenzi rămase în urmă". Tabelul din tab arată, filtrabil pe categorie/platformă/lună (implicit pe noiembrie): produs, categorie, platformă, medie lunară istorică, stoc curent, și recomandarea directă — medie minus stoc curent. Operație unică, re-apăsabilă oricând ca să aduci istoricul la zi (idempotentă — o lună deja adusă se recalculează curat, nu se dublează). Plan complet, cu toate deciziile luate explicit, pas cu pas: `.tmp/grill-me/istoric-vanzari-aprovizionare.md`. **Necesită rularea migrării SQL din chat în Supabase** (tabela `vanzari_istoric_lunar`) **și repornirea conectorului local eMAG** (versiune nouă, cu interogare pe interval real de date, nu doar zi cu zi) înainte de prima folosire. Verificat cu 24 de teste izolate pe funcțiile reale extrase din cod (potrivire produs pe toate cele 4 căi + regresii, deducerea categoriei alege cel mai specific cuvânt potrivit — nu primul găsit, intervalul de luni + limita reală Trendyol de 14 zile/apel acoperă complet fără gol niciun interval, agregarea adună corect cantitățile aceluiași produs și separă produsele diferite), rulate de 2 ori, plus sintaxa celor 3 fișiere atinse (index.html, scripts/emag-local-connector.js, api/trendyol.js) verificată de 2 ori fiecare.',date:'2026-10-13'},
@@ -19567,50 +19568,73 @@ async function vintedFromFiles(ev){
    în interior, caută după platforma==='vinted' generic, deci „recunoașterea AWB" funcționează deja,
    fără cod nou). Distincția rămâne vizibilă prin comandaId — prefixat „OLX-" (spre deosebire de
    Vinted, OLX chiar arată un ID de comandă real pe ecran, deci îl folosim direct, nu unul sintetic. */
+// Array (nu un singur obiect) — cerut direct, pe o captură reală cu 3 comenzi deodată: „aici sunt 3
+// comenzi - sa le preia pe toate". O captură OLX poate fi fie un singur ecran de detaliu, fie o listă
+// derulabilă cu mai multe comenzi una sub alta (ca la Vinted — vezi VINTED_EXTRACTION_SCHEMA/randuri,
+// același tipar).
 const OLX_EXTRACTION_SCHEMA={
   type:'object',
   properties:{
-    comandaId:{type:['string','null'],description:'„ID-ul comenzii” — un cod alfanumeric scurt (ex. „3SLGVDS5V3”), de lângă titlul ecranului. null dacă nu apare.'},
-    produs:{type:['string','null'],description:'Numele/titlul produsului comandat. Dacă titlul e scurt/generic, completează cu detalii vizuale distinctive din poza produsului (culoare, material, formă, model) — se folosește la potrivirea cu produsele din stoc. null dacă nu apare.'},
-    pret:{type:['number','null'],description:'Prețul afișat (în lei), sub titlul produsului — doar numărul. null dacă nu apare.'},
-    cumparator:{type:['string','null'],description:'Numele cumpărătorului, din secțiunea „Cumpărător” de jos. null dacă nu apare.'},
-    curier:{type:['string','null'],description:'Numele curierului (FAN Courier, Cargus, Sameday etc), dacă e explicit vizibil. null dacă nu apare.'}
+    comenzi:{
+      type:'array',
+      description:'Fiecare comandă DISTINCTĂ vizibilă în imagine — o captură poate fi un singur ecran de detaliu SAU o listă derulabilă cu mai multe comenzi una sub alta; extrage-le pe TOATE, nu doar prima.',
+      items:{
+        type:'object',
+        properties:{
+          comandaId:{type:['string','null'],description:'„ID-ul comenzii” — un cod alfanumeric scurt (ex. „3SLGVDS5V3”), de lângă titlul ecranului/cardului. null dacă nu apare.'},
+          produs:{type:['string','null'],description:'Numele/titlul produsului comandat. Dacă titlul e scurt/generic, completează cu detalii vizuale distinctive din poza produsului (culoare, material, formă, model) — se folosește la potrivirea cu produsele din stoc. null dacă nu apare.'},
+          pret:{type:['number','null'],description:'Prețul afișat (în lei), sub titlul produsului — doar numărul. null dacă nu apare.'},
+          cumparator:{type:['string','null'],description:'Numele cumpărătorului, din secțiunea „Cumpărător” a acelei comenzi. null dacă nu apare.'},
+          curier:{type:['string','null'],description:'Numele curierului (FAN Courier, Cargus, Sameday etc), dacă e explicit vizibil. null dacă nu apare.'}
+        },
+        required:['comandaId','produs','pret','cumparator','curier'],
+        additionalProperties:false
+      }
+    }
   },
-  required:['comandaId','produs','pret','cumparator','curier'],
+  required:['comenzi'],
   additionalProperties:false
 };
 async function olxRunRecognition(imageContent,previewSrc){
   const box=document.getElementById('olx-parsing');if(box)box.style.display='block';
   try{
-    const content=[imageContent,{type:'text',text:'Această captură e din aplicația/site-ul OLX — ecranul de detaliu al unei comenzi din secțiunea de vânzări a vânzătorului, un singur articol pe captură (nu o listă). Extrage STRICT ce apare — ID-ul comenzii, produsul, prețul, cumpărătorul, curierul.'}];
-    const resp=await callAI([{role:'user',content}],'Ești expert în citirea capturilor de ecran din aplicația OLX, secțiunea de vânzări a vânzătorului. Extragi STRICT ce apare în imagine, fără să inventezi ce lipsește.',400,'analysis',OLX_EXTRACTION_SCHEMA,'olx_extraction');
+    const content=[imageContent,{type:'text',text:'Această captură e din aplicația/site-ul OLX, secțiunea de vânzări a vânzătorului — poate fi ecranul de detaliu al UNEI comenzi, sau o listă derulabilă cu MAI MULTE comenzi una sub alta. Extrage TOATE comenzile distincte vizibile, fără să inventezi ce lipsește.'}];
+    const resp=await callAI([{role:'user',content}],'Ești expert în citirea capturilor de ecran din aplicația OLX, secțiunea de vânzări a vânzătorului. Extragi STRICT ce apare în imagine, comandă cu comandă — o captură poate avea mai multe comenzi deodată, nu doar una.',900,'analysis',OLX_EXTRACTION_SCHEMA,'olx_extraction');
     const parsed=JSON.parse(resp);
-    if(parsed.produs)parsed.produs=stripInvisibleChars(parsed.produs);
-    if(parsed.cumparator)parsed.cumparator=stripInvisibleChars(parsed.cumparator);
-    if(parsed.comandaId)parsed.comandaId=stripInvisibleChars(parsed.comandaId);
-    if(!parsed.produs&&!parsed.comandaId){toast('Nu am găsit nimic util în această captură','err');return;}
-    const comandaId=parsed.comandaId?('OLX-'+parsed.comandaId):('OLX-'+Date.now().toString(36).toUpperCase());
-    // Spre deosebire de Vinted (fără niciun ID stabil pe captură, doar euristica preț+nume —
-    // vezi vintedFindLikelyDuplicate), OLX chiar arată un ID de comandă real: verificarea de duplicat
-    // e simplă și exactă, direct pe el — aceeași captură lipită de două ori nu creează 2 comenzi.
-    const already=pcImpParsed.some(x=>x.platforma==='vinted'&&x.comandaId===comandaId)||PCOM.some(o=>o.platforma==='vinted'&&o.comandaId===comandaId&&!o.anulata);
-    if(already){toast(`Comanda OLX ${esc(parsed.comandaId||comandaId)} pare deja adăugată`,'err');return;}
-    const exact=findExistingProduct({name:parsed.produs});
-    let produsId=exact?.product.id||null,score=exact?.score||0;
-    if(!produsId&&parsed.produs){
-      let best=null,bestScore=0;
-      for(const p of P){if(p.archived)continue;const s=fuzzyMatch(parsed.produs,productMatchText(p));if(s>bestScore){bestScore=s;best=p;}}
-      if(bestScore>=0.35){produsId=best.id;score=bestScore;}
-    }
-    const pretTotalCuTva=Number(parsed.pret)||0;
-    pcImpParsed.push({platforma:'vinted',comandaId,pachetId:comandaId,data:td(),pnk:'',tara:'',codProdus:'',
-      clientNume:parsed.cumparator||'',titluExtern:parsed.produs||'Produs OLX',vintedImg:previewSrc||'',
-      cantitate:1,suggestedCantitate:0,pretFaraTva:Math.round(pretTotalCuTva/1.21*100)/100,pretTotalCuTva,moneda:'RON',
-      produsId,score,viaPnk:false,viaTitle:false,viaCode:false,
-      include:false,awb:'',_source:'olx'});
+    const comenzi=Array.isArray(parsed.comenzi)?parsed.comenzi:[];
+    if(!comenzi.length){toast('Nu am găsit nicio comandă utilă în această captură','err');return;}
+    let added=0,duplicate=0,matched=0;
+    comenzi.forEach(c=>{
+      const produs=c.produs?stripInvisibleChars(c.produs):'';
+      const cumparator=c.cumparator?stripInvisibleChars(c.cumparator):'';
+      const comandaIdRaw=c.comandaId?stripInvisibleChars(c.comandaId):'';
+      if(!produs&&!comandaIdRaw)return;
+      const comandaId=comandaIdRaw?('OLX-'+comandaIdRaw):('OLX-'+Date.now().toString(36).toUpperCase()+Math.random().toString(36).slice(2,5).toUpperCase());
+      // Spre deosebire de Vinted (fără niciun ID stabil pe captură, doar euristica preț+nume — vezi
+      // vintedFindLikelyDuplicate), OLX chiar arată un ID de comandă real: verificarea de duplicat e
+      // simplă și exactă, direct pe el — aceeași captură lipită de două ori nu creează comenzi duble.
+      const already=pcImpParsed.some(x=>x.platforma==='vinted'&&x.comandaId===comandaId)||PCOM.some(o=>o.platforma==='vinted'&&o.comandaId===comandaId&&!o.anulata);
+      if(already){duplicate++;return;}
+      const exact=findExistingProduct({name:produs});
+      let produsId=exact?.product.id||null,score=exact?.score||0;
+      if(!produsId&&produs){
+        let best=null,bestScore=0;
+        for(const p of P){if(p.archived)continue;const s=fuzzyMatch(produs,productMatchText(p));if(s>bestScore){bestScore=s;best=p;}}
+        if(bestScore>=0.35){produsId=best.id;score=bestScore;}
+      }
+      if(produsId)matched++;
+      const pretTotalCuTva=Number(c.pret)||0;
+      pcImpParsed.push({platforma:'vinted',comandaId,pachetId:comandaId,data:td(),pnk:'',tara:'',codProdus:'',
+        clientNume:cumparator,titluExtern:produs||'Produs OLX',vintedImg:previewSrc||'',
+        cantitate:1,suggestedCantitate:0,pretFaraTva:Math.round(pretTotalCuTva/1.21*100)/100,pretTotalCuTva,moneda:'RON',
+        produsId,score,viaPnk:false,viaTitle:false,viaCode:false,
+        include:false,awb:'',_source:'olx'});
+      added++;
+    });
+    if(!added){toast(duplicate?`${duplicate} ${duplicate===1?'comandă pare':'comenzi par'} deja adăugate — nimic nou`:'Nu am găsit nicio comandă utilă în această captură','err');return;}
     renderPcomImportPreview();
-    toast(produsId?'Comandă OLX adăugată — produs asociat ✓':'Comandă OLX adăugată — alege produsul în previzualizare');
-  }catch(e){toast('Eroare la analiza comenzii OLX: '+(e.message||e),'err');}
+    toast(`${added} ${added===1?'comandă OLX adăugată':'comenzi OLX adăugate'}${matched?` · ${matched} cu produs asociat`:''}${duplicate?` · ${duplicate} deja adăugate (ignorate)`:''}`);
+  }catch(e){toast('Eroare la analiza comenzilor OLX: '+(e.message||e),'err');}
   finally{const box=document.getElementById('olx-parsing');if(box)box.style.display='none';}
 }
 async function olxPasteImage(){
@@ -20284,11 +20308,11 @@ function renderPcomRedesign(){
         <div class="pcx-source-zone" id="pcx-trendyol-zone" style="display:none"><div class="pcx-emag-date-range"><div class="pcx-fld"><label>De la</label><input type="date" id="pcx-trendyol-date-start"></div><div class="pcx-fld"><label>Până la</label><input type="date" id="pcx-trendyol-date-end"></div><button type="button" class="pcx-btn pcx-btn-primary" id="pcx-trendyol-import-btn" onclick="importTrendyolApiOrders()">🛍️ Adu comenzi Trendyol</button></div><div class="pcx-source-note">Importă pachetele disponibile prin API, cu cumpărător și AWB când există. Stocul se modifică doar la „Aplică import”.</div></div>
         <div class="pcx-source-zone" id="pcx-vinted-zone" style="display:none"><div class="pcx-row2"><div class="pcx-dropzone" onclick="document.getElementById('pcmi-vinted-images').click()"><span class="ic">🖼️</span>Adaugă capturi Vinted<span class="sub">Poți alege mai multe capturi; comenzile recunoscute apar în previzualizare</span></div><button type="button" class="pcx-btn" style="align-self:center;justify-self:center" onclick="vintedPasteImage()">📋 Adaugă din clipboard</button></div><div class="pcx-vinted-pdf"><div><b>Ai PDF-uri cu etichete sau AWB-uri Vinted?</b><span>Selectează mai multe fișiere: sistemul citește fiecare pagină și o asociază cu comanda potrivită — sau creează o comandă Vinted NOUĂ direct din etichetă, dacă încă nu există una pentru ea.</span></div><button type="button" class="pcx-btn" onclick="document.getElementById('pcmi-awb-file').click()">📮 Citește PDF-uri Vinted (asociază sau adaugă comandă nouă)</button></div><div id="pcx-vinted-gls-ready"></div><div id="pcx-vinted-parsing-slot"></div>
           <!-- OLX — cerut direct: „să intre în fluxul de lucru normal... în secțiunea Vinted". Aceeași
-               platformă (platforma:'vinted'), doar captura de recunoaștere e alta (ecranul de detaliu
-               al unei comenzi OLX, nu o listă) — vezi olxRunRecognition. -->
-          <div class="pcx-row2" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--b1)"><div class="pcx-dropzone" onclick="document.getElementById('pcmi-olx-images').click()"><span class="ic">🛒</span>Adaugă comenzi OLX<span class="sub">Ecranul de detaliu al comenzii (ID, produs, preț, cumpărător) — un articol pe captură</span></div><button type="button" class="pcx-btn" style="align-self:center;justify-self:center" onclick="olxPasteImage()">📋 Adaugă din clipboard (OLX)</button></div>
+               platformă (platforma:'vinted'), doar captura de recunoaștere e alta (ecranul/lista de
+               comenzi OLX, una sau mai multe deodată) — vezi olxRunRecognition. -->
+          <div class="pcx-row2" style="margin-top:14px;padding-top:14px;border-top:1px solid var(--b1)"><div class="pcx-dropzone" onclick="document.getElementById('pcmi-olx-images').click()"><span class="ic">🛒</span>Adaugă comenzi OLX<span class="sub">Ecranul cu comenzile (ID, produs, preț, cumpărător) — o comandă sau o listă cu mai multe, deodată</span></div><button type="button" class="pcx-btn" style="align-self:center;justify-self:center" onclick="olxPasteImage()">📋 Adaugă din clipboard (OLX)</button></div>
           <input type="file" id="pcmi-olx-images" accept="image/*" multiple onchange="olxFromFiles(event)" style="display:none">
-          <div id="olx-parsing" style="display:none;font-size:24px;color:var(--t3);margin:8px 0"><span class="spin"></span> Analizez comanda OLX…</div>
+          <div id="olx-parsing" style="display:none;font-size:24px;color:var(--t3);margin:8px 0"><span class="spin"></span> Analizez comenzile OLX…</div>
         </div>
         <div class="pcx-source-zone" id="pcx-file-zone" style="display:none"><div class="pcx-file-settings"><div class="pcx-fld"><label>Platforma fișierului</label><select id="pcx-file-platform" onchange="pcxSetFilePlatform(this.value)"><option value="emag">eMAG</option><option value="trendyol">Trendyol</option><option value="both">eMAG + Trendyol (mixt)</option><option value="all3">Toate 3 (mixt)</option></select></div></div><div class="pcx-dropzone" onclick="document.getElementById('pcmi-file').click()"><span class="ic">📄</span>Alege fișier(e) comenzi (.xlsx / .xls / .csv)<span class="sub">Seller Center — poți alege mai multe fișiere deodată</span></div></div>
         <div class="pcx-source-zone" id="pcx-manual-zone" style="display:none"><div class="pcx-source-note" style="margin-top:0">Pentru o comandă Vinted fără captură: adaugă toate produsele din același colet, cumpărătorul și codul de expediere.</div><div class="pcx-lot-rows" id="pcx-lot-rows-slot"></div><button type="button" class="pcx-btn" onclick="vintedLotAddRow()">➕ Adaugă rând produs</button><div class="pcx-row2" style="margin-top:10px"><div class="pcx-fld"><label>Cumpărător</label><div id="pcx-lot-client-slot"></div></div><div class="pcx-fld"><label>Cod (în loc de AWB)</label><div id="pcx-lot-awb-slot"></div></div></div><button type="button" class="pcx-btn pcx-btn-primary" style="margin-top:10px" onclick="vintedLotSubmit()">Adaugă lotul în Comenzi</button></div>
@@ -22519,10 +22543,21 @@ function parseAwbLabelText(text){
   // DPD... măcar să sesizeze că sunt de acolo"): până acum, cazul obișnuit (FAN Courier) rămânea singurul
   // format din tot parseAwbLabelText FĂRĂ niciun nume de curier reținut — nici Staff, nici admin nu
   // aveau ce arăta pe card, deși eticheta era recunoscută perfect.
-  const awbM=text.match(/AWB:\s*(\d+)/);
-  const contM=text.match(/Continut:\s*(\d+)/);
+  // „:" opțional + insensibil la majuscule — cerut direct, pe o etichetă FAN Courier reală (comenzi
+  // OLX): formatul ei scrie „AWB 4285600033825”/„CONTINUT ILN3AESJ55”, FĂRĂ „:” și cu TOT textul
+  // majuscul — regexul vechi (strict „AWB:”+cifre) nu se potrivea deloc. „Continut” acceptă acum și
+  // litere (nu doar cifre) — confirmat direct, pe date reale: codul de-acolo E chiar ID-ul comenzii OLX
+  // (identic, literă cu literă, cu „ID-ul comenzii” arătat în aplicația OLX) — doar alfanumeric, nu
+  // numeric ca la Trendyol/eMAG. Când conține litere, înseamnă clar OLX (Trendyol/eMAG au mereu cod
+  // numeric aici) — prefixat „OLX-”, ca să se potrivească EXACT cu comandaId-ul scris la adăugarea
+  // comenzii (vezi olxRunRecognition) — asociere AWB exactă, nu doar fuzzy după nume+sumă.
+  const awbM=text.match(/AWB:?\s*(\d+)/i);
+  const contM=text.match(/Continut:?\s*([A-Za-z0-9]+)/i);
   const dpdSignature=/\d+\s+of\s+\d+\s+for\s+(?:\d\s*){9,14}/.test(text);
-  if(awbM&&contM)return canceled?{courierCanceled:true,awb:awbM[1],comandaId:contM[1]}:{awb:awbM[1],comandaId:contM[1],courier:dpdSignature?'DPD':'FAN Courier'};
+  if(awbM&&contM){
+    const contVal=contM[1],comandaId=/[A-Za-z]/.test(contVal)?'OLX-'+contVal:contVal;
+    return canceled?{courierCanceled:true,awb:awbM[1],comandaId}:{awb:awbM[1],comandaId,courier:dpdSignature?'DPD':'FAN Courier'};
+  }
   const sdM=text.match(/^([A-Za-z0-9]{8,25})_(\d{6,})_\d+$/m);
   if(sdM)return canceled?{courierCanceled:true,awb:sdM[1],comandaId:sdM[2]}:{awb:sdM[1],comandaId:sdM[2],courier:'Sameday'};
   // Sameday — „notă de transport" clasică (ramburs/COD), format diferit de eticheta easybox de mai sus
