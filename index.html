@@ -4496,6 +4496,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:558,text:'Comenzi Platforme — căutând o comandă deja scrisă în bază, dar lipsă din previzualizarea curentă, apare acum CARDUL REAL, exact ca restul listei, nu doar un rezumat text, cerut direct cu captură: „dacă e în previzualizare comenzi, să apară direct comanda, exact așa cum e în previzualizare, nu text". Comanda găsită (neanulată) e adusă automat în previzualizare (aceeași mecanică deja folosită la „↺ Reactivează comandă finalizată", dar STRICT pentru afișare — fără să trimită nimic spre Staff, o simplă căutare nu are voie să schimbe ceva în bază) — imagine, badge-uri, AWB, butoane de acțiune, identic cu orice altă comandă din listă. O comandă cu mai multe produse se aduce toată deodată, ca gruparea cardului să fie completă. Dacă filtrul de platformă activ nu se potrivește, sau comanda e anulată, rămâne exact vechiul comportament (rezumat text, cu acțiunile de la #550/#553) — nimic pierdut, doar extins pentru cazul obișnuit. Verificat cu 7 teste izolate pe funcțiile reale extrase din cod (cazul real raportat — comanda #535410374, deja trimisă spre Staff, lipsă din previzualizare —, comandă deja prezentă neatinsă, comandă cu mai multe produse grupată corect, regresie pe comandă anulată și pe filtru de platformă nepotrivit, cardul rezultat reflectă exact datele din bază), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-13'},
   {n:557,text:'Picker-ul „🔗 Asociază manual" (AWB-uri) caută acum pe cuvinte, nu doar pe un singur text literal, cerut direct, pe un caz real: căutarea „set 500" nu găsea comanda OLX cu titlul „Set complet de poker Texas Hold\'em de 500 jetoane" — cuvintele „set" și „500" nu erau alăturate în titlu, deci vechea comparație (tot textul căutat, dintr-o bucată, trebuia să existe exact așa) eșua, deși comanda chiar exista, corect scrisă în bază (verificat direct, live, în Supabase — comanda #1309). Acum fiecare cuvânt din căutare trebuie să apară undeva în comandă (număr + client + produs + platformă, combinate), în orice ordine — „set 500", „popa poker" sau doar codul OLX funcționează la fel de bine. Căutarea live suplimentară (pentru interogări de minim 3 caractere) folosește primul cuvânt ca plasă mai largă, apoi filtrează local cu toate cuvintele, înainte de afișare — niciun rezultat fals-pozitiv. Verificat cu 10 teste izolate pe funcțiile reale extrase din cod (cazul real raportat — „set 500" —, căutare pe un singur cuvânt din titlu, combinație client+produs, 2 cuvinte unde unul nu se potrivește → corect gol, căutare pe platformă, regresie pe comenzi deja rezolvate — cu AWB — excluse corect, filtrarea locală după interogarea live elimină corect falșii-pozitivi), rulate de 2 ori.',date:'2026-10-13'},
   {n:556,text:'Comenzi Platforme — cardul „↺ Reactivează comandă finalizată" mutat înaintea „Comenzi rămase în urmă din Staff", cerut direct: „du această comandă de reactivează înainte de comenzi rămase în staff". Pur vizual (ordine de afișare) — nimic funcțional schimbat.',date:'2026-10-13'},
   {n:555,text:'Comenzi Platforme — 2 completări directe la comenzile OLX (#554), pe o captură reală cu 3 comenzi deodată: „aici sunt 3 comenzi - sa le preia pe toate". (1) Recunoașterea OLX citește acum o LISTĂ întreagă dintr-o singură captură (exact ca la Vinted), nu doar un ecran de detaliu — toate comenzile distincte din imagine se adaugă deodată, cu numărătoare clară în mesaj (ex. „3 comenzi OLX adăugate · 2 cu produs asociat · 1 deja adăugată"); o comandă deja existentă din listă e ignorată individual, fără să blocheze restul. (2) Reparat pe loc, verificând eticheta FAN Courier atașată caracter cu caracter: câmpul „CONTINUT" de pe etichetă conține chiar ID-ul real al comenzii OLX (confirmat identic cu „ILN3AESJ55", văzut și în captura cu cele 3 comenzi) — regexul de recunoaștere a etichetelor FAN Courier (folosit de ani de zile pentru Trendyol/eMAG) accepta doar cifre acolo și cerea obligatoriu „:", format pe care eticheta reală NU îl are deloc (scrie „AWB 123" / „CONTINUT ABC", fără două puncte, tot cu majuscule) — extins acum să accepte și litere, cu „:" opțional; o potrivire alfanumerică înseamnă clar OLX (Trendyol/eMAG au mereu cod numeric), deci primește automat prefixul „OLX-", pentru asociere EXACTĂ cu comanda, nu doar fuzzy după nume+sumă (care, pentru OLX, poate rata — suma de pe etichetă e rambursul, nu neapărat prețul exact al produsului). Formatele vechi (Trendyol/eMAG, cu „:" și cifre) rămân identice, verificate explicit neatinse. Verificat cu 8+9 teste izolate noi pe funcțiile reale extrase din cod (captură cu 3 comenzi — cazul exact raportat —, mix comenzi noi+duplicat în aceeași captură, rând gol sărit fără să oprească restul, eticheta FAN Courier/OLX reală atașată verbatim, regresie pe formatul vechi exact + disambiguarea DPD + celelalte 3 formate de curier, neatinse), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-13'},
@@ -20204,15 +20205,11 @@ function pcxSearchFallbackHtml(q){
   }
   return`<div class="pcx-empty">Nicio comandă nu corespunde căutării „${esc(q)}" — nici în previzualizare, nici în comenzile deja din bază.<br><button type="button" class="btn btn-sm btn-acc" id="pcx-emag-search-btn" style="margin-top:10px" onclick="searchEmagOrderByNumber()">🔍 Caută pe eMAG după acest număr</button></div>`;
 }
-function pcxRenderOrders(){
-  renderCancelledPcomList();
-  renderStaleStaffOrdersCard();
-  const host=document.getElementById('pcx-orders-list');if(!host)return;
-  pcomComputeGroups();
-  const q=(document.getElementById('pcx-search')?.value||'').toLowerCase().trim();
-  const platF=document.getElementById('pcx-filter-platform')?.value||'all';
-  const statF=document.getElementById('pcx-filter-status')?.value||'all';
-  const filtered=pcomGroups.filter(idxs=>{
+// Predicatul de filtrare al unei comenzi din previzualizare, extras separat (nu doar inline în
+// pcxRenderOrders) — refolosit de 2 ori la aceeași randare (vezi mai jos, pcxPullDbHitIntoPreview),
+// ca re-filtrarea de după o aducere nouă din bază să fie EXACT aceeași logică, nu o copie divergentă.
+function pcxFilteredGroups(q,platF,statF){
+  return pcomGroups.filter(idxs=>{
     const it0=pcImpParsed[idxs[0]];
     if(platF!=='all'&&(it0.platforma||pcImpPlatforma)!==platF)return false;
     if(statF==='included'&&!idxs.some(i=>pcImpParsed[i].include))return false;
@@ -20224,6 +20221,40 @@ function pcxRenderOrders(){
     }
     return true;
   });
+}
+// Cerut direct, pe o comandă deja scrisă în bază, dar lipsă din previzualizarea curentă: „dacă e în
+// previzualizare comenzi, să apară direct comanda, exact așa cum e în previzualizare, nu text" — în loc
+// de rezumatul text separat (pcxSearchFallbackHtml), o comandă găsită (neanulată) e adusă direct în
+// pcImpParsed (ca orice comandă normală — vezi pcomLineFromCommittedOrder, același mecanism ca la
+// pullPcomOrderToPreview), ca să se randeze cu EXACT același card ca restul listei. Fără efectul
+// secundar de-acolo (staff_trimis_at — „retrimis explicit spre Staff"): o simplă căutare nu trebuie să
+// schimbe nimic în bază, doar să arate ce există deja. O comandă cu mai multe produse (mai multe
+// rânduri PCOM, același comandaId+platformă) se aduce toată deodată, ca gruparea cardului să fie
+// completă, nu doar un produs izolat.
+function pcxPullDbHitIntoPreview(q,platF){
+  const dbHit=PCOM.find(o=>!o.anulata&&(platF==='all'||o.platforma===platF)&&[o.comandaId,o.clientNume,o.titluExtern,o.produsNume,o.awb].filter(Boolean).some(v=>String(v).toLowerCase().includes(q)));
+  if(!dbHit)return false;
+  let added=false;
+  PCOM.filter(o=>o.comandaId&&o.comandaId===dbHit.comandaId&&o.platforma===dbHit.platforma).forEach(o=>{
+    if(pcImpParsed.some(x=>x._committedId===o.id))return;
+    pcImpParsed.push(pcomLineFromCommittedOrder(o));
+    added=true;
+  });
+  return added;
+}
+function pcxRenderOrders(){
+  renderCancelledPcomList();
+  renderStaleStaffOrdersCard();
+  const host=document.getElementById('pcx-orders-list');if(!host)return;
+  pcomComputeGroups();
+  const q=(document.getElementById('pcx-search')?.value||'').toLowerCase().trim();
+  const platF=document.getElementById('pcx-filter-platform')?.value||'all';
+  const statF=document.getElementById('pcx-filter-status')?.value||'all';
+  let filtered=pcxFilteredGroups(q,platF,statF);
+  if(!filtered.length&&q&&pcxPullDbHitIntoPreview(q,platF)){
+    pcomComputeGroups();
+    filtered=pcxFilteredGroups(q,platF,statF);
+  }
   // Grupare pe platformă (cerut direct — „o delimitare clară... să înțelegem care e pentru una și care
   // e pentru alta"), NU doar culoare de fundal — comenzile din aceeași platformă stau acum una lângă
   // alta, sub un antet propriu, în loc să fie amestecate în ordinea brută de import. Ordinea relativă
