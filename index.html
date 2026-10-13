@@ -4464,6 +4464,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:551,text:'Comenzi Platforme — dezactivată includerea automată doar din potrivirea de produs, raportat direct cu captură: „fiecare comandă când intră din sistem și i se aplică un produs, devine inclus — dezactivează funcția, să devină inclus doar ce are AWB-ul încărcat + când se apasă manual, atat". Existau 2 căi separate prin care o comandă devenea „✓ Inclus" (scrisă în bază) STRICT dintr-o potrivire de produs sigură (viaPnk/viaTitle/viaCode) — fără AWB, fără niciun click uman: (1) orice import nou, de fișier sau API (eMAG/Trendyol), unde liniile porneau „✓ Inclus" chiar la construcție; (2) pasul 4 al „▶️ Rulează rutina zilnică" („potrivirile sigure"), care bifa în bloc tot ce avea un scor bun. Amândouă erau de fapt feature-ul #470 („confirmare instant"), intenționat la vremea respectivă — regula s-a schimbat acum explicit. Produsul tot se asociază automat, exact ca înainte (nimic schimbat la potrivire în sine) — doar confirmarea finală („✓ Inclus", care scrie efectiv comanda) rămâne STRICT pentru 2 cazuri: o comandă cu AWB real asociat (#536, neatins) sau un click uman explicit (checkbox, picker, „✓ Selectează toate" — neatins, #526 le trata deja ca acțiune conștientă). O comandă restaurată dintr-un rând DEJA confirmat anterior în bază (reîncărcare de pagină) rămâne normal „✓ Inclus" — nu e o includere nouă. Pe drum, reparat efectul colateral în rezumatul rutinei zilnice: liniile cu produs găsit dar neconfirmate încă nu mai apar sub „⚠ excepții de verificat" (nu-i nimic greșit, doar de confirmat dintr-un click) — categorie proprie, neutră, separată de excepțiile genuine (fără niciun produs găsit). Verificat cu 14 teste izolate pe funcțiile reale extrase din cod (linie nouă cu potrivire sigură → nu mai pornește inclusă, linie restaurată dintr-un rând deja confirmat → neatinsă, linie anulată redescoperită → neatinsă, pasul 4 al rutinei → nu mai atinge nimic, rezumatul rutinei → categoriile corecte pe toate combinațiile), rulate de 2-3 ori, plus suitele vecine de la #536-#547 (AWB) re-rulate — toate verzi, nicio regresie.',date:'2026-10-13'},
   {n:550,text:'Comenzi Platforme — căutarea unei comenzi deja scrise în bază primește acum acțiune, nu doar text, cerut direct cu captură: „să apară secțiunea de reactivează sau adu la împachetat și aici" (căutând #535894515 în previzualizare, mesajul era strict „Găsită deja în bază… — deja aplicată", fără nimic de apăsat). Aceleași acțiuni care existau deja pe cardul „comenzi rămase în urmă din Staff" apar acum și direct în rezultatul căutării: o comandă scrisă în bază, dar niciodată trimisă spre Staff, primește „📦 Trimite la împachetare"/„✓ Marchează împachetat"; una deja împachetată/finalizată primește „↺ Reactivează" (grupat pe comandaId+platformă — o comandă cu mai multe produse se retrimite toată deodată); una deja activă în coadă nu mai arată niciun buton, fiindcă n-are nimic de făcut. Pe drum, reparat și un bug mic de randare: acțiunile astea, declanșate din oricare din cele 2 locuri (cardul dedicat sau căutarea de-aici), reîmprospătau doar cardul original — acum reîmprospătează amândouă suprafețele, altfel mesajul din căutare rămânea cu un buton deja apăsat încă pe ecran. Verificat cu 9 teste izolate pe funcția reală extrasă din cod (toate cele 3 stări posibile — neconfirmat, în coadă activă, finalizat — plus gruparea corectă pe comandă cu mai multe produse, și regresie pe cazurile vechi: comandă anulată, nicio comandă găsită, căutare goală), rulate de 2 ori.',date:'2026-10-13'},
   {n:549,text:'Imagini produse — 42 de imagini „dispărute" recuperate, raportat direct din Staff („de ce nu apar imaginile? vezi ce imagini s-au pierdut"). 42 de produse active aveau poza ca link către furnizorul Verk (verk.store), care și-a mutat/șters pozele (404). Pagina fiecărui produs a fost regăsită după ID-ul din numele pozei, imaginea curentă verificată vizual și salvată în stocarea proprie a aplicației (/api/ai-image, URL stabil) — de-acum nu mai depinde de furnizor; plus ghiozdanul Sonic. Date reparate, fără modificări de cod în Stoc Manager. Unealtă nouă: `node scripts/check-product-images.js [--list]` (doar citire) arată câte linkuri de imagini nu mai răspund și ce produse nu au poză, ca să prinzi din timp pierderile. Au rămas fără poză: 5 produse arhivate (imagini pe vechiul proiect Supabase, șters) și 43 fără nicio imagine (40 arhivate, 3 active: Globuri Set 100, Proiector laser, Saltea electrică — de încărcat manual).',date:'2026-10-12'},
   {n:548,text:'Staff — previzualizarea AWB se recuperează acum automat, nu mai depinde de apăsarea unui buton: pe comanda reală eMAG #1027256621 din 12 octombrie, AWB-ul și PDF-ul-sursă existau corect, însă awb_preview_url rămăsese gol după asociere, iar tableta afișa doar un pătrățel fără etichetă. La pornirea Adminului, sistemul caută tăcut comenzile active cu AWB+PDF-sursă, dar fără miniatură, recitește pagina exactă din arhiva locală a Mac-ului și o urcă în Storage; procesul nu schimbă AWB-ul, comanda, stocul sau arhiva. Pentru etichetele noi rămân și reîncercările de upload existente. În Staff, un URL de imagine invalid nu mai lasă iconiță stricată: revine elegant la opțiunea de fotografiere a etichetei. Verificat pe date reale: PDF-ul sursă al comenzii raportate există în arhiva locală și poate fi reconstituit.',date:'2026-10-12'},
@@ -17621,7 +17622,9 @@ async function handlePcomImportFile(ev){
     document.getElementById('pcmi-ai-btn').style.display=noMatch?'':'none';
     toast(`${newlyAddedCount} linii noi adăugate${files.length>1?' din '+files.length+' fișiere':''} (total ${pcImpParsed.length} în previzualizare) · ${pcImpParsed.length-noMatch} cu produs asociat ✓${restoredCount?` · ${restoredCount} recuperate pentru Staff`:''}${cancelledCount?` · ${cancelledCount} anulate anterior — de reconsiderat`:''}${alreadyImportedCount?` · ${alreadyImportedCount} deja aplicate/în previzualizare (ignorate)`:''}${failedFiles.length?' · '+failedFiles.length+' fișiere ignorate: '+failedFiles.join(', '):''}`);
     pcomTranslateForeignTitles();
-    await autoCommitConfidentPcomLines(newLines);
+    // NU se mai confirmă automat aici — cerut direct: „devine inclus doar ce are AWB-ul încărcat + când
+    // se apasă manual”. Liniile noi pornesc acum „Neinclus” (vezi pcomApiImportGate), deci
+    // autoCommitConfidentPcomLines n-ar mai avea ce comite oricum — eliminat, nu doar lăsat ca apel mort.
   }catch(err){
     parsing.style.display='none';
     toast('Eroare la citirea fișierelor: '+err.message,'err');
@@ -17675,6 +17678,14 @@ function pcomApiImportGate(keyOf){
       // motivul anulării notat mai sus.
       if(old&&old.anulata){line.include=false;line._cancelledId=old.id;line._cancelledMotiv=old.motivAnulare||'';pcImpParsed.push(line);previewKeys.add(key);return'cancelled';}
       if(old){line.include=true;line._committedId=old.id;line._restoredFromGate=true;}
+      // Bug real, raportat direct cu captură: „fiecare comandă când intră din sistem și i se aplică un
+      // produs, devine inclus — dezactivează funcția, să devină inclus doar ce are AWB-ul încărcat +
+      // când se apasă manual, atat". O linie CHIAR NOUĂ (fără nimic în bază încă — `!old`) nu are nici
+      // AWB, nici niciun click uman în acest moment — doar o potrivire de produs — deci NU intră
+      // confirmată, indiferent cât de sigură pare potrivirea (viaPnk/viaTitle/viaCode, vezi
+      // pcomEmagMatchLine/pcomTrendyolMatchLine). O linie „restored” (ramura de mai sus) rămâne
+      // neatinsă — nu e o includere nouă, doar reflectă un rând DEJA confirmat anterior în bază.
+      else line.include=false;
       pcImpParsed.push(line);previewKeys.add(key);
       return old?'restored':'added';
     }
@@ -17724,7 +17735,8 @@ async function importTrendyolApiOrders(silent=false){
     const noMatch=added-matched,aiBtn=document.getElementById('pcmi-ai-btn');if(aiBtn)aiBtn.style.display=noMatch?'':'none';
     if(!silent)toast(`${added} linii Trendyol aduse · ${matched} asociate${restored?` · ${restored} recuperate pentru Staff`:''}${cancelled?` · ${cancelled} anulate anterior — de reconsiderat`:''}${noMatch?` · ${noMatch} necesită confirmare`:''}${duplicates?` · ${duplicates} deja aplicate/în previzualizare (ignorate)`:''} · AWB-urile sunt preluate pentru Staff.`);
     pcomTranslateForeignTitles();
-    await autoCommitConfidentPcomLines(newLines);
+    // Vezi comentariul din handlePcomImportFile — nu se mai confirmă automat doar din potrivirea de
+    // produs, liniile pornesc „Neinclus” (pcomApiImportGate).
   }catch(e){if(!silent)toast('Trendyol: '+(e.message||'nu am putut citi comenzile'),'err');else console.warn('Actualizare automată Trendyol eșuată:',e);}
   finally{if(btn&&!silent){btn.disabled=false;btn.textContent='🛍️ Adu comenzi Trendyol';}}
 }
@@ -17753,7 +17765,8 @@ async function importEmagApiOrders(silent=false){
     const noMatch=added-matched,aiBtn=document.getElementById('pcmi-ai-btn');if(aiBtn)aiBtn.style.display=noMatch?'':'none';
     if(!silent)toast(`${added} linii eMAG noi/în lucru aduse · ${matched} asociate${restored?` · ${restored} recuperate pentru Staff`:''}${cancelled?` · ${cancelled} anulate anterior — de reconsiderat`:''}${noMatch?` · ${noMatch} necesită confirmare`:''}${duplicates?` · ${duplicates} deja aplicate/în previzualizare (ignorate)`:''}${unavailable.size?` · Atenție: ${[...unavailable].join(', ')} neconfigurat/blocat`:''}`,unavailable.size?'warn':undefined);
     pcomTranslateForeignTitles();
-    await autoCommitConfidentPcomLines(newLines);
+    // Vezi comentariul din handlePcomImportFile — nu se mai confirmă automat doar din potrivirea de
+    // produs, liniile pornesc „Neinclus” (pcomApiImportGate).
   }catch(e){if(!silent)toast('eMAG: '+(e.message||'nu am putut citi comenzile'),'err');else console.warn('Actualizare automată eMAG eșuată:',e);}
   finally{if(btn&&!silent){btn.disabled=false;btn.textContent='🛒 Adu comenzi eMAG';}}
 }
@@ -18822,8 +18835,8 @@ async function runRutinaZilnica(){
     pcomMarkStep(3,'done');
 
     pcomMarkStep(4,'active');
-    toast('Pasul 4 — Verific și asociez produsele sigure…');
-    if(status)status.innerHTML='<div class="pcx-source-note">⏳ Pasul 4 — Se includ automat liniile sigure…</div>';
+    toast('Pasul 4 — Produsele sigure sunt deja asociate, gata de confirmat manual…');
+    if(status)status.innerHTML='<div class="pcx-source-note">⏳ Pasul 4 — Verific asocierile (fără confirmare automată — vezi „✓ Inclus"/„✓ Selectează toate")…</div>';
     await pcomAutoIncludeConfident();
     pcomMarkStep(4,'done');
 
@@ -18839,21 +18852,17 @@ async function runRutinaZilnica(){
     if(btn){btn.disabled=false;btn.textContent='▶️ Rulează rutina zilnică';}
   }
 }
-// Prag identic cu potrivirea eMAG/Trendyol (findExistingProduct: exact=1, fuzzy≥0.7 — vezi
-// pcomEmagMatchLine/pcomTrendyolMatchLine). O linie Vinted adusă manual din captură, cu potrivire
-// slabă sub prag (fallback 0.35 din vintedRunRecognition, „punct de plecare, nu bifat automat"), NU e
-// inclusă automat aici — rămâne o excepție de verificat manual, la fel ca o linie fără niciun produs.
+// DEZACTIVATĂ — bug real, raportat direct cu captură: „fiecare comandă când intră din sistem și i se
+// aplică un produs, devine inclus — dezactivează funcția, să devină inclus doar ce are AWB-ul încărcat
+// + când se apasă manual, atat". Pasul 4 al rutinei zilnice bifa automat „✓ Inclus" (și scria comanda
+// în bază) pe orice linie cu o potrivire de produs suficient de sigură (score≥0.7/viaPnk/viaTitle/
+// viaCode) — DOAR potrivire de produs, fără niciun AWB și fără niciun click uman pe linia respectivă.
+// Rămâne funcția + pasul (nu eliminate din rutină/ghid — risc mai mare de regresie decât valoarea unei
+// renumerotări acum), dar nu mai atinge nimic: produsele tot se asociază normal la import (vezi
+// pcomEmagMatchLine/pcomTrendyolMatchLine, neschimbat), rămân vizibile „Neinclus", gata de confirmat
+// manual (✓ Inclus pe linie / „✓ Selectează toate") sau automat, dacă apare un AWB (readAwbFolderPdfs).
 async function pcomAutoIncludeConfident(){
-  const idxs=pcImpParsed.map((it,i)=>i).filter(i=>{
-    const it=pcImpParsed[i];
-    return!!it.produsId&&!it.include&&!it.amanat&&(it.score>=0.7||it.viaPnk||it.viaTitle||it.viaCode);
-  });
-  if(!idxs.length)return 0;
-  idxs.forEach(i=>{pcImpParsed[i].include=true;});
-  renderPcomImportPreview();
-  for(const i of idxs)await syncPcomLineCommitState(i,false);
-  renderPcomImportPreview();
-  return idxs.length;
+  return 0;
 }
 // Checkpoint-ul unic al rutinei (cerut direct: „un singur checkpoint, la final") — rezumat scurt +
 // „Aplică tot", înainte de orice scădere de stoc sau scriere de AWB.
@@ -18861,7 +18870,13 @@ function pcomRenderRoutineSummary(){
   const status=document.getElementById('pcx-routine-status');if(!status)return;
   const pending=pcImpParsed.filter(x=>x.include&&x.produsId&&!x.amanat).length;
   const amanate=pcImpParsed.filter(x=>x.amanat).length;
-  const exceptii=pcImpParsed.filter(x=>!x.include&&!x.amanat).length;
+  // Despărțite în 2, de când produsul potrivit sigur nu mai bifează singur „✓ Inclus" (vezi
+  // pcomApiImportGate/pcomAutoIncludeConfident, cerut direct: „devine inclus doar ce are AWB-ul
+  // încărcat + când se apasă manual") — altfel marea majoritate a comenzilor de azi (produs găsit,
+  // doar neconfirmate încă) ar fi arătat ca „excepții ⚠", deși nu-i nimic de verificat, doar de
+  // confirmat dintr-un click.
+  const readyToConfirm=pcImpParsed.filter(x=>!x.include&&x.produsId&&!x.amanat).length;
+  const exceptii=pcImpParsed.filter(x=>!x.include&&!x.produsId&&!x.amanat).length;
   const awbMatched=awbParsed.filter(pcomAwbMatched).length;
   const awbUnmatched=awbParsed.filter(p=>!pcomAwbMatched(p)).length;
   const createdVinted=awbCreatedVintedFileNames.length;
@@ -18874,6 +18889,7 @@ function pcomRenderRoutineSummary(){
   if(awbMatched)parts.push(`${awbMatched} AWB-uri potrivite`);
   if(createdVinted)parts.push(`${createdVinted} ${createdVinted===1?'comandă Vinted nouă':'comenzi Vinted noi'} din etichetă`);
   if(amanate)parts.push(`${amanate} amânate (stoc insuficient)`);
+  if(readyToConfirm)parts.push(`${readyToConfirm} ${readyToConfirm===1?'comandă cu produs găsit, de confirmat':'comenzi cu produs găsit, de confirmat'} („✓ Inclus"/„✓ Selectează toate")`);
   if(exceptii)parts.push(`⚠ ${exceptii} ${exceptii===1?'excepție de verificat':'excepții de verificat'} mai jos`);
   if(packMismatch)parts.push(`⚠ ${packMismatch} ${packMismatch===1?'cantitate de verificat':'cantități de verificat'} (titlul sugerează alt pachet — vezi „💡 Aplică" pe rând)`);
   if(awbUnmatched)parts.push(`⚠ ${awbUnmatched} ${awbUnmatched===1?'etichetă AWB nerezolvată':'etichete AWB nerezolvate'}`);
@@ -19898,12 +19914,12 @@ function renderPcomRedesign(){
         <div class="pcx-check-step"><i class="pcx-flow-n">1</i><div><b>Generează AWB-urile</b><span>Verifică să aibă bifat butonul de Easybox, pentru comenzile din Easybox.</span></div><i class="pcx-check-tag manual">✋ manual</i></div>
         <div class="pcx-check-step"><i class="pcx-flow-n">2</i><div><b>Verifică comenzile din Vinted</b><span>Uită-te în Vinted după comenzi noi și adaugă-le în sistem.</span></div><i class="pcx-check-tag manual">✋ manual</i></div>
         <div class="pcx-check-step" id="pcx-check-3"><i class="pcx-flow-n">3</i><div><b>Adaugă AWB-urile</b><span>Citește etichetele din dosarul AWB-uri de pe Mac.</span></div><i class="pcx-check-tag auto">🤖 automat</i></div>
-        <div class="pcx-check-step" id="pcx-check-4"><i class="pcx-flow-n">4</i><div><b>Verifică toate comenzile</b><span>Asociază produsele — sistemul face potrivirile sigure, restul le confirmi tu.</span></div><i class="pcx-check-tag auto">🤖 automat</i></div>
+        <div class="pcx-check-step" id="pcx-check-4"><i class="pcx-flow-n">4</i><div><b>Verifică toate comenzile</b><span>Produsele sunt deja asociate — confirmă-le cu „✓ Inclus"/„✓ Selectează toate" (devin incluse automat doar dacă au AWB).</span></div><i class="pcx-check-tag manual">✋ manual</i></div>
         <div class="pcx-check-step" id="pcx-check-5"><i class="pcx-flow-n">5</i><div><b>Include-le în importul de azi</b><span>Rezumatul apare jos — apasă „✓ Aplică tot" ca să se scrie efectiv stocul și AWB-urile.</span></div><i class="pcx-check-tag auto">🤖 automat</i></div>
         <div class="pcx-check-step"><i class="pcx-flow-n">6</i><div><b>Fă fișierul și trimite-l spre listare</b><span>Pasul final, separat de rutină.</span></div><i class="pcx-check-tag manual">✋ manual</i></div>
       </div>
       <div class="pcx-card" style="border:2px solid var(--acc)">
-        <div class="pcx-card-hd"><div><div class="pcx-card-title">▶️ Rutina zilnică</div><div class="pcx-card-sub">Un singur buton: aduce eMAG + Trendyol, citește AWB-urile din dosar (creează automat comenzile Vinted noi găsite pe etichetă), potrivește tot ce e sigur — rămân doar excepțiile pentru tine.</div></div></div>
+        <div class="pcx-card-hd"><div><div class="pcx-card-title">▶️ Rutina zilnică</div><div class="pcx-card-sub">Un singur buton: aduce eMAG + Trendyol, citește AWB-urile din dosar (creează automat comenzile Vinted noi găsite pe etichetă) și asociază produsele — confirmarea „✓ Inclus" rămâne mereu pentru tine, cu AWB sau cu un click.</div></div></div>
         <button type="button" class="pcx-btn pcx-btn-primary" id="pcx-routine-btn" onclick="runRutinaZilnica()" style="width:100%;justify-content:center;font-size:19px;padding:14px">▶️ Rulează rutina zilnică</button>
         <div id="pcx-routine-status"></div>
       </div>
