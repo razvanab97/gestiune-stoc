@@ -3613,7 +3613,7 @@ button.pcx-include-btn.included{border-color:var(--gr)}
       <div class="fld"><label>Lună</label><select id="ap-luna" onchange="renderAprovizionareTable()"><option value="">Medie pe tot istoricul</option><option value="11" selected>Noiembrie</option><option value="12">Decembrie</option><option value="1">Ianuarie</option><option value="2">Februarie</option><option value="3">Martie</option><option value="4">Aprilie</option><option value="5">Mai</option><option value="6">Iunie</option><option value="7">Iulie</option><option value="8">August</option><option value="9">Septembrie</option><option value="10">Octombrie</option></select></div>
     </div>
     <div style="overflow-x:auto">
-      <table class="rpt-table" id="ap-table"><thead><tr><th>Produs</th><th>Categorie</th><th>Platformă</th><th>Medie lunară istorică</th><th>Stoc curent</th><th>Recomandare</th></tr></thead><tbody id="ap-tbody"></tbody></table>
+      <table class="rpt-table" id="ap-table"><thead><tr><th></th><th>Produs</th><th>Categorie</th><th>Platformă</th><th>Perioadă</th><th>Medie lunară istorică</th><th>Stoc curent</th><th>Recomandare</th></tr></thead><tbody id="ap-tbody"></tbody></table>
     </div>
     <div id="ap-empty" style="display:none;color:var(--t3);font-size:25px;padding:20px 0">Niciun istoric adus încă — apasă „📥 Adu istoricul" mai sus.</div>
   </div>
@@ -4496,6 +4496,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:560,text:'Aprovizionare sezonieră — tabelul arată acum poza produsului și perioada exactă din care vine media, cerut direct: „să scrie luna și anul și poza produsului în produse". Fiecare rând are acum o coloană nouă cu imaginea reală a produsului (aceeași convenție ca în Raport stoc — placeholder 📦 pe lipsă/produs discontinuat) și o coloană „Perioadă": cu o lună anume aleasă (ex. „Noiembrie"), arată anul/anii care chiar au date pentru ea (ex. „2025"); pe „Medie pe tot istoricul", arată intervalul complet acoperit pentru acel produs (ex. „ian 2025 – oct 2026"). Verificat cu 10 teste izolate pe funcțiile reale extrase din cod (formatarea perioadei pe toate cazurile — un an/doi ani/interval/punct unic/gol —, randarea rândului cu poză reală și cu placeholder, cazul exact raportat), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-13'},
   {n:559,text:'Aprovizionare sezonieră — bug real grav reparat, raportat direct: „revenim la aprovizionare, să înțeleg că Trendyol nu a fost încărcat?" (filtrat pe Trendyol/noiembrie, totul arăta 0). Investigat live, direct în Supabase: istoricul eMAG se oprea brusc la noiembrie 2025 (în loc de ianuarie 2025 → azi), Trendyol avea doar iulie-octombrie 2026 — niciuna din platforme nu acoperea intervalul complet cerut. Cauza, confirmată direct (testat conectorul local pentru o lună „lipsă" — a întors 451 de linii reale, în 12 secunde, deci sursa de date era perfect funcțională): scrierea în bază (`writeHistoricalMonth`) la finalul fiecărei luni NU era prinsă într-un try/catch propriu — o singură eroare izolată (ex. un lot lunar mare, peste timeout-ul de 20s al cererilor către Supabase) ieșea din toată bucla, oprind silențios TOATE lunile rămase neatinse, fără niciun semnal clar al punctului exact de oprire. Acum fiecare lună e complet izolată la scriere, la fel ca la citire — o eroare pe o singură lună se adaugă la lista de probleme afișată la final, iar bucla continuă normal până la capăt, pe toate celelalte. **Necesită re-apăsarea „📥 Adu istoricul" o dată, din tab-ul Aprovizionare** — datele actuale din bază rămân incomplete până la o nouă rulare. Verificat cu 4 teste izolate pe funcția reală extrasă din cod (eroare de scriere la o lună din mijloc/prima/ultima — toate cele 22 de luni tot procesate integral, nu doar până la eroare; regresie — fără nicio eroare, comportament neschimbat), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-13'},
   {n:558,text:'Comenzi Platforme — căutând o comandă deja scrisă în bază, dar lipsă din previzualizarea curentă, apare acum CARDUL REAL, exact ca restul listei, nu doar un rezumat text, cerut direct cu captură: „dacă e în previzualizare comenzi, să apară direct comanda, exact așa cum e în previzualizare, nu text". Comanda găsită (neanulată) e adusă automat în previzualizare (aceeași mecanică deja folosită la „↺ Reactivează comandă finalizată", dar STRICT pentru afișare — fără să trimită nimic spre Staff, o simplă căutare nu are voie să schimbe ceva în bază) — imagine, badge-uri, AWB, butoane de acțiune, identic cu orice altă comandă din listă. O comandă cu mai multe produse se aduce toată deodată, ca gruparea cardului să fie completă. Dacă filtrul de platformă activ nu se potrivește, sau comanda e anulată, rămâne exact vechiul comportament (rezumat text, cu acțiunile de la #550/#553) — nimic pierdut, doar extins pentru cazul obișnuit. Verificat cu 7 teste izolate pe funcțiile reale extrase din cod (cazul real raportat — comanda #535410374, deja trimisă spre Staff, lipsă din previzualizare —, comandă deja prezentă neatinsă, comandă cu mai multe produse grupată corect, regresie pe comandă anulată și pe filtru de platformă nepotrivit, cardul rezultat reflectă exact datele din bază), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-13'},
   {n:557,text:'Picker-ul „🔗 Asociază manual" (AWB-uri) caută acum pe cuvinte, nu doar pe un singur text literal, cerut direct, pe un caz real: căutarea „set 500" nu găsea comanda OLX cu titlul „Set complet de poker Texas Hold\'em de 500 jetoane" — cuvintele „set" și „500" nu erau alăturate în titlu, deci vechea comparație (tot textul căutat, dintr-o bucată, trebuia să existe exact așa) eșua, deși comanda chiar exista, corect scrisă în bază (verificat direct, live, în Supabase — comanda #1309). Acum fiecare cuvânt din căutare trebuie să apară undeva în comandă (număr + client + produs + platformă, combinate), în orice ordine — „set 500", „popa poker" sau doar codul OLX funcționează la fel de bine. Căutarea live suplimentară (pentru interogări de minim 3 caractere) folosește primul cuvânt ca plasă mai largă, apoi filtrează local cu toate cuvintele, înainte de afișare — niciun rezultat fals-pozitiv. Verificat cu 10 teste izolate pe funcțiile reale extrase din cod (cazul real raportat — „set 500" —, căutare pe un singur cuvânt din titlu, combinație client+produs, 2 cuvinte unde unul nu se potrivește → corect gol, căutare pe platformă, regresie pe comenzi deja rezolvate — cu AWB — excluse corect, filtrarea locală după interogarea live elimină corect falșii-pozitivi), rulate de 2 ori.',date:'2026-10-13'},
@@ -19137,6 +19138,19 @@ function renderAprovizionare(){
 // produs+platformă (nu doar lunile în care chiar a vândut ceva — o lună fără nicio vânzare tot scade
 // media reală, nu trebuie ignorată). Filtrul de lună restrânge la o singură lună din calendar (ex.
 // noiembrie), mediind peste toți anii din istoric care au date pentru luna aia.
+// Perioadă scurtă, citibilă — cerut direct: „să scrie luna și anul" (rândurile arătau doar o medie,
+// fără niciun indiciu DIN CE perioadă vine). Cu o lună anume aleasă (ex. „Noiembrie"), luna e deja
+// constantă — rămâne doar să arătăm anul/anii care chiar au date pentru ea; pe „Medie pe tot
+// istoricul", luna variază, deci arătăm un interval compact (prima lună acoperită – ultima).
+const LUNI_SCURT_AP=['','ian','feb','mar','apr','mai','iun','iul','aug','sep','oct','noi','dec'];
+function formatPerioadaAprovizionare(luniSet,lunaFiltrata){
+  const parsed=[...luniSet].map(s=>{const[an,luna]=s.split('-').map(Number);return{an,luna};}).sort((a,b)=>a.an-b.an||a.luna-b.luna);
+  if(!parsed.length)return'—';
+  if(lunaFiltrata)return[...new Set(parsed.map(p=>p.an))].join(', ');
+  const first=parsed[0],last=parsed[parsed.length-1];
+  const f=`${LUNI_SCURT_AP[first.luna]} ${first.an}`,l=`${LUNI_SCURT_AP[last.luna]} ${last.an}`;
+  return f===l?f:`${f} – ${l}`;
+}
 function renderAprovizionareTable(){
   const tbody=document.getElementById('ap-tbody'),empty=document.getElementById('ap-empty'),statsEl=document.getElementById('ap-stats');
   if(!tbody)return;
@@ -19171,12 +19185,17 @@ function renderAprovizionareTable(){
     const p=g.produsId?P.find(x=>x.id===g.produsId):null;
     const stoc=p?qty(p):null;
     const recomandare=stoc!=null?Math.max(0,Math.round(medie-stoc)):null;
-    return{...g,medie,stoc,recomandare,nume:p?p.name:g.titluExtern};
+    return{...g,medie,stoc,recomandare,nume:p?p.name:g.titluExtern,img:p?.img||''};
   }).sort((a,b)=>b.medie-a.medie);
   tbody.innerHTML=list.map(g=>{
     const stocTxt=g.stoc!=null?g.stoc:'—';
     const recTxt=g.recomandare!=null?(g.recomandare>0?`<strong style="color:var(--acc)">+${g.recomandare}</strong>`:'<span style="color:var(--t3)">stoc suficient</span>'):'<span style="color:var(--t3)">produs discontinuat</span>';
-    return`<tr><td><strong>${esc(g.nume)}</strong>${!g.produsId?'<div style="font-size:19px;color:var(--t3)">nepotrivit cu niciun produs activ</div>':''}</td><td><span class="rpt-cat-badge">${esc(g.categorie)}</span></td><td>${esc(pcomPlatLabel(g.platforma))}</td><td style="font-family:var(--mono)">${g.medie.toFixed(1)}/lună</td><td style="font-family:var(--mono)">${stocTxt}</td><td>${recTxt}</td></tr>`;
+    // Poză produs + perioada exactă (lună+an) din care vine media — cerut direct: „să scrie luna și
+    // anul și poza produsului în produse". Aceeași convenție de imagine ca în Raport stoc (imgSrc/
+    // imgErrAttr, placeholder 📦 pe lipsă) — un produs discontinuat (g.img gol) rămâne pe placeholder.
+    const imgHtml=g.img?`<img src="${esc(imgSrc(g.img))}" loading="lazy" style="width:38px;height:38px;object-fit:contain;border-radius:4px;border:1px solid var(--b1)" ${imgErrAttr(g.img)}>`:`<div style="width:38px;height:38px;border-radius:4px;background:var(--bg1);display:flex;align-items:center;justify-content:center;font-size:24px">📦</div>`;
+    const perioada=formatPerioadaAprovizionare(g.luni,!!lunaF);
+    return`<tr><td style="width:42px">${imgHtml}</td><td><strong>${esc(g.nume)}</strong>${!g.produsId?'<div style="font-size:19px;color:var(--t3)">nepotrivit cu niciun produs activ</div>':''}</td><td><span class="rpt-cat-badge">${esc(g.categorie)}</span></td><td>${esc(pcomPlatLabel(g.platforma))}</td><td style="font-family:var(--mono);font-size:19px;color:var(--t3)">${esc(perioada)}</td><td style="font-family:var(--mono)">${g.medie.toFixed(1)}/lună</td><td style="font-family:var(--mono)">${stocTxt}</td><td>${recTxt}</td></tr>`;
   }).join('');
   if(statsEl){
     const totalMedie=list.reduce((s,g)=>s+g.medie,0);
