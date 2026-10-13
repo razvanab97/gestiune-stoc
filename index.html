@@ -4496,6 +4496,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:556,text:'Comenzi Platforme — cardul „↺ Reactivează comandă finalizată" mutat înaintea „Comenzi rămase în urmă din Staff", cerut direct: „du această comandă de reactivează înainte de comenzi rămase în staff". Pur vizual (ordine de afișare) — nimic funcțional schimbat.',date:'2026-10-13'},
   {n:555,text:'Comenzi Platforme — 2 completări directe la comenzile OLX (#554), pe o captură reală cu 3 comenzi deodată: „aici sunt 3 comenzi - sa le preia pe toate". (1) Recunoașterea OLX citește acum o LISTĂ întreagă dintr-o singură captură (exact ca la Vinted), nu doar un ecran de detaliu — toate comenzile distincte din imagine se adaugă deodată, cu numărătoare clară în mesaj (ex. „3 comenzi OLX adăugate · 2 cu produs asociat · 1 deja adăugată"); o comandă deja existentă din listă e ignorată individual, fără să blocheze restul. (2) Reparat pe loc, verificând eticheta FAN Courier atașată caracter cu caracter: câmpul „CONTINUT" de pe etichetă conține chiar ID-ul real al comenzii OLX (confirmat identic cu „ILN3AESJ55", văzut și în captura cu cele 3 comenzi) — regexul de recunoaștere a etichetelor FAN Courier (folosit de ani de zile pentru Trendyol/eMAG) accepta doar cifre acolo și cerea obligatoriu „:", format pe care eticheta reală NU îl are deloc (scrie „AWB 123" / „CONTINUT ABC", fără două puncte, tot cu majuscule) — extins acum să accepte și litere, cu „:" opțional; o potrivire alfanumerică înseamnă clar OLX (Trendyol/eMAG au mereu cod numeric), deci primește automat prefixul „OLX-", pentru asociere EXACTĂ cu comanda, nu doar fuzzy după nume+sumă (care, pentru OLX, poate rata — suma de pe etichetă e rambursul, nu neapărat prețul exact al produsului). Formatele vechi (Trendyol/eMAG, cu „:" și cifre) rămân identice, verificate explicit neatinse. Verificat cu 8+9 teste izolate noi pe funcțiile reale extrase din cod (captură cu 3 comenzi — cazul exact raportat —, mix comenzi noi+duplicat în aceeași captură, rând gol sărit fără să oprească restul, eticheta FAN Courier/OLX reală atașată verbatim, regresie pe formatul vechi exact + disambiguarea DPD + celelalte 3 formate de curier, neatinse), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-13'},
   {n:554,text:'Comenzi Platforme — comenzile OLX intră acum în fluxul de lucru, cerut direct, cu captură de ecran OLX + etichetă FAN Courier reale atașate: „adaugă și comenzi OLX, au formatul acesta și AWB-urile... să intre în fluxul de lucru normal... în secțiunea Vinted — cu recunoaștere AWB ș.a.m.d". OLX, ca și Vinted, nu are nicio integrare API aici — captură de ecran e singura cale. Secțiunea Vinted primește acum un al doilea buton, „📋 Adaugă din clipboard (OLX)" (plus selector de fișiere), care citește ecranul de detaliu al unei comenzi OLX (ID, produs, preț, cumpărător) — spre deosebire de Vinted, OLX arată un ID de comandă REAL, folosit direct (prefixat „OLX-"), cu verificare exactă de duplicat dacă aceeași captură se lipește de două ori. Comenzile OLX intră STRICT în aceeași platformă („vinted", nu una nouă) — niciuna din cele ~60 de locuri din cod care tratează deja Vinted nu a fost atinsă, deci Staff/statistici/potrivire AWB funcționează identic, fără cod nou acolo. Verificat direct, pe eticheta FAN Courier reală atașată: formatul ei standard („AWB 4285600033825"/„CONTINUT ILN3AESJ55", fără „:" și cu litere în câmpul de conținut) NU se potrivește cu niciunul din cele 5 formate recunoscute prin regex — cade corect pe calea deja existentă, universală, bazată pe AI (extractAwbLabelDataWithAI → resolveAwbByNameAndAmount, deja platform-agnostic), care potrivește după numele destinatarului, exact mecanismul „recunoaștere AWB" cerut, fără nicio modificare suplimentară. Verificat cu 10 teste izolate pe funcția reală extrasă din cod (comandă nouă cu/fără produs potrivit, potrivire exactă + fallback fuzzy, duplicat exact pe comandaId — inclusiv regresie pe comandă anulată, care nu blochează —, ID lipsă → fallback sintetic, captură complet goală, preț lipsă, produs arhivat ignorat), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-13'},
   {n:553,text:'Comenzi Platforme — căutarea unei comenzi deja scrise în bază arată acum și istoricul, cerut direct: „să apară istoric, când a fost împachetată" (căutând o comandă Vinted, mesajul arăta doar „deja aplicată", fără nicio dată). Acum, lângă statusul găsit, apare data exactă a evenimentului relevant pentru acea stare: o comandă deja împachetată arată când anume a fost împachetată; una confirmată, încă neaplicată, arată când a fost confirmată; una deja activă în Staff (nu stale) arată când a fost trimisă spre împachetare. O comandă fără nicio dată disponibilă rămâne exact ca până acum, fără paranteză goală. Verificat cu 5 teste noi, izolate, pe funcția reală extrasă din cod (toate cele 3 stări cu dată + regresie pe lipsă totală de date + regresie pe comanda anulată, neatinsă), plus suita completă de 9 teste de la #550 re-rulată — toate verzi, rulate de 2 ori.',date:'2026-10-13'},
@@ -20362,6 +20363,17 @@ function renderPcomRedesign(){
         </div>
         <div class="pcx-orders-list" id="pcx-orders-list"></div>
       </div>
+      <!-- „↺ Reactivează comandă finalizată" mutat înaintea „Comenzi rămase în urmă din Staff" —
+           cerut direct: „du aceasta comanda de reactiveaza inainte de comenzi ramase in staff". -->
+      <div class="pcx-card pcx-card-compact">
+        <div class="pcx-card-title">↺ Reactivează comandă finalizată</div>
+        <div style="font-size:16px;color:var(--t3);margin:4px 0 8px">Caută după numărul comenzii (eMAG/Trendyol/Vinted) o comandă deja marcată împachetată/finalizată în Staff, ca să apară din nou activă acolo, gata de procesat.</div>
+        <div class="frow" style="align-items:flex-end;gap:8px;margin-bottom:8px">
+          <div class="fld" style="max-width:220px;margin:0"><label style="font-size:14px">Număr comandă</label><input type="text" id="pcom-reactivate-search" placeholder="ex. 123456789" onkeydown="if(event.key==='Enter')searchPcomReactivate()"></div>
+          <button type="button" class="pcx-btn" onclick="searchPcomReactivate()">🔍 Caută</button>
+        </div>
+        <div id="pcom-reactivate-results"></div>
+      </div>
       <div class="pcx-card pcx-card-compact" id="pcx-stale-staff-card" style="display:none">
         <div class="pcx-card-title">🕓 Comenzi rămase în urmă din Staff</div>
         <div style="font-size:16px;color:var(--t3);margin:4px 0 8px">Comenzi neîmpachetate care au ieșit din coada activă Staff la un reset de coadă (manual sau automat, ora 22:00) — nu mai sunt vizibile acolo, dar tot trebuie expediate. Verifică fizic dacă au plecat deja; dacă da, marchează-le împachetate de aici.</div>
@@ -20371,15 +20383,6 @@ function renderPcomRedesign(){
         <div class="pcx-card-title">🚫 Comenzi anulate — de reconsiderat</div>
         <div style="font-size:16px;color:var(--t3);margin:4px 0 8px">Produse scoase din coada Staff (test, dublură, stoc zero etc.), încă neaplicate financiar. Dacă motivul nu mai e valabil (ex. produsul a fost reaprovizionat), le poți readuce active.</div>
         <div id="pcx-cancelled-list"></div>
-      </div>
-      <div class="pcx-card pcx-card-compact">
-        <div class="pcx-card-title">↺ Reactivează comandă finalizată</div>
-        <div style="font-size:16px;color:var(--t3);margin:4px 0 8px">Caută după numărul comenzii (eMAG/Trendyol/Vinted) o comandă deja marcată împachetată/finalizată în Staff, ca să apară din nou activă acolo, gata de procesat.</div>
-        <div class="frow" style="align-items:flex-end;gap:8px;margin-bottom:8px">
-          <div class="fld" style="max-width:220px;margin:0"><label style="font-size:14px">Număr comandă</label><input type="text" id="pcom-reactivate-search" placeholder="ex. 123456789" onkeydown="if(event.key==='Enter')searchPcomReactivate()"></div>
-          <button type="button" class="pcx-btn" onclick="searchPcomReactivate()">🔍 Caută</button>
-        </div>
-        <div id="pcom-reactivate-results"></div>
       </div>
       <div class="pcx-card pcx-card-compact">
         <div class="pcx-card-title">Istoric importuri</div>
