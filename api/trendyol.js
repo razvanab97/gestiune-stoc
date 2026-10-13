@@ -1,5 +1,11 @@
 const BASE=String(process.env.TRENDYOL_API_BASE_URL||'https://apigw.trendyol.com').replace(/\/$/,'');
 const OPEN_STATUSES=['Created','Picking','Invoiced'];
+// Istoric de vânzări (statistici/aprovizionare sezonieră), cerut direct: „aducem comenzile din ani
+// trecuți, să facem o medie lunară de vânzare". STRICT „Delivered" — e singurul status, alături de
+// „Returned", documentat ca terminal („No status changes can be made after this status" — Trendyol
+// API v3 docs, getShipmentPackages); „Returned" înseamnă livrat apoi întors, nu o vânzare reală rămasă
+// — exclus intenționat, ca media să reflecte ce chiar a rămas vândut, nu ce s-a întors ulterior.
+const HISTORICAL_STATUSES=['Delivered'];
 
 function bodyOf(req){return typeof req.body==='string'?JSON.parse(req.body||'{}'):(req.body||{});}
 function day(value){return /^\d{4}-\d{2}-\d{2}$/.test(String(value||''))?String(value):null;}
@@ -52,16 +58,18 @@ function packageLines(pack){
 module.exports=async function handler(req,res){
   try{
     if(req.method!=='POST')return res.status(405).json({error:'Folosește POST'});
-    const body=bodyOf(req);if(String(body.action||'')!=='orders')return res.status(400).json({error:'Acțiune Trendyol necunoscută'});
+    const body=bodyOf(req),action=String(body.action||'');
+    if(action!=='orders'&&action!=='orders-historical')return res.status(400).json({error:'Acțiune Trendyol necunoscută'});
+    const statuses=action==='orders-historical'?HISTORICAL_STATUSES:OPEN_STATUSES;
     const startDate=day(body.startDate),endDate=day(body.endDate)||startDate;
     if(!startDate||!endDate||endDate<startDate)return res.status(400).json({error:'Alege un interval de date valid'});
     if((timestamp(endDate)-timestamp(startDate))/86400000>13)return res.status(400).json({error:'Trendyol permite maximum 14 zile într-un singur import'});
     const {sellerId,authorization}=config(),seen=new Set(),packages=[];
-    for(const status of OPEN_STATUSES){
+    for(const status of statuses){
       const result=await requestPackages(sellerId,authorization,status,startDate,endDate);
       for(const pack of result){const id=String(pack.shipmentPackageId||pack.id||'');if(id&&!seen.has(id)){seen.add(id);packages.push(pack);}}
     }
     const lines=packages.flatMap(packageLines).filter(x=>x.comandaId&&x.titluExtern);
-    return res.status(200).json({startDate,endDate,packages:packages.length,lines,statuses:OPEN_STATUSES});
+    return res.status(200).json({startDate,endDate,packages:packages.length,lines,statuses});
   }catch(e){return res.status(500).json({error:e.message||'Eroare integrare Trendyol'});}
 };

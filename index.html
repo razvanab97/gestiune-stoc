@@ -2827,6 +2827,7 @@ button.pcx-include-btn.included{border-color:var(--gr)}
     <button class="h-tab" data-page="salesreport" onclick="goPage('salesreport',this)"><svg class="ico" aria-hidden="true"><use href="#i-trend"/></svg><span>Raport vânzări</span></button>
     <button class="h-tab" data-page="sync" onclick="goPage('sync',this)"><svg class="ico" aria-hidden="true"><use href="#i-sync"/></svg><span>Sincronizare</span></button>
     <button class="h-tab" data-page="pcom" onclick="goPage('pcom',this)"><svg class="ico" aria-hidden="true"><use href="#i-bag"/></svg><span>Comenzi Platforme</span></button>
+    <button class="h-tab" data-page="aprovizionare" onclick="goPage('aprovizionare',this)"><svg class="ico" aria-hidden="true"><use href="#i-trend"/></svg><span>Aprovizionare</span></button>
     <button class="h-tab" data-page="research" onclick="goPage('research',this)"><svg class="ico" aria-hidden="true"><use href="#i-search"/></svg><span>Research</span></button>
     <button class="h-tab" data-page="news" onclick="goPage('news',this)"><svg class="ico" aria-hidden="true"><use href="#i-news"/></svg><span>News Intelligence</span></button>
     <button class="h-tab" data-page="archive" onclick="goPage('archive',this)"><svg class="ico" aria-hidden="true"><use href="#i-archive"/></svg><span>Arhivă</span></button>
@@ -3584,6 +3585,37 @@ button.pcx-include-btn.included{border-color:var(--gr)}
         <div id="pcom-reorder-list"></div>
       </div>
     </div>
+  </div>
+</div></div>
+
+<!-- PAGE APROVIZIONARE — istoric eMAG/Trendyol -> medie lunară -> recomandare de stoc (cerut direct:
+     „să știu în noiembrie, respectiv decembrie, câte produse ar trebui să aduc din anumite categorii").
+     Plan complet: .tmp/grill-me/istoric-vanzari-aprovizionare.md -->
+<div id="page-aprovizionare" class="page"><div class="wrap">
+  <div class="tb">
+    <div class="tb-head">
+      <div class="tb-title"><span class="pm-emoji">📈</span> Aprovizionare sezonieră — istoric eMAG &amp; Trendyol</div>
+    </div>
+    <div class="card" style="padding:1rem 1.25rem;margin-bottom:1rem">
+      <div class="sec" style="margin-top:0">Istoric de vânzări</div>
+      <div style="color:var(--t3);font-size:22px;margin-bottom:10px;max-width:70ch">Aduce comenzile finalizate din eMAG + Trendyol, de la 1 ianuarie anul trecut până azi, și calculează media lunară de vânzare per produs — util mai ales înainte de noiembrie/decembrie, ca să știi exact câte produse din fiecare categorie să aduci în stoc. Operație unică, de apăsat o dată (durează câteva minute) — rulabilă din nou oricând, ca să aduci istoricul la zi.</div>
+      <button type="button" class="btn btn-acc" id="ap-backfill-btn" onclick="backfillHistoricalSales()">📥 Adu istoricul (eMAG + Trendyol)</button>
+      <div id="ap-backfill-progress" style="display:none;margin-top:12px;max-width:520px">
+        <div style="height:8px;border-radius:999px;background:var(--bg1);overflow:hidden"><div id="ap-backfill-bar" style="height:100%;width:0%;background:var(--acc);transition:width .2s"></div></div>
+        <div id="ap-backfill-label" style="margin-top:6px;color:var(--t3);font-size:20px"></div>
+      </div>
+      <div id="ap-backfill-result" style="margin-top:10px"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px" id="ap-stats"></div>
+    <div class="frow" style="margin:0 0 .75rem">
+      <div class="fld"><label>Categorie</label><select id="ap-cat" onchange="renderAprovizionareTable()"><option value="">Toate</option></select></div>
+      <div class="fld"><label>Platformă</label><select id="ap-plat" onchange="renderAprovizionareTable()"><option value="">Toate</option><option value="emag">eMAG</option><option value="trendyol">Trendyol</option></select></div>
+      <div class="fld"><label>Lună</label><select id="ap-luna" onchange="renderAprovizionareTable()"><option value="">Medie pe tot istoricul</option><option value="11" selected>Noiembrie</option><option value="12">Decembrie</option><option value="1">Ianuarie</option><option value="2">Februarie</option><option value="3">Martie</option><option value="4">Aprilie</option><option value="5">Mai</option><option value="6">Iunie</option><option value="7">Iulie</option><option value="8">August</option><option value="9">Septembrie</option><option value="10">Octombrie</option></select></div>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="rpt-table" id="ap-table"><thead><tr><th>Produs</th><th>Categorie</th><th>Platformă</th><th>Medie lunară istorică</th><th>Stoc curent</th><th>Recomandare</th></tr></thead><tbody id="ap-tbody"></tbody></table>
+    </div>
+    <div id="ap-empty" style="display:none;color:var(--t3);font-size:25px;padding:20px 0">Niciun istoric adus încă — apasă „📥 Adu istoricul" mai sus.</div>
   </div>
 </div></div>
 
@@ -4464,6 +4496,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:552,text:'Nou — tab „📈 Aprovizionare": istoric de vânzări eMAG + Trendyol, cu medie lunară și recomandare de stoc, cerut direct: „vreau să aducem comenzile din ani trecuți... să facem o medie lunară de vânzare a unor produse, ca să știu în noiembrie, respectiv decembrie, câte produse ar trebui să aduc din anumite categorii". Un buton „📥 Adu istoricul" citește comenzile FINALIZATE de pe eMAG (status 4, pe toate cele 3 piețe) și Trendyol (status Delivered) de la 1 ianuarie anul trecut până azi, potrivește fiecare linie cu produsul activ (aceeași logică de potrivire PNK/titlu/cod ca la Comenzi Platforme) — iar dacă produsul a fost între timp discontinuat/redenumit, linia tot intră în statistică, sub o categorie dedusă din titlul original, ca media pe categorie să rămână corectă. Rezultatul (agregat STRICT lunar — cantitate, fără valoare RON, cum s-a cerut explicit) se scrie într-o tabelă nouă, separată — `vanzari_istoric_lunar` — niciodată în `platforma_comenzi`, deci zero risc ca o comandă de-acum un an să „scape" vizibilă în Staff sau în „comenzi rămase în urmă". Tabelul din tab arată, filtrabil pe categorie/platformă/lună (implicit pe noiembrie): produs, categorie, platformă, medie lunară istorică, stoc curent, și recomandarea directă — medie minus stoc curent. Operație unică, re-apăsabilă oricând ca să aduci istoricul la zi (idempotentă — o lună deja adusă se recalculează curat, nu se dublează). Plan complet, cu toate deciziile luate explicit, pas cu pas: `.tmp/grill-me/istoric-vanzari-aprovizionare.md`. **Necesită rularea migrării SQL din chat în Supabase** (tabela `vanzari_istoric_lunar`) **și repornirea conectorului local eMAG** (versiune nouă, cu interogare pe interval real de date, nu doar zi cu zi) înainte de prima folosire. Verificat cu 24 de teste izolate pe funcțiile reale extrase din cod (potrivire produs pe toate cele 4 căi + regresii, deducerea categoriei alege cel mai specific cuvânt potrivit — nu primul găsit, intervalul de luni + limita reală Trendyol de 14 zile/apel acoperă complet fără gol niciun interval, agregarea adună corect cantitățile aceluiași produs și separă produsele diferite), rulate de 2 ori, plus sintaxa celor 3 fișiere atinse (index.html, scripts/emag-local-connector.js, api/trendyol.js) verificată de 2 ori fiecare.',date:'2026-10-13'},
   {n:551,text:'Comenzi Platforme — dezactivată includerea automată doar din potrivirea de produs, raportat direct cu captură: „fiecare comandă când intră din sistem și i se aplică un produs, devine inclus — dezactivează funcția, să devină inclus doar ce are AWB-ul încărcat + când se apasă manual, atat". Existau 2 căi separate prin care o comandă devenea „✓ Inclus" (scrisă în bază) STRICT dintr-o potrivire de produs sigură (viaPnk/viaTitle/viaCode) — fără AWB, fără niciun click uman: (1) orice import nou, de fișier sau API (eMAG/Trendyol), unde liniile porneau „✓ Inclus" chiar la construcție; (2) pasul 4 al „▶️ Rulează rutina zilnică" („potrivirile sigure"), care bifa în bloc tot ce avea un scor bun. Amândouă erau de fapt feature-ul #470 („confirmare instant"), intenționat la vremea respectivă — regula s-a schimbat acum explicit. Produsul tot se asociază automat, exact ca înainte (nimic schimbat la potrivire în sine) — doar confirmarea finală („✓ Inclus", care scrie efectiv comanda) rămâne STRICT pentru 2 cazuri: o comandă cu AWB real asociat (#536, neatins) sau un click uman explicit (checkbox, picker, „✓ Selectează toate" — neatins, #526 le trata deja ca acțiune conștientă). O comandă restaurată dintr-un rând DEJA confirmat anterior în bază (reîncărcare de pagină) rămâne normal „✓ Inclus" — nu e o includere nouă. Pe drum, reparat efectul colateral în rezumatul rutinei zilnice: liniile cu produs găsit dar neconfirmate încă nu mai apar sub „⚠ excepții de verificat" (nu-i nimic greșit, doar de confirmat dintr-un click) — categorie proprie, neutră, separată de excepțiile genuine (fără niciun produs găsit). Verificat cu 14 teste izolate pe funcțiile reale extrase din cod (linie nouă cu potrivire sigură → nu mai pornește inclusă, linie restaurată dintr-un rând deja confirmat → neatinsă, linie anulată redescoperită → neatinsă, pasul 4 al rutinei → nu mai atinge nimic, rezumatul rutinei → categoriile corecte pe toate combinațiile), rulate de 2-3 ori, plus suitele vecine de la #536-#547 (AWB) re-rulate — toate verzi, nicio regresie.',date:'2026-10-13'},
   {n:550,text:'Comenzi Platforme — căutarea unei comenzi deja scrise în bază primește acum acțiune, nu doar text, cerut direct cu captură: „să apară secțiunea de reactivează sau adu la împachetat și aici" (căutând #535894515 în previzualizare, mesajul era strict „Găsită deja în bază… — deja aplicată", fără nimic de apăsat). Aceleași acțiuni care existau deja pe cardul „comenzi rămase în urmă din Staff" apar acum și direct în rezultatul căutării: o comandă scrisă în bază, dar niciodată trimisă spre Staff, primește „📦 Trimite la împachetare"/„✓ Marchează împachetat"; una deja împachetată/finalizată primește „↺ Reactivează" (grupat pe comandaId+platformă — o comandă cu mai multe produse se retrimite toată deodată); una deja activă în coadă nu mai arată niciun buton, fiindcă n-are nimic de făcut. Pe drum, reparat și un bug mic de randare: acțiunile astea, declanșate din oricare din cele 2 locuri (cardul dedicat sau căutarea de-aici), reîmprospătau doar cardul original — acum reîmprospătează amândouă suprafețele, altfel mesajul din căutare rămânea cu un buton deja apăsat încă pe ecran. Verificat cu 9 teste izolate pe funcția reală extrasă din cod (toate cele 3 stări posibile — neconfirmat, în coadă activă, finalizat — plus gruparea corectă pe comandă cu mai multe produse, și regresie pe cazurile vechi: comandă anulată, nicio comandă găsită, căutare goală), rulate de 2 ori.',date:'2026-10-13'},
   {n:549,text:'Imagini produse — 42 de imagini „dispărute" recuperate, raportat direct din Staff („de ce nu apar imaginile? vezi ce imagini s-au pierdut"). 42 de produse active aveau poza ca link către furnizorul Verk (verk.store), care și-a mutat/șters pozele (404). Pagina fiecărui produs a fost regăsită după ID-ul din numele pozei, imaginea curentă verificată vizual și salvată în stocarea proprie a aplicației (/api/ai-image, URL stabil) — de-acum nu mai depinde de furnizor; plus ghiozdanul Sonic. Date reparate, fără modificări de cod în Stoc Manager. Unealtă nouă: `node scripts/check-product-images.js [--list]` (doar citire) arată câte linkuri de imagini nu mai răspund și ce produse nu au poză, ca să prinzi din timp pierderile. Au rămas fără poză: 5 produse arhivate (imagini pe vechiul proiect Supabase, șters) și 43 fără nicio imagine (40 arhivate, 3 active: Globuri Set 100, Proiector laser, Saltea electrică — de încărcat manual).',date:'2026-10-12'},
@@ -7748,6 +7781,11 @@ let jStockOrdersRendered=[];
 // renderPcomRedesign(). Pune pe false ca să revii instant la interfața veche, fără nimic de git-uit.
 const USE_PCOM_REDESIGN=true;
 let PCOM=[],pcomLoaded=false,pcImpParsed=[],pcImpPlatforma='emag',STAFF_QUEUE_STARTED_AT=null;
+// Istoric lunar de vânzări eMAG/Trendyol (aprovizionare sezonieră — „câte produse ar trebui să aduc
+// în noiembrie/decembrie"), vezi .tmp/grill-me/istoric-vanzari-aprovizionare.md pentru planul complet.
+// Agregat STRICT lunar (platformă, an, lună, produs/titlu extern, categorie, cantitate) — fără linii
+// brute, fără valoare RON, cum s-a decis explicit. Complet separat de platforma_comenzi/Staff.
+let VIL=[],vilBackfillRunning=false;
 // Un singur import_batch_id per platformă, per sesiune de previzualizare — generat o singură dată,
 // reutilizat atât de commitPcomLine (scriere imediată, la „Inclus") cât și de applyPcomImport (mai
 // târziu), ca liniile confirmate din timp să rămână grupate corect în „Istoric importuri", nu izolate.
@@ -7910,6 +7948,7 @@ async function load(){
     const activityPromise=dbGet('activitate_stoc?select=*&order=created_at.desc&limit=100').catch(e=>({__err:e}));
     const priceHistPromise=dbGet('istoric_preturi?select=*&order=created_at.desc&limit=200').catch(e=>({__err:e}));
     const pcomPromise=dbGet('platforma_comenzi?select=*&order=data.desc').catch(e=>({__err:e}));
+    const vilPromise=dbGet('vanzari_istoric_lunar?select=*').catch(e=>({__err:e}));
     const staffQueueStartPromise=dbGet('setari_app?key=eq.staff_queue_started_at&select=value').catch(e=>({__err:e}));
     const reorderPromise=fetch('/api/settings?key='+REORDER_KEY).then(r=>r.json()).catch(e=>({__err:e}));
 
@@ -7970,6 +8009,16 @@ async function load(){
     }else{
       PCOM=[];
       console.warn('platforma_comenzi unavailable (rulează migration_platforma_comenzi.sql):',pcResult?.__err);
+    }
+    // Istoric lunar de vânzări (tab „Aprovizionare") — fără fallback local, e strict un instrument de
+    // planificare, nu o dependință a fluxului zilnic; dacă migrarea nu a rulat încă, tab-ul rămâne gol
+    // cu un mesaj clar, în loc să rupă restul încărcării.
+    const vilResult=await vilPromise;
+    if(vilResult&&!vilResult.__err){
+      VIL=vilResult.map(r=>({id:r.id,platforma:r.platforma,an:r.an,luna:r.luna,produsId:r.produs_id,titluExtern:r.titlu_extern||'',categorie:r.categorie||'',cantitate:Number(r.cantitate)||0}));
+    }else{
+      VIL=[];
+      console.warn('vanzari_istoric_lunar unavailable (rulează migrarea SQL din chat):',vilResult?.__err);
     }
     // Pragul cozii Staff (setari_app, aceeași cheie ca în staff.html) — încărcat și în admin, doar ca
     // să putem semnala comenzile neîmpachetate rămase ÎN URMA acelui prag (vezi renderStaleStaffOrdersCard).
@@ -8504,6 +8553,10 @@ function goPage(id,btn){
   if(id==='archive'){
     const tryA=(n)=>{if(P.length>0)renderArchivePage();else if(n>0)setTimeout(()=>tryA(n-1),300);};
     setTimeout(()=>tryA(20),100);
+  }
+  if(id==='aprovizionare'){
+    const tryAp=(n)=>{if(P.length>0)renderAprovizionare();else if(n>0)setTimeout(()=>tryAp(n-1),300);};
+    setTimeout(()=>tryAp(20),100);
   }
   if(id==='news'){
     (async()=>{
@@ -18905,6 +18958,217 @@ async function pcomApplyRoutineAll(){
   if(status)status.innerHTML='';
   pcomMarkStep(5,'done');
   toast('Pasul 5 — Inclus în importul de azi ✓');
+}
+
+/* ── Aprovizionare sezonieră — istoric eMAG/Trendyol -> medie lunară -> recomandare de stoc, cerut
+   direct: „vreau să aducem comenzile din ani trecuți... să facem o medie lunară de vânzare a unor
+   produse, ca să știu în noiembrie, respectiv decembrie, câte produse ar trebui să aduc din anumite
+   categorii". Plan complet, cu toate deciziile: .tmp/grill-me/istoric-vanzari-aprovizionare.md.
+   Scrie STRICT în vanzari_istoric_lunar (tabelă nouă, separată) — niciodată în platforma_comenzi,
+   niciun risc ca o comandă de-acum un an să apară în Staff/„comenzi rămase în urmă". ── */
+// Potrivire produs, reutilizând EXACT aceeași logică (PNK/titlu/cod/fuzzy) ca pcomEmagMatchLine/
+// pcomTrendyolMatchLine, dar fără restul (include/suggestedCantitate) — aici ne interesează strict
+// produsId, nimic din fluxul de comitere live.
+function matchHistoricalProduct(platforma,raw){
+  if(raw.pnk){const m=SYNCM.find(s=>s.platforma===platforma&&s.confirmat&&s.idExtern===raw.pnk);if(m)return m.produsId;}
+  if(raw.titluExtern){const key=raw.titluExtern.toLowerCase().trim(),m=SYNCM.find(s=>s.platforma===platforma&&s.confirmat&&s.titluExtern.toLowerCase().trim()===key);if(m)return m.produsId;}
+  if(raw.codProdus){const key=raw.codProdus.toLowerCase(),p=P.find(x=>(x.sku||'').toLowerCase()===key||(x.internalCode||'').toLowerCase()===key);if(p)return p.id;}
+  const m=findExistingProduct({name:raw.titluExtern});
+  return m?m.product.id:null;
+}
+// O comandă veche al cărei produs nu se mai potrivește cu nimic activ azi (discontinuat/redenumit) tot
+// intră în statistică, sub o categorie dedusă euristic din titlul extern — altfel media pe categorie ar
+// ieși artificial mai mică (cerut direct, decizia Q4 din grill-me). Simplă potrivire pe cuvinte-cheie
+// din categoriile deja existente (CATS) — fără apel AI, ca backfill-ul (potențial mii de linii) să
+// rămână rapid; alege cea mai LUNGĂ potrivire de cuvânt, ca să evite potriviri scurte/ambigue.
+function guessHistoricalCategory(titluExtern){
+  const t=(titluExtern||'').toLowerCase();
+  if(!t)return'Nesortat';
+  let best=null,bestLen=0;
+  (typeof CATS!=='undefined'?CATS:[]).forEach(cat=>{
+    const words=String(cat||'').toLowerCase().split(/\s+/).filter(w=>w.length>=4);
+    // Cel mai LUNG cuvânt din ACEASTĂ categorie care se potrivește (nu primul găsit, în ordinea din
+    // numele categoriei) — altfel o categorie mai specifică putea pierde în fața uneia mai generice,
+    // doar pentru că genericul apărea primul în numele ei (ordine arbitrară, fără nicio legătură cu
+    // cât de specifică e potrivirea).
+    const hit=words.filter(w=>t.includes(w)).sort((a,b)=>b.length-a.length)[0];
+    if(hit&&hit.length>bestLen){best=cat;bestLen=hit.length;}
+  });
+  return best||'Nesortat';
+}
+// Lunile de acoperit — de la 1 ianuarie anul trecut până la luna curentă (inclusiv), cum s-a decis
+// explicit (Q5). {an,luna} cu luna 1-12.
+function historicalMonthsRange(){
+  const now=new Date(),curY=now.getFullYear(),curM=now.getMonth()+1,startY=curY-1;
+  const months=[];
+  for(let y=startY;y<=curY;y++){const mTo=y===curY?curM:12;for(let m=1;m<=mTo;m++)months.push({an:y,luna:m});}
+  return months;
+}
+function monthBounds(an,luna){
+  const from=`${an}-${String(luna).padStart(2,'0')}-01`;
+  const nextM=luna===12?{y:an+1,m:1}:{y:an,m:luna+1};
+  const to=`${nextM.y}-${String(nextM.m).padStart(2,'0')}-01`;
+  return{from,to};
+}
+// Trendyol acceptă maximum 14 zile/apel (vezi api/trendyol.js) — o lună (până la 31 zile) se împarte
+// în bucăți de cel mult 14 zile, acoperind exact [from,to).
+function trendyolChunks(from,to){
+  const chunks=[];
+  let cur=new Date(from+'T00:00:00Z');
+  const end=new Date(to+'T00:00:00Z');
+  while(cur<end){
+    const chunkStart=cur.toISOString().slice(0,10);
+    let chunkEnd=new Date(cur);chunkEnd.setUTCDate(chunkEnd.getUTCDate()+13);
+    if(chunkEnd>=end)chunkEnd=new Date(end.getTime()-86400000);
+    chunks.push({startDate:chunkStart,endDate:chunkEnd.toISOString().slice(0,10)});
+    cur=new Date(chunkEnd);cur.setUTCDate(cur.getUTCDate()+1);
+  }
+  return chunks;
+}
+// Agregă liniile brute (deja citite, de pe eMAG sau Trendyol) pe produs potrivit (sau titlu extern,
+// dacă niciun produs activ nu s-a potrivit) — o singură dată, în memorie, înainte de scris în bază.
+function aggregateHistoricalLines(platforma,lines){
+  const map=new Map();
+  lines.forEach(raw=>{
+    if(!raw.titluExtern||!(Number(raw.cantitate)>0))return;
+    const produsId=matchHistoricalProduct(platforma,raw);
+    const key=produsId?'p'+produsId:'t'+raw.titluExtern;
+    if(!map.has(key)){
+      const categorie=produsId?(P.find(x=>x.id===produsId)?.category||'Nesortat'):guessHistoricalCategory(raw.titluExtern);
+      map.set(key,{produsId:produsId||null,titluExtern:raw.titluExtern,categorie,cantitate:0});
+    }
+    map.get(key).cantitate+=Number(raw.cantitate)||0;
+  });
+  return[...map.values()];
+}
+// Scrie agregatul unei luni în bază — șterge întâi orice rânduri vechi pentru (platformă, an, lună)
+// înainte de a insera cele noi, ca o re-rulare (cerut direct, Q8 — buton manual, re-apăsabil oricând)
+// să recalculeze curat, nu să dubleze.
+async function writeHistoricalMonth(platforma,an,luna,rows){
+  await dbDelete(`vanzari_istoric_lunar?platforma=eq.${platforma}&an=eq.${an}&luna=eq.${luna}`);
+  if(!rows.length)return;
+  const body=rows.map(r=>({platforma,an,luna,produs_id:r.produsId,titlu_extern:r.titluExtern,categorie:r.categorie,cantitate:r.cantitate}));
+  await dbPost('vanzari_istoric_lunar',body);
+  VIL=VIL.filter(v=>!(v.platforma===platforma&&v.an===an&&v.luna===luna)).concat(rows.map(r=>({platforma,an,luna,produsId:r.produsId,titluExtern:r.titluExtern,categorie:r.categorie,cantitate:r.cantitate})));
+}
+// Operație unică, lungă, cu progres lună-cu-lună (cerut direct, Q9) — nu reluabilă în bucăți (dacă se
+// întrerupe, idempotentă: o re-apăsare recalculează curat, de la Q8).
+async function backfillHistoricalSales(){
+  if(vilBackfillRunning)return;
+  vilBackfillRunning=true;
+  const btn=document.getElementById('ap-backfill-btn'),prog=document.getElementById('ap-backfill-progress'),bar=document.getElementById('ap-backfill-bar'),label=document.getElementById('ap-backfill-label'),result=document.getElementById('ap-backfill-result');
+  if(btn){btn.disabled=true;}
+  if(prog)prog.style.display='';
+  if(result)result.innerHTML='';
+  // Mapările de sincronizare (SYNCM) se încarcă leneș, doar la prima vizită pe Dashboard/Sincronizare/
+  // Comenzi Platforme — fără asta, potrivirea pe PNK/titlu ar fi silențios mai slabă (doar fallback
+  // fuzzy), dacă adminul ajunge direct pe acest tab, fără să treacă mai întâi prin celelalte.
+  if(!syncMapsLoaded)await loadSyncMappings();
+  const months=historicalMonthsRange();
+  const luniNume=['','ianuarie','februarie','martie','aprilie','mai','iunie','iulie','august','septembrie','octombrie','noiembrie','decembrie'];
+  let done=0,erori=[];
+  try{
+    for(const{an,luna}of months){
+      if(label)label.textContent=`${luniNume[luna]} ${an}… (${done+1}/${months.length})`;
+      if(bar)bar.style.width=Math.round((done/months.length)*100)+'%';
+      const{from,to}=monthBounds(an,luna);
+      // eMAG — interval real (vezi readHistoricalRange din conectorul local), status 4 (Finalizată)
+      let emagLines=[];
+      try{
+        const r=await localEmagJson('/orders-historical',{from,to},120000);
+        emagLines=r?.lines||[];
+      }catch(e){erori.push(`eMAG ${luniNume[luna]} ${an}: ${e.message||e}`);}
+      // Trendyol — în bucăți de max. 14 zile, status Delivered
+      let trendyolLines=[];
+      try{
+        for(const chunk of trendyolChunks(from,to)){
+          const r=await apiJson('/api/trendyol',{action:'orders-historical',startDate:chunk.startDate,endDate:chunk.endDate},60000);
+          trendyolLines.push(...(r?.lines||[]));
+        }
+      }catch(e){erori.push(`Trendyol ${luniNume[luna]} ${an}: ${e.message||e}`);}
+      const emagRows=aggregateHistoricalLines('emag',emagLines);
+      const trendyolRows=aggregateHistoricalLines('trendyol',trendyolLines);
+      await writeHistoricalMonth('emag',an,luna,emagRows);
+      await writeHistoricalMonth('trendyol',an,luna,trendyolRows);
+      done++;
+    }
+    if(bar)bar.style.width='100%';
+    if(label)label.textContent=`Gata — ${months.length} luni procesate.`;
+    if(result)result.innerHTML=`<div class="pcx-source-note">✓ Istoric adus (${months.length} luni, de la ${luniNume[months[0].luna]} ${months[0].an} până azi)${erori.length?` · ⚠ ${erori.length} probleme (vezi mai jos)`:''}</div>${erori.length?`<div style="margin-top:6px;color:var(--rd);font-size:20px">${erori.map(esc).join('<br>')}</div>`:''}`;
+    renderAprovizionare();
+    toast(erori.length?`Istoric adus, cu ${erori.length} probleme — vezi detalii`:'✓ Istoric adus cu succes',erori.length?'err':undefined);
+  }catch(e){
+    toast('Eroare la aducerea istoricului: '+(e.message||e),'err');
+  }finally{
+    vilBackfillRunning=false;
+    if(btn)btn.disabled=false;
+  }
+}
+// Randare pagină — populează filtrul de categorii (din P, ca să reflecte categoriile reale folosite)
+// și apelează tabelul.
+function renderAprovizionare(){
+  const catSel=document.getElementById('ap-cat');
+  if(catSel){
+    const cur=catSel.value;
+    const cats=[...new Set(VIL.map(v=>v.categorie).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+    catSel.innerHTML='<option value="">Toate</option>'+cats.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+    if(cats.includes(cur))catSel.value=cur;
+  }
+  renderAprovizionareTable();
+}
+// Media lunară = total cantitate istoric / numărul de luni distincte ACOPERITE de backfill pentru acel
+// produs+platformă (nu doar lunile în care chiar a vândut ceva — o lună fără nicio vânzare tot scade
+// media reală, nu trebuie ignorată). Filtrul de lună restrânge la o singură lună din calendar (ex.
+// noiembrie), mediind peste toți anii din istoric care au date pentru luna aia.
+function renderAprovizionareTable(){
+  const tbody=document.getElementById('ap-tbody'),empty=document.getElementById('ap-empty'),statsEl=document.getElementById('ap-stats');
+  if(!tbody)return;
+  const catF=document.getElementById('ap-cat')?.value||'';
+  const platF=document.getElementById('ap-plat')?.value||'';
+  const lunaF=document.getElementById('ap-luna')?.value||'';
+  if(!VIL.length){
+    tbody.innerHTML='';
+    if(empty)empty.style.display='';
+    if(statsEl)statsEl.innerHTML='';
+    return;
+  }
+  if(empty)empty.style.display='none';
+  // Scopat pe platforma filtrată (dacă e aleasă una) — dacă un backfill anterior a eșuat parțial doar
+  // pe o platformă (eroare de rețea pe o lună), numărul de luni acoperite nu trebuie "umflat" de
+  // cealaltă platformă, care poate avea mai multe luni reușite.
+  const monthsCovered=new Set(VIL.filter(v=>!platF||v.platforma===platF).map(v=>v.an+'-'+v.luna)).size;
+  let rows=VIL.filter(v=>(!catF||v.categorie===catF)&&(!platF||v.platforma===platF)&&(!lunaF||v.luna===Number(lunaF)));
+  // Grupare pe produs/titlu + platformă + categorie (indiferent de an) — media se calculează peste TOȚI
+  // anii din istoric pentru luna aleasă (sau peste tot istoricul, dacă „Medie pe tot istoricul").
+  const groups=new Map();
+  rows.forEach(v=>{
+    const key=(v.produsId?'p'+v.produsId:'t'+v.titluExtern)+'|'+v.platforma;
+    if(!groups.has(key))groups.set(key,{produsId:v.produsId,titluExtern:v.titluExtern,categorie:v.categorie,platforma:v.platforma,total:0,luni:new Set()});
+    const g=groups.get(key);g.total+=v.cantitate;g.luni.add(v.an+'-'+v.luna);
+  });
+  // Numărul de luni din numitor: dacă s-a ales o lună specifică (ex. noiembrie), numărătorul e peste
+  // câți ani au date pentru acea lună; altfel, peste toate lunile acoperite de backfill în total.
+  const list=[...groups.values()].map(g=>{
+    const divizor=lunaF?g.luni.size:monthsCovered;
+    const medie=divizor?g.total/divizor:0;
+    const p=g.produsId?P.find(x=>x.id===g.produsId):null;
+    const stoc=p?qty(p):null;
+    const recomandare=stoc!=null?Math.max(0,Math.round(medie-stoc)):null;
+    return{...g,medie,stoc,recomandare,nume:p?p.name:g.titluExtern};
+  }).sort((a,b)=>b.medie-a.medie);
+  tbody.innerHTML=list.map(g=>{
+    const stocTxt=g.stoc!=null?g.stoc:'—';
+    const recTxt=g.recomandare!=null?(g.recomandare>0?`<strong style="color:var(--acc)">+${g.recomandare}</strong>`:'<span style="color:var(--t3)">stoc suficient</span>'):'<span style="color:var(--t3)">produs discontinuat</span>';
+    return`<tr><td><strong>${esc(g.nume)}</strong>${!g.produsId?'<div style="font-size:19px;color:var(--t3)">nepotrivit cu niciun produs activ</div>':''}</td><td><span class="rpt-cat-badge">${esc(g.categorie)}</span></td><td>${esc(pcomPlatLabel(g.platforma))}</td><td style="font-family:var(--mono)">${g.medie.toFixed(1)}/lună</td><td style="font-family:var(--mono)">${stocTxt}</td><td>${recTxt}</td></tr>`;
+  }).join('');
+  if(statsEl){
+    const totalMedie=list.reduce((s,g)=>s+g.medie,0);
+    const nevoieRecomandare=list.filter(g=>g.recomandare>0).length;
+    statsEl.innerHTML=`
+      <div class="rpt-stat"><div class="rpt-stat-lbl">Produse/titluri în istoric</div><div class="rpt-stat-val">${list.length}</div><div class="rpt-stat-sub">${monthsCovered} luni acoperite de backfill</div></div>
+      <div class="rpt-stat"><div class="rpt-stat-lbl">Medie lunară totală</div><div class="rpt-stat-val">${totalMedie.toFixed(0)}</div><div class="rpt-stat-sub">bucăți/lună, pe filtrul curent</div></div>
+      <div class="rpt-stat"><div class="rpt-stat-lbl">De aprovizionat</div><div class="rpt-stat-val">${nevoieRecomandare}</div><div class="rpt-stat-sub">produse sub media istorică</div></div>`;
+  }
 }
 
 /* ── Vinted (din captură) — cerut direct: Vinted nu are export de fișier ca eMAG/Trendyol, deci nu
