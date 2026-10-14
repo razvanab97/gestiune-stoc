@@ -4334,7 +4334,7 @@ poza principală a produsului — orice apel openImgZoom(src) deschide aceeași 
     <div class="invx-summary">
       <div class="invx-summary-card">
         <div class="invx-summary-lbl">Furnizor</div>
-        <input type="text" id="cf-furnizor" class="invx-summary-input" list="inv-supplier-list" placeholder="ex: Jumbo">
+        <input type="text" id="cf-furnizor" class="invx-summary-input" list="inv-supplier-list" placeholder="ex: Jumbo" oninput="renderFurnizorImportPreview()">
       </div>
       <div class="invx-summary-card">
         <div class="invx-summary-lbl">Referință comandă</div>
@@ -4496,6 +4496,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:562,text:'Comandă furnizor — 3 lucruri cerute direct. (1) Popup-ul „alege produs" se închide acum la click oriunde în altă parte (bug real: modalele opreau propagarea click-ului, deci listener-ul de pe pagină nu-l mai vedea niciodată; acum e prins în faza de capture, pentru TOATE picker-ele de produs din aplicație, plus Escape). (2) Produsul se poate adăuga o dată cu comanda așteptată: pe fiecare linie fără potrivire apare „🆕 Produs nou" (sau un singur buton „Produs nou pentru toate cele N nepotrivite"), cu categorie și poză opționale; la „Trimite ca așteptată" se creează produsul cu STOC 0 (furnizorul comenzii, codul ca SKU, prețul unitar = total linie ÷ cantitate), iar comanda din Staff se leagă direct de el — stocul nu se atinge, rămâne pentru sosire. (3) Același produs de la alt furnizor/cont: dacă furnizorul comenzii diferă de cel al produsului și nu e deja între sursele lui, se creează automat secțiunea „Alt furnizor" (furnizor + cod + preț unitar), cu badge „➕ alt furnizor" vizibil în previzualizare înainte de trimitere. Același lucru în Importă factură (badge în previzualizare + creare la import), unde stocul se adaugă ca până acum cu costul mediu ponderat (ex. 20 buc. la 1.49 + 10 la 1.19 → 30 buc. la 1.39). Numele furnizorilor se compară normalizat (Maxy = Maxy.eu = old.maxy.eu, Jumbo = e-jumbo.ro, Verk = Verk Store), dar „Jumbo cont 2" rămâne alt furnizor; un produs fără furnizor principal primește furnizorul documentului. Maximum 5 surse, ca în formular. Verificat: test pe funcțiile reale (creare, alt furnizor, dedup, eșecuri), test în pagină cu click-uri reale + scrieri simulate, sintaxa rulată de 2 ori.',date:'2026-10-14'},
   {n:561,text:'Asociază AWB-uri — al 9-lea format recunoscut: eticheta Cargus STANDARD generată de eMAG (nu Click & Collect, deja acoperit), cerută direct, cu etichetă reală atașată: „avem o nouă formă de AWB pentru Cargus, se va regăsi mult la eMAG, să o recunoști și să preiei nume client sau telefon, ca să asociezi cu comanda din eMAG". Fără niciun ID de comandă eMAG pe etichetă („Referinta fact.:" e generic „MARKETPLACE", nu numărul real al comenzii) — la fel ca eticheta eMAG Ungaria de mai înainte, singura legătură posibilă e numele destinatarului, potrivit fuzzy cu comenzile eMAG nerezolvate (fără AWB încă), comise sau încă „Neinclus". Telefonul destinatarului e extras și el de pe etichetă și afișat la verificarea manuală, deși nu e încă folosit la potrivirea automată — comenzile eMAG locale nu rețin azi un câmp de telefon propriu, cu care să fie comparat. Verificat cu 11 teste izolate pe funcțiile reale extrase din cod (eticheta reală atașată — nume+telefon+AWB extrase corect —, regresie pe Cargus Click & Collect și pe FAN Courier neatinse, etichetă anulată de curier, asociere pe comandă comisă și pe „Neinclus", etichetă deja asociată recitită, ambiguitate pe nume identic, fără candidat potrivit, comenzi Vinted/anulate/împachetate excluse corect din candidați), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-14'},
   {n:560,text:'Aprovizionare sezonieră — tabelul arată acum poza produsului și perioada exactă din care vine media, cerut direct: „să scrie luna și anul și poza produsului în produse". Fiecare rând are acum o coloană nouă cu imaginea reală a produsului (aceeași convenție ca în Raport stoc — placeholder 📦 pe lipsă/produs discontinuat) și o coloană „Perioadă": cu o lună anume aleasă (ex. „Noiembrie"), arată anul/anii care chiar au date pentru ea (ex. „2025"); pe „Medie pe tot istoricul", arată intervalul complet acoperit pentru acel produs (ex. „ian 2025 – oct 2026"). Verificat cu 10 teste izolate pe funcțiile reale extrase din cod (formatarea perioadei pe toate cazurile — un an/doi ani/interval/punct unic/gol —, randarea rândului cu poză reală și cu placeholder, cazul exact raportat), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-13'},
   {n:559,text:'Aprovizionare sezonieră — bug real grav reparat, raportat direct: „revenim la aprovizionare, să înțeleg că Trendyol nu a fost încărcat?" (filtrat pe Trendyol/noiembrie, totul arăta 0). Investigat live, direct în Supabase: istoricul eMAG se oprea brusc la noiembrie 2025 (în loc de ianuarie 2025 → azi), Trendyol avea doar iulie-octombrie 2026 — niciuna din platforme nu acoperea intervalul complet cerut. Cauza, confirmată direct (testat conectorul local pentru o lună „lipsă" — a întors 451 de linii reale, în 12 secunde, deci sursa de date era perfect funcțională): scrierea în bază (`writeHistoricalMonth`) la finalul fiecărei luni NU era prinsă într-un try/catch propriu — o singură eroare izolată (ex. un lot lunar mare, peste timeout-ul de 20s al cererilor către Supabase) ieșea din toată bucla, oprind silențios TOATE lunile rămase neatinse, fără niciun semnal clar al punctului exact de oprire. Acum fiecare lună e complet izolată la scriere, la fel ca la citire — o eroare pe o singură lună se adaugă la lista de probleme afișată la final, iar bucla continuă normal până la capăt, pe toate celelalte. **Necesită re-apăsarea „📥 Adu istoricul" o dată, din tab-ul Aprovizionare** — datele actuale din bază rămân incomplete până la o nouă rulare. Verificat cu 4 teste izolate pe funcția reală extrasă din cod (eroare de scriere la o lună din mijloc/prima/ultima — toate cele 22 de luni tot procesate integral, nu doar până la eroare; regresie — fără nicio eroare, comportament neschimbat), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-13'},
@@ -21572,9 +21573,12 @@ function renderSupplierDatalist(){
 }
 
 /* ── Marfă furnizor — comenzi ÎNCĂ pe drum, separat de Importă factură (stoc deja sosit). Nu creează
-   produse noi automat: o linie fără potrivire în stoc rămâne text simplu, exact cerut direct („nu am
-   timp tot timpul sa stau sa pun poza pentru a genera produsul nou"). Ajunge în Staff (comenzi_furnizor),
-   NU în produse/stoc. ── */
+   produse noi singur: o linie fără potrivire în stoc rămâne text simplu (exact cerut direct — „nu am
+   timp tot timpul sa stau sa pun poza pentru a genera produsul nou"), dar acum o poți marca „🆕 produs
+   nou" (individual sau toate odată) și se creează la „Trimite ca așteptată", cu stoc 0 — cerut direct:
+   „să putem adăuga și produsul o dată cu încărcarea unei comenzi". Pentru liniile potrivite cu un produs
+   al ALTUI furnizor se adaugă automat „Alt furnizor" pe produs (vezi ensureAltSupplierSource). Ajunge în
+   Staff (comenzi_furnizor); stocul NU se atinge — se adaugă la sosire, prin Importă factură (cost mediu). ── */
 let furnizorImpParsed=[];
 function openFurnizorComanda(){
   furnizorImpParsed=[];
@@ -21585,6 +21589,7 @@ function openFurnizorComanda(){
   document.getElementById('cf-file').value='';
   document.getElementById('cf-preview').innerHTML='';
   document.getElementById('cf-parsing').style.display='none';
+  renderInvCatDatalist();
   document.getElementById('cfx-status').textContent='Se așteaptă text sau poză';
   document.getElementById('cf-info').textContent='Adaugă produse pentru previzualizare';
   document.getElementById('cf-apply-btn').disabled=true;
@@ -21621,7 +21626,7 @@ async function furnizorApplyAiResult(resp){
     // „Alt furnizor" (supplierSources), înainte de fuzzy pe nume. Fără el, o potrivire de nume ambiguă
     // (mai multe variante similare în stoc) putea alege greșit, deși codul exact ar fi eliminat orice dubiu.
     const match=findExistingProduct({name:it.name,sku:cod});
-    return{titluExtern:String(it.name||'').trim(),codExtern:cod,cantitate:Math.max(0,Number(it.qty)||0)||1,pret:Math.max(0,Number(it.pret)||0),produsId:match?match.product.id:null,score:match?match.score:0};
+    return{titluExtern:String(it.name||'').trim(),codExtern:cod,cantitate:Math.max(0,Number(it.qty)||0)||1,pret:Math.max(0,Number(it.pret)||0),produsId:match?match.product.id:null,score:match?match.score:0,newProduct:false,category:'',img:''};
   });
   furnizorImpParsed=furnizorImpParsed.concat(newLines);
   renderFurnizorImportPreview();
@@ -21667,22 +21672,32 @@ async function handleFurnizorFiles(ev){
 }
 function renderFurnizorImportPreview(){
   const box=document.getElementById('cf-preview');if(!box)return;
-  box.innerHTML=furnizorImpParsed.map((it,idx)=>{
+  const furnizor=(document.getElementById('cf-furnizor')?.value||'').trim();
+  const unmatchedN=furnizorImpParsed.filter(x=>!x.produsId&&!x.newProduct).length;
+  const bulk=unmatchedN?`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px"><button type="button" class="btn btn-sm" onclick="markAllFurnizorUnmatchedAsNew()" title="Marchează toate liniile fără potrivire ca produse noi — se creează la „Trimite ca așteptată", cu stoc 0">🆕 Produs nou pentru toate cele ${unmatchedN} nepotrivite</button><span style="font-size:15px;color:var(--t3)">Se creează cu stoc 0 — nu atinge stocul.</span></div>`:'';
+  box.innerHTML=bulk+furnizorImpParsed.map((it,idx)=>{
     const p=it.produsId?P.find(x=>x.id===it.produsId):null;
     const scoreTag=p&&it.score<1?`<span style="font-size:14px;color:var(--t3);margin-left:6px">${Math.round(it.score*100)}% potrivire automată</span>`:'';
+    const altK=p?altSupplierCheck(p,furnizor):'none';
+    const altTag=altK==='alt'?`<span class="inv-match new" style="margin-left:6px" title="Furnizorul comenzii diferă de cel al produsului — la „Trimite ca așteptată" se adaugă automat în „Alt furnizor" (cod + preț). Stocul rămâne neatins.">➕ alt furnizor: ${esc(furnizor)}</span>`
+      :altK==='full'?`<span class="inv-match miss" style="margin-left:6px" title="Produsul are deja 5 surse alternative — nu se mai adaugă automat">⚠ 5 surse alternative — nu se adaugă</span>`:'';
     return`<div class="inv-prev-row">
       <div style="flex:1;min-width:0"><b>${esc(it.titluExtern)}</b>${it.codExtern?' · cod '+esc(it.codExtern):''} · ${fmtQty(it.cantitate)} buc${it.pret?' · '+it.pret.toFixed(2)+' RON':''}
-        <div style="margin-top:6px;display:flex;align-items:center;gap:6px">
+        <div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <div class="smi-pick cf-pick-trigger" style="flex:1;max-width:340px">${furnizorPickBtnHtml(idx)}</div>
           ${p?`<button type="button" class="btn btn-sm" onclick="clearFurnizorPick(${idx})" title="Elimină asocierea — rândul rămâne doar text">✕</button>`:''}
-          ${scoreTag}
+          ${!p&&!it.newProduct?`<button type="button" class="btn btn-sm" onclick="markFurnizorNewProduct(${idx})" title="Creează produsul în inventar o dată cu comanda (stoc 0)">🆕 Produs nou</button>`:''}
+          ${it.newProduct?`<button type="button" class="btn btn-sm" onclick="unmarkFurnizorNewProduct(${idx})" title="Nu mai crea produs nou — rândul rămâne doar text">✕ Anulează produs nou</button>`:''}
+          ${scoreTag}${altTag}
         </div>
+        ${furnizorNewProductFormHtml(idx)}
       </div>
       <button type="button" class="btn btn-sm" onclick="removeFurnizorImpLine(${idx})">🗑</button>
     </div>`;
   }).join('');
   const matched=furnizorImpParsed.filter(x=>x.produsId).length;
-  document.getElementById('cf-info').textContent=furnizorImpParsed.length?`${furnizorImpParsed.length} produse · ${matched} potrivite din stoc · ${furnizorImpParsed.length-matched} rămân doar text`:'Adaugă produse pentru previzualizare';
+  const newN=furnizorImpParsed.filter(x=>!x.produsId&&x.newProduct).length;
+  document.getElementById('cf-info').textContent=furnizorImpParsed.length?`${furnizorImpParsed.length} produse · ${matched} potrivite din stoc${newN?` · ${newN} produse noi`:''} · ${furnizorImpParsed.length-matched-newN} rămân doar text`:'Adaugă produse pentru previzualizare';
   document.getElementById('cf-apply-btn').disabled=!furnizorImpParsed.length;
 }
 function removeFurnizorImpLine(idx){furnizorImpParsed.splice(idx,1);renderFurnizorImportPreview();}
@@ -21693,8 +21708,71 @@ function furnizorPickBtnHtml(idx){
   const it=furnizorImpParsed[idx];
   const p=it.produsId?P.find(x=>x.id===it.produsId):null;
   const th=p?(p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'cf')}>`:`<div class="smi-pick-th-ph">📦</div>`):'';
+  if(!p&&it.newProduct)return`<button type="button" class="smi-pick-btn" style="border-color:var(--or);color:var(--or)" onclick="openFurnizorPick(event,${idx})" title="Se va crea ca produs nou — click ca să alegi în schimb un produs existent"><div class="smi-pick-th-ph">🆕</div><span class="smi-pick-nm">Produs nou — se creează la trimitere</span><span class="smi-pick-car">▾</span></button>`;
   const nm=p?`${esc(p.name)}${p.sku?' · '+esc(p.sku):''}`:'— alege produs —';
   return`<button type="button" class="smi-pick-btn" onclick="openFurnizorPick(event,${idx})">${th}<span class="smi-pick-nm">${nm}</span><span class="smi-pick-car">▾</span></button>`;
+}
+// Produs nou direct din comandă (cerut direct) — nimic nu se creează până la „Trimite ca așteptată".
+function markFurnizorNewProduct(idx){
+  const it=furnizorImpParsed[idx];if(!it)return;
+  it.produsId=null;it.score=0;it.newProduct=true;
+  renderFurnizorImportPreview();
+}
+function unmarkFurnizorNewProduct(idx){
+  const it=furnizorImpParsed[idx];if(!it)return;
+  it.newProduct=false;
+  renderFurnizorImportPreview();
+}
+function markAllFurnizorUnmatchedAsNew(){
+  const idxs=furnizorImpParsed.map((x,i)=>i).filter(i=>!furnizorImpParsed[i].produsId&&!furnizorImpParsed[i].newProduct);
+  if(!idxs.length){toast('Nu mai sunt linii nepotrivite','err');return;}
+  idxs.forEach(i=>{furnizorImpParsed[i].newProduct=true;});
+  renderFurnizorImportPreview();
+  toast(`${idxs.length} linii marcate ca produse noi — se creează la „Trimite ca așteptată"`);
+}
+function furnizorNewProductFormHtml(idx){
+  const it=furnizorImpParsed[idx];
+  if(!it||it.produsId||!it.newProduct)return'';
+  const th=it.img?`<img src="${esc(imgSrc(it.img))}" class="inv-newprod-img" ${imgErrAttr(it.img,'hide')}>`:`<div class="inv-newprod-img-ph">📦</div>`;
+  return`<div class="inv-newprod-form">
+    <span style="font-size:21px;color:var(--or);font-weight:700;flex-basis:100%">🆕 Produs nou — se creează cu stoc 0 la „Trimite ca așteptată". Detaliile sunt opționale:</span>
+    ${th}
+    <input type="file" accept="image/*" id="cfnp-file-${idx}" style="display:none" onchange="handleFurnizorNewProdImgFile(${idx},this)">
+    <button type="button" class="btn btn-sm" onclick="document.getElementById('cfnp-file-${idx}').click()">📁 Poză</button>
+    <button type="button" class="btn btn-sm" onclick="pasteFurnizorNewProdImage(${idx})">📋 Lipește poză</button>
+    <input type="text" list="inv-cat-list" placeholder="Categorie" value="${esc(it.category||'')}" oninput="setFurnizorNewProdField(${idx},'category',this.value)" style="width:170px">
+  </div>`;
+}
+function setFurnizorNewProdField(idx,field,val){
+  const it=furnizorImpParsed[idx];if(!it)return;
+  if(field==='category')it.category=val;
+}
+async function applyFurnizorNewProdImageDataUrl(idx,rawDataUrl){
+  if(!rawDataUrl||!rawDataUrl.startsWith('data:image'))throw new Error('Imagine invalidă sau coruptă');
+  const dataUrl=await resizeImageDataUrl(rawDataUrl,900,.85);
+  const it=furnizorImpParsed[idx];if(!it)return;
+  it.img=dataUrl;
+  renderFurnizorImportPreview();
+}
+function handleFurnizorNewProdImgFile(idx,inputEl){
+  const file=inputEl?.files?.[0];if(!file)return;
+  const r=new FileReader();
+  r.onload=async e=>{try{await applyFurnizorNewProdImageDataUrl(idx,e.target.result);toast('Poză adăugată ✓');}catch(err){toast(err.message||'Eroare la încărcarea pozei','err');}};
+  r.onerror=()=>toast('Eroare la citirea fișierului','err');
+  r.readAsDataURL(file);
+  inputEl.value='';
+}
+async function pasteFurnizorNewProdImage(idx){
+  if(!navigator.clipboard?.read){toast('Browserul nu suportă citirea directă din clipboard — încarcă manual fișierul','err');return;}
+  try{
+    const items=await navigator.clipboard.read();
+    let blob=null;
+    for(const item of items){const type=item.types.find(t=>t.startsWith('image/'));if(type){blob=await item.getType(type);break;}}
+    if(!blob){toast('Nu am găsit nicio imagine în clipboard — fă întâi un screenshot (Cmd/Ctrl+Shift+4 pe Mac), apoi încearcă din nou','err');return;}
+    const rawDataUrl=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(blob);});
+    await applyFurnizorNewProdImageDataUrl(idx,rawDataUrl);
+    toast('Poză din clipboard adăugată ✓');
+  }catch(e){toast('Eroare la citirea clipboard-ului: '+(e.message||e),'err');}
 }
 function clearFurnizorPick(idx){furnizorImpParsed[idx].produsId=null;furnizorImpParsed[idx].score=0;renderFurnizorImportPreview();}
 let furnizorPickIdx=null,furnizorPickProds=null;
@@ -21728,14 +21806,24 @@ const filterFurnizorPickDebounced=debounce(()=>filterFurnizorPick(),150);
 function pickFurnizorProduct(id){
   if(furnizorPickIdx==null)return;
   const it=furnizorImpParsed[furnizorPickIdx];
-  it.produsId=id;it.score=1;
+  it.produsId=id;it.score=1;it.newProduct=false;
   document.getElementById('cf-pickdrop').classList.remove('on');
   renderFurnizorImportPreview();
 }
+// Bug real, raportat direct („să dispară pop up-ul de ales produse când se dă click în altă parte"):
+// fiecare modal (`.inv-modal`) oprește propagarea click-urilor (onclick="event.stopPropagation()", ca
+// un click în modal să nu închidă overlay-ul), deci un click oriunde ÎN modal nu mai ajungea NICIODATĂ
+// la listener-ul din faza de bubbling de pe `document` — popup-ul rămânea deschis. Faza de CAPTURE
+// rulează înaintea oricărui stopPropagation; un singur listener acoperă toate picker-ele
+// `.smi-pickdrop` (nu doar cel de la Comandă furnizor). Click-ul pe un buton-declanșator e ocolit
+// (își deschide singur picker-ul), iar Escape închide orice picker deschis.
 document.addEventListener('click',ev=>{
-  if(!ev.target.closest('#cf-pickdrop')&&!ev.target.closest('.cf-pick-trigger')){
-    const d=document.getElementById('cf-pickdrop');if(d)d.classList.remove('on');
-  }
+  const t=ev.target;
+  if(t&&t.closest&&t.closest('.smi-pick-btn,.cf-pick-trigger,.awb-pick-trigger,.inv-search-img-btn'))return;
+  document.querySelectorAll('.smi-pickdrop.on').forEach(d=>{if(!d.contains(t))d.classList.remove('on');});
+},true);
+document.addEventListener('keydown',ev=>{
+  if(ev.key==='Escape')document.querySelectorAll('.smi-pickdrop.on').forEach(d=>d.classList.remove('on'));
 });
 async function applyFurnizorComanda(){
   const furnizor=document.getElementById('cf-furnizor').value.trim();
@@ -21745,6 +21833,51 @@ async function applyFurnizorComanda(){
   const dataEstimativa=document.getElementById('cf-data-estimativa').value||null;
   const btn=document.getElementById('cf-apply-btn');btn.disabled=true;btn.textContent='Se salvează…';
   try{
+    // 1) Produse noi marcate „🆕" — create cu stoc 0 (comanda e încă pe drum), cu furnizorul comenzii,
+    // codul din comandă ca SKU și prețul unitar (total linie ÷ cantitate) ca preț de achiziție, la fel ca
+    // un produs nou din Importă factură. Un eșec izolat lasă linia doar text (nu oprește comanda); la o
+    // reîncercare după o eroare mai jos, produsele deja create au produsId setat — nu se dublează.
+    let createdN=0,createFailN=0;
+    for(const it of furnizorImpParsed){
+      if(it.produsId||!it.newProduct)continue;
+      const unit=it.cantitate>0&&it.pret>0?Math.round(it.pret/it.cantitate*100)/100:0;
+      const prices=unit>0?calcPrices(unit):{sell:0,emag:0,trendyol:0,rec:0};// fără preț în comandă → fără prețuri de vânzare inventate
+      const newP={name:String(it.titluExtern||it.codExtern||'Produs nou').slice(0,240),sku:it.codExtern||null,bought:0,sold:0,minQty:0,
+        priceBuyTTC:unit,tvaAcq:0.21,priceSell:prices.sell,priceEmag:prices.emag,priceTrendyol:prices.trendyol,priceRec:prices.rec,
+        category:it.category||'',supplier:furnizor,img:it.img||''};
+      const beforeLen=P.length;
+      // saveProdToDb își arată singur eroarea (toast) și întoarce false fără să arunce — dacă eșuează,
+      // P NU crește, deci nu luăm greșit id-ul ultimului produs EXISTENT drept cel nou creat.
+      const ok=await saveProdToDb(newP,null);
+      if(ok&&P.length>beforeLen&&P[P.length-1]?.id){it.produsId=P[P.length-1].id;it.newProduct=false;createdN++;}
+      else createFailN++;
+    }
+    // 2) Același produs, alt furnizor/cont → „Alt furnizor" automat pe produs (cerut direct). Lucrăm pe o
+    // copie și actualizăm P doar după ce scrierea reușește; PATCH îngust (doar furnizor/surse), ca să nu
+    // rescriem și contoarele de stoc din memorie. Stocul NU se atinge aici — se adaugă la sosire, prin
+    // Importă factură (cu cost mediu ponderat, iar sursa alternativă există atunci deja).
+    const work=new Map();let altN=0,altFullN=0,altFailN=0;
+    for(const it of furnizorImpParsed){
+      const prod=it.produsId?P.find(x=>x.id===it.produsId):null;if(!prod)continue;
+      let w=work.get(prod.id);
+      if(!w){w={prod,clone:{supplier:prod.supplier,supplierSources:Array.isArray(prod.supplierSources)?prod.supplierSources.slice():[]},kinds:[]};work.set(prod.id,w);}
+      const unit=it.cantitate>0&&it.pret>0?it.pret/it.cantitate:0;
+      const kind=ensureAltSupplierSource(w.clone,furnizor,it.codExtern,unit);
+      if(kind==='alt'||kind==='primary')w.kinds.push(kind);
+      else if(kind==='full')altFullN++;
+    }
+    for(const w of work.values()){
+      if(!w.kinds.length)continue;
+      const body={};
+      if(w.kinds.includes('primary'))body.supplier=w.clone.supplier;
+      if(w.kinds.includes('alt'))body.supplier_sources=w.clone.supplierSources.slice(0,5);
+      try{
+        if(sbReady)await dbPatch(`produse?id=eq.${w.prod.id}`,body);
+        if('supplier' in body)w.prod.supplier=w.clone.supplier;
+        if('supplier_sources' in body){w.prod.supplierSources=w.clone.supplierSources.slice(0,5);altN++;}
+      }catch(e){altFailN++;console.warn('Nu am putut adăuga „Alt furnizor" pe produsul',w.prod.id,e);}
+    }
+    // 3) Comanda propriu-zisă, spre Staff.
     const rows=furnizorImpParsed.map(it=>({furnizor,comanda_ref:comandaRef,titlu_extern:it.titluExtern,cod_extern:it.codExtern||null,produs_id:it.produsId,cantitate_comandata:it.cantitate,pret:it.pret||0,data_estimativa:dataEstimativa}));
     let dateSkipped=false;
     try{
@@ -21756,7 +21889,9 @@ async function applyFurnizorComanda(){
       await dbPost('comenzi_furnizor',rows.map(({data_estimativa,...rest})=>rest));
       dateSkipped=true;
     }
-    toast(`✓ ${rows.length} produse trimise ca și comandă așteptată — apar în Staff${dateSkipped?' (dată estimativă neinclusă — rulează migration_comenzi_furnizor.sql)':''}`,dateSkipped?'err':undefined);
+    if(createdN||altN){renderTable();renderSupplierDatalist();furnizorPickProds=null;invPickProds=null;}
+    const extra=[createdN?`${createdN} produse noi create (stoc 0)`:'',altN?`${altN} surse „Alt furnizor" adăugate`:'',createFailN?`⚠ ${createFailN} produse noi NU s-au putut crea (au rămas doar text)`:'',altFullN?`${altFullN} produse au deja 5 surse alternative`:'',altFailN?`⚠ ${altFailN} surse „Alt furnizor" nescrise`:''].filter(Boolean);
+    toast(`✓ ${rows.length} produse trimise ca și comandă așteptată — apar în Staff${extra.length?' · '+extra.join(' · '):''}${dateSkipped?' (dată estimativă neinclusă — rulează migration_comenzi_furnizor.sql)':''}`,(dateSkipped||createFailN||altFailN)?'err':undefined);
     closeFurnizorComanda();
   }catch(e){
     toast('Eroare la salvare: '+(e.message||e)+' (rulează migration_comenzi_furnizor.sql?)','err');
@@ -21989,6 +22124,43 @@ function weightedAvgCost(oldStock,oldCost,addQty,newCost){
   addQty=Math.max(0,Number(addQty)||0);newCost=Math.max(0,Number(newCost)||0);
   if(oldStock<=0||oldCost<=0||addQty<=0)return newCost;
   return Math.round(((oldStock*oldCost+addQty*newCost)/(oldStock+addQty))*100)/100;
+}
+// „Alt furnizor" automat (cerut direct: „dacă adăugăm același produs, dar se vede că e alt cont și alt
+// furnizor, să se creeze automat secțiune de alt furnizor în pagina produsului"). Când un document de
+// aprovizionare (Importă factură / Comandă furnizor) aduce un produs EXISTENT de la un furnizor diferit
+// de cel principal și care nu e deja în supplierSources, îl adăugăm ca sursă alternativă (max. 5, aceeași
+// limită ca în formular) cu codul și prețul unitar din document. Stocul și costul mediu ponderat rămân
+// ale fluxului de recepție (weightedAvgCost în applyInvoice) — aici doar „cine ne vinde produsul".
+// Comparația e pe nume normalizat EXACT, nu „conține": variantele de scriere ale ACELUIAȘI furnizor din
+// datele reale (Maxy = Maxy.eu = old.maxy.eu, Jumbo = JUMBO = e-jumbo.ro, Verk = Verk Store = verk.store)
+// dau aceeași cheie — fără sufix de domeniu, fără „old/new/store/group/srl…", fără diacritice/majuscule —
+// dar „Jumbo cont 2" rămâne intenționat o sursă diferită (alt cont = alt furnizor în fișa produsului).
+const SUPPLIER_NOISE=new Set(['old','new','store','shop','group','srl','sa','sc','magazin','magazine','distribution','trading','www']);
+function supplierKey(s){
+  let k=stripDiacritics(String(s||'')).toLowerCase().trim().replace(/^https?:\/\//,'');
+  k=k.replace(/\.(ro|eu|pl|com|net|org|store|shop|hu|bg|de)(?=$|[^a-z0-9])/g,' ');
+  let t=k.split(/[^a-z0-9]+/).filter(x=>x&&!SUPPLIER_NOISE.has(x));
+  if(t.length>1&&t[0]==='e')t=t.slice(1);// „e-jumbo" → „jumbo"
+  return t.join(' ');
+}
+// Doar verifică (fără să modifice): 'none' | 'primary' (produsul n-avea furnizor principal) | 'alt' | 'full' (deja 5 surse).
+function altSupplierCheck(p,supplier){
+  const key=supplierKey(supplier);
+  if(!p||!key)return'none';
+  if(!String(p.supplier||'').trim())return'primary';
+  if(supplierKey(p.supplier)===key)return'none';
+  const src=Array.isArray(p.supplierSources)?p.supplierSources:[];
+  if(src.some(s=>supplierKey(s?.supplier)===key))return'none';
+  return src.length>=5?'full':'alt';
+}
+// Modifică `p` în memorie (supplier / supplierSources) și întoarce același verdict; scrierea în bază
+// rămâne a apelantului (o singură scriere per produs).
+function ensureAltSupplierSource(p,supplier,sku,priceTTC){
+  const kind=altSupplierCheck(p,supplier);
+  supplier=String(supplier||'').trim();
+  if(kind==='primary')p.supplier=supplier;
+  else if(kind==='alt')p.supplierSources=(Array.isArray(p.supplierSources)?p.supplierSources:[]).concat([{supplier,sku:String(sku||'').trim(),priceTTC:Math.max(0,Math.round((Number(priceTTC)||0)*100)/100),url:''}]);
+  return kind;
 }
 function priceChangeInfo(oldPrice,newPrice){
   oldPrice=Number(oldPrice)||0;newPrice=Number(newPrice)||0;
@@ -24462,6 +24634,8 @@ function invxRowHtml(idx){
       ?`<span class="inv-match upd" title="${conf}">✓ recepționează ${fmtQty(receipt.fromIncoming)} din pe drum${receipt.incomingAfter>0?' · rămân '+fmtQty(receipt.incomingAfter):''}${receipt.extra>0?' + '+fmtQty(receipt.extra)+' extra':''}</span>`
       :`<span class="inv-match upd" title="${conf}">↑ actualizează stoc</span>`;
     nm=p.name;
+    const altK=altSupplierCheck(p,document.getElementById('inv-supplier')?.value);
+    if(altK==='alt')tag+=` <span class="inv-match new" title="Furnizorul facturii diferă de cel al produsului — la import se adaugă automat în „Alt furnizor" (cod + preț), iar stocul se adaugă cu cost mediu ponderat">➕ alt furnizor: ${esc((document.getElementById('inv-supplier')?.value||'').trim())}</span>`;
   } else if(item.newProduct){
     tag=`<span class="inv-match new" title="Va fi creat un produs nou la aplicare">🆕 produs nou</span>`;
     nm=item.name||item.sku||'Produs necunoscut';
@@ -24716,8 +24890,9 @@ function generateStockOrderChecklist(idx){
 }
 async function applyInvoice(){
   showLoading('Se importă factura…');
-  let updated=0,created=0,skipped=0,receivedLines=0,receivedQty=0,extraQty=0,unresolved=0;
+  let updated=0,created=0,skipped=0,receivedLines=0,receivedQty=0,extraQty=0,unresolved=0,altCreated=0;
   const stockStamp=new Date().toISOString();
+  const invSupplierName=(document.getElementById('inv-supplier')?.value||'').trim();
   const orderDetails=[];
   const transportPerUnit=invTransportPerUnit();
   for(const item of invParsed){
@@ -24764,6 +24939,9 @@ async function applyInvoice(){
           // nu doar în timpul importului. Silențios, fără nicio confirmare — se întâmplă în fundal.
           if(item.currency==='EUR'&&item.priceBuy>0)P[idx].priceBuyEur=item.priceBuy;
         }
+        // Același produs, alt furnizor (alt cont) → „Alt furnizor" creat automat pe produs (cerut direct);
+        // stocul și costul mediu ponderat sunt deja aplicate mai sus, într-o singură scriere cu restul.
+        if(ensureAltSupplierSource(P[idx],invSupplierName,item.sku,productCost)==='alt')altCreated++;
         await saveProdToDb(P[idx],P[idx].id);
         await logMove('in',P[idx].name,item.qty,invSourceName||'Import factură',P[idx].id);
         await logPriceChanges(P[idx].id,P[idx].name,priceBefore,P[idx],invSourceName||'Import factură');
@@ -24839,7 +25017,7 @@ async function applyInvoice(){
   }else{
     closeInvoice();
   }
-  toast(`✓ ${created} produse noi · ${updated} actualizate${skipped?' · '+skipped+' coduri sărite':''}${receivedLines?' · '+fmtQty(receivedQty)+' buc. recepționate':''}${extraQty?' · '+fmtQty(extraQty)+' buc. extra':''}${unresolved?` · ⚠ ${unresolved} linii mai au nevoie de produs ales manual`:''}`);
+  toast(`✓ ${created} produse noi · ${updated} actualizate${skipped?' · '+skipped+' coduri sărite':''}${receivedLines?' · '+fmtQty(receivedQty)+' buc. recepționate':''}${extraQty?' · '+fmtQty(extraQty)+' buc. extra':''}${altCreated?` · ${altCreated} surse „Alt furnizor" adăugate automat`:''}${unresolved?` · ⚠ ${unresolved} linii mai au nevoie de produs ales manual`:''}`);
 }
 
 
