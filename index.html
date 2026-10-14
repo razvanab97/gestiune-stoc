@@ -4496,6 +4496,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:561,text:'Asociază AWB-uri — al 9-lea format recunoscut: eticheta Cargus STANDARD generată de eMAG (nu Click & Collect, deja acoperit), cerută direct, cu etichetă reală atașată: „avem o nouă formă de AWB pentru Cargus, se va regăsi mult la eMAG, să o recunoști și să preiei nume client sau telefon, ca să asociezi cu comanda din eMAG". Fără niciun ID de comandă eMAG pe etichetă („Referinta fact.:" e generic „MARKETPLACE", nu numărul real al comenzii) — la fel ca eticheta eMAG Ungaria de mai înainte, singura legătură posibilă e numele destinatarului, potrivit fuzzy cu comenzile eMAG nerezolvate (fără AWB încă), comise sau încă „Neinclus". Telefonul destinatarului e extras și el de pe etichetă și afișat la verificarea manuală, deși nu e încă folosit la potrivirea automată — comenzile eMAG locale nu rețin azi un câmp de telefon propriu, cu care să fie comparat. Verificat cu 11 teste izolate pe funcțiile reale extrase din cod (eticheta reală atașată — nume+telefon+AWB extrase corect —, regresie pe Cargus Click & Collect și pe FAN Courier neatinse, etichetă anulată de curier, asociere pe comandă comisă și pe „Neinclus", etichetă deja asociată recitită, ambiguitate pe nume identic, fără candidat potrivit, comenzi Vinted/anulate/împachetate excluse corect din candidați), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-14'},
   {n:560,text:'Aprovizionare sezonieră — tabelul arată acum poza produsului și perioada exactă din care vine media, cerut direct: „să scrie luna și anul și poza produsului în produse". Fiecare rând are acum o coloană nouă cu imaginea reală a produsului (aceeași convenție ca în Raport stoc — placeholder 📦 pe lipsă/produs discontinuat) și o coloană „Perioadă": cu o lună anume aleasă (ex. „Noiembrie"), arată anul/anii care chiar au date pentru ea (ex. „2025"); pe „Medie pe tot istoricul", arată intervalul complet acoperit pentru acel produs (ex. „ian 2025 – oct 2026"). Verificat cu 10 teste izolate pe funcțiile reale extrase din cod (formatarea perioadei pe toate cazurile — un an/doi ani/interval/punct unic/gol —, randarea rândului cu poză reală și cu placeholder, cazul exact raportat), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-13'},
   {n:559,text:'Aprovizionare sezonieră — bug real grav reparat, raportat direct: „revenim la aprovizionare, să înțeleg că Trendyol nu a fost încărcat?" (filtrat pe Trendyol/noiembrie, totul arăta 0). Investigat live, direct în Supabase: istoricul eMAG se oprea brusc la noiembrie 2025 (în loc de ianuarie 2025 → azi), Trendyol avea doar iulie-octombrie 2026 — niciuna din platforme nu acoperea intervalul complet cerut. Cauza, confirmată direct (testat conectorul local pentru o lună „lipsă" — a întors 451 de linii reale, în 12 secunde, deci sursa de date era perfect funcțională): scrierea în bază (`writeHistoricalMonth`) la finalul fiecărei luni NU era prinsă într-un try/catch propriu — o singură eroare izolată (ex. un lot lunar mare, peste timeout-ul de 20s al cererilor către Supabase) ieșea din toată bucla, oprind silențios TOATE lunile rămase neatinse, fără niciun semnal clar al punctului exact de oprire. Acum fiecare lună e complet izolată la scriere, la fel ca la citire — o eroare pe o singură lună se adaugă la lista de probleme afișată la final, iar bucla continuă normal până la capăt, pe toate celelalte. **Necesită re-apăsarea „📥 Adu istoricul" o dată, din tab-ul Aprovizionare** — datele actuale din bază rămân incomplete până la o nouă rulare. Verificat cu 4 teste izolate pe funcția reală extrasă din cod (eroare de scriere la o lună din mijloc/prima/ultima — toate cele 22 de luni tot procesate integral, nu doar până la eroare; regresie — fără nicio eroare, comportament neschimbat), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-13'},
   {n:558,text:'Comenzi Platforme — căutând o comandă deja scrisă în bază, dar lipsă din previzualizarea curentă, apare acum CARDUL REAL, exact ca restul listei, nu doar un rezumat text, cerut direct cu captură: „dacă e în previzualizare comenzi, să apară direct comanda, exact așa cum e în previzualizare, nu text". Comanda găsită (neanulată) e adusă automat în previzualizare (aceeași mecanică deja folosită la „↺ Reactivează comandă finalizată", dar STRICT pentru afișare — fără să trimită nimic spre Staff, o simplă căutare nu are voie să schimbe ceva în bază) — imagine, badge-uri, AWB, butoane de acțiune, identic cu orice altă comandă din listă. O comandă cu mai multe produse se aduce toată deodată, ca gruparea cardului să fie completă. Dacă filtrul de platformă activ nu se potrivește, sau comanda e anulată, rămâne exact vechiul comportament (rezumat text, cu acțiunile de la #550/#553) — nimic pierdut, doar extins pentru cazul obișnuit. Verificat cu 7 teste izolate pe funcțiile reale extrase din cod (cazul real raportat — comanda #535410374, deja trimisă spre Staff, lipsă din previzualizare —, comandă deja prezentă neatinsă, comandă cu mai multe produse grupată corect, regresie pe comandă anulată și pe filtru de platformă nepotrivit, cardul rezultat reflectă exact datele din bază), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-13'},
@@ -22764,6 +22765,28 @@ function parseAwbLabelText(text){
       return canceled?{courierCanceled:true,awb}:{cargusClickCollectLabel:true,courier:'Cargus',awb};
     }
   }
+  // Cargus — eticheta STANDARD de „Colet" generată de eMAG (al 9-lea format, cerut direct, etichetă
+  // reală trimisă: „avem o nouă formă de AWB pentru Cargus, se va regăsi mult la eMAG, să o recunoști
+  // și să preiei nume client sau telefon, ca să asociezi cu comanda din eMAG"). Complet diferită de
+  // Cargus Click & Collect de mai sus (acolo nu există deloc câmpurile „Destinatar:”/„Cargus SRL” pe
+  // acest format standard) — fără niciun ID de comandă eMAG pe etichetă („Referinta fact.:” e generic
+  // „MARKETPLACE”, nu numărul real al comenzii), la fel ca eticheta eMAG Ungaria de mai sus — singura
+  // legătură posibilă e NUMELE destinatarului (vezi resolveCargusEmagLabelMatch, potrivire fuzzy pe
+  // clientNume, identic cu resolveVintedDigitalLabelMatch dar scopat pe platforma „emag”). Verificat
+  // direct pe eticheta reală (extragere identică cu extractPdfPagesText): AWB-ul (10 cifre) apare pe
+  // rândul IMEDIAT următor numelui destinatarului — restul etichetei (barcode, „Nota:”, rute) NU stă
+  // într-o ordine stabilă în textul extras, aceeași problemă deja documentată mai sus la Cargus Click &
+  // Collect. Telefonul destinatarului (+40.........) e reținut separat, doar informativ — nu există
+  // încă un câmp de telefon salvat pe comenzile eMAG locale, cu care să fie comparat automat.
+  if(/Cargus SRL/.test(text)){
+    const cargusStdM=text.match(/Destinatar:\s*([^\n]+)\n\s*(\d{8,12})\b/);
+    if(cargusStdM){
+      const destinatar=cargusStdM[1].trim(),awb=cargusStdM[2];
+      const phones=[...text.matchAll(/\+40\d{9}\b/g)].map(m=>m[0]);
+      const destinatarPhone=phones.length?phones[phones.length-1]:'';
+      return canceled?{courierCanceled:true,awb}:{cargusEmagLabel:true,courier:'Cargus',destinatar,destinatarPhone,awb};
+    }
+  }
   return null;
 }
 // Ultimă soluție universală, folosită DOAR ca fallback când textul etichetei nu se potrivește cu NICIUN
@@ -22937,6 +22960,36 @@ function resolveCargusClickCollectMatch(p){
   if(pendingHit)return{...p,comandaId:pendingHit.comandaId,_pendingMatch:true};
   return p;
 }
+// Comenzi eMAG ÎNCĂ necomise în bază („Neinclus" — vezi pendingVintedCandidates, aceeași idee, scopată
+// pe eMAG în loc de Vinted).
+function pendingEmagCandidates(){
+  return pcImpParsed.filter(it=>it.platforma==='emag'&&!it._committedId);
+}
+// Rezolvă eticheta Cargus standard eMAG (fără niciun ID de comandă propriu — vezi parseAwbLabelText) la
+// o comandă eMAG deja importată, nerezolvată încă (fără AWB), prin numele destinatarului — singura
+// legătură posibilă pe acest format (identic ca mecanism cu resolveVintedDigitalLabelMatch, dar scopat
+// pe platforma „emag” în loc de „vinted”, și fără nicio potrivire de produs posibilă — eticheta n-are
+// nicio denumire de produs pe ea, doar destinatar). Prag de nume la fel de ridicat (0.5) și aceeași
+// detectare de ambiguitate — o potrivire greșită ar asocia AWB-ul unui client la comanda altuia.
+function resolveCargusEmagLabelMatch(p){
+  // Aceeași verificare „deja asociat" ca la resolveVintedDigitalLabelMatch — o etichetă recitită pentru
+  // o comandă CU acest AWB deja scris (comisă sau încă „Neinclus”) se confirmă direct, fără matching.
+  const exactHit=PCOM.find(o=>o.platforma==='emag'&&!o.anulata&&String(o.awb||'').trim()===p.awb);
+  if(exactHit)return{...p,comandaId:exactHit.comandaId};
+  const exactPendingHit=pendingEmagCandidates().find(it=>String(it.awb||'').trim()===p.awb);
+  if(exactPendingHit)return{...p,comandaId:exactPendingHit.comandaId,_pendingMatch:true};
+  const committedScored=PCOM.filter(o=>o.platforma==='emag'&&!o.awb&&!o.anulata&&!o.impachetat)
+    .map(o=>({comandaId:o.comandaId,pending:false,score:safeNameScore(p.destinatar,o.clientNume)}));
+  const pendingScored=pendingEmagCandidates().map(it=>({comandaId:it.comandaId,pending:true,score:safeNameScore(p.destinatar,it.clientNume)}));
+  const scored=[...committedScored,...pendingScored].sort((a,b)=>b.score-a.score);
+  const best=scored[0];
+  if(!best||best.score<0.5)return p;
+  const second=scored[1];
+  if(second&&second.score>=best.score-0.05&&second.comandaId!==best.comandaId)return{...p,cargusEmagAmbiguous:true};
+  return best.pending
+    ?{...p,comandaId:best.comandaId,_pendingMatch:true,matchScore:best.score}
+    :{...p,comandaId:best.comandaId,matchScore:best.score};
+}
 // Picker manual pentru orice etichetă AWB fără potrivire perfectă (cerut direct — „să putem selecta din
 // cele care nu s-au potrivit perfect"): potrivirea automată (comandaId/nume+sumă/cod exact, în funcție
 // de format) rămâne doar un punct de plecare — oricând se poate alege manual comanda corectă dintr-o
@@ -23095,7 +23148,7 @@ async function pickAwbOrder(i){
   // nu are nimic de desfăcut).
   if(pcomAwbMatched(p)&&p.comandaId!==o.comandaId)await undoAwbMatch(p);
   const rows=o._pending?pendingImportRowSnapshot(o.comandaId):[{id:o.id,platforma:o.platforma,client_nume:o.clientNume,produs_nume:o.produsNume,awb:o.awb}];
-  awbParsed[awbPickIdx]={...p,comandaId:o.comandaId,rows,vintedAmbiguous:false,emagHuAmbiguous:false,_manualPick:true,_pendingMatch:!!o._pending};
+  awbParsed[awbPickIdx]={...p,comandaId:o.comandaId,rows,vintedAmbiguous:false,emagHuAmbiguous:false,cargusEmagAmbiguous:false,_manualPick:true,_pendingMatch:!!o._pending};
   // Cerut direct — „asocierea trebuie să se facă fără să mai [trebuiască] Inclus [separat]. Activăm
   // Inclus o dată cu asocierea comenzii": alegerea manuală E confirmarea explicită — scriem direct acum
   // (comandă + Inclus + trimis spre Staff), fără să mai aștepte „✓ Asociază AWB-urile" de mai jos.
@@ -23183,6 +23236,7 @@ async function handleAwbPdfFile(ev){
         if(p&&p.vintedDigitalLabel)p=resolveVintedDigitalLabelMatch(p);
         if(p&&p.emagHuLabel)p=resolveEmagHuLabelMatch(p);
         if(p&&p.cargusClickCollectLabel)p=resolveCargusClickCollectMatch(p);
+        if(p&&p.cargusEmagLabel)p=resolveCargusEmagLabelMatch(p);
         const label=`${file.name} p.${i+1}`;
         // Un PDF ales manual are un nume de fișier, deci și DPD-ul fără „note:" poate fi
         // reconciliat când documentul a fost descărcat cu numărul comenzii la începutul numelui.
@@ -23409,6 +23463,7 @@ async function readAwbFolderPdfs(fromArchive){
           if(p&&p.vintedDigitalLabel)p=resolveVintedDigitalLabelMatch(p);
           if(p&&p.emagHuLabel)p=resolveEmagHuLabelMatch(p);
           if(p&&p.cargusClickCollectLabel)p=resolveCargusClickCollectMatch(p);
+          if(p&&p.cargusEmagLabel)p=resolveCargusEmagLabelMatch(p);
           // Etichetă Vinted/GLS fără NICIO comandă nerezolvată de asociat (nu ambiguă — ambiguul rămâne
           // mai jos, la fel ca înainte) — vezi pcomCreateVintedLineFromLabel: creează direct o comandă
           // Vinted nouă în previzualizare, în loc să rămână doar o eroare „asociază manual”. Fișierul se
@@ -23502,7 +23557,7 @@ async function readAwbFolderPdfs(fromArchive){
   if(btn)btn.disabled=false;
 }
 function pcomAwbMatched(p){
-  return!!(p?.rows?.length)&&!p.vintedAmbiguous&&new Set(p.rows.map(r=>r.platforma||'')).size===1;
+  return!!(p?.rows?.length)&&!p.vintedAmbiguous&&!p.cargusEmagAmbiguous&&new Set(p.rows.map(r=>r.platforma||'')).size===1;
 }
 function pcomAwbErrorKey(p){return[p.file||'manual',p.page||0,p.awb||'',p.comandaId||'fara-comanda'].join('|');}
 // Extins (cerut direct — „dacă adăugăm 18 AWB-uri și avem 16 comenzi incluse, să primim notificare
@@ -23548,6 +23603,8 @@ function renderAwbPreview(){
       else if(p.emagHuAmbiguous)msg=`⚠️ Etichetă eMAG Ungaria (Sameday) — „${esc(p.destinatarHu)}" (${esc(p.amountHuf)} FT) se potrivește la fel de bine cu MAI MULTE comenzi eMAG HU nerezolvate (AWB ${esc(p.awb)})`;
       else if(p.emagHuLabel)msg=`⚠️ Etichetă eMAG Ungaria (Sameday) — nicio comandă eMAG HU nerezolvată nu se potrivește cu „${esc(p.destinatarHu)}" (${esc(p.amountHuf)} FT, AWB ${esc(p.awb)})`;
       else if(p.cargusClickCollectLabel)msg=`⚠️ Etichetă Cargus Click & Collect — niciun cod de comandă Vinted nu corespunde cu „${esc(p.awb)}"`;
+      else if(p.cargusEmagAmbiguous)msg=`⚠️ Etichetă Cargus (eMAG) — „${esc(p.destinatar)}" se potrivește la fel de bine cu MAI MULTE comenzi eMAG nerezolvate (AWB ${esc(p.awb)})`;
+      else if(p.cargusEmagLabel)msg=`⚠️ Etichetă Cargus (eMAG) — nicio comandă eMAG nerezolvată nu se potrivește cu destinatarul „${esc(p.destinatar)}"${p.destinatarPhone?` (${esc(p.destinatarPhone)})`:''} (AWB ${esc(p.awb)})`;
       // Citire AI (orice limbă), fără număr de comandă pe etichetă — vezi aiFallbackAwbMatch/
       // resolveAwbByNameAndAmount: numele+suma se potrivesc la fel de bine cu MAI MULTE comenzi.
       else if(p.aiAmbiguous)msg=`⚠️ Etichetă citită de AI${p.courier?` (${esc(p.courier)})`:''} — „${esc(p.aiClientNume||'?')}"${p.aiSuma!=null?` (${esc(p.aiSuma)} ${esc(p.aiMoneda||'')})`:''} se potrivește la fel de bine cu MAI MULTE comenzi nerezolvate (AWB ${esc(p.awb)})`;
@@ -23567,6 +23624,7 @@ function renderAwbPreview(){
     const matchNote=p.vintedDigitalLabel&&p.matchScore?` <span style="color:var(--t3)">(Vinted „${esc(p.courier)}" — potrivire produs ${Math.round(p.matchScore*100)}%, verifică)</span>`
       :p.emagHuLabel&&p.matchScore?` <span style="color:var(--t3)">(eMAG Ungaria „${esc(p.destinatarHu)}", ${esc(p.amountHuf)} FT — potrivire nume ${Math.round(p.matchScore*100)}%, verifică)</span>`
       :p.cargusClickCollectLabel?` <span style="color:var(--t3)">(Cargus Click & Collect — potrivire exactă după cod)</span>`
+      :p.cargusEmagLabel&&p.matchScore?` <span style="color:var(--t3)">(Cargus eMAG „${esc(p.destinatar)}"${p.destinatarPhone?`, ${esc(p.destinatarPhone)}`:''} — potrivire nume ${Math.round(p.matchScore*100)}%, verifică)</span>`
       :p.aiNameMatch?` <span style="color:var(--t3)">(AI, orice limbă — „${esc(p.aiClientNume||'?')}" — potrivire nume+sumă ${Math.round((p.matchScore||0)*100)}%, verifică)</span>`
       :p.aiExtracted?` <span style="color:var(--t3)">(citit de AI, orice limbă)</span>`:'';
     // Comandă încă necomisă (vezi resolveVintedDigitalLabelMatch/resolveCargusClickCollectMatch) — AWB-ul
