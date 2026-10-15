@@ -4183,7 +4183,7 @@ button.pcx-include-btn.included{border-color:var(--gr)}
         <div class="pe-col">
           <div class="pe-section pe-primary">
             <div class="sec">Informații principale</div>
-            <div class="fld"><label>Nume produs *</label><input id="f-name" type="text" placeholder="ex: Cafea Arabica 250g" oninput="suggestCatFromName()"></div>
+            <div class="fld"><label>Nume produs *</label><input id="f-name" type="text" placeholder="ex: Cafea Arabica 250g" oninput="suggestCatFromName()"><div id="f-title-options" style="display:none;flex-wrap:wrap;gap:5px;margin-top:7px"></div></div>
             <div id="merge-dup-wrap" style="display:none;margin:0 0 1rem;padding:1rem 0;border-top:1px solid #EEF2F6;border-bottom:1px solid #EEF2F6">
               <div style="font-size:18px;font-weight:800;color:#344054;margin-bottom:8px">Există deja acest produs?</div>
               <div style="font-size:17px;color:#667085;margin-bottom:8px">Alege produsul corect — stocul și mapările eMAG/Trendyol se mută pe el, iar duplicatul va fi arhivat.</div>
@@ -4614,6 +4614,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:576,text:'Asistent AI — aceeași citire completă din screenshot se aplică acum și produselor deschise direct din chat: furnizor, SKU/model vizibil, titlu recomandat și variantă alternativă. Variantele apar imediat sub Nume produs, nu ascunse mai jos în formular.',date:'2026-10-15'},
   {n:575,text:'Import produs din screenshot — AI-ul citește acum explicit furnizorul din logo/antet, păstrează titlul văzut la furnizor și propune două titluri clare, bazate pe produsul și specificațiile vizibile. Titlul recomandat este completat automat, iar celelalte variante se pot alege cu un click.',date:'2026-10-15'},
   {n:574,text:'Asistent AI — furnizorul vizibil în screenshot (logo, antet sau magazin) este preluat automat în produs.',date:'2026-10-15'},
   {n:573,text:'Asistent AI — creare produs din screenshot, reparat pe cazul real „de ce mi-a luat doar screenshot-ul?”. Chat-ul nu mai extrage doar nume+categorie: citește explicit titlu, cod furnizor/SKU, EAN, preț + monedă + dacă este net/cu TVA, furnizor, material, dimensiuni, culori și descriere. Pentru o captură de pagină, AI-ul indică zona fotografiei produsului, iar aplicația o decupează local; nu mai salvează pagina întreagă drept fotografie de produs. La „Deschide ca produs nou” completează câmpurile reale din formular, inclusiv prețul EUR net sau RON cu/fără TVA; un câmp neclar rămâne gol, nu este inventat. Produsul rămâne draft până la „Salvează produs”, iar avertismentul de produs asemănător rămâne activ.',date:'2026-10-15'},
@@ -9071,6 +9072,13 @@ function useScreenshotTitleOption(i){
   document.querySelectorAll('[data-screenshot-title]').forEach(b=>b.classList.toggle('btn-acc',Number(b.dataset.screenshotTitle)===i));
   toast('Titlu actualizat ✓');
 }
+function setProductTitleOptions(options){
+  screenshotTitleOptions=(options||[]).filter(x=>x?.title).filter((x,i,a)=>a.findIndex(y=>y.title===x.title)===i);
+  const el=document.getElementById('f-title-options');if(!el)return;
+  if(!screenshotTitleOptions.length){el.style.display='none';el.innerHTML='';return;}
+  el.style.display='flex';
+  el.innerHTML=screenshotTitleOptions.map((opt,i)=>`<button type="button" class="btn btn-sm ${i===0?'btn-acc':''}" data-screenshot-title="${i}" onclick="useScreenshotTitleOption(${i})" style="font-size:13px;padding:4px 7px">${esc(opt.label||'Titlu propus')}: ${esc(opt.title)}</button>`).join('');
+}
 async function handleProductScreenshotFile(inputEl){
   const files=[...(inputEl?.files||[])];if(!files.length)return;
   try{
@@ -9130,16 +9138,16 @@ Răspunde STRICT cu JSON, fără text suplimentar, fără markdown:
     const d=JSON.parse(jsonMatch[0]);
 
     const validTitle=v=>v&&v!=='null'?String(v).trim():'';
-    screenshotTitleOptions=[
+    const titleOptions=[
       {title:validTitle(d.titleRecommended),label:'✓ Recomandat'},
       {title:validTitle(d.titleAlternative),label:'Variantă alternativă'},
       {title:validTitle(d.titleSource),label:'Titlu furnizor'}
     ].filter(x=>x.title).filter((x,i,a)=>a.findIndex(y=>y.title===x.title)===i);
+    setProductTitleOptions(titleOptions);
     const title=screenshotTitleOptions[0]?.title||'';
     if(title){
       document.getElementById('f-name').value=stripDiacritics(title);
-      const titleButtons=screenshotTitleOptions.map((opt,i)=>`<button type="button" class="btn btn-sm ${i===0?'btn-acc':''}" data-screenshot-title="${i}" onclick="useScreenshotTitleOption(${i})" style="font-size:13px;padding:4px 7px">${opt.label}: ${esc(opt.title)}</button>`).join(' ');
-      status.innerHTML=`<span style="color:var(--gr)">✓ Titlu recomandat: ${esc(title)}</span><div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px">${titleButtons}</div>`;
+      status.innerHTML=`<span style="color:var(--gr)">✓ Titlu recomandat: ${esc(title)}</span>`;
     }
     else status.innerHTML='';
     if(d.sku&&d.sku!=='null'){document.getElementById('f-sku').value=d.sku;status.innerHTML+=`<br><span style="color:var(--gr)">✓ SKU: ${esc(d.sku)}</span>`;}
@@ -15824,6 +15832,7 @@ async function openModal(id){
   const mergeWrap=document.getElementById('merge-dup-wrap');
   if(mergeWrap)mergeWrap.style.display=p?'':'none';
   renderMergeBox();
+  setProductTitleOptions([]);
   document.getElementById('f-name').value=p?.name||'';
   document.getElementById('f-sku').value=p?.sku||'';
   document.getElementById('f-ean').value=p?.ean||'';
@@ -27043,17 +27052,17 @@ async function aiChatFormatAnswer(mesajOriginal,exec){
 // ── Creare produs prin chat — produsul rămâne ÎNTOTDEAUNA un draft de confirmat. Pentru un screenshot
 // de magazin decupăm local fotografia produsului; pagina întreagă nu devine niciodată poza produsului.
 const AI_CHAT_PRODUCT_VISUAL_SCHEMA={type:'object',properties:{
-  nume:{type:['string','null']},categorie:{type:['string','null']},sku:{type:['string','null']},ean:{type:['string','null']},
+  nume:{type:['string','null']},numeSursa:{type:['string','null']},numeRecomandat:{type:['string','null']},numeAlternativ:{type:['string','null']},categorie:{type:['string','null']},sku:{type:['string','null']},ean:{type:['string','null']},
   pretAchizitie:{type:['number','null']},moneda:{type:['string','null']},tipPret:{type:'string',enum:['net','cu_tva','necunoscut']},
   furnizor:{type:['string','null']},material:{type:['string','null']},dimensiuni:{type:['string','null']},culori:{type:['string','null']},descriere:{type:['string','null']},
   tipImagine:{type:'string',enum:['fotografie_produs','screenshot_pagina','necunoscut']},
   zonaProdus:{type:['object','null'],properties:{x:{type:'number'},y:{type:'number'},latime:{type:'number'},inaltime:{type:'number'}},required:['x','y','latime','inaltime'],additionalProperties:false}
-},required:['nume','categorie','sku','ean','pretAchizitie','moneda','tipPret','furnizor','material','dimensiuni','culori','descriere','tipImagine','zonaProdus'],additionalProperties:false};
+},required:['nume','numeSursa','numeRecomandat','numeAlternativ','categorie','sku','ean','pretAchizitie','moneda','tipPret','furnizor','material','dimensiuni','culori','descriere','tipImagine','zonaProdus'],additionalProperties:false};
 async function aiChatExtractProductVisual(imageDataUrl){
   const mt=imageDataUrl.match(/data:(image\/\w+);/)?.[1]||'image/jpeg',b64=imageDataUrl.split(',')[1];
   if(!b64||b64.length<100)throw new Error('Imagine prea mică sau coruptă');
   const prompt=`Analizează imaginea pentru crearea unui produs în gestiune. Poate fi fotografie de produs sau screenshot al unei pagini de furnizor.
-Extrage DOAR informația vizibilă: nume în română; categorie EXACT din lista ${CATS.join(', ')}; cod furnizor/SKU/model dacă este etichetat explicit SAU dacă apare clar ca model al produsului în titlu (ex. „VC-05”); EAN/GTIN doar dacă este etichetat explicit; preț de achiziție, monedă și dacă scrie net/fără TVA sau cu TVA; furnizorul/magazinul: caută-l inclusiv în logo, antet, bara de navigare sau URL-ul vizibil — de exemplu logo „iWant!” înseamnă furnizor „iWant!” — și completează-l chiar dacă nu apare lângă preț; material, dimensiuni, culori și descriere scurtă. Nu inventa nimic și nu trata ID-ul paginii sau un număr de navigare drept cod produs.
+Extrage DOAR informația vizibilă: numeSursa = titlul văzut la furnizor (tradus în română doar dacă e altă limbă); numeRecomandat = titlu românesc clar, comercial și corect, bazat pe produsul real și specificațiile vizibile, care corectează titlurile prea vagi; numeAlternativ = o a doua variantă mai scurtă, cu alte cuvinte relevante; nume = aceeași valoare ca numeRecomandat. Categorie EXACT din lista ${CATS.join(', ')}. Cod furnizor/SKU/model dacă este etichetat explicit SAU dacă apare clar ca model/cod în titlu, inclusiv cod cu cratimă precum „SOL-EQ” sau „VC-05”; EAN/GTIN doar dacă este etichetat explicit; preț de achiziție, monedă și dacă scrie net/fără TVA sau cu TVA; furnizorul/magazinul: caută-l inclusiv în logo, antet, bara de navigare sau URL-ul vizibil — de exemplu logo „iWant!” înseamnă furnizor „iWant!” — și completează-l chiar dacă nu apare lângă preț; material, dimensiuni, culori și descriere scurtă. Nu inventa nimic și nu trata ID-ul paginii sau un număr de navigare drept cod produs.
 Pentru screenshot de pagină, tipImagine este screenshot_pagina iar zonaProdus este fotografia MARE a produsului, fără meniuri/text/thumbnails, în procente 0-100 ale imaginii: x/y/latime/inaltime. Pentru fotografie directă, tipImagine este fotografie_produs și zonaProdus null.`;
   const resp=await callAI([{role:'user',content:[{type:'image',source:{type:'base64',media_type:mt,data:b64}},{type:'text',text:prompt}]}],
     'Ești un extractor riguros de date comerciale. Răspunzi doar cu JSON-ul cerut și nu ghicești câmpuri lipsă.',1200,'analysis',AI_CHAT_PRODUCT_VISUAL_SCHEMA,'ai_chat_product_visual');
@@ -27068,12 +27077,14 @@ function aiChatCropProductImage(imageDataUrl,zona){
 async function aiChatCreateProductDraft(intent,imageDataUrl){
   let nume=intent.produsNume||'',categorie=intent.categorie&&CATS.includes(intent.categorie)?intent.categorie:'';
   const pret=intent.produsCreatPret||null;let extras={},pozaProdus='';
-  if(imageDataUrl)try{extras=await aiChatExtractProductVisual(imageDataUrl);if(!nume&&extras.nume)nume=stripDiacritics(extras.nume);if(!categorie&&extras.categorie&&CATS.includes(extras.categorie))categorie=extras.categorie;pozaProdus=extras.zonaProdus?await aiChatCropProductImage(imageDataUrl,extras.zonaProdus):(extras.tipImagine==='fotografie_produs'?imageDataUrl:'');}catch(e){console.warn('Extragerea completă din imagine pentru draft produs a eșuat:',e);}
+  if(imageDataUrl)try{extras=await aiChatExtractProductVisual(imageDataUrl);if(!nume&&(extras.numeRecomandat||extras.nume))nume=stripDiacritics(extras.numeRecomandat||extras.nume);if(!categorie&&extras.categorie&&CATS.includes(extras.categorie))categorie=extras.categorie;pozaProdus=extras.zonaProdus?await aiChatCropProductImage(imageDataUrl,extras.zonaProdus):(extras.tipImagine==='fotografie_produs'?imageDataUrl:'');}catch(e){console.warn('Extragerea completă din imagine pentru draft produs a eșuat:',e);}
   const candidati=aiFindSimilarProductCandidates(nume,categorie,5);
   let asemanatori=[];
   if(candidati.length&&pozaProdus)asemanatori=await aiCompareProductImages(pozaProdus,candidati);
   else if(candidati.length)asemanatori=candidati.slice(0,3).map(c=>({...c,confirmatVizual:false}));
-  return{nume,categorie,pret,imageDataUrl:pozaProdus,asemanatori,
+  const validTitle=v=>v&&v!=='null'?stripDiacritics(String(v).trim()):'';
+  const titluri=[{title:validTitle(extras.numeRecomandat||extras.nume),label:'✓ Recomandat'},{title:validTitle(extras.numeAlternativ),label:'Variantă alternativă'},{title:validTitle(extras.numeSursa),label:'Titlu furnizor'}].filter(x=>x.title).filter((x,i,a)=>a.findIndex(y=>y.title===x.title)===i);
+  return{nume,categorie,pret,imageDataUrl:pozaProdus,asemanatori,titluri,
     sku:extras.sku&&extras.sku!=='null'?String(extras.sku).trim():'',ean:extras.ean&&extras.ean!=='null'?String(extras.ean).trim():'',pretAchizitie:Number(extras.pretAchizitie)||0,moneda:String(extras.moneda||'').toUpperCase(),tipPret:extras.tipPret||'necunoscut',
     furnizor:extras.furnizor&&extras.furnizor!=='null'?stripDiacritics(extras.furnizor):'',material:extras.material&&extras.material!=='null'?stripDiacritics(extras.material):'',dimensiuni:extras.dimensiuni&&extras.dimensiuni!=='null'?extras.dimensiuni:'',culori:extras.culori&&extras.culori!=='null'?stripDiacritics(extras.culori):'',descriere:extras.descriere&&extras.descriere!=='null'?stripDiacritics(extras.descriere):'',pozaDecupata:!!extras.zonaProdus&&!!pozaProdus};
 }
@@ -27101,6 +27112,7 @@ function aiChatOpenDraft(){
   const d=aiChatDraft;
   openModal().then(()=>{
     if(d.nume)document.getElementById('f-name').value=d.nume;
+    setProductTitleOptions(d.titluri||[]);
     if(d.pret)document.getElementById('f-psell').value=d.pret;
     if(d.sku)document.getElementById('f-sku').value=d.sku;
     if(d.ean)document.getElementById('f-ean').value=d.ean;
@@ -27226,7 +27238,8 @@ function aiChatDraftHtml(){
   const img=d.imageDataUrl?`<img src="${esc(d.imageDataUrl)}" class="aic-draft-img">`:'';
   const asem=d.asemanatori.length?`<div class="aic-draft-warn">⚠️ Asemănător cu: ${d.asemanatori.map(a=>`<a href="#" onclick="openModal(${a.id});return false">${esc(a.nume)}</a>`).join(', ')}</div>`:'';
   const meta=[d.sku?`SKU: ${d.sku}`:'',d.ean?`EAN: ${d.ean}`:'',d.pretAchizitie?`Achiziție: ${d.pretAchizitie} ${d.moneda||''}${d.tipPret==='net'?' net':d.tipPret==='cu_tva'?' cu TVA':''}`:''].filter(Boolean);
-  return`<div class="aic-draft">${img}<div><strong>${esc(d.nume||'(fără nume)')}</strong>${d.categorie?` · ${esc(d.categorie)}`:''}</div>${meta.length?`<div style="font-size:17px;color:var(--t2)">${esc(meta.join(' · '))}</div>`:''}${d.pozaDecupata?'<div style="font-size:17px;color:var(--gr)">✓ Poză produs decupată din screenshot</div>':''}${asem}<button type="button" class="btn btn-sm btn-acc" onclick="aiChatOpenDraft()">Deschide ca produs nou</button></div>`;
+  const titluri=d.titluri?.length?`<div style="font-size:16px;color:var(--t2);margin-top:4px">${d.titluri.map(x=>`${esc(x.label)}: ${esc(x.title)}`).join(' · ')}</div>`:'';
+  return`<div class="aic-draft">${img}<div><strong>${esc(d.nume||'(fără nume)')}</strong>${d.categorie?` · ${esc(d.categorie)}`:''}</div>${titluri}${meta.length?`<div style="font-size:17px;color:var(--t2)">${esc(meta.join(' · '))}</div>`:''}${d.pozaDecupata?'<div style="font-size:17px;color:var(--gr)">✓ Poză produs decupată din screenshot</div>':''}${asem}<button type="button" class="btn btn-sm btn-acc" onclick="aiChatOpenDraft()">Deschide ca produs nou</button></div>`;
 }
 
 // ── Input (text + poză, ambele suprafețe) ──
