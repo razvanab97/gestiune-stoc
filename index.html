@@ -4614,6 +4614,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:575,text:'Import produs din screenshot — AI-ul citește acum explicit furnizorul din logo/antet, păstrează titlul văzut la furnizor și propune două titluri clare, bazate pe produsul și specificațiile vizibile. Titlul recomandat este completat automat, iar celelalte variante se pot alege cu un click.',date:'2026-10-15'},
   {n:574,text:'Asistent AI — furnizorul vizibil în screenshot (logo, antet sau magazin) este preluat automat în produs.',date:'2026-10-15'},
   {n:573,text:'Asistent AI — creare produs din screenshot, reparat pe cazul real „de ce mi-a luat doar screenshot-ul?”. Chat-ul nu mai extrage doar nume+categorie: citește explicit titlu, cod furnizor/SKU, EAN, preț + monedă + dacă este net/cu TVA, furnizor, material, dimensiuni, culori și descriere. Pentru o captură de pagină, AI-ul indică zona fotografiei produsului, iar aplicația o decupează local; nu mai salvează pagina întreagă drept fotografie de produs. La „Deschide ca produs nou” completează câmpurile reale din formular, inclusiv prețul EUR net sau RON cu/fără TVA; un câmp neclar rămâne gol, nu este inventat. Produsul rămâne draft până la „Salvează produs”, iar avertismentul de produs asemănător rămâne activ.',date:'2026-10-15'},
   {n:572,text:'Previzualizare etichetă AWB (#570) — bug real reparat, raportat direct: „nu merge să dau zoom pe AWB". Link-ul thumbnail-ului pornea cu `href="#"` și `onclick="return false"`, pus intenționat ca să nu „sară" nicăieri înainte să se încarce poza — dar `onclick`-ul rămânea acolo PERMANENT, chiar și DUPĂ ce poza chiar se încărca și `href`-ul era completat cu imaginea reală: `onclick` rula mereu primul și anula orice navigare, indiferent ce ajungea pe `href`. Click-ul pe thumbnail nu a mărit niciodată nimic, pe nicio etichetă. Reparat: fără `onclick` deloc — `href` pornește neutru (`javascript:void(0)`, sigur de apăsat înainte de încărcare) și se suprascrie cu poza reală + `target="_blank"` imediat ce randarea se termină, fără cod rămas care să mai blocheze click-ul ulterior. Verificat cu 2 teste noi, izolate, pe funcția reală extrasă din cod (markup-ul NU mai conține `onclick`, href inițial neutru, nu „#"), plus suita completă de 9 teste de la #570 re-rulată — toate verzi, nicio regresie —, rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-15'},
@@ -9057,6 +9058,19 @@ Răspunde STRICT cu JSON:
 // AI (vision) citește poza și completează ACELEAȘI câmpuri ca „Importă din link" (mai puțin poza produsului,
 // care rămâne de adăugat manual/separat — o captură de pagină nu e o poză de produs utilizabilă).
 const PRODSHOT_MAX=5;
+let screenshotTitleOptions=[];
+const PRODUCT_SCREENSHOT_SCHEMA={type:'object',properties:{
+  titleSource:{type:['string','null']},titleRecommended:{type:['string','null']},titleAlternative:{type:['string','null']},
+  sku:{type:['string','null']},category:{type:['string','null']},price:{type:['number','null']},currency:{type:['string','null']},priceType:{type:'string',enum:['net','cu_tva','necunoscut']},
+  supplier:{type:['string','null']},material:{type:['string','null']},dimensions:{type:['string','null']},colors:{type:['string','null']},description:{type:['string','null']}
+},required:['titleSource','titleRecommended','titleAlternative','sku','category','price','currency','priceType','supplier','material','dimensions','colors','description'],additionalProperties:false};
+function useScreenshotTitleOption(i){
+  const title=screenshotTitleOptions[i]?.title;if(!title)return;
+  document.getElementById('f-name').value=stripDiacritics(title);
+  suggestCatFromName();
+  document.querySelectorAll('[data-screenshot-title]').forEach(b=>b.classList.toggle('btn-acc',Number(b.dataset.screenshotTitle)===i));
+  toast('Titlu actualizat ✓');
+}
 async function handleProductScreenshotFile(inputEl){
   const files=[...(inputEl?.files||[])];if(!files.length)return;
   try{
@@ -9095,35 +9109,50 @@ async function importFromScreenshot(rawDataUrls){
       return{type:'image',source:{type:'base64',media_type:mt,data:b64}};
     });
     const prompt=`${dataUrls.length>1?`Acestea sunt ${dataUrls.length} poze ale ACELEIAȘI pagini de produs de la un furnizor (posibil capturi din scroll succesiv) — combină informația din toate și extrage:`:'Citește acest screenshot al unei pagini de produs de la un furnizor și extrage:'}
-1. Titlul complet al produsului (tradus în ROMÂNĂ, cu sens, nu cuvânt cu cuvânt)
-2. Codul SKU / cod produs / cod articol / model NUMAI dacă apare explicit etichetat pe pagină (ex. "Product code", "Cod produs", "SKU", "Model", "Art. no.") — altfel null
-3. Categoria cea mai potrivită, EXACT din lista: ${CATS.join(', ')}
-4. Prețul de achiziție afișat (numărul curent/final, ignoră preț vechi tăiat) și moneda (RON/EUR/etc.)
-5. Furnizorul/brandul/producătorul, dacă apare pe pagină
-6. Materialul, dimensiunile, culorile disponibile, dacă apar
-7. O descriere scurtă a produsului
+1. titleSource: titlul văzut exact la furnizor, tradus în ROMÂNĂ doar când este în altă limbă
+2. titleRecommended: un titlu ROMÂNESC clar, comercial și corect, bazat pe ce este produsul în realitate și pe specificațiile vizibile. Corectează titlurile de pagină prea vagi sau greșite; nu inventa caracteristici.
+3. titleAlternative: o a doua variantă, mai scurtă, pentru același produs, cu alte cuvinte relevante. Dacă nu se poate formula sigur, null.
+4. Codul SKU / cod produs / cod articol / model NUMAI dacă apare explicit etichetat pe pagină (ex. "Product code", "Cod produs", "SKU", "Model", "Art. no.") — altfel null
+5. Categoria cea mai potrivită, EXACT din lista: ${CATS.join(', ')}
+6. Prețul de achiziție afișat (numărul curent/final, ignoră preț vechi tăiat), moneda și dacă scrie net/fără TVA sau cu TVA
+7. supplier: magazinul/furnizorul vizibil în logo, antet, bara de navigare sau URL. Completează-l și când este doar în logo (ex. logo "iWant!" → supplier "iWant!"). Nu-l confunda cu brandul produsului.
+8. Materialul, dimensiunile, culorile disponibile, dacă apar, și o descriere scurtă
 
 Nu inventa valori care nu apar în poze. Disponibilitatea (stoc/produs indisponibil) nu contează — extrage datele oricum.
 
 Răspunde STRICT cu JSON, fără text suplimentar, fără markdown:
-{"title":"<titlu tradus>","sku":"<cod sau null>","category":"<categorie sau null>","price":<număr sau null>,"currency":"<RON/EUR/etc sau null>","supplier":"<furnizor/brand sau null>","material":"<material sau null>","dimensions":"<dimensiuni sau null>","colors":"<culori sau null>","description":"<descriere scurtă sau null>"}`;
+{"titleSource":"<titlu furnizor sau null>","titleRecommended":"<titlu recomandat sau null>","titleAlternative":"<titlu alternativ sau null>","sku":"<cod sau null>","category":"<categorie sau null>","price":<număr sau null>,"currency":"<RON/EUR/etc sau null>","priceType":"<net/cu_tva/necunoscut>","supplier":"<furnizor sau null>","material":"<material sau null>","dimensions":"<dimensiuni sau null>","colors":"<culori sau null>","description":"<descriere scurtă sau null>"}`;
 
-    const responseText=await callAI([{role:'user',content:[...imgContent,{type:'text',text:prompt}]}],null,3000,'analysis');
+    const responseText=await callAI([{role:'user',content:[...imgContent,{type:'text',text:prompt}]}],null,3000,'analysis',PRODUCT_SCREENSHOT_SCHEMA,'product_screenshot_import');
     if(!responseText)throw new Error('Nu am primit răspuns de la AI');
     const jsonMatch=responseText.match(/\{[\s\S]*\}/);
     if(!jsonMatch)throw new Error('Nu am putut extrage datele din poză');
     const d=JSON.parse(jsonMatch[0]);
 
-    if(d.title){document.getElementById('f-name').value=stripDiacritics(d.title);status.innerHTML=`<span style="color:var(--gr)">✓ Titlu: ${esc(d.title)}</span>`;}
+    const validTitle=v=>v&&v!=='null'?String(v).trim():'';
+    screenshotTitleOptions=[
+      {title:validTitle(d.titleRecommended),label:'✓ Recomandat'},
+      {title:validTitle(d.titleAlternative),label:'Variantă alternativă'},
+      {title:validTitle(d.titleSource),label:'Titlu furnizor'}
+    ].filter(x=>x.title).filter((x,i,a)=>a.findIndex(y=>y.title===x.title)===i);
+    const title=screenshotTitleOptions[0]?.title||'';
+    if(title){
+      document.getElementById('f-name').value=stripDiacritics(title);
+      const titleButtons=screenshotTitleOptions.map((opt,i)=>`<button type="button" class="btn btn-sm ${i===0?'btn-acc':''}" data-screenshot-title="${i}" onclick="useScreenshotTitleOption(${i})" style="font-size:13px;padding:4px 7px">${opt.label}: ${esc(opt.title)}</button>`).join(' ');
+      status.innerHTML=`<span style="color:var(--gr)">✓ Titlu recomandat: ${esc(title)}</span><div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:5px">${titleButtons}</div>`;
+    }
     else status.innerHTML='';
     if(d.sku&&d.sku!=='null'){document.getElementById('f-sku').value=d.sku;status.innerHTML+=`<br><span style="color:var(--gr)">✓ SKU: ${esc(d.sku)}</span>`;}
-    if(d.supplier&&d.supplier!=='null')document.getElementById('f-sup').value=d.supplier;
+    if(d.supplier&&d.supplier!=='null'){
+      document.getElementById('f-sup').value=stripDiacritics(d.supplier);
+      status.innerHTML+=`<br><span style="color:var(--gr)">✓ Furnizor: ${esc(d.supplier)}</span>`;
+    }
     if(d.category&&d.category!=='null'){
       const cat=String(d.category).trim();
       if(cat&&!CATS.includes(cat))addCustomCategory(cat);
       if(cat)selectCat(cat);
       status.innerHTML+=`<br><span style="color:var(--gr)">✓ Categorie: ${esc(cat)}</span>`;
-    }else if(d.title)suggestCatFromName();
+    }else if(title)suggestCatFromName();
     const setImported=(id,val)=>{if(val&&val!=='null')document.getElementById(id).value=stripDiacritics(val);};
     setImported('f-material',d.material);
     setImported('f-dims',d.dimensions);
