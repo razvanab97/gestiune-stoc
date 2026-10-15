@@ -4614,6 +4614,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:573,text:'Asistent AI — creare produs din screenshot, reparat pe cazul real „de ce mi-a luat doar screenshot-ul?”. Chat-ul nu mai extrage doar nume+categorie: citește explicit titlu, cod furnizor/SKU, EAN, preț + monedă + dacă este net/cu TVA, furnizor, material, dimensiuni, culori și descriere. Pentru o captură de pagină, AI-ul indică zona fotografiei produsului, iar aplicația o decupează local; nu mai salvează pagina întreagă drept fotografie de produs. La „Deschide ca produs nou” completează câmpurile reale din formular, inclusiv prețul EUR net sau RON cu/fără TVA; un câmp neclar rămâne gol, nu este inventat. Produsul rămâne draft până la „Salvează produs”, iar avertismentul de produs asemănător rămâne activ.',date:'2026-10-15'},
   {n:572,text:'Previzualizare etichetă AWB (#570) — bug real reparat, raportat direct: „nu merge să dau zoom pe AWB". Link-ul thumbnail-ului pornea cu `href="#"` și `onclick="return false"`, pus intenționat ca să nu „sară" nicăieri înainte să se încarce poza — dar `onclick`-ul rămânea acolo PERMANENT, chiar și DUPĂ ce poza chiar se încărca și `href`-ul era completat cu imaginea reală: `onclick` rula mereu primul și anula orice navigare, indiferent ce ajungea pe `href`. Click-ul pe thumbnail nu a mărit niciodată nimic, pe nicio etichetă. Reparat: fără `onclick` deloc — `href` pornește neutru (`javascript:void(0)`, sigur de apăsat înainte de încărcare) și se suprascrie cu poza reală + `target="_blank"` imediat ce randarea se termină, fără cod rămas care să mai blocheze click-ul ulterior. Verificat cu 2 teste noi, izolate, pe funcția reală extrasă din cod (markup-ul NU mai conține `onclick`, href inițial neutru, nu „#"), plus suita completă de 9 teste de la #570 re-rulată — toate verzi, nicio regresie —, rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-15'},
   {n:571,text:'Picker-ul manual de asociere AWB (🔗 Asociază manual) — sortat strict după dată, cea mai recentă primă, cerut direct a doua oară, pe o captură reală (căutarea „haine"): „să apară în prima parte ultimele comenzi, ba chiar — să apară după dată, azi, apoi ieri, tot așa". Lista locală (comenzi deja comise + Neinclus) era deja sortată corect — bug-ul real era în completarea LIVE din bază (declanșată automat la căutări de minim 3 caractere, ca „haine"): interogarea n-avea niciun `order=`, deci PostgREST întorcea rândurile în ordinea lui proprie, nu cronologic — comenzi vechi (ex. din septembrie) puteau apărea înaintea uneia de azi, doar pentru că au ajuns în lotul live, nesortat, lipit pur și simplu la coada listei locale, deja corecte. Reparat în 2 pași: interogarea cere acum explicit `order=data.desc`, ȘI lista finală combinată (local + live) se resortează o singură dată, întreagă, înainte de afișare — indiferent din ce sursă vine fiecare rezultat, ordinea finală e mereu strict cronologică. Verificat cu 9 teste izolate pe funcțiile reale extrase din cod (reproduce exact cazul raportat — „haine", cu comenzi vechi din completarea live care NU mai sar peste una mai nouă —, pool local deja sortat corect neatins, amestec local+live combinat corect, regresie pe căutare scurtă fără completare live), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-15'},
   {n:570,text:'Asociază AWB-uri — previzualizare vizuală a etichetei, direct pe rândurile de asociere (găsite și negăsite), cerut direct: „să avem previzualizare la AWB să vedem unde se potrivește". Fiecare rând (atât „✓ Comanda... → AWB..." cât și „⚠️ ...negăsită sau ambiguă") arată acum un thumbnail mic al paginii reale a etichetei — click pe el o deschide mărită, în tab nou. Reutilizează exact aceeași randare PDF.js deja folosită pentru poza persistentă din Staff (#512), dar STRICT client-side, fără niciun upload/Storage — doar pentru sesiunea curentă de citire AWB, dispare la reîncărcarea paginii, la fel ca restul previzualizării. Pozele apar treptat, pe măsură ce se randează (fără să blocheze afișarea listei), și se țin minte într-un cache pe durata sesiunii — o etichetă deja randată o dată (ex. la re-verificarea live de fundal, care re-randează ecranul) nu mai trece a doua oară prin PDF.js, se aplică direct, fără pâlpâire. O linie fără PDF-ul original disponibil (ex. reconstruită din erori salvate) rămâne pur și simplu fără thumbnail, fără nicio eroare vizibilă. Verificat cu 9 teste izolate pe funcțiile reale extrase din cod (construcția cheii de cache, markup cu/fără etichetă disponibilă, randare lenesă cu completare async, cache-hit aplicat sincron fără a doua randare, eroare de randare tratată grațios, rând dispărut din DOM între timp — fără crash), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-15'},
@@ -27009,28 +27010,42 @@ async function aiChatFormatAnswer(mesajOriginal,exec){
   return resp.trim();
 }
 
-// ── Creare produs prin chat (Q1/Q2/Q8) — rezultatul e ÎNTOTDEAUNA un draft de confirmat, NICIODATĂ
-// scris direct în `produse` — deschis apoi în modalul de produs existent (openModal, pre-completat),
-// userul revizuiește/completează și apasă explicit "Salvează". ──
+// ── Creare produs prin chat — produsul rămâne ÎNTOTDEAUNA un draft de confirmat. Pentru un screenshot
+// de magazin decupăm local fotografia produsului; pagina întreagă nu devine niciodată poza produsului.
+const AI_CHAT_PRODUCT_VISUAL_SCHEMA={type:'object',properties:{
+  nume:{type:['string','null']},categorie:{type:['string','null']},sku:{type:['string','null']},ean:{type:['string','null']},
+  pretAchizitie:{type:['number','null']},moneda:{type:['string','null']},tipPret:{type:'string',enum:['net','cu_tva','necunoscut']},
+  furnizor:{type:['string','null']},material:{type:['string','null']},dimensiuni:{type:['string','null']},culori:{type:['string','null']},descriere:{type:['string','null']},
+  tipImagine:{type:'string',enum:['fotografie_produs','screenshot_pagina','necunoscut']},
+  zonaProdus:{type:['object','null'],properties:{x:{type:'number'},y:{type:'number'},latime:{type:'number'},inaltime:{type:'number'}},required:['x','y','latime','inaltime'],additionalProperties:false}
+},required:['nume','categorie','sku','ean','pretAchizitie','moneda','tipPret','furnizor','material','dimensiuni','culori','descriere','tipImagine','zonaProdus'],additionalProperties:false};
+async function aiChatExtractProductVisual(imageDataUrl){
+  const mt=imageDataUrl.match(/data:(image\/\w+);/)?.[1]||'image/jpeg',b64=imageDataUrl.split(',')[1];
+  if(!b64||b64.length<100)throw new Error('Imagine prea mică sau coruptă');
+  const prompt=`Analizează imaginea pentru crearea unui produs în gestiune. Poate fi fotografie de produs sau screenshot al unei pagini de furnizor.
+Extrage DOAR informația vizibilă: nume în română; categorie EXACT din lista ${CATS.join(', ')}; cod furnizor/SKU/model dacă este etichetat explicit SAU dacă apare clar ca model al produsului în titlu (ex. „VC-05”); EAN/GTIN doar dacă este etichetat explicit; preț de achiziție, monedă și dacă scrie net/fără TVA sau cu TVA; furnizor, material, dimensiuni, culori și descriere scurtă. Nu inventa nimic și nu trata ID-ul paginii sau un număr de navigare drept cod produs.
+Pentru screenshot de pagină, tipImagine este screenshot_pagina iar zonaProdus este fotografia MARE a produsului, fără meniuri/text/thumbnails, în procente 0-100 ale imaginii: x/y/latime/inaltime. Pentru fotografie directă, tipImagine este fotografie_produs și zonaProdus null.`;
+  const resp=await callAI([{role:'user',content:[{type:'image',source:{type:'base64',media_type:mt,data:b64}},{type:'text',text:prompt}]}],
+    'Ești un extractor riguros de date comerciale. Răspunzi doar cu JSON-ul cerut și nu ghicești câmpuri lipsă.',1200,'analysis',AI_CHAT_PRODUCT_VISUAL_SCHEMA,'ai_chat_product_visual');
+  return JSON.parse(resp);
+}
+function aiChatCropProductImage(imageDataUrl,zona){
+  if(!zona)return Promise.resolve('');
+  const vals=['x','y','latime','inaltime'].map(k=>Number(zona[k]));
+  if(vals.some(n=>!Number.isFinite(n))||vals[0]<0||vals[1]<0||vals[2]<10||vals[3]<10||vals[0]+vals[2]>100||vals[1]+vals[3]>100)return Promise.resolve('');
+  return new Promise(resolve=>{const img=new Image();img.onload=()=>{const sx=Math.round(img.naturalWidth*vals[0]/100),sy=Math.round(img.naturalHeight*vals[1]/100),sw=Math.round(img.naturalWidth*vals[2]/100),sh=Math.round(img.naturalHeight*vals[3]/100);if(!sw||!sh){resolve('');return;}const scale=Math.min(1,1200/Math.max(sw,sh)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(sw*scale));canvas.height=Math.max(1,Math.round(sh*scale));canvas.getContext('2d').drawImage(img,sx,sy,sw,sh,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL('image/jpeg',.9));};img.onerror=()=>resolve('');img.src=imageDataUrl;});
+}
 async function aiChatCreateProductDraft(intent,imageDataUrl){
   let nume=intent.produsNume||'',categorie=intent.categorie&&CATS.includes(intent.categorie)?intent.categorie:'';
-  const pret=intent.produsCreatPret||null;
-  // Doar poză, fără nume/categorie în text ("dă-i poza și se ocupă singur") — completăm din poză, la fel
-  // ca analyzeImage; PREȚUL rămâne mereu necompletat dintr-o poză (Q8 — nu poate fi dedus).
-  if(imageDataUrl&&(!nume||!categorie)){
-    try{
-      const mt=imageDataUrl.match(/data:(image\/\w+);/)?.[1]||'image/jpeg',b64=imageDataUrl.split(',')[1];
-      const resp=await callAI([{role:'user',content:[{type:'image',source:{type:'base64',media_type:mt,data:b64}},{type:'text',text:`Ce produs apare în imagine? Categoria cea mai potrivită, EXACT din lista: ${CATS.join(', ')}. Răspunde STRICT JSON: {"nume":"<titlu scurt, română>","categorie":"<categorie exactă din listă>"}`}]}],'Ești expert în identificarea produselor comerciale din poze, pentru un sistem de gestiune stoc.',200,'analysis');
-      const parsed=JSON.parse(resp.replace(/```json|```/g,'').trim());
-      if(!nume&&parsed.nume)nume=parsed.nume;
-      if(!categorie&&parsed.categorie&&CATS.includes(parsed.categorie))categorie=parsed.categorie;
-    }catch(e){console.warn('Analiza pozei pentru draft produs a eșuat:',e);}
-  }
+  const pret=intent.produsCreatPret||null;let extras={},pozaProdus='';
+  if(imageDataUrl)try{extras=await aiChatExtractProductVisual(imageDataUrl);if(!nume&&extras.nume)nume=stripDiacritics(extras.nume);if(!categorie&&extras.categorie&&CATS.includes(extras.categorie))categorie=extras.categorie;pozaProdus=extras.zonaProdus?await aiChatCropProductImage(imageDataUrl,extras.zonaProdus):(extras.tipImagine==='fotografie_produs'?imageDataUrl:'');}catch(e){console.warn('Extragerea completă din imagine pentru draft produs a eșuat:',e);}
   const candidati=aiFindSimilarProductCandidates(nume,categorie,5);
   let asemanatori=[];
-  if(candidati.length&&imageDataUrl)asemanatori=await aiCompareProductImages(imageDataUrl,candidati);
+  if(candidati.length&&pozaProdus)asemanatori=await aiCompareProductImages(pozaProdus,candidati);
   else if(candidati.length)asemanatori=candidati.slice(0,3).map(c=>({...c,confirmatVizual:false}));
-  return{nume,categorie,pret,imageDataUrl,asemanatori};
+  return{nume,categorie,pret,imageDataUrl:pozaProdus,asemanatori,
+    sku:extras.sku&&extras.sku!=='null'?String(extras.sku).trim():'',ean:extras.ean&&extras.ean!=='null'?String(extras.ean).trim():'',pretAchizitie:Number(extras.pretAchizitie)||0,moneda:String(extras.moneda||'').toUpperCase(),tipPret:extras.tipPret||'necunoscut',
+    furnizor:extras.furnizor&&extras.furnizor!=='null'?stripDiacritics(extras.furnizor):'',material:extras.material&&extras.material!=='null'?stripDiacritics(extras.material):'',dimensiuni:extras.dimensiuni&&extras.dimensiuni!=='null'?extras.dimensiuni:'',culori:extras.culori&&extras.culori!=='null'?stripDiacritics(extras.culori):'',descriere:extras.descriere&&extras.descriere!=='null'?stripDiacritics(extras.descriere):'',pozaDecupata:!!extras.zonaProdus&&!!pozaProdus};
 }
 // Comparație vizuală DOAR pe candidații deja filtrați prin titlu/categorie (aiFindSimilarProductCandidates)
 // — niciodată pe tot inventarul (Q12 — mecanism hibrid, ieftin).
@@ -27057,8 +27072,24 @@ function aiChatOpenDraft(){
   openModal().then(()=>{
     if(d.nume)document.getElementById('f-name').value=d.nume;
     if(d.pret)document.getElementById('f-psell').value=d.pret;
+    if(d.sku)document.getElementById('f-sku').value=d.sku;
+    if(d.ean)document.getElementById('f-ean').value=d.ean;
+    if(d.furnizor)document.getElementById('f-sup').value=d.furnizor;
+    if(d.material)document.getElementById('f-material').value=d.material;
+    if(d.dimensiuni)document.getElementById('f-dims').value=d.dimensiuni;
+    if(d.culori)document.getElementById('f-colors').value=d.culori;
+    if(d.descriere)document.getElementById('f-description').value=d.descriere;
     if(d.categorie){buildCats('');const r=document.querySelector(`.cat-g input[value="${CSS.escape(d.categorie)}"]`);if(r){r.checked=true;updCats();}}
+    if(d.pretAchizitie>0&&d.moneda==='EUR'){
+      document.getElementById('f-pbuy-eur').value=d.pretAchizitie.toFixed(2);syncAcqFromEur();
+    }else if(d.pretAchizitie>0&&d.moneda==='RON'&&d.tipPret!=='necunoscut'){
+      document.getElementById('f-tva-acq').value='0.21';
+      if(d.tipPret==='cu_tva'){document.getElementById('f-pbuy-ttc').value=d.pretAchizitie.toFixed(2);syncAcqFields('ttc');}
+      else{document.getElementById('f-pbuy').value=d.pretAchizitie.toFixed(2);syncAcqFields('net');}
+    }
     if(d.imageDataUrl){curImg=d.imageDataUrl;showPrev(d.imageDataUrl);document.getElementById('ai-img-btn').disabled=false;}
+    if(d.sku)suggestSkuConflictDebounced();
+    renderEasyboxResult();
   });
 }
 
@@ -27105,7 +27136,8 @@ async function aiChatSend(textRaw){
       const draft=await aiChatCreateProductDraft(intent,imageDataUrl);
       aiChatDraft=draft;
       const asemanatoriTxt=draft.asemanatori.length?`\n\n⚠️ Ai deja ceva asemănător: ${draft.asemanatori.map(a=>a.nume).join(', ')} — verifică înainte să salvezi.`:'';
-      await aiChatPersist('asistent',`Am pregătit un draft de produs: **${draft.nume||'(fără nume)'}**${draft.categorie?` · ${draft.categorie}`:''}${draft.pret?` · ${draft.pret} RON`:''}.${asemanatoriTxt}\n\nVerifică și completează în fereastra de produs.`,'creeaza_produs');
+      const extrase=[draft.sku?'SKU '+draft.sku:'',draft.ean?'EAN '+draft.ean:'',draft.pretAchizitie?`Achiziție ${draft.pretAchizitie} ${draft.moneda||''}${draft.tipPret==='net'?' net':draft.tipPret==='cu_tva'?' cu TVA':''}`:''].filter(Boolean);
+      await aiChatPersist('asistent',`Am pregătit un draft de produs: **${draft.nume||'(fără nume)'}**${draft.categorie?` · ${draft.categorie}`:''}${extrase.length?'\n'+extrase.join(' · '):''}${draft.pozaDecupata?'\n✓ Fotografia produsului a fost extrasă din screenshot.':''}${asemanatoriTxt}\n\nVerifică datele și apasă „Deschide ca produs nou”. Nimic nu se salvează până nu apeși „Salvează produs”.`,'creeaza_produs');
     }else{
       const exec=aiChatExecuteIntent(intent);
       const raspuns=await aiChatFormatAnswer(text,exec);
@@ -27163,7 +27195,8 @@ function aiChatDraftHtml(){
   const d=aiChatDraft;if(!d)return'';
   const img=d.imageDataUrl?`<img src="${esc(d.imageDataUrl)}" class="aic-draft-img">`:'';
   const asem=d.asemanatori.length?`<div class="aic-draft-warn">⚠️ Asemănător cu: ${d.asemanatori.map(a=>`<a href="#" onclick="openModal(${a.id});return false">${esc(a.nume)}</a>`).join(', ')}</div>`:'';
-  return`<div class="aic-draft">${img}<div><strong>${esc(d.nume||'(fără nume)')}</strong>${d.categorie?` · ${esc(d.categorie)}`:''}${d.pret?` · ${d.pret} RON`:''}</div>${asem}<button type="button" class="btn btn-sm btn-acc" onclick="aiChatOpenDraft()">Deschide ca produs nou</button></div>`;
+  const meta=[d.sku?`SKU: ${d.sku}`:'',d.ean?`EAN: ${d.ean}`:'',d.pretAchizitie?`Achiziție: ${d.pretAchizitie} ${d.moneda||''}${d.tipPret==='net'?' net':d.tipPret==='cu_tva'?' cu TVA':''}`:''].filter(Boolean);
+  return`<div class="aic-draft">${img}<div><strong>${esc(d.nume||'(fără nume)')}</strong>${d.categorie?` · ${esc(d.categorie)}`:''}</div>${meta.length?`<div style="font-size:17px;color:var(--t2)">${esc(meta.join(' · '))}</div>`:''}${d.pozaDecupata?'<div style="font-size:17px;color:var(--gr)">✓ Poză produs decupată din screenshot</div>':''}${asem}<button type="button" class="btn btn-sm btn-acc" onclick="aiChatOpenDraft()">Deschide ca produs nou</button></div>`;
 }
 
 // ── Input (text + poză, ambele suprafețe) ──
