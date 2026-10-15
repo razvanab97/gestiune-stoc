@@ -783,6 +783,12 @@ tr:hover td{background:var(--surf2)}
 .inv-prev-row:last-child{border-bottom:none}
 .inv-prev-nm{font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;margin-right:12px}
 .inv-prev-q{font-family:var(--mono);color:var(--t2);min-width:50px;text-align:right}
+/* Previzualizare etichetă AWB, pe rândul de asociere (găsit/negăsit) — cerut direct: „să avem
+   previzualizare la AWB să vedem unde se potrivește". Dimensiune mică, fixă — doar un reper vizual
+   rapid, clic pentru mărit (în tab nou, pe imaginea originală randată la 700px, deja generată client-side
+   — vezi renderPdfPageToImageDataUrl/awbFillThumb, fără niciun upload, strict pentru sesiunea curentă). */
+.awb-thumb-link{flex-shrink:0;display:block;border-radius:6px;overflow:hidden;border:1px solid var(--b2);box-shadow:var(--sh);background:var(--surf2);cursor:zoom-in}
+.awb-thumb{display:block;width:46px;height:60px;object-fit:cover;object-position:top}
 .inv-prev-price{text-align:right;flex-shrink:0;min-width:120px;max-width:170px}
 .inv-match{font-size:25px;padding:2px 8px;border-radius:12px;margin-left:8px;flex-shrink:0;font-weight:500}
 .inv-match.new{background:var(--bl-bg);color:var(--bl)}
@@ -4608,6 +4614,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:570,text:'Asociază AWB-uri — previzualizare vizuală a etichetei, direct pe rândurile de asociere (găsite și negăsite), cerut direct: „să avem previzualizare la AWB să vedem unde se potrivește". Fiecare rând (atât „✓ Comanda... → AWB..." cât și „⚠️ ...negăsită sau ambiguă") arată acum un thumbnail mic al paginii reale a etichetei — click pe el o deschide mărită, în tab nou. Reutilizează exact aceeași randare PDF.js deja folosită pentru poza persistentă din Staff (#512), dar STRICT client-side, fără niciun upload/Storage — doar pentru sesiunea curentă de citire AWB, dispare la reîncărcarea paginii, la fel ca restul previzualizării. Pozele apar treptat, pe măsură ce se randează (fără să blocheze afișarea listei), și se țin minte într-un cache pe durata sesiunii — o etichetă deja randată o dată (ex. la re-verificarea live de fundal, care re-randează ecranul) nu mai trece a doua oară prin PDF.js, se aplică direct, fără pâlpâire. O linie fără PDF-ul original disponibil (ex. reconstruită din erori salvate) rămâne pur și simplu fără thumbnail, fără nicio eroare vizibilă. Verificat cu 9 teste izolate pe funcțiile reale extrase din cod (construcția cheii de cache, markup cu/fără etichetă disponibilă, randare lenesă cu completare async, cache-hit aplicat sincron fără a doua randare, eroare de randare tratată grațios, rând dispărut din DOM între timp — fără crash), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-15'},
   {n:569,text:'Comenzi Platforme — corecție directă la #568, pe loc: „de acum așa să se întâmple... dar nu la 5 minute să dispară — să dispară seara după ora 22:00". #568 curăța comenzile „fantomă" (deja incluse și aplicate) independent, la FIECARE verificare din timpul zilei (la 5 minute și la fiecare reîncărcare de pagină) — nepotrivit, cerut explicit să rămână strict un eveniment de seară, o singură trecere, exact ca restul safety net-ului de 22:00. Curățarea fantomelor (pcomPruneAppliedGhosts) e scopată acum STRICT în interiorul aceleiași treceri unice de seară ca scanarea de comenzi uitate — după ce pragul de 22:00 chiar a trecut de la ultima verificare (aceeași gardă `lastChecked`), nu la orice tick din restul zilei și nu la restaurarea previzualizării, la deschiderea paginii în timpul zilei. În restul zilei, o comandă deja terminată rămâne vizibilă normal (nu mai „sare" de pe ecran în timp ce o verifici) — dispare o singură dată, seara, odată cu restul curățeniei de 22:00. Verificat cu 1 test nou, izolat, pe funcția reală extrasă din cod (verificarea de seară deja rulată azi -> un tick ulterior NU mai curăță nimic, fantoma rămâne, nicio randare/scriere declanșată), plus suita completă de 8 teste de la #568 re-rulată — toate verzi, nicio regresie —, rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-15'},
   {n:568,text:'Comenzi Platforme — continuare directă la #567, cerută explicit: „verifică comenzile de ieri care sunt incluse și cu AWB și rezolvă-le, după ora 22:00 acestea să fie închise și să rămână în Comenzi Platforme doar cele care nu au fost incluse și mai trebuie lucrate". Verificat live, direct în Supabase: fix-ul de la #567 (scoate linia din previzualizare DOAR în clipa în care safety net-ul chiar o aplică) nu ajuta deloc comenzile deja aplicate ÎNAINTE de acel fix — iar presupunerea notată atunci, că un nou „Adu comenzi" le-ar elimina oricum, s-a dovedit GREȘITĂ, verificând codul mai departe: reconcilierea de fundal exclude explicit orice linie deja inclusă (`_committedId`), indiferent dacă mai e „stale" sau nu. Găsite live, în draft-ul real salvat (local + cloud): 16 comenzi din 44 — toate complet terminate (incluse, cu AWB, stoc scăzut, împachetate) — încă afișate ca și cum ar mai avea nevoie de ceva. Reparat la rădăcină, general — nu doar pentru linia tocmai aplicată de safety net, ca la #567, ci pentru ORICE linie inclusă a cărei aplicare s-a scris între timp în bază, pe orice cale (alt calculator/tab, Aplică import manual, safety net): o funcție nouă (pcomPruneAppliedGhosts), care compară direct cu PCOM, deja în memorie — fără niciun apel suplimentar către bază — rulează acum la FIECARE restaurare a previzualizării (reîncărcare de pagină) ȘI la fiecare verificare periodică a safety net-ului (la 5 minute), nu doar o dată pe seară. O comandă deja terminată dispare acum singură din „Comenzi Platforme" în cel mult 5 minute, indiferent cum/unde a fost aplicată — rămân vizibile STRICT cele care chiar mai au nevoie de o decizie. Pe drum, curățate direct, live, cele 16 comenzi deja „fantomă" găsite în draft-ul curent din cloud (verificat înainte și după — confirmat 0 rămase) — draft-ul local din browser se curăță singur, automat, la următoarea reîncărcare a paginii (după ce acest update ajunge pe Vercel). Verificat cu 8 teste izolate pe funcțiile reale extrase din cod (reproduce exact amestecul live de 16 fantome + linii încă valide, fantomă găsită independent de scanarea curentă tot dispare, linie încă neaplicată rămâne neatinsă, linie „Neinclus" neatinsă, fără PCOM încărcat încă — nu șterge nimic pe ghicite), plus suita de 5 teste de la #567 re-rulată — toate verzi, nicio regresie —, rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-15'},
   {n:567,text:'Safety net-ul de 22:00 (autoApplyStalePendingImports) — bug real reparat, raportat direct cu captură, pe o comandă reală (#536589117, mircioiu mircea adrian): „astea sunt de ieri, au și AWB și sunt și incluse și trebuie să se aplice importul — butonul de aplică import automat și să dispară din această secțiune". Verificat live, direct în Supabase: comanda ERA deja complet aplicată (efecte_aplicate=true, stoc deja scăzut, AWB real asociat, chiar împachetată în Staff) — regula de 22:00 chiar rulase și chiar funcționase corect. Bug-ul real era altul: funcția marca rândul aplicat în bază și-n `PCOM`, dar nu scotea NICIODATĂ linia „fantomă" corespunzătoare din previzualizarea de import (pcImpParsed) — spre deosebire de „Aplică import” manual (click), care face exact asta la succes — și nici nu re-randa ecranul; o comandă deja complet terminată rămânea vizibilă la nesfârșit în „Comenzi Platforme”, arătând ca și cum mai era ceva de făcut. Acum, exact ca la aplicarea manuală, linia e scoasă din previzualizare (potrivire după `_committedId`) și ecranul se reîmprospătează automat (renderPcomImportPreview) imediat ce safety net-ul aplică ceva pe fundal — comanda dispare singură, fără să mai fie nevoie de refresh manual. **Comenzile deja „fantomă" de dinainte de acest fix** rămân vizibile până la o reîmprospătare (reîncărcarea paginii sau un nou „Adu comenzi eMAG/Trendyol” le elimină, fiindcă sunt deja recunoscute corect ca aplicate — asta funcționa deja). Verificat cu 5 teste izolate pe funcția reală extrasă din cod (cazul real raportat — linia dispare + toate randările se declanșează —, altă linie cu _committedId diferit rămâne neatinsă, nicio randare degeaba când nu s-a aplicat nimic, linie aplicată fără reprezentare în previzualizare — no-op sigur, fără crash —, regresie sbReady=false), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-15'},
@@ -23921,6 +23928,32 @@ async function persistAwbErrors(rows){
   }
 }
 let awbPreviewHealing=false;
+// Previzualizare vizuală a etichetei, pe rândul de asociere AWB (găsit/negăsit) — cerut direct: „să
+// avem previzualizare la AWB să vedem unde se potrivește". Reutilizează EXACT aceeași randare PDF.js
+// deja folosită pentru poza persistentă din Staff (renderPdfPageToImageDataUrl, #512) — aici STRICT
+// client-side, fără upload/Storage, doar pentru sesiunea curentă (pozele dispar la reîncărcare, exact
+// ca restul previzualizării de import). Cache-uită pe file+pagină, ca re-randările dese ale acestui
+// ecran (ex. auto-vindecarea awbReverifyUnmatchedLive, care re-randează la fiecare afișare) să nu
+// relanseze PDF.js de la zero pentru ACEEAȘI etichetă — o singură randare reală per etichetă, cât timp
+// pagina rămâne deschisă; un cache-hit se aplică sincron, fără flash de imagine lipsă la re-randare.
+const awbThumbCache=new Map();
+function awbThumbKey(p){return(p.file||'')+'|'+(p.page||0);}
+function awbThumbHtml(p,idx){
+  return p._blob?`<a href="#" onclick="return false" id="awb-thumb-${idx}-link" class="awb-thumb-link" title="Previzualizare etichetă — click pentru mărit"><img id="awb-thumb-${idx}" class="awb-thumb" alt=""></a>`:'';
+}
+function awbFillThumb(p,idx){
+  if(!p._blob)return;
+  const key=awbThumbKey(p);
+  const applyUrl=dataUrl=>{
+    const img=document.getElementById(`awb-thumb-${idx}`);if(!img)return;
+    img.src=dataUrl;
+    const link=document.getElementById(`awb-thumb-${idx}-link`);
+    if(link){link.href=dataUrl;link.target='_blank';}
+  };
+  const cached=awbThumbCache.get(key);
+  if(cached){applyUrl(cached);return;}
+  renderPdfPageToImageDataUrl(p._blob,p.page||1).then(dataUrl=>{awbThumbCache.set(key,dataUrl);applyUrl(dataUrl);}).catch(e=>console.warn('Previzualizare etichetă AWB eșuată:',e));
+}
 function renderAwbPreview(){
   const box=document.getElementById('pcmi-awb-preview');
   const matched=awbParsed.filter(pcomAwbMatched);
@@ -23962,7 +23995,7 @@ function renderAwbPreview(){
       // exact ce lipsește: codul AWB e sigur, doar comanda trebuie aleasă manual.
       else if(p.file&&!p.comandaId)msg=`⚠️ Etichetă ${esc(p.file)} — AWB ${esc(p.awb)} citit din numele fișierului, fără niciun număr de comandă pe etichetă`;
       else{const source=p.file?` · ${esc(p.file)} p.${esc(p.page||'?')}`:'';msg=`⚠️ Comanda ${esc(p.comandaId)} (AWB ${esc(p.awb)}) — negăsită sau ambiguă în Comenzi Platforme${source}`;}
-      return`<div class="inv-prev-row" style="color:var(--rd);flex-wrap:wrap;gap:8px"><span style="flex:1;min-width:260px">${msg}</span><button type="button" class="btn btn-sm awb-pick-trigger" style="flex-shrink:0" onclick="openAwbPick(event,${idx})">🔗 Asociază manual</button></div>`;
+      return`<div class="inv-prev-row" style="color:var(--rd);flex-wrap:wrap;gap:8px">${awbThumbHtml(p,idx)}<span style="flex:1;min-width:260px">${msg}</span><button type="button" class="btn btn-sm awb-pick-trigger" style="flex-shrink:0" onclick="openAwbPick(event,${idx})">🔗 Asociază manual</button></div>`;
     }
     const nm=p.rows[0].client_nume||p.rows.map(r=>r.produs_nume).join(', ');
     const already=p.rows[0].awb;
@@ -23984,7 +24017,7 @@ function renderAwbPreview(){
     // deja „rezolvată" vizual n-avea NICIO cale de corectare, nici înainte, nici după comitere. Deschide
     // ACELAȘI picker ca la „🔗 Asociază manual" (openAwbPick) — pickAwbOrder desface singur asocierea
     // veche, corect, înainte să scrie noua alegere (vezi undoAwbMatch).
-    return`<div class="inv-prev-row" style="flex-wrap:wrap;gap:8px"><span style="flex:1;min-width:260px">✓ Comanda ${esc(p.comandaId)} — ${esc(nm)} → AWB ${esc(p.awb)}${already?` <span style="color:var(--t3)">(înlocuiește ${esc(already)})</span>`:''}${matchNote}${pendingNote}</span><button type="button" class="btn btn-sm awb-pick-trigger" style="flex-shrink:0" onclick="openAwbPick(event,${idx})">🔄 Altă comandă</button></div>`;
+    return`<div class="inv-prev-row" style="flex-wrap:wrap;gap:8px">${awbThumbHtml(p,idx)}<span style="flex:1;min-width:260px">✓ Comanda ${esc(p.comandaId)} — ${esc(nm)} → AWB ${esc(p.awb)}${already?` <span style="color:var(--t3)">(înlocuiește ${esc(already)})</span>`:''}${matchNote}${pendingNote}</span><button type="button" class="btn btn-sm awb-pick-trigger" style="flex-shrink:0" onclick="openAwbPick(event,${idx})">🔄 Altă comandă</button></div>`;
   }).join('');
   // Etichetă anulată de curier — raportat direct, extins de la DPD la orice curier („nu doar DPD ci
   // peste tot, dacă apar erori"): secțiune separată de „format nerecunoscut", aici NU e o problemă de
@@ -23993,6 +24026,13 @@ function renderAwbPreview(){
   if(awbCanceledPages.length)html+=`<div class="inv-prev-row" style="color:var(--rd);font-weight:700">🚫 ${awbCanceledPages.length} ${awbCanceledPages.length>1?'etichete anulate':'etichetă anulată'} de curier (fără livrare posibilă cu acest AWB) — regenerează AWB, nu se poate asocia automat: ${awbCanceledPages.map(p=>`${esc(p.label)}${p.comandaId?` — comanda ${esc(p.comandaId)}${p.clientNume?' ('+esc(p.clientNume)+')':''}`:''} (AWB ${esc(p.awb)})`).join(', ')}</div>`;
   if(awbUnrecognizedPages.length)html+=`<div class="inv-prev-row" style="color:var(--t3)">❔ Format nerecunoscut, sărite (fără AWB/comandă identificabile) — ${awbUnrecognizedPages.length>1?'paginile':'pagina'} ${esc(awbUnrecognizedPages.map(x=>x.label).join(', '))}</div>`;
   box.innerHTML=html;
+  // Previzualizare etichetă — cerut direct: „să avem previzualizare la AWB să vedem unde se potrivește"
+  // (atât pe liniile negăsite/ambigue, de ales manual, cât și pe cele deja potrivite, ca verificare
+  // vizuală înainte de „✓ Asociază AWB-urile"). Pozele „apar treptat" — randarea PDF.js e async, DOM-ul
+  // de mai sus e deja afișat; fiecare thumbnail se completează independent, fire-and-forget, fără să
+  // blocheze nimic altceva. Strict client-side, pentru sesiunea curentă — fără niciun upload/Storage
+  // (spre deosebire de generateAwbPreviewInBackground, care persistă poza DUPĂ asociere, pentru Staff).
+  awbParsed.forEach((p,idx)=>{if(p._blob)awbFillThumb(p,idx);});
   document.getElementById('pcmi-awb-info').textContent=`${matched.length} găsite, ${unmatched.length} negăsite${awbCanceledPages.length?`, ${awbCanceledPages.length} anulate de curier`:''}${awbUnrecognizedPages.length?`, ${awbUnrecognizedPages.length} nerecunoscute`:''}`;
   // Și un lot alcătuit numai din AWB-uri fără comandă trebuie confirmat: îl păstrăm ca eroare
   // reconciliabilă, nu îl pierdem doar fiindcă nu există încă nicio asociere reușită.
