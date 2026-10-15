@@ -4614,6 +4614,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:578,text:'Asistent AI — produsele asemănătoare nu mai dispar dacă două fotografii de furnizor au unghi, culoare sau brand diferit. Un candidat semantic puternic rămâne vizibil ca „produs posibil asemănător”, inclusiv când produsul vechi nu are categorie completată; alegerea și adăugarea furnizorului rămân manual confirmate.',date:'2026-10-15'},
   {n:577,text:'Asistent AI — când fotografia arată un produs deja existent, caută și după termeni echivalenți (ex. gripper/flexor/antebraț), verifică vizual candidații și recomandă produsul real. „Folosește produsul existent” deschide direct acea fișă, la Alt furnizor; nu mai creează un duplicat și nu atinge stocul.',date:'2026-10-15'},
   {n:576,text:'Asistent AI — aceeași citire completă din screenshot se aplică acum și produselor deschise direct din chat: furnizor, SKU/model vizibil, titlu recomandat și variantă alternativă. Variantele apar imediat sub Nume produs, nu ascunse mai jos în formular.',date:'2026-10-15'},
   {n:575,text:'Import produs din screenshot — AI-ul citește acum explicit furnizorul din logo/antet, păstrează titlul văzut la furnizor și propune două titluri clare, bazate pe produsul și specificațiile vizibile. Titlul recomandat este completat automat, iar celelalte variante se pot alege cu un click.',date:'2026-10-15'},
@@ -27096,8 +27097,13 @@ async function aiChatCreateProductDraft(intent,imageDataUrl){
   if(imageDataUrl)try{extras=await aiChatExtractProductVisual(imageDataUrl);if(!nume&&(extras.numeRecomandat||extras.nume))nume=stripDiacritics(extras.numeRecomandat||extras.nume);if(!categorie&&extras.categorie&&CATS.includes(extras.categorie))categorie=extras.categorie;pozaProdus=extras.zonaProdus?await aiChatCropProductImage(imageDataUrl,extras.zonaProdus):(extras.tipImagine==='fotografie_produs'?imageDataUrl:'');}catch(e){console.warn('Extragerea completă din imagine pentru draft produs a eșuat:',e);}
   const candidati=aiFindSimilarProductCandidates(nume,categorie,5);
   let asemanatori=[];
-  if(candidati.length&&pozaProdus)asemanatori=await aiCompareProductImages(pozaProdus,candidati);
-  else if(candidati.length)asemanatori=candidati.slice(0,3).map(c=>({...c,confirmatVizual:false}));
+  if(candidati.length&&pozaProdus){
+    const confirmati=await aiCompareProductImages(pozaProdus,candidati);
+    // O fotografie de furnizor poate avea alt unghi/brand/culoare decât cea deja din stoc. În loc să
+    // ascundem complet un candidat semantic puternic doar fiindcă verdictul vizual nu e cert, îl lăsăm
+    // ca recomandare de verificat manual. Decizia de a adăuga sursa rămâne mereu la utilizator.
+    asemanatori=confirmati.length?confirmati:candidati.slice(0,3).map(c=>({...c,confirmatVizual:false}));
+  }else if(candidati.length)asemanatori=candidati.slice(0,3).map(c=>({...c,confirmatVizual:false}));
   const validTitle=v=>v&&v!=='null'?stripDiacritics(String(v).trim()):'';
   const titluri=[{title:validTitle(extras.numeRecomandat||extras.nume),label:'✓ Recomandat'},{title:validTitle(extras.numeAlternativ),label:'Variantă alternativă'},{title:validTitle(extras.numeSursa),label:'Titlu furnizor'}].filter(x=>x.title).filter((x,i,a)=>a.findIndex(y=>y.title===x.title)===i);
   return{nume,categorie,pret,imageDataUrl:pozaProdus,asemanatori,titluri,
@@ -27271,7 +27277,7 @@ function aiChatFormatMsgHtml(t){
 function aiChatDraftHtml(){
   const d=aiChatDraft;if(!d)return'';
   const img=d.imageDataUrl?`<img src="${esc(d.imageDataUrl)}" class="aic-draft-img">`:'';
-  const asem=d.asemanatori.length?`<div class="aic-draft-warn">✓ <strong>Produs existent recomandat</strong> — nu crea duplicat. ${d.asemanatori.map(a=>`<div style="margin-top:6px"><a href="#" onclick="openModal(${a.id});return false">${esc(a.nume)}</a><button type="button" class="btn btn-sm btn-acc" style="margin-left:7px" onclick="aiChatUseExistingProduct(${a.id})">Folosește produsul existent</button></div>`).join('')}</div>`:'';
+  const asem=d.asemanatori.length?`<div class="aic-draft-warn">${d.asemanatori.some(a=>a.confirmatVizual)?'✓ <strong>Produs existent recomandat</strong> — confirmat vizual.':'⚠️ <strong>Produs posibil asemănător</strong> — verifică fotografia înainte de alegere.'} ${d.asemanatori.map(a=>`<div style="margin-top:6px"><a href="#" onclick="openModal(${a.id});return false">${esc(a.nume)}</a><button type="button" class="btn btn-sm btn-acc" style="margin-left:7px" onclick="aiChatUseExistingProduct(${a.id})">Folosește produsul existent</button></div>`).join('')}</div>`:'';
   const meta=[d.sku?`SKU: ${d.sku}`:'',d.ean?`EAN: ${d.ean}`:'',d.pretAchizitie?`Achiziție: ${d.pretAchizitie} ${d.moneda||''}${d.tipPret==='net'?' net':d.tipPret==='cu_tva'?' cu TVA':''}`:''].filter(Boolean);
   const titluri=d.titluri?.length?`<div style="font-size:16px;color:var(--t2);margin-top:4px">${d.titluri.map(x=>`${esc(x.label)}: ${esc(x.title)}`).join(' · ')}</div>`:'';
   return`<div class="aic-draft">${img}<div><strong>${esc(d.nume||'(fără nume)')}</strong>${d.categorie?` · ${esc(d.categorie)}`:''}</div>${titluri}${meta.length?`<div style="font-size:17px;color:var(--t2)">${esc(meta.join(' · '))}</div>`:''}${d.pozaDecupata?'<div style="font-size:17px;color:var(--gr)">✓ Poză produs decupată din screenshot</div>':''}${asem}<button type="button" class="btn btn-sm btn-acc" onclick="aiChatOpenDraft()">Deschide ca produs nou</button></div>`;
