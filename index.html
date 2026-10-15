@@ -4608,6 +4608,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:569,text:'Comenzi Platforme — corecție directă la #568, pe loc: „de acum așa să se întâmple... dar nu la 5 minute să dispară — să dispară seara după ora 22:00". #568 curăța comenzile „fantomă" (deja incluse și aplicate) independent, la FIECARE verificare din timpul zilei (la 5 minute și la fiecare reîncărcare de pagină) — nepotrivit, cerut explicit să rămână strict un eveniment de seară, o singură trecere, exact ca restul safety net-ului de 22:00. Curățarea fantomelor (pcomPruneAppliedGhosts) e scopată acum STRICT în interiorul aceleiași treceri unice de seară ca scanarea de comenzi uitate — după ce pragul de 22:00 chiar a trecut de la ultima verificare (aceeași gardă `lastChecked`), nu la orice tick din restul zilei și nu la restaurarea previzualizării, la deschiderea paginii în timpul zilei. În restul zilei, o comandă deja terminată rămâne vizibilă normal (nu mai „sare" de pe ecran în timp ce o verifici) — dispare o singură dată, seara, odată cu restul curățeniei de 22:00. Verificat cu 1 test nou, izolat, pe funcția reală extrasă din cod (verificarea de seară deja rulată azi -> un tick ulterior NU mai curăță nimic, fantoma rămâne, nicio randare/scriere declanșată), plus suita completă de 8 teste de la #568 re-rulată — toate verzi, nicio regresie —, rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-15'},
   {n:568,text:'Comenzi Platforme — continuare directă la #567, cerută explicit: „verifică comenzile de ieri care sunt incluse și cu AWB și rezolvă-le, după ora 22:00 acestea să fie închise și să rămână în Comenzi Platforme doar cele care nu au fost incluse și mai trebuie lucrate". Verificat live, direct în Supabase: fix-ul de la #567 (scoate linia din previzualizare DOAR în clipa în care safety net-ul chiar o aplică) nu ajuta deloc comenzile deja aplicate ÎNAINTE de acel fix — iar presupunerea notată atunci, că un nou „Adu comenzi" le-ar elimina oricum, s-a dovedit GREȘITĂ, verificând codul mai departe: reconcilierea de fundal exclude explicit orice linie deja inclusă (`_committedId`), indiferent dacă mai e „stale" sau nu. Găsite live, în draft-ul real salvat (local + cloud): 16 comenzi din 44 — toate complet terminate (incluse, cu AWB, stoc scăzut, împachetate) — încă afișate ca și cum ar mai avea nevoie de ceva. Reparat la rădăcină, general — nu doar pentru linia tocmai aplicată de safety net, ca la #567, ci pentru ORICE linie inclusă a cărei aplicare s-a scris între timp în bază, pe orice cale (alt calculator/tab, Aplică import manual, safety net): o funcție nouă (pcomPruneAppliedGhosts), care compară direct cu PCOM, deja în memorie — fără niciun apel suplimentar către bază — rulează acum la FIECARE restaurare a previzualizării (reîncărcare de pagină) ȘI la fiecare verificare periodică a safety net-ului (la 5 minute), nu doar o dată pe seară. O comandă deja terminată dispare acum singură din „Comenzi Platforme" în cel mult 5 minute, indiferent cum/unde a fost aplicată — rămân vizibile STRICT cele care chiar mai au nevoie de o decizie. Pe drum, curățate direct, live, cele 16 comenzi deja „fantomă" găsite în draft-ul curent din cloud (verificat înainte și după — confirmat 0 rămase) — draft-ul local din browser se curăță singur, automat, la următoarea reîncărcare a paginii (după ce acest update ajunge pe Vercel). Verificat cu 8 teste izolate pe funcțiile reale extrase din cod (reproduce exact amestecul live de 16 fantome + linii încă valide, fantomă găsită independent de scanarea curentă tot dispare, linie încă neaplicată rămâne neatinsă, linie „Neinclus" neatinsă, fără PCOM încărcat încă — nu șterge nimic pe ghicite), plus suita de 5 teste de la #567 re-rulată — toate verzi, nicio regresie —, rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-15'},
   {n:567,text:'Safety net-ul de 22:00 (autoApplyStalePendingImports) — bug real reparat, raportat direct cu captură, pe o comandă reală (#536589117, mircioiu mircea adrian): „astea sunt de ieri, au și AWB și sunt și incluse și trebuie să se aplice importul — butonul de aplică import automat și să dispară din această secțiune". Verificat live, direct în Supabase: comanda ERA deja complet aplicată (efecte_aplicate=true, stoc deja scăzut, AWB real asociat, chiar împachetată în Staff) — regula de 22:00 chiar rulase și chiar funcționase corect. Bug-ul real era altul: funcția marca rândul aplicat în bază și-n `PCOM`, dar nu scotea NICIODATĂ linia „fantomă" corespunzătoare din previzualizarea de import (pcImpParsed) — spre deosebire de „Aplică import” manual (click), care face exact asta la succes — și nici nu re-randa ecranul; o comandă deja complet terminată rămânea vizibilă la nesfârșit în „Comenzi Platforme”, arătând ca și cum mai era ceva de făcut. Acum, exact ca la aplicarea manuală, linia e scoasă din previzualizare (potrivire după `_committedId`) și ecranul se reîmprospătează automat (renderPcomImportPreview) imediat ce safety net-ul aplică ceva pe fundal — comanda dispare singură, fără să mai fie nevoie de refresh manual. **Comenzile deja „fantomă" de dinainte de acest fix** rămân vizibile până la o reîmprospătare (reîncărcarea paginii sau un nou „Adu comenzi eMAG/Trendyol” le elimină, fiindcă sunt deja recunoscute corect ca aplicate — asta funcționa deja). Verificat cu 5 teste izolate pe funcția reală extrasă din cod (cazul real raportat — linia dispare + toate randările se declanșează —, altă linie cu _committedId diferit rămâne neatinsă, nicio randare degeaba când nu s-a aplicat nimic, linie aplicată fără reprezentare în previzualizare — no-op sigur, fără crash —, regresie sbReady=false), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-15'},
   {n:566,text:'Comenzi Platforme (previzualizare import) — comenzile NEincluse pornesc acum restrânse implicit, cerut direct cu captură: „pentru cele care nu sunt incluse - să se restrângă comanda". Un card „✓ Inclus" rămâne deschis (de obicei verifici ceva pe o comandă deja scrisă); unul „Neinclus" sau „⚠ fără produs" pornește restrâns, doar cu antetul (comandă, cumpărător, status) — ca o listă lungă de comenzi de verificat să fie scanabilă dintr-o privire, nu un perete de detalii pentru fiecare. Rămâne un singur click distanță de orice detaliu — click pe antet deschide/închide normal, ca până acum, iar alegerea manuală (deschis sau închis) rămâne ținută minte per comandă, indiferent de starea ei, cât timp previzualizarea e deschisă (un card neinclus deschis manual ca să-l lucrezi nu se restrânge singur la re-randare). Strict stare implicită de afișare — nimic din asociere/includere/calcule nu s-a schimbat. Verificat cu 9 teste izolate pe funcțiile reale extrase din cod (toate cele 3 cazuri reale din captură — inclus/fără produs/neinclus —, toggle manual + persistare, toggle pe o comandă nu atinge alta, restrângere manuală a uneia deja incluse, pachet cu produse multiple incluse parțial, cheie orfană fără crash), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-14'},
@@ -17407,11 +17408,13 @@ function lastApplyThreshold(){const d=new Date();d.setHours(22,0,0,0);if(d>new D
 // aplicării — cerut direct, pe date reale: 16 comenzi deja complet terminate (incluse + AWB + stoc
 // scăzut + împachetate) găsite încă vizibile în previzualizare, fiindcă draft-ul (local sau din cloud)
 // fusese salvat ÎNAINTE ca ele să fie aplicate, iar nicio cale existentă nu le mai curăța retroactiv la
-// restaurare (loadPcomImportState/applyPcomImportDraft doar reface EXACT ce era salvat, fără nicio
-// verificare). Folosește STRICT PCOM, deja încărcat în memorie — niciun apel suplimentar către bază, deci
-// sigur de rulat des (la fiecare restaurare de draft ȘI la fiecare tick al safety net-ului de mai jos).
+// restaurare. Folosește STRICT PCOM, deja încărcat în memorie — niciun apel suplimentar către bază.
 // Fără PCOM încărcat încă (ex. apelat prea devreme la pornire) — nu șterge nimic pe ghicite, linia
 // rămâne vizibilă până la următoarea verificare, nu dispare fals fără confirmare.
+// Corecție directă, cerută explicit („nu la 5 minute să dispară — să dispară seara după ora 22:00"):
+// prima variantă rula curățarea independent, la fiecare tick de 5 minute — corectat acum, scopată
+// STRICT la aceeași trecere unică de seară ca restul safety net-ului (același prag/aceeași gardă
+// `lastChecked`, mai jos), nu la fiecare verificare din timpul zilei.
 function pcomPruneAppliedGhosts(){
   const before=pcImpParsed.length;
   pcImpParsed=pcImpParsed.filter(it=>{
@@ -17423,15 +17426,14 @@ function pcomPruneAppliedGhosts(){
 }
 async function autoApplyStalePendingImports(){
   if(!sbReady)return;
-  // Independent de pragul de 22:00 de mai jos — rulează la FIECARE verificare (inclusiv tick-urile din
-  // restul zilei), ca o comandă aplicată între timp pe alt dispozitiv/tab să dispară de-aici la
-  // următorul tick (max. 5 minute), nu doar o dată pe seară.
-  if(pcomPruneAppliedGhosts())renderPcomImportPreview();
   try{
     const threshold=lastApplyThreshold();
     const checkRows=await dbGet(`setari_app?key=eq.${LAST_AUTO_APPLY_KEY}&select=value`);
     const lastChecked=checkRows?.[0]?.value;
     if(lastChecked&&new Date(lastChecked)>=threshold)return;
+    // Dincolo de acest punct, pragul de 22:00 chiar a trecut de la ultima verificare — aici, și NICĂIERI
+    // altundeva, se curăță și fantomele (o singură trecere, seara, exact ca restul funcției).
+    if(pcomPruneAppliedGhosts())renderPcomImportPreview();
     const stale=await dbGet(`platforma_comenzi?efecte_aplicate=eq.false&anulata=eq.false&awb=not.is.null&created_at=gte.${encodeURIComponent(AUTO_APPLY_CUTOFF)}&created_at=lt.${encodeURIComponent(threshold.toISOString())}&select=*`);
     let applied=0;
     for(const row of stale){
@@ -20651,9 +20653,10 @@ function renderPcomRedesign(){
 function applyPcomImportDraft(saved){
   pcImpParsed=saved.parsed;
   pcImpPlatforma=saved.platforma||'emag';
-  // Draft-ul (local sau din cloud) poate conține comenzi deja aplicate între timp, pe orice cale — vezi
-  // pcomPruneAppliedGhosts — curățat chiar la restaurare, nu doar la următorul tick al safety net-ului.
-  pcomPruneAppliedGhosts();
+  // Fantomele (comenzi incluse deja aplicate între timp) NU se curăță aici, la restaurare — cerut
+  // explicit: curățarea se întâmplă STRICT seara, după ora 22:00, o singură trecere pe zi, ca restul
+  // safety net-ului (vezi pcomPruneAppliedGhosts/autoApplyStalePendingImports), nu la orice deschidere
+  // a paginii în timpul zilei.
   const sel=document.getElementById('pcmi-platforma');if(sel)sel.value=pcImpPlatforma;
   updPcmiPlatformaHint();
   renderPcomImportPreview();
