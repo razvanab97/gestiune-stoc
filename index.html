@@ -4614,6 +4614,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:577,text:'Asistent AI — când fotografia arată un produs deja existent, caută și după termeni echivalenți (ex. gripper/flexor/antebraț), verifică vizual candidații și recomandă produsul real. „Folosește produsul existent” deschide direct acea fișă, la Alt furnizor; nu mai creează un duplicat și nu atinge stocul.',date:'2026-10-15'},
   {n:576,text:'Asistent AI — aceeași citire completă din screenshot se aplică acum și produselor deschise direct din chat: furnizor, SKU/model vizibil, titlu recomandat și variantă alternativă. Variantele apar imediat sub Nume produs, nu ascunse mai jos în formular.',date:'2026-10-15'},
   {n:575,text:'Import produs din screenshot — AI-ul citește acum explicit furnizorul din logo/antet, păstrează titlul văzut la furnizor și propune două titluri clare, bazate pe produsul și specificațiile vizibile. Titlul recomandat este completat automat, iar celelalte variante se pot alege cu un click.',date:'2026-10-15'},
   {n:574,text:'Asistent AI — furnizorul vizibil în screenshot (logo, antet sau magazin) este preluat automat în produs.',date:'2026-10-15'},
@@ -26929,17 +26930,32 @@ function aiForecastProdus(produsId,categorie,lunaTinta){
   return{mediaGenerala:Math.round(mediaGenerala*10)/10,indexSezonier:Math.round(indexSezonier*100)/100,trendProcent,preconizare,luniAcoperite:points.length,lunaTinta};
 }
 
-// ── Candidați "produs asemănător" (determinist) — pentru detectarea de duplicate la creare (Q11/Q12,
-// adăugat de user neprompt: "dacă un produs se aseamănă din recomandare cu ceva ce avem în sistem, să
-// se recomande acel produs ca asemănător — asemănare de titlu sau de poză"). Filtrare pe titlu+categorie
-// (prag mai jos decât findExistingProduct — 0.35, nu 0.7 — ca să prindă și potriviri mai slabe, demne
-// doar de o sugestie, nu de o auto-asociere); AI-ul compară vizual DOAR acești candidați (nu tot
-// inventarul) — vezi aiCompareProductImages.
+// ── Candidați "produs asemănător" (determinist) — pentru detectarea de duplicate la creare (Q11/Q12).
+// Titlurile furnizorilor diferă des chiar pentru același produs ("gripper" vs "flexor antebraț"), astfel
+// încât fuzzy pe titlul brut nu e suficient. Extindem doar câțiva termeni comerciali echivalenți, apoi AI
+// compară VIZUAL cel mult 8 poze candidate; nu asociem niciodată automat doar după aceste cuvinte.
+const AI_SIMILAR_TERM_GROUPS=[['gripper','flexor','antebrat','priza','mana','maini'],['banda','elastic','rezistenta','fitness'],['pistol','masaj','masajer','muscular'],['carucior','trolley','valiza'],['cutie','organizer','depozitare']];
+function aiSimilarTerms(text){
+  const base=(stripDiacritics(String(text||'')).toLowerCase().match(/[a-z0-9]+/g)||[]).filter(w=>w.length>=3);
+  const out=new Set(base);
+  AI_SIMILAR_TERM_GROUPS.forEach(group=>{if(group.some(w=>out.has(w)))group.forEach(w=>out.add(w));});
+  return out;
+}
+function aiTermOverlap(a,b){
+  if(!a.size||!b.size)return 0;
+  let shared=0;a.forEach(w=>{if(b.has(w))shared++;});
+  return shared/Math.min(a.size,b.size);
+}
 function aiFindSimilarProductCandidates(nume,categorie,limit){
-  const n=Math.max(1,Math.min(10,Number(limit)||5));
+  const n=Math.max(1,Math.min(8,Number(limit)||8));
   if(!nume||!String(nume).trim())return[];
-  const scored=P.filter(p=>!p.archived).map(p=>({p,score:fuzzyMatch(nume,productMatchText(p))+(categorie&&p.category===categorie?0.1:0)}))
-    .filter(x=>x.score>=0.35).sort((a,b)=>b.score-a.score);
+  const queryTerms=aiSimilarTerms(nume);
+  const scored=P.filter(p=>!p.archived&&p.img).map(p=>{
+    const fuzzy=fuzzyMatch(nume,productMatchText(p));
+    const semantic=aiTermOverlap(queryTerms,aiSimilarTerms(productMatchText(p)));
+    const sameCategory=!!categorie&&p.category===categorie;
+    return{p,score:fuzzy+(sameCategory?0.1:0)+semantic*.5,fuzzy,semantic,sameCategory};
+  }).filter(x=>x.fuzzy>=.35||x.semantic>=.18||(x.sameCategory&&x.semantic>=.1)).sort((a,b)=>b.score-a.score);
   return scored.slice(0,n).map(x=>({id:x.p.id,nume:x.p.name,categorie:x.p.category,img:x.p.img,score:Math.round(x.score*100)/100}));
 }
 
@@ -27107,6 +27123,25 @@ async function aiCompareProductImages(newImageDataUrl,candidati){
     return withImg.map((c,i)=>({...c,confirmatVizual:!!parsed.rezultate.find(x=>x.index===i)?.asemanator})).filter(c=>c.confirmatVizual);
   }catch(e){console.warn('Comparație vizuală de produse eșuată:',e);return[];}
 }
+function aiChatSourcePriceTTC(d){
+  let price=Number(d?.pretAchizitie)||0;if(!price)return 0;
+  if(String(d.moneda||'').toUpperCase()==='EUR')price*=EUR_RON;
+  if(d.tipPret==='net')price*=1.21;
+  return Math.round(price*100)/100;
+}
+function aiChatUseExistingProduct(productId){
+  const d=aiChatDraft,p=P.find(x=>x.id===productId);if(!d||!p)return;
+  openModal(productId).then(()=>{
+    peTab('prices');
+    const details=document.querySelector('.pe-alt-supplier');if(details)details.open=true;
+    const supplier=document.getElementById('f-alt-supplier'),sku=document.getElementById('f-alt-sku'),price=document.getElementById('f-alt-price');
+    if(supplier&&d.furnizor)supplier.value=d.furnizor;
+    if(sku&&d.sku)sku.value=d.sku;
+    const priceTTC=aiChatSourcePriceTTC(d);
+    if(price&&priceTTC>0){price.value=priceTTC.toFixed(2);syncAltPriceFields('ttc');}
+    toast(d.furnizor&&d.sku&&priceTTC?'Sursa nouă este completată. Verifică și apasă „+ Adaugă sursă”.':'Produsul existent este deschis. Completează ce lipsește la „Alt furnizor”, apoi apasă „+ Adaugă sursă”.');
+  });
+}
 function aiChatOpenDraft(){
   if(!aiChatDraft)return;
   const d=aiChatDraft;
@@ -27236,7 +27271,7 @@ function aiChatFormatMsgHtml(t){
 function aiChatDraftHtml(){
   const d=aiChatDraft;if(!d)return'';
   const img=d.imageDataUrl?`<img src="${esc(d.imageDataUrl)}" class="aic-draft-img">`:'';
-  const asem=d.asemanatori.length?`<div class="aic-draft-warn">⚠️ Asemănător cu: ${d.asemanatori.map(a=>`<a href="#" onclick="openModal(${a.id});return false">${esc(a.nume)}</a>`).join(', ')}</div>`:'';
+  const asem=d.asemanatori.length?`<div class="aic-draft-warn">✓ <strong>Produs existent recomandat</strong> — nu crea duplicat. ${d.asemanatori.map(a=>`<div style="margin-top:6px"><a href="#" onclick="openModal(${a.id});return false">${esc(a.nume)}</a><button type="button" class="btn btn-sm btn-acc" style="margin-left:7px" onclick="aiChatUseExistingProduct(${a.id})">Folosește produsul existent</button></div>`).join('')}</div>`:'';
   const meta=[d.sku?`SKU: ${d.sku}`:'',d.ean?`EAN: ${d.ean}`:'',d.pretAchizitie?`Achiziție: ${d.pretAchizitie} ${d.moneda||''}${d.tipPret==='net'?' net':d.tipPret==='cu_tva'?' cu TVA':''}`:''].filter(Boolean);
   const titluri=d.titluri?.length?`<div style="font-size:16px;color:var(--t2);margin-top:4px">${d.titluri.map(x=>`${esc(x.label)}: ${esc(x.title)}`).join(' · ')}</div>`:'';
   return`<div class="aic-draft">${img}<div><strong>${esc(d.nume||'(fără nume)')}</strong>${d.categorie?` · ${esc(d.categorie)}`:''}</div>${titluri}${meta.length?`<div style="font-size:17px;color:var(--t2)">${esc(meta.join(' · '))}</div>`:''}${d.pozaDecupata?'<div style="font-size:17px;color:var(--gr)">✓ Poză produs decupată din screenshot</div>':''}${asem}<button type="button" class="btn btn-sm btn-acc" onclick="aiChatOpenDraft()">Deschide ca produs nou</button></div>`;
