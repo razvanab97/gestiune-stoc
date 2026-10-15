@@ -699,6 +699,8 @@ tr:hover td{background:var(--surf2)}
 .cat-chip{font-size:25px;padding:4px 10px;border-radius:20px;background:var(--acc-light);color:var(--acc);border:1px solid var(--acc-mid);cursor:pointer;font-weight:500;transition:all .12s;display:flex;align-items:center;gap:4px}
 .cat-chip:hover{background:var(--acc);color:var(--acc-fg)}
 .cat-chip-loading{font-size:25px;color:var(--t3);padding:4px 0;font-style:italic}
+.cat-chip-new{background:var(--grn-bg);color:var(--gr);border:1.5px dashed var(--gr)}
+.cat-chip-new:hover{background:var(--gr);color:#fff}
 .cat-s{width:100%;margin-bottom:7px;font-size:26px}
 .cat-g{display:grid;grid-template-columns:1fr 1fr;gap:4px;max-height:200px;overflow-y:auto;padding:2px}
 .cat-g label{display:flex;align-items:center;gap:6px;font-size:25px;cursor:pointer;padding:5px 8px;border-radius:5px;border:1px solid var(--b1);background:var(--surf);line-height:1.3;transition:all .12s}
@@ -4311,7 +4313,7 @@ button.pcx-include-btn.included{border-color:var(--gr)}
     <div class="pe-pane" data-pe-pane="cats">
       <div class="pe-section">
         <div class="sec">Categorii</div>
-        <div class="cat-suggest" id="cat-suggest" style="display:none"><span class="cat-chip-loading">Scrie numele produsului pentru sugestii…</span></div>
+        <div class="cat-suggest" id="cat-suggest"><span class="cat-chip-loading">Scrie numele produsului pentru sugestii…</span></div>
         <div style="display:flex;gap:8px;margin-bottom:12px">
           <input type="text" id="new-cat-input" class="cat-s" placeholder="Adaugă categorie nouă…" style="flex:1">
           <button class="btn btn-sm" onclick="const inp=document.getElementById('new-cat-input');if(inp.value.trim()){addCustomCategory(inp.value);inp.value='';}" style="min-width:100px">+ Adaugă</button>
@@ -4614,6 +4616,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:580,text:'Sugestii de categorie (Produs nou → Categorii și etichete) — 2 lucruri cerute direct: „să recomande și Categorie, dacă nu se găsește una potrivită, să recomande alta nouă". (1) Bug real găsit pe drum: zona de sugestii (sub „Categorii", apare pe măsură ce scrii numele produsului) avea `style="display:none"` fix în șablon — JS-ul completa corect sugestiile în ea, dar nimic nu scotea niciodată acel `display:none`, deci rămâneau invizibile de fiecare dată, indiferent cât de bune erau. (2) AI-ul alegea până acum STRICT dintre categoriile deja existente, chiar și pentru un produs genuin nou, fără nimic potrivit în listă — primea 1-3 sugestii forțate, nepotrivite. Acum alege câte categorii EXISTENTE se potrivesc cu adevărat (poate fi și nicio una), iar dacă NICIUNA nu se potrivește bine, propune separat și o categorie NOUĂ, scurtă și clară — chip distinct (verde, contur punctat), care la click o adaugă în listă ȘI o selectează direct, dintr-un singur pas. Verificat cu 9 teste izolate pe funcțiile reale extrase din cod (schema strictă validă, categorie nouă propusă corect când nimic nu se potrivește, categorii existente filtrate corect — inclusiv un nume halucinat de AI, care nu există de fapt în listă —, categorie „nouă" care de fapt există deja tratată corect, fără sugestii deloc, ambele tipuri deodată, click pe chip-ul nou adaugă+selectează, fără categorie propusă → fără acțiune), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-16'},
   {n:579,text:'„Alt furnizor" — câmpul de cod se numește acum „Cod furnizor (SKU / EAN)", nu doar „Cod extern", ca să reflecte clar că „Folosește produsul existent" (#577) poate completa aici fie un SKU, fie un EAN citit din screenshot.',date:'2026-10-15'},
   {n:578,text:'Asistent AI — produsele asemănătoare nu mai dispar dacă două fotografii de furnizor au unghi, culoare sau brand diferit. Un candidat semantic puternic rămâne vizibil ca „produs posibil asemănător”, inclusiv când produsul vechi nu are categorie completată; alegerea și adăugarea furnizorului rămân manual confirmate.',date:'2026-10-15'},
   {n:577,text:'Asistent AI — când fotografia arată un produs deja existent, caută și după termeni echivalenți (ex. gripper/flexor/antebraț), verifică vizual candidații și recomandă produsul real. „Folosește produsul existent” deschide direct acea fișă, la Alt furnizor; nu mai creează un duplicat și nu atinge stocul.',date:'2026-10-15'},
@@ -7949,7 +7952,7 @@ const PCIK='sm6_pcom_import';
 // se blochează Safari-ul sau schimbi calculatorul. Vezi savePcomImportState/loadPcomImportState mai jos.
 const PCOM_DRAFT_SETTINGS_KEY='pcom_import_draft';
 const SMIK='sm6_sync_import';
-let invLines=[],invParsed=[],catSuggestTimer=null,lastNameForCat='',invShippingCostRon=0;
+let invLines=[],invParsed=[],catSuggestTimer=null,lastNameForCat='',invShippingCostRon=0,catSuggestNewCat='';
 let sbReady=false;
 let eFacturaEmagDate=localStorage.getItem(EFK)||'';
 let eFacturaEmagEdit=!eFacturaEmagDate;
@@ -8764,19 +8767,54 @@ function suggestCatFromName(){
   if(!name||name===lastNameForCat)return;
   catSuggestTimer=setTimeout(()=>doSuggestCat(name),600);
 }
+// Schema constrânsă — cerut direct: „să recomande și Categorie, dacă nu se găsește una potrivită, să
+// recomande alta nouă". Până acum, AI-ul alegea STRICT dintre categoriile deja existente (promptul le
+// enumera explicit, fără nicio opțiune de „niciuna nu se potrivește") — un produs genuin nou, fără
+// categorie bună în listă, tot primea 1-3 sugestii forțate, nepotrivite. Acum alege câte EXISTENTE se
+// potrivesc cu adevărat (listă goală dacă niciuna) ȘI, separat, poate propune o categorie NOUĂ — dar
+// doar când chiar e nevoie, nu de fiecare dată.
+const CAT_SUGGEST_SCHEMA={
+  type:'object',
+  properties:{
+    existente:{type:'array',items:{type:'string'},description:'0-3 categorii EXISTENTE (exact din listă, cuvânt cu cuvânt) care se potrivesc produsului. Listă goală dacă niciuna nu se potrivește rezonabil — nu alege una forțat.'},
+    categorieNoua:{type:['string','null'],description:'O categorie NOUĂ, scurtă și clară (2-4 cuvinte, română), propusă DOAR dacă nicio categorie existentă nu se potrivește bine. null dacă o categorie existentă e suficient de potrivită.'}
+  },
+  required:['existente','categorieNoua'],
+  additionalProperties:false
+};
+// Transformă răspunsul AI (deja parsat) în HTML pentru chip-uri + reține separat categoria nouă propusă
+// (catSuggestNewCat, citită de selectNewSuggestedCat la click) — extras separat de apelul AI în sine, ca
+// logica de filtrare/randare să fie testabilă determinist, fără să depindă de un răspuns live.
+function catSuggestChipsHtml(d){
+  catSuggestNewCat=d.categorieNoua&&!CATS.includes(d.categorieNoua)?String(d.categorieNoua).trim():'';
+  const chips=[
+    ...(d.existente||[]).filter(c=>CATS.includes(c)).map(c=>`<span class="cat-chip" onclick="selectCat('${esc(c)}')">✦ ${esc(c)}</span>`),
+    ...(catSuggestNewCat?[`<span class="cat-chip cat-chip-new" onclick="selectNewSuggestedCat()" title="Nicio categorie existentă nu se potrivește bine — adaugă și selectează asta">+ ${esc(catSuggestNewCat)} (nouă)</span>`]:[])
+  ];
+  return chips.length?chips.join(''):'<span class="cat-chip-loading" style="color:var(--t3)">Nicio sugestie clară</span>';
+}
 async function doSuggestCat(name){
   lastNameForCat=name;
   const el=document.getElementById('cat-suggest');
   el.innerHTML='<span class="cat-chip-loading"><span class="spin"></span> Se analizează…</span>';
   try{
-    const resp=await callAI([{role:'user',content:`Ești asistent stoc. Produsul: "${name}". Categorii: ${CATS.join(', ')}. Răspunde DOAR cu JSON array cu 1-3 categorii exacte ex: ["Cafea și ceai"]. Fără explicații.`}],null,100,'simple');
-    const arr=JSON.parse(resp.replace(/```json|```/g,'').trim());
-    el.innerHTML=arr.map(c=>`<span class="cat-chip" onclick="selectCat('${esc(c)}')">✦ ${esc(c)}</span>`).join('');
+    const resp=await callAI([{role:'user',content:`Ești asistent stoc. Produsul: "${name}". Categorii existente: ${CATS.join(', ')}.`}],
+      'Alegi 0-3 categorii EXISTENTE care se potrivesc cu adevărat produsului — listă goală dacă niciuna nu se potrivește rezonabil, nu alege una forțat doar ca să ai ce răspunde. Dacă NICIO categorie existentă nu se potrivește bine, propune și o categorie nouă, scurtă și clară; altfel las-o goală.',
+      150,'simple',CAT_SUGGEST_SCHEMA,'cat_suggest');
+    el.innerHTML=catSuggestChipsHtml(JSON.parse(resp));
   }catch(e){el.innerHTML='<span class="cat-chip-loading" style="color:var(--t3)">—</span>';}
 }
 function selectCat(cat){
   buildCats('');
   setTimeout(()=>{const r=document.querySelector(`.cat-g input[value="${CSS.escape(cat)}"]`);if(r){r.checked=true;updCats();}},50);
+}
+// Categoria nouă propusă de AI (catSuggestNewCat, setată la randarea chip-ului) — reținută separat, nu
+// interpolată direct în onclick, ca un nume cu ghilimele/apostrof din răspunsul AI să nu rupă niciodată
+// markup-ul HTML generat.
+function selectNewSuggestedCat(){
+  if(!catSuggestNewCat)return;
+  addCustomCategory(catSuggestNewCat);
+  selectCat(catSuggestNewCat);
 }
 
 /* AI ANALYZE IMAGE */
