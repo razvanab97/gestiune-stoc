@@ -4660,6 +4660,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:583,text:'Comenzi Platforme — avertismentul de duplicat Vinted (ex. „«Set costum înger...» pare deja înregistrat pe ... ȘI E DEJA ÎMPACHETATĂ") are acum 3 opțiuni, nu doar Anulează/Adaugă oricum — cerut direct: „să poți selecta acea comandă, dacă există deja". A treia — „🔍 Vezi comanda existentă" — te duce direct pe ea: trece pe Comenzi Platforme și filtrează căutarea exact pe numărul acelei comenzi (reutilizează goToPcomIssue, deja folosit de clopoțelul de notificări — nimic nou de navigare/highlight). Apare doar când duplicatul e o comandă deja comisă în bază (găsită prin căutare, cu număr real de comandă) — dacă e doar un rând din lista pe care tocmai o construiești (încă necomisă), rămân doar Anulează/Adaugă oricum, pentru că n-ar avea unde naviga. Verificat de 2 ori: sintaxă + 8 teste izolate pe funcțiile reale extrase din cod (comandaId păstrat corect din comanda găsită, cazul „încă în previzualizare" fără buton Vezi, produs/preț diferit → fără avertisment, comandă anulată ignorată corect, toate 3 click-urile rezolvă acțiunea corectă, click pe fundal = Anulează, ca la un confirm() respins).',date:'2026-10-16'},
   {n:582,text:'Editor produs — corectat direct, imediat după #581: „dă-mi varianta deschisă la culoare, nu închisă, nu mă interesează — e greoi acest background închis". Tema întunecată a fost scoasă complet (fundal + text), înlocuită cu o variantă luminoasă/albă, în ton cu restul aplicației — modalul moștenește acum direct culorile deschise globale ale aplicației, fără nicio redefinire proprie de fundal/text. Rămân toate accentele „premium" care nu țin de culoarea de fundal: titluri cu font Space Grotesk, etichete de secțiune tip mono/majuscule, butonul „Salvează produs" cu gradient mov-turcoaz, umbre discrete. Organizarea pe coloane (Media / Identitate + Furnizori / Stoc + Caracteristici), „Mai multe detalii" pliat și cardul nou „Furnizori & surse" de pe #581 rămân neschimbate — doar culorile. Verificat de 2 ori: sintaxă JS, balans CSS (paranteze numărate programatic).',date:'2026-10-16'},
   {n:581,text:'Editor produs (popup-ul de adăugare/editare) — redesign complet, cerut direct: „premium, futurist și mai bine organizat", apoi „mai aerisit", apoi „puțin mai futurist". Vizual: temă întunecată dedicată DOAR acestui popup (restul aplicației rămâne neschimbat — scopat prin `.modal`, clasă exclusivă acestui element), accent mov-cyan, fonturi Space Grotesk/mono pentru titluri și etichete, glow discret pe cifrele cheie (Stoc actual), fără emoji ca iconițe noi. Organizare: tab „Informații produs" regrupat pe rol — Media / Identitate + Furnizori / Stoc + Caracteristici — în loc de 3 coloane fără legătură clară; „Dimensiuni / EasyBox / Note" sunt acum sub „▾ Mai multe detalii" (pliate implicit, `<details>` nativ, același tipar ca „Alt furnizor"), ca prima privire să nu fie încărcată. Funcție nouă: card „Furnizori & surse" apare acum ȘI pe tab-ul „Informații produs" (nu doar pe „Prețuri"), cerut direct — „informații despre produs de la al doilea, al treilea furnizor... atât la info produs, cât și la preț". Nu duplică datele sau formularul: `renderSupplierSources()` randează aceeași listă (din `supplierSourcesDraft`, deja existent, #389) în DOUĂ gazde deodată; „+ Adaugă sursă" de pe Info trece pe tab-ul Prețuri și deschide direct secțiunea reală, ca să nu existe id-uri duplicate. Nimic din funcții/câmpuri/id-uri nu a fost scos — toate cele ~80 de elemente și cele ~30 de funcții din #271 rămân identice, doar regrupate vizual. Verificat de 2 ori: sintaxă JS (node --check), balans HTML/CSS (paranteze/div-uri numărate programatic), toate id-urile critice confirmate unice (fără duplicate), 7 teste izolate noi pe `renderSupplierSources`/`goToAddSupplierSource` extrase din cod (dublă-gazdă, gazdă lipsă, draft gol, 3 surse indexate corect, navigare+deschidere details), rulate de 2 ori.',date:'2026-10-16'},
   {n:580,text:'Sugestii de categorie (Produs nou → Categorii și etichete) — 2 lucruri cerute direct: „să recomande și Categorie, dacă nu se găsește una potrivită, să recomande alta nouă". (1) Bug real găsit pe drum: zona de sugestii (sub „Categorii", apare pe măsură ce scrii numele produsului) avea `style="display:none"` fix în șablon — JS-ul completa corect sugestiile în ea, dar nimic nu scotea niciodată acel `display:none`, deci rămâneau invizibile de fiecare dată, indiferent cât de bune erau. (2) AI-ul alegea până acum STRICT dintre categoriile deja existente, chiar și pentru un produs genuin nou, fără nimic potrivit în listă — primea 1-3 sugestii forțate, nepotrivite. Acum alege câte categorii EXISTENTE se potrivesc cu adevărat (poate fi și nicio una), iar dacă NICIUNA nu se potrivește bine, propune separat și o categorie NOUĂ, scurtă și clară — chip distinct (verde, contur punctat), care la click o adaugă în listă ȘI o selectează direct, dintr-un singur pas. Verificat cu 9 teste izolate pe funcțiile reale extrase din cod (schema strictă validă, categorie nouă propusă corect când nimic nu se potrivește, categorii existente filtrate corect — inclusiv un nume halucinat de AI, care nu există de fapt în listă —, categorie „nouă" care de fapt există deja tratată corect, fără sugestii deloc, ambele tipuri deodată, click pe chip-ul nou adaugă+selectează, fără categorie propusă → fără acțiune), rulate de 2 ori, sintaxa verificată de 2 ori.',date:'2026-10-16'},
@@ -19662,11 +19663,35 @@ async function aiFallbackAwbMatch(text){
 // conține produse deja procesate cu zile/săptămâni în urmă, nu doar azi. Întoarce data + starea de
 // împachetare a potrivirii găsite, ca omul să vadă direct dacă a fost deja FĂCUTĂ (nu doar înregistrată).
 function vintedFindLikelyDuplicate(produsName,pretTotalCuTva){
+  // _inPreview:true — rândul „duplicat" e chiar în lista pe care tocmai o construiești (pcImpParsed),
+  // nu încă o comandă comisă în bază — „Vezi comanda existentă" (mai jos, vintedDupeDecision) nu are
+  // sens aici (ar naviga în gol, fără id de comandă comisă), doar Anulează/Adaugă oricum.
   const inPreview=pcImpParsed.some(x=>x.platforma==='vinted'&&x.titluExtern===produsName&&Math.abs((x.pretTotalCuTva||0)-pretTotalCuTva)<0.01);
-  if(inPreview)return{data:td(),impachetat:false};
+  if(inPreview)return{data:td(),impachetat:false,_inPreview:true};
   const matches=PCOM.filter(o=>o.platforma==='vinted'&&!o.anulata&&(o.titluExtern===produsName||o.produsNume===produsName)&&Math.abs((o.pretTotalCuTvaRon||0)-pretTotalCuTva)<0.5);
   if(!matches.length)return null;
   return matches.slice().sort((a,b)=>String(b.data).localeCompare(String(a.data)))[0];
+}
+// Confirmare cu 3 opțiuni (window.confirm nativ oferă strict 2) — cerut direct: „să poți selecta acea
+// comandă, dacă există deja", ca alternativă reală la Anulează/Adaugă oricum, nu doar text informativ.
+// „Vezi comanda existentă" reutilizează goToPcomIssue (deja folosit de clopoțelul de notificări) — trece
+// pe Comenzi Platforme și filtrează căutarea exact pe comandaId-ul găsit, fără cod nou de navigare/highlight.
+function vintedDupeDecision(message,comandaId){
+  return new Promise(resolve=>{
+    const ov=document.createElement('div');
+    ov.className='ov';ov.style.cssText='display:flex;z-index:400';
+    const box=document.createElement('div');
+    box.style.cssText='background:#fff;border-radius:16px;max-width:480px;width:92%;margin:auto;padding:22px;box-shadow:0 24px 60px rgba(15,23,42,.25)';
+    const msg=document.createElement('div');msg.style.cssText='font-size:19px;line-height:1.5;color:var(--t1);margin-bottom:16px;white-space:pre-line';msg.textContent=message;
+    const row=document.createElement('div');row.style.cssText='display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end';
+    const mkBtn=(label,cls,action)=>{const b=document.createElement('button');b.type='button';b.className=cls;b.textContent=label;b.onclick=()=>{ov.remove();resolve(action);};return b;};
+    row.appendChild(mkBtn('Anulează','btn btn-sm','cancel'));
+    if(comandaId)row.appendChild(mkBtn('🔍 Vezi comanda existentă','btn btn-sm','view'));
+    row.appendChild(mkBtn('Adaugă oricum','btn btn-sm btn-acc','add'));
+    box.appendChild(msg);box.appendChild(row);ov.appendChild(box);
+    ov.onclick=e=>{if(e.target===ov){ov.remove();resolve('cancel');}};
+    document.body.appendChild(ov);
+  });
 }
 // Generator etichetă GLS pentru comenzi Vinted expediate prin punct de depunere GLS — cerut direct,
 // pe baza unui exemplu real (ecranul Vinted „Împachetează și trimite", cu un cod de expediere text, ex.
@@ -19797,7 +19822,7 @@ async function vintedRunRecognition(imageContent,previewSrc){
     const produsRows=randuri.filter(r=>r.tip==='produs'&&r.produs);
     const lotRows=randuri.filter(r=>r.tip==='lot'&&r.articole>1);
     const newIdxs=[];
-    produsRows.forEach(r=>{
+    for(const r of produsRows){
       // findExistingProduct — potrivirea exactă (EAN/SKU/scor fuzzy ≥70%) folosită și la eMAG/Trendyol —
       // dar Vinted n-are PNK/SKU, deci pragul strict de-acolo lăsa gol prea des (raportat direct: „2 din
       // 4 fără produs"). Sub prag, arătăm totuși cea mai bună potrivire găsită — un punct de plecare
@@ -19819,10 +19844,15 @@ async function vintedRunRecognition(imageContent,previewSrc){
       // Nu blocăm silențios (ar putea fi o a doua comandă REALĂ, chiar identică ca produs+preț) — doar
       // avertizăm explicit, cu confirmare, dacă produsul+prețul par deja prezente (previzualizare curentă
       // SAU deja aplicate oricând în istoric, nu doar azi — vezi vintedFindLikelyDuplicate) — omul decide.
+      // Cerut direct („să poți selecta acea comandă, dacă există deja"): pe lângă Anulează/Adaugă oricum,
+      // a treia opțiune — „Vezi comanda existentă" — te duce direct la ea (vintedDupeDecision), nu doar
+      // text informativ fără nicio cale de acțiune.
       const dup=vintedFindLikelyDuplicate(r.produs,pretTotalCuTva);
       if(dup){
         const candData=dup.data===td()?'azi':`pe ${dup.data}`,starePachet=dup.impachetat?'ȘI E DEJA ÎMPACHETATĂ/expediată':'încă neîmpachetată';
-        if(!confirm(`„${r.produs}" (${pretTotalCuTva.toFixed(2)} ${moneda}) pare deja înregistrat ${candData} (${starePachet}) — posibil aceeași captură procesată de două ori sau produs deja vândut/procesat. Adaugi oricum o comandă NOUĂ?`))return;
+        const decision=await vintedDupeDecision(`„${r.produs}" (${pretTotalCuTva.toFixed(2)} ${moneda}) pare deja înregistrat ${candData} (${starePachet}) — posibil aceeași captură procesată de două ori sau produs deja vândut/procesat.`,dup._inPreview?null:dup.comandaId);
+        if(decision==='cancel')continue;
+        if(decision==='view'){goToPcomIssue(dup.comandaId);continue;}
       }
       pcImpParsed.push({platforma:'vinted',comandaId:'VNT-'+Date.now().toString(36).toUpperCase()+Math.random().toString(36).slice(2,5).toUpperCase(),
         pachetId:'',data:td(),pnk:'',tara:'',codProdus:'',clientNume:'',titluExtern:r.produs,vintedImg:previewSrc||'',
@@ -19830,7 +19860,7 @@ async function vintedRunRecognition(imageContent,previewSrc){
         produsId,score,viaPnk:false,viaTitle:false,viaCode:false,
         include:false,awb:'',_source:'vinted'});
       newIdxs.push(pcImpParsed.length-1);
-    });
+    }
     // „Grupează N articole” — fără nume de produs individual, deci imposibil de ghicit automat — dar
     // cerut direct ca liniile să apară SUS, în același grid ca eMAG/Trendyol, nu într-un formular
     // separat: N linii goale, cu ACELAȘI comandaId/pachetId (se grupează vizual ca un singur pachet,
