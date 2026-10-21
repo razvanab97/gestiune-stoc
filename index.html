@@ -4660,6 +4660,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:584,text:'Comenzi Platforme — bug real reparat, raportat direct: „pe Trendyol nu mai încarcă comenzile, de ce?". Cauza: câmpurile „De la"/„Până la" ale importului Trendyol se completau o SINGURĂ dată, la încărcarea paginii — dacă tab-ul rămânea deschis peste miezul nopții (sau mai multe zile), „Până la" rămânea înghețat la ziua deschiderii (ex. 19.10), în timp ce ziua reală avansa (ex. 21.10) — atât reîmprospătarea automată (la 5 minute), cât și un click manual pe „Adu comenzi Trendyol" interogau tăcut un interval tot mai vechi, ratând comenzile din zilele scurse între timp; mesajul „Nicio linie Trendyol nouă" era tehnic corect pentru intervalul (vechi) interogat, doar că intervalul însuși era greșit. eMAG nu era afectat — are alt API, fără interval de date, mereu „la zi". Acum intervalul avansează singur, la fiecare reîmprospătare automată, păstrând aceeași lățime de fereastră (plafonată la 13 zile, limita Trendyol) — un click manual cu date alese explicit de om nu e atins. Verificat de 2 ori: sintaxă + 6 teste izolate pe funcția reală extrasă din cod (avansare păstrând lățimea ferestrei, interval deja la zi → neschimbat, câmpuri goale/elemente lipsă → fără crash, fereastră îngustă de 1 zi, fereastră peste limita de 14 zile → plafonată corect).',date:'2026-10-21'},
   {n:583,text:'Comenzi Platforme — avertismentul de duplicat Vinted (ex. „«Set costum înger...» pare deja înregistrat pe ... ȘI E DEJA ÎMPACHETATĂ") are acum 3 opțiuni, nu doar Anulează/Adaugă oricum — cerut direct: „să poți selecta acea comandă, dacă există deja". A treia — „🔍 Vezi comanda existentă" — te duce direct pe ea: trece pe Comenzi Platforme și filtrează căutarea exact pe numărul acelei comenzi (reutilizează goToPcomIssue, deja folosit de clopoțelul de notificări — nimic nou de navigare/highlight). Apare doar când duplicatul e o comandă deja comisă în bază (găsită prin căutare, cu număr real de comandă) — dacă e doar un rând din lista pe care tocmai o construiești (încă necomisă), rămân doar Anulează/Adaugă oricum, pentru că n-ar avea unde naviga. Verificat de 2 ori: sintaxă + 8 teste izolate pe funcțiile reale extrase din cod (comandaId păstrat corect din comanda găsită, cazul „încă în previzualizare" fără buton Vezi, produs/preț diferit → fără avertisment, comandă anulată ignorată corect, toate 3 click-urile rezolvă acțiunea corectă, click pe fundal = Anulează, ca la un confirm() respins).',date:'2026-10-16'},
   {n:582,text:'Editor produs — corectat direct, imediat după #581: „dă-mi varianta deschisă la culoare, nu închisă, nu mă interesează — e greoi acest background închis". Tema întunecată a fost scoasă complet (fundal + text), înlocuită cu o variantă luminoasă/albă, în ton cu restul aplicației — modalul moștenește acum direct culorile deschise globale ale aplicației, fără nicio redefinire proprie de fundal/text. Rămân toate accentele „premium" care nu țin de culoarea de fundal: titluri cu font Space Grotesk, etichete de secțiune tip mono/majuscule, butonul „Salvează produs" cu gradient mov-turcoaz, umbre discrete. Organizarea pe coloane (Media / Identitate + Furnizori / Stoc + Caracteristici), „Mai multe detalii" pliat și cardul nou „Furnizori & surse" de pe #581 rămân neschimbate — doar culorile. Verificat de 2 ori: sintaxă JS, balans CSS (paranteze numărate programatic).',date:'2026-10-16'},
   {n:581,text:'Editor produs (popup-ul de adăugare/editare) — redesign complet, cerut direct: „premium, futurist și mai bine organizat", apoi „mai aerisit", apoi „puțin mai futurist". Vizual: temă întunecată dedicată DOAR acestui popup (restul aplicației rămâne neschimbat — scopat prin `.modal`, clasă exclusivă acestui element), accent mov-cyan, fonturi Space Grotesk/mono pentru titluri și etichete, glow discret pe cifrele cheie (Stoc actual), fără emoji ca iconițe noi. Organizare: tab „Informații produs" regrupat pe rol — Media / Identitate + Furnizori / Stoc + Caracteristici — în loc de 3 coloane fără legătură clară; „Dimensiuni / EasyBox / Note" sunt acum sub „▾ Mai multe detalii" (pliate implicit, `<details>` nativ, același tipar ca „Alt furnizor"), ca prima privire să nu fie încărcată. Funcție nouă: card „Furnizori & surse" apare acum ȘI pe tab-ul „Informații produs" (nu doar pe „Prețuri"), cerut direct — „informații despre produs de la al doilea, al treilea furnizor... atât la info produs, cât și la preț". Nu duplică datele sau formularul: `renderSupplierSources()` randează aceeași listă (din `supplierSourcesDraft`, deja existent, #389) în DOUĂ gazde deodată; „+ Adaugă sursă" de pe Info trece pe tab-ul Prețuri și deschide direct secțiunea reală, ca să nu existe id-uri duplicate. Nimic din funcții/câmpuri/id-uri nu a fost scos — toate cele ~80 de elemente și cele ~30 de funcții din #271 rămân identice, doar regrupate vizual. Verificat de 2 ori: sintaxă JS (node --check), balans HTML/CSS (paranteze/div-uri numărate programatic), toate id-urile critice confirmate unice (fără duplicate), 7 teste izolate noi pe `renderSupplierSources`/`goToAddSupplierSource` extrase din cod (dublă-gazdă, gazdă lipsă, draft gol, 3 surse indexate corect, navigare+deschidere details), rulate de 2 ori.',date:'2026-10-16'},
@@ -18240,11 +18241,35 @@ let pcomAutoRefreshStarted=false;
 // să nu consume degeaba din cota API când nimeni nu se uită. Reutilizează EXACT aceleași funcții
 // (importEmagApiOrders/importTrendyolApiOrders, silent=true) — nimic nou de verificat în logica de
 // potrivire/comitere, doar frecvența la care rulează.
+// Bug real, raportat direct („pe Trendyol nu mai încarcă comenzile, de ce?"): câmpurile „De la"/„Până
+// la" ale importului Trendyol se completau o SINGURĂ dată, la încărcarea paginii (vezi
+// refreshPcomAvailableOrdersOnLoad mai jos) — dacă tab-ul rămânea deschis peste miezul nopții (sau mai
+// multe zile), „Până la" rămânea înghețat la ziua deschiderii (ex. 19.10), în timp ce td() (ziua reală)
+// avansa (ex. 21.10). importTrendyolApiOrders citește STRICT din input.value, nu din td() — spre
+// deosebire de eMAG (importEmagApiOrders, /orders-new-and-in-progress, fără interval de date, mereu „la
+// zi"), Trendyol n-are alt API decât interval de date, deci era singurul afectat. Rezultat: atât
+// reîmprospătarea automată (la 5 minute) cât și un click manual pe „Adu comenzi Trendyol" interogau
+// un interval tot mai vechi, ratând tăcut comenzile din zilele scurse între timp — mesajul „Nicio linie
+// Trendyol nouă" era tehnic corect pentru intervalul (vechi) interogat, doar că intervalul însuși era
+// greșit. Avansăm aici intervalul la „zi" ori de câte ori rulează reîmprospătarea (la fiecare 5 minute,
+// deci cel mult atât de desincronizat poate rămâne), păstrând aceeași lățime de fereastră — un click
+// manual, cu date alese explicit de om, nu e atins (funcția de mai jos rulează DOAR din fluxul automat).
+function pcxKeepTrendyolDateRangeFresh(){
+  const trendStart=document.getElementById('pcx-trendyol-date-start'),trendEnd=document.getElementById('pcx-trendyol-date-end');
+  if(!trendStart||!trendEnd||!trendStart.value||!trendEnd.value)return;
+  const today=td();
+  if(trendEnd.value>=today)return;
+  const spanDays=Math.round((new Date(trendEnd.value+'T00:00:00Z')-new Date(trendStart.value+'T00:00:00Z'))/86400000);
+  const newStart=new Date(today+'T00:00:00Z');newStart.setUTCDate(newStart.getUTCDate()-Math.min(Math.max(spanDays,0),13));
+  trendEnd.value=today;
+  trendStart.value=newStart.toISOString().slice(0,10);
+}
 async function runPcomSilentImport(){
   // Golim o singură dată, aici, înainte de a porni ambele importuri — fiecare, rulat individual
   // (silent=false, din buton), tot golește-și-retaghează ca înainte; doar varianta silențioasă,
   // concurentă, sare peste acel pas ca să nu se șteargă reciproc flag-urile „NOU”.
   pcImpParsed.forEach(x=>delete x._recentImport);
+  pcxKeepTrendyolDateRangeFresh();
   await Promise.allSettled([importEmagApiOrders(true),importTrendyolApiOrders(true)]);
 }
 async function refreshPcomAvailableOrdersOnLoad(){
