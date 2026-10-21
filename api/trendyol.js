@@ -30,6 +30,20 @@ async function requestPackages(sellerId,authorization,status,startDate,endDate){
   }
   return rows;
 }
+// Căutare directă după numărul comenzii (cerut direct — „în zona de search, cum avem pentru eMAG să
+// căutăm strict acea comandă, să avem și pentru Trendyol"): echivalentul Trendyol al /order-by-id de la
+// eMAG. `orderNumber` e documentat ca filtru independent pe getShipmentPackages (developers.trendyol.com/
+// v3.0/reference/getshipmentpackages — startDate/endDate/status sunt toate opționale, nu condiționate de
+// orderNumber) — spre deosebire de requestPackages de mai sus, NU trimitem `status`, ca să găsească
+// comanda indiferent de stare (Created/Picking/Invoiced/Shipped/Delivered/...), la fel cum căutarea eMAG
+// găsește indiferent de status, nu doar Nou/În lucru ca la importul normal.
+async function requestPackageByOrderNumber(sellerId,authorization,orderNumber){
+  const q=new URLSearchParams({orderNumber,page:'0',size:'50'});
+  const r=await fetch(`${BASE}/integration/order/sellers/${encodeURIComponent(sellerId)}/v2/orders?${q}`,{headers:{authorization,'user-agent':`${sellerId} - SelfIntegration`,accept:'application/json'}});
+  const text=await r.text();let data={};try{data=text?JSON.parse(text):{};}catch(e){data={message:text};}
+  if(!r.ok)throw new Error(data.message||data.error||`Trendyol API ${r.status}`);
+  return Array.isArray(data.content)?data.content:[];
+}
 function packageLines(pack){
   const customer=[pack.customerFirstName,pack.customerLastName].filter(Boolean).join(' ').trim()||pack.deliveryAddress?.fullName||'';
   const lines=Array.isArray(pack.lines)?pack.lines:[];
@@ -59,6 +73,14 @@ module.exports=async function handler(req,res){
   try{
     if(req.method!=='POST')return res.status(405).json({error:'Folosește POST'});
     const body=bodyOf(req),action=String(body.action||'');
+    if(action==='order-by-number'){
+      const orderNumber=String(body.orderNumber||'').trim();
+      if(!orderNumber)return res.status(400).json({error:'Introdu numărul comenzii Trendyol'});
+      const {sellerId,authorization}=config();
+      const packages=await requestPackageByOrderNumber(sellerId,authorization,orderNumber);
+      const lines=packages.flatMap(packageLines).filter(x=>x.comandaId&&x.titluExtern);
+      return res.status(200).json({orderNumber,packages:packages.length,lines});
+    }
     if(action!=='orders'&&action!=='orders-historical')return res.status(400).json({error:'Acțiune Trendyol necunoscută'});
     const statuses=action==='orders-historical'?HISTORICAL_STATUSES:OPEN_STATUSES;
     const startDate=day(body.startDate),endDate=day(body.endDate)||startDate;
