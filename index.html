@@ -1278,6 +1278,18 @@ tr:hover td{background:var(--surf2)}
 .rpt-cards-hint{margin-top:10px;text-align:center;font-size:26px;color:var(--t3)}
 .rpt-cards-hint kbd{display:inline-block;min-width:20px;padding:2px 6px;border-radius:5px;border:1px solid var(--b1);background:var(--surf2);font-family:var(--mono);font-size:25px;color:var(--t1)}
 @media(max-width:640px){.rpt-cards-hint{display:none}}
+/* Modul dedicat „doar carduri" (#raport/cards) — cerut direct: „un link dedicat... să apară doar stocul
+   de actualizat... să punem pe alt laptop să se refacă stocul". body.rpt-kiosk (pornit din openHashRoute)
+   ascunde sidebar-ul și tot restul paginii Raport stoc — strict CSS, nicio logică nouă, datele/funcțiile
+   cardurilor rămân exact cele deja existente. Linkul de ieșire rămâne vizibil DOAR în acest mod. */
+.rpt-kiosk-exit{display:none}
+body.rpt-kiosk{margin-left:0}
+body.rpt-kiosk .sidebar{display:none}
+body.rpt-kiosk #rpt-catalog-card,body.rpt-kiosk #rpt-furnizor-card,body.rpt-kiosk .rpt-toolbar,body.rpt-kiosk #rpt-stats,body.rpt-kiosk #rpt-table-wrap,body.rpt-kiosk #rpt-kiosk-link-btn,body.rpt-kiosk .prep-widget{display:none}
+body.rpt-kiosk .rpt-kiosk-exit{display:block;text-align:center;margin:4px 0 16px}
+body.rpt-kiosk .rpt-kiosk-exit a{color:var(--t3);font-size:20px;text-decoration:none}
+body.rpt-kiosk .rpt-kiosk-exit a:hover{color:var(--acc)}
+body.rpt-kiosk #page-raport .wrap{max-width:720px;margin:32px auto;padding:0 16px}
 
 /* ── PRINT ── */
 @media print {
@@ -3159,7 +3171,7 @@ button.pcx-include-btn.included{border-color:var(--gr)}
 <!-- PAGE JURNAL -->
 <!-- PAGE RAPORT STOC -->
 <div id="page-raport" class="page"><div class="wrap">
-  <div class="card" style="padding:1rem 1.25rem;margin-bottom:1rem">
+  <div class="card" id="rpt-catalog-card" style="padding:1rem 1.25rem;margin-bottom:1rem">
     <div class="sec" style="margin-top:0">🔍 Compară catalog furnizor</div>
     <div style="font-size:22px;color:var(--t3);margin-bottom:8px">Lipește linkul unei pagini de categorie/catalog a unui furnizor (ex. Jumbo) — citim produsele de-acolo și îți arătăm ce NU avem încă în stoc.</div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
@@ -3174,9 +3186,15 @@ button.pcx-include-btn.included{border-color:var(--gr)}
     <div id="rpt-furnizor-list"></div>
   </div>
   <!-- Carduri produse (actualizare rapidă stoc) — primul lucru vizibil, e principalul motiv de a intra pe pagină -->
+  <div id="rpt-kiosk-exit" class="rpt-kiosk-exit"><a href="javascript:void(0)" onclick="rptExitKiosk()">← Ieși din modul dedicat — vezi tot raportul</a></div>
   <div class="rpt-cards-wrap">
     <div class="rpt-cards-head">
       <div class="tb-title" style="font-size:27px">🗂️ Actualizare rapidă stoc — carduri produse</div>
+      <!-- Link dedicat (cerut direct — „să putem pune pe alt laptop să se refacă stocul"): #raport/cards
+           deschide pagina direct în modul „doar carduri" (sidebar + restul raportului ascunse prin CSS,
+           body.rpt-kiosk, vezi openHashRoute) — nimic nou de date, strict afișare, ca pe alt dispozitiv
+           să nu apară decât ce trebuie actualizat, fără riscul de a atinge din greșeală altceva din app. -->
+      <button type="button" class="btn btn-sm" id="rpt-kiosk-link-btn" onclick="rptCopyKioskLink()" title="Copiază un link care deschide direct această vedere, fără restul aplicației — util pe alt laptop/tabletă">🔗 Link dedicat (alt laptop)</button>
       <div class="rpt-card-search-wrap">
         <input type="text" id="rpt-card-search" class="rpt-card-search" placeholder="🔍 Caută produs (nume/SKU/cod intern)…" oninput="rptCardSearchInput(this.value)" onkeydown="if(event.key==='Escape'){this.value='';rptCardSearchInput('')}" onblur="setTimeout(()=>{const b=document.getElementById('rpt-card-search-results');if(b)b.style.display='none';},180)">
         <div id="rpt-card-search-results" class="rpt-card-search-results" style="display:none"></div>
@@ -4660,6 +4678,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:586,text:'Raport stoc — link dedicat „doar carduri" pentru actualizare rapidă de stoc pe alt dispozitiv, cerut direct: „să avem un link dedicat... unde să apară doar stocul de actualizat... să putem pune pe alt laptop să se refacă stocul". Buton nou „🔗 Link dedicat (alt laptop)", lângă titlul „Actualizare rapidă stoc" — copiază un link (`#raport/cards`) care, deschis pe orice alt dispozitiv, ascunde complet restul aplicației (sidebar, comparare catalog furnizor, marfă așteptată, tabelul/toolbar-ul raportului, cronometrul „Start comenzi") și arată STRICT cardurile de produs cu actualizare de stoc — navigare cu ←/→, căutare, „Actualizează stoc" cu Enter, exact funcțiile deja existente, nimic nou de logică, strict afișare (CSS, body.rpt-kiosk). Link „← Ieși din modul dedicat" readuce tot raportul normal. Verificat de 2 ori: sintaxă + balans CSS + 7 teste izolate pe funcția reală de rutare (activare pe #raport/cards, rămâne inactiv pe #raport simplu sau altă pagină, dezactivare automată la navigare înapoi, rută necunoscută ignorată fără efect, link copiat corect, ieșirea setează hash-ul corect).',date:'2026-10-21'},
   {n:585,text:'Comenzi Platforme — căutarea unei comenzi exacte, după număr, funcționează acum și pentru Trendyol, nu doar eMAG — cerut direct: „în zona de search, cum avem pentru eMAG să căutăm strict acea comandă, să avem și pentru Trendyol". Apare în ambele locuri unde exista deja butonul „🔍 Caută pe eMAG după acest număr": căutarea principală din previzualizare (#pcx-search, când numărul tastat nu corespunde nimic local) și cardul „↺ Reactivează comandă finalizată". Găsește comanda Trendyol INDIFERENT de status (Created/Picking/Invoiced/Shipped/Delivered/...), spre deosebire de „Adu comenzi Trendyol" (importul normal, limitat la 3 statusuri deschise + maximum 14 zile) — API-ul Trendyol acceptă `orderNumber` ca filtru independent (fără status/interval de date obligatorii, verificat direct în documentația oficială developers.trendyol.com), nouă acțiune `order-by-number` adăugată în api/trendyol.js. Comanda adusă astfel rămâne „Neinclus" până la confirmare explicită (AWB gol — căutare manuală, nu citire etichetă), exact ca la eMAG. Verificat de 2 ori: sintaxă (index.html + api/trendyol.js) + 9 teste izolate pe funcțiile reale extrase din cod (comandă găsită/negăsită/deja-în-previzualizare/eroare de rețea, toast-uri și buton reactivat corect, ambele puncte de intrare — căutarea principală și reactivarea).',date:'2026-10-21'},
   {n:584,text:'Comenzi Platforme — bug real reparat, raportat direct: „pe Trendyol nu mai încarcă comenzile, de ce?". Cauza: câmpurile „De la"/„Până la" ale importului Trendyol se completau o SINGURĂ dată, la încărcarea paginii — dacă tab-ul rămânea deschis peste miezul nopții (sau mai multe zile), „Până la" rămânea înghețat la ziua deschiderii (ex. 19.10), în timp ce ziua reală avansa (ex. 21.10) — atât reîmprospătarea automată (la 5 minute), cât și un click manual pe „Adu comenzi Trendyol" interogau tăcut un interval tot mai vechi, ratând comenzile din zilele scurse între timp; mesajul „Nicio linie Trendyol nouă" era tehnic corect pentru intervalul (vechi) interogat, doar că intervalul însuși era greșit. eMAG nu era afectat — are alt API, fără interval de date, mereu „la zi". Acum intervalul avansează singur, la fiecare reîmprospătare automată, păstrând aceeași lățime de fereastră (plafonată la 13 zile, limita Trendyol) — un click manual cu date alese explicit de om nu e atins. Verificat de 2 ori: sintaxă + 6 teste izolate pe funcția reală extrasă din cod (avansare păstrând lățimea ferestrei, interval deja la zi → neschimbat, câmpuri goale/elemente lipsă → fără crash, fereastră îngustă de 1 zi, fereastră peste limita de 14 zile → plafonată corect).',date:'2026-10-21'},
   {n:583,text:'Comenzi Platforme — avertismentul de duplicat Vinted (ex. „«Set costum înger...» pare deja înregistrat pe ... ȘI E DEJA ÎMPACHETATĂ") are acum 3 opțiuni, nu doar Anulează/Adaugă oricum — cerut direct: „să poți selecta acea comandă, dacă există deja". A treia — „🔍 Vezi comanda existentă" — te duce direct pe ea: trece pe Comenzi Platforme și filtrează căutarea exact pe numărul acelei comenzi (reutilizează goToPcomIssue, deja folosit de clopoțelul de notificări — nimic nou de navigare/highlight). Apare doar când duplicatul e o comandă deja comisă în bază (găsită prin căutare, cu număr real de comandă) — dacă e doar un rând din lista pe care tocmai o construiești (încă necomisă), rămân doar Anulează/Adaugă oricum, pentru că n-ar avea unde naviga. Verificat de 2 ori: sintaxă + 8 teste izolate pe funcțiile reale extrase din cod (comandaId păstrat corect din comanda găsită, cazul „încă în previzualizare" fără buton Vezi, produs/preț diferit → fără avertisment, comandă anulată ignorată corect, toate 3 click-urile rezolvă acțiunea corectă, click pe fundal = Anulează, ca la un confirm() respins).',date:'2026-10-16'},
@@ -26144,6 +26163,16 @@ function rptCardGhost(p,side){
     <div class="rpt-card-title">${esc(p.name||'—')}</div>
   </div>`;
 }
+// Link dedicat + ieșire din modul „doar carduri" — vezi openHashRoute (toggle body.rpt-kiosk) și regulile
+// CSS corespunzătoare. rptExitKiosk() nu dezactivează clasa direct — doar schimbă hash-ul la #raport,
+// care declanșează hashchange → openHashRoute('#raport') → toggle cu condiția falsă → dezactivare automată,
+// fără cod duplicat.
+function rptCopyKioskLink(){
+  copyText(location.origin+location.pathname+'#raport/cards');
+}
+function rptExitKiosk(){
+  location.hash='raport';
+}
 function renderRaportCards(prods){
   rptCardProds=prods;
   if(rptCardIdx>=prods.length)rptCardIdx=Math.max(0,prods.length-1);
@@ -26796,6 +26825,10 @@ function openHashRoute(raw){
   const sub=slash<0?'':h.slice(slash+1);
   if(!document.getElementById('page-'+page))return;
   goPage(page);
+  // Modul dedicat „doar carduri" (#raport/cards) — vezi regulile body.rpt-kiosk din CSS. toggle cu
+  // condiție explicită: orice altă rută (inclusiv #raport simplu, din linkul de ieșire) îl dezactivează
+  // automat, fără cod separat de „ieșire”.
+  document.body.classList.toggle('rpt-kiosk',page==='raport'&&sub==='cards');
   if(page==='research'&&sub){
     const pid=Number(sub);
     const tryOpen=(n)=>{
