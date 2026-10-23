@@ -4702,6 +4702,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:589,text:'Asociază AWB-uri — 2 reparații directe, cerute explicit după o investigație reală („vreau să rezolvi să nu mai avem astfel de probleme în viitor"), pe 2 bug-uri reale confirmate cu date live (comanda PRO-VITAM SRL). (1) Comandă deja scrisă greșit în bază cu AWB „0219282" — un fragment din telefonul fix Cargus, tipărit identic pe fiecare etichetă standard eMAG→Cargus („Tel.: 0219330 / 0219282"), în loc de adevăratul „Nota:" (1209973512). Regexul care citește „Nota:" era prea permisiv (`\d{8,12}`) — strâns acum la exact 10 cifre, cât au toate etichetele Cargus reale văzute până acum. Adăugată și o a doua plasă de siguranță, universală (`awbLooksPlausible`), verificată în AMBELE bucle de citire AWB — indiferent pe ce cale ar ieși vreodată din nou o valoare implauzibilă (acest regex sau fallback-ul AI, pe text zgomotos/reordonat de PDF.js), nu mai e acceptată tăcut — cade pe calea deja existentă „format nerecunoscut, verifică manual". (2) Bug real suplimentar, paralel cu #588: „Alege PDF-uri" (selectarea manuală de fișiere, spre deosebire de „📂 Citește din dosar") nu avea DELOC verificarea împotriva comenzilor „Neinclus" din previzualizare, nici căutarea directă pe eMAG după număr (indiferent de status) — o comandă necomisă, citită printr-un PDF ales manual, rămânea mereu „negăsită". Adusă acum la paritate completă cu „Citește din dosar". Verificat de 2 ori: sintaxă + 8 teste izolate (15 verificări) pe funcțiile reale extrase din cod (regex strâns la 10 cifre, plasa de siguranță respinge exact valoarea greșită găsită live + variante de lungime greșită, neatinsă pentru alți curieri, ambele comenzi reale — PRO-VITAM/Ana vlasie — rămân extrase corect).',date:'2026-10-23'},
   {n:588,text:'Asociază AWB-uri — bug real, important, reparat, raportat direct cu etichetă FAN Courier reală atașată (AWB 7000171946886, Continut 11691606915) + captură: „de ce nu se asociază AWB-ul comenzii?" — o comandă Trendyol clar vizibilă în Comenzi Platforme, „Neinclus", rămânea permanent „negăsită sau ambiguă" la citirea etichetei, deși produsul era deja potrivit și eticheta conținea exact numărul ei de comandă. Cauza: potrivirea de bază (🏭 FAN Courier, câmpul „Continut" = comanda_id exact, cel mai folosit format) verifica STRICT comenzile deja scrise în bază (platforma_comenzi) — dacă nu găsea nimic acolo, încerca un singur fallback, STRICT pentru eMAG (căutare directă pe eMAG după număr), fără nicio verificare împotriva comenzilor „Neinclus" încă în previzualizare (pcImpParsed). Mecanismul corect (`_pendingMatch`, scrie AWB-ul direct pe linia din previzualizare și o comite automat — „AWB asociat cu succes = comandă inclusă automat") EXISTA deja, folosit corect la alte formate (Vinted/Cargus), doar că drumul standard FAN Courier/Trendyol nu-l apela niciodată. Acum verifică și pcImpParsed, indiferent de platformă (eMAG/Trendyol/Vinted/OLX), înainte de fallback-ul eMAG — nimic nou de scris, doar lookup-ul care lipsea. Verificat de 2 ori: sintaxă + 5 teste izolate (15 verificări) pe funcția reală extrasă din cod (cazul exact raportat — comandă Trendyol „Neinclus" găsită prin pcImpParsed, fără apel inutil la eMAG —, regresie pe comandă deja comisă în bază neatinsă, aceeași reparație funcționează și pentru eMAG „Neinclus" nu doar Trendyol, comandă negăsită nicăieri rămâne corect negăsită, comandă deja comisă — cu _committedId — tratată corect ca „nu mai e Neinclus", nu confundată).',date:'2026-10-22'},
   {n:587,text:'Raport stoc — 2 corecții directe pe modul dedicat „doar carduri" (#586), raportate cu o captură reală de pe link-ul dedicat. (1) Bug real: „VALOARE COST/VALOARE VÂNZARE" de jos tot apăreau, deși trebuiau ascunse — cauza, #rpt-stats are `display:grid` scris direct în `style=""` în șablon, iar un stil inline bate orice regulă CSS externă fără `!important`; adăugat acum. (2) „Mai mare, potrivit pentru laptop/tabletă" + „căsuța mai mare unde se scrie stocul" — cardul și tot ce ține de el sunt mărite substanțial STRICT în acest mod (lățime card 360→600px, poză 252→400px, titlu 30→40px, câmpul de stoc nou 27→42px cu padding mult mai generos) — vederea normală din Raport stoc, neatinsă. Verificat de 2 ori: sintaxă + balans CSS (nicio logică nouă, strict regulile de afișare).',date:'2026-10-21'},
   {n:586,text:'Raport stoc — link dedicat „doar carduri" pentru actualizare rapidă de stoc pe alt dispozitiv, cerut direct: „să avem un link dedicat... unde să apară doar stocul de actualizat... să putem pune pe alt laptop să se refacă stocul". Buton nou „🔗 Link dedicat (alt laptop)", lângă titlul „Actualizare rapidă stoc" — copiază un link (`#raport/cards`) care, deschis pe orice alt dispozitiv, ascunde complet restul aplicației (sidebar, comparare catalog furnizor, marfă așteptată, tabelul/toolbar-ul raportului, cronometrul „Start comenzi") și arată STRICT cardurile de produs cu actualizare de stoc — navigare cu ←/→, căutare, „Actualizează stoc" cu Enter, exact funcțiile deja existente, nimic nou de logică, strict afișare (CSS, body.rpt-kiosk). Link „← Ieși din modul dedicat" readuce tot raportul normal. Verificat de 2 ori: sintaxă + balans CSS + 7 teste izolate pe funcția reală de rutare (activare pe #raport/cards, rămâne inactiv pe #raport simplu sau altă pagină, dezactivare automată la navigare înapoi, rută necunoscută ignorată fără efect, link copiat corect, ieșirea setează hash-ul corect).',date:'2026-10-21'},
@@ -23249,6 +23250,21 @@ let awbEmagLookupFileNames=[];
 // doar pentru DPD („CANCELED”, 3 etichete) — restul cuvintelor (ANULAT/STORNAT/VOID) sunt o plasă de
 // siguranță pentru celelalte curiere, netestată încă pe etichete reale ale lor.
 const AWB_CANCEL_RE=/\b(CANCELED|CANCELLED|ANULAT|STORNAT|VOID)/i;
+// Plasă de siguranță comună, a doua linie de apărare (prima e regexul propriu-zis mai strict al
+// fiecărui format, ex. Cargus mai jos) — cerut direct, pe un bug real cu comandă reală (PRO-VITAM SRL,
+// AWB salvat greșit „0219282", un fragment din telefonul fix Cargus, tipărit identic pe fiecare etichetă:
+// „Tel.: 0219330 / 0219282") — „să rezolvi să nu mai avem astfel de probleme în viitor". Indiferent de
+// care anume cale ar produce vreodată din nou o valoare implauzibilă (regex specific SAU fallback-ul AI
+// universal, pe text zgomotos/reordonat de PDF.js), verificată aici, chiar înainte să intre în `pairs` —
+// vezi readAwbFolderPdfs/handleAwbPdfFile — ca să nu mai poată ajunge NICIODATĂ scrisă tăcut în bază.
+const AWB_KNOWN_FALSE_POSITIVES=new Set(['0219330','0219282']);
+function awbLooksPlausible(awb,courier){
+  const a=String(awb||'').trim();
+  if(!a)return false;
+  if(AWB_KNOWN_FALSE_POSITIVES.has(a))return false;
+  if(courier==='Cargus'&&!/^\d{10}$/.test(a))return false;
+  return true;
+}
 function parseAwbLabelText(text){
   const canceled=AWB_CANCEL_RE.test(text);
   // Curierul e reținut de-acum pe fiecare format (cerut direct — Staff arată numele curierului direct
@@ -23430,7 +23446,15 @@ function parseAwbLabelText(text){
   // Collect. Telefonul destinatarului (+40.........) e reținut separat, doar informativ — nu există
   // încă un câmp de telefon salvat pe comenzile eMAG locale, cu care să fie comparat automat.
   if(/Cargus SRL/.test(text)){
-    const cargusStdM=text.match(/Destinatar:\s*([^\n]+)\n\s*(\d{8,12})\b/);
+    // Bug real, raportat direct, cu comandă reală (PRO-VITAM SRL): AWB-ul salvat a ieșit „0219282" — un
+    // fragment din telefonul fix FIX, tipărit identic pe fiecare etichetă Cargus („Tel.: 0219330 /
+    // 0219282"), nu adevăratul „Nota:" (1209973512). `\d{8,12}` era prea permisiv — un „Nota:" Cargus e
+    // ÎNTOTDEAUNA exact 10 cifre (verificat pe toate etichetele reale văzute până acum, pe mai multe
+    // zile diferite) — strâns acum la exact 10, ca un asemenea fragment scurt să nu mai poată trece
+    // niciodată drept AWB. A doua plasă de siguranță, mai generală (awbLooksPlausible, verificată mai
+    // jos în bucla de potrivire) — acoperă și varianta în care valoarea greșită ar veni din altă cale
+    // (ex. fallback-ul AI, pe text zgomotos/reordonat de PDF.js), nu doar din acest regex.
+    const cargusStdM=text.match(/Destinatar:\s*([^\n]+)\n\s*(\d{10})\b/);
     if(cargusStdM){
       const destinatar=cargusStdM[1].trim(),awb=cargusStdM[2];
       const phones=[...text.matchAll(/\+40\d{9}\b/g)].map(m=>m[0]);
@@ -23911,12 +23935,14 @@ async function handleAwbPdfFile(ev){
         if(p&&p.courierCanceled)awbCanceledPages.push({label,awb:p.awb,comandaId:p.comandaId,file:file.name,page:i+1});
         // _blob — reținut și pentru previzualizarea vizuală AWB (randată mai târziu, la
         // applyAwbAssociation — vezi generateAwbPreviewInBackground); `file` e deja un Blob (File).
+        else if(p&&!awbLooksPlausible(p.awb,p.courier))awbUnrecognizedPages.push({label,file:file.name,page:i+1});
         else if(p)pairs.push({...p,file:file.name,page:i+1,_blob:file});
         else awbUnrecognizedPages.push({label,file:file.name,page:i+1});
       }
     }
     if(!pairs.length&&!awbUnrecognizedPages.length&&!awbCanceledPages.length)throw new Error('PDF-ul pare gol.');
     const results=[];
+    let awbEmagLookupCreated=0;
     for(const p of pairs){
       // Variantă generală, nu doar Vinted — vezi resolveAwbByNameAndAmount/pendingImportRowSnapshot:
       // rezolvările AI cross-platform (nume+sumă) pot ateriza pe o linie „Neinclus" de pe ORICE
@@ -23925,6 +23951,18 @@ async function handleAwbPdfFile(ev){
       if(p._pendingMatch){results.push({...p,rows:pendingImportRowSnapshot(p.comandaId)});continue;}
       if(!p.comandaId){results.push({...p,rows:[]});continue;}
       const rows=await dbGet(`platforma_comenzi?comanda_id=eq.${p.comandaId}&select=id,platforma,client_nume,produs_nume,awb`);
+      // Bug real, raportat direct („de ce nu se asociază AWB-ul comenzii?"): acest punct de intrare
+      // (selectare manuală de PDF-uri — spre deosebire de readAwbFolderPdfs, „📂 Citește din dosar") nu
+      // verifica DELOC previzualizarea locală (pcImpParsed) pentru o comandă încă „Neinclus" — doar baza
+      // de date, apoi nimic. O comandă „Neinclus" la citirea unui PDF ales manual rămânea deci mereu
+      // „negăsită", indiferent de platformă. Aceeași reparație ca la readAwbFolderPdfs — `_pendingMatch`
+      // declanșează fluxul deja existent (applyOneAwbMatch scrie AWB-ul direct pe linie și o comite).
+      if(!rows.length){
+        if(findPendingImportLineByComandaId(p.comandaId)){results.push({...p,rows:pendingImportRowSnapshot(p.comandaId),_pendingMatch:true});continue;}
+        const r=await pcomFetchAndCreateEmagOrderById(p.comandaId,p.awb,p.file,p.page,p.courier);
+        if(r.committed){awbEmagLookupCreated+=r.committed;continue;}
+        if(r.found){results.push({...p,rows:[],emagFoundUnmatched:true,reason:'Comandă eMAG găsită, dar produsul nu a fost recunoscut automat — verifică „Comenzi Platforme" (linia a rămas „Neinclus", cu AWB-ul deja completat)'});continue;}
+      }
       results.push({...p,rows});
     }
     // La fel ca liniile matched — dacă eticheta anulată chiar are comanda_id (nu doar DPD, care n-are
@@ -23935,7 +23973,8 @@ async function handleAwbPdfFile(ev){
     }
     awbParsed=results;
     renderAwbPreview();
-    toast(`${files.length} PDF-uri citite · ${results.length} etichete recunoscute${awbUnrecognizedPages.length?` · ${awbUnrecognizedPages.length} necesită verificare`:''}`);
+    if(awbEmagLookupCreated)renderPcomImportPreview();
+    toast(`${files.length} PDF-uri citite · ${results.length} etichete recunoscute${awbEmagLookupCreated?` · ${awbEmagLookupCreated} comenzi eMAG găsite direct după număr (indiferent de status)`:''}${awbUnrecognizedPages.length?` · ${awbUnrecognizedPages.length} necesită verificare`:''}`);
   }catch(e){
     toast('Eroare PDF: '+e.message,'err');
   }
@@ -24148,6 +24187,7 @@ async function readAwbFolderPdfs(fromArchive){
           // deși aveau AWB): spre deosebire de handleAwbPdfFile (selectare manuală), bucla asta nu reținea
           // NICIODATĂ numărul paginii — awb_source_page rămânea mereu null, deci activeAwbPrintOrders nu
           // găsea niciodată o pagină sursă de tipărit, oricâte comenzi ar fi fost incluse.
+          else if(p&&!awbLooksPlausible(p.awb,p.courier))awbUnrecognizedPages.push({label:`${f.name} p.${i+1}`,file:f.name,page:i+1});
           else if(p)pairs.push({...p,file:f.name,page:i+1,_blob:blob});
           else awbUnrecognizedPages.push({label:`${f.name} p.${i+1}`,file:f.name,page:i+1});
         }
