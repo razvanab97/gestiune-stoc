@@ -3205,6 +3205,21 @@ button.pcx-include-btn.included{border-color:var(--gr)}
     </div>
     <div id="rpt-catalog-results"></div>
   </div>
+  <!-- Listă internă „ce vrem să comandăm" (cerut direct: „sa avem un buton prin care sa selectam ce am
+       vrea sa comandam ca produs, ca o lista... si bifam ca vrem sa le cumparam, ce stoc mai este") —
+       aceeași listă REORDER folosită deja la Comenzi Platforme → „De comandat" (un singur loc de adevăr,
+       nu o listă paralelă), doar că aici se poate adăuga ORICE produs liber, prin căutare, nu doar automat
+       (stoc 0/1 la vânzare) sau din avertismentul „Import comenzi". Afișează doar luna curentă — istoricul
+       lunilor vechi rămâne de consultat în Comenzi Platforme, unde există deja selectorul de lună. -->
+  <div class="card" id="rpt-reorder-card" style="padding:1rem 1.25rem;margin-bottom:1rem">
+    <div class="sec" style="margin-top:0">📝 Produse de comandat</div>
+    <div style="font-size:22px;color:var(--t3);margin-bottom:8px">Listă internă, nu o comandă reală — caută și adaugă orice produs la care te gândești să-l recomanzi, ca să vezi aici stocul lui curent înainte să decizi. Bifează „✓ Comandat" când chiar îl comanzi; pentru comanda efectivă plasată la furnizor, folosește „📥 Comandă furnizor" din Inventar.</div>
+    <div class="rpt-card-search-wrap" style="max-width:420px;margin-bottom:10px">
+      <input type="text" id="rpt-reorder-search" class="rpt-card-search" placeholder="🔍 Adaugă produs la listă (nume/SKU/cod intern)…" oninput="rptReorderSearchInput(this.value)" onkeydown="if(event.key==='Escape'){this.value='';rptReorderSearchInput('')}" onblur="setTimeout(()=>{const b=document.getElementById('rpt-reorder-search-results');if(b)b.style.display='none';},180)">
+      <div id="rpt-reorder-search-results" class="rpt-card-search-results" style="display:none"></div>
+    </div>
+    <div id="rpt-reorder-list"></div>
+  </div>
   <div class="card" id="rpt-furnizor-card" style="padding:1rem 1.25rem;margin-bottom:1rem;display:none">
     <div class="sec" style="margin-top:0">📥 Marfă așteptată de la furnizor</div>
     <div style="font-size:22px;color:var(--t3);margin-bottom:8px">Comenzi plasate la furnizor, încă pe drum — urmărirea sosirii (✗ Nu a ajuns / ◐ A ajuns) se face din Staff, tab „Marfă furnizor". Aici e doar o privire de ansamblu.</div>
@@ -4707,6 +4722,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:601,text:'Raport stoc — 2 completări cerute direct pe „Marfă așteptată de la furnizor". (1) Buton „🗑️" pe fiecare comandă din listă — șterge complet acea comandă (toate liniile ei), pentru import dublat din greșeală, comandă de test sau anulată înainte să fi fost trimisă efectiv la furnizor; cere confirmare, e ireversibil, și nu atinge „finalizat" (acela înseamnă „a sosit", folosit de fluxul din Staff, sens diferit de „a fost o greșeală"). (2) Card nou „📝 Produse de comandat", cu căutare+adăugare liberă — cerut direct: „sa avem un buton prin care sa selectam ce am vrea sa comandam ca produs, ca o lista... si bifam ca vrem sa le cumparam, ce stoc mai este sau daca nu este stoc". Reutilizează lista „De comandat" deja existentă în Comenzi Platforme (un singur loc de adevăr, nu o listă paralelă — un produs adăugat din oricare din cele 2 locuri apare în ambele), până acum populată DOAR automat (stoc 0/1 la o vânzare) sau din avertismentul „Import comenzi"; acum se poate căuta și adăuga liber orice produs, din Raport stoc, indiferent de stocul lui curent. Fiecare rând arată acum stocul curent al produsului („Stoc N" sau „Fără stoc") — lipsea complet până acum, în ambele locuri unde apare lista. Verificat de 2 ori: sintaxă + 40 de verificări izolate pe funcțiile reale extrase din cod (grupare/ștergere comandă — confirmare refuzată, offline, grup cu mai multe linii, eroare server, alt grup neatins —, afișare stoc 0/negativ/pozitiv/produs șters, căutare exclude arhivate și arată stocul, adăugare din căutare integrată cap-coadă cu lista reală, inclusiv regresia „deja pe listă" existentă).',date:'2026-10-27'},
   {n:600,text:'Asociază AWB-uri — citire completă a arhivei locale (`~/Desktop/AWB-uri/`, 363 fișiere reale), cerută direct: „citeste toate awb urile si invata toate tipurile de AWB uri care pot exista... sa fie bine integrate". 4 reparări de regex, găsite prin citire DIRECTĂ (pdftotext -layout, nu presupunere) a textului real extras din fiecare etichetă. (1) Etichetă digitală Vinted (ambele variante — cu/fără produs): extragerea reală de text introduce 2-4 rânduri GOALE între segmentele vizual separate pe etichetă — niciuna din cele 32 de etichete reale nu se potrivea (separatorul cerea un singur `\n` strict); tolerăm acum orice număr de rânduri goale. Pe drum, un AL DOILEA bug, găsit la re-testare, mai subtil: varianta „cu produs" ajunsese totuși să „potrivească", greșit, DOAR caracterul invizibil de final de pagină (`\f`) ca linie de produs — rezultatul ieșea gol, iar fallback-ul pentru varianta minimală (fără produs) nu se mai încerca deloc, pentru că regexul CHIAR se potrivise (inutil, dar tehnic nenul); ultimele 2 segmente cer acum explicit cel puțin un caracter real, nu orice caracter care nu e linie nouă. (2) Etichetă proprie GLS (generateGlsLabelPdf): aceeași toleranță la rânduri goale, plus denumirea de produs poate ocupa până la 6 rânduri (generatorul însuși o împarte așa, pentru cele lungi) — unite acum cu spațiu, nu doar primul rând citit; adăugată și o variantă mai veche, găsită separat în arhivă (fără „PRODUS" ca prim rând, cu „COD:" simplu în loc de „COD DE EXPEDIERE"). (3) Cargus standard (eMAG): regexul presupunea greșit că AWB-ul („Nota:") apare pe rândul imediat următor numelui destinatarului — fals; eticheta e pe 2 coloane, iar extragerea de text lipește alt conținut (din coloana dreaptă — „Incercari permise...") pe același rând vizual cu „Destinatar: NUME". Fiecare câmp se citește acum independent, pe markerul lui propriu, nu unul relativ la celălalt. Rezultat, verificat pe toate cele 537 de pagini reale din arhivă: 100% recunoscute automat în toate categoriile, cu O SINGURĂ excepție rămasă — paginile genuin needitabile prin text (Sameday RO/crossborder randate ca imagine, ExpressOne Ungaria cu encoding corupt — confirmat direct cu `pdfimages`/`pdftotext`, nu presupunere), unde doar fallback-ul AI pe imagine, deja funcțional, mai poate citi. Verificat de 2 ori: sintaxă + 29 de verificări izolate pe funcțiile reale extrase din cod, pe text exact din etichetele reale (inclusiv bug-ul găsit la re-testare) + re-verificare completă, de 2 ori, pe toate cele 537 de pagini din arhivă.',date:'2026-10-26'},
   {n:599,text:'Asociază AWB-uri — bug MAJOR, confirmat printr-un apel DIRECT către AI-ul de producție, cu etichetă reală (Király Zoltánné, cod „67833 5089857 00001 36 04002"): AI-ul, citind pe imagine, întoarce codul FĂRĂ spații („678335089857000013604002"), în timp ce regexul de pe etichetele citite normal îl reține CU spații simple — ACELAȘI AWB fizic, două texte diferite. Verificarea universală „AWB deja asociat" de la #598, plus TOATE celelalte verificări „deja asociat" (Vinted, Cargus Click&Collect, Cargus eMAG, Sameday Ungaria — 8 locuri în total), comparau STRICT identic — nu recunoșteau niciodată o potrivire între o citire AI și una din regex/bază, pentru un cod cu spații, exact cazul care a declanșat tot acest fir („dacă există deja, de ce apare mai sus ca neasociat?"). Comparăm acum peste tot fără spații și fără sensibilitate la majuscule (`awbNorm`) — niciodată ce se SCRIE în bază, acolo formatarea originală, lizibilă, rămâne neschimbată. Verificat direct, live, printr-un apel real către `/api/openai` de producție cu eticheta reală (confirmat: AI-ul chiar citește corect numele+suma+AWB-ul, doar formatarea diferea) — apoi de 2 ori: sintaxă + 11 teste izolate pe funcțiile reale extrase din cod (cazul exact reprodus, simetric în ambele direcții, spații multiple, majuscule, AWB-uri genuin diferite tot resping corect, comandă anulată/input gol neschimbate).',date:'2026-10-26'},
   {n:598,text:'Asociază AWB-uri — 2 reparații majore, cerute direct: „fă sistemul să înțeleagă cum se asociază, care și cum și pe baza a ce" (clarificat: „asociere mai inteligentă, cu mai multe semnale") + 2 comenzi reale confirmate live în bază, deja corect asociate, dar tot afișate „negăsită" la recitire: „dacă există deja, de ce apare mai sus ca neasociat?" (Király Zoltánné #1136836907) și „încă o dată 550497435 - există și nu e asociat, de ce?" (Lumperdean Mihai #550497435, deja împachetat). (1) Semnal nou — conținutul coletului: AI-ul citește acum și descrierea produsului de pe etichetă (câmp nou, `produsText`, exclude explicit genericul „Marketplace"/„Colet"), folosit ALĂTURI de nume+sumă în potrivirea universală (`resolveAwbByNameAndAmount`) — scorul final e cel mai bun dintre nume și conținut, nu o medie, ca un semnal slab să nu-l tragă în jos pe celălalt, clar. (2) Cauza reală a celor 2 comenzi raportate: potrivirea verifica STRICT după comandaId (care poate ieși complet greșit — vezi „Ref. sz." de la #592/#594) sau excludea din candidați orice comandă care ARE DEJA un AWB — o etichetă recitită, cu AWB-ul deja scris corect pe o comandă, nu mai era recunoscută ca „deja rezolvată". Verificăm acum, universal și PRIMUL (înaintea oricărui lookup după comandaId), dacă AWB-ul citit există deja EXACT pe vreo comandă, indiferent de platformă/format/comandaId citit alături — semnalul cel mai sigur posibil. Verificat de 2 ori: sintaxă + 20 de teste izolate pe funcțiile reale extrase din cod (ambele comenzi reale reproduse exact, potrivire prin conținut fără nume disponibil, scor maxim nu medie, regresii pe comportamentul vechi neatinse, comandă anulată/AWB gol/substring parțial — toate corect ignorate).',date:'2026-10-26'},
@@ -5687,6 +5703,12 @@ async function loadStaffIssues(){
     renderFurnizorStockCard();
   }catch(e){console.warn('Nu s-au putut citi problemele raportate de Staff:',e);}
 }
+// Extrasă separat din renderFurnizorStockCard — folosită și la ștergerea unei comenzi întregi, mai jos
+// (deleteFurnizorOrderGroup), ca cele 2 locuri să nu poată ajunge vreodată să identifice grupuri diferit.
+function furnizorGroupKey(r){
+  // Fără număr de comandă, liniile aceluiași import au același created_at (un singur INSERT) — același grup.
+  return(r.furnizor||'—')+'|'+(r.comanda_ref||(r.created_at?('_batch'+String(r.created_at).slice(0,19)):('_row'+r.id)));
+}
 function renderFurnizorStockCard(){
   const card=document.getElementById('rpt-furnizor-card'),list=document.getElementById('rpt-furnizor-list');
   if(!card||!list)return;
@@ -5694,16 +5716,37 @@ function renderFurnizorStockCard(){
   if(!FURNIZOR_ADMIN.length){list.innerHTML='';return;}
   const groups={};
   FURNIZOR_ADMIN.forEach(r=>{
-    // Fără număr de comandă, liniile aceluiași import au același created_at (un singur INSERT) — același grup.
-    const key=(r.furnizor||'—')+'|'+(r.comanda_ref||(r.created_at?('_batch'+String(r.created_at).slice(0,19)):('_row'+r.id)));
-    (groups[key]=groups[key]||{furnizor:r.furnizor||'',comandaRef:r.comanda_ref||'',rows:[]}).rows.push(r);
+    const key=furnizorGroupKey(r);
+    (groups[key]=groups[key]||{key,furnizor:r.furnizor||'',comandaRef:r.comanda_ref||'',rows:[]}).rows.push(r);
   });
-  list.innerHTML=Object.values(groups).map(g=>`<div class="sec">${esc(g.furnizor||'Furnizor')}${g.comandaRef?' · #'+esc(g.comandaRef):''} (${g.rows.length})</div>${g.rows.map(r=>{
-    const p=r.produs_id?P.find(x=>x.id===r.produs_id):null;
-    const restul=Math.max(0,(Number(r.cantitate_comandata)||0)-(Number(r.cantitate_sosita)||0));
-    const issue=(r.nu_a_sosit&&!r.nu_a_sosit_rezolvat)?` · <span style="color:var(--rd);font-weight:700">⛔ nu a ajuns</span>`:'';
-    return`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(p?p.name:r.titlu_extern)}</strong><div class="jp-meta">comandat ${fmtQty(r.cantitate_comandata)}${r.cantitate_sosita>0?` · sosit ${fmtQty(r.cantitate_sosita)} · rest ${fmtQty(restul)}`:''}${issue}</div></div></div>`;
-  }).join('')}`).join('');
+  list.innerHTML=Object.values(groups).map(g=>{
+    const label=`${esc(g.furnizor||'Furnizor')}${g.comandaRef?' · #'+esc(g.comandaRef):''}`;
+    // Ștergere comandă întreagă — cerut direct: „sa avem buton de stergere pentru aceste comenzi, pentru
+    // atunci cand e cazul" (import dublat din greșeală, comandă de test, comandă anulată înainte să fi
+    // fost trimisă efectiv la furnizor). Șterge TOATE liniile grupului (hard delete din comenzi_furnizor,
+    // ireversibil) — nu marchează „finalizat" (acela înseamnă „a sosit", folosit deja de fluxul din
+    // Staff, sens complet diferit de „a fost o greșeală").
+    const delBtn=`<button type="button" class="btn btn-sm" style="padding:1px 8px;font-size:16px;color:var(--rd);border-color:var(--rd)" title="Șterge această comandă" onclick="deleteFurnizorOrderGroup('${esc(g.key).replace(/'/g,"\\'")}','${label.replace(/'/g,"\\'")}')">🗑️</button>`;
+    return`<div class="sec" style="display:flex;align-items:center;justify-content:space-between;gap:8px"><span>${label} (${g.rows.length})</span>${delBtn}</div>${g.rows.map(r=>{
+      const p=r.produs_id?P.find(x=>x.id===r.produs_id):null;
+      const restul=Math.max(0,(Number(r.cantitate_comandata)||0)-(Number(r.cantitate_sosita)||0));
+      const issue=(r.nu_a_sosit&&!r.nu_a_sosit_rezolvat)?` · <span style="color:var(--rd);font-weight:700">⛔ nu a ajuns</span>`:'';
+      return`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(p?p.name:r.titlu_extern)}</strong><div class="jp-meta">comandat ${fmtQty(r.cantitate_comandata)}${r.cantitate_sosita>0?` · sosit ${fmtQty(r.cantitate_sosita)} · rest ${fmtQty(restul)}`:''}${issue}</div></div></div>`;
+    }).join('')}`;
+  }).join('');
+}
+async function deleteFurnizorOrderGroup(key,label){
+  if(!confirm(`Ștergi comanda ${label}? Nu poate fi anulat.`))return;
+  if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
+  const rows=FURNIZOR_ADMIN.filter(r=>furnizorGroupKey(r)===key);
+  if(!rows.length)return;
+  const ids=rows.map(r=>r.id);
+  try{
+    await dbDelete(`comenzi_furnizor?id=in.(${ids.join(',')})`);
+    FURNIZOR_ADMIN=FURNIZOR_ADMIN.filter(r=>!ids.includes(r.id));
+    renderFurnizorStockCard();
+    toast('✓ Comandă ștearsă din marfa așteptată');
+  }catch(e){toast('Eroare la ștergere: '+(e.message||e),'err');}
 }
 function goToPcomIssue(comandaId){
   const btn=document.querySelector('.h-tab[data-page="pcom"]');
@@ -8298,6 +8341,12 @@ async function load(){
     }else{
       try{REORDER=JSON.parse(localStorage.getItem(REORDER_KEY)||'[]');}catch(e2){REORDER=[];}
     }
+    // Necondiționat de tab-ul activ (la fel ca renderFurnizorStockCard, apelat tot independent de pagina
+    // curentă, din loadStaffIssues) — P se populează ÎNAINTE de REORDER în această funcție, deci un
+    // switch pe Raport stoc chiar în acea fereastră îngustă ar fi putut prinde P.length>0 dar REORDER
+    // tot gol, la apelurile de mai jos din goPage. Elementele cardului există mereu în DOM (pagina e doar
+    // ascunsă prin CSS, nu scoasă), deci randarea aici e sigură indiferent de tab-ul vizibil acum.
+    renderRptReorderList();
 
     // fallback to sample if empty
     if(!P.length){
@@ -8312,7 +8361,7 @@ async function load(){
     setSyncStatus('ok','Supabase ✓');
     document.getElementById('day-badge').textContent=new Date().toLocaleDateString('ro-RO',{day:'numeric',month:'long'});
     hideLoading();
-    buildCats('');renderToday();renderTable();buildJMonths();if(document.getElementById('page-raport')?.classList.contains('on')){buildRaportCats();renderRaport();}
+    buildCats('');renderToday();renderTable();buildJMonths();if(document.getElementById('page-raport')?.classList.contains('on')){buildRaportCats();renderRaport();renderRptReorderList();}
     renderSupplierDatalist();
     renderUpdWidget();renderNotif();renderDashboard();loadPcomImportState().finally(()=>{pcomApplyImportUiMode();refreshPcomAvailableOrdersOnLoad();scheduleAwbPreviewBackfill();});loadSyncImportState();loadStaffIssues();
     pcomApplyImportUiMode();
@@ -8357,7 +8406,7 @@ async function liveRefreshProducts(){
     renderTable();renderToday();
     const activeId=document.querySelector('.page.on')?.id?.replace(/^page-/,'');
     if(activeId==='dashboard'){if(!syncMapsLoaded)await loadSyncMappings();renderDashboard();}
-    else if(activeId==='raport'){buildRaportCats();renderRaport();}
+    else if(activeId==='raport'){buildRaportCats();renderRaport();renderRptReorderList();}
     else if(activeId==='salesreport')renderSalesReport();
     else if(activeId==='sync'){if(!syncMapsLoaded)await loadSyncMappings();renderSyncPage();}
     else if(activeId==='calc')buildCalcProductSelector();
@@ -8778,7 +8827,7 @@ function goPage(id,btn){
   if(id==='jurnal'){buildJMonths();renderJurnal();}
   if(id==='raport'){
     const tryR=(n)=>{
-      if(P.length>0){buildRaportCats();renderRaport();}
+      if(P.length>0){buildRaportCats();renderRaport();renderRptReorderList();}
       else if(n>0)setTimeout(()=>tryR(n-1),300);
     };
     setTimeout(()=>tryR(20),100);
@@ -18556,10 +18605,21 @@ function removeFromReorderList(id){
   saveReorderList();
   renderNotif();
   renderReorderList();
+  renderRptReorderList();
 }
 function saveReorderList(){
   safeLocalSet(REORDER_KEY,JSON.stringify(REORDER));
   fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:REORDER_KEY,value:JSON.stringify(REORDER)})}).catch(()=>{});
+}
+// Rândul unei linii din "Produse de comandat" (REORDER) — extras separat, folosit ATÂT în Comenzi
+// Platforme → „De comandat" (cu istoric pe luni, mai jos) CÂT ȘI în cardul dedicat din Raport stoc
+// (renderRptReorderList, doar luna curentă, dar cu căutare+adăugare manuală) — aceeași listă, 2 locuri
+// de afișare. Stocul curent (cerut direct: „sa vedem... ce stoc mai este sau daca nu este stoc") nu era
+// arătat deloc până acum, în niciunul din cele 2 locuri.
+function reorderRowHtml(r,isCurrent){
+  const p=r.productId?P.find(x=>x.id===r.productId):null;
+  const stocHtml=p?(qty(p)<=0?'<span style="color:var(--rd);font-weight:700">Fără stoc</span>':`<span style="color:var(--t3)">Stoc ${fmtQty(qty(p))}</span>`):'<span style="color:var(--t3)">produs șters din inventar</span>';
+  return`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(r.name)}</strong>${r.sku?` <span style="color:var(--t3);font-family:var(--mono)">· Cod furnizor ${esc(r.sku)}</span>`:''}<div class="jp-meta">${stocHtml}</div></div>${isCurrent?`<button type="button" class="btn btn-sm" style="color:var(--gr);border-color:var(--gr)" onclick="removeFromReorderList('${r.id}')">✓ Comandat</button>`:''}</div>`;
 }
 // Nu se șterge nimic la schimbarea lunii — "reset" înseamnă doar că luna curentă pornește goală,
 // pentru că filtrăm după addedAt.slice(0,7); lunile anterioare rămân alese din dropdown, needitabile
@@ -18576,7 +18636,42 @@ function renderReorderList(){
   monthSel.innerHTML=months.map(m=>{const[y,mo]=m.split('-');const lbl=new Date(y,mo-1).toLocaleDateString('ro-RO',{month:'long',year:'numeric'});return`<option value="${m}"${m===sel?' selected':''}>${lbl}${m===cur?' (luna curentă)':''}</option>`;}).join('');
   const isCurrent=sel===cur;
   const list=REORDER.filter(r=>(r.addedAt||'').slice(0,7)===sel).sort((a,b)=>(a.name||'').localeCompare(b.name||'','ro'));
-  host.innerHTML=list.length?list.map(r=>`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(r.name)}</strong>${r.sku?` <span style="color:var(--t3);font-family:var(--mono)">· Cod furnizor ${esc(r.sku)}</span>`:''}</div>${isCurrent?`<button type="button" class="btn btn-sm" style="color:var(--gr);border-color:var(--gr)" onclick="removeFromReorderList('${r.id}')">✓ Comandat</button>`:''}</div>`).join(''):`<div style="font-size:24px;color:var(--t3);padding:8px 0">Nicio comandă pe listă ${isCurrent?'luna asta':'în luna selectată'}.</div>`;
+  host.innerHTML=list.length?list.map(r=>reorderRowHtml(r,isCurrent)).join(''):`<div style="font-size:24px;color:var(--t3);padding:8px 0">Nicio comandă pe listă ${isCurrent?'luna asta':'în luna selectată'}.</div>`;
+}
+// Card dedicat în Raport stoc (cerut direct: „buton prin care sa selectam ce am vrea sa comandam ca
+// produs... si bifam ca vrem sa le cumparam, ce stoc mai este") — aceeași listă REORDER ca mai sus, un
+// singur loc de adevăr, nu o listă paralelă; afișează STRICT luna curentă (istoricul lunilor vechi rămâne
+// doar în Comenzi Platforme, unde există deja selectorul de lună).
+function renderRptReorderList(){
+  const host=document.getElementById('rpt-reorder-list');
+  if(!host)return;
+  const cur=currentMonthKey();
+  const list=REORDER.filter(r=>(r.addedAt||'').slice(0,7)===cur).sort((a,b)=>(a.name||'').localeCompare(b.name||'','ro'));
+  host.innerHTML=list.length?list.map(r=>reorderRowHtml(r,true)).join(''):'<div style="font-size:24px;color:var(--t3);padding:8px 0">Nicio comandă pe listă — caută mai sus un produs ca să-l adaugi.</div>';
+}
+// Căutare+adăugare liberă (cerut direct — singura cale de adăugare până acum era automată, la stoc 0/1
+// în urma unei vânzări, sau din avertismentul „Import comenzi"; niciuna nu permitea să adaugi orice
+// produs la care te gândești, indiferent de stocul lui actual). Același tipar ca rptCardSearchInput
+// (căutare carduri produse) — reutilizează aceleași clase CSS (.rpt-card-search*), dar arată și stocul
+// direct în rezultate, ca alegerea să fie informată din prima, fără un pas în plus.
+function rptReorderSearchInput(q){
+  const box=document.getElementById('rpt-reorder-search-results');
+  if(!box)return;
+  const query=String(q||'').trim().toLowerCase();
+  if(!query){box.style.display='none';box.innerHTML='';return;}
+  const matches=P.filter(p=>!p.archived&&`${p.name||''} ${p.sku||''} ${p.internalCode||''}`.toLowerCase().includes(query)).slice(0,8);
+  if(!matches.length){box.innerHTML='<div class="rpt-card-search-empty">Niciun produs găsit</div>';box.style.display='block';return;}
+  box.innerHTML=matches.map(p=>{
+    const s=qty(p),stocLbl=s<=0?'fără stoc':'stoc '+fmtQty(s);
+    return`<div class="rpt-card-search-row" onclick="rptReorderSearchPick(${p.id})">${esc(p.name||'—')}${p.sku?' · SKU '+esc(p.sku):''} <span style="color:${s<=0?'var(--rd)':'var(--t3)'}">· ${stocLbl}</span></div>`;
+  }).join('');
+  box.style.display='block';
+}
+function rptReorderSearchPick(id){
+  const inp=document.getElementById('rpt-reorder-search');if(inp)inp.value='';
+  const box=document.getElementById('rpt-reorder-search-results');if(box){box.style.display='none';box.innerHTML='';}
+  addToReorderList(id);
+  renderRptReorderList();
 }
 // Liniile marcate "produs nou" nu se creează automat la aplicare — omul le adaugă manual, cu categorie/
 // preț/poză complete, prin formularul normal de produs (deschis pre-completat cu numele din comandă).
