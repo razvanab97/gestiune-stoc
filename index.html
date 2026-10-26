@@ -4707,6 +4707,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:598,text:'Asociază AWB-uri — 2 reparații majore, cerute direct: „fă sistemul să înțeleagă cum se asociază, care și cum și pe baza a ce" (clarificat: „asociere mai inteligentă, cu mai multe semnale") + 2 comenzi reale confirmate live în bază, deja corect asociate, dar tot afișate „negăsită" la recitire: „dacă există deja, de ce apare mai sus ca neasociat?" (Király Zoltánné #1136836907) și „încă o dată 550497435 - există și nu e asociat, de ce?" (Lumperdean Mihai #550497435, deja împachetat). (1) Semnal nou — conținutul coletului: AI-ul citește acum și descrierea produsului de pe etichetă (câmp nou, `produsText`, exclude explicit genericul „Marketplace"/„Colet"), folosit ALĂTURI de nume+sumă în potrivirea universală (`resolveAwbByNameAndAmount`) — scorul final e cel mai bun dintre nume și conținut, nu o medie, ca un semnal slab să nu-l tragă în jos pe celălalt, clar. (2) Cauza reală a celor 2 comenzi raportate: potrivirea verifica STRICT după comandaId (care poate ieși complet greșit — vezi „Ref. sz." de la #592/#594) sau excludea din candidați orice comandă care ARE DEJA un AWB — o etichetă recitită, cu AWB-ul deja scris corect pe o comandă, nu mai era recunoscută ca „deja rezolvată". Verificăm acum, universal și PRIMUL (înaintea oricărui lookup după comandaId), dacă AWB-ul citit există deja EXACT pe vreo comandă, indiferent de platformă/format/comandaId citit alături — semnalul cel mai sigur posibil. Verificat de 2 ori: sintaxă + 20 de teste izolate pe funcțiile reale extrase din cod (ambele comenzi reale reproduse exact, potrivire prin conținut fără nume disponibil, scor maxim nu medie, regresii pe comportamentul vechi neatinse, comandă anulată/AWB gol/substring parțial — toate corect ignorate).',date:'2026-10-26'},
   {n:597,text:'Asociază AWB-uri — 2 îmbunătățiri de UX, cerute direct, pe rândurile de asociere din #596. (1) „vreau ca pop up sa fie tot pe aceasta pagina, nu sa deschida o pagina noua": click pe thumbnail-ul etichetei deschidea poza într-un TAB NOU (de la #570) — acum folosește lightbox-ul deja existent în aplicație (openImgZoom/#ov-imgzoom, folosit și pentru poze de produs), rămânând pe aceeași pagină. (2) „si sa poti da copy la text foarte usor - la nume, la numere": buton mic ⧉ lângă numele clientului, numărul comenzii și codul AWB, pe toate rândurile de asociere (găsite și negăsite) — un click copiază direct valoarea, fără să mai fie nevoie de selectare manuală de text; reutilizează exact `copyText`, folosit deja în Research pentru același scop. Verificat de 2 ori: sintaxă + 18 teste izolate pe funcțiile reale extrase din cod (thumbnail fără link/tab nou, buton de copiere cu valori normale/diacritice/goale, fără crash pe nicio variantă).',date:'2026-10-26'},
   {n:596,text:'Asociază AWB-uri — 2 reparații suplimentare, cerute direct. (1) Codul-compus de sub „Obs:" (AWB_comandaId_altceva, pe etichete Sameday) nu se mai potrivea când nu era STRICT singur pe rândul lui — raportat direct, cu etichetă reală crossborder Bulgaria: „cum adică această pagină e necunoscută? repară sistemul - numărul comenzii se găsește sub observații, după numărul AWB". `sdM` caută acum tiparul oriunde în text, nu doar ca linie izolată — tolerează orice ar fi rămas în plus pe același „rând" din extragerea reală PDF.js. (2) Feature nou, cerut direct: „să apară linie cu comenzile necunoscute și să se recomande, după țară sau platformă, în funcție de AWB-ul citit, unde nu se poate, astfel încât să pot asocia ușor" — secțiunea „❔ Format nerecunoscut" (înainte un singur paragraf, fără nicio acțiune posibilă) arată acum câte un rând per pagină, cu thumbnail-ul etichetei (recunoaștere vizuală) și „🔗 Asociază manual" — alegi comanda din listă și tastezi AWB-ul citit de pe etichetă într-o căsuță dedicată (apare doar în acest mod), scrise împreună dintr-un singur pas. Pentru liniile „negăsită/ambiguă" care AU deja un AWB citit, dar nu ȘI potrivire automată, căutarea pornește acum precompletată și cu platforma deja sigur cunoscută din formatul etichetei (ex. Cargus Click&Collect = mereu Vinted), nu doar cu numele clientului ca până acum — fără nicio presupunere nouă pe formatele cu platformă ambiguă (FAN Courier/DPD/Cargus standard). Verificat de 2 ori: sintaxă + 30 de teste izolate pe funcțiile reale extrase din cod (codul-compus recunoscut indiferent de poziția pe linie, regresie pe toate formatele deja funcționale — Sameday RO/FAN/GLS —, fluxul complet de asociere manuală cu AWB tastat — comandă deja comisă și încă „Neinclus" —, eroare clară când AWB-ul lipsește din căsuță, fără nicio scriere, recomandare după platformă doar pe formate sigure, modurile vechi de picker — preview/error — neatinse).',date:'2026-10-26'},
   {n:595,text:'Asociază AWB-uri — etichetă eMAG Ungaria (Sameday/Pactic, „Ref. sz." — vezi #592/#594) ajungea complet „nerecunoscută" (fără niciun indiciu afișat), raportat direct cu etichetă reală (Király Zoltánné): „am zis că scoatem nume client - să putem identifica comanda". Cauza: regexul de citire a numelui destinatarului cerea „Címzett:" urmat STRICT, pe rândul imediat următor, de nume — un tabel cu 2 coloane (Feladó/Címzett) poate ieși din PDF.js cu text intercalat între ele (rânduri goale, reordonări), caz în care regexul eșua silențios, eticheta cădea direct pe AI-ul, nesigur, de fallback. Căutăm acum tot blocul de text dintre „Címzett:" și următorul câmp cunoscut de pe etichetă (Darab:/Utánvét:/Ref. sz.:, oricare apare primul), apoi primul rând nevid din el — tolerează rânduri goale/reordonate în interior, rămânând ancorat strict la etichetă. Când nicio comandă eMAG HU nerezolvată nu se potrivește local (ordinea nu a fost încă adusă în sistem), numele clientului tot apare direct pe linie — „nicio comandă eMAG HU nerezolvată nu se potrivește cu «Király Zoltánné»" — ca omul să poată identifica manual comanda, în loc de „nerecunoscută", fără niciun indiciu. Verificat de 2 ori: sintaxă + 6 teste izolate pe funcția reală extrasă din cod (adiacență strictă — cazul deja funcțional — neatinsă, rând gol intercalat — cazul real raportat — acum extras corect, regresie pe alte formate — GLS — neatinse, fără delimitator → rămâne null, fără crash).',date:'2026-10-26'},
@@ -19710,16 +19711,23 @@ const AWB_LABEL_AI_SCHEMA={
     awb:{type:['string','null'],description:'Codul de urmărire al coletului (tracking number/AWB), de obicei lângă/sub un cod de bare — DIFERIT de numărul comenzii, dacă amândouă apar. null dacă nu apare clar niciun cod de urmărire.'},
     suma:{type:['number','null'],description:'Suma totală/ramburs (cash on delivery/COD/utánvét/наложен платеж/pobranie, etc) afișată pe etichetă — doar numărul, fără monedă. null dacă nu apare nicio sumă.'},
     moneda:{type:['string','null'],description:'Codul monedei sumei de mai sus (RON, EUR, HUF, BGN, PLN etc), dedus din simbol/text. null dacă neclar.'},
-    curier:{type:['string','null'],description:'Numele curierului (DPD, Sameday, FAN Courier, GLS, Cargus, InPost, Packeta etc), dacă e vizibil explicit pe etichetă. null dacă nu apare.'}
+    curier:{type:['string','null'],description:'Numele curierului (DPD, Sameday, FAN Courier, GLS, Cargus, InPost, Packeta etc), dacă e vizibil explicit pe etichetă. null dacă nu apare.'},
+    // Semnal nou, cerut direct — „fă sistemul să înțeleagă cum se asociază... pe baza a ce" / „asociere
+    // mai inteligentă, cu mai multe semnale": conținutul coletului (dacă apare pe etichetă) e un semnal
+    // la fel de direct ca numele clientului pentru a găsi comanda corectă — mai ales când numele lipsește
+    // sau se potrivește cu mai multe comenzi la fel de bine (vezi resolveAwbByNameAndAmount, acum
+    // folosește și acest câmp). Explicit NU genericul „Marketplace”/„Colet”/„Package” (scris identic pe
+    // orice etichetă eMAG, fără nicio informație reală) — doar o denumire/descriere specifică produsului.
+    produsText:{type:['string','null'],description:'Descrierea conținutului coletului, dacă apare pe etichetă (după „Continut:”/„Content:”/„Observatii:”, sau denumirea produsului scrisă direct) — NU valori generice fără informație reală („Marketplace”, „Colet”, „Package”, „Goods”). null dacă nu apare nimic specific.'}
   },
-  required:['clientNume','comandaId','awb','suma','moneda','curier'],
+  required:['clientNume','comandaId','awb','suma','moneda','curier','produsText'],
   additionalProperties:false
 };
 async function extractAwbLabelDataWithAI(text){
   try{
     const resp=await callAI(
       [{role:'user',content:`Text extras dintr-o etichetă de expediere de la curier, posibil în orice limbă (română, maghiară, bulgară, greacă, poloneză etc):\n\n${String(text||'').slice(0,3000)}`}],
-      'Ești expert în citirea etichetelor de expediere de la curieri (DPD, Sameday, FAN Courier, GLS, Cargus, InPost, Packeta etc), în ORICE limbă. Extragi STRICT ce apare pe etichetă — numele destinatarului, orice număr de comandă/referință, codul de urmărire (AWB, dacă e diferit de numărul comenzii), suma totală/ramburs cu moneda ei, și numele curierului. Nu inventezi ce nu apare clar — null dacă un câmp lipsește.',
+      'Ești expert în citirea etichetelor de expediere de la curieri (DPD, Sameday, FAN Courier, GLS, Cargus, InPost, Packeta etc), în ORICE limbă. Extragi STRICT ce apare pe etichetă — numele destinatarului, orice număr de comandă/referință, codul de urmărire (AWB, dacă e diferit de numărul comenzii), suma totală/ramburs cu moneda ei, conținutul coletului dacă e specific (nu generic), și numele curierului. Nu inventezi ce nu apare clar — null dacă un câmp lipsește.',
       // tier 'analysis' (nu 'simple') — la fel ca la facturi (INVOICE_EXTRACTION_SCHEMA): citirea
       // corectă a unei etichete în orice limbă, distingând AWB de nr. comandă de sumă ramburs, merită
       // modelul mai puternic — fallback-ul e rar (doar când regex+numele fișierului au eșuat amândouă),
@@ -19756,9 +19764,9 @@ async function extractAwbLabelDataWithAIVision(blob,pageNum){
     const resp=await callAI(
       [{role:'user',content:[
         {type:'image',source:{type:'base64',media_type:m[1],data:m[2]}},
-        {type:'text',text:'Aceasta este o fotografie/randare a unei etichete de expediere de la curier (DPD, Sameday, FAN Courier, GLS, Cargus, InPost, Packeta etc), posibil în orice limbă. Citește direct din imagine ce nu a putut fi extras ca text (nume destinatar, AWB/cod de urmărire, număr comandă, sumă ramburs, curier).'}
+        {type:'text',text:'Aceasta este o fotografie/randare a unei etichete de expediere de la curier (DPD, Sameday, FAN Courier, GLS, Cargus, InPost, Packeta etc), posibil în orice limbă. Citește direct din imagine ce nu a putut fi extras ca text (nume destinatar, AWB/cod de urmărire, număr comandă, sumă ramburs, conținutul coletului dacă e specific, curier).'}
       ]}],
-      'Ești expert în citirea etichetelor de expediere de la curieri, în ORICE limbă, inclusiv direct din imagine când textul nu e disponibil. Extragi STRICT ce apare vizibil pe etichetă — numele destinatarului, orice număr de comandă/referință, codul de urmărire (AWB, dacă e diferit de numărul comenzii), suma totală/ramburs cu moneda ei, și numele curierului. Nu inventezi ce nu apare clar — null dacă un câmp lipsește.',
+      'Ești expert în citirea etichetelor de expediere de la curieri, în ORICE limbă, inclusiv direct din imagine când textul nu e disponibil. Extragi STRICT ce apare vizibil pe etichetă — numele destinatarului, orice număr de comandă/referință, codul de urmărire (AWB, dacă e diferit de numărul comenzii), suma totală/ramburs cu moneda ei, conținutul coletului dacă e specific (nu generic), și numele curierului. Nu inventezi ce nu apare clar — null dacă un câmp lipsește.',
       500,'analysis',AWB_LABEL_AI_SCHEMA,'awb_label_extraction'
     );
     return JSON.parse(resp);
@@ -19782,38 +19790,65 @@ function safeNameScore(q,candidate){
   }
   return fuzzyMatch(q,candidate);
 }
-// Potrivire universală după nume+sumă (cerut direct — „nume client, comandă, sumă, astea 3 trebuie să
-// fie cele mai importante"), pe TOATE platformele deodată (generalizare a resolveEmagHuLabelMatch, care
-// era scopată doar la eMAG Ungaria) — folosită doar când AI-ul a reușit să citească măcar numele SAU
-// suma. Candidați: orice comandă fără AWB încă, comisă în bază SAU încă „Neinclus" în previzualizare —
-// grupate pe comandaId+platformă (un pachet cu mai multe produse = o singură sumă totală de comparat).
-// Suma se compară convertită la RON (pcomToRon), ca EUR/HUF/BGN să se compare corect cu RON. Prag
-// ridicat + verificare de ambiguitate, la fel ca la celelalte potriviri prin nume — o potrivire greșită
-// ar asocia AWB-ul unui client la comanda altuia.
+// Potrivire universală după nume+sumă+conținut, pe TOATE platformele deodată (generalizare a
+// resolveEmagHuLabelMatch, care era scopată doar la eMAG Ungaria) — folosită doar când AI-ul a reușit să
+// citească măcar unul dintre cele 3 semnale. Candidați: orice comandă fără AWB încă, comisă în bază SAU
+// încă „Neinclus" în previzualizare — grupate pe comandaId+platformă (un pachet cu mai multe produse = o
+// singură sumă totală de comparat, iar titlul reținut e al primului produs găsit cu titlu). Suma se
+// compară convertită la RON (pcomToRon), ca EUR/HUF/BGN să se compare corect cu RON. Prag ridicat +
+// verificare de ambiguitate, la fel ca la celelalte potriviri prin nume — o potrivire greșită ar asocia
+// AWB-ul unui client la comanda altuia.
+// Conținutul coletului (produsText) — al treilea semnal, cerut direct: „fă sistemul să înțeleagă cum se
+// asociază... pe baza a ce” / „asociere mai inteligentă, cu mai multe semnale”. Multe etichete arată o
+// descriere a produsului alături de (sau în loc de) numele clientului — exact mecanismul deja folosit
+// doar pentru Vinted (resolveVintedDigitalLabelMatch, prin `produs`), generalizat acum aici pentru orice
+// platformă/format citit prin AI. Scorul final e cel MAI BUN dintre nume și conținut (oricare dintre ele
+// se potrivește mai clar câștigă) — nu o medie, ca un nume clar dar un titlu vag (sau invers) să nu tragă
+// scorul în jos degeaba.
+// Verificare universală, cerut direct, cu 2 comenzi reale confirmate live în bază (Lumperdean Mihai
+// #550497435, Király Zoltánné #1136836907 — AMÂNDOUĂ aveau deja AWB-ul corect scris, dar tot apăreau
+// „negăsită" la o recitire a aceleiași etichete): „dacă există deja, de ce apare mai sus ca neasociat?" /
+// „exista si nu e asociat, de ce?" — AWB-ul EXACT, deja scris pe o comandă, e cel mai sigur semnal
+// posibil, mai sigur decât orice comandaId citit alături (care poate fi complet greșit — vezi bug-ul
+// „Ref. sz." de la #592/#594). Verificat ÎNAINTE de orice lookup după comandaId, în bucla de rezolvare
+// „pairs" (readAwbFolderPdfs/handleAwbPdfFile) — nu doar în ramurile regex dedicate care îl mai aveau
+// (Vinted/Cargus/Sameday HU, scopate la o singură platformă), ci universal, pe TOATE comenzile, indiferent
+// de format/platformă/cale de extragere (regex sau AI).
+function awbFindExactExisting(awb){
+  const v=String(awb||'').trim();
+  if(!v)return null;
+  return PCOM.find(o=>!o.anulata&&String(o.awb||'').trim()===v)||null;
+}
 function resolveAwbByNameAndAmount(extracted){
-  if(!extracted||(!extracted.clientNume&&extracted.suma==null))return null;
+  if(!extracted||(!extracted.clientNume&&extracted.suma==null&&!extracted.produsText))return null;
   const nameQ=extracted.clientNume||'';
+  const prodQ=extracted.produsText||'';
   const sumaRon=extracted.suma!=null?pcomToRon(extracted.suma,extracted.moneda||'RON'):null;
-  const committed=PCOM.filter(o=>!o.awb&&!o.anulata&&!o.impachetat).map(o=>({comandaId:o.comandaId,platforma:o.platforma,pending:false,nume:o.clientNume||'',totalRon:pcomToRon(o.pretTotalCuTva,o.moneda)}));
-  const pending=pcImpParsed.filter(it=>!it._committedId).map(it=>({comandaId:it.comandaId,platforma:it.platforma,pending:true,nume:it.clientNume||'',totalRon:pcomToRon(it.pretTotalCuTva,it.moneda)}));
+  const committed=PCOM.filter(o=>!o.awb&&!o.anulata&&!o.impachetat).map(o=>({comandaId:o.comandaId,platforma:o.platforma,pending:false,nume:o.clientNume||'',produs:o.titluExtern||o.produsNume||'',totalRon:pcomToRon(o.pretTotalCuTva,o.moneda)}));
+  const pending=pcImpParsed.filter(it=>!it._committedId).map(it=>({comandaId:it.comandaId,platforma:it.platforma,pending:true,nume:it.clientNume||'',produs:it.titluExtern||(it.produsId?(P.find(x=>x.id===it.produsId)?.name||''):'')||'',totalRon:pcomToRon(it.pretTotalCuTva,it.moneda)}));
   const groups=new Map();
   [...committed,...pending].forEach(o=>{
     const key=o.platforma+'|'+o.comandaId;
-    const g=groups.get(key)||{comandaId:o.comandaId,platforma:o.platforma,pending:o.pending,nume:o.nume,total:0};
+    const g=groups.get(key)||{comandaId:o.comandaId,platforma:o.platforma,pending:o.pending,nume:o.nume,produs:o.produs,total:0};
     g.total+=o.totalRon;
     if(o.nume)g.nume=o.nume;
+    if(o.produs&&!g.produs)g.produs=o.produs;
     groups.set(key,g);
   });
   const scored=[...groups.values()]
     .filter(g=>sumaRon==null||Math.abs(g.total-sumaRon)<=Math.max(2,g.total*0.02))
-    .map(g=>({g,nameScore:nameQ?safeNameScore(nameQ,g.nume):0}))
-    .filter(x=>nameQ?x.nameScore>=0.5:true)
-    .sort((a,b)=>b.nameScore-a.nameScore);
+    .map(g=>{
+      const nameScore=nameQ?safeNameScore(nameQ,g.nume):0;
+      const titleScore=prodQ&&g.produs?fuzzyMatch(prodQ,g.produs):0;
+      return{g,score:Math.max(nameScore,titleScore)};
+    })
+    .filter(x=>(nameQ||prodQ)?x.score>=0.5:true)
+    .sort((a,b)=>b.score-a.score);
   const best=scored[0];
   if(!best)return null;
   const second=scored[1];
-  if(second&&second.nameScore>=best.nameScore-0.05&&(second.g.comandaId!==best.g.comandaId||second.g.platforma!==best.g.platforma))return{ambiguous:true};
-  return{comandaId:best.g.comandaId,platforma:best.g.platforma,pending:best.g.pending,matchScore:best.nameScore};
+  if(second&&second.score>=best.score-0.05&&(second.g.comandaId!==best.g.comandaId||second.g.platforma!==best.g.platforma))return{ambiguous:true};
+  return{comandaId:best.g.comandaId,platforma:best.g.platforma,pending:best.g.pending,matchScore:best.score};
 }
 // Punct unic folosit de AMBELE fluxuri (fișier ales manual / dosar Desktop/AWB-uri) — vezi
 // extractAwbLabelDataWithAI/resolveAwbByNameAndAmount mai sus. Întoarce un obiect „p" compatibil cu
@@ -19847,9 +19882,11 @@ async function aiFallbackAwbMatch(text,blob,pageNum){
   // lookup-ul după acel ID eșuează (nu există), iar numele+suma, CHIAR PREZENTE pe aceeași etichetă,
   // rămâneau pierdute, nefolosite niciodată. Acum rămân disponibile ca a doua șansă (vezi bucla „pairs”
   // mai jos, readAwbFolderPdfs/handleAwbPdfFile) dacă acel comandaId se dovedește greșit.
-  if(extracted.comandaId)return{awb:extracted.awb,comandaId:extracted.comandaId,courier:extracted.curier||'',aiExtracted:true,aiClientNume:extracted.clientNume||'',aiSuma:extracted.suma,aiMoneda:extracted.moneda||''};
+  if(extracted.comandaId)return{awb:extracted.awb,comandaId:extracted.comandaId,courier:extracted.curier||'',aiExtracted:true,aiClientNume:extracted.clientNume||'',aiSuma:extracted.suma,aiMoneda:extracted.moneda||'',aiProdusText:extracted.produsText||''};
   // Fără număr de comandă pe etichetă — singurele semnale rămase sunt exact cele cerute: nume
-  // client + sumă. resolveAwbByNameAndAmount caută în TOATE platformele, comise sau încă „Neinclus".
+  // client + sumă + conținutul coletului (vezi resolveAwbByNameAndAmount — al 3-lea semnal, cerut
+  // direct: „asociere mai inteligentă, cu mai multe semnale”). resolveAwbByNameAndAmount caută în TOATE
+  // platformele, comise sau încă „Neinclus".
   const match=resolveAwbByNameAndAmount(extracted);
   if(!match)return null;
   if(match.ambiguous)return{awb:extracted.awb,comandaId:'',courier:extracted.curier||'',aiAmbiguous:true,aiClientNume:extracted.clientNume||'',aiSuma:extracted.suma,aiMoneda:extracted.moneda||'',reason:'Potrivire AI ambiguă (nume+sumă) — verifică manual'};
@@ -19858,12 +19895,12 @@ async function aiFallbackAwbMatch(text,blob,pageNum){
 // A doua șansă, folosită STRICT în bucla „pairs” (readAwbFolderPdfs/handleAwbPdfFile), când un comandaId
 // extras de AI (vezi aiFallbackAwbMatch) NU se găsește deloc pe eMAG — cerut direct, pe o etichetă reală
 // (ExpressOne/Sameday Ungaria, „avem AWB cu nume client și în platformă nu a fost preluat — de ce?"):
-// numele+suma păstrate pe `p` (aiClientNume/aiSuma/aiMoneda) sunt exact ce ar fi folosit
-// resolveAwbByNameAndAmount dacă AI-ul n-ar fi găsit deloc un comandaId — aceeași potrivire, doar
+// numele+suma+conținutul păstrate pe `p` (aiClientNume/aiSuma/aiMoneda/aiProdusText) sunt exact ce ar fi
+// folosit resolveAwbByNameAndAmount dacă AI-ul n-ar fi găsit deloc un comandaId — aceeași potrivire, doar
 // declanșată mai târziu, DUPĂ ce lookup-ul direct după ID s-a dovedit un eșec (nu doar încă neconfirmat).
 async function awbTryNameAmountFallback(p){
-  if(!p.aiClientNume&&p.aiSuma==null)return null;
-  const match=resolveAwbByNameAndAmount({clientNume:p.aiClientNume,suma:p.aiSuma,moneda:p.aiMoneda});
+  if(!p.aiClientNume&&p.aiSuma==null&&!p.aiProdusText)return null;
+  const match=resolveAwbByNameAndAmount({clientNume:p.aiClientNume,suma:p.aiSuma,moneda:p.aiMoneda,produsText:p.aiProdusText});
   if(!match||match.ambiguous)return null;
   const rows=match.pending?pendingImportRowSnapshot(match.comandaId):await dbGet(`platforma_comenzi?comanda_id=eq.${match.comandaId}&select=id,platforma,client_nume,produs_nume,awb`);
   if(!rows.length)return null;
@@ -24154,6 +24191,12 @@ async function handleAwbPdfFile(ev){
     const results=[];
     let awbEmagLookupCreated=0;
     for(const p of pairs){
+      // Verificare universală, ÎNAINTEA oricărui lookup după comandaId — vezi awbFindExactExisting,
+      // „dacă există deja, de ce apare mai sus ca neasociat?". O etichetă recitită (același AWB, deja
+      // scris pe o comandă, indiferent cu ce comandaId greșit a ieșit alături de data asta) e recunoscută
+      // direct, fără nicio ambiguitate posibilă — semnalul cel mai sigur, verificat primul.
+      const exactExisting=awbFindExactExisting(p.awb);
+      if(exactExisting){results.push({...p,comandaId:exactExisting.comandaId,rows:[{id:exactExisting.id,platforma:exactExisting.platforma,client_nume:exactExisting.clientNume,produs_nume:exactExisting.produsNume,awb:exactExisting.awb}]});continue;}
       // Variantă generală, nu doar Vinted — vezi resolveAwbByNameAndAmount/pendingImportRowSnapshot:
       // rezolvările AI cross-platform (nume+sumă) pot ateriza pe o linie „Neinclus" de pe ORICE
       // platformă, nu doar Vinted; forma e superset-ul strict al variantei scopate la Vinted, deci
@@ -24465,6 +24508,12 @@ async function readAwbFolderPdfs(fromArchive){
     const results=[];
     let awbEmagLookupCreated=0;
     for(const p of pairs){
+      // Verificare universală, ÎNAINTEA oricărui lookup după comandaId — vezi awbFindExactExisting,
+      // „dacă există deja, de ce apare mai sus ca neasociat?". O etichetă recitită (același AWB, deja
+      // scris pe o comandă, indiferent cu ce comandaId greșit a ieșit alături de data asta) e recunoscută
+      // direct, fără nicio ambiguitate posibilă — semnalul cel mai sigur, verificat primul.
+      const exactExisting=awbFindExactExisting(p.awb);
+      if(exactExisting){results.push({...p,comandaId:exactExisting.comandaId,rows:[{id:exactExisting.id,platforma:exactExisting.platforma,client_nume:exactExisting.clientNume,produs_nume:exactExisting.produsNume,awb:exactExisting.awb}]});continue;}
       // Variantă generală, nu doar Vinted — vezi resolveAwbByNameAndAmount/pendingImportRowSnapshot:
       // rezolvările AI cross-platform (nume+sumă) pot ateriza pe o linie „Neinclus" de pe ORICE
       // platformă, nu doar Vinted; forma e superset-ul strict al variantei scopate la Vinted, deci
