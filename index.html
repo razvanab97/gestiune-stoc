@@ -3660,7 +3660,11 @@ button.pcx-include-btn.included{border-color:var(--gr)}
     <!-- Același bug, aceeași reparație (vezi comentariul de mai sus la #pcmi-pickdrop) — găsit direct
          („nu pare să deschidă"): #awb-pickdrop stătea în interiorul #pcom-import-legacy, ascuns odată cu
          el la USE_PCOM_REDESIGN=true. Mutat aici, frate direct al ambelor variante. -->
-    <div class="smi-pickdrop" id="awb-pickdrop"><input type="text" id="awb-pick-search" placeholder="Caută după platformă, client, comandă sau produs…" oninput="filterAwbPickDebounced()"><div class="smi-pick-list" id="awb-pick-list"></div></div>
+    <!-- awb-pick-awb-input — cerut direct: "sa apara linie cu comenzile necunoscute ... astfel incat sa
+         pot asocia usor". Vizibil STRICT în modul „unrecognized" (openAwbUnrecognizedPick) — etichetă
+         complet necitită, fără niciun AWB extras automat, omul îl tastează aici, citit direct de pe
+         etichetă/thumbnail, o singură dată cu alegerea comenzii din listă. -->
+    <div class="smi-pickdrop" id="awb-pickdrop"><input type="text" id="awb-pick-awb-input" placeholder="AWB citit de pe etichetă…" style="display:none;margin-bottom:6px"><input type="text" id="awb-pick-search" placeholder="Caută după platformă, client, comandă sau produs…" oninput="filterAwbPickDebounced()"><div class="smi-pick-list" id="awb-pick-list"></div></div>
     <div id="pcom-import-redesign" style="display:none"></div>
     </div>
 
@@ -4702,6 +4706,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:596,text:'Asociază AWB-uri — 2 reparații suplimentare, cerute direct. (1) Codul-compus de sub „Obs:" (AWB_comandaId_altceva, pe etichete Sameday) nu se mai potrivea când nu era STRICT singur pe rândul lui — raportat direct, cu etichetă reală crossborder Bulgaria: „cum adică această pagină e necunoscută? repară sistemul - numărul comenzii se găsește sub observații, după numărul AWB". `sdM` caută acum tiparul oriunde în text, nu doar ca linie izolată — tolerează orice ar fi rămas în plus pe același „rând" din extragerea reală PDF.js. (2) Feature nou, cerut direct: „să apară linie cu comenzile necunoscute și să se recomande, după țară sau platformă, în funcție de AWB-ul citit, unde nu se poate, astfel încât să pot asocia ușor" — secțiunea „❔ Format nerecunoscut" (înainte un singur paragraf, fără nicio acțiune posibilă) arată acum câte un rând per pagină, cu thumbnail-ul etichetei (recunoaștere vizuală) și „🔗 Asociază manual" — alegi comanda din listă și tastezi AWB-ul citit de pe etichetă într-o căsuță dedicată (apare doar în acest mod), scrise împreună dintr-un singur pas. Pentru liniile „negăsită/ambiguă" care AU deja un AWB citit, dar nu ȘI potrivire automată, căutarea pornește acum precompletată și cu platforma deja sigur cunoscută din formatul etichetei (ex. Cargus Click&Collect = mereu Vinted), nu doar cu numele clientului ca până acum — fără nicio presupunere nouă pe formatele cu platformă ambiguă (FAN Courier/DPD/Cargus standard). Verificat de 2 ori: sintaxă + 30 de teste izolate pe funcțiile reale extrase din cod (codul-compus recunoscut indiferent de poziția pe linie, regresie pe toate formatele deja funcționale — Sameday RO/FAN/GLS —, fluxul complet de asociere manuală cu AWB tastat — comandă deja comisă și încă „Neinclus" —, eroare clară când AWB-ul lipsește din căsuță, fără nicio scriere, recomandare după platformă doar pe formate sigure, modurile vechi de picker — preview/error — neatinse).',date:'2026-10-26'},
   {n:595,text:'Asociază AWB-uri — etichetă eMAG Ungaria (Sameday/Pactic, „Ref. sz." — vezi #592/#594) ajungea complet „nerecunoscută" (fără niciun indiciu afișat), raportat direct cu etichetă reală (Király Zoltánné): „am zis că scoatem nume client - să putem identifica comanda". Cauza: regexul de citire a numelui destinatarului cerea „Címzett:" urmat STRICT, pe rândul imediat următor, de nume — un tabel cu 2 coloane (Feladó/Címzett) poate ieși din PDF.js cu text intercalat între ele (rânduri goale, reordonări), caz în care regexul eșua silențios, eticheta cădea direct pe AI-ul, nesigur, de fallback. Căutăm acum tot blocul de text dintre „Címzett:" și următorul câmp cunoscut de pe etichetă (Darab:/Utánvét:/Ref. sz.:, oricare apare primul), apoi primul rând nevid din el — tolerează rânduri goale/reordonate în interior, rămânând ancorat strict la etichetă. Când nicio comandă eMAG HU nerezolvată nu se potrivește local (ordinea nu a fost încă adusă în sistem), numele clientului tot apare direct pe linie — „nicio comandă eMAG HU nerezolvată nu se potrivește cu «Király Zoltánné»" — ca omul să poată identifica manual comanda, în loc de „nerecunoscută", fără niciun indiciu. Verificat de 2 ori: sintaxă + 6 teste izolate pe funcția reală extrasă din cod (adiacență strictă — cazul deja funcțional — neatinsă, rând gol intercalat — cazul real raportat — acum extras corect, regresie pe alte formate — GLS — neatinse, fără delimitator → rămâne null, fără crash).',date:'2026-10-26'},
   {n:594,text:'Asociază AWB-uri — 2 reparații suplimentare, cerute direct după #593: „nu mai găsește și asociază deloc bine". (1) Cauza principală, în `api/openai.js` (funcția serverless care face proxy către OpenAI, folosită de TOATE apelurile AI): nu avea deloc `maxDuration` setat — Vercel folosea limita IMPLICITĂ a planului, prea mică pentru o cerere cu imagine (viziune + JSON structurat, vezi #590), mai ales sub concurență (3 cereri AWB simultane, #591) — funcția era omorâtă de Vercel ÎNAINTE ca OpenAI să apuce să răspundă, indiferent cât de generos era timeout-ul de pe client (#593) — multe pagini rămâneau „format nerecunoscut" chiar și cu fallback-ul pe imagine activ. Ridicat explicit la 60s (maximul configurabil pe planurile standard). (2) Bug real, cu captură (comenzi 26.10.pdf p.19): o comandă a ieșit „012EMGXL23363294001_1027376269_16237334" — codul-compus de pe etichetă (AWB_comandaId_altceva), pe care regexul `sdM` știe deja să-l spargă corect când apare ca text clar, dar AI-ul (citind aceeași etichetă ca imagine, unde codul apare ca un singur șir vizual) l-a întors verbatim, netăiat, ca „comandă" — căzută apoi „negăsită" la lookup. Aplicăm acum aceeași despărțire și pe comandaId-ul extras de AI, nu doar pe cel citit direct din text de regex. Verificat de 2 ori: sintaxă (ambele fișiere) + 10 teste izolate suplimentare pe funcțiile reale extrase din cod (cazul exact raportat — cod compus spart corect, AWB neatins —, regresie pe comandaId normal fără acest tipar, regresie pe un cod cu underscore dar formă diferită — SKU intern — neatins).',date:'2026-10-26'},
   {n:593,text:'Asociază AWB-uri — bug MAJOR, raportat direct: „nu mai termină de citit, are peste 5 minute, e prea mult". Cauza, găsită în `callAI` (folosită de TOATE funcțiile AI, inclusiv noul fallback de citire AWB pe text/imagine de la #590): trimitea cererea printr-un `fetch()` scris de mână, FĂRĂ niciun timeout. Dacă UN SINGUR apel AI rămânea agățat (rețea lentă, răspuns blocat) în lotul concurent de citire AWB de la #591, `Promise.all` din worker-pool aștepta la nesfârșit după EL, chiar dacă celelalte pagini terminaseră deja — întregul lot rămânea blocat, fără nicio eroare vizibilă, fără limită de timp. `callAI` refolosește acum `apiJson` (același helper cu timeout+abort deja folosit la celelalte endpoint-uri `/api`), în loc de propriul fetch — un apel blocat eșuează acum cel târziu după 90s (generos, acoperă și facturile lungi cu 8000 max_tokens), pagina devine „nerecunoscută" ca orice altă eroare normală, în loc să blocheze restul lotului la infinit. Verificat de 2 ori: sintaxă + 9 teste izolate pe funcțiile reale extrase din cod (delegare corectă către apiJson cu timeout de 90s, un apel „agățat" respinge curat în loc să agațe, efectul end-to-end — pagina devine null, nu blochează restul lotului —, regresie pe apeluri AI normale, fără schema).',date:'2026-10-26'},
@@ -23376,7 +23381,15 @@ function parseAwbLabelText(text){
     const contVal=contM[1],comandaId=/[A-Za-z]/.test(contVal)?'OLX-'+contVal:contVal;
     return canceled?{courierCanceled:true,awb:awbM[1],comandaId}:{awb:awbM[1],comandaId,courier:dpdSignature?'DPD':'FAN Courier'};
   }
-  const sdM=text.match(/^([A-Za-z0-9]{8,25})_(\d{6,})_\d+$/m);
+  // Codul-compus de sub „Obs:” (AWB_comandaId_altceva) — mai permisiv acum, cerut direct, pe o etichetă
+  // reală crossborder Bulgaria (Delivery Solutions/Sameday, „012EMGXL23363308001_1027375557_16236517”,
+  // confirmat explicit: „numărul comenzii se găsește sub observații, după numărul AWB"): regexul vechi
+  // cerea STRICT ca linia să fie SINGURĂ pe rândul ei (`^...$`) — dacă PDF.js extrage acest cod lipit de
+  // alt text pe același rând (ex. un spațiu/caracter invizibil rămas din randarea etichetei, în loc de o
+  // linie complet goală), potrivirea eșua silențios, deși codul era prezent, identic, în text. Căutăm
+  // acum tiparul oriunde în text, nu doar ca linie izolată — specific destul (3 segmente, lungimi minime)
+  // să nu se potrivească din greșeală cu altceva de pe etichetă.
+  const sdM=text.match(/([A-Za-z0-9]{8,25})_(\d{6,})_\d+/);
   if(sdM)return canceled?{courierCanceled:true,awb:sdM[1],comandaId:sdM[2]}:{awb:sdM[1],comandaId:sdM[2],courier:'Sameday'};
   // Sameday — „notă de transport" clasică (ramburs/COD), format diferit de eticheta easybox de mai sus
   // (găsit direct pe date reale, 7 etichete nerecunoscute până acum — vezi raport direct „AWB-uri puse
@@ -23776,7 +23789,20 @@ function resolveCargusEmagLabelMatch(p){
 // listă căutabilă cu toate comenzile încă nerezolvate (fără AWB, neanulate, neîmpachetate), indiferent
 // de platformă. Aceeași structură ca la picker-ul de produs din Comandă furnizor (openFurnizorPick),
 // dar pe comenzi în loc de produse.
-let awbPickIdx=null,awbPickVisible=null,awbPickMode='preview',awbPickErrorRow=null;
+let awbPickIdx=null,awbPickVisible=null,awbPickMode='preview',awbPickErrorRow=null,awbPickUnrecognizedIdx=null;
+// Recomandare după platformă, dedusă din formatul etichetei/curier — cerut direct: „să se recomande,
+// după țară sau platformă, în funcție de AWB-ul citit, unde nu se poate [automat], astfel încât să pot
+// asocia ușor". Țara nu se poate deduce sigur din majoritatea formatelor (același curier livrează în mai
+// multe țări) — dar PLATFORMA (eMAG/Vinted) e deja cunoscută sigur pe formatele dedicate (GLS/Sameday HU
+// = mereu eMAG, Cargus Click&Collect = mereu Vinted etc.), fără nicio presupunere nouă, doar reutilizând
+// semnale deja extrase de parseAwbLabelText. Folosit ca prefix de căutare — niciodată inventat pentru
+// formate unde platforma chiar e ambiguă (FAN Courier/DPD/Cargus standard, care servesc mai multe).
+function awbInferPlatformHint(p){
+  if(!p)return'';
+  if(p.cargusEmagLabel||p.cargusEmagAmbiguous||p.emagFoundUnmatched||p.emagHuLabel||p.emagHuAmbiguous||p.courier==='GLS')return'eMAG';
+  if(p.vintedDigitalLabel||p.vintedAmbiguous||p.cargusClickCollectLabel)return'Vinted';
+  return'';
+}
 // Include și comenzile ÎNCĂ necomise din previzualizare („Neinclus" — vezi resolveVintedDigitalLabelMatch
 // mai sus, aceeași reparație pe termen lung), nu doar cele deja scrise în platforma_comenzi — altfel
 // picker-ul manual ar fi orb exact la comenzile pentru care omul are cel mai des nevoie să caute manual
@@ -23799,6 +23825,11 @@ function openAwbPickDropdownAt(anchorEl,prefill){
   if(top+420>window.innerHeight)top=Math.max(8,btn.top-424);
   drop.style.left=zoomAdjust(left)+'px';drop.style.top=zoomAdjust(top)+'px';
   drop.classList.add('on');
+  // Căsuța de AWB manual — vizibilă STRICT în modul „unrecognized" (etichetă complet necitită, fără
+  // niciun semnal — vezi openAwbUnrecognizedPick); pentru restul modurilor (preview/error), AWB-ul e deja
+  // cunoscut dintr-o citire anterioară, nu mai trebuie reintrodus.
+  const awbInput=document.getElementById('awb-pick-awb-input');
+  if(awbInput){awbInput.style.display=awbPickMode==='unrecognized'?'block':'none';awbInput.value='';}
   const search=document.getElementById('awb-pick-search');
   search.value=prefill||'';
   filterAwbPick();
@@ -23809,13 +23840,28 @@ function openAwbPick(ev,idx){
   awbPickMode='preview';
   awbPickIdx=idx;
   // Cerut direct — „când e vorba de eMAG HU, să încerce să asocieze după nume client” + „să primesc la
-  // recomandate doar comenzile eMAG HU, să bifez eu manual mai repede”: pentru o etichetă GLS Ungaria
-  // (singurul format care reține și numele destinatarului, vezi parseAwbLabelText/destinatarHu), căsuța
-  // de căutare a picker-ului pornește deja completată cu numele clientului — lista se filtrează instant
-  // la candidatul potrivit, fără să mai fie nevoie să caute omul singur prin toate platformele. Pentru
-  // orice altă etichetă (fără destinatarHu), căsuța rămâne goală, ca înainte — niciun comportament nou.
+  // recomandate doar comenzile eMAG HU, să bifez eu manual mai repede" + „să se recomande, după țară sau
+  // platformă, în funcție de AWB-ul citit": pentru o etichetă GLS Ungaria (singurul format care reține și
+  // numele destinatarului, vezi parseAwbLabelText/destinatarHu), căsuța de căutare a picker-ului pornește
+  // deja completată cu numele clientului. Fără nume (restul formatelor), dar cu platforma deja SIGUR
+  // cunoscută din formatul etichetei (vezi awbInferPlatformHint — ex. Cargus Click&Collect = mereu
+  // Vinted), căsuța pornește completată cu platforma — lista se filtrează instant la candidații relevanți,
+  // fără să mai caute omul singur prin toate platformele. Fără niciun semnal fiabil, rămâne goală, ca
+  // înainte — nicio recomandare inventată, mai bine goală decât greșită.
   const p=awbParsed[idx];
-  openAwbPickDropdownAt(ev.currentTarget,p?.destinatarHu||'');
+  openAwbPickDropdownAt(ev.currentTarget,p?.destinatarHu||awbInferPlatformHint(p));
+}
+// Al treilea punct de intrare pentru ACELAȘI picker — cerut direct: „să apară linie cu comenzile
+// necunoscute și să se recomande... astfel încât să pot asocia ușor". Spre deosebire de openAwbPick
+// (etichetă parțial citită, cu AWB cunoscut) și openAwbErrorPick (eroare salvată), aici eticheta n-a putut
+// fi citită DELOC — nu există niciun AWB de scris pe comandă. Căsuța de AWB manual (vezi
+// openAwbPickDropdownAt) se arată DOAR în acest mod, ca omul să poată citi AWB-ul de pe etichetă (vizibil
+// în thumbnail-ul de-alături) și să-l scrie o singură dată, odată cu alegerea comenzii.
+function openAwbUnrecognizedPick(ev,idx){
+  ev.stopPropagation();
+  awbPickMode='unrecognized';
+  awbPickUnrecognizedIdx=idx;
+  openAwbPickDropdownAt(ev.currentTarget,'');
 }
 // Al doilea punct de intrare pentru ACELAȘI picker (cerut direct — „dacă sunt mai multe AWB-uri decât
 // comenzi, trebuie să primim informații... spre a-l verifica manual și a asocia, dacă este cazul, o
@@ -23933,6 +23979,21 @@ async function pickAwbOrder(i){
   document.getElementById('awb-pickdrop').classList.remove('on');
   if(awbPickMode==='error'){
     if(awbPickErrorRow)associateAwbErrorToOrder(awbPickErrorRow,o);
+    return;
+  }
+  // Etichetă complet necitită (vezi openAwbUnrecognizedPick) — niciun AWB extras automat, îl ia pe cel
+  // tastat manual în căsuța dedicată (vizibilă STRICT în acest mod). Fără el, alegerea comenzii n-ar avea
+  // ce scrie pe ea — cerut explicit să nu se scrie niciodată un AWB gol/inventat.
+  if(awbPickMode==='unrecognized'){
+    const entry=awbUnrecognizedPages[awbPickUnrecognizedIdx];if(!entry)return;
+    const awbTyped=(document.getElementById('awb-pick-awb-input')?.value||'').trim();
+    if(!awbTyped){toast('Scrie AWB-ul citit de pe etichetă înainte să alegi comanda','err');return;}
+    const rows=o._pending?pendingImportRowSnapshot(o.comandaId):[{id:o.id,platforma:o.platforma,client_nume:o.clientNume,produs_nume:o.produsNume,awb:o.awb}];
+    const newP={awb:awbTyped,comandaId:o.comandaId,file:entry.file,page:entry.page,_blob:entry._blob,rows,_pendingMatch:!!o._pending,_manualPick:true};
+    if(pcomAwbMatched(newP))await applyOneAwbMatch(newP);
+    awbParsed.push(newP);
+    awbUnrecognizedPages.splice(awbPickUnrecognizedIdx,1);
+    renderAwbPreview();
     return;
   }
   const p=awbParsed[awbPickIdx];if(!p)return;
@@ -24080,9 +24141,12 @@ async function handleAwbPdfFile(ev){
       if(p&&p.courierCanceled)awbCanceledPages.push({label,awb:p.awb,comandaId:p.comandaId,file:fname,page});
       // _blob — reținut și pentru previzualizarea vizuală AWB (randată mai târziu, la
       // applyAwbAssociation — vezi generateAwbPreviewInBackground); `file` e deja un Blob (File).
-      else if(p&&!awbLooksPlausible(p.awb,p.courier))awbUnrecognizedPages.push({label,file:fname,page});
+      // Reținut și pe paginile complet nerecunoscute (vezi openAwbUnrecognizedPick, „sa apara linie cu
+      // comenzile necunoscute... astfel încât să pot asocia ușor") — thumbnail-ul ajută omul să recunoască
+      // vizual eticheta, chiar fără niciun text citit automat de pe ea.
+      else if(p&&!awbLooksPlausible(p.awb,p.courier))awbUnrecognizedPages.push({label,file:fname,page,_blob:blob});
       else if(p)pairs.push({...p,file:fname,page,_blob:blob});
-      else awbUnrecognizedPages.push({label,file:fname,page});
+      else awbUnrecognizedPages.push({label,file:fname,page,_blob:blob});
     }
     if(!pairs.length&&!awbUnrecognizedPages.length&&!awbCanceledPages.length)throw new Error('PDF-ul pare gol.');
     const results=[];
@@ -24373,9 +24437,12 @@ async function readAwbFolderPdfs(fromArchive){
       // deși aveau AWB): spre deosebire de handleAwbPdfFile (selectare manuală), bucla asta nu reținea
       // NICIODATĂ numărul paginii — awb_source_page rămânea mereu null, deci activeAwbPrintOrders nu
       // găsea niciodată o pagină sursă de tipărit, oricâte comenzi ar fi fost incluse.
-      else if(p&&!awbLooksPlausible(p.awb,p.courier))awbUnrecognizedPages.push({label:`${fname} p.${page}`,file:fname,page});
+      // Reținut și pe paginile complet nerecunoscute (vezi openAwbUnrecognizedPick, „sa apara linie cu
+      // comenzile necunoscute... astfel încât să pot asocia ușor") — thumbnail-ul ajută omul să recunoască
+      // vizual eticheta, chiar fără niciun text citit automat de pe ea.
+      else if(p&&!awbLooksPlausible(p.awb,p.courier))awbUnrecognizedPages.push({label:`${fname} p.${page}`,file:fname,page,_blob:blob});
       else if(p)pairs.push({...p,file:fname,page,_blob:blob});
-      else awbUnrecognizedPages.push({label:`${fname} p.${page}`,file:fname,page});
+      else awbUnrecognizedPages.push({label:`${fname} p.${page}`,file:fname,page,_blob:blob});
     }
     if(!pairs.length&&!awbUnrecognizedPages.length&&!awbCanceledPages.length&&!awbCreatedVintedFileNames.length)throw new Error('Niciun PDF citit cu succes din dosar.');
     // Bug real, foarte important, raportat direct („sincronizate prin citire AWB, dar nu apar în Staff"):
@@ -24483,22 +24550,28 @@ let awbPreviewHealing=false;
 // pagina rămâne deschisă; un cache-hit se aplică sincron, fără flash de imagine lipsă la re-randare.
 const awbThumbCache=new Map();
 function awbThumbKey(p){return(p.file||'')+'|'+(p.page||0);}
-function awbThumbHtml(p,idx){
+// `prefix` opțional — permite reutilizarea EXACTĂ a acestui thumbnail și pentru rândurile „format
+// nerecunoscut" (vezi mai jos, „sa apara linie cu comenzile necunoscute... astfel încât să pot asocia
+// ușor"), cu propriul namespace de id-uri DOM (`awb-unrec-thumb-*`), ca să nu se suprapună peste
+// id-urile liniilor din `awbParsed` (indecși complet independenți, aceeași valoare ar coincide altfel).
+function awbThumbHtml(p,idx,prefix){
+  prefix=prefix||'awb-thumb';
   // Bug real, raportat direct: „nu merge să dau zoom pe AWB" — href="#" + onclick="return false" era
   // pus ca să nu „sară" nicăieri înainte să se încarce poza, dar bloca click-ul PERMANENT, chiar și
   // DUPĂ ce awbFillThumb completa href-ul real mai jos — onclick-ul tot rula primul și tot anula
   // navigarea, indiferent de href. Fără onclick, cu un href neutru (javascript:void(0)) înainte de
   // încărcare — awbFillThumb suprascrie href-ul cu poza reală + target _blank, iar clickul chiar
   // funcționează din acel moment încolo, fără cod suplimentar care să-l mai blocheze.
-  return p._blob?`<a href="javascript:void(0)" id="awb-thumb-${idx}-link" class="awb-thumb-link" title="Previzualizare etichetă — click pentru mărit"><img id="awb-thumb-${idx}" class="awb-thumb" alt=""></a>`:'';
+  return p._blob?`<a href="javascript:void(0)" id="${prefix}-${idx}-link" class="awb-thumb-link" title="Previzualizare etichetă — click pentru mărit"><img id="${prefix}-${idx}" class="awb-thumb" alt=""></a>`:'';
 }
-function awbFillThumb(p,idx){
+function awbFillThumb(p,idx,prefix){
+  prefix=prefix||'awb-thumb';
   if(!p._blob)return;
   const key=awbThumbKey(p);
   const applyUrl=dataUrl=>{
-    const img=document.getElementById(`awb-thumb-${idx}`);if(!img)return;
+    const img=document.getElementById(`${prefix}-${idx}`);if(!img)return;
     img.src=dataUrl;
-    const link=document.getElementById(`awb-thumb-${idx}-link`);
+    const link=document.getElementById(`${prefix}-${idx}-link`);
     if(link){link.href=dataUrl;link.target='_blank';}
   };
   const cached=awbThumbCache.get(key);
@@ -24575,7 +24648,15 @@ function renderAwbPreview(){
   // parsare (AWB-ul se citește clar), ci un AWB pe care curierul l-a anulat/stornat înainte de preluare
   // — omul trebuie să regenereze AWB pentru acea comandă, nu doar să reîncerce citirea.
   if(awbCanceledPages.length)html+=`<div class="inv-prev-row" style="color:var(--rd);font-weight:700">🚫 ${awbCanceledPages.length} ${awbCanceledPages.length>1?'etichete anulate':'etichetă anulată'} de curier (fără livrare posibilă cu acest AWB) — regenerează AWB, nu se poate asocia automat: ${awbCanceledPages.map(p=>`${esc(p.label)}${p.comandaId?` — comanda ${esc(p.comandaId)}${p.clientNume?' ('+esc(p.clientNume)+')':''}`:''} (AWB ${esc(p.awb)})`).join(', ')}</div>`;
-  if(awbUnrecognizedPages.length)html+=`<div class="inv-prev-row" style="color:var(--t3)">❔ Format nerecunoscut, sărite (fără AWB/comandă identificabile) — ${awbUnrecognizedPages.length>1?'paginile':'pagina'} ${esc(awbUnrecognizedPages.map(x=>x.label).join(', '))}</div>`;
+  // Cerut direct — „sa apara linie cu comenzile necunoscute si sa se recomande... astfel incat sa pot
+  // asocia usor": înainte, un singur paragraf cu toate paginile înșirate, FĂRĂ nicio acțiune posibilă —
+  // eticheta rămânea definitiv needitabilă din previzualizare. Acum, câte un rând per pagină, cu
+  // thumbnail-ul etichetei (ca omul s-o recunoască vizual, chiar fără niciun text citit automat) și
+  // „🔗 Asociază manual" (vezi openAwbUnrecognizedPick) — picker-ul obișnuit, plus o căsuță unde AWB-ul se
+  // tastează o singură dată, citit direct de pe etichetă.
+  if(awbUnrecognizedPages.length)html+=awbUnrecognizedPages.map((x,idx)=>
+    `<div class="inv-prev-row" style="color:var(--t3);flex-wrap:wrap;gap:8px">${awbThumbHtml(x,idx,'awb-unrec-thumb')}<span style="flex:1;min-width:260px">❔ ${esc(x.label)} — format nerecunoscut, fără AWB/comandă identificabile</span><button type="button" class="btn btn-sm awb-pick-trigger" style="flex-shrink:0" onclick="openAwbUnrecognizedPick(event,${idx})">🔗 Asociază manual</button></div>`
+  ).join('');
   box.innerHTML=html;
   // Previzualizare etichetă — cerut direct: „să avem previzualizare la AWB să vedem unde se potrivește"
   // (atât pe liniile negăsite/ambigue, de ales manual, cât și pe cele deja potrivite, ca verificare
@@ -24584,6 +24665,7 @@ function renderAwbPreview(){
   // blocheze nimic altceva. Strict client-side, pentru sesiunea curentă — fără niciun upload/Storage
   // (spre deosebire de generateAwbPreviewInBackground, care persistă poza DUPĂ asociere, pentru Staff).
   awbParsed.forEach((p,idx)=>{if(p._blob)awbFillThumb(p,idx);});
+  awbUnrecognizedPages.forEach((x,idx)=>{if(x._blob)awbFillThumb(x,idx,'awb-unrec-thumb');});
   document.getElementById('pcmi-awb-info').textContent=`${matched.length} găsite, ${unmatched.length} negăsite${awbCanceledPages.length?`, ${awbCanceledPages.length} anulate de curier`:''}${awbUnrecognizedPages.length?`, ${awbUnrecognizedPages.length} nerecunoscute`:''}`;
   // Și un lot alcătuit numai din AWB-uri fără comandă trebuie confirmat: îl păstrăm ca eroare
   // reconciliabilă, nu îl pierdem doar fiindcă nu există încă nicio asociere reușită.
