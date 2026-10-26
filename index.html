@@ -815,10 +815,11 @@ tr:hover td{background:var(--surf2)}
 .inv-prev-q{font-family:var(--mono);color:var(--t2);min-width:50px;text-align:right}
 /* Previzualizare etichetă AWB, pe rândul de asociere (găsit/negăsit) — cerut direct: „să avem
    previzualizare la AWB să vedem unde se potrivește". Dimensiune mică, fixă — doar un reper vizual
-   rapid, clic pentru mărit (în tab nou, pe imaginea originală randată la 700px, deja generată client-side
-   — vezi renderPdfPageToImageDataUrl/awbFillThumb, fără niciun upload, strict pentru sesiunea curentă). */
-.awb-thumb-link{flex-shrink:0;display:block;border-radius:6px;overflow:hidden;border:1px solid var(--b2);box-shadow:var(--sh);background:var(--surf2);cursor:zoom-in}
-.awb-thumb{display:block;width:46px;height:60px;object-fit:cover;object-position:top}
+   rapid, clic pentru mărit — pe aceeași pagină (lightbox openImgZoom/#ov-imgzoom, cerut direct: „vreau
+   ca pop up sa fie tot pe aceasta pagina, nu sa deschida o pagina noua" — înainte deschidea tab nou),
+   pe imaginea originală randată la 700px, deja generată client-side — vezi
+   renderPdfPageToImageDataUrl/awbFillThumb, fără niciun upload, strict pentru sesiunea curentă. */
+.awb-thumb{flex-shrink:0;display:block;width:46px;height:60px;object-fit:cover;object-position:top;border-radius:6px;border:1px solid var(--b2);box-shadow:var(--sh);background:var(--surf2);cursor:zoom-in}
 .inv-prev-price{text-align:right;flex-shrink:0;min-width:120px;max-width:170px}
 .inv-match{font-size:25px;padding:2px 8px;border-radius:12px;margin-left:8px;flex-shrink:0;font-weight:500}
 .inv-match.new{background:var(--bl-bg);color:var(--bl)}
@@ -4706,6 +4707,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:597,text:'Asociază AWB-uri — 2 îmbunătățiri de UX, cerute direct, pe rândurile de asociere din #596. (1) „vreau ca pop up sa fie tot pe aceasta pagina, nu sa deschida o pagina noua": click pe thumbnail-ul etichetei deschidea poza într-un TAB NOU (de la #570) — acum folosește lightbox-ul deja existent în aplicație (openImgZoom/#ov-imgzoom, folosit și pentru poze de produs), rămânând pe aceeași pagină. (2) „si sa poti da copy la text foarte usor - la nume, la numere": buton mic ⧉ lângă numele clientului, numărul comenzii și codul AWB, pe toate rândurile de asociere (găsite și negăsite) — un click copiază direct valoarea, fără să mai fie nevoie de selectare manuală de text; reutilizează exact `copyText`, folosit deja în Research pentru același scop. Verificat de 2 ori: sintaxă + 18 teste izolate pe funcțiile reale extrase din cod (thumbnail fără link/tab nou, buton de copiere cu valori normale/diacritice/goale, fără crash pe nicio variantă).',date:'2026-10-26'},
   {n:596,text:'Asociază AWB-uri — 2 reparații suplimentare, cerute direct. (1) Codul-compus de sub „Obs:" (AWB_comandaId_altceva, pe etichete Sameday) nu se mai potrivea când nu era STRICT singur pe rândul lui — raportat direct, cu etichetă reală crossborder Bulgaria: „cum adică această pagină e necunoscută? repară sistemul - numărul comenzii se găsește sub observații, după numărul AWB". `sdM` caută acum tiparul oriunde în text, nu doar ca linie izolată — tolerează orice ar fi rămas în plus pe același „rând" din extragerea reală PDF.js. (2) Feature nou, cerut direct: „să apară linie cu comenzile necunoscute și să se recomande, după țară sau platformă, în funcție de AWB-ul citit, unde nu se poate, astfel încât să pot asocia ușor" — secțiunea „❔ Format nerecunoscut" (înainte un singur paragraf, fără nicio acțiune posibilă) arată acum câte un rând per pagină, cu thumbnail-ul etichetei (recunoaștere vizuală) și „🔗 Asociază manual" — alegi comanda din listă și tastezi AWB-ul citit de pe etichetă într-o căsuță dedicată (apare doar în acest mod), scrise împreună dintr-un singur pas. Pentru liniile „negăsită/ambiguă" care AU deja un AWB citit, dar nu ȘI potrivire automată, căutarea pornește acum precompletată și cu platforma deja sigur cunoscută din formatul etichetei (ex. Cargus Click&Collect = mereu Vinted), nu doar cu numele clientului ca până acum — fără nicio presupunere nouă pe formatele cu platformă ambiguă (FAN Courier/DPD/Cargus standard). Verificat de 2 ori: sintaxă + 30 de teste izolate pe funcțiile reale extrase din cod (codul-compus recunoscut indiferent de poziția pe linie, regresie pe toate formatele deja funcționale — Sameday RO/FAN/GLS —, fluxul complet de asociere manuală cu AWB tastat — comandă deja comisă și încă „Neinclus" —, eroare clară când AWB-ul lipsește din căsuță, fără nicio scriere, recomandare după platformă doar pe formate sigure, modurile vechi de picker — preview/error — neatinse).',date:'2026-10-26'},
   {n:595,text:'Asociază AWB-uri — etichetă eMAG Ungaria (Sameday/Pactic, „Ref. sz." — vezi #592/#594) ajungea complet „nerecunoscută" (fără niciun indiciu afișat), raportat direct cu etichetă reală (Király Zoltánné): „am zis că scoatem nume client - să putem identifica comanda". Cauza: regexul de citire a numelui destinatarului cerea „Címzett:" urmat STRICT, pe rândul imediat următor, de nume — un tabel cu 2 coloane (Feladó/Címzett) poate ieși din PDF.js cu text intercalat între ele (rânduri goale, reordonări), caz în care regexul eșua silențios, eticheta cădea direct pe AI-ul, nesigur, de fallback. Căutăm acum tot blocul de text dintre „Címzett:" și următorul câmp cunoscut de pe etichetă (Darab:/Utánvét:/Ref. sz.:, oricare apare primul), apoi primul rând nevid din el — tolerează rânduri goale/reordonate în interior, rămânând ancorat strict la etichetă. Când nicio comandă eMAG HU nerezolvată nu se potrivește local (ordinea nu a fost încă adusă în sistem), numele clientului tot apare direct pe linie — „nicio comandă eMAG HU nerezolvată nu se potrivește cu «Király Zoltánné»" — ca omul să poată identifica manual comanda, în loc de „nerecunoscută", fără niciun indiciu. Verificat de 2 ori: sintaxă + 6 teste izolate pe funcția reală extrasă din cod (adiacență strictă — cazul deja funcțional — neatinsă, rând gol intercalat — cazul real raportat — acum extras corect, regresie pe alte formate — GLS — neatinse, fără delimitator → rămâne null, fără crash).',date:'2026-10-26'},
   {n:594,text:'Asociază AWB-uri — 2 reparații suplimentare, cerute direct după #593: „nu mai găsește și asociază deloc bine". (1) Cauza principală, în `api/openai.js` (funcția serverless care face proxy către OpenAI, folosită de TOATE apelurile AI): nu avea deloc `maxDuration` setat — Vercel folosea limita IMPLICITĂ a planului, prea mică pentru o cerere cu imagine (viziune + JSON structurat, vezi #590), mai ales sub concurență (3 cereri AWB simultane, #591) — funcția era omorâtă de Vercel ÎNAINTE ca OpenAI să apuce să răspundă, indiferent cât de generos era timeout-ul de pe client (#593) — multe pagini rămâneau „format nerecunoscut" chiar și cu fallback-ul pe imagine activ. Ridicat explicit la 60s (maximul configurabil pe planurile standard). (2) Bug real, cu captură (comenzi 26.10.pdf p.19): o comandă a ieșit „012EMGXL23363294001_1027376269_16237334" — codul-compus de pe etichetă (AWB_comandaId_altceva), pe care regexul `sdM` știe deja să-l spargă corect când apare ca text clar, dar AI-ul (citind aceeași etichetă ca imagine, unde codul apare ca un singur șir vizual) l-a întors verbatim, netăiat, ca „comandă" — căzută apoi „negăsită" la lookup. Aplicăm acum aceeași despărțire și pe comandaId-ul extras de AI, nu doar pe cel citit direct din text de regex. Verificat de 2 ori: sintaxă (ambele fișiere) + 10 teste izolate suplimentare pe funcțiile reale extrase din cod (cazul exact raportat — cod compus spart corect, AWB neatins —, regresie pe comandaId normal fără acest tipar, regresie pe un cod cu underscore dar formă diferită — SKU intern — neatins).',date:'2026-10-26'},
@@ -24554,15 +24556,26 @@ function awbThumbKey(p){return(p.file||'')+'|'+(p.page||0);}
 // nerecunoscut" (vezi mai jos, „sa apara linie cu comenzile necunoscute... astfel încât să pot asocia
 // ușor"), cu propriul namespace de id-uri DOM (`awb-unrec-thumb-*`), ca să nu se suprapună peste
 // id-urile liniilor din `awbParsed` (indecși complet independenți, aceeași valoare ar coincide altfel).
+// Cerut direct — „vreau ca pop up sa fie tot pe aceasta pagina, nu sa deschida o pagina noua": thumbnail-ul
+// deschidea poza într-un TAB NOU (href+target="_blank", de la #570) — acum folosește lightbox-ul deja
+// existent în aplicație (openImgZoom/#ov-imgzoom, folosit peste tot în altă parte pentru poze de produs),
+// rămânând pe aceeași pagină. `onclick="openImgZoom(this.src)"` citește direct src-ul curent al imaginii
+// la momentul click-ului — nu mai are nevoie de link/href separat, deci dispare și bug-ul vechi documentat
+// aici („nu merge să dau zoom", href blocat de onclick) — era specific mecanismului de link, inexistent
+// acum.
+// Cerut direct — „sa poti da copy la text foarte usor - la nume, la numere": buton mic ⧉ lângă
+// comandă/AWB/nume, pe rândurile de asociere — reutilizează EXACT tiparul deja folosit în Research
+// (copyText, deja verificat/folosit în toată aplicația), nu un mecanism nou. `event.stopPropagation()` —
+// rândul-părinte are alte click-uri active (thumbnail, buton picker); fără el, click-ul pe copy ar putea
+// declanșa accidental altceva pe lângă copiere.
+function awbCopyChip(value){
+  const v=String(value||'').trim();
+  if(!v)return'';
+  return`<button type="button" class="smi-title-copy-btn" onclick="event.stopPropagation();copyText(${esc(JSON.stringify(v))})" title="Copiază: ${esc(v)}">⧉</button>`;
+}
 function awbThumbHtml(p,idx,prefix){
   prefix=prefix||'awb-thumb';
-  // Bug real, raportat direct: „nu merge să dau zoom pe AWB" — href="#" + onclick="return false" era
-  // pus ca să nu „sară" nicăieri înainte să se încarce poza, dar bloca click-ul PERMANENT, chiar și
-  // DUPĂ ce awbFillThumb completa href-ul real mai jos — onclick-ul tot rula primul și tot anula
-  // navigarea, indiferent de href. Fără onclick, cu un href neutru (javascript:void(0)) înainte de
-  // încărcare — awbFillThumb suprascrie href-ul cu poza reală + target _blank, iar clickul chiar
-  // funcționează din acel moment încolo, fără cod suplimentar care să-l mai blocheze.
-  return p._blob?`<a href="javascript:void(0)" id="${prefix}-${idx}-link" class="awb-thumb-link" title="Previzualizare etichetă — click pentru mărit"><img id="${prefix}-${idx}" class="awb-thumb" alt=""></a>`:'';
+  return p._blob?`<img id="${prefix}-${idx}" class="awb-thumb" alt="" style="cursor:pointer" title="Previzualizare etichetă — click pentru mărit" onclick="openImgZoom(this.src)">`:'';
 }
 function awbFillThumb(p,idx,prefix){
   prefix=prefix||'awb-thumb';
@@ -24571,8 +24584,6 @@ function awbFillThumb(p,idx,prefix){
   const applyUrl=dataUrl=>{
     const img=document.getElementById(`${prefix}-${idx}`);if(!img)return;
     img.src=dataUrl;
-    const link=document.getElementById(`${prefix}-${idx}-link`);
-    if(link){link.href=dataUrl;link.target='_blank';}
   };
   const cached=awbThumbCache.get(key);
   if(cached){applyUrl(cached);return;}
@@ -24619,7 +24630,9 @@ function renderAwbPreview(){
       // exact ce lipsește: codul AWB e sigur, doar comanda trebuie aleasă manual.
       else if(p.file&&!p.comandaId)msg=`⚠️ Etichetă ${esc(p.file)} — AWB ${esc(p.awb)} citit din numele fișierului, fără niciun număr de comandă pe etichetă`;
       else{const source=p.file?` · ${esc(p.file)} p.${esc(p.page||'?')}`:'';msg=`⚠️ Comanda ${esc(p.comandaId)} (AWB ${esc(p.awb)}) — negăsită sau ambiguă în Comenzi Platforme${source}`;}
-      return`<div class="inv-prev-row" style="color:var(--rd);flex-wrap:wrap;gap:8px">${awbThumbHtml(p,idx)}<span style="flex:1;min-width:260px">${msg}</span><button type="button" class="btn btn-sm awb-pick-trigger" style="flex-shrink:0" onclick="openAwbPick(event,${idx})">🔗 Asociază manual</button></div>`;
+      // Copiere rapidă — numele (oricare variantă s-a citit) + comandă + AWB, vezi awbCopyChip.
+      const copyName=p.destinatarHu||p.destinatar||p.aiClientNume||p.produs||'';
+      return`<div class="inv-prev-row" style="color:var(--rd);flex-wrap:wrap;gap:8px">${awbThumbHtml(p,idx)}<span style="flex:1;min-width:260px">${msg}</span><span style="display:flex;gap:4px;flex-shrink:0">${awbCopyChip(copyName)}${awbCopyChip(p.comandaId)}${awbCopyChip(p.awb)}</span><button type="button" class="btn btn-sm awb-pick-trigger" style="flex-shrink:0" onclick="openAwbPick(event,${idx})">🔗 Asociază manual</button></div>`;
     }
     const nm=p.rows[0].client_nume||p.rows.map(r=>r.produs_nume).join(', ');
     const already=p.rows[0].awb;
@@ -24641,7 +24654,7 @@ function renderAwbPreview(){
     // deja „rezolvată" vizual n-avea NICIO cale de corectare, nici înainte, nici după comitere. Deschide
     // ACELAȘI picker ca la „🔗 Asociază manual" (openAwbPick) — pickAwbOrder desface singur asocierea
     // veche, corect, înainte să scrie noua alegere (vezi undoAwbMatch).
-    return`<div class="inv-prev-row" style="flex-wrap:wrap;gap:8px">${awbThumbHtml(p,idx)}<span style="flex:1;min-width:260px">✓ Comanda ${esc(p.comandaId)} — ${esc(nm)} → AWB ${esc(p.awb)}${already?` <span style="color:var(--t3)">(înlocuiește ${esc(already)})</span>`:''}${matchNote}${pendingNote}</span><button type="button" class="btn btn-sm awb-pick-trigger" style="flex-shrink:0" onclick="openAwbPick(event,${idx})">🔄 Altă comandă</button></div>`;
+    return`<div class="inv-prev-row" style="flex-wrap:wrap;gap:8px">${awbThumbHtml(p,idx)}<span style="flex:1;min-width:260px">✓ Comanda ${esc(p.comandaId)} — ${esc(nm)} → AWB ${esc(p.awb)}${already?` <span style="color:var(--t3)">(înlocuiește ${esc(already)})</span>`:''}${matchNote}${pendingNote}</span><span style="display:flex;gap:4px;flex-shrink:0">${awbCopyChip(nm)}${awbCopyChip(p.comandaId)}${awbCopyChip(p.awb)}</span><button type="button" class="btn btn-sm awb-pick-trigger" style="flex-shrink:0" onclick="openAwbPick(event,${idx})">🔄 Altă comandă</button></div>`;
   }).join('');
   // Etichetă anulată de curier — raportat direct, extins de la DPD la orice curier („nu doar DPD ci
   // peste tot, dacă apar erori"): secțiune separată de „format nerecunoscut", aici NU e o problemă de
