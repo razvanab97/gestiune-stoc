@@ -4707,6 +4707,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:600,text:'Asociază AWB-uri — citire completă a arhivei locale (`~/Desktop/AWB-uri/`, 363 fișiere reale), cerută direct: „citeste toate awb urile si invata toate tipurile de AWB uri care pot exista... sa fie bine integrate". 4 reparări de regex, găsite prin citire DIRECTĂ (pdftotext -layout, nu presupunere) a textului real extras din fiecare etichetă. (1) Etichetă digitală Vinted (ambele variante — cu/fără produs): extragerea reală de text introduce 2-4 rânduri GOALE între segmentele vizual separate pe etichetă — niciuna din cele 32 de etichete reale nu se potrivea (separatorul cerea un singur `\n` strict); tolerăm acum orice număr de rânduri goale. Pe drum, un AL DOILEA bug, găsit la re-testare, mai subtil: varianta „cu produs" ajunsese totuși să „potrivească", greșit, DOAR caracterul invizibil de final de pagină (`\f`) ca linie de produs — rezultatul ieșea gol, iar fallback-ul pentru varianta minimală (fără produs) nu se mai încerca deloc, pentru că regexul CHIAR se potrivise (inutil, dar tehnic nenul); ultimele 2 segmente cer acum explicit cel puțin un caracter real, nu orice caracter care nu e linie nouă. (2) Etichetă proprie GLS (generateGlsLabelPdf): aceeași toleranță la rânduri goale, plus denumirea de produs poate ocupa până la 6 rânduri (generatorul însuși o împarte așa, pentru cele lungi) — unite acum cu spațiu, nu doar primul rând citit; adăugată și o variantă mai veche, găsită separat în arhivă (fără „PRODUS" ca prim rând, cu „COD:" simplu în loc de „COD DE EXPEDIERE"). (3) Cargus standard (eMAG): regexul presupunea greșit că AWB-ul („Nota:") apare pe rândul imediat următor numelui destinatarului — fals; eticheta e pe 2 coloane, iar extragerea de text lipește alt conținut (din coloana dreaptă — „Incercari permise...") pe același rând vizual cu „Destinatar: NUME". Fiecare câmp se citește acum independent, pe markerul lui propriu, nu unul relativ la celălalt. Rezultat, verificat pe toate cele 537 de pagini reale din arhivă: 100% recunoscute automat în toate categoriile, cu O SINGURĂ excepție rămasă — paginile genuin needitabile prin text (Sameday RO/crossborder randate ca imagine, ExpressOne Ungaria cu encoding corupt — confirmat direct cu `pdfimages`/`pdftotext`, nu presupunere), unde doar fallback-ul AI pe imagine, deja funcțional, mai poate citi. Verificat de 2 ori: sintaxă + 29 de verificări izolate pe funcțiile reale extrase din cod, pe text exact din etichetele reale (inclusiv bug-ul găsit la re-testare) + re-verificare completă, de 2 ori, pe toate cele 537 de pagini din arhivă.',date:'2026-10-26'},
   {n:599,text:'Asociază AWB-uri — bug MAJOR, confirmat printr-un apel DIRECT către AI-ul de producție, cu etichetă reală (Király Zoltánné, cod „67833 5089857 00001 36 04002"): AI-ul, citind pe imagine, întoarce codul FĂRĂ spații („678335089857000013604002"), în timp ce regexul de pe etichetele citite normal îl reține CU spații simple — ACELAȘI AWB fizic, două texte diferite. Verificarea universală „AWB deja asociat" de la #598, plus TOATE celelalte verificări „deja asociat" (Vinted, Cargus Click&Collect, Cargus eMAG, Sameday Ungaria — 8 locuri în total), comparau STRICT identic — nu recunoșteau niciodată o potrivire între o citire AI și una din regex/bază, pentru un cod cu spații, exact cazul care a declanșat tot acest fir („dacă există deja, de ce apare mai sus ca neasociat?"). Comparăm acum peste tot fără spații și fără sensibilitate la majuscule (`awbNorm`) — niciodată ce se SCRIE în bază, acolo formatarea originală, lizibilă, rămâne neschimbată. Verificat direct, live, printr-un apel real către `/api/openai` de producție cu eticheta reală (confirmat: AI-ul chiar citește corect numele+suma+AWB-ul, doar formatarea diferea) — apoi de 2 ori: sintaxă + 11 teste izolate pe funcțiile reale extrase din cod (cazul exact reprodus, simetric în ambele direcții, spații multiple, majuscule, AWB-uri genuin diferite tot resping corect, comandă anulată/input gol neschimbate).',date:'2026-10-26'},
   {n:598,text:'Asociază AWB-uri — 2 reparații majore, cerute direct: „fă sistemul să înțeleagă cum se asociază, care și cum și pe baza a ce" (clarificat: „asociere mai inteligentă, cu mai multe semnale") + 2 comenzi reale confirmate live în bază, deja corect asociate, dar tot afișate „negăsită" la recitire: „dacă există deja, de ce apare mai sus ca neasociat?" (Király Zoltánné #1136836907) și „încă o dată 550497435 - există și nu e asociat, de ce?" (Lumperdean Mihai #550497435, deja împachetat). (1) Semnal nou — conținutul coletului: AI-ul citește acum și descrierea produsului de pe etichetă (câmp nou, `produsText`, exclude explicit genericul „Marketplace"/„Colet"), folosit ALĂTURI de nume+sumă în potrivirea universală (`resolveAwbByNameAndAmount`) — scorul final e cel mai bun dintre nume și conținut, nu o medie, ca un semnal slab să nu-l tragă în jos pe celălalt, clar. (2) Cauza reală a celor 2 comenzi raportate: potrivirea verifica STRICT după comandaId (care poate ieși complet greșit — vezi „Ref. sz." de la #592/#594) sau excludea din candidați orice comandă care ARE DEJA un AWB — o etichetă recitită, cu AWB-ul deja scris corect pe o comandă, nu mai era recunoscută ca „deja rezolvată". Verificăm acum, universal și PRIMUL (înaintea oricărui lookup după comandaId), dacă AWB-ul citit există deja EXACT pe vreo comandă, indiferent de platformă/format/comandaId citit alături — semnalul cel mai sigur posibil. Verificat de 2 ori: sintaxă + 20 de teste izolate pe funcțiile reale extrase din cod (ambele comenzi reale reproduse exact, potrivire prin conținut fără nume disponibil, scor maxim nu medie, regresii pe comportamentul vechi neatinse, comandă anulată/AWB gol/substring parțial — toate corect ignorate).',date:'2026-10-26'},
   {n:597,text:'Asociază AWB-uri — 2 îmbunătățiri de UX, cerute direct, pe rândurile de asociere din #596. (1) „vreau ca pop up sa fie tot pe aceasta pagina, nu sa deschida o pagina noua": click pe thumbnail-ul etichetei deschidea poza într-un TAB NOU (de la #570) — acum folosește lightbox-ul deja existent în aplicație (openImgZoom/#ov-imgzoom, folosit și pentru poze de produs), rămânând pe aceeași pagină. (2) „si sa poti da copy la text foarte usor - la nume, la numere": buton mic ⧉ lângă numele clientului, numărul comenzii și codul AWB, pe toate rândurile de asociere (găsite și negăsite) — un click copiază direct valoarea, fără să mai fie nevoie de selectare manuală de text; reutilizează exact `copyText`, folosit deja în Research pentru același scop. Verificat de 2 ori: sintaxă + 18 teste izolate pe funcțiile reale extrase din cod (thumbnail fără link/tab nou, buton de copiere cu valori normale/diacritice/goale, fără crash pe nicio variantă).',date:'2026-10-26'},
@@ -23512,7 +23513,24 @@ function parseAwbLabelText(text){
   // ÎNAINTE de produs, pe altele DUPĂ (verificat: 2 din 4 etichete reale aveau ordinea inversată).
   // Nu se mai presupune o poziție fixă — se citesc ambele rânduri, apoi se decide care e codul DUPĂ
   // FORMĂ (un singur cuvânt alfanumeric scurt, fără spații — un titlu de produs are mereu spații).
-  const vintedDigitalM=text.match(/Scanează acest cod pentru a trimite coletul\n([^\n]+)\nDestinatar\n([^\n]+)\n([^\n]+)\n([\s\S]+)/);
+  // Separatorul dintre segmente — `\s*\n+\s*`, nu un singur `\n` strict — bug real, major, găsit prin
+  // citirea directă (pdftotext) a TUTUROR celor 363 de etichete reale din arhiva locală (`~/Desktop/
+  // AWB-uri/`): extragerea reală de text introduce 2-4 rânduri GOALE între segmentele vizual separate pe
+  // etichetă (ex. „...coletul\n\n\n\n    Cargus\n\n\nDestinatar\n...") — un singur `\n` strict nu s-a
+  // potrivit NICIODATĂ, pe NICIUNA din cele 32 de etichete Vinted digitale reale testate (0% recunoscute
+  // înainte de acest fix, verificat exhaustiv). `\s*\n+\s*` tolerează orice număr de rânduri goale/spații
+  // în plus, rămânând la fel de strict pe restul structurii (nu rătăcește pe toată pagina).
+  // Ultimele 2 grupuri cer explicit cel puțin UN caracter care NU e spațiu (`\S`), nu doar „orice
+  // caracter care nu e \n” — bug real #2, găsit la re-testarea pe toate cele 32 etichete reale (nu doar
+  // presupus): pe varianta FĂRĂ linie de produs (ex. „...Destinatar\nMihaela Socoteanu\n\n\n\n\n
+  // 4285600013698\n\f”), regexul vechi (`([\s\S]+)` la final) reușea totuși să „potrivească”, prin
+  // backtracking, DOAR caracterul `\f` final ca ultim grup — produs rezulta gol ('') după `.trim()`, iar
+  // `if(awb&&produs)` (mai jos) refuza să returneze din cauza asta — DAR variabila `vintedDigitalM` tot
+  // rămânea nenulă (regexul CHIAR se potrivise, doar inutil), deci fallback-ul „variantă minimală” de mai
+  // jos (`if(!vintedDigitalM)`) nu se mai încerca niciodată. Cerând `\S` în ultimele 2 grupuri, un
+  // asemenea „meci gol” nu mai e posibil deloc — regexul fie găsește ambele linii REALE (produs ȚI cod),
+  // fie eșuează curat, lăsând varianta minimală să își facă treaba.
+  const vintedDigitalM=text.match(/Scanează acest cod pentru a trimite coletul\s*\n+\s*([^\n]+)\s*\n+\s*Destinatar\s*\n+\s*([^\n]+)\s*\n+\s*([^\n]*\S[^\n]*)\s*\n+\s*([\s\S]*\S)/);
   if(vintedDigitalM){
     const courier=vintedDigitalM[1].trim(),destinatar=vintedDigitalM[2].trim();
     const line3=vintedDigitalM[3].trim(),line4=vintedDigitalM[4].trim();
@@ -23533,8 +23551,12 @@ function parseAwbLabelText(text){
   // — exact 5 rânduri, niciun al 6-lea pentru produs. produs:'' (nu null) — resolveVintedDigitalLabelMatch
   // detectează asta și trece la potrivire după NUMELE destinatarului, nu după produs (singura informație
   // disponibilă pe o asemenea etichetă).
+  // Aceeași toleranță la rânduri goale ca mai sus (identică la citirea reală a textului din PDF) —
+  // defensiv, fără un exemplu real confirmat EXACT pe varianta minimală (din cele 32 de etichete Vinted
+  // digitale reale văzute, niciuna n-a fost minimală), dar e exact același bug de extragere, nu ceva
+  // specific variantei cu produs — mai sigur să fie tratat identic decât lăsat pe vechiul `\n` strict.
   if(!vintedDigitalM){
-    const vintedDigitalMinimalM=text.match(/Scanează acest cod pentru a trimite coletul\n([^\n]+)\nDestinatar\n([^\n]+)\n([A-Za-z0-9]{6,20})\s*$/);
+    const vintedDigitalMinimalM=text.match(/Scanează acest cod pentru a trimite coletul\s*\n+\s*([^\n]+)\s*\n+\s*Destinatar\s*\n+\s*([^\n]+)\s*\n+\s*([A-Za-z0-9]{6,20})\s*$/);
     if(vintedDigitalMinimalM)return{vintedDigitalLabel:true,courier:vintedDigitalMinimalM[1].trim(),destinatar:vintedDigitalMinimalM[2].trim(),produs:'',awb:vintedDigitalMinimalM[3].trim()};
   }
   // Propria etichetă GLS, generată de noi (generateGlsLabelPdf) — cerut direct: „e chiar AWB-ul generat
@@ -23542,8 +23564,26 @@ function parseAwbLabelText(text){
   // are exact aceeași problemă ca eticheta digitală Vinted de mai sus (niciun ID de comandă Vinted pe
   // ea) — deci se rezolvă IDENTIC, prin denumirea produsului. Format fix, controlat de noi (vezi
   // generateGlsLabelPdf) — „PRODUS" + denumire + „COD DE EXPEDIERE" + cod, nimic altceva pe pagină.
-  const glsOwnLabelM=text.match(/^PRODUS\n([^\n]+)\nCOD DE EXPEDIERE\n([A-Za-z0-9]{4,20})\s*$/);
-  if(glsOwnLabelM)return{vintedDigitalLabel:true,courier:'GLS',destinatar:'',produs:glsOwnLabelM[1].trim(),awb:glsOwnLabelM[2].trim()};
+  // 2 corecții, din citirea reală (pdftotext) a arhivei locale: (1) toleranță la rânduri goale între
+  // segmente, ca la eticheta Vinted de mai sus (confirmat pe toate cele 6 etichete GLS reale —
+  // „PRODUS\n...\n\n\nCOD DE EXPEDIERE\n\n\n\n5891992"); (2) denumirea produsului poate ocupa MAI MULTE
+  // rânduri, nu doar unul — generateGlsLabelPdf însuși o împarte pe până la 6 rânduri (`glsWrapText`,
+  // `prodLines.slice(0,6)`) când e prea lungă pentru etichetă — `[^\n]+` (un singur rând) ar rata exact
+  // acele produse cu denumire lungă. Rândurile interne ale denumirii sunt unite cu spațiu (nu păstrăm
+  // „\n” în produs — doar text simplu, afișat și comparat ca atare).
+  const glsOwnLabelM=text.match(/^PRODUS\s*\n+\s*([\s\S]+?)\s*\n+\s*COD DE EXPEDIERE\s*\n+\s*([A-Za-z0-9]{4,20})\s*$/);
+  if(glsOwnLabelM)return{vintedDigitalLabel:true,courier:'GLS',destinatar:'',produs:glsOwnLabelM[1].replace(/\s*\n+\s*/g,' ').trim(),awb:glsOwnLabelM[2].trim()};
+  // Variantă mai veche a aceleiași etichete proprii GLS, găsită în arhivă (generator anterior, înainte
+  // de formularea curentă „PRODUS"/„COD DE EXPEDIERE") — fără rândul „PRODUS", cod introdus direct cu
+  // „COD:”. Verificat direct pe eticheta reală (extragere identică cu extractPdfPagesText): „1x Pantofar
+  // dublu metalic cu 4 niveluri, suport cu rafturi pentru hol\nmodel nou | 27737\n\n\n     COD:5755144” —
+  // tot conținutul paginii e DOAR denumirea produsului (eventual pe mai multe rânduri) urmată de „COD:” +
+  // cod, nimic altceva. Ancorat pe TOT textul (^...$), ca să nu rătăcim din greșeală pe altă etichetă care
+  // ar conține întâmplător „COD:” undeva în mijlocul ei, cu mult conținut în continuare după.
+  if(!glsOwnLabelM){
+    const glsOwnLabelOldM=text.match(/^([\s\S]+?)\s*\n+\s*COD:\s*([A-Za-z0-9]{4,20})\s*$/);
+    if(glsOwnLabelOldM)return{vintedDigitalLabel:true,courier:'GLS',destinatar:'',produs:glsOwnLabelOldM[1].replace(/\s*\n+\s*/g,' ').trim(),awb:glsOwnLabelOldM[2].trim()};
+  }
   // eMAG Ungaria prin Sameday/Pactic (al 7-lea format, cerut direct — „o să mai găsesc din astea, să
   // fie recunoscută și asociată după nume client și suma de vânzare"): etichetă în maghiară, fără
   // niciun ID de comandă recognoscibil în sistemul nostru („Ref. sz." e o referință internă Pactic/
@@ -23615,17 +23655,26 @@ function parseAwbLabelText(text){
   // Collect. Telefonul destinatarului (+40.........) e reținut separat, doar informativ — nu există
   // încă un câmp de telefon salvat pe comenzile eMAG locale, cu care să fie comparat automat.
   if(/Cargus SRL/.test(text)){
-    // Bug real, raportat direct, cu comandă reală (PRO-VITAM SRL): AWB-ul salvat a ieșit „0219282" — un
-    // fragment din telefonul fix FIX, tipărit identic pe fiecare etichetă Cargus („Tel.: 0219330 /
-    // 0219282"), nu adevăratul „Nota:" (1209973512). `\d{8,12}` era prea permisiv — un „Nota:" Cargus e
-    // ÎNTOTDEAUNA exact 10 cifre (verificat pe toate etichetele reale văzute până acum, pe mai multe
-    // zile diferite) — strâns acum la exact 10, ca un asemenea fragment scurt să nu mai poată trece
-    // niciodată drept AWB. A doua plasă de siguranță, mai generală (awbLooksPlausible, verificată mai
-    // jos în bucla de potrivire) — acoperă și varianta în care valoarea greșită ar veni din altă cale
-    // (ex. fallback-ul AI, pe text zgomotos/reordonat de PDF.js), nu doar din acest regex.
-    const cargusStdM=text.match(/Destinatar:\s*([^\n]+)\n\s*(\d{10})\b/);
-    if(cargusStdM){
-      const destinatar=cargusStdM[1].trim(),awb=cargusStdM[2];
+    // Bug real #1 (deja reparat, istoric păstrat): AWB-ul salvat ieșea „0219282" — un fragment din
+    // telefonul fix, tipărit identic pe fiecare etichetă Cargus („Tel.: 0219330 / 0219282"), nu adevăratul
+    // „Nota:" (ex. 1209974055). Un „Nota:" Cargus e ÎNTOTDEAUNA exact 10 cifre (verificat pe toate
+    // etichetele reale văzute, pe multe zile diferite) — de aceea AWB-ul se citește strict `\d{10}`,
+    // niciodată `\d{8,12}` (prea permisiv, prindea fragmentul de telefon).
+    // Bug real #2, descoperit prin citirea directă (pdftotext -layout) a mai multor etichete din arhiva
+    // locală: regexul vechi mai presupunea și că „Nota:" apare pe rândul IMEDIAT următor lui „Destinatar:"
+    // — fals. Eticheta e pe 2 coloane; extragerea de text lipește rândul „Destinatar: NUME" de text din
+    // coloana DREAPTĂ, de pe ACELAȘI rând vizual („Destinatar: Ana vlasie         Incercari permise   2"),
+    // nu de rândul de dedesubt — iar „Nota:" e mult mai sus pe etichetă, pe propriul rând, complet
+    // independent de poziția lui „Destinatar:". Fiecare câmp e ancorat acum separat, pe markerul lui
+    // propriu, nu unul relativ la celălalt — confirmat identic pe 6 etichete reale, din zile/curse
+    // diferite: „Destinatar: NUME" e urmat MEREU de „Incercari permise" pe același rând (câmp fix de
+    // template), deci delimitează sigur numele; dacă din vreun motiv „Incercari permise" nu apare,
+    // destinatar rămâne gol — AWB-ul (singurul câmp esențial pentru asociere) nu depinde de el.
+    const cargusNotaM=text.match(/Nota:\s*(\d{10})\b/);
+    if(cargusNotaM){
+      const awb=cargusNotaM[1];
+      const cargusDestM=text.match(/Destinatar:\s*([^\n]+?)\s*Incercari permise/);
+      const destinatar=cargusDestM?cargusDestM[1].trim():'';
       const phones=[...text.matchAll(/\+40\d{9}\b/g)].map(m=>m[0]);
       const destinatarPhone=phones.length?phones[phones.length-1]:'';
       return canceled?{courierCanceled:true,awb}:{cargusEmagLabel:true,courier:'Cargus',destinatar,destinatarPhone,awb};
