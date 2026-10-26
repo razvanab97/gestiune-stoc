@@ -74,3 +74,14 @@ module.exports=async function handler(req,res){
     return res.status(500).json({error:{message:'Eroare internă la conectarea cu OpenAI'}});
   }
 };
+// maxDuration — bug real, raportat direct, pe un lot real (comenzi 26.10.pdf): „nu mai găsește și
+// asociază deloc bine" — multe pagini rămâneau „format nerecunoscut" chiar și după fallback-ul pe
+// imagine (vezi index.html, extractAwbLabelDataWithAIVision) și după adăugarea unui timeout generos pe
+// client (90s, vezi callAI). Fără acest export, Vercel folosește limita IMPLICITĂ a planului pentru
+// funcția serverless — nesetată explicit, poate fi mult sub cât durează o cerere cu imagine (viziune +
+// JSON structurat), mai ales sub concurență (3 cereri AWB simultane, vezi AWB_AI_MAX_CONCURRENT) —
+// funcția e omorâtă de Vercel ÎNAINTE ca OpenAI să apuce să răspundă, indiferent cât de generos e
+// timeout-ul clientului. 60s e maximul configurabil pe planurile standard (Hobby rămâne oricum plafonat
+// la propria limită, mai mică — acest export nu poate depăși plafonul planului, doar îl folosește pe tot).
+// Trebuie setat DUPĂ `module.exports=...` de mai sus — altfel reasignarea îl șterge imediat.
+module.exports.config={maxDuration:60};
