@@ -4707,6 +4707,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:599,text:'Asociază AWB-uri — bug MAJOR, confirmat printr-un apel DIRECT către AI-ul de producție, cu etichetă reală (Király Zoltánné, cod „67833 5089857 00001 36 04002"): AI-ul, citind pe imagine, întoarce codul FĂRĂ spații („678335089857000013604002"), în timp ce regexul de pe etichetele citite normal îl reține CU spații simple — ACELAȘI AWB fizic, două texte diferite. Verificarea universală „AWB deja asociat" de la #598, plus TOATE celelalte verificări „deja asociat" (Vinted, Cargus Click&Collect, Cargus eMAG, Sameday Ungaria — 8 locuri în total), comparau STRICT identic — nu recunoșteau niciodată o potrivire între o citire AI și una din regex/bază, pentru un cod cu spații, exact cazul care a declanșat tot acest fir („dacă există deja, de ce apare mai sus ca neasociat?"). Comparăm acum peste tot fără spații și fără sensibilitate la majuscule (`awbNorm`) — niciodată ce se SCRIE în bază, acolo formatarea originală, lizibilă, rămâne neschimbată. Verificat direct, live, printr-un apel real către `/api/openai` de producție cu eticheta reală (confirmat: AI-ul chiar citește corect numele+suma+AWB-ul, doar formatarea diferea) — apoi de 2 ori: sintaxă + 11 teste izolate pe funcțiile reale extrase din cod (cazul exact reprodus, simetric în ambele direcții, spații multiple, majuscule, AWB-uri genuin diferite tot resping corect, comandă anulată/input gol neschimbate).',date:'2026-10-26'},
   {n:598,text:'Asociază AWB-uri — 2 reparații majore, cerute direct: „fă sistemul să înțeleagă cum se asociază, care și cum și pe baza a ce" (clarificat: „asociere mai inteligentă, cu mai multe semnale") + 2 comenzi reale confirmate live în bază, deja corect asociate, dar tot afișate „negăsită" la recitire: „dacă există deja, de ce apare mai sus ca neasociat?" (Király Zoltánné #1136836907) și „încă o dată 550497435 - există și nu e asociat, de ce?" (Lumperdean Mihai #550497435, deja împachetat). (1) Semnal nou — conținutul coletului: AI-ul citește acum și descrierea produsului de pe etichetă (câmp nou, `produsText`, exclude explicit genericul „Marketplace"/„Colet"), folosit ALĂTURI de nume+sumă în potrivirea universală (`resolveAwbByNameAndAmount`) — scorul final e cel mai bun dintre nume și conținut, nu o medie, ca un semnal slab să nu-l tragă în jos pe celălalt, clar. (2) Cauza reală a celor 2 comenzi raportate: potrivirea verifica STRICT după comandaId (care poate ieși complet greșit — vezi „Ref. sz." de la #592/#594) sau excludea din candidați orice comandă care ARE DEJA un AWB — o etichetă recitită, cu AWB-ul deja scris corect pe o comandă, nu mai era recunoscută ca „deja rezolvată". Verificăm acum, universal și PRIMUL (înaintea oricărui lookup după comandaId), dacă AWB-ul citit există deja EXACT pe vreo comandă, indiferent de platformă/format/comandaId citit alături — semnalul cel mai sigur posibil. Verificat de 2 ori: sintaxă + 20 de teste izolate pe funcțiile reale extrase din cod (ambele comenzi reale reproduse exact, potrivire prin conținut fără nume disponibil, scor maxim nu medie, regresii pe comportamentul vechi neatinse, comandă anulată/AWB gol/substring parțial — toate corect ignorate).',date:'2026-10-26'},
   {n:597,text:'Asociază AWB-uri — 2 îmbunătățiri de UX, cerute direct, pe rândurile de asociere din #596. (1) „vreau ca pop up sa fie tot pe aceasta pagina, nu sa deschida o pagina noua": click pe thumbnail-ul etichetei deschidea poza într-un TAB NOU (de la #570) — acum folosește lightbox-ul deja existent în aplicație (openImgZoom/#ov-imgzoom, folosit și pentru poze de produs), rămânând pe aceeași pagină. (2) „si sa poti da copy la text foarte usor - la nume, la numere": buton mic ⧉ lângă numele clientului, numărul comenzii și codul AWB, pe toate rândurile de asociere (găsite și negăsite) — un click copiază direct valoarea, fără să mai fie nevoie de selectare manuală de text; reutilizează exact `copyText`, folosit deja în Research pentru același scop. Verificat de 2 ori: sintaxă + 18 teste izolate pe funcțiile reale extrase din cod (thumbnail fără link/tab nou, buton de copiere cu valori normale/diacritice/goale, fără crash pe nicio variantă).',date:'2026-10-26'},
   {n:596,text:'Asociază AWB-uri — 2 reparații suplimentare, cerute direct. (1) Codul-compus de sub „Obs:" (AWB_comandaId_altceva, pe etichete Sameday) nu se mai potrivea când nu era STRICT singur pe rândul lui — raportat direct, cu etichetă reală crossborder Bulgaria: „cum adică această pagină e necunoscută? repară sistemul - numărul comenzii se găsește sub observații, după numărul AWB". `sdM` caută acum tiparul oriunde în text, nu doar ca linie izolată — tolerează orice ar fi rămas în plus pe același „rând" din extragerea reală PDF.js. (2) Feature nou, cerut direct: „să apară linie cu comenzile necunoscute și să se recomande, după țară sau platformă, în funcție de AWB-ul citit, unde nu se poate, astfel încât să pot asocia ușor" — secțiunea „❔ Format nerecunoscut" (înainte un singur paragraf, fără nicio acțiune posibilă) arată acum câte un rând per pagină, cu thumbnail-ul etichetei (recunoaștere vizuală) și „🔗 Asociază manual" — alegi comanda din listă și tastezi AWB-ul citit de pe etichetă într-o căsuță dedicată (apare doar în acest mod), scrise împreună dintr-un singur pas. Pentru liniile „negăsită/ambiguă" care AU deja un AWB citit, dar nu ȘI potrivire automată, căutarea pornește acum precompletată și cu platforma deja sigur cunoscută din formatul etichetei (ex. Cargus Click&Collect = mereu Vinted), nu doar cu numele clientului ca până acum — fără nicio presupunere nouă pe formatele cu platformă ambiguă (FAN Courier/DPD/Cargus standard). Verificat de 2 ori: sintaxă + 30 de teste izolate pe funcțiile reale extrase din cod (codul-compus recunoscut indiferent de poziția pe linie, regresie pe toate formatele deja funcționale — Sameday RO/FAN/GLS —, fluxul complet de asociere manuală cu AWB tastat — comandă deja comisă și încă „Neinclus" —, eroare clară când AWB-ul lipsește din căsuță, fără nicio scriere, recomandare după platformă doar pe formate sigure, modurile vechi de picker — preview/error — neatinse).',date:'2026-10-26'},
@@ -19815,9 +19816,9 @@ function safeNameScore(q,candidate){
 // (Vinted/Cargus/Sameday HU, scopate la o singură platformă), ci universal, pe TOATE comenzile, indiferent
 // de format/platformă/cale de extragere (regex sau AI).
 function awbFindExactExisting(awb){
-  const v=String(awb||'').trim();
+  const v=awbNorm(awb);
   if(!v)return null;
-  return PCOM.find(o=>!o.anulata&&String(o.awb||'').trim()===v)||null;
+  return PCOM.find(o=>!o.anulata&&awbNorm(o.awb)===v)||null;
 }
 function resolveAwbByNameAndAmount(extracted){
   if(!extracted||(!extracted.clientNume&&extracted.suma==null&&!extracted.produsText))return null;
@@ -23379,6 +23380,17 @@ let awbEmagLookupFileNames=[];
 // doar pentru DPD („CANCELED”, 3 etichete) — restul cuvintelor (ANULAT/STORNAT/VOID) sunt o plasă de
 // siguranță pentru celelalte curiere, netestată încă pe etichete reale ale lor.
 const AWB_CANCEL_RE=/\b(CANCELED|CANCELLED|ANULAT|STORNAT|VOID)/i;
+// Normalizare pentru COMPARAREA AWB-urilor — bug real, major, confirmat direct printr-un apel de test
+// către AI-ul de producție, cu eticheta reală (Király Zoltánné, cod de bare „67833 5089857 00001 36
+// 04002"): AI-ul (citire pe imagine) întoarce codul FĂRĂ spații („678335089857000013604002"), în timp ce
+// regexul de pe eticheta citită normal îl reține CU spații simple („67833 5089857 00001 36 04002") —
+// ACELAȘI AWB fizic, două texte diferite. Toate verificările „AWB deja existent" de mai jos comparau
+// STRICT identic (`.trim()===`), deci recunoașteau o potrivire DOAR dacă formatarea proveniților din
+// ambele părți coincidea exact — ceea ce nu se întâmplă niciodată între o citire AI și una din regex/
+// baza de date, pentru un cod cu spații. Cerut direct: „totul trebuie să fie identificat și asociat" —
+// comparăm acum fără spații (și fără sensibilitate la majuscule, aceeași clasă de risc), NICIODATĂ ce se
+// SCRIE în bază (acolo formatarea originală, lizibilă, rămâne neschimbată).
+function awbNorm(v){return String(v||'').replace(/\s+/g,'').toUpperCase();}
 // Plasă de siguranță comună, a doua linie de apărare (prima e regexul propriu-zis mai strict al
 // fiecărui format, ex. Cargus mai jos) — cerut direct, pe un bug real cu comandă reală (PRO-VITAM SRL,
 // AWB salvat greșit „0219282", un fragment din telefonul fix Cargus, tipărit identic pe fiecare etichetă:
@@ -23716,9 +23728,9 @@ function resolveVintedDigitalLabelMatch(p){
   // resolveCargusClickCollectMatch (verificare identică, deja corectă acolo) — verificăm întâi, separat,
   // dacă AWB-ul e deja scris exact pe o comandă Vinted (comisă sau încă „Neinclus”) — dacă da, ne
   // întoarcem direct la ea (rescrierea e un no-op sigur), fără avertisment și fără matching fuzzy.
-  const exactHit=PCOM.find(o=>o.platforma==='vinted'&&!o.anulata&&String(o.awb||'').trim()===p.awb);
+  const exactHit=PCOM.find(o=>o.platforma==='vinted'&&!o.anulata&&awbNorm(o.awb)===awbNorm(p.awb));
   if(exactHit)return{...p,comandaId:exactHit.comandaId};
-  const exactPendingHit=pendingVintedCandidates().find(it=>String(it.awb||'').trim()===p.awb);
+  const exactPendingHit=pendingVintedCandidates().find(it=>awbNorm(it.awb)===awbNorm(p.awb));
   if(exactPendingHit)return{...p,comandaId:exactPendingHit.comandaId,_pendingMatch:true};
   // Variantă „minimală" a etichetei (fără nicio linie de produs — vezi parseAwbLabelText, „de ce nu
   // l-a recunoscut?"): p.produs rămâne gol ('', setat explicit, nu null) — singura informație rămasă
@@ -23756,7 +23768,7 @@ function resolveEmagHuLabelMatch(p){
   // bug) — o etichetă deja asociată, recitită, nu mai trebuie tratată ca „nepotrivită” doar fiindcă
   // lista de candidați de mai jos exclude liniile deja rezolvate (fără AWB încă).
   if(p.awb){
-    const exactHit=PCOM.find(o=>o.platforma==='emag'&&(o.tara==='HU'||String(o.moneda||'').toUpperCase()==='HUF')&&!o.anulata&&String(o.awb||'').trim()===p.awb);
+    const exactHit=PCOM.find(o=>o.platforma==='emag'&&(o.tara==='HU'||String(o.moneda||'').toUpperCase()==='HUF')&&!o.anulata&&awbNorm(o.awb)===awbNorm(p.awb));
     if(exactHit)return{...p,comandaId:exactHit.comandaId};
   }
   const candidates=PCOM.filter(o=>o.platforma==='emag'&&(o.tara==='HU'||String(o.moneda||'').toUpperCase()==='HUF')&&!o.awb&&!o.anulata&&!o.impachetat);
@@ -23784,11 +23796,11 @@ function resolveEmagHuLabelMatch(p){
 // cod), aici codul de pe etichetă e deja cunoscut EXACT (salvat la citirea capturii din aplicația
 // Vinted — vezi vintedRunRecognition), deci nicio ambiguitate posibilă: fie se potrivește exact, fie nu.
 function resolveCargusClickCollectMatch(p){
-  const hit=PCOM.find(o=>o.platforma==='vinted'&&!o.anulata&&String(o.awb||'').trim()===p.awb);
+  const hit=PCOM.find(o=>o.platforma==='vinted'&&!o.anulata&&awbNorm(o.awb)===awbNorm(p.awb));
   if(hit)return{...p,comandaId:hit.comandaId};
   // Aceeași reparație pe termen lung ca la resolveVintedDigitalLabelMatch — o comandă Vinted „Neinclus"
   // (încă necomisă) are propriul cod deja salvat pe pcImpParsed[i].awb, invizibil pentru PCOM.
-  const pendingHit=pendingVintedCandidates().find(it=>String(it.awb||'').trim()===p.awb);
+  const pendingHit=pendingVintedCandidates().find(it=>awbNorm(it.awb)===awbNorm(p.awb));
   if(pendingHit)return{...p,comandaId:pendingHit.comandaId,_pendingMatch:true};
   return p;
 }
@@ -23806,9 +23818,9 @@ function pendingEmagCandidates(){
 function resolveCargusEmagLabelMatch(p){
   // Aceeași verificare „deja asociat" ca la resolveVintedDigitalLabelMatch — o etichetă recitită pentru
   // o comandă CU acest AWB deja scris (comisă sau încă „Neinclus”) se confirmă direct, fără matching.
-  const exactHit=PCOM.find(o=>o.platforma==='emag'&&!o.anulata&&String(o.awb||'').trim()===p.awb);
+  const exactHit=PCOM.find(o=>o.platforma==='emag'&&!o.anulata&&awbNorm(o.awb)===awbNorm(p.awb));
   if(exactHit)return{...p,comandaId:exactHit.comandaId};
-  const exactPendingHit=pendingEmagCandidates().find(it=>String(it.awb||'').trim()===p.awb);
+  const exactPendingHit=pendingEmagCandidates().find(it=>awbNorm(it.awb)===awbNorm(p.awb));
   if(exactPendingHit)return{...p,comandaId:exactPendingHit.comandaId,_pendingMatch:true};
   const committedScored=PCOM.filter(o=>o.platforma==='emag'&&!o.awb&&!o.anulata&&!o.impachetat)
     .map(o=>({comandaId:o.comandaId,pending:false,score:safeNameScore(p.destinatar,o.clientNume)}));
