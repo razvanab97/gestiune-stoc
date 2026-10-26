@@ -4702,6 +4702,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:591,text:'Asociază AWB-uri — 3 îmbunătățiri cerute direct, în continuarea #590. (1) „se citește PDF-ul, durează prea mult, de ce? repară": bucla de citire trimitea câte un apel AI separat PE RÂND, strict secvențial — un lot de 20 de pagini nerecunoscute însemna 20 de călătorii de rețea una după alta. Restructurat în 3 pași: regex+nume fișier (rapid), apoi STRICT paginile rămase nerezolvate rulează CONCURENT, cu o limită (același tipar ca la generarea galeriei AI), în loc de una câte una — finalizarea rămâne strict secvențială, în ordinea originală a paginilor, deci rezultatul final e identic, doar mult mai rapid. (2+3) „când e vorba de eMAG HU, să încerce să asocieze după nume client" + „să primesc la recomandate doar comenzile eMAG HU, să bifez eu manual mai repede": etichetele GLS Ungaria (singurul format eMAG HU cu comandă_id direct pe etichetă) nu rețineau deloc numele destinatarului, deși apare clar pe etichetă, chiar sub adresa punctului de livrare — extras acum (`destinatarHu`, confirmat pe 2 etichete reale, comenzi 26.10.pdf p.20-21: „Koncz Ádám", „Barcsanics Péter"), afișat direct în avertismentul „produsul nu s-a potrivit automat" ȘI folosit să precompleteze automat căsuța de căutare când deschizi „🔗 Asociază manual" — lista se filtrează instant la candidatul corect, fără să mai caute omul prin toate platformele. Verificat de 2 ori: sintaxă + 19 teste izolate pe funcțiile reale extrase din cod (ordinea finală identică indiferent de ordinea de răspuns AI, concurența real limitată — măsurată, niciodată mai mult de 3 cereri simultan —, timp total vizibil mai mic față de randul secvențial vechi, extragere nume pe ambele etichete reale + regresii pe etichete fără acest bloc, precompletarea picker-ului doar pentru linii cu destinatarHu, clopoțelul de erori neschimbat).',date:'2026-10-26'},
   {n:590,text:'Asociază AWB-uri — bug MAJOR, raportat direct, cu PDF real atașat (comenzi 26.10.pdf, 22 pagini) + captură: „verifică ce s-a întâmplat și rezolvă, e o problemă majoră, nu putem lucra așa" — 20 din 22 pagini ieșeau „Format nerecunoscut", inclusiv formate STANDARD, citite cu succes zilnic până acum (Sameday easybox RO, Cargus standard), nu doar cazuri rare. Cauza: ultima plasă de siguranță (fallback-ul AI universal, `aiFallbackAwbMatch`) trimitea modelului STRICT textul extras de PDF.js — pentru etichete generate ca parte dintr-un PDF cu mai multe etichete combinate într-un singur fișier (spre deosebire de etichetele descărcate individual, câte una per fișier, cu strat real de text), corpul vizual al etichetei (nume destinatar, cod de bare, AWB) e RANDAT CA IMAGINE, nu text — PDF.js extrage doar antetul static, fără nimic din ce contează; AI-ul pe text, oricât de bun modelul, n-are de unde citi ce nu există deloc în textul primit. Adăugată o a DOUA treaptă de fallback, pe IMAGINE (`extractAwbLabelDataWithAIVision`): când treapta pe text eșuează, randăm pagina ca JPEG (`renderPdfPageToImageDataUrl`, funcția EXACTĂ deja folosită și verificată pentru previzualizarea vizuală AWB din Staff) și o trimitem direct modelului cu viziune, la fel ca la analiza unei poze de produs. Ultimă treaptă, deliberat, nu prima — mai costisitoare, folosită STRICT când regex + nume fișier + AI pe text au eșuat toate. Verificat de 2 ori: sintaxă + 8 teste izolate pe funcțiile reale extrase din cod (treapta vizuală se declanșează doar când textul eșuează complet și există blob de pagină, NU se mai declanșează deloc când textul reușește — fără cost suplimentar, regresie verificată și pentru apelanți fără blob, erori de randare/AI prinse fără să oprească restul lotului).',date:'2026-10-26'},
   {n:589,text:'Asociază AWB-uri — 2 reparații directe, cerute explicit după o investigație reală („vreau să rezolvi să nu mai avem astfel de probleme în viitor"), pe 2 bug-uri reale confirmate cu date live (comanda PRO-VITAM SRL). (1) Comandă deja scrisă greșit în bază cu AWB „0219282" — un fragment din telefonul fix Cargus, tipărit identic pe fiecare etichetă standard eMAG→Cargus („Tel.: 0219330 / 0219282"), în loc de adevăratul „Nota:" (1209973512). Regexul care citește „Nota:" era prea permisiv (`\d{8,12}`) — strâns acum la exact 10 cifre, cât au toate etichetele Cargus reale văzute până acum. Adăugată și o a doua plasă de siguranță, universală (`awbLooksPlausible`), verificată în AMBELE bucle de citire AWB — indiferent pe ce cale ar ieși vreodată din nou o valoare implauzibilă (acest regex sau fallback-ul AI, pe text zgomotos/reordonat de PDF.js), nu mai e acceptată tăcut — cade pe calea deja existentă „format nerecunoscut, verifică manual". (2) Bug real suplimentar, paralel cu #588: „Alege PDF-uri" (selectarea manuală de fișiere, spre deosebire de „📂 Citește din dosar") nu avea DELOC verificarea împotriva comenzilor „Neinclus" din previzualizare, nici căutarea directă pe eMAG după număr (indiferent de status) — o comandă necomisă, citită printr-un PDF ales manual, rămânea mereu „negăsită". Adusă acum la paritate completă cu „Citește din dosar". Verificat de 2 ori: sintaxă + 8 teste izolate (15 verificări) pe funcțiile reale extrase din cod (regex strâns la 10 cifre, plasa de siguranță respinge exact valoarea greșită găsită live + variante de lungime greșită, neatinsă pentru alți curieri, ambele comenzi reale — PRO-VITAM/Ana vlasie — rămân extrase corect).',date:'2026-10-23'},
   {n:588,text:'Asociază AWB-uri — bug real, important, reparat, raportat direct cu etichetă FAN Courier reală atașată (AWB 7000171946886, Continut 11691606915) + captură: „de ce nu se asociază AWB-ul comenzii?" — o comandă Trendyol clar vizibilă în Comenzi Platforme, „Neinclus", rămânea permanent „negăsită sau ambiguă" la citirea etichetei, deși produsul era deja potrivit și eticheta conținea exact numărul ei de comandă. Cauza: potrivirea de bază (🏭 FAN Courier, câmpul „Continut" = comanda_id exact, cel mai folosit format) verifica STRICT comenzile deja scrise în bază (platforma_comenzi) — dacă nu găsea nimic acolo, încerca un singur fallback, STRICT pentru eMAG (căutare directă pe eMAG după număr), fără nicio verificare împotriva comenzilor „Neinclus" încă în previzualizare (pcImpParsed). Mecanismul corect (`_pendingMatch`, scrie AWB-ul direct pe linia din previzualizare și o comite automat — „AWB asociat cu succes = comandă inclusă automat") EXISTA deja, folosit corect la alte formate (Vinted/Cargus), doar că drumul standard FAN Courier/Trendyol nu-l apela niciodată. Acum verifică și pcImpParsed, indiferent de platformă (eMAG/Trendyol/Vinted/OLX), înainte de fallback-ul eMAG — nimic nou de scris, doar lookup-ul care lipsea. Verificat de 2 ori: sintaxă + 5 teste izolate (15 verificări) pe funcția reală extrasă din cod (cazul exact raportat — comandă Trendyol „Neinclus" găsită prin pcImpParsed, fără apel inutil la eMAG —, regresie pe comandă deja comisă în bază neatinsă, aceeași reparație funcționează și pentru eMAG „Neinclus" nu doar Trendyol, comandă negăsită nicăieri rămâne corect negăsită, comandă deja comisă — cu _committedId — tratată corect ca „nu mai e Neinclus", nu confundată).',date:'2026-10-22'},
@@ -23355,7 +23356,16 @@ function parseAwbLabelText(text){
   if(idM){
     const withoutNoise=text.replace(/\+\d{9,15}/g,'').replace(/ID=\d+[;;]/,'');
     const awbM=withoutNoise.match(/\b(\d{10,14})\b/);
-    if(awbM)return canceled?{courierCanceled:true,awb:awbM[1],comandaId:idM[1]}:{awb:awbM[1],comandaId:idM[1],courier:'GLS'};
+    // Numele destinatarului — cerut direct: „când e vorba de eMAG HU, să încerce să asocieze după nume
+    // client”. Pe eticheta GLS Ungaria, chiar sub adresa punctului de livrare (Automata/Címzett), urmează
+    // direct numele clientului + telefonul lui, pe același rând (ex. „Koncz Ádám 305502877”, „Barcsanics
+    // Péter 305920041” — confirmat pe 2 etichete reale, comenzi 26.10.pdf p.20-21). Primul „HU -
+    // Magyarország” din text e mereu blocul Címzett (destinatarul) — blocul Feladó (adresa noastră de
+    // expediere din Ungaria) apare mereu DUPĂ el pe etichetă, deci match() (fără /g/) prinde mereu numele
+    // corect, nu numele propriei firme.
+    const nameM=text.match(/HU - Magyarorsz[aá]g\n([^\d\n]{3,40}?)\s*\d{6,}/);
+    const destinatarHu=nameM?nameM[1].trim():'';
+    if(awbM)return canceled?{courierCanceled:true,awb:awbM[1],comandaId:idM[1]}:{awb:awbM[1],comandaId:idM[1],courier:'GLS',destinatarHu};
   }
   // DPD (Bulgaria/CEE crossborder, Trendyol) — al 5-lea format, găsit direct pe o etichetă reală
   // amestecată în același PDF cu etichete FAN Courier (raportat direct: „de ce se sar AWB-urile alea").
@@ -23727,7 +23737,7 @@ function awbPickCandidates(){
   }));
   return[...committed,...pending].sort((a,b)=>String(b.data||'').localeCompare(String(a.data||'')));
 }
-function openAwbPickDropdownAt(anchorEl){
+function openAwbPickDropdownAt(anchorEl,prefill){
   const drop=document.getElementById('awb-pickdrop');
   const btn=anchorEl.getBoundingClientRect();
   let left=btn.left,top=btn.bottom+4;
@@ -23736,7 +23746,7 @@ function openAwbPickDropdownAt(anchorEl){
   drop.style.left=zoomAdjust(left)+'px';drop.style.top=zoomAdjust(top)+'px';
   drop.classList.add('on');
   const search=document.getElementById('awb-pick-search');
-  search.value='';
+  search.value=prefill||'';
   filterAwbPick();
   search.focus();
 }
@@ -23744,7 +23754,14 @@ function openAwbPick(ev,idx){
   ev.stopPropagation();
   awbPickMode='preview';
   awbPickIdx=idx;
-  openAwbPickDropdownAt(ev.currentTarget);
+  // Cerut direct — „când e vorba de eMAG HU, să încerce să asocieze după nume client” + „să primesc la
+  // recomandate doar comenzile eMAG HU, să bifez eu manual mai repede”: pentru o etichetă GLS Ungaria
+  // (singurul format care reține și numele destinatarului, vezi parseAwbLabelText/destinatarHu), căsuța
+  // de căutare a picker-ului pornește deja completată cu numele clientului — lista se filtrează instant
+  // la candidatul potrivit, fără să mai fie nevoie să caute omul singur prin toate platformele. Pentru
+  // orice altă etichetă (fără destinatarHu), căsuța rămâne goală, ca înainte — niciun comportament nou.
+  const p=awbParsed[idx];
+  openAwbPickDropdownAt(ev.currentTarget,p?.destinatarHu||'');
 }
 // Al doilea punct de intrare pentru ACELAȘI picker (cerut direct — „dacă sunt mai multe AWB-uri decât
 // comenzi, trebuie să primim informații... spre a-l verifica manual și a asocia, dacă este cazul, o
@@ -23950,6 +23967,10 @@ async function handleAwbPdfFile(ev){
     awbUnrecognizedPages=[];
     awbCanceledPages=[];
     parsing.innerHTML=`<span class="spin"></span> Se citesc ${files.length} PDF-uri…`;
+    // Pas 1 (rapid, secvențial) — regex + nume fișier pentru FIECARE pagină, fără AI încă. `awbTasks`
+    // păstrează ordinea originală (fișier/pagină), ca rezultatul final să rămână identic, indiferent cât
+    // de repede/în ce ordine răspunde AI-ul mai jos.
+    const awbTasks=[];
     for(const file of files){
       const pages=await extractPdfPagesText(file);
       for(let i=0;i<pages.length;i++){
@@ -23959,7 +23980,6 @@ async function handleAwbPdfFile(ev){
         if(p&&p.emagHuLabel)p=resolveEmagHuLabelMatch(p);
         if(p&&p.cargusClickCollectLabel)p=resolveCargusClickCollectMatch(p);
         if(p&&p.cargusEmagLabel)p=resolveCargusEmagLabelMatch(p);
-        const label=`${file.name} p.${i+1}`;
         // Un PDF ales manual are un nume de fișier, deci și DPD-ul fără „note:" poate fi
         // reconciliat când documentul a fost descărcat cu numărul comenzii la începutul numelui.
         if(p&&p.dpdNeedsFilenameId){const m=file.name.match(/^(\d{6,})/);p=m?{...p,comandaId:m[1]}:null;}
@@ -23968,19 +23988,34 @@ async function handleAwbPdfFile(ev){
         // e o SINGURĂ etichetă (nu un lot de mai multe pagini), numele fișierului poate da direct
         // comandaId+AWB, fără să mai depindă deloc de textul/limba etichetei.
         if(!p&&pages.length===1){const fb=awbFromFilename(file.name);if(fb)p={awb:fb.awb,comandaId:fb.comandaId,courier:fb.courier};}
-        // Ultimă plasă de siguranță, universală, indiferent de limbă (cerut direct — „nu mă interesează
-        // ce limbă, sistemul trebuie să recunoască toate AWB-urile pe baza nume client, comandă, sumă"):
-        // dacă NICI regexul, NICI numele fișierului n-au funcționat, AI-ul citește eticheta (orice
-        // limbă) și extrage exact aceste semnale. Fără un cod AWB citit, nu are sens — nimic de asociat.
-        // `file`+`i+1` — treapta a doua (imagine, vezi aiFallbackAwbMatch) randează EXACT această pagină.
-        if(!p)p=await aiFallbackAwbMatch(text,file,i+1);
-        if(p&&p.courierCanceled)awbCanceledPages.push({label,awb:p.awb,comandaId:p.comandaId,file:file.name,page:i+1});
-        // _blob — reținut și pentru previzualizarea vizuală AWB (randată mai târziu, la
-        // applyAwbAssociation — vezi generateAwbPreviewInBackground); `file` e deja un Blob (File).
-        else if(p&&!awbLooksPlausible(p.awb,p.courier))awbUnrecognizedPages.push({label,file:file.name,page:i+1});
-        else if(p)pairs.push({...p,file:file.name,page:i+1,_blob:file});
-        else awbUnrecognizedPages.push({label,file:file.name,page:i+1});
+        awbTasks.push({p,text,blob:file,file:file.name,page:i+1});
       }
+    }
+    // Pas 2 (lent, CONCURENT, cu limită) — ultima plasă de siguranță AI (text + imagine, vezi
+    // aiFallbackAwbMatch), STRICT pentru paginile nerezolvate încă de pasul 1. Bug real, raportat direct
+    // („se citește PDF-ul, durează prea mult, de ce? repară, să fie mai repede"): fiecare pagină
+    // nerecunoscută trimitea un apel de rețea separat, STRICT secvențial, unul după altul — un lot de 20
+    // de pagini însemna 20 de călătorii dus-întors una după alta. Paginile sunt complet independente
+    // între ele, deci rulate acum concurent, cu o limită (același tipar ca la generarea galeriei AI —
+    // vezi GALLERY_MAX_CONCURRENT), nu toate deodată (ar risca limite de rată pe server).
+    const AWB_AI_MAX_CONCURRENT=3;
+    const awbAiPending=awbTasks.filter(t=>!t.p);
+    if(awbAiPending.length){
+      let awbAiIdx=0;
+      async function awbAiWorker(){while(awbAiIdx<awbAiPending.length){const t=awbAiPending[awbAiIdx++];t.p=await aiFallbackAwbMatch(t.text,t.blob,t.page);}}
+      await Promise.all(Array.from({length:Math.min(AWB_AI_MAX_CONCURRENT,awbAiPending.length)},awbAiWorker));
+    }
+    // Pas 3 (rapid, secvențial, ordinea originală) — finalizare identică cu ce era înainte imediat după
+    // aiFallbackAwbMatch, neschimbată ca logică, doar separată de pasul lent de mai sus.
+    for(const t of awbTasks){
+      const{p,file:fname,page,blob}=t;
+      const label=`${fname} p.${page}`;
+      if(p&&p.courierCanceled)awbCanceledPages.push({label,awb:p.awb,comandaId:p.comandaId,file:fname,page});
+      // _blob — reținut și pentru previzualizarea vizuală AWB (randată mai târziu, la
+      // applyAwbAssociation — vezi generateAwbPreviewInBackground); `file` e deja un Blob (File).
+      else if(p&&!awbLooksPlausible(p.awb,p.courier))awbUnrecognizedPages.push({label,file:fname,page});
+      else if(p)pairs.push({...p,file:fname,page,_blob:blob});
+      else awbUnrecognizedPages.push({label,file:fname,page});
     }
     if(!pairs.length&&!awbUnrecognizedPages.length&&!awbCanceledPages.length)throw new Error('PDF-ul pare gol.');
     const results=[];
@@ -24189,6 +24224,10 @@ async function readAwbFolderPdfs(fromArchive){
     awbCreatedVintedFileNames=[];
     awbEmagLookupFileNames=[];
     const awbCreatedVintedComandaIds=[];
+    // Pas 1 (rapid, secvențial) — regex + nume fișier pentru FIECARE pagină, fără AI încă. `awbTasks`
+    // păstrează ordinea originală (fișier/pagină), ca rezultatul final să rămână identic, indiferent cât
+    // de repede/în ce ordine răspunde AI-ul mai jos.
+    const awbTasks=[];
     for(const f of files){
       try{
         // Reținut și pentru previzualizarea vizuală AWB (randată mai târziu, la applyAwbAssociation —
@@ -24222,19 +24261,36 @@ async function readAwbFolderPdfs(fromArchive){
           // e o SINGURĂ etichetă (nu un lot de mai multe pagini), numele fișierului poate da direct
           // comandaId+AWB, fără să mai depindă deloc de textul/limba etichetei.
           if(!p&&pages.length===1){const fb=awbFromFilename(f.name);if(fb)p={awb:fb.awb,comandaId:fb.comandaId,courier:fb.courier};}
-          // Ultimă plasă de siguranță, universală, indiferent de limbă — vezi aiFallbackAwbMatch.
-          // `blob`+`i+1` — treapta a doua (imagine) randează EXACT această pagină din PDF-ul deja citit.
-          if(!p)p=await aiFallbackAwbMatch(text,blob,i+1);
-          if(p&&p.courierCanceled)awbCanceledPages.push({label:`${f.name} p.${i+1}`,awb:p.awb,comandaId:p.comandaId});
-          // Bug real, raportat direct („PDF AWB comenzi incluse” refuza toate comenzile deja incluse,
-          // deși aveau AWB): spre deosebire de handleAwbPdfFile (selectare manuală), bucla asta nu reținea
-          // NICIODATĂ numărul paginii — awb_source_page rămânea mereu null, deci activeAwbPrintOrders nu
-          // găsea niciodată o pagină sursă de tipărit, oricâte comenzi ar fi fost incluse.
-          else if(p&&!awbLooksPlausible(p.awb,p.courier))awbUnrecognizedPages.push({label:`${f.name} p.${i+1}`,file:f.name,page:i+1});
-          else if(p)pairs.push({...p,file:f.name,page:i+1,_blob:blob});
-          else awbUnrecognizedPages.push({label:`${f.name} p.${i+1}`,file:f.name,page:i+1});
+          awbTasks.push({p,text,blob,file:f.name,page:i+1});
         }
       }catch(e){console.warn('PDF ignorat din dosar:',f.name,e);}
+    }
+    // Pas 2 (lent, CONCURENT, cu limită) — ultima plasă de siguranță AI (text + imagine, vezi
+    // aiFallbackAwbMatch), STRICT pentru paginile nerezolvate încă de pasul 1. Bug real, raportat direct
+    // („se citește PDF-ul, durează prea mult, de ce? repară, să fie mai repede"): fiecare pagină
+    // nerecunoscută trimitea un apel de rețea separat, STRICT secvențial, unul după altul — un lot de 20
+    // de pagini însemna 20 de călătorii dus-întors una după alta. Paginile sunt complet independente
+    // între ele, deci rulate acum concurent, cu o limită (același tipar ca la generarea galeriei AI —
+    // vezi GALLERY_MAX_CONCURRENT), nu toate deodată (ar risca limite de rată pe server).
+    const AWB_AI_MAX_CONCURRENT=3;
+    const awbAiPending=awbTasks.filter(t=>!t.p);
+    if(awbAiPending.length){
+      let awbAiIdx=0;
+      async function awbAiWorker(){while(awbAiIdx<awbAiPending.length){const t=awbAiPending[awbAiIdx++];t.p=await aiFallbackAwbMatch(t.text,t.blob,t.page);}}
+      await Promise.all(Array.from({length:Math.min(AWB_AI_MAX_CONCURRENT,awbAiPending.length)},awbAiWorker));
+    }
+    // Pas 3 (rapid, secvențial, ordinea originală) — finalizare identică cu ce era înainte imediat după
+    // aiFallbackAwbMatch, neschimbată ca logică, doar separată de pasul lent de mai sus.
+    for(const t of awbTasks){
+      const{p,file:fname,page,blob}=t;
+      if(p&&p.courierCanceled)awbCanceledPages.push({label:`${fname} p.${page}`,awb:p.awb,comandaId:p.comandaId});
+      // Bug real, raportat direct („PDF AWB comenzi incluse” refuza toate comenzile deja incluse,
+      // deși aveau AWB): spre deosebire de handleAwbPdfFile (selectare manuală), bucla asta nu reținea
+      // NICIODATĂ numărul paginii — awb_source_page rămânea mereu null, deci activeAwbPrintOrders nu
+      // găsea niciodată o pagină sursă de tipărit, oricâte comenzi ar fi fost incluse.
+      else if(p&&!awbLooksPlausible(p.awb,p.courier))awbUnrecognizedPages.push({label:`${fname} p.${page}`,file:fname,page});
+      else if(p)pairs.push({...p,file:fname,page,_blob:blob});
+      else awbUnrecognizedPages.push({label:`${fname} p.${page}`,file:fname,page});
     }
     if(!pairs.length&&!awbUnrecognizedPages.length&&!awbCanceledPages.length&&!awbCreatedVintedFileNames.length)throw new Error('Niciun PDF citit cu succes din dosar.');
     // Bug real, foarte important, raportat direct („sincronizate prin citire AWB, dar nu apar în Staff"):
@@ -24394,7 +24450,7 @@ function renderAwbPreview(){
       // Comandă găsită pe eMAG după număr, dar produsul n-a fost recunoscut automat — distinct de
       // „negăsită", ca omul să știe exact unde să se ducă (Comenzi Platforme, linia „Neinclus"), nu să
       // caute degeaba o comandă care de fapt EXISTĂ deja, doar neconfirmată — vezi readAwbFolderPdfs.
-      else if(p.emagFoundUnmatched)msg=`⚠️ Comanda eMAG ${esc(p.comandaId)} (AWB ${esc(p.awb)}) — găsită, dar produsul nu s-a potrivit automat. Verifică „Comenzi Platforme" (a rămas „Neinclus", cu AWB-ul deja completat)`;
+      else if(p.emagFoundUnmatched)msg=`⚠️ Comanda eMAG ${esc(p.comandaId)}${p.destinatarHu?` — ${esc(p.destinatarHu)}`:''} (AWB ${esc(p.awb)}) — găsită, dar produsul nu s-a potrivit automat. Verifică „Comenzi Platforme" (a rămas „Neinclus", cu AWB-ul deja completat)`;
       // AWB-ul citit direct din NUMELE fișierului (vezi awbFromFilename, caz „012EMGXL..."), fără niciun
       // comandaId pe etichetă — mesaj distinct de „Comanda  (AWB ...)" (gol, confuz), ca omul să știe
       // exact ce lipsește: codul AWB e sigur, doar comanda trebuie aleasă manual.
