@@ -4702,6 +4702,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:590,text:'Asociază AWB-uri — bug MAJOR, raportat direct, cu PDF real atașat (comenzi 26.10.pdf, 22 pagini) + captură: „verifică ce s-a întâmplat și rezolvă, e o problemă majoră, nu putem lucra așa" — 20 din 22 pagini ieșeau „Format nerecunoscut", inclusiv formate STANDARD, citite cu succes zilnic până acum (Sameday easybox RO, Cargus standard), nu doar cazuri rare. Cauza: ultima plasă de siguranță (fallback-ul AI universal, `aiFallbackAwbMatch`) trimitea modelului STRICT textul extras de PDF.js — pentru etichete generate ca parte dintr-un PDF cu mai multe etichete combinate într-un singur fișier (spre deosebire de etichetele descărcate individual, câte una per fișier, cu strat real de text), corpul vizual al etichetei (nume destinatar, cod de bare, AWB) e RANDAT CA IMAGINE, nu text — PDF.js extrage doar antetul static, fără nimic din ce contează; AI-ul pe text, oricât de bun modelul, n-are de unde citi ce nu există deloc în textul primit. Adăugată o a DOUA treaptă de fallback, pe IMAGINE (`extractAwbLabelDataWithAIVision`): când treapta pe text eșuează, randăm pagina ca JPEG (`renderPdfPageToImageDataUrl`, funcția EXACTĂ deja folosită și verificată pentru previzualizarea vizuală AWB din Staff) și o trimitem direct modelului cu viziune, la fel ca la analiza unei poze de produs. Ultimă treaptă, deliberat, nu prima — mai costisitoare, folosită STRICT când regex + nume fișier + AI pe text au eșuat toate. Verificat de 2 ori: sintaxă + 8 teste izolate pe funcțiile reale extrase din cod (treapta vizuală se declanșează doar când textul eșuează complet și există blob de pagină, NU se mai declanșează deloc când textul reușește — fără cost suplimentar, regresie verificată și pentru apelanți fără blob, erori de randare/AI prinse fără să oprească restul lotului).',date:'2026-10-26'},
   {n:589,text:'Asociază AWB-uri — 2 reparații directe, cerute explicit după o investigație reală („vreau să rezolvi să nu mai avem astfel de probleme în viitor"), pe 2 bug-uri reale confirmate cu date live (comanda PRO-VITAM SRL). (1) Comandă deja scrisă greșit în bază cu AWB „0219282" — un fragment din telefonul fix Cargus, tipărit identic pe fiecare etichetă standard eMAG→Cargus („Tel.: 0219330 / 0219282"), în loc de adevăratul „Nota:" (1209973512). Regexul care citește „Nota:" era prea permisiv (`\d{8,12}`) — strâns acum la exact 10 cifre, cât au toate etichetele Cargus reale văzute până acum. Adăugată și o a doua plasă de siguranță, universală (`awbLooksPlausible`), verificată în AMBELE bucle de citire AWB — indiferent pe ce cale ar ieși vreodată din nou o valoare implauzibilă (acest regex sau fallback-ul AI, pe text zgomotos/reordonat de PDF.js), nu mai e acceptată tăcut — cade pe calea deja existentă „format nerecunoscut, verifică manual". (2) Bug real suplimentar, paralel cu #588: „Alege PDF-uri" (selectarea manuală de fișiere, spre deosebire de „📂 Citește din dosar") nu avea DELOC verificarea împotriva comenzilor „Neinclus" din previzualizare, nici căutarea directă pe eMAG după număr (indiferent de status) — o comandă necomisă, citită printr-un PDF ales manual, rămânea mereu „negăsită". Adusă acum la paritate completă cu „Citește din dosar". Verificat de 2 ori: sintaxă + 8 teste izolate (15 verificări) pe funcțiile reale extrase din cod (regex strâns la 10 cifre, plasa de siguranță respinge exact valoarea greșită găsită live + variante de lungime greșită, neatinsă pentru alți curieri, ambele comenzi reale — PRO-VITAM/Ana vlasie — rămân extrase corect).',date:'2026-10-23'},
   {n:588,text:'Asociază AWB-uri — bug real, important, reparat, raportat direct cu etichetă FAN Courier reală atașată (AWB 7000171946886, Continut 11691606915) + captură: „de ce nu se asociază AWB-ul comenzii?" — o comandă Trendyol clar vizibilă în Comenzi Platforme, „Neinclus", rămânea permanent „negăsită sau ambiguă" la citirea etichetei, deși produsul era deja potrivit și eticheta conținea exact numărul ei de comandă. Cauza: potrivirea de bază (🏭 FAN Courier, câmpul „Continut" = comanda_id exact, cel mai folosit format) verifica STRICT comenzile deja scrise în bază (platforma_comenzi) — dacă nu găsea nimic acolo, încerca un singur fallback, STRICT pentru eMAG (căutare directă pe eMAG după număr), fără nicio verificare împotriva comenzilor „Neinclus" încă în previzualizare (pcImpParsed). Mecanismul corect (`_pendingMatch`, scrie AWB-ul direct pe linia din previzualizare și o comite automat — „AWB asociat cu succes = comandă inclusă automat") EXISTA deja, folosit corect la alte formate (Vinted/Cargus), doar că drumul standard FAN Courier/Trendyol nu-l apela niciodată. Acum verifică și pcImpParsed, indiferent de platformă (eMAG/Trendyol/Vinted/OLX), înainte de fallback-ul eMAG — nimic nou de scris, doar lookup-ul care lipsea. Verificat de 2 ori: sintaxă + 5 teste izolate (15 verificări) pe funcția reală extrasă din cod (cazul exact raportat — comandă Trendyol „Neinclus" găsită prin pcImpParsed, fără apel inutil la eMAG —, regresie pe comandă deja comisă în bază neatinsă, aceeași reparație funcționează și pentru eMAG „Neinclus" nu doar Trendyol, comandă negăsită nicăieri rămâne corect negăsită, comandă deja comisă — cu _committedId — tratată corect ca „nu mai e Neinclus", nu confundată).',date:'2026-10-22'},
   {n:587,text:'Raport stoc — 2 corecții directe pe modul dedicat „doar carduri" (#586), raportate cu o captură reală de pe link-ul dedicat. (1) Bug real: „VALOARE COST/VALOARE VÂNZARE" de jos tot apăreau, deși trebuiau ascunse — cauza, #rpt-stats are `display:grid` scris direct în `style=""` în șablon, iar un stil inline bate orice regulă CSS externă fără `!important`; adăugat acum. (2) „Mai mare, potrivit pentru laptop/tabletă" + „căsuța mai mare unde se scrie stocul" — cardul și tot ce ține de el sunt mărite substanțial STRICT în acest mod (lățime card 360→600px, poză 252→400px, titlu 30→40px, câmpul de stoc nou 27→42px cu padding mult mai generos) — vederea normală din Raport stoc, neatinsă. Verificat de 2 ori: sintaxă + balans CSS (nicio logică nouă, strict regulile de afișare).',date:'2026-10-21'},
@@ -19710,6 +19711,41 @@ async function extractAwbLabelDataWithAI(text){
     return JSON.parse(resp);
   }catch(e){console.warn('Extragere AI etichetă AWB eșuată:',e);return null;}
 }
+// A DOUA treaptă a fallback-ului AI, pe IMAGINE, nu pe text — bug major, raportat direct („verifică ce
+// s-a întâmplat și rezolvă, e o problemă majoră, nu putem lucra așa"): un lot real de 22 etichete
+// (comenzi 26.10.pdf) a ieșit aproape complet „format nerecunoscut" (20 din 22), inclusiv formate
+// STANDARD, verificate zilnic (Sameday easybox RO, Cargus standard) — nu doar cazuri rare. Cauza:
+// `extractAwbLabelDataWithAI` de mai sus primește STRICT textul extras de PDF.js (`page.getTextContent`)
+// — pentru etichetele astea, generate ca parte dintr-un PDF cu mai multe etichete combinate într-un
+// singur fișier (spre deosebire de etichetele descărcate individual, câte una per fișier, care au strat
+// de text real), corpul vizual al etichetei (nume destinatar, cod de bare, AWB) e RANDAT ca IMAGINE
+// rasterizată, nu text — PDF.js extrage doar antetul static (adresa firmei noastre), fără nimic din ce
+// contează. Fallback-ul pe text, oricât de bun modelul, n-are de unde citi ce nu există deloc în textul
+// primit — eșuează tăcut, identic cu regexul de mai sus (parseAwbLabelText), pentru ACELAȘI motiv.
+// Rezolvare: dacă fallback-ul pe text eșuează ȘI avem blob-ul paginii (apelantul îl are deja, reținut
+// pentru previzualizarea vizuală AWB — vezi renderPdfPageToImageDataUrl, funcția EXACTĂ deja folosită și
+// de generateAwbPreviewInBackground, deci verificată deja pe exact acest tip de etichete), randăm pagina
+// ca imagine JPEG și o trimitem direct modelului cu viziune — identic ca tehnică cu analyzeImage (poză
+// produs) — ca să „vadă" ce PDF.js nu poate extrage ca text. Ultimă treaptă, deliberat, nu prima: mai
+// costisitoare (randare canvas + imagine, nu doar text), folosită STRICT când toate căile mai ieftine
+// (regex, nume fișier, AI pe text) au eșuat.
+async function extractAwbLabelDataWithAIVision(blob,pageNum){
+  if(!blob)return null;
+  try{
+    const dataUrl=await renderPdfPageToImageDataUrl(blob,pageNum);
+    const m=dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+    if(!m)return null;
+    const resp=await callAI(
+      [{role:'user',content:[
+        {type:'image',source:{type:'base64',media_type:m[1],data:m[2]}},
+        {type:'text',text:'Aceasta este o fotografie/randare a unei etichete de expediere de la curier (DPD, Sameday, FAN Courier, GLS, Cargus, InPost, Packeta etc), posibil în orice limbă. Citește direct din imagine ce nu a putut fi extras ca text (nume destinatar, AWB/cod de urmărire, număr comandă, sumă ramburs, curier).'}
+      ]}],
+      'Ești expert în citirea etichetelor de expediere de la curieri, în ORICE limbă, inclusiv direct din imagine când textul nu e disponibil. Extragi STRICT ce apare vizibil pe etichetă — numele destinatarului, orice număr de comandă/referință, codul de urmărire (AWB, dacă e diferit de numărul comenzii), suma totală/ramburs cu moneda ei, și numele curierului. Nu inventezi ce nu apare clar — null dacă un câmp lipsește.',
+      500,'analysis',AWB_LABEL_AI_SCHEMA,'awb_label_extraction'
+    );
+    return JSON.parse(resp);
+  }catch(e){console.warn('Extragere AI vizuală etichetă AWB eșuată:',e);return null;}
+}
 // fuzzyMatch (fmNorm/fmFold) elimină diacriticele latine dar NU transliterează alte alfabete — orice
 // caracter chirilic/grecesc e pur și simplu șters de regexul `[^a-z0-9]`. Două nume complet diferite,
 // amândouă scrise doar în chirilic/grecesc, s-ar normaliza deci la text GOL → fuzzyMatch le-ar da scor
@@ -19764,8 +19800,13 @@ function resolveAwbByNameAndAmount(extracted){
 // Punct unic folosit de AMBELE fluxuri (fișier ales manual / dosar Desktop/AWB-uri) — vezi
 // extractAwbLabelDataWithAI/resolveAwbByNameAndAmount mai sus. Întoarce un obiect „p" compatibil cu
 // restul lanțului (parseAwbLabelText etc), sau null dacă AI-ul n-a putut citi nimic util.
-async function aiFallbackAwbMatch(text){
-  const extracted=await extractAwbLabelDataWithAI(text);
+// `blob`+`pageNum` opționale (apelantul le are deja — vezi readAwbFolderPdfs/handleAwbPdfFile): dacă
+// citirea pe TEXT nu găsește niciun AWB (etichetă rasterizată ca imagine — vezi
+// extractAwbLabelDataWithAIVision mai sus, bug major „nu putem lucra așa"), mai încercăm o dată, direct
+// pe imaginea paginii, înainte să renunțăm — fără blob (apelant vechi/necunoscut), se oprește ca înainte.
+async function aiFallbackAwbMatch(text,blob,pageNum){
+  let extracted=await extractAwbLabelDataWithAI(text);
+  if((!extracted||!extracted.awb)&&blob)extracted=await extractAwbLabelDataWithAIVision(blob,pageNum);
   if(!extracted||!extracted.awb)return null;
   // Eticheta chiar are un număr de comandă tipărit — cel mai sigur caz, identic ca încredere cu
   // awbFromFilename: lookup-ul normal după comanda_id (mai jos, în bucla „pairs") face restul.
@@ -23931,7 +23972,8 @@ async function handleAwbPdfFile(ev){
         // ce limbă, sistemul trebuie să recunoască toate AWB-urile pe baza nume client, comandă, sumă"):
         // dacă NICI regexul, NICI numele fișierului n-au funcționat, AI-ul citește eticheta (orice
         // limbă) și extrage exact aceste semnale. Fără un cod AWB citit, nu are sens — nimic de asociat.
-        if(!p)p=await aiFallbackAwbMatch(text);
+        // `file`+`i+1` — treapta a doua (imagine, vezi aiFallbackAwbMatch) randează EXACT această pagină.
+        if(!p)p=await aiFallbackAwbMatch(text,file,i+1);
         if(p&&p.courierCanceled)awbCanceledPages.push({label,awb:p.awb,comandaId:p.comandaId,file:file.name,page:i+1});
         // _blob — reținut și pentru previzualizarea vizuală AWB (randată mai târziu, la
         // applyAwbAssociation — vezi generateAwbPreviewInBackground); `file` e deja un Blob (File).
@@ -24181,7 +24223,8 @@ async function readAwbFolderPdfs(fromArchive){
           // comandaId+AWB, fără să mai depindă deloc de textul/limba etichetei.
           if(!p&&pages.length===1){const fb=awbFromFilename(f.name);if(fb)p={awb:fb.awb,comandaId:fb.comandaId,courier:fb.courier};}
           // Ultimă plasă de siguranță, universală, indiferent de limbă — vezi aiFallbackAwbMatch.
-          if(!p)p=await aiFallbackAwbMatch(text);
+          // `blob`+`i+1` — treapta a doua (imagine) randează EXACT această pagină din PDF-ul deja citit.
+          if(!p)p=await aiFallbackAwbMatch(text,blob,i+1);
           if(p&&p.courierCanceled)awbCanceledPages.push({label:`${f.name} p.${i+1}`,awb:p.awb,comandaId:p.comandaId});
           // Bug real, raportat direct („PDF AWB comenzi incluse” refuza toate comenzile deja incluse,
           // deși aveau AWB): spre deosebire de handleAwbPdfFile (selectare manuală), bucla asta nu reținea
