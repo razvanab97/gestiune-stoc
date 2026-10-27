@@ -4789,6 +4789,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:612,text:'„Normalizează furnizorii" (Raport stoc) — bug real, raportat direct, cu o captură a listei de sugestii furnizor: „Verk"/„VERK GROUP"/„Verk Store"/„verk.store" apăreau ca 4 furnizori diferiți — „verk e acelasi furnizor, la fel e si la maxy si la jumbo - uneste le". Unealta de normalizare exista deja de mult (buton „🧹 Normalizează furnizorii"), dar scana DOAR furnizorul principal al produsului — variantele salvate ca „Alt furnizor" (până la 5 pe produs) treceau complet pe lângă ea, oricât de multe produse le-ar fi avut. Acum scanează și acolo: fiecare variantă greșită dintr-o sursă „Alt furnizor" apare în previzualizare, marcată „(Alt furnizor)" ca să se știe exact ce se schimbă, cu aceeași bifă de includere/excludere ca înainte — nimic nu se schimbă silențios. Pe drum, reparat și un bug de fiabilitate: un produs cu 2+ variante greșite deodată (ex. principalul ȘI o sursă alternativă) făcea acum 2 scrieri separate în bază pentru același produs — grupate acum într-o singură scriere, ca restul aplicației (un produs = o scriere, niciodată mai multe secvențiale pentru aceeași acțiune). Verificat direct pe baza reală (citire, fără nicio scriere): 56 de variante greșite găsite pe 56 de produse (12× „e-jumbo.ro", 14× „VERK GROUP", 13× „Verk Store" etc.) — toate recunoscute corect, niciuna ratată. Verificat de 2 ori: sintaxă + 29 de verificări izolate pe funcțiile reale extrase din cod (găsește variantele din Alt furnizor cu indexul exact, regresie pe furnizorul principal/produse arhivate, un produs cu ambele tipuri de greșeală deodată -> o singură scriere cu toate corectate, bifare/debifare pe poziție exactă, nu pe produs, refuz la confirmare -> nimic scris) + regresie completă pe toate cele 24 de teste anterioare din sesiune, toate verzi.',date:'2026-10-28'},
   {n:611,text:'„Produse de comandat" — redesign premium, cerut direct pe o captură reală a cardului din Raport stoc: „fa un redesign aici - sa arate mai futurist - mai premium". Rândurile plate, fără relief, au devenit carduri albe discrete cu umbră la hover (ridicare ușoară la trecerea cu mouse-ul), poza produsului puțin mai mare; stocul apare acum ca pastilă colorată (roșie pentru „Fără stoc", neutră pentru restul) în loc de text simplu; antetele de grup pe furnizor (ex. „IMPORTIO.PL (2)") au acum un număr tip insignă, separate de o linie subțire; antetul cardului și titlul au fontul Space Grotesk, ca restul elementelor „premium" deja existente în aplicație (popup-ul de produs, #581). Nicio culoare nouă — totul reutilizează tokenurile deja definite (--acc/--acc-light/--gr/--rd); aplicat identic ÎN AMBELE locuri unde apare lista (Comenzi Platforme → „De comandat" ȘI Raport stoc, aceeași funcție de randare). Căutarea „Adaugă produs la listă" (și celelalte 2 căutări asemănătoare din Raport stoc) au acum același focus discret, cu glow, ca restul câmpurilor din aplicație. Schimbările sunt pe clase noi, dedicate (.reorder-*) — stilurile globale reutilizate în zeci de alte locuri (.pcom-batch-row, .sec) rămân complet neatinse. Verificat de 2 ori: sintaxă + balans CSS (acolade numărate programatic, 2382/2382) + 31 de verificări izolate pe funcțiile reale extrase din cod (clasele noi prezente, clasele vechi absente, pastilă de stoc corectă pe ambele cazuri, grupare neschimbată logic — doar vizual, regresie pe selectorul de furnizor și pe inputul „adaugă furnizor" de pe #610, wiring real pe ambele carduri) + regresie completă pe toate cele 23 de teste anterioare din sesiune, toate verzi.',date:'2026-10-28'},
   {n:610,text:'„Produse de comandat" — liniile din grupul „FĂRĂ FURNIZOR" primesc acum o secțiune de adăugat/selectat furnizor, direct pe rând — cerut direct, pe o captură reală a grupării pe furnizori: „fara furnizor sa aiba sectiune de adaugat furnizor sau de selectat". Până acum, un produs fără niciun furnizor cunoscut (nici principal, nici „Alt furnizor") nu avea nicio acțiune posibilă pe linia lui — doar grupul „Fără furnizor", fără ieșire, obligând la deschiderea fișei complete a produsului doar ca să adaugi un furnizor. Acum apare un câmp text cu sugestii (aceeași listă de furnizori deja folosiți în toată aplicația, ca la Alt furnizor/Import factură) — scrii sau alegi un furnizor existent, confirmi cu Enter/click în afara câmpului, și se salvează direct pe produs (ca furnizor principal), rămâne acolo și după ce linia e bifată „✓ Comandat". Apare DOAR pe linii curente, editabile, cu produsul încă în inventar — istoricul lunilor vechi și liniile cu produs șters rămân neschimbate, needitabile. Verificat de 2 ori: sintaxă + 29 de verificări izolate pe funcțiile reale extrase din cod (apare doar pe linia corectă, dispare pe istoric/produs șters, regresie pe liniile cu 1/2+ furnizori existenți, salvare reală pe produs cu ensureAltSupplierSource — același helper ca la Import factură —, no-op pe valoare goală, fără crash pe id inexistent) + regresie completă pe toate cele 22 de teste anterioare din sesiune, toate verzi.',date:'2026-10-27'},
   {n:609,text:'Bug MAJOR, raportat direct: „nu s-au actualizat produsele din stoc o data cu produsele din vanzari azi, de ce?". Confirmat live, în bază: o comandă Trendyol nouă („Set 10 becuri LED...") se potrivise AUTOMAT, la import, cu un produs ARHIVAT din 23.09 (discontinuat, înlocuit între timp cu unul nou, creat chiar în aceeași dimineață) — stocul produsului activ nu s-a mișcat niciodată, pentru că vânzarea „actualiza" de fapt un produs mort, ascuns peste tot în rest din aplicație. Cauza, găsită în `findExistingProduct` (potrivirea automată folosită la Importă comenzi/factură/Comandă furnizor/Sincronizare/Asistent AI): niciuna din cele 4 căi de potrivire (EAN, SKU propriu, cod „Alt furnizor", nume fuzzy) nu excludea produsele arhivate — un produs arhivat înseamnă „nu mai există" oriunde altundeva în aplicație (Inventar, Raport stoc), dar la potrivirea automată tot conta ca opțiune validă. Pe drum, găsit și reparat același bug, din a doua direcție: picker-ul manual de reasociere produs (Comenzi Platforme, Sincronizare, Importă factură) oferea și el produse arhivate ca opțiuni de ales — iar la Comenzi Platforme/Sincronizare, lista de căutare rămânea „înghețată" de la prima deschidere din sesiune, fără nicio reîmprospătare — un produs nou, creat ulterior (exact cazul real raportat), nu apărea niciodată la căutare, oricât de exact ai fi scris numele. Verificat de 2 ori: sintaxă + 20 de verificări izolate pe funcțiile reale extrase din cod (cazul real reprodus exact — produs arhivat exclus, produs activ neafectat — pe toate cele 4 căi de potrivire; picker-ele recalculează acum mereu proaspăt, exclud arhivate, văd imediat un produs nou creat între 2 deschideri) + regresie completă pe toate testele anterioare din sesiune, tot verzi.',date:'2026-10-27'},
@@ -27341,26 +27342,38 @@ async function handleRaportSupplierImport(ev){
 // Normalizare furnizori — la cerere directă: unește variantele de scriere ale aceluiași furnizor
 // ("Jumbo Romania"/"Jumbo / E-Jumbo Romania" → "Jumbo") într-un singur nume canonic. Niciodată
 // silențios — arată o previzualizare cu vechi→nou per produs, cu bifă de includere, înainte de aplicare.
+// Bug real, raportat direct, cu o captură a listei de sugestii furnizor („Verk"/„VERK GROUP"/„Verk
+// Store"/„verk.store" apăreau ca 4 furnizori diferiți): scana DOAR furnizorul principal (p.supplier) —
+// variantele salvate ca „Alt furnizor" (p.supplierSources, până la 5 pe produs) treceau complet pe
+// lângă normalizare, oricât de multe produse le-ar fi avut. Fiecare intrare are acum `field` (`supplier`
+// sau `alt`, cu `altIdx` — indexul exact în supplierSources) — un produs poate contribui mai multe
+// intrări deodată (principalul + 1-5 surse alternative), toate aplicate într-o SINGURĂ scriere per
+// produs (grupate pe `pid` la aplicare), nu o scriere separată per intrare.
 let supNormParsed=[];
 function previewSupplierNormalization(){
-  supNormParsed=P.filter(p=>!p.archived).map(p=>{
+  supNormParsed=[];
+  P.filter(p=>!p.archived).forEach(p=>{
     const canon=canonicalSupplierName(p.supplier);
-    return canon&&canon!==p.supplier?{pid:p.id,name:p.name,old:p.supplier,canon,include:true}:null;
-  }).filter(Boolean);
+    if(canon&&canon!==p.supplier)supNormParsed.push({pid:p.id,name:p.name,field:'supplier',old:p.supplier,canon,include:true});
+    (p.supplierSources||[]).forEach((s,altIdx)=>{
+      const c=canonicalSupplierName(s?.supplier);
+      if(c&&c!==s.supplier)supNormParsed.push({pid:p.id,name:p.name,field:'alt',altIdx,old:s.supplier,canon:c,include:true});
+    });
+  });
   const box=document.getElementById('rpt-sup-norm-preview');if(!box)return;
-  if(!supNormParsed.length){box.innerHTML='<div style="font-size:24px;color:var(--t3);margin-top:10px">Niciun furnizor de normalizat — toate valorile recunoscute (Jumbo/Maxy/Verk) sunt deja scrise exact așa.</div>';return;}
+  if(!supNormParsed.length){box.innerHTML='<div style="font-size:24px;color:var(--t3);margin-top:10px">Niciun furnizor de normalizat — toate valorile recunoscute (Jumbo/Maxy/Verk) sunt deja scrise exact așa, inclusiv la sursele „Alt furnizor".</div>';return;}
   renderSupplierNormPreview();
 }
-function toggleSupNormInclude(pid,checked){
-  const it=supNormParsed.find(x=>x.pid===pid);if(it)it.include=checked;
+function toggleSupNormInclude(idx,checked){
+  if(supNormParsed[idx])supNormParsed[idx].include=checked;
   const n=supNormParsed.filter(x=>x.include).length;
   const btn=document.getElementById('sup-norm-apply-btn');if(btn){btn.disabled=!n;btn.textContent=`Aplică normalizarea (${n})`;}
 }
 function renderSupplierNormPreview(){
   const box=document.getElementById('rpt-sup-norm-preview');if(!box)return;
   const groups={};
-  supNormParsed.forEach(it=>{(groups[it.canon]=groups[it.canon]||[]).push(it);});
-  const rows=Object.keys(groups).sort().map(canon=>`<div class="sec" style="margin-top:10px">${esc(canon)} (${groups[canon].length})</div>${groups[canon].map(it=>`<div class="inv-prev-row"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;min-width:0"><input type="checkbox" ${it.include?'checked':''} onchange="toggleSupNormInclude(${it.pid},this.checked)"><span class="inv-prev-nm" style="flex:1">${esc(it.name)}<div class="jp-meta">„${esc(it.old||'—')}" → „${esc(it.canon)}"</div></span></label></div>`).join('')}`).join('');
+  supNormParsed.forEach((it,i)=>{(groups[it.canon]=groups[it.canon]||[]).push({...it,_i:i});});
+  const rows=Object.keys(groups).sort().map(canon=>`<div class="sec" style="margin-top:10px">${esc(canon)} (${groups[canon].length})</div>${groups[canon].map(it=>`<div class="inv-prev-row"><label style="display:flex;align-items:center;gap:8px;cursor:pointer;flex:1;min-width:0"><input type="checkbox" ${it.include?'checked':''} onchange="toggleSupNormInclude(${it._i},this.checked)"><span class="inv-prev-nm" style="flex:1">${esc(it.name)}${it.field==='alt'?' <span style="color:var(--t3);font-weight:400">(Alt furnizor)</span>':''}<div class="jp-meta">„${esc(it.old||'—')}" → „${esc(it.canon)}"</div></span></label></div>`).join('')}`).join('');
   const n=supNormParsed.filter(x=>x.include).length;
   box.innerHTML=`<div class="inv-preview" style="margin-top:10px"><div class="inv-prev-title">Normalizare furnizori — previzualizare</div>${rows}
     <div style="display:flex;justify-content:flex-end;margin-top:10px"><button type="button" class="btn btn-sm btn-acc" id="sup-norm-apply-btn" onclick="applySupplierNormalization()" ${n?'':'disabled'}>Aplică normalizarea (${n})</button></div>
@@ -27368,17 +27381,22 @@ function renderSupplierNormPreview(){
 }
 async function applySupplierNormalization(){
   const toApply=supNormParsed.filter(x=>x.include);if(!toApply.length)return;
-  if(!confirm(`Se actualizează furnizorul la ${toApply.length} produse. Continui?`))return;
-  showLoading(`Se normalizează furnizorii la ${toApply.length} produse…`);
-  for(const it of toApply){
-    const p=P.find(x=>x.id===it.pid);if(!p)continue;
-    await saveProdToDb({...p,supplier:it.canon},p.id);
+  const pids=[...new Set(toApply.map(x=>x.pid))];
+  if(!confirm(`Se actualizează furnizorul la ${pids.length} produse (${toApply.length} modificări). Continui?`))return;
+  showLoading(`Se normalizează furnizorii la ${pids.length} produse…`);
+  for(const pid of pids){
+    const p=P.find(x=>x.id===pid);if(!p)continue;
+    for(const ch of toApply.filter(x=>x.pid===pid)){
+      if(ch.field==='supplier')p.supplier=ch.canon;
+      else if(ch.field==='alt'&&Array.isArray(p.supplierSources)&&p.supplierSources[ch.altIdx])p.supplierSources[ch.altIdx].supplier=ch.canon;
+    }
+    await saveProdToDb(p,p.id);
   }
   hideLoading();
   supNormParsed=[];
   document.getElementById('rpt-sup-norm-preview').innerHTML='';
-  renderTable();renderRaport();
-  toast(`Furnizor normalizat la ${toApply.length} produse ✓`);
+  renderTable();renderRaport();renderSupplierDatalist();
+  toast(`Furnizor normalizat la ${pids.length} produse ✓`);
 }
 
 function previewImageStorageMigration(){
