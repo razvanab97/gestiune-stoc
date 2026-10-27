@@ -4755,6 +4755,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:609,text:'Bug MAJOR, raportat direct: „nu s-au actualizat produsele din stoc o data cu produsele din vanzari azi, de ce?". Confirmat live, în bază: o comandă Trendyol nouă („Set 10 becuri LED...") se potrivise AUTOMAT, la import, cu un produs ARHIVAT din 23.09 (discontinuat, înlocuit între timp cu unul nou, creat chiar în aceeași dimineață) — stocul produsului activ nu s-a mișcat niciodată, pentru că vânzarea „actualiza" de fapt un produs mort, ascuns peste tot în rest din aplicație. Cauza, găsită în `findExistingProduct` (potrivirea automată folosită la Importă comenzi/factură/Comandă furnizor/Sincronizare/Asistent AI): niciuna din cele 4 căi de potrivire (EAN, SKU propriu, cod „Alt furnizor", nume fuzzy) nu excludea produsele arhivate — un produs arhivat înseamnă „nu mai există" oriunde altundeva în aplicație (Inventar, Raport stoc), dar la potrivirea automată tot conta ca opțiune validă. Pe drum, găsit și reparat același bug, din a doua direcție: picker-ul manual de reasociere produs (Comenzi Platforme, Sincronizare, Importă factură) oferea și el produse arhivate ca opțiuni de ales — iar la Comenzi Platforme/Sincronizare, lista de căutare rămânea „înghețată" de la prima deschidere din sesiune, fără nicio reîmprospătare — un produs nou, creat ulterior (exact cazul real raportat), nu apărea niciodată la căutare, oricât de exact ai fi scris numele. Verificat de 2 ori: sintaxă + 20 de verificări izolate pe funcțiile reale extrase din cod (cazul real reprodus exact — produs arhivat exclus, produs activ neafectat — pe toate cele 4 căi de potrivire; picker-ele recalculează acum mereu proaspăt, exclud arhivate, văd imediat un produs nou creat între 2 deschideri) + regresie completă pe toate testele anterioare din sesiune, tot verzi.',date:'2026-10-27'},
   {n:608,text:'Asistent AI — candidații „Produs posibil asemănător" (la crearea unui produs nou prin chat) au acum poza fiecăruia, lângă nume — cerut direct, pe o captură reală: „sa primim si poza aici in dreptul produsului recomandat - sa mi dau seama daca e acelasi". Mesajul de avertizare chiar spune „verifică fotografia înainte de alegere", dar nu arăta nicio fotografie până acum — doar text, contrazicea propriul sfat. Pe drum, butoanele „Folosește" sunt acum mult mai mici și mai bine încadrate (cerut direct) — font/padding reduse explicit (butoanele din restul aplicației sunt mari, 26-27px, prea „bulky" repetate pe fiecare candidat) și eticheta scurtată la „Folosește" (fără „produsul existent", redundant lângă poză+nume) — identică cu eticheta deja folosită la o sursă „Alt furnizor". Butonul principal „Deschide ca produs nou" rămâne neschimbat, singurul rămas vizual proeminent. Verificat de 2 ori: sintaxă + 14 verificări izolate pe funcțiile reale extrase din cod (poză reală cu id corect, degradare pe produs dispărut din stoc → URL salvat → emoji, cazul real cu 3 candidați din captură, wiring CSS real).',date:'2026-10-27'},
   {n:607,text:'„Alt furnizor" — bug real, raportat direct, cu un preț deja salvat greșit (produs #98, sursă Importio.pl, 16.09 „RON"): „aici e 16 eur probabil, nu 16 RON - s-a preluat gresit". Confirmat — pagina reală a furnizorului afișează prețul în altă monedă, nu RON. Cauza: formularul „+ Adaugă sursă" avea DOAR câmpuri în RON, spre deosebire de prețul principal (Preț achiziție), care are deja un câmp EUR cu conversie automată — un furnizor extern care facturează în EUR nu avea nicio cale corectă de introdus prețul aici, doar calcul manual, ușor de uitat/greșit (exact ce s-a întâmplat). Adăugat același câmp „Preț EUR fără TVA" și la „Alt furnizor", cu aceeași conversie automată (EUR_RON) ca la prețul principal. Rămâne de verificat manual: prețul deja salvat pe Importio.pl (16.09) — pagina reală a acelui furnizor e de fapt în PLN (zloți), o monedă pe care aplicația n-o are deloc, nici la prețul principal — nu poate fi corectat automat, fără să ghicim o cifră; trebuie reintrodus manual, cu prețul corect verificat direct pe pagina furnizorului. Verificat de 2 ori: sintaxă + 10 teste izolate pe funcțiile reale extrase din cod (conversie EUR→RON identică cu cea de la prețul principal, TVA forțat la 0% la fel ca acolo, câmp gol fără crash, regresie pe sincronizarea manuală TVA/fără TVA, wiring real al formularului).',date:'2026-10-27'},
   {n:606,text:'„Alt furnizor" + „Produse de comandat" — 7 completări cerute direct, pe 4 capturi reale. (1) Redesign „Alt furnizor" (fișa produsului, Prețuri și TVA) — rândurile arătau plat, fără legătură cu restul popup-ului premium (#581); acum card discret, aliniat la aceeași temă (Space Grotesk, accent mov-cyan), nicio culoare nouă. (2) Bug real, cu un cod existent atașat: căutarea „prin secțiunea de căutare" (Inventar/Dashboard, carduri Raport stoc) nu verifica niciodată codurile „Alt furnizor" salvate pe un produs — doar codul propriu; găsește acum și după acestea. (3) Diferență de preț +/- pe fiecare sursă alternativă, față de prețul principal — vezi dintr-o privire dacă un furnizor e mai scump sau mai ieftin, fără calcul mental. (4) „Produse de comandat" — produsele cu 2+ furnizori disponibili (principal + Alt furnizor) primesc acum un selector „de la cine comanzi" direct pe rând, cu prețul fiecăruia; alegerea se salvează pe listă. (5) Lista se desparte acum automat pe furnizori, cu antet per grup, dar DOAR când conține 2+ furnizori diferiți — o listă dintr-un singur furnizor rămâne simplă, neschimbată. (6) Căutarea din „Produse de comandat" acceptă acum și o poză lipită din clipboard — AI-ul descrie ce vede, caută în stocul real; un candidat clar se adaugă direct, altfel rămân rezultatele de ales manual. (7) Căutarea de-acolo verifică acum și EAN-ul, pe lângă nume/SKU/cod intern. Verificat de 2 ori: sintaxă + 40 de verificări izolate pe funcțiile reale extrase din cod (căutare după cod Alt furnizor, diferență de preț +/-/fără comparație posibilă, selector de furnizor doar cu 2+ surse reale și NICIODATĂ pe istoric, alegere persistată, grupare doar cu 2+ furnizori diferiți — altfel flat, logica de alegere automată vs. ambiguă pe căutarea din poză) + regresie completă pe toate testele anterioare (#601/#602/#603), tot verzi.',date:'2026-10-27'},
@@ -16765,7 +16766,7 @@ function setSmProduct(id){
 }
 function openSmProductPick(ev){
   ev.stopPropagation();
-  if(!smProdPickList)smProdPickList=P.slice().sort((a,b)=>a.name.localeCompare(b.name));
+  if(!smProdPickList)smProdPickList=P.filter(p=>!p.archived).sort((a,b)=>a.name.localeCompare(b.name));
   const drop=document.getElementById('sm-produs-pickdrop');
   const btn=ev.currentTarget.getBoundingClientRect();
   let left=btn.left,top=btn.bottom+4;
@@ -16894,7 +16895,7 @@ async function recognizeProductQueryFromClipboard(){
 async function pasteSmProductImageSearch(){
   try{
     const query=await recognizeProductQueryFromClipboard();
-    if(!smProdPickList)smProdPickList=P.slice().sort((a,b)=>a.name.localeCompare(b.name));
+    if(!smProdPickList)smProdPickList=P.filter(p=>!p.archived).sort((a,b)=>a.name.localeCompare(b.name));
     const scored=smProdPickList.map(p=>({p,score:fuzzyMatch(query,productMatchText(p))})).filter(x=>x.score>=0.2).sort((a,b)=>b.score-a.score);
     const btn=document.querySelector('#sm-produs-pick .smi-pick-btn');
     if(btn){
@@ -17499,10 +17500,16 @@ async function suggestSyncImportWithAI(){
   }
 }
 let syncPickIdx=null,syncPickProds=null;
+// Recalculată la fiecare deschidere, fără produse arhivate — același bug găsit și reparat la
+// pcomPickProds (Comenzi Platforme): lista rămânea „înghețată" de la prima deschidere din sesiune, fără
+// nicio invalidare, și includea produse discontinuate ca opțiuni valide de ales.
+function buildSyncPickProds(){
+  return P.filter(p=>!p.archived).sort((a,b)=>a.name.localeCompare(b.name));
+}
 function openSyncPick(ev,idx){
   ev.stopPropagation();
   syncPickIdx=idx;
-  if(!syncPickProds)syncPickProds=P.slice().sort((a,b)=>a.name.localeCompare(b.name));
+  syncPickProds=buildSyncPickProds();
   const drop=document.getElementById('smi-pickdrop');
   const btn=ev.currentTarget.getBoundingClientRect();
   let left=btn.left,top=btn.bottom+4;
@@ -17534,7 +17541,7 @@ function filterSyncPick(){
 async function syncPickRecognizeImage(){
   try{
     const query=await recognizeProductQueryFromClipboard();
-    if(!syncPickProds)syncPickProds=P.slice().sort((a,b)=>a.name.localeCompare(b.name));
+    syncPickProds=buildSyncPickProds();
     const scored=syncPickProds.map(p=>({p,score:fuzzyMatch(query,productMatchText(p))})).filter(x=>x.score>=0.2).sort((a,b)=>b.score-a.score);
     const search=document.getElementById('smi-pick-search');if(search)search.value=query;
     renderSyncPickRows(scored.length?scored.slice(0,20).map(x=>x.p):syncPickProds.slice(0,20));
@@ -21445,12 +21452,24 @@ function pcomRecentOrderCounts(){
   });
   return counts;
 }
+// Recalculată de fiecare dată când se deschide picker-ul — NU mai e „înghețată" (cache) pe toată durata
+// sesiunii. Bug real, confirmat direct pe date live: un produs nou, creat chiar în aceeași dimineață
+// (pentru un produs vechi arhivat o lună mai devreme), nu apărea deloc la căutare — lista fusese
+// construită o singură dată, la prima deschidere a picker-ului, cu mult înainte ca produsul nou să existe,
+// și nu se mai actualiza niciodată după. Exclude și produsele arhivate — același caz real: comanda nouă
+// se potrivise automat (la import) cu produsul VECHI, arhivat, nu cu cel nou, activ (vezi fix-ul identic
+// pe findExistingProduct, mai jos) — alegerea manuală de-aici nu trebuie să ofere aceeași greșeală ca
+// opțiune.
+function buildPcomPickProds(){
+  const oc=pcomRecentOrderCounts();
+  return P.filter(p=>!p.archived).sort((a,b)=>(oc.get(b.id)||0)-(oc.get(a.id)||0)||a.name.localeCompare(b.name));
+}
 function openPcomPick(ev,idx){
   ev.stopPropagation();
   pcomPickIdx=idx;
   // filterPcomPick() rămâne neschimbat — Array.filter() păstrează ordinea sursei, deci orice căutare
   // moștenește automat prioritatea de mai jos, fără cod suplimentar acolo.
-  if(!pcomPickProds){const oc=pcomRecentOrderCounts();pcomPickProds=P.slice().sort((a,b)=>(oc.get(b.id)||0)-(oc.get(a.id)||0)||a.name.localeCompare(b.name));}
+  pcomPickProds=buildPcomPickProds();
   const drop=document.getElementById('pcmi-pickdrop');
   const btn=ev.currentTarget.getBoundingClientRect();
   let left=btn.left,top=btn.bottom+4;
@@ -21486,7 +21505,7 @@ function filterPcomPick(){
 async function pcomPickRecognizeImage(){
   try{
     const query=await recognizeProductQueryFromClipboard();
-    if(!pcomPickProds){const oc=pcomRecentOrderCounts();pcomPickProds=P.slice().sort((a,b)=>(oc.get(b.id)||0)-(oc.get(a.id)||0)||a.name.localeCompare(b.name));}
+    pcomPickProds=buildPcomPickProds();
     const scored=pcomPickProds.map(p=>({p,score:fuzzyMatch(query,productMatchText(p))})).filter(x=>x.score>=0.2).sort((a,b)=>b.score-a.score);
     const search=document.getElementById('pcmi-pick-search');if(search)search.value=query;
     renderPcomPickRows(scored.length?scored.slice(0,20).map(x=>x.p):pcomPickProds.slice(0,20));
@@ -22977,19 +22996,28 @@ function productMatchText(p){
   return[p.name,p.dims,p.material,p.colors,p.sizes].filter(Boolean).join(' ');
 }
 function findExistingProduct(item){
+  // Produsele arhivate NU se potrivesc niciodată aici — bug real, confirmat direct pe date live: o
+  // comandă Trendyol nouă („Set 10 becuri LED...") s-a potrivit cu un produs arhivat încă din 23.09
+  // (discontinuat, înlocuit între timp cu unul nou), creat chiar în aceeași dimineață — stocul NU s-a
+  // actualizat niciodată, pentru că produsul „actualizat" era de fapt cel mort, ascuns peste tot în rest
+  // din aplicație (Inventar, Raport stoc), nu cel activ, real. Un produs arhivat înseamnă „nu mai există"
+  // pentru orice potrivire automată a unei comenzi NOI — indiferent dacă potrivirea ar fi venit din EAN,
+  // SKU exact sau nume fuzzy; dacă chiar e același produs fizic, revenit în stoc, corect e un produs nou
+  // (sau dezarhivat manual), nu o atașare tăcută la unul mort.
+  const live=P.filter(p=>!p.archived);
   // EAN întâi — cerut direct, pentru Maxy: codul propriu Maxy („Code") se poate schimba între
   // reaprovizionări ale ACELUIAȘI produs fizic, dar EAN-ul (codul de bare global) rămâne constant.
   // Verificat doar dacă produsul are deja un EAN salvat (câmp nou, gol pe majoritatea produselor
   // vechi) — pentru restul, se cade pe SKU, exact ca până acum.
   if(item.ean){
-    const byEan=P.find(p=>p.ean&&p.ean===item.ean);
+    const byEan=live.find(p=>p.ean&&p.ean===item.ean);
     if(byEan)return{product:byEan,confidence:'ean',score:1};
   }
   if(item.sku){
-    const bySku=P.find(p=>p.sku&&p.sku.toLowerCase()===item.sku.toLowerCase());
+    const bySku=live.find(p=>p.sku&&p.sku.toLowerCase()===item.sku.toLowerCase());
     if(bySku)return{product:bySku,confidence:'sku',score:1};
     const key=String(item.sku).toLowerCase();
-    const bySupplierSku=P.find(p=>(p.supplierSources||[]).some(s=>String(s?.sku||'').toLowerCase()===key));
+    const bySupplierSku=live.find(p=>(p.supplierSources||[]).some(s=>String(s?.sku||'').toLowerCase()===key));
     if(bySupplierSku)return{product:bySupplierSku,confidence:'supplier_sku',score:1};
   }
   // Bug real, grav, găsit direct pe date reale („s-a creat o comandă nouă, ceea ce e relativ greșit" —
@@ -23001,7 +23029,7 @@ function findExistingProduct(item){
   // Fără nume, pur și simplu nu încercăm deloc potrivirea fuzzy (EAN/SKU de mai sus rămân neatinse).
   let best=null,bestScore=0;
   if(item.name&&String(item.name).trim()){
-    for(const p of P){
+    for(const p of live){
       const score=fuzzyMatch(item.name,productMatchText(p));
       if(score>bestScore){bestScore=score;best=p;}
     }
@@ -25707,7 +25735,7 @@ function invPickBtnHtml(idx){
 function openInvPick(ev,idx){
   ev.stopPropagation();
   invPickIdx=idx;
-  if(!invPickProds)invPickProds=P.slice().sort((a,b)=>a.name.localeCompare(b.name));
+  if(!invPickProds)invPickProds=P.filter(p=>!p.archived).sort((a,b)=>a.name.localeCompare(b.name));
   const drop=document.getElementById('invmi-pickdrop');
   const btn=ev.currentTarget.getBoundingClientRect();
   let left=btn.left,top=btn.bottom+4;
