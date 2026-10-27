@@ -884,6 +884,11 @@ tr:hover td{background:var(--surf2)}
 /* Selector de furnizor pe o linie „Produse de comandat" — cerut direct, apare doar când produsul are 2+
    surse reale (altfel text simplu, neschimbat). */
 .reorder-sup-sel{font-size:18px;padding:3px 7px;border-radius:7px;border:1px solid var(--b1);background:var(--bg2);color:var(--t1);cursor:pointer;max-width:100%}
+/* Linie FĂRĂ niciun furnizor — secțiune de adăugat/selectat unul chiar acolo (cerut direct, pe o
+   captură reală a grupului „FĂRĂ FURNIZOR"); input+datalist, exact tiparul „alege sau adaugă" deja
+   folosit peste tot în aplicație (inv-supplier-list), nu un control nou de învățat. */
+.reorder-sup-input{font-size:18px;padding:3px 7px;border-radius:7px;border:1px dashed var(--b1);background:var(--bg2);color:var(--t1);min-width:170px;max-width:100%}
+.reorder-sup-input:focus{border-style:solid;border-color:var(--acc)}
 .pcom-country-grid{display:flex;gap:18px;flex-wrap:wrap;margin-top:8px}
 .pcom-country-col{display:flex;flex-direction:column;gap:6px}
 .pcom-country-lbl{font-size:21px;color:var(--t3);font-weight:700;text-transform:uppercase;letter-spacing:.03em}
@@ -4755,6 +4760,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:610,text:'„Produse de comandat" — liniile din grupul „FĂRĂ FURNIZOR" primesc acum o secțiune de adăugat/selectat furnizor, direct pe rând — cerut direct, pe o captură reală a grupării pe furnizori: „fara furnizor sa aiba sectiune de adaugat furnizor sau de selectat". Până acum, un produs fără niciun furnizor cunoscut (nici principal, nici „Alt furnizor") nu avea nicio acțiune posibilă pe linia lui — doar grupul „Fără furnizor", fără ieșire, obligând la deschiderea fișei complete a produsului doar ca să adaugi un furnizor. Acum apare un câmp text cu sugestii (aceeași listă de furnizori deja folosiți în toată aplicația, ca la Alt furnizor/Import factură) — scrii sau alegi un furnizor existent, confirmi cu Enter/click în afara câmpului, și se salvează direct pe produs (ca furnizor principal), rămâne acolo și după ce linia e bifată „✓ Comandat". Apare DOAR pe linii curente, editabile, cu produsul încă în inventar — istoricul lunilor vechi și liniile cu produs șters rămân neschimbate, needitabile. Verificat de 2 ori: sintaxă + 29 de verificări izolate pe funcțiile reale extrase din cod (apare doar pe linia corectă, dispare pe istoric/produs șters, regresie pe liniile cu 1/2+ furnizori existenți, salvare reală pe produs cu ensureAltSupplierSource — același helper ca la Import factură —, no-op pe valoare goală, fără crash pe id inexistent) + regresie completă pe toate cele 22 de teste anterioare din sesiune, toate verzi.',date:'2026-10-27'},
   {n:609,text:'Bug MAJOR, raportat direct: „nu s-au actualizat produsele din stoc o data cu produsele din vanzari azi, de ce?". Confirmat live, în bază: o comandă Trendyol nouă („Set 10 becuri LED...") se potrivise AUTOMAT, la import, cu un produs ARHIVAT din 23.09 (discontinuat, înlocuit între timp cu unul nou, creat chiar în aceeași dimineață) — stocul produsului activ nu s-a mișcat niciodată, pentru că vânzarea „actualiza" de fapt un produs mort, ascuns peste tot în rest din aplicație. Cauza, găsită în `findExistingProduct` (potrivirea automată folosită la Importă comenzi/factură/Comandă furnizor/Sincronizare/Asistent AI): niciuna din cele 4 căi de potrivire (EAN, SKU propriu, cod „Alt furnizor", nume fuzzy) nu excludea produsele arhivate — un produs arhivat înseamnă „nu mai există" oriunde altundeva în aplicație (Inventar, Raport stoc), dar la potrivirea automată tot conta ca opțiune validă. Pe drum, găsit și reparat același bug, din a doua direcție: picker-ul manual de reasociere produs (Comenzi Platforme, Sincronizare, Importă factură) oferea și el produse arhivate ca opțiuni de ales — iar la Comenzi Platforme/Sincronizare, lista de căutare rămânea „înghețată" de la prima deschidere din sesiune, fără nicio reîmprospătare — un produs nou, creat ulterior (exact cazul real raportat), nu apărea niciodată la căutare, oricât de exact ai fi scris numele. Verificat de 2 ori: sintaxă + 20 de verificări izolate pe funcțiile reale extrase din cod (cazul real reprodus exact — produs arhivat exclus, produs activ neafectat — pe toate cele 4 căi de potrivire; picker-ele recalculează acum mereu proaspăt, exclud arhivate, văd imediat un produs nou creat între 2 deschideri) + regresie completă pe toate testele anterioare din sesiune, tot verzi.',date:'2026-10-27'},
   {n:608,text:'Asistent AI — candidații „Produs posibil asemănător" (la crearea unui produs nou prin chat) au acum poza fiecăruia, lângă nume — cerut direct, pe o captură reală: „sa primim si poza aici in dreptul produsului recomandat - sa mi dau seama daca e acelasi". Mesajul de avertizare chiar spune „verifică fotografia înainte de alegere", dar nu arăta nicio fotografie până acum — doar text, contrazicea propriul sfat. Pe drum, butoanele „Folosește" sunt acum mult mai mici și mai bine încadrate (cerut direct) — font/padding reduse explicit (butoanele din restul aplicației sunt mari, 26-27px, prea „bulky" repetate pe fiecare candidat) și eticheta scurtată la „Folosește" (fără „produsul existent", redundant lângă poză+nume) — identică cu eticheta deja folosită la o sursă „Alt furnizor". Butonul principal „Deschide ca produs nou" rămâne neschimbat, singurul rămas vizual proeminent. Verificat de 2 ori: sintaxă + 14 verificări izolate pe funcțiile reale extrase din cod (poză reală cu id corect, degradare pe produs dispărut din stoc → URL salvat → emoji, cazul real cu 3 candidați din captură, wiring CSS real).',date:'2026-10-27'},
   {n:607,text:'„Alt furnizor" — bug real, raportat direct, cu un preț deja salvat greșit (produs #98, sursă Importio.pl, 16.09 „RON"): „aici e 16 eur probabil, nu 16 RON - s-a preluat gresit". Confirmat — pagina reală a furnizorului afișează prețul în altă monedă, nu RON. Cauza: formularul „+ Adaugă sursă" avea DOAR câmpuri în RON, spre deosebire de prețul principal (Preț achiziție), care are deja un câmp EUR cu conversie automată — un furnizor extern care facturează în EUR nu avea nicio cale corectă de introdus prețul aici, doar calcul manual, ușor de uitat/greșit (exact ce s-a întâmplat). Adăugat același câmp „Preț EUR fără TVA" și la „Alt furnizor", cu aceeași conversie automată (EUR_RON) ca la prețul principal. Rămâne de verificat manual: prețul deja salvat pe Importio.pl (16.09) — pagina reală a acelui furnizor e de fapt în PLN (zloți), o monedă pe care aplicația n-o are deloc, nici la prețul principal — nu poate fi corectat automat, fără să ghicim o cifră; trebuie reintrodus manual, cu prețul corect verificat direct pe pagina furnizorului. Verificat de 2 ori: sintaxă + 10 teste izolate pe funcțiile reale extrase din cod (conversie EUR→RON identică cu cea de la prețul principal, TVA forțat la 0% la fel ca acolo, câmp gol fără crash, regresie pe sincronizarea manuală TVA/fără TVA, wiring real al formularului).',date:'2026-10-27'},
@@ -18751,6 +18757,24 @@ function reorderSetSupplier(id,supplier){
   renderReorderList();
   renderRptReorderList();
 }
+// Adaugă furnizor direct pe o linie „Fără furnizor" (cerut direct: „fara furnizor sa aiba sectiune de
+// adaugat furnizor sau de selectat") — produsul n-avea NICIUN furnizor (altfel ar fi avut deja select
+// sau text, mai jos), deci ensureAltSupplierSource îl pune mereu ca principal; e ACELAȘI helper deja
+// folosit la Import factură/Marfă furnizor — o singură cale de „atașează furnizor la produs" în toată
+// aplicația, nu una nouă, paralelă. Scrie direct în produs (saveProdToDb), nu doar pe linia REORDER —
+// ca furnizorul să rămână pe produs și după ce linia asta e bifată „✓ Comandat"/dispare din listă.
+async function reorderAssignSupplier(id,val){
+  const supplier=String(val||'').trim();
+  if(!supplier)return;
+  const r=REORDER.find(x=>x.id===id);if(!r)return;
+  const p=r.productId?P.find(x=>x.id===r.productId):null;
+  if(!p)return;
+  ensureAltSupplierSource(p,supplier,'',p.priceBuyTTC||0);
+  await saveProdToDb(p,p.id);
+  renderSupplierDatalist();
+  renderReorderList();
+  renderRptReorderList();
+}
 function reorderRowHtml(r,isCurrent){
   const p=r.productId?P.find(x=>x.id===r.productId):null;
   const imgInner=p?productImageTag(p,'',`alt="" style="width:100%;height:100%;object-fit:contain" onerror="this.src=PRODUCT_IMAGE_PLACEHOLDER"`):'<span style="font-size:26px">📦</span>';
@@ -18765,6 +18789,11 @@ function reorderRowHtml(r,isCurrent){
     metaBits.push(`<select class="reorder-sup-sel" onchange="reorderSetSupplier('${r.id}',this.value)" title="Alege de la ce furnizor comanzi">${opts.map(o=>`<option value="${esc(o.supplier)}"${o.supplier===effSupplier?' selected':''}>${esc(o.supplier)} — ${o.priceTTC.toFixed(2)} RON</option>`).join('')}</select>`);
   }else if(effSupplier){
     metaBits.push(`<span style="color:var(--t2)">${esc(effSupplier)}</span>`);
+  }else if(p&&isCurrent){
+    // Chiar „fără furnizor" (cerut direct, pe o captură reală a grupului „FĂRĂ FURNIZOR") — aceeași
+    // listă de sugestii ca peste tot în aplicație (inv-supplier-list): alege un furnizor deja folosit
+    // sau scrie unul nou, exact tiparul „Alt furnizor"/Import factură, nu un control nou de învățat.
+    metaBits.push(`<input type="text" class="reorder-sup-input" list="inv-supplier-list" placeholder="+ Adaugă furnizor" onblur="reorderAssignSupplier('${r.id}',this.value)" onkeydown="if(event.key==='Enter')this.blur()">`);
   }
   if(r.sku)metaBits.push(`<span style="font-family:var(--mono);color:var(--t3)">Cod ${esc(r.sku)}</span>${awbCopyChip(r.sku)}`);
   if(p&&p.priceBuyTTC>0)metaBits.push(`<span style="color:var(--t2)">Preț achiziție <strong>${p.priceBuyTTC.toFixed(2)} RON</strong></span>`);
