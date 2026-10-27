@@ -2274,6 +2274,10 @@ body .tt-widget .tt-panel{left:calc(100% + 14px);bottom:-84px;width:min(400px,ca
 .aic-ul{margin:4px 0 4px 2px;padding:0;list-style:none}
 .aic-ul li{position:relative;padding-left:16px;margin:3px 0}
 .aic-ul li::before{content:'';position:absolute;left:0;top:9px;width:6px;height:6px;border-radius:50%;background:var(--acc)}
+/* Poza randată în bulă, la „arata_poza" — aceeași lățime maximă ca .aic-draft-img, dar clicabilă (nu
+   doar preview static) — click deschide fișa completă a produsului. */
+.aic-pic-wrap{margin-top:4px}
+.aic-pic{width:100%;max-width:180px;border-radius:var(--r);object-fit:cover;box-shadow:var(--sh);cursor:pointer;display:block}
 
 /* ══ #pcom-redesign-css — Comenzi Platforme, redesign vizual (USE_PCOM_REDESIGN) ══
    Scopat integral sub .pcx-* — nu atinge nicio clasă existentă (.pcom-*, .card, .btn etc.), ca restul
@@ -4722,6 +4726,8 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:605,text:'Asistent AI — 3 completări cerute direct, pe conversații reale unde mesaje clare picau pe „Nu am înțeles exact ce vrei să afli". (1) Lipire poză din clipboard ORIUNDE în zona Asistentului, nu doar cu cursorul exact în caseta de scris — cerut direct: „sa putem adauga poze din clipboard". (2) Context conversațional — clasificatorul trata fiecare mesaj complet izolat, fără nicio memorie a schimburilor anterioare; o întrebare de continuare ("da-mi poza cu produsul", fără să mai repete numele, imediat după ce tocmai se discutase despre un produs) nu avea de unde ști la ce se referă. Ultimele schimburi se trimit acum ca și context, ca referințele implicite ("el"/"acela"/"produsul ăsta") să se rezolve la ce s-a discutat chiar înainte. (3) Intenție nouă, „arata_poza" — "dă-mi poza produsului"/"arată-mi o poză cu el" picau pe „nerecunoscut" de fiecare dată, deși cererea e clară; răspunsul arată acum fotografia reală a produsului direct în conversație (clicabilă spre fișa completă), nu doar text. Cerut direct: „mai lucreaza la algoritmul AI-ului, sa inteleaga tot ce i cer baza pe produsele din stoc si de viitoarele produse" — rămâne un fir deschis, nu „rezolvat definitiv"; „actualizează acest produs pe baza informațiilor din acest link" (altă cerere reală picată tot pe „nerecunoscut") rămâne un gol cunoscut, netratat încă — pentru asta, azi, calea e tot „📥 Comandă furnizor"/formularul de produs, nu chat-ul. Verificat de 2 ori: sintaxă + 50 de verificări izolate pe funcțiile reale extrase din cod (context — ultimele 6 schimburi, trunchiate, token-urile de poză ascunse din context; arata_poza — produs găsit după nume/cod, eroare pe negăsit, regresie pe info_produs; randarea pozei în bulă — id corect, clicabilă, degradare pe produs șters, combinată cu liste/text; paste global — scopat strict pe Asistent activ, fără procesare dublă cu caseta locală, ignoră clipboard fără imagine).',date:'2026-10-27'},
+  {n:604,text:'EAN — 3 completări cerute direct, cu o pagină reală de furnizor atașată („Cod EAN: 5907451325575" vizibil clar): „acolo unde e cazul si avem, sa se preia si EAN-ul produsului pe care il cumparam, in caz ca nu il gasim dupa SKU, sa il gasim dupa EAN-ul produsului prin sectiunea de cautare". (1) Căutare — bara de căutare din Inventar/Dashboard și cele 3 căsuțe de căutare inline (carduri Raport stoc, Produse de comandat, reasociere stoc neprocesat) verificau nume/SKU/cod intern, dar niciodată EAN-ul, deși era deja salvat pe produse (folosit deja prioritar la potrivirea de la Importă factură). (2) Captură — „Importă din link" (exact fluxul de pe pagina din captură) extrăgea titlu/SKU/preț/categorie etc., dar niciodată EAN-ul, chiar și când pagina îl avea afișat explicit; completează acum și câmpul EAN din formular. (3) „📥 Comandă furnizor" — nici acolo nu se extrăgea EAN din comandă; acum se extrage, se trimite la potrivirea cu stocul existent ÎNAINTEA codului de furnizor (mai stabil — codul propriu al furnizorului se poate schimba între reaprovizionări ale aceluiași produs fizic, EAN-ul nu), se salvează pe produsul nou creat, și completează (backfill) EAN-ul lipsă pe un produs deja asociat prin SKU/nume, fără să-l suprascrie dacă există deja unul salvat. Verificat de 2 ori: sintaxă + verificări izolate pe funcțiile reale extrase din cod (căutare după EAN complet/fragment/greșit, potrivire prioritizată pe EAN cu SKU schimbat între timp, backfill doar când lipsește — niciodată suprascriere, wiring real al promptului/schemei/formularului de Importă din link).',date:'2026-10-27'},
   {n:603,text:'„Produse de comandat" (Raport stoc) — redesign complet al rândurilor, cerut direct pe o captură reală a listei (text simplu, fără poză): „sa arate mai bine design si foarte important sa apara si poza si cod furnizor sa aiba copy si sa apara si pretul, sa putem compara si furnizorul". Fiecare rând are acum: poză (click → deschide direct fișa produsului, ca pe celelalte carduri din Raport stoc), furnizorul, prețul de achiziție curent (ca să poți compara rapid cu o ofertă de la alt furnizor) și codul furnizor cu propriul buton de copiere (⧉, același helper deja folosit la Asociază AWB-uri). Furnizorul și prețul se citesc LIVE din produs, nu din instantaneul salvat pe listă la momentul adăugării — dacă s-au schimbat între timp, rândul arată valoarea curentă, nu una veche. Produs șters din inventar între timp — degradare grațioasă, fără poză/preț/furnizor, doar numele și codul salvate rămân vizibile, cu copy funcțional. Verificat de 2 ori: sintaxă + 49 de verificări izolate pe funcțiile reale extrase din cod (toate cele din #601/#602 neatinse, plus 9 noi — poză cu id corect, click deschide fișa produsului, furnizor/preț afișate corect formatate, copy pe cod furnizor, fără câmpuri opționale nu inventează nimic, produs șters degradează corect cu codul tot copiabil).',date:'2026-10-27'},
   {n:602,text:'2 reparări mici, pe loc, cerute direct. (1) Asociază AWB-uri — rândurile de asociere (găsite și rezolvate) au acum buton de copiere ⧉ și pentru telefonul destinatarului (ex. etichetă Cargus standard), lângă cele deja existente (nume/comandă/AWB, #597) — telefonul apărea deja scris în mesaj, dar trebuia retastat manual; cerut direct, cu o etichetă Cargus reală atașată: „sa pot sa ma duc sa dau copiaza la texte si la altele foarte usor". (2) Raport stoc — „Total bucăți stoc"/„Valoare cost"/„Valoare vânzare" nu mai coincideau cu „Situația stocului" de pe Dashboard, raportat direct cu 2 capturi alăturate: „de ce nu sunt la fel cele 2 secțiuni?". Cauza, confirmată pe date live (348 produse, 24 cu stoc negativ): Dashboard (și Inventar) clamp-uiau deja stocul negativ la 0 per produs înainte de sumă (vândut mai mult decât cumpărat — fizic imposibil să scadă din total), dar Raport stoc nu primise niciodată aceeași reparație — aceeași sumă, 2 reguli diferite. Aliniat acum la formula deja corectă; rândurile individuale din tabel rămân neatinse (stocul negativ tot vizibil acolo, ca diagnostic). Verificat de 2 ori: sintaxă + 16 verificări izolate (chip telefon — randare/gol/wiring real în ambele rânduri; formulă clampată — sintetic + recalculată pe date live din producție, cifră cu cifră identică cu ce arată Dashboard-ul în captură).',date:'2026-10-27'},
   {n:601,text:'Raport stoc — 2 completări cerute direct pe „Marfă așteptată de la furnizor". (1) Buton „🗑️" pe fiecare comandă din listă — șterge complet acea comandă (toate liniile ei), pentru import dublat din greșeală, comandă de test sau anulată înainte să fi fost trimisă efectiv la furnizor; cere confirmare, e ireversibil, și nu atinge „finalizat" (acela înseamnă „a sosit", folosit de fluxul din Staff, sens diferit de „a fost o greșeală"). (2) Card nou „📝 Produse de comandat", cu căutare+adăugare liberă — cerut direct: „sa avem un buton prin care sa selectam ce am vrea sa comandam ca produs, ca o lista... si bifam ca vrem sa le cumparam, ce stoc mai este sau daca nu este stoc". Reutilizează lista „De comandat" deja existentă în Comenzi Platforme (un singur loc de adevăr, nu o listă paralelă — un produs adăugat din oricare din cele 2 locuri apare în ambele), până acum populată DOAR automat (stoc 0/1 la o vânzare) sau din avertismentul „Import comenzi"; acum se poate căuta și adăuga liber orice produs, din Raport stoc, indiferent de stocul lui curent. Fiecare rând arată acum stocul curent al produsului („Stoc N" sau „Fără stoc") — lipsea complet până acum, în ambele locuri unde apare lista. Verificat de 2 ori: sintaxă + 40 de verificări izolate pe funcțiile reale extrase din cod (grupare/ștergere comandă — confirmare refuzată, offline, grup cu mai multe linii, eroare server, alt grup neatins —, afișare stoc 0/negativ/pozitiv/produs șters, căutare exclude arhivate și arată stocul, adăugare din căutare integrată cap-coadă cu lista reală, inclusiv regresia „deja pe listă" existentă).',date:'2026-10-27'},
@@ -5871,7 +5877,7 @@ function staleReassignSearch(id,q){
   if(!box)return;
   const query=String(q||'').trim().toLowerCase();
   if(!query){box.style.display='none';box.innerHTML='';return;}
-  const matches=P.filter(p=>`${p.name||''} ${p.sku||''} ${p.internalCode||''}`.toLowerCase().includes(query)).slice(0,8);
+  const matches=P.filter(p=>`${p.name||''} ${p.sku||''} ${p.internalCode||''} ${p.ean||''}`.toLowerCase().includes(query)).slice(0,8);
   if(!matches.length){box.innerHTML='<div class="rpt-card-search-empty">Niciun produs găsit</div>';box.style.display='block';return;}
   box.innerHTML=matches.map(p=>`<div class="rpt-card-search-row" onmousedown="event.preventDefault()" onclick="staleReassignPick(${id},${p.id})">${esc(p.name||'—')}${p.sku?' · SKU '+esc(p.sku):''}${p.archived?' <span style="color:var(--or)">(arhivat)</span>':''}</div>`).join('');
   box.style.display='block';
@@ -9117,6 +9123,7 @@ Extrage toate informațiile utile pentru adăugarea produsului într-un sistem d
 1. Titlul complet al produsului (în ROMÂNĂ - tradu cu sens, ținând cont de imagine dacă e atașată, nu mecanic cuvânt cu cuvânt)
 2. URL-ul imaginii principale (full URL complet, nu relativ)
 3. Codul SKU / cod produs / cod articol / model NUMAI dacă este afișat explicit și etichetat în conținutul paginii
+3b. Codul EAN/GTIN (codul de bare global, de obicei 13 cifre, uneori 8) NUMAI dacă apare explicit etichetat ca „EAN"/„Cod EAN"/„GTIN"/„Barcode" — diferit de codul producătorului/SKU-ul furnizorului
 4. Categoria cea mai potrivită, EXACT din lista: ${CATS.join(', ')}
 5. Prețul curent al produsului ca număr și moneda
 6. Furnizorul/magazinul, materialul, dimensiunile, culorile și o descriere scurtă
@@ -9128,12 +9135,13 @@ IMPORTANT pentru SKU:
 - Acceptă SKU doar dacă apare lângă o etichetă explicită precum "Cod produs", "Cod Jumbo", "SKU", "Cod articol", "Model", "Product code", "Item code" sau "Art. no.".
 - În sku_evidence copiază eticheta și codul găsite în pagină. Dacă nu găsești o asemenea sursă explicită, returnează sku și sku_evidence ca null.
 - Pentru imagine folosește URL-ul direct al imaginii principale din metadata. Nu inventa informații care lipsesc.
+IMPORTANT pentru EAN: nu confunda cu „Cod producător"/SKU-ul furnizorului (câmpuri diferite, pot apărea amândouă pe aceeași pagină) — EAN-ul e STRICT cel etichetat explicit „EAN"/„GTIN"/„Barcode". null dacă nu apare o asemenea etichetă explicită.
 
 Date și text găsite direct în pagină (folosește-le dacă sunt valide și completează ce lipsește):
 ${JSON.stringify(pageData)}
 
 Răspunde STRICT cu JSON:
-{"title":"<titlu tradus în română>","image":"<URL complet imagine>","sku":"<cod sau null>","sku_evidence":"<eticheta și codul exact din pagină sau null>","category":"<categorie generală sau null>","price":<număr sau null>,"currency":"<RON/EUR/etc sau null>","supplier":"<magazin/furnizor sau null>","material":"<material sau null>","dimensions":"<dimensiuni sau null>","colors":"<culori sau null>","description":"<descriere scurtă sau null>"}`;
+{"title":"<titlu tradus în română>","image":"<URL complet imagine>","sku":"<cod sau null>","sku_evidence":"<eticheta și codul exact din pagină sau null>","ean":"<cod EAN/GTIN sau null>","category":"<categorie generală sau null>","price":<număr sau null>,"currency":"<RON/EUR/etc sau null>","supplier":"<magazin/furnizor sau null>","material":"<material sau null>","dimensions":"<dimensiuni sau null>","colors":"<culori sau null>","description":"<descriere scurtă sau null>"}`;
 
     const importContent=pageImgCandidate
       ?[{type:'image',source:{type:'url',url:aiSafeImageUrl(pageImgCandidate)}},{type:'text',text:importPrompt}]
@@ -9185,6 +9193,16 @@ Răspunde STRICT cu JSON:
       status.innerHTML+=`<br><span style="color:var(--gr)">✓ SKU: ${esc(importedSku.sku)}</span>`;
     }else if(importedSku.warning){
       status.innerHTML+=`<br><span style="color:var(--or)">⚠ ${esc(importedSku.warning)}</span>`;
+    }
+
+    // EAN — cerut direct: „acolo unde e cazul si avem, sa se preia si EAN-ul produsului pe care il
+    // cumparam" (pagină reală de furnizor cu „Cod EAN" afișat clar, atașată). Până acum importul din
+    // link extrăgea SKU/preț/categorie etc., dar niciodată EAN-ul — chiar dacă pagina îl avea explicit.
+    // Salvat în câmpul deja existent (f-ean, folosit deja ca potrivire prioritară la Importă factură) —
+    // nicio schimbare de schemă, doar o sursă nouă care îl completează.
+    if(productData.ean&&productData.ean!=='null'){
+      document.getElementById('f-ean').value=String(productData.ean).trim();
+      status.innerHTML+=`<br><span style="color:var(--gr)">✓ EAN: ${esc(productData.ean)}</span>`;
     }
 
     if(productData.supplier&&productData.supplier!=='null'){
@@ -15183,7 +15201,11 @@ function invSearchDigits(v){return String(v||'').replace(/\D/g,'');}
 function prodMatchesSearch(p,qRaw){
   const q=invSearchNorm(qRaw),qd=invSearchDigits(qRaw);
   if(!q)return true;
-  const vals=[p.name,p.sku,p.internalCode,p.category,p.supplier,p.notes,p.material,p.dims,p.colors];
+  // p.ean — cerut direct: „in caz ca nu il gasim dupa SKU, sa il gasim dupa EAN-ul produsului prin
+  // sectiunea de cautare". EAN-ul e deja salvat pe produse (câmp existent, folosit deja prioritar la
+  // potrivirea de la Importă factură — vezi findExistingProduct), dar căutarea „prin secțiunea de
+  // căutare" (Inventar, bara de căutare de sus, carduri Raport stoc) nu-l verifica deloc până acum.
+  const vals=[p.name,p.sku,p.internalCode,p.category,p.supplier,p.notes,p.material,p.dims,p.colors,p.ean];
   if(vals.some(v=>invSearchNorm(v).includes(q)))return true;
   if(qd.length>=3&&vals.some(v=>invSearchDigits(v).includes(qd)))return true;
   // SKU extern — codurile PNK mapate pe acest produs în Sincronizare (platforma_mapari), nu doar
@@ -18674,7 +18696,7 @@ function rptReorderSearchInput(q){
   if(!box)return;
   const query=String(q||'').trim().toLowerCase();
   if(!query){box.style.display='none';box.innerHTML='';return;}
-  const matches=P.filter(p=>!p.archived&&`${p.name||''} ${p.sku||''} ${p.internalCode||''}`.toLowerCase().includes(query)).slice(0,8);
+  const matches=P.filter(p=>!p.archived&&`${p.name||''} ${p.sku||''} ${p.internalCode||''} ${p.ean||''}`.toLowerCase().includes(query)).slice(0,8);
   if(!matches.length){box.innerHTML='<div class="rpt-card-search-empty">Niciun produs găsit</div>';box.style.display='block';return;}
   box.innerHTML=matches.map(p=>{
     const s=qty(p),stocLbl=s<=0?'fără stoc':'stoc '+fmtQty(s);
@@ -22324,9 +22346,10 @@ const FURNIZOR_ORDER_SCHEMA={
     items:{type:'array',items:{type:'object',properties:{
       name:{type:'string',description:'Denumirea completă a produsului — nu scurta, nu inventa ce nu apare.'},
       cod:{type:['string','null'],description:'Codul produsului la furnizor (SKU/cod intern furnizor) — null dacă nu apare'},
+      ean:{type:['string','null'],description:'Codul de bare EAN/GTIN (de obicei 13 cifre, uneori 8), NUMAI dacă apare explicit etichetat „EAN"/„Cod EAN"/„GTIN"/„Barcode" — diferit de „cod" (SKU-ul/codul intern al furnizorului). null dacă nu apare o asemenea etichetă explicită.'},
       qty:{type:'number',description:'Cantitatea comandată'},
       pret:{type:['number','null'],description:'Prețul TOTAL al liniei (cantitate × preț unitar), în lei — null dacă nu apare'}
-    },required:['name','cod','qty','pret'],additionalProperties:false}}
+    },required:['name','cod','ean','qty','pret'],additionalProperties:false}}
   },
   required:['comandaRef','items'],
   additionalProperties:false
@@ -22342,12 +22365,17 @@ async function furnizorApplyAiResult(resp){
   // să oblige o alegere: fără potrivire, linia rămâne text simplu (produsId null), vizibilă oricum.
   const newLines=rawItems.map(it=>{
     const cod=it.cod?String(it.cod).trim():'';
+    const ean=it.ean?String(it.ean).trim():'';
     // Codul extras din text/poză (cerut direct — „codul se găsește și într-un fișier și altul"): trimis
     // și el la findExistingProduct, nu doar numele — se verifică pe SKU-ul nostru ȘI pe codurile de la
     // „Alt furnizor" (supplierSources), înainte de fuzzy pe nume. Fără el, o potrivire de nume ambiguă
     // (mai multe variante similare în stoc) putea alege greșit, deși codul exact ar fi eliminat orice dubiu.
-    const match=findExistingProduct({name:it.name,sku:cod});
-    return{titluExtern:String(it.name||'').trim(),codExtern:cod,cantitate:Math.max(0,Number(it.qty)||0)||1,pret:Math.max(0,Number(it.pret)||0),produsId:match?match.product.id:null,score:match?match.score:0,newProduct:false,category:'',img:''};
+    // EAN, când apare pe comandă (cerut direct — „acolo unde e cazul si avem, sa se preia si EAN-ul
+    // produsului pe care il cumparam"), e trimis ȘI el — findExistingProduct îl verifică ÎNAINTEA
+    // codului, exact ca la Importă factură (mai stabil decât codul propriu al furnizorului, care se
+    // poate schimba între reaprovizionări ale aceluiași produs fizic).
+    const match=findExistingProduct({name:it.name,sku:cod,ean});
+    return{titluExtern:String(it.name||'').trim(),codExtern:cod,eanExtern:ean,cantitate:Math.max(0,Number(it.qty)||0)||1,pret:Math.max(0,Number(it.pret)||0),produsId:match?match.product.id:null,score:match?match.score:0,newProduct:false,category:'',img:''};
   });
   furnizorImpParsed=furnizorImpParsed.concat(newLines);
   renderFurnizorImportPreview();
@@ -22563,7 +22591,7 @@ async function applyFurnizorComanda(){
       if(it.produsId||!it.newProduct)continue;
       const unit=it.cantitate>0&&it.pret>0?Math.round(it.pret/it.cantitate*100)/100:0;
       const prices=unit>0?calcPrices(unit):{sell:0,emag:0,trendyol:0,rec:0};// fără preț în comandă → fără prețuri de vânzare inventate
-      const newP={name:String(it.titluExtern||it.codExtern||'Produs nou').slice(0,240),sku:it.codExtern||null,bought:0,sold:0,minQty:0,
+      const newP={name:String(it.titluExtern||it.codExtern||'Produs nou').slice(0,240),sku:it.codExtern||null,ean:it.eanExtern||null,bought:0,sold:0,minQty:0,
         priceBuyTTC:unit,tvaAcq:0.21,priceSell:prices.sell,priceEmag:prices.emag,priceTrendyol:prices.trendyol,priceRec:prices.rec,
         category:it.category||'',supplier:furnizor,img:it.img||''};
       const beforeLen=P.length;
@@ -22581,22 +22609,27 @@ async function applyFurnizorComanda(){
     for(const it of furnizorImpParsed){
       const prod=it.produsId?P.find(x=>x.id===it.produsId):null;if(!prod)continue;
       let w=work.get(prod.id);
-      if(!w){w={prod,clone:{supplier:prod.supplier,supplierSources:Array.isArray(prod.supplierSources)?prod.supplierSources.slice():[]},kinds:[]};work.set(prod.id,w);}
+      if(!w){w={prod,clone:{supplier:prod.supplier,supplierSources:Array.isArray(prod.supplierSources)?prod.supplierSources.slice():[]},kinds:[],ean:null};work.set(prod.id,w);}
       const unit=it.cantitate>0&&it.pret>0?it.pret/it.cantitate:0;
       const kind=ensureAltSupplierSource(w.clone,furnizor,it.codExtern,unit);
       if(kind==='alt'||kind==='primary')w.kinds.push(kind);
       else if(kind==='full')altFullN++;
+      // Completare EAN pe drum — același tipar deja folosit la Importă factură: produsul deja asociat
+      // (potrivit prin SKU/nume) nu avea încă EAN salvat, dar comanda chiar îl aduce acum.
+      if(it.eanExtern&&!prod.ean&&!w.ean)w.ean=it.eanExtern;
     }
     for(const w of work.values()){
-      if(!w.kinds.length)continue;
+      if(!w.kinds.length&&!w.ean)continue;
       const body={};
       if(w.kinds.includes('primary'))body.supplier=w.clone.supplier;
       if(w.kinds.includes('alt'))body.supplier_sources=w.clone.supplierSources.slice(0,5);
+      if(w.ean)body.ean=w.ean;
       try{
         if(sbReady)await dbPatch(`produse?id=eq.${w.prod.id}`,body);
         if('supplier' in body)w.prod.supplier=w.clone.supplier;
         if('supplier_sources' in body){w.prod.supplierSources=w.clone.supplierSources.slice(0,5);altN++;}
-      }catch(e){altFailN++;console.warn('Nu am putut adăuga „Alt furnizor" pe produsul',w.prod.id,e);}
+        if('ean' in body)w.prod.ean=body.ean;
+      }catch(e){altFailN++;console.warn('Nu am putut adăuga „Alt furnizor"/EAN pe produsul',w.prod.id,e);}
     }
     // 3) Comanda propriu-zisă, spre Staff.
     const rows=furnizorImpParsed.map(it=>({furnizor,comanda_ref:comandaRef,titlu_extern:it.titluExtern,cod_extern:it.codExtern||null,produs_id:it.produsId,cantitate_comandata:it.cantitate,pret:it.pret||0,data_estimativa:dataEstimativa}));
@@ -26838,7 +26871,7 @@ function rptCardSearchInput(q){
   if(!box)return;
   const query=String(q||'').trim().toLowerCase();
   if(!query){box.style.display='none';box.innerHTML='';return;}
-  const matches=P.filter(p=>!p.archived&&`${p.name||''} ${p.sku||''} ${p.internalCode||''}`.toLowerCase().includes(query)).slice(0,8);
+  const matches=P.filter(p=>!p.archived&&`${p.name||''} ${p.sku||''} ${p.internalCode||''} ${p.ean||''}`.toLowerCase().includes(query)).slice(0,8);
   if(!matches.length){box.innerHTML='<div class="rpt-card-search-empty">Niciun produs găsit</div>';box.style.display='block';return;}
   box.innerHTML=matches.map(p=>`<div class="rpt-card-search-row" onclick="rptCardSearchPick(${p.id})">${esc(p.name||'—')}${p.sku?' · SKU '+esc(p.sku):''}</div>`).join('');
   box.style.display='block';
@@ -27831,6 +27864,14 @@ function aiChatExecuteIntent(intent){
     const r=aiProductDossier(produsId);
     return{tip:intent.tip,rezultat:r,sursa:'Stoc curent / Jurnal vânzări / Istoric comenzi'};
   }
+  // „Dă-mi poza produsului" — cerut direct, de 2 ori la rând, pe o conversație reală unde mesajul pica
+  // pe „nerecunoscut" de fiecare dată („mai lucreaza la algoritmul AI-ului, sa inteleaga tot ce i cer").
+  // Deterministic, nu trece prin formularea AI de la pasul 3 (vezi aiChatFormatAnswer) — randarea pozei
+  // chiar în bulă (aiChatFormatMsgHtml) are nevoie de ID-ul exact al produsului, nu de text liber generat.
+  if(intent.tip==='arata_poza'){
+    if(!produsId)return{tip:intent.tip,rezultat:null,eroare:'Nu am găsit niciun produs după codul/numele dat — verifică te rog, sau încearcă cu numele complet.'};
+    return{tip:intent.tip,rezultat:{produsId,nume:produsMatch.product.name}};
+  }
   if(intent.tip==='stoc_curent'){
     const lista=aiStocCurent({produsId,categorie,subMinim:!!intent.subMinim});
     return{tip:intent.tip,rezultat:{produse:lista},sursa:'Stoc curent'};
@@ -27865,7 +27906,7 @@ function aiChatExecuteIntent(intent){
 const AI_CHAT_INTENT_SCHEMA={
   type:'object',
   properties:{
-    tip:{type:'string',enum:['info_produs','cantitate_vanduta','stoc_curent','comparatie_perioade','top_produse','preconizare','creeaza_produs','nerecunoscut'],description:'Tipul de întrebare, cel mai potrivit dintre cele cunoscute. "info_produs" dacă userul cere TOATE informațiile despre UN produs anume (dosar/fișă completă — stoc, ultima comandă, vânzări), sau dacă mesajul e DOAR un cod/număr (EAN/SKU/cod de bare, fără alt context) — tratează un cod singur, fără alte cuvinte, ca "info_produs" cu produsCod. "creeaza_produs" dacă userul vrea să adauge un produs NOU (cu nume/preț/poză, sau doar o poză). "nerecunoscut" dacă mesajul nu se încadrează clar în niciunul.'},
+    tip:{type:'string',enum:['info_produs','arata_poza','cantitate_vanduta','stoc_curent','comparatie_perioade','top_produse','preconizare','creeaza_produs','nerecunoscut'],description:'Tipul de întrebare, cel mai potrivit dintre cele cunoscute. "info_produs" dacă userul cere TOATE informațiile despre UN produs anume (dosar/fișă completă — stoc, ultima comandă, vânzări), sau dacă mesajul e DOAR un cod/număr (EAN/SKU/cod de bare, fără alt context) — tratează un cod singur, fără alte cuvinte, ca "info_produs" cu produsCod. "arata_poza" dacă userul cere STRICT fotografia unui produs EXISTENT în stoc ("dă-mi poza", "arată-mi o poză cu el", "cum arată produsul X", "trimite poza lui Y") — diferit de "creeaza_produs" (acolo userul DĂ o poză ca să adauge un produs nou, aici userul CERE să vadă poza unuia deja din stoc). "creeaza_produs" dacă userul vrea să adauge un produs NOU (cu nume/preț/poză, sau doar o poză). "nerecunoscut" dacă mesajul nu se încadrează clar în niciunul.'},
     produsNume:{type:['string','null'],description:'Numele produsului menționat sau de creat (text liber, cum l-a scris userul). null dacă nu menționează un produs anume.'},
     produsCod:{type:['string','null'],description:'Codul/EAN/SKU/barcode al produsului, DOAR dacă userul a scris un cod/număr direct (ex. un șir de cifre) — diferit de produsNume (numele în cuvinte). null dacă nu apare niciun cod.'},
     categorie:{type:['string','null'],description:`Categoria EXACTĂ dintre cele existente, dacă e menționată: ${CATS.join(', ')}. null dacă nu e menționată nicio categorie.`},
@@ -27884,8 +27925,18 @@ const AI_CHAT_INTENT_SCHEMA={
   required:['tip','produsNume','produsCod','categorie','perioadaTip','perioadaN','perioadaOffsetLuni','perioadaOffsetAni','perioadaAn','perioadaLuna','comparaCuAnterioara','subMinim','limitaTop','lunaTinta','produsCreatPret'],
   additionalProperties:false
 };
-async function aiChatClassifyIntent(mesaj,hasImage){
-  const system=`Ești clasificatorul de intenții pentru asistentul AI al unei aplicații de gestiune stoc. Încadrezi mesajul userului STRICT într-unul din tipurile cunoscute și extragi parametrii din ce a scris — NU calculezi nimic, NU inventezi cifre. Un mesaj format DOAR dintr-un cod/număr (EAN/SKU/cod de bare, fără alte cuvinte) înseamnă "info_produs", cu produsCod acel text exact. Categorii disponibile: ${CATS.join(', ')}. Azi este ${td()}.`;
+// Context conversațional — cerut direct („sa inteleaga tot ce i cer baza pe produsele din stoc"):
+// clasificatorul trata FIECARE mesaj complet izolat, fără nicio memorie a schimburilor anterioare — o
+// întrebare de continuare („da-mi poza cu produsul", fără să mai repete numele, imediat după ce tocmai
+// se discutase despre un anume produs) nu avea de unde ști la ce se referă, pica direct pe „nerecunoscut".
+// Ultimele câteva schimburi (nu toată conversația — inutil de lung și scump la fiecare mesaj) se trimit
+// acum ca și context, ca AI-ul să poată rezolva referințe implicite („el"/„acela"/„produsul ăsta", fără
+// alt detaliu) la ce s-a discutat chiar înainte, fără să-l oblige pe user să repete totul de fiecare dată.
+function aiChatRecentContext(){
+  return AIC.slice(-6).map(m=>`${m.rol==='user'?'User':'Asistent'}: ${String(m.continut||'').replace(/\[\[poza:\d+\]\]/g,'(poză produs)').slice(0,300)}`).join('\n');
+}
+async function aiChatClassifyIntent(mesaj,hasImage,context){
+  const system=`Ești clasificatorul de intenții pentru asistentul AI al unei aplicații de gestiune stoc. Încadrezi mesajul userului STRICT într-unul din tipurile cunoscute și extragi parametrii din ce a scris — NU calculezi nimic, NU inventezi cifre. Un mesaj format DOAR dintr-un cod/număr (EAN/SKU/cod de bare, fără alte cuvinte) înseamnă "info_produs", cu produsCod acel text exact. Categorii disponibile: ${CATS.join(', ')}. Azi este ${td()}.${context?`\n\nContextul conversației recente (ultimele schimburi) — folosește-l STRICT pentru referințe implicite ("el"/"acela"/"produsul ăsta"/"poza lui", fără alt detaliu, referindu-se la ce s-a discutat chiar înainte); dacă userul chiar menționează acum un alt produs explicit, ignoră contextul și folosește ce a scris:\n${context}`:''}`;
   const content=hasImage?`[Userul a atașat și o poză]\n${mesaj}`:mesaj;
   const resp=await callAI([{role:'user',content}],system,600,'simple',AI_CHAT_INTENT_SCHEMA,'ai_chat_intent');
   return JSON.parse(resp);
@@ -27893,8 +27944,12 @@ async function aiChatClassifyIntent(mesaj,hasImage){
 
 // ── Pasul 3: formulare răspuns (AI, text liber STRICT peste rezultatul deja calculat) ──
 async function aiChatFormatAnswer(mesajOriginal,exec){
-  if(exec.tip==='nerecunoscut')return'Nu am înțeles exact ce vrei să afli — pot răspunde la întrebări despre cantități vândute, stoc curent, comparații între perioade, topuri de produse, preconizări de aprovizionare, un dosar complet al unui produs (sau trimite direct codul/EAN-ul lui), sau pot crea un produs nou dacă îmi dai nume/poză/preț.';
+  if(exec.tip==='nerecunoscut')return'Nu am înțeles exact ce vrei să afli — pot răspunde la întrebări despre cantități vândute, stoc curent, comparații între perioade, topuri de produse, preconizări de aprovizionare, un dosar complet al unui produs sau poza lui (sau trimite direct codul/EAN-ul lui), sau pot crea un produs nou dacă îmi dai nume/poză/preț.';
   if(exec.eroare)return exec.eroare;
+  // „arata_poza" — deterministic, SKIP peste formularea AI de mai jos: un token intern ([[poza:ID]]),
+  // randat ca fotografie reală de aiChatFormatMsgHtml, nu text liber generat (ar putea scrie orice în
+  // locul tokenului, inclusiv ID-ul greșit sau deloc).
+  if(exec.tip==='arata_poza')return`Iată poza pentru **${exec.rezultat.nume}**:\n[[poza:${exec.rezultat.produsId}]]`;
   // "info_produs" cere explicit răspuns STRUCTURAT ("toate informațiile despre el, structurat") — listă,
   // nu paragraf — fiecare informație pe rândul ei, cu "- " la început (randat ca listă reală, vezi
   // aiChatFormatMsgHtml), nu text continuu.
@@ -28049,10 +28104,13 @@ async function aiChatSend(textRaw){
   const imageDataUrl=aiChatPendingImage;
   aiChatPendingImage='';aiChatRenderPending();
   await aiChatEnsureHistory();
+  // Context-ul se citește ÎNAINTE de a persista mesajul curent (altfel s-ar duplica pe el însuși la
+  // coada contextului, trimis deja separat ca întrebare principală).
+  const context=aiChatRecentContext();
   await aiChatPersist('user',text||'(poză atașată)','');
   renderAiChat();
   try{
-    const intent=await aiChatClassifyIntent(text||'Creează produs din poza atașată',!!imageDataUrl);
+    const intent=await aiChatClassifyIntent(text||'Creează produs din poza atașată',!!imageDataUrl,context);
     if(intent.tip==='creeaza_produs'){
       const draft=await aiChatCreateProductDraft(intent,imageDataUrl);
       aiChatDraft=draft;
@@ -28098,19 +28156,34 @@ function renderAiChat(){
 }
 // Liniile care încep cu "- " devin o listă reală (<ul><li>), nu doar text cu \n — cerut direct, pe
 // dosarul de produs ("toate informațiile despre el, structurat"). **bold** rămâne neschimbat, pe orice
-// linie (listă sau text simplu).
+// linie (listă sau text simplu). Un rând „[[poza:ID]]" (scris STRICT de cod, niciodată de AI — vezi
+// aiChatFormatAnswer/arata_poza) devine fotografia reală a produsului, clicabilă spre fișa lui completă —
+// cerut direct, de 2 ori la rând, pe o conversație reală unde „dă-mi poza produsului" pica pe
+// „nerecunoscut" de fiecare dată.
 function aiChatFormatMsgHtml(t){
   const bolded=s=>esc(s).replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>');
   const lines=String(t||'').split('\n');
   const blocks=[];
   lines.forEach(line=>{
+    const picM=line.match(/^\[\[poza:(\d+)\]\]$/);
+    if(picM){blocks.push({pic:Number(picM[1])});return;}
     const m=line.match(/^-\s+(.*)$/);
     if(m){
       const last=blocks[blocks.length-1];
       if(Array.isArray(last))last.push(m[1]);else blocks.push([m[1]]);
     }else blocks.push(line);
   });
-  return blocks.map(b=>Array.isArray(b)?`<ul class="aic-ul">${b.map(li=>`<li>${bolded(li)}</li>`).join('')}</ul>`:bolded(b)).join('<br>');
+  return blocks.map(b=>{
+    if(Array.isArray(b))return`<ul class="aic-ul">${b.map(li=>`<li>${bolded(li)}</li>`).join('')}</ul>`;
+    if(b&&typeof b==='object'&&b.pic!=null)return aiChatProductPicHtml(b.pic);
+    return bolded(b);
+  }).join('<br>');
+}
+function aiChatProductPicHtml(id){
+  const p=P.find(x=>x.id===id);
+  if(!p)return'<span style="color:var(--t3)">(produsul nu mai există)</span>';
+  const img=productImageTag(p,'aic-pic',`alt="" onclick="openModal(${id})" title="Deschide fișa produsului" onerror="this.src=PRODUCT_IMAGE_PLACEHOLDER"`);
+  return`<div class="aic-pic-wrap">${img}</div>`;
 }
 function aiChatDraftHtml(){
   const d=aiChatDraft;if(!d)return'';
@@ -28188,6 +28261,23 @@ function closeAiChatWidget(){document.getElementById('aic-widget').classList.rem
   });
   head.addEventListener('pointerup',()=>{dragging=false;});
 })();
+// Lipire poză din clipboard ORIUNDE în zona Asistent AI, nu doar cu cursorul exact în caseta de text —
+// cerut direct: „sa putem adauga poze din clipboard". onpaste-ul de pe cele 2 textarea (mai sus) rămâne
+// neatins și tratează deja corect cazul normal (cursor în casetă); acest listener global acoperă restul
+// — click oriunde în panou/tab, apoi Cmd+V, fără să mai fie nevoie să ochești exact caseta mică de scris.
+// Dezactivat explicit când ținta e una din cele 2 textarea (already handled), ca imaginea să nu fie
+// procesată de 2 ori pentru același paste. Scopat STRICT la momentele în care Asistentul chiar e vizibil
+// (tab-ul activ sau pop-up-ul deschis) — altfel ar fura paste-ul din orice alt câmp din aplicație.
+document.addEventListener('paste',ev=>{
+  if(ev.target&&(ev.target.id==='aic-input-tab'||ev.target.id==='aic-input-popup'))return;
+  const tabOn=document.getElementById('page-asistent')?.classList.contains('on');
+  const popupOn=document.getElementById('aic-widget')?.classList.contains('on');
+  if(!tabOn&&!popupOn)return;
+  const item=[...(ev.clipboardData?.items||[])].find(i=>i.type.startsWith('image/'));
+  if(!item)return;
+  ev.preventDefault();
+  aiChatSetPendingImageFromBlob(item.getAsFile());
+});
 
 // Preîncarcă dosarele Research tăcut, în fundal, chiar de la pornirea aplicației — nu doar la prima
 // vizită a tab-ului. Până apeși pe „Research" (de obicei la câteva secunde după ce ai deschis
