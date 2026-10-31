@@ -2488,6 +2488,15 @@ body .tt-widget .tt-panel{left:calc(100% + 14px);bottom:-84px;width:min(400px,ca
 .pcx-counters{display:flex;gap:8px;flex-wrap:wrap}
 .pcx-counter{font-size:16px;font-weight:700;padding:5px 11px;border-radius:999px;background:var(--surf2);color:var(--t2);border:1px solid var(--b1)}
 .pcx-counter b{font-variant-numeric:tabular-nums}
+/* „Lista scurtă" de stoc insuficient pentru comenzile curente — cerut direct: „sa se verifice comenzile
+   si sa se compare cu stocul... astfel incat sa comandam". Roșu (--rd/--rd-bg), ca „⚠ Fără produs" de
+   mai sus în aceeași pagină — aceeași gravitate, deja un token cunoscut aici, nicio culoare nouă. */
+.pcx-shortage{background:var(--rd-bg);border:1px solid rgba(240,68,56,.3);border-radius:var(--r);padding:10px 14px;margin-bottom:14px}
+.pcx-shortage-hd{font-size:16px;font-weight:700;color:var(--rd);margin-bottom:4px}
+.pcx-shortage-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid rgba(240,68,56,.15)}
+.pcx-shortage-row:last-child{border-bottom:none}
+.pcx-shortage-info{min-width:0;font-size:15px;color:var(--t2);display:flex;flex-direction:column;gap:1px}
+.pcx-shortage-info b{color:var(--t1);font-size:16px}
 .pcx-filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
 .pcx-filters input[type=text]{flex:1;min-width:220px}
 .pcx-filters input,.pcx-filters select{font-family:inherit;font-size:17px;padding:8px 12px;border:1px solid var(--b1);border-radius:var(--r);background:var(--surf2);color:var(--t1)}
@@ -4831,6 +4840,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:620,text:'Comenzi Platforme — listă nouă, scurtă, „⚠️ N produse fără stoc suficient pentru comenzile curente", cerută direct pe o captură reală a „Previzualizare comenzi": „sa se verifice comenzile si sa se compare cu stocul si sa vad intr-o lista scurt, ce comenzi sunt fara produse, astfel incat sa comandam". Diferit de contorul deja existent „⚠ Fără produs" (acela arată linii FĂRĂ NICIUN produs asociat — problemă de potrivire); lista nouă arată produse CU produs asociat, dar unde stocul curent nu ajunge pentru tot ce s-a comandat/promis încă neaplicat în stoc — exact semnalul „trebuie comandat urgent la furnizor". Acoperă ATÂT comenzile proaspăt importate, neconfirmate încă (cazul exact din captură — 0 „Incluse"), CÂT ȘI cele deja confirmate dar cu stocul încă neaplicat; o comandă deja aplicată (stoc deja scăzut) nu mai contează, e deja reflectată în stocul curent — altfel deficitul ar ieși umflat artificial. Mai multe comenzi pentru același produs se adună corect; comenzile anulate (pe platformă sau anterior) sunt excluse. Fiecare rând are un singur buton „+ Adaugă la comandat" — reutilizează direct `addToReorderList`, deja existent, aceeași listă „Produse de comandat" de pe Raport stoc, nu un flux paralel nou. Nicio culoare nouă — roșu (--rd/--rd-bg), deja folosit pe aceeași pagină la „⚠ Fără produs". Verificat de 2 ori: sintaxă + balans CSS + 24 de verificări izolate pe funcțiile reale extrase din cod (deficit calculat și sortat corect, stoc suficient exclus, linii fără produs/produs nou excluse, linie deja aplicată exclusă, comandă anulată exclusă, comandă neconfirmată încă tot contează, însumare corectă pe același produs, produs arhivat exclus, randare reală — text, plural, ascundere când nu mai e nimic de arătat).',date:'2026-10-31'},
   {n:619,text:'Raport stoc — completare directă la #618: „sa nu se mai deschida si toata platforma, sa ramana doar link ul si pagina aceasta" (linkul dedicat „doar carduri", #raport/cards, pentru alt laptop). Cauza: modul dedicat (body.rpt-kiosk, ascunde sidebar/tabel/restul paginii) se activa STRICT din openHashRoute(), la finalul scriptului principal — adică după ce tot HTML-ul paginii era deja parsat; pe un dispozitiv mai lent (exact scenariul „alt laptop" al acestui link), platforma întreagă apuca să fie vizibilă pentru o clipă, înainte să se restrângă la cardul de stoc. Adăugat un script minuscul, chiar la începutul <body>-ului — înaintea sidebar-ului, a oricărui element vizibil —, care citește hash-ul și aplică aceeași clasă INSTANT, din primul moment; logica de citire a hash-ului e identică cu cea din openHashRoute() (verificat direct, pe 14 hash-uri diferite — niciun verdict diferit), nu o variantă simplificată, divergentă. openHashRoute() continuă să ruleze normal, neatins. Verificat de 2 ori: sintaxă + balans CSS + 23 de verificări directe pe sursa reală (echivalență completă cu openHashRoute pe toate hash-urile testate, cazul real #raport/cards confirmat, poziția scriptului chiar la începutul <body>-ului, regresie pe openHashRoute neatins) + regresie completă pe toate cele 28 de suite anterioare din sesiune, toate verzi.',date:'2026-10-28'},
   {n:618,text:'Raport stoc — 2 reparații pe linkul dedicat „doar carduri" (#raport/cards, „pentru alt laptop"), raportate direct pe o captură reală a acelui link: „sa dispara din partea de sus informatia nerelevanta" / „sa ramana doar stocul pe acest link" + „si sa rmaana fix in pagina sa nu se mai miste sus jos". (1) Cardul „📝 Produse de comandat" (adăugat ulterior, #601, după ce lista de ascundere a modului dedicat fusese deja scrisă, #586) rămânea vizibil pe acest link — singurul „intrus" dintre cele 3 carduri de sus ale paginii, celelalte 2 (comparare catalog furnizor / marfă așteptată) erau deja corect ascunse; acum e ascuns la fel ca ele. (2) Bug real, găsit verificând exact de ce „sare" ecranul: rândul „Ultima mișcare de stoc" (sub „Stoc actual") nu avea o înălțime fixă — text absent (offline/în curs de încărcare), scurt („Nicio mișcare…") sau lung (cu sursă — „Import factură SC...SRL” poate fi mult mai lung decât „Vânzare directă”) dădeau înălțimi diferite cardului, împingând câmpul „Actualizează stoc” sus-jos la fiecare navigare (←/→) între produse — exact genul de instabilitate nepotrivit pentru un ecran dedicat de inventariere fizică rapidă, unde poziția constantă a câmpului contează pentru viteză. Rezervă acum fix 2 rânduri (același tipar deja folosit la titlu, clamp cu elipsis dacă textul chiar e prea lung), în em — se scalează automat și cu fontul mai mare din modul dedicat. Verificat de 2 ori: sintaxă + balans CSS + 16 verificări directe pe sursa reală (toate cele 3 carduri de sus acoperite de regula de ascundere — nu doar cel raportat, înălțime minimă + clamp confirmate cuvânt cu cuvânt, regresie pe tot restul cardului — titlu/poză/logica de încărcare/toggle-ul modului dedicat) + regresie completă pe toate cele 27 de suite anterioare din sesiune, toate verzi.',date:'2026-10-28'},
   {n:617,text:'Comenzi Platforme — indiciul „💡 Titlul sugerează N buc." (ex. un titlu „Pachet 3” pe un produs intern vândut la bucată) devine vizibil, cerut direct pe o captură reală: „actualizaeaza aici, recomandarea sa se vada mai mare". Până acum era doar text colorat portocaliu, aceeași mărime mică (18px) ca rândurile din jur (SKU/cumpărător/cod) — ușor de ratat, mai ales cu butonul „Aplică" micșorat suplimentar la 14px. Acum e un bloc distinct, cu fundal și bordură proprii, font vizibil mai mare, iar „Aplică" e un buton plin, portocaliu — nu doar conturat subțire. Nicio culoare nouă — reutilizează tokenurile deja existente (--or/--or-bg), aceleași folosite și la „⚠️ Fără AWB". Aplicat identic în AMBELE randări ale comenzilor (pcxLineHtml — cardul din captură — ȘI pcomRowHtml, randarea soră) — aceeași recomandare, același stil peste tot, nu doar în locul fotografiat. Schimbare strict de prezentare — logica de calcul/aplicare a sugestiei (applyPcomSuggestedQty) rămâne complet neatinsă. Verificat de 2 ori: sintaxă + balans CSS + 11 verificări directe pe sursa reală (clasa nouă prezentă în ambele randări, stilul vechi/mic dispărut din ambele, restul rândurilor mici neatinse, funcția de aplicare neschimbată) + regresie completă pe toate cele 26 de suite anterioare din sesiune, toate verzi.',date:'2026-10-28'},
@@ -21292,6 +21302,46 @@ function pcxPullDbHitIntoPreview(q,platF){
   });
   return added;
 }
+// „Listă scurtă" de stoc insuficient pentru comenzile curente — cerut direct: „sa se verifice comenzile
+// si sa se compare cu stocul si sa vad intr-o lista scurt, ce comenzi sunt fara produse, astfel incat sa
+// comandam". Diferit de „⚠ Fără produs" (contorul de mai sus, deja existent) — acela arată linii FĂRĂ
+// NICIUN produs asociat (problemă de potrivire); asta arată produse CU produs asociat, dar unde stocul
+// curent nu ajunge pentru tot ce s-a comandat/promis încă neaplicat în stoc — exact semnalul „trebuie
+// comandat urgent la furnizor", nu o problemă de identificare.
+// Linii incluse în sumă: au produs asociat (nu „produs nou", acela n-are încă stoc de comparat), nu sunt
+// anulate (nici cele deja anulate anterior, _cancelledId, nici cele anulate pe comanda reală din PCOM) și
+// stocul lor ÎNCĂ nu a fost scăzut (committedRow.efecteAplicate) — o linie deja aplicată e deja reflectată
+// în qty(p) curent, re-numărată ar umfla artificial deficitul. Acoperă ATÂT liniile proaspăt importate,
+// neconfirmate încă (exact cazul din captură — 0 „Incluse"), CÂT ȘI comenzile deja confirmate, dar cu
+// stocul încă neaplicat — un singur calcul, aceleași date (pcImpParsed/PCOM), niciun tabel nou.
+function pcxStockShortageList(){
+  const sums=new Map();
+  pcImpParsed.forEach(it=>{
+    if(!it.produsId||it.newProduct||it._cancelledId)return;
+    const committedRow=it._committedId?PCOM.find(o=>o.id===it._committedId):null;
+    if(committedRow&&(committedRow.anulata||committedRow.efecteAplicate))return;
+    const cur=sums.get(it.produsId)||{cantitate:0,linii:0};
+    cur.cantitate+=Number(it.cantitate)||0;
+    cur.linii+=1;
+    sums.set(it.produsId,cur);
+  });
+  const out=[];
+  sums.forEach((v,produsId)=>{
+    const p=P.find(x=>x.id===produsId);
+    if(!p||p.archived)return;
+    const stoc=qty(p);
+    const deficit=Math.round((v.cantitate-stoc)*100)/100;
+    if(deficit>0)out.push({p,comandat:v.cantitate,stoc,deficit,linii:v.linii});
+  });
+  return out.sort((a,b)=>b.deficit-a.deficit);
+}
+function renderPcomStockShortage(){
+  const host=document.getElementById('pcx-stock-shortage');if(!host)return;
+  const list=pcxStockShortageList();
+  if(!list.length){host.style.display='none';host.innerHTML='';return;}
+  host.style.display='block';
+  host.innerHTML=`<div class="pcx-shortage-hd">⚠️ ${list.length} produs${list.length===1?'':'e'} fără stoc suficient pentru comenzile curente</div>${list.map(x=>`<div class="pcx-shortage-row"><div class="pcx-shortage-info"><b>${esc(x.p.name)}</b><span>comandat ${fmtQty(x.comandat)} · stoc ${fmtQty(x.stoc)} · lipsesc <b style="color:var(--rd)">${fmtQty(x.deficit)}</b>${x.linii>1?` (${x.linii} comenzi)`:''}</span></div><button type="button" class="pcx-btn" onclick="addToReorderList(${x.p.id});renderPcomStockShortage()" ${isInReorderList(x.p.id)?'disabled':''}>${isInReorderList(x.p.id)?'✓ Pe listă':'+ Adaugă la comandat'}</button></div>`).join('')}`;
+}
 function pcxRenderOrders(){
   renderCancelledPcomList();
   renderStaleStaffOrdersCard();
@@ -21337,6 +21387,7 @@ function pcxRenderOrders(){
   const includedCount=pcImpParsed.filter(x=>x.include).length;
   const counters=document.getElementById('pcx-counters');
   if(counters)counters.innerHTML=`<span class="pcx-counter">Total <b>${total}</b></span>${Object.entries(byPlat).map(([pl,c])=>`<span class="pcx-counter">${esc(pcomPlatLabel(pl))} <b>${c}</b></span>`).join('')}<span class="pcx-counter" style="color:var(--gr);border-color:rgba(34,197,94,.35)">✓ Incluse <b>${includedCount}</b></span>${includedCount?`<button type="button" class="pcx-counter pcx-counter-btn" id="pcx-deselect-chip" onclick="excludeAllPcom()" ${pcomExcluding?'disabled':''} title="Debifează toate comenzile incluse (cele cu stoc deja scăzut sau împachetate rămân neatinse)">↺ Debifează toate</button>`:''}${unmatched?`<span class="pcx-counter" style="color:var(--rd);border-color:rgba(240,68,56,.3)">⚠ Fără produs <b>${unmatched}</b></span>`:''}${archivedCount?`<span class="pcx-counter" style="color:var(--or);border-color:rgba(247,144,9,.35)">⚠️ Arhivate <b>${archivedCount}</b></span>`:''}`;
+  renderPcomStockShortage();
   // Bară de acțiuni sticky — reflectă EXACT aceleași condiții ca updPcomImportInfo()/#pcmi-foot,
   // butoanele apelează exact aceleași handlere (resetPcomImportPage/pcomAiMatchUnmatched/applyPcomImport).
   const bar=document.getElementById('pcx-stickybar');
@@ -21428,6 +21479,12 @@ function renderPcomRedesign(){
           <div class="pcx-card-title">Previzualizare comenzi</div>
           <div class="pcx-counters" id="pcx-counters"></div>
         </div>
+        <!-- Cerut direct: „sa se verifice comenzile si sa se compare cu stocul si sa vad intr-o lista
+             scurt, ce comenzi sunt fara produse, astfel incat sa comandam" — listă scurtă, separată de
+             „⚠ Fără produs" de mai sus (acela e despre POTRIVIRE, nicio legătură cu stocul): produse DEJA
+             asociate unei comenzi curente, dar cu stoc insuficient pentru tot ce s-a comandat/promis încă
+             neaplicat — vezi renderPcomStockShortage(). -->
+        <div id="pcx-stock-shortage" class="pcx-shortage" style="display:none"></div>
         <div class="pcx-filters">
           <input type="text" id="pcx-search" placeholder="Caută comandă, cumpărător, produs, cod…" oninput="pcxRenderOrders()">
           <select id="pcx-filter-platform" onchange="pcxRenderOrders()">
