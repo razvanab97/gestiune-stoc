@@ -2497,6 +2497,9 @@ body .tt-widget .tt-panel{left:calc(100% + 14px);bottom:-84px;width:min(400px,ca
 .pcx-shortage-row:last-child{border-bottom:none}
 .pcx-shortage-info{min-width:0;font-size:15px;color:var(--t2);display:flex;flex-direction:column;gap:1px}
 .pcx-shortage-info b{color:var(--t1);font-size:16px}
+/* Verificare fără nimic de semnalat — verde (--gr/--gr-bg), ca „✓ Incluse" de mai sus, aceeași pagină. */
+.pcx-shortage-ok{background:var(--gr-bg);border-color:rgba(34,197,94,.3)}
+.pcx-shortage-ok .pcx-shortage-hd{color:var(--gr)}
 .pcx-filters{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
 .pcx-filters input[type=text]{flex:1;min-width:220px}
 .pcx-filters input,.pcx-filters select{font-family:inherit;font-size:17px;padding:8px 12px;border:1px solid var(--b1);border-radius:var(--r);background:var(--surf2);color:var(--t1)}
@@ -4840,6 +4843,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:621,text:'Comenzi Platforme — corectat direct, imediat după #620: „sa functioneze doar cand apasam un buton sau ceva, nu mereu". Lista „⚠️ N produse fără stoc suficient" se recalcula automat la FIECARE randare a paginii (orice căutare tastată, filtru schimbat, comandă bifată „Inclus") — nu ceva ce userul a vrut. Acum pornește STRICT la cerere, dintr-un buton nou „🔍 Verifică stocul pentru comenzile curente" chiar deasupra ei; niciun apel automat nicăieri. Pe drum, verificarea explicită a primit și un răspuns pozitiv, clar — „✓ Stoc suficient pentru toate comenzile curente" (verde, ca „✓ Incluse" de pe aceeași pagină) — dacă nu găsește nimic, în loc să dispară tăcut (ar fi părut că butonul n-a făcut nimic). Verificat de 2 ori: sintaxă + balans CSS + 27 de verificări izolate pe sursa reală (apelul automat chiar a dispărut din pcxRenderOrders, butonul nou există cu onclick corect, starea „ok" apare corect, logica de calcul de pe #620 neatinsă).',date:'2026-10-31'},
   {n:620,text:'Comenzi Platforme — listă nouă, scurtă, „⚠️ N produse fără stoc suficient pentru comenzile curente", cerută direct pe o captură reală a „Previzualizare comenzi": „sa se verifice comenzile si sa se compare cu stocul si sa vad intr-o lista scurt, ce comenzi sunt fara produse, astfel incat sa comandam". Diferit de contorul deja existent „⚠ Fără produs" (acela arată linii FĂRĂ NICIUN produs asociat — problemă de potrivire); lista nouă arată produse CU produs asociat, dar unde stocul curent nu ajunge pentru tot ce s-a comandat/promis încă neaplicat în stoc — exact semnalul „trebuie comandat urgent la furnizor". Acoperă ATÂT comenzile proaspăt importate, neconfirmate încă (cazul exact din captură — 0 „Incluse"), CÂT ȘI cele deja confirmate dar cu stocul încă neaplicat; o comandă deja aplicată (stoc deja scăzut) nu mai contează, e deja reflectată în stocul curent — altfel deficitul ar ieși umflat artificial. Mai multe comenzi pentru același produs se adună corect; comenzile anulate (pe platformă sau anterior) sunt excluse. Fiecare rând are un singur buton „+ Adaugă la comandat" — reutilizează direct `addToReorderList`, deja existent, aceeași listă „Produse de comandat" de pe Raport stoc, nu un flux paralel nou. Nicio culoare nouă — roșu (--rd/--rd-bg), deja folosit pe aceeași pagină la „⚠ Fără produs". Verificat de 2 ori: sintaxă + balans CSS + 24 de verificări izolate pe funcțiile reale extrase din cod (deficit calculat și sortat corect, stoc suficient exclus, linii fără produs/produs nou excluse, linie deja aplicată exclusă, comandă anulată exclusă, comandă neconfirmată încă tot contează, însumare corectă pe același produs, produs arhivat exclus, randare reală — text, plural, ascundere când nu mai e nimic de arătat).',date:'2026-10-31'},
   {n:619,text:'Raport stoc — completare directă la #618: „sa nu se mai deschida si toata platforma, sa ramana doar link ul si pagina aceasta" (linkul dedicat „doar carduri", #raport/cards, pentru alt laptop). Cauza: modul dedicat (body.rpt-kiosk, ascunde sidebar/tabel/restul paginii) se activa STRICT din openHashRoute(), la finalul scriptului principal — adică după ce tot HTML-ul paginii era deja parsat; pe un dispozitiv mai lent (exact scenariul „alt laptop" al acestui link), platforma întreagă apuca să fie vizibilă pentru o clipă, înainte să se restrângă la cardul de stoc. Adăugat un script minuscul, chiar la începutul <body>-ului — înaintea sidebar-ului, a oricărui element vizibil —, care citește hash-ul și aplică aceeași clasă INSTANT, din primul moment; logica de citire a hash-ului e identică cu cea din openHashRoute() (verificat direct, pe 14 hash-uri diferite — niciun verdict diferit), nu o variantă simplificată, divergentă. openHashRoute() continuă să ruleze normal, neatins. Verificat de 2 ori: sintaxă + balans CSS + 23 de verificări directe pe sursa reală (echivalență completă cu openHashRoute pe toate hash-urile testate, cazul real #raport/cards confirmat, poziția scriptului chiar la începutul <body>-ului, regresie pe openHashRoute neatins) + regresie completă pe toate cele 28 de suite anterioare din sesiune, toate verzi.',date:'2026-10-28'},
   {n:618,text:'Raport stoc — 2 reparații pe linkul dedicat „doar carduri" (#raport/cards, „pentru alt laptop"), raportate direct pe o captură reală a acelui link: „sa dispara din partea de sus informatia nerelevanta" / „sa ramana doar stocul pe acest link" + „si sa rmaana fix in pagina sa nu se mai miste sus jos". (1) Cardul „📝 Produse de comandat" (adăugat ulterior, #601, după ce lista de ascundere a modului dedicat fusese deja scrisă, #586) rămânea vizibil pe acest link — singurul „intrus" dintre cele 3 carduri de sus ale paginii, celelalte 2 (comparare catalog furnizor / marfă așteptată) erau deja corect ascunse; acum e ascuns la fel ca ele. (2) Bug real, găsit verificând exact de ce „sare" ecranul: rândul „Ultima mișcare de stoc" (sub „Stoc actual") nu avea o înălțime fixă — text absent (offline/în curs de încărcare), scurt („Nicio mișcare…") sau lung (cu sursă — „Import factură SC...SRL” poate fi mult mai lung decât „Vânzare directă”) dădeau înălțimi diferite cardului, împingând câmpul „Actualizează stoc” sus-jos la fiecare navigare (←/→) între produse — exact genul de instabilitate nepotrivit pentru un ecran dedicat de inventariere fizică rapidă, unde poziția constantă a câmpului contează pentru viteză. Rezervă acum fix 2 rânduri (același tipar deja folosit la titlu, clamp cu elipsis dacă textul chiar e prea lung), în em — se scalează automat și cu fontul mai mare din modul dedicat. Verificat de 2 ori: sintaxă + balans CSS + 16 verificări directe pe sursa reală (toate cele 3 carduri de sus acoperite de regula de ascundere — nu doar cel raportat, înălțime minimă + clamp confirmate cuvânt cu cuvânt, regresie pe tot restul cardului — titlu/poză/logica de încărcare/toggle-ul modului dedicat) + regresie completă pe toate cele 27 de suite anterioare din sesiune, toate verzi.',date:'2026-10-28'},
@@ -21314,6 +21318,9 @@ function pcxPullDbHitIntoPreview(q,platF){
 // în qty(p) curent, re-numărată ar umfla artificial deficitul. Acoperă ATÂT liniile proaspăt importate,
 // neconfirmate încă (exact cazul din captură — 0 „Incluse"), CÂT ȘI comenzile deja confirmate, dar cu
 // stocul încă neaplicat — un singur calcul, aceleași date (pcImpParsed/PCOM), niciun tabel nou.
+// Declanșată STRICT manual, din butonul „🔍 Verifică stocul" (cerut direct — „sa functioneze doar cand
+// apasam un buton sau ceva, nu mereu"): prima variantă recalcula la fiecare randare a paginii (orice
+// căutare/filtru/bifare), ceva ce userul nu a vrut — niciun apel automat nicăieri, acum.
 function pcxStockShortageList(){
   const sums=new Map();
   pcImpParsed.forEach(it=>{
@@ -21338,8 +21345,12 @@ function pcxStockShortageList(){
 function renderPcomStockShortage(){
   const host=document.getElementById('pcx-stock-shortage');if(!host)return;
   const list=pcxStockShortageList();
-  if(!list.length){host.style.display='none';host.innerHTML='';return;}
   host.style.display='block';
+  // Verificare explicită, din buton — niciodată silențioasă (același principiu ca restul aplicației):
+  // „niciun rezultat” arată un răspuns pozitiv, clar, nu doar o cutie goală care ar părea că butonul n-a
+  // făcut nimic.
+  if(!list.length){host.className='pcx-shortage pcx-shortage-ok';host.innerHTML=`<div class="pcx-shortage-hd">✓ Stoc suficient pentru toate comenzile curente</div>`;return;}
+  host.className='pcx-shortage';
   host.innerHTML=`<div class="pcx-shortage-hd">⚠️ ${list.length} produs${list.length===1?'':'e'} fără stoc suficient pentru comenzile curente</div>${list.map(x=>`<div class="pcx-shortage-row"><div class="pcx-shortage-info"><b>${esc(x.p.name)}</b><span>comandat ${fmtQty(x.comandat)} · stoc ${fmtQty(x.stoc)} · lipsesc <b style="color:var(--rd)">${fmtQty(x.deficit)}</b>${x.linii>1?` (${x.linii} comenzi)`:''}</span></div><button type="button" class="pcx-btn" onclick="addToReorderList(${x.p.id});renderPcomStockShortage()" ${isInReorderList(x.p.id)?'disabled':''}>${isInReorderList(x.p.id)?'✓ Pe listă':'+ Adaugă la comandat'}</button></div>`).join('')}`;
 }
 function pcxRenderOrders(){
@@ -21387,7 +21398,6 @@ function pcxRenderOrders(){
   const includedCount=pcImpParsed.filter(x=>x.include).length;
   const counters=document.getElementById('pcx-counters');
   if(counters)counters.innerHTML=`<span class="pcx-counter">Total <b>${total}</b></span>${Object.entries(byPlat).map(([pl,c])=>`<span class="pcx-counter">${esc(pcomPlatLabel(pl))} <b>${c}</b></span>`).join('')}<span class="pcx-counter" style="color:var(--gr);border-color:rgba(34,197,94,.35)">✓ Incluse <b>${includedCount}</b></span>${includedCount?`<button type="button" class="pcx-counter pcx-counter-btn" id="pcx-deselect-chip" onclick="excludeAllPcom()" ${pcomExcluding?'disabled':''} title="Debifează toate comenzile incluse (cele cu stoc deja scăzut sau împachetate rămân neatinse)">↺ Debifează toate</button>`:''}${unmatched?`<span class="pcx-counter" style="color:var(--rd);border-color:rgba(240,68,56,.3)">⚠ Fără produs <b>${unmatched}</b></span>`:''}${archivedCount?`<span class="pcx-counter" style="color:var(--or);border-color:rgba(247,144,9,.35)">⚠️ Arhivate <b>${archivedCount}</b></span>`:''}`;
-  renderPcomStockShortage();
   // Bară de acțiuni sticky — reflectă EXACT aceleași condiții ca updPcomImportInfo()/#pcmi-foot,
   // butoanele apelează exact aceleași handlere (resetPcomImportPage/pcomAiMatchUnmatched/applyPcomImport).
   const bar=document.getElementById('pcx-stickybar');
@@ -21483,7 +21493,10 @@ function renderPcomRedesign(){
              scurt, ce comenzi sunt fara produse, astfel incat sa comandam" — listă scurtă, separată de
              „⚠ Fără produs" de mai sus (acela e despre POTRIVIRE, nicio legătură cu stocul): produse DEJA
              asociate unei comenzi curente, dar cu stoc insuficient pentru tot ce s-a comandat/promis încă
-             neaplicat — vezi renderPcomStockShortage(). -->
+             neaplicat — vezi renderPcomStockShortage(). STRICT manual, din buton (cerut direct: „sa
+             functioneze doar cand apasam un buton sau ceva, nu mereu") — nu se recalculează la fiecare
+             randare a paginii. -->
+        <button type="button" class="btn btn-sm" style="margin-bottom:10px" onclick="renderPcomStockShortage()" title="Compară toate comenzile curente cu stocul real — ce trebuie comandat urgent la furnizor">🔍 Verifică stocul pentru comenzile curente</button>
         <div id="pcx-stock-shortage" class="pcx-shortage" style="display:none"></div>
         <div class="pcx-filters">
           <input type="text" id="pcx-search" placeholder="Caută comandă, cumpărător, produs, cod…" oninput="pcxRenderOrders()">
