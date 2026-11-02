@@ -4843,6 +4843,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:623,text:'„Asociază AWB-uri" — comenzile expediate în mai multe colete pot primi acum un AL DOILEA (sau al treilea) AWB, cerut direct pe o captură reală a unei comenzi deja cu AWB asociat: „unele comenzi au 2/3 awb uri / daca adaug awb si incerc sa asociez aceasta comada cu un nou AWB, sa functioneze". Cauza: peste tot în sistem (6 funcții diferite de potrivire, pentru toți curierii), o comandă care are deja un AWB era exclusă definitiv din orice căutare nouă (`!o.awb`) — inclusiv din picker-ul manual (🔗 Asociază manual/eroare AWB din clopoțel), care nici măcar nu o mai găsea la căutare. STRICT în picker-ul manual (confirmat explicit — potrivirea automată/în bloc, din PDF-uri încărcate deodată, rămâne neschimbată, fără control uman pas cu pas, ignoră în continuare comenzile deja rezolvate): o comandă deja cu AWB apare acum ca și candidat, marcată clar cu AWB-ul ei existent („📦 are deja X"), ca alegerea să fie informată; alegerea ei scrie noul AWB ca SUPLIMENTAR (coloană nouă, `awb_extra`), nu suprascrie AWB-ul principal — niciun AWB nu se mai pierde. AWB-urile suplimentare apar acum pe cardul comenzii, lângă cel principal, în ambele randări (Comenzi Platforme + cea soră). Necesită migrarea SQL din chat (coloană nouă pe platforma_comenzi, `awb_extra`, jsonb, implicit listă goală) — fără ea, aplicația degradează clar (avertisment, nu crash), nu poate salva un AWB suplimentar până se rulează. Verificat de 2 ori: sintaxă + balans CSS + 43 de verificări izolate pe funcțiile reale extrase din cod (cazul real reprodus exact — AWB principal neatins, suplimentar adăugat corect —, AWB identic/cu spații recunoscut și ignorat — awbNorm —, 3 AWB-uri pe aceeași comandă se adună fără duplicate, regresie completă pe comenzi fără AWB — comportament vechi, neschimbat —, pe comenzi anulate/deja împachetate — rămân excluse —, pe ramura „Neinclus" — complet neatinsă —, degradare clară dacă migrarea nu a rulat încă).',date:'2026-11-02'},
   {n:622,text:'Comenzi Platforme — completare directă la #621, pe o captură reală cu 4 rânduri rămase vizibile, toate deja „✓ Pe listă": „in momentul in care se adauga la comanda - sa dispara de aici sectiunea". Un produs adăugat la „Produse de comandat" rămânea afișat în lista de stoc insuficient — doar butonul lui devenea dezactivat, rândul în sine nu dispărea niciodată. Acum, de îndată ce un produs e deja pe „Produse de comandat" (luna curentă), e exclus complet din calcul — nu doar din afișare — grija a trecut la cardul „Produse de comandat" (Raport stoc), un singur loc unde se urmărește de-acum înainte, nu dublat în 2 locuri. Dacă ultimul produs rămas e adăugat, lista trece direct pe starea „✓ Stoc suficient" (verde), ca și cum ai verificat din nou. Butonul fiecărui rând s-a simplificat la „+ Adaugă la comandat" — starea dezactivată „✓ Pe listă" a devenit imposibilă (rândul dispare înainte să mai conteze). Verificat de 2 ori: sintaxă + balans CSS + 32 de verificări izolate pe sursa reală (produs deja pe listă exclus din calcul, celelalte produse neatinse, fluxul complet click→dispariție→stare „ok" când se golește lista, butonul simplificat, regresie completă pe toate verificările de pe #620/#621).',date:'2026-10-31'},
   {n:621,text:'Comenzi Platforme — corectat direct, imediat după #620: „sa functioneze doar cand apasam un buton sau ceva, nu mereu". Lista „⚠️ N produse fără stoc suficient" se recalcula automat la FIECARE randare a paginii (orice căutare tastată, filtru schimbat, comandă bifată „Inclus") — nu ceva ce userul a vrut. Acum pornește STRICT la cerere, dintr-un buton nou „🔍 Verifică stocul pentru comenzile curente" chiar deasupra ei; niciun apel automat nicăieri. Pe drum, verificarea explicită a primit și un răspuns pozitiv, clar — „✓ Stoc suficient pentru toate comenzile curente" (verde, ca „✓ Incluse" de pe aceeași pagină) — dacă nu găsește nimic, în loc să dispară tăcut (ar fi părut că butonul n-a făcut nimic). Verificat de 2 ori: sintaxă + balans CSS + 27 de verificări izolate pe sursa reală (apelul automat chiar a dispărut din pcxRenderOrders, butonul nou există cu onclick corect, starea „ok" apare corect, logica de calcul de pe #620 neatinsă).',date:'2026-10-31'},
   {n:620,text:'Comenzi Platforme — listă nouă, scurtă, „⚠️ N produse fără stoc suficient pentru comenzile curente", cerută direct pe o captură reală a „Previzualizare comenzi": „sa se verifice comenzile si sa se compare cu stocul si sa vad intr-o lista scurt, ce comenzi sunt fara produse, astfel incat sa comandam". Diferit de contorul deja existent „⚠ Fără produs" (acela arată linii FĂRĂ NICIUN produs asociat — problemă de potrivire); lista nouă arată produse CU produs asociat, dar unde stocul curent nu ajunge pentru tot ce s-a comandat/promis încă neaplicat în stoc — exact semnalul „trebuie comandat urgent la furnizor". Acoperă ATÂT comenzile proaspăt importate, neconfirmate încă (cazul exact din captură — 0 „Incluse"), CÂT ȘI cele deja confirmate dar cu stocul încă neaplicat; o comandă deja aplicată (stoc deja scăzut) nu mai contează, e deja reflectată în stocul curent — altfel deficitul ar ieși umflat artificial. Mai multe comenzi pentru același produs se adună corect; comenzile anulate (pe platformă sau anterior) sunt excluse. Fiecare rând are un singur buton „+ Adaugă la comandat" — reutilizează direct `addToReorderList`, deja existent, aceeași listă „Produse de comandat" de pe Raport stoc, nu un flux paralel nou. Nicio culoare nouă — roșu (--rd/--rd-bg), deja folosit pe aceeași pagină la „⚠ Fără produs". Verificat de 2 ori: sintaxă + balans CSS + 24 de verificări izolate pe funcțiile reale extrase din cod (deficit calculat și sortat corect, stoc suficient exclus, linii fără produs/produs nou excluse, linie deja aplicată exclusă, comandă anulată exclusă, comandă neconfirmată încă tot contează, însumare corectă pe același produs, produs arhivat exclus, randare reală — text, plural, ascundere când nu mai e nimic de arătat).',date:'2026-10-31'},
@@ -8056,7 +8057,7 @@ function dbToPcom(r){
     // nu dispară brusc din Istoric importuri.
     efecteAplicate:r.efecte_aplicate!==false,
     impachetat:!!r.impachetat,impachetatAt:r.impachetat_at||'',faraStoc:!!r.fara_stoc,faraStocAt:r.fara_stoc_at||'',
-    awb:r.awb||'',staffBlocked:!!r.staff_blocked,staffIssueType:r.staff_issue_type||'',staffIssueNote:r.staff_issue_note||'',staffIssueResolved:!!r.staff_issue_resolved,
+    awb:r.awb||'',awbExtra:Array.isArray(r.awb_extra)?r.awb_extra:[],staffBlocked:!!r.staff_blocked,staffIssueType:r.staff_issue_type||'',staffIssueNote:r.staff_issue_note||'',staffIssueResolved:!!r.staff_issue_resolved,
     anulata:!!r.anulata,motivAnulare:r.motiv_anulare||'',staffInclusAt:r.staff_inclus_at||'',staffFinalizatAt:r.staff_finalizat_at||'',awbSourceFile:r.awb_source_file||'',awbSourcePage:r.awb_source_page||null,awbCourier:r.awb_courier||'',
     // RESET TOTAL al sistemului Staff/Packing, cerut direct — „nu mai trebuie recuperată, afișată sau
     // introdusă automat în Packing nicio comandă veche doar fiindcă are status neîmpachetat". Sursă unică
@@ -19452,12 +19453,16 @@ function pcomRowHtml(idx,showOwnAwb){
   // AWB-ul de expediere (numărul primit de la curier, asociat cu „📮 Asociază AWB-uri") — arătat direct
   // aici, ca să nu fie nevoie să verifici separat în Staff dacă asocierea chiar a scris ceva (cerut
   // direct, după o comandă unde asocierea părea că nu ajunge până la Staff).
-  const committedAwb=it._committedId?PCOM.find(o=>o.id===it._committedId)?.awb:'';
+  const committedPcomRow=it._committedId?PCOM.find(o=>o.id===it._committedId):null;
+  const committedAwb=committedPcomRow?.awb||'';
+  // Comenzi expediate în mai multe colete (cerut direct: „unele comenzi au 2/3 awb uri") — fiecare AWB
+  // suplimentar adăugat manual (vezi pcomAddExtraAwbIfNeeded) apare aici, lângă cel principal.
+  const committedAwbExtraTxt=committedPcomRow?.awbExtra?.length?` · 📮 +${committedPcomRow.awbExtra.map(esc).join(', +')}`:'';
   // Cerut direct: comandă deja inclusă (vizibilă în Staff), dar încă fără AWB — ușor de ratat printre
   // multe carduri „✓ Comandă creată”, toate identice la prima vedere. Nu la Vinted — acolo „awb” e de
   // fapt „Cod”, opțional, introdus separat, nu un pas obligatoriu de expediere ca la eMAG/Trendyol.
   const awbMissingWarn=it._committedId&&!committedAwb&&it.platforma!=='vinted'?` <span style="color:var(--or);font-weight:700" title="Comanda e inclusă, dar încă nu are AWB asociat">⚠️ Fără AWB</span>`:'';
-  const committedNote=it._committedId?`<div class="pcom-sel-meta" style="color:var(--gr);font-weight:700">✓ Comandă creată — vizibilă în Staff${committedAwb?` · 📮 AWB ${esc(committedAwb)}`:''}${awbMissingWarn}</div>`:'';
+  const committedNote=it._committedId?`<div class="pcom-sel-meta" style="color:var(--gr);font-weight:700">✓ Comandă creată — vizibilă în Staff${committedAwb?` · 📮 AWB ${esc(committedAwb)}`:''}${committedAwbExtraTxt}${awbMissingWarn}</div>`:'';
   // Sugestie de cantitate din titlu („Pachet 3”/„Set 2”) — doar recomandare, un click de aplicat,
   // nu modifică nimic singură (cerut explicit, ca să nu scadă stocul greșit dintr-un fals-pozitiv).
   const packHint=it.suggestedCantitate?`<div class="pcx-suggest-qty">💡 Titlul sugerează ${fmtQty(it.suggestedCantitate)} buc. <button type="button" class="pcx-btn" onclick="applyPcomSuggestedQty(${idx})">Aplică</button></div>`:'';
@@ -21124,6 +21129,9 @@ function pcxLineHtml(idx,groupIdxs){
   const stockHtml=it.newProduct?'':pcomStockWarningHtml(idx);
   const committedRow=it._committedId?PCOM.find(o=>o.id===it._committedId):null;
   const committedAwb=committedRow?.awb||'';
+  // Comenzi expediate în mai multe colete (cerut direct: „unele comenzi au 2/3 awb uri") — fiecare AWB
+  // suplimentar adăugat manual (vezi pcomAddExtraAwbIfNeeded) apare aici, lângă cel principal.
+  const committedAwbExtraTxt=committedRow?.awbExtra?.length?` · 📮 +${committedRow.awbExtra.map(esc).join(', +')}`:'';
   const committedOrderRows=committedRow?PCOM.filter(o=>o.platforma===committedRow.platforma&&o.comandaId===committedRow.comandaId&&!o.anulata):[];
   const orderFinalized=committedOrderRows.length>0&&committedOrderRows.every(o=>o.impachetat);
   // Cerut direct: comandă deja inclusă (vizibilă în Staff), dar încă fără AWB — ușor de ratat printre
@@ -21132,7 +21140,7 @@ function pcxLineHtml(idx,groupIdxs){
   const awbMissingWarn=it._committedId&&committedRow&&!committedRow.anulata&&!committedAwb&&it.platforma!=='vinted'?` <span style="color:var(--or);font-weight:700" title="Comanda e inclusă, dar încă nu are AWB asociat">⚠️ Fără AWB</span>`:'';
   const committedNote=it._committedId?(committedRow?.anulata
     ?`<div style="color:var(--rd);font-weight:700;font-size:15px;margin-top:2px">🚫 Anulată${committedRow.motivAnulare?': '+esc(committedRow.motivAnulare):''} — nu mai apare în Staff</div>`
-    :`<div style="color:${orderFinalized&&!committedAwb?'var(--or)':'var(--gr)'};font-weight:700;font-size:15px;margin-top:2px">${orderFinalized?(committedAwb?'✓ Completă':'✓ Finalizată fără AWB'):'✓ Comandă creată — vizibilă în Staff'}${committedAwb?` · 📮 ${esc(committedAwb)}`:''}${awbMissingWarn}</div>`):'';
+    :`<div style="color:${orderFinalized&&!committedAwb?'var(--or)':'var(--gr)'};font-weight:700;font-size:15px;margin-top:2px">${orderFinalized?(committedAwb?'✓ Completă':'✓ Finalizată fără AWB'):'✓ Comandă creată — vizibilă în Staff'}${committedAwb?` · 📮 ${esc(committedAwb)}`:''}${committedAwbExtraTxt}${awbMissingWarn}</div>`):'';
   const issueNote=(committedRow?.staffBlocked&&!committedRow.staffIssueResolved)
     ?`<div style="color:var(--rd);font-weight:700;font-size:15px;margin-top:2px">⛔ ${esc(ISSUE_LABELS_ADMIN[committedRow.staffIssueType]||'Problemă raportată')}${committedRow.staffIssueNote?': '+esc(committedRow.staffIssueNote):''} <button type="button" class="pcx-btn" style="padding:1px 8px;font-size:14px" onclick="resolveStaffIssueAdmin('platforma_comenzi',${it._committedId})">✓ Rezolvată</button></div>`:'';
   // align-self:flex-start — altfel .pcx-line-actions (flex column, align-items:stretch) întinde
@@ -21200,6 +21208,9 @@ function pcxOrderCardHtml(idxs,gIdx){
     return src?`<img src="${esc(src)}" loading="lazy">`:'';
   }).filter(Boolean).join('');
   const awbForHeader=it0.platforma==='vinted'?it0.awb:(PCOM.find(o=>o.id===it0._committedId)?.awb||'');
+  // Comenzi expediate în mai multe colete (cerut direct: „unele comenzi au 2/3 awb uri") — citit mereu
+  // din rândul PCOM (nu din linia locală, chiar și la Vinted mai sus) — awbExtra există STRICT acolo.
+  const awbExtraForHeader=PCOM.find(o=>o.id===it0._committedId)?.awbExtra||[];
   const platLabel=pcomPlatLabel(platform);
   const platCls=platform==='trendyol'?'trendyol':platform==='vinted'?'vinted':'emag';
   // Cutia „copiază titlul pentru AWB" — mutată în capul cardului (cerut direct), sub numărul comenzii/
@@ -21224,6 +21235,7 @@ function pcxOrderCardHtml(idxs,gIdx){
     </div>
     ${deadlineBadgeHtml(it0.termenExpediere)?`<div class="pcx-order-awb-row">${deadlineBadgeHtml(it0.termenExpediere)}</div>`:''}
     ${awbForHeader?`<div class="pcx-order-awb-row"><span style="font-weight:700;color:var(--gr)">📦 AWB asociat: <span style="font-family:var(--mono)">${esc(awbForHeader)}</span></span></div>`:''}
+    ${awbExtraForHeader.length?`<div class="pcx-order-awb-row"><span style="font-weight:700;color:var(--gr)">📦 AWB suplimentar${awbExtraForHeader.length>1?'e':''}: <span style="font-family:var(--mono)">${awbExtraForHeader.map(esc).join(', ')}</span></span></div>`:''}
     ${awbChipHtml?`<div class="pcx-order-awb-row">${awbChipHtml}</div>`:''}
     <div class="pcx-order-body" style="${open?'':'display:none'}">
       ${multi?idxs.map(i=>pcxLineHtml(i,idxs)).join(''):pcxLineHtml(idxs[0],idxs)}
@@ -24427,8 +24439,17 @@ function awbInferPlatformHint(p){
 // mai sus, aceeași reparație pe termen lung), nu doar cele deja scrise în platforma_comenzi — altfel
 // picker-ul manual ar fi orb exact la comenzile pentru care omul are cel mai des nevoie să caute manual
 // (cele pe care potrivirea automată nu le-a găsit, adesea tocmai fiindcă încă nu erau comise).
+// O comandă care are DEJA un AWB rămâne candidat aici — cerut direct: „unele comenzi au 2/3 awb uri /
+// daca adaug awb si incerc sa asociez aceasta comada cu un nou AWB, sa functioneze" (comandă expediată în
+// mai multe colete, câte un AWB per colet). Până acum !o.awb o excludea definitiv — nicio cale, nici
+// măcar manuală, nu putea găsi o comandă deja rezolvată, ca să-i mai adauge un AWB. STRICT aici, în
+// picker-ul manual (deschis printr-un click explicit) — potrivirea automată/în bloc (PDF-uri încărcate
+// deodată, fără control uman pas cu pas) rămâne neschimbată, ignoră în continuare comenzile deja
+// rezolvate (vezi cele 6 funcții de potrivire automată, toate cu !o.awb, neatinse). awbPickRenderList
+// arată explicit AWB-ul deja existent, ca alegerea să fie informată, nu accidentală; pickAwbOrder/
+// applyOneAwbMatch ADAUGĂ noul AWB ca suplimentar (nu suprascrie) când comanda are deja unul diferit.
 function awbPickCandidates(){
-  const committed=PCOM.filter(o=>!o.awb&&!o.anulata&&!o.impachetat).map(o=>({...o,_pending:false}));
+  const committed=PCOM.filter(o=>!o.anulata&&!o.impachetat).map(o=>({...o,_pending:false}));
   const pending=pcImpParsed.filter(it=>!it._committedId&&!it._cancelledId).map(it=>({
     comandaId:it.comandaId,platforma:it.platforma,clientNume:it.clientNume||'',
     produsNume:it.produsId?(P.find(x=>x.id===it.produsId)?.name||''):'',
@@ -24503,8 +24524,11 @@ function awbPickRenderList(matches){
     const plat=o.platforma==='emag'?'eMAG':o.platforma==='trendyol'?'Trendyol':'Vinted';
     const nm=o.clientNume||o.produsNume||o.titluExtern||'(fără nume)';
     const pendingTag=o._pending?' · <span style="color:var(--or);font-weight:700">Neinclus</span>':'';
+    // Comandă deja cu AWB (acum candidat valid, vezi awbPickCandidates) — afișat explicit, ca alegerea
+    // să fie informată: userul vede clar că adaugă un AWB SUPLIMENTAR, nu asociază una nerezolvată.
+    const hasAwbTag=o.awb?` · <span style="color:var(--gr);font-weight:700">📦 are deja ${esc(o.awb)}</span>`:'';
     const sub=[o.comandaId,o.produsNume||o.titluExtern,o.pretTotalCuTva?o.pretTotalCuTva.toFixed(2)+' '+(o.moneda||'RON'):''].filter(Boolean).join(' · ');
-    return`<div class="smi-pick-item" style="flex-direction:column;align-items:flex-start" onclick="pickAwbOrder(${i})"><span class="smi-pick-item-nm" style="font-weight:700">${esc(plat)} · ${esc(nm)}</span><span class="smi-pick-item-nm" style="font-size:19px;color:var(--t3)">${esc(sub)}${pendingTag}</span></div>`;
+    return`<div class="smi-pick-item" style="flex-direction:column;align-items:flex-start" onclick="pickAwbOrder(${i})"><span class="smi-pick-item-nm" style="font-weight:700">${esc(plat)} · ${esc(nm)}</span><span class="smi-pick-item-nm" style="font-size:19px;color:var(--t3)">${esc(sub)}${pendingTag}${hasAwbTag}</span></div>`;
   }).join('')||`<div class="smi-pick-item" style="color:var(--t3);cursor:default">Nicio comandă nerezolvată găsită</div>`;
 }
 // Căutare în 2 pași, cerut direct, pe un bug real: „sistemul acesta de recunoaștere și regăsire a
@@ -24552,8 +24576,10 @@ async function filterAwbPick(){
     // PostgREST nu poate exprima ușor direct „toate cuvintele, în orice coloană" — lărgim plasa live cu
     // primul cuvânt (cel mai probabil discriminant), apoi filtrăm local cu ACELEAȘI cuvinte complete,
     // înainte de afișare — niciun fals-pozitiv nu ajunge vizibil, doar aducem mai mulți candidați.
+    // Fără `&awb=is.null` — o comandă deja cu AWB tot trebuie găsită aici (vezi awbPickCandidates, același
+    // motiv), altfel căutarea live ar rămâne „oarbă" exact la comenzile mai vechi, nemaiîncărcate local.
     const like=encodeURIComponent(`*${words[0]}*`);
-    const extra=await dbGet(`platforma_comenzi?select=id,platforma,comanda_id,client_nume,produs_nume,titlu_extern,pret_total_cu_tva,moneda,data,awb&awb=is.null&anulata=eq.false&or=(comanda_id.ilike.${like},client_nume.ilike.${like},produs_nume.ilike.${like},titlu_extern.ilike.${like},platforma.ilike.${like})&order=data.desc&limit=30`);
+    const extra=await dbGet(`platforma_comenzi?select=id,platforma,comanda_id,client_nume,produs_nume,titlu_extern,pret_total_cu_tva,moneda,data,awb&anulata=eq.false&or=(comanda_id.ilike.${like},client_nume.ilike.${like},produs_nume.ilike.${like},titlu_extern.ilike.${like},platforma.ilike.${like})&order=data.desc&limit=30`);
     if(seq!==awbPickSeq)return;
     const known=new Set(localMatches.map(o=>o.platforma+'|'+o.comandaId));
     const extraMapped=extra.filter(r=>!known.has(r.platforma+'|'+r.comanda_id)).map(r=>({
@@ -24638,6 +24664,7 @@ async function pickAwbOrder(i){
 // scrie pe linia din pcImpParsed și se comite, la fel ca la _pendingMatch din applyAwbAssociation).
 async function associateAwbErrorToOrder(x,o){
   try{
+    let addedExtra=false;
     if(o._pending){
       const it=findPendingImportLineByComandaId(o.comandaId);
       if(it){
@@ -24646,17 +24673,22 @@ async function associateAwbErrorToOrder(x,o){
         if(idx>=0){it.include=true;await syncPcomLineCommitState(idx);}
       }
     }else{
-      // RESET TOTAL (#519) — rezolvarea manuală a unei erori AWB NU mai avansează nimic legat de
-      // vizibilitatea în Staff (vezi comentariul identic din issueEmagAwb).
-      const source={awb:x.awb||null,awb_source_file:x.source_file||null,awb_source_page:x.source_page||null,awb_courier:x.courier||null};
-      await patchAwbWithSource(`comanda_id=eq.${encodeURIComponent(o.comandaId)}&platforma=eq.${encodeURIComponent(o.platforma)}`,source);
-      PCOM.filter(p2=>p2.comandaId===o.comandaId&&p2.platforma===o.platforma).forEach(p2=>Object.assign(p2,{awb:x.awb||'',awbSourceFile:x.source_file||'',awbSourcePage:x.source_page||null,awbCourier:x.courier||''}));
+      // Comandă care are DEJA un AWB DIFERIT — adaugă ca suplimentar, nu suprascrie (vezi
+      // pcomAddExtraAwbIfNeeded/awbPickCandidates, aceeași reparație ca la applyOneAwbMatch).
+      addedExtra=await pcomAddExtraAwbIfNeeded(o.comandaId,o.platforma,x.awb||'');
+      if(!addedExtra){
+        // RESET TOTAL (#519) — rezolvarea manuală a unei erori AWB NU mai avansează nimic legat de
+        // vizibilitatea în Staff (vezi comentariul identic din issueEmagAwb).
+        const source={awb:x.awb||null,awb_source_file:x.source_file||null,awb_source_page:x.source_page||null,awb_courier:x.courier||null};
+        await patchAwbWithSource(`comanda_id=eq.${encodeURIComponent(o.comandaId)}&platforma=eq.${encodeURIComponent(o.platforma)}`,source);
+        PCOM.filter(p2=>p2.comandaId===o.comandaId&&p2.platforma===o.platforma).forEach(p2=>Object.assign(p2,{awb:x.awb||'',awbSourceFile:x.source_file||'',awbSourcePage:x.source_page||null,awbCourier:x.courier||''}));
+      }
     }
     await dbPatch(`staff_awb_erori?id=eq.${x.id}`,{resolved:true,resolved_at:new Date().toISOString()});
     AWB_ISSUES=AWB_ISSUES.filter(e=>e.id!==x.id);
     renderNotif();
     if(pcImpParsed.length)renderPcomImportPreview();
-    toast('✓ AWB asociat manual la comanda aleasă');
+    toast(addedExtra?'✓ AWB suplimentar adăugat la comanda aleasă':'✓ AWB asociat manual la comanda aleasă');
   }catch(e){toast('Nu am putut asocia AWB-ul: '+(e.message||e),'err');}
 }
 document.addEventListener('click',ev=>{
@@ -25341,6 +25373,30 @@ function renderAwbPreview(){
     }).finally(()=>{awbPreviewHealing=false;});
   }
 }
+// Adaugă AWB-ul ca SUPLIMENTAR (awb_extra), în loc să suprascrie, când comanda ARE deja un AWB diferit
+// de cel nou — cerut direct: „unele comenzi au 2/3 awb uri / daca adaug awb si incerc sa asociez aceasta
+// comada cu un nou AWB, sa functioneze" (expediere în mai multe colete, câte un AWB per colet). Dacă NU
+// are încă niciun AWB, sau noul AWB e EXACT același (ex. recitire aceleiași etichete) — comportament
+// normal, neschimbat, suprascrie mai jos (sau rescrie identic, fără efect vizibil). Ajunge aici STRICT
+// dintr-o alegere manuală din picker (vezi awbPickCandidates) — fluxul automat/în bloc nu alege
+// niciodată o comandă deja rezolvată, deci condiția de-aici nu se declanșează niciodată pe acel drum.
+// Întoarce true dacă a scris ca SUPLIMENTAR, ca apelantul să sară peste suprascrierea normală.
+async function pcomAddExtraAwbIfNeeded(comandaId,platforma,newAwb){
+  const existing=PCOM.find(o=>o.comandaId===comandaId&&o.platforma===platforma);
+  if(!existing||!existing.awb||awbNorm(existing.awb)===awbNorm(newAwb))return false;
+  const extra=Array.isArray(existing.awbExtra)?[...existing.awbExtra]:[];
+  if(!extra.some(x=>awbNorm(x)===awbNorm(newAwb)))extra.push(newAwb);
+  try{await dbPatch(`platforma_comenzi?comanda_id=eq.${encodeURIComponent(comandaId)}&platforma=eq.${encodeURIComponent(platforma)}`,{awb_extra:extra});}
+  catch(e){
+    // Migrarea nouă (awb_extra) poate să nu fi rulat încă în Supabase — AWB-ul suplimentar nu se poate
+    // salva fără acea coloană; avertizăm clar, nu lăsăm eroarea să pară un eșec generic, neexplicat.
+    console.warn('Nu am putut salva AWB-ul suplimentar (rulează migrarea awb_extra în Supabase):',e);
+    toast('AWB suplimentar necesită o migrare nouă în Supabase — vezi consola','err');
+    return false;
+  }
+  PCOM.filter(o=>o.comandaId===comandaId&&o.platforma===platforma).forEach(o=>{o.awbExtra=extra;});
+  return true;
+}
 async function patchAwbWithSource(filter,source){
   try{return await dbPatch(`platforma_comenzi?${filter}`,source);}
   catch(e){
@@ -25397,8 +25453,14 @@ async function applyOneAwbMatch(p){
     }
     // Linia a fost între timp comisă manual („✓ Inclus") — există acum în PCOM, tratată normal mai jos.
   }
-  const source={awb:p.awb,awb_source_file:p.file||null,awb_source_page:p.page||null,awb_courier:p.courier||null};
   const platforma=p.rows[0].platforma;
+  // Comandă care are DEJA un AWB DIFERIT — adaugă ca suplimentar, nu suprascrie (vezi
+  // pcomAddExtraAwbIfNeeded/awbPickCandidates mai sus în fișier).
+  if(await pcomAddExtraAwbIfNeeded(p.comandaId,platforma,p.awb)){
+    if(p._blob)generateAwbPreviewInBackground(p._blob,p.page,p.awb,p.comandaId,platforma);
+    return;
+  }
+  const source={awb:p.awb,awb_source_file:p.file||null,awb_source_page:p.page||null,awb_courier:p.courier||null};
   // RESET TOTAL (#519) — ACESTA era mecanismul EXACT care a produs bug-ul real, raportat direct, cu
   // o captură: „ce caută aceste comenzi în staff la de împachetat în condițiile în care acestea sunt
   // de astăzi?" — o comandă din 21.09, neatinsă de nimic altceva, și-a avansat singură created_at la
