@@ -4843,6 +4843,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:624,text:'Asistent AI — poate acum și adăuga stoc la produse deja EXISTENTE, nu doar interoga date sau crea produse noi, cerut direct cu 2 capturi reale: o conversație unde „adauga acest nou stoc pe produsele adiacente” cădea pe lista de intenții cunoscute (fără nicio opțiune de stoc) + un tabel cu produse de la furnizorul Jumbo, ca exemplu de listă. Trimiți o poză cu o listă/factură de la furnizor însoțită de un text clar („adaugă stoc”, „am primit marfa/comanda asta”) — intenție nouă, adauga_stoc, deosebită explicit de creeaza_produs (acolo userul descrie UN produs nou; aici recepționează stoc pentru produse deja din stoc). Pe baza unei alegeri directe, explicite (grill-me complet, .tmp/grill-me/adaugare-stoc-prin-chat.md): nu s-a construit o UI nouă de confirmare în chat — se deschide direct ecranul deja matur „Importă factură” (aceeași extragere AI din poză — parseOrderScreenshots — deja folosită acolo pentru facturi de la Maxy/Verk), care rezolvă deja singur linie nepotrivită, preț, furnizor+număr factură și ambiguitate de produs — niciun mecanism nou, paralel, de întreținut. Chat-ul doar anunță câte produse a găsit (numărul real, din starea deja calculată, niciodată inventat de AI) și trimite direct acolo — nimic nu se adaugă la stoc fără „Aplică”, apăsat manual, exact ca până acum. Verificat de 2 ori: sintaxă + 29 de verificări izolate pe funcțiile reale extrase din cod (extragerea corectă a mimetype/base64 din poză, ordinea corectă openInvoice→parseOrderScreenshots, numărul real de produse întors, gramatică singular/plural corectă în mesaj, mesaj distinct pe poză lipsă vs. 0 produse găsite, pre-verificarea „recunoaște un singur produs din poză” exclusă corect pentru noua intenție — fără apel AI irosit —, regresie completă pe creeaza_produs/celelalte intenții, wiring real pe schema de clasificare și pe ordinea ramurilor din aiChatSend) + regresie pe cele 2 suite anterioare din sesiune (AWB suplimentar #623, stoc insuficient comenzi #620-622), toate verzi.',date:'2026-11-03'},
   {n:623,text:'„Asociază AWB-uri" — comenzile expediate în mai multe colete pot primi acum un AL DOILEA (sau al treilea) AWB, cerut direct pe o captură reală a unei comenzi deja cu AWB asociat: „unele comenzi au 2/3 awb uri / daca adaug awb si incerc sa asociez aceasta comada cu un nou AWB, sa functioneze". Cauza: peste tot în sistem (6 funcții diferite de potrivire, pentru toți curierii), o comandă care are deja un AWB era exclusă definitiv din orice căutare nouă (`!o.awb`) — inclusiv din picker-ul manual (🔗 Asociază manual/eroare AWB din clopoțel), care nici măcar nu o mai găsea la căutare. STRICT în picker-ul manual (confirmat explicit — potrivirea automată/în bloc, din PDF-uri încărcate deodată, rămâne neschimbată, fără control uman pas cu pas, ignoră în continuare comenzile deja rezolvate): o comandă deja cu AWB apare acum ca și candidat, marcată clar cu AWB-ul ei existent („📦 are deja X"), ca alegerea să fie informată; alegerea ei scrie noul AWB ca SUPLIMENTAR (coloană nouă, `awb_extra`), nu suprascrie AWB-ul principal — niciun AWB nu se mai pierde. AWB-urile suplimentare apar acum pe cardul comenzii, lângă cel principal, în ambele randări (Comenzi Platforme + cea soră). Necesită migrarea SQL din chat (coloană nouă pe platforma_comenzi, `awb_extra`, jsonb, implicit listă goală) — fără ea, aplicația degradează clar (avertisment, nu crash), nu poate salva un AWB suplimentar până se rulează. Verificat de 2 ori: sintaxă + balans CSS + 43 de verificări izolate pe funcțiile reale extrase din cod (cazul real reprodus exact — AWB principal neatins, suplimentar adăugat corect —, AWB identic/cu spații recunoscut și ignorat — awbNorm —, 3 AWB-uri pe aceeași comandă se adună fără duplicate, regresie completă pe comenzi fără AWB — comportament vechi, neschimbat —, pe comenzi anulate/deja împachetate — rămân excluse —, pe ramura „Neinclus" — complet neatinsă —, degradare clară dacă migrarea nu a rulat încă).',date:'2026-11-02'},
   {n:622,text:'Comenzi Platforme — completare directă la #621, pe o captură reală cu 4 rânduri rămase vizibile, toate deja „✓ Pe listă": „in momentul in care se adauga la comanda - sa dispara de aici sectiunea". Un produs adăugat la „Produse de comandat" rămânea afișat în lista de stoc insuficient — doar butonul lui devenea dezactivat, rândul în sine nu dispărea niciodată. Acum, de îndată ce un produs e deja pe „Produse de comandat" (luna curentă), e exclus complet din calcul — nu doar din afișare — grija a trecut la cardul „Produse de comandat" (Raport stoc), un singur loc unde se urmărește de-acum înainte, nu dublat în 2 locuri. Dacă ultimul produs rămas e adăugat, lista trece direct pe starea „✓ Stoc suficient" (verde), ca și cum ai verificat din nou. Butonul fiecărui rând s-a simplificat la „+ Adaugă la comandat" — starea dezactivată „✓ Pe listă" a devenit imposibilă (rândul dispare înainte să mai conteze). Verificat de 2 ori: sintaxă + balans CSS + 32 de verificări izolate pe sursa reală (produs deja pe listă exclus din calcul, celelalte produse neatinse, fluxul complet click→dispariție→stare „ok" când se golește lista, butonul simplificat, regresie completă pe toate verificările de pe #620/#621).',date:'2026-10-31'},
   {n:621,text:'Comenzi Platforme — corectat direct, imediat după #620: „sa functioneze doar cand apasam un buton sau ceva, nu mereu". Lista „⚠️ N produse fără stoc suficient" se recalcula automat la FIECARE randare a paginii (orice căutare tastată, filtru schimbat, comandă bifată „Inclus") — nu ceva ce userul a vrut. Acum pornește STRICT la cerere, dintr-un buton nou „🔍 Verifică stocul pentru comenzile curente" chiar deasupra ei; niciun apel automat nicăieri. Pe drum, verificarea explicită a primit și un răspuns pozitiv, clar — „✓ Stoc suficient pentru toate comenzile curente" (verde, ca „✓ Incluse" de pe aceeași pagină) — dacă nu găsește nimic, în loc să dispară tăcut (ar fi părut că butonul n-a făcut nimic). Verificat de 2 ori: sintaxă + balans CSS + 27 de verificări izolate pe sursa reală (apelul automat chiar a dispărut din pcxRenderOrders, butonul nou există cu onclick corect, starea „ok" apare corect, logica de calcul de pe #620 neatinsă).',date:'2026-10-31'},
@@ -28362,7 +28363,7 @@ function aiChatExecuteIntent(intent){
 const AI_CHAT_INTENT_SCHEMA={
   type:'object',
   properties:{
-    tip:{type:'string',enum:['info_produs','arata_poza','cantitate_vanduta','stoc_curent','comparatie_perioade','top_produse','preconizare','creeaza_produs','nerecunoscut'],description:'Tipul de întrebare, cel mai potrivit dintre cele cunoscute. "info_produs" dacă userul cere TOATE informațiile despre UN produs anume (dosar/fișă completă — stoc, ultima comandă, vânzări), sau dacă mesajul e DOAR un cod/număr (EAN/SKU/cod de bare, fără alt context) — tratează un cod singur, fără alte cuvinte, ca "info_produs" cu produsCod. "arata_poza" dacă userul cere STRICT fotografia unui produs EXISTENT în stoc ("dă-mi poza", "arată-mi o poză cu el", "cum arată produsul X", "trimite poza lui Y") — diferit de "creeaza_produs" (acolo userul DĂ o poză ca să adauge un produs nou, aici userul CERE să vadă poza unuia deja din stoc). "creeaza_produs" dacă userul vrea să adauge un produs NOU (cu nume/preț/poză, sau doar o poză). "nerecunoscut" dacă mesajul nu se încadrează clar în niciunul.'},
+    tip:{type:'string',enum:['info_produs','arata_poza','cantitate_vanduta','stoc_curent','comparatie_perioade','top_produse','preconizare','creeaza_produs','adauga_stoc','nerecunoscut'],description:'Tipul de întrebare, cel mai potrivit dintre cele cunoscute. "info_produs" dacă userul cere TOATE informațiile despre UN produs anume (dosar/fișă completă — stoc, ultima comandă, vânzări), sau dacă mesajul e DOAR un cod/număr (EAN/SKU/cod de bare, fără alt context) — tratează un cod singur, fără alte cuvinte, ca "info_produs" cu produsCod. "arata_poza" dacă userul cere STRICT fotografia unui produs EXISTENT în stoc ("dă-mi poza", "arată-mi o poză cu el", "cum arată produsul X", "trimite poza lui Y") — diferit de "creeaza_produs" (acolo userul DĂ o poză ca să adauge un produs nou, aici userul CERE să vadă poza unuia deja din stoc). "creeaza_produs" dacă userul vrea să adauge un produs NOU (cu nume/preț/poză, sau doar o poză). "adauga_stoc" dacă userul a atașat o poză cu o LISTĂ/FACTURĂ de la furnizor, cu mai multe produse, și vrea să adauge stocul primit la produse deja EXISTENTE (ex. "adaugă stoc", "am primit marfa/comanda asta", "actualizează stocul cu lista asta", "recepție marfă") — diferit de "creeaza_produs" (acolo userul descrie UN produs NOU, nu recepționează stoc pentru produse deja existente). "nerecunoscut" dacă mesajul nu se încadrează clar în niciunul.'},
     produsNume:{type:['string','null'],description:'Numele produsului menționat sau de creat (text liber, cum l-a scris userul). null dacă nu menționează un produs anume.'},
     produsCod:{type:['string','null'],description:'Codul/EAN/SKU/barcode al produsului, DOAR dacă userul a scris un cod/număr direct (ex. un șir de cifre) — diferit de produsNume (numele în cuvinte). null dacă nu apare niciun cod.'},
     categorie:{type:['string','null'],description:`Categoria EXACTĂ dintre cele existente, dacă e menționată: ${CATS.join(', ')}. null dacă nu e menționată nicio categorie.`},
@@ -28400,7 +28401,7 @@ async function aiChatClassifyIntent(mesaj,hasImage,context){
 
 // ── Pasul 3: formulare răspuns (AI, text liber STRICT peste rezultatul deja calculat) ──
 async function aiChatFormatAnswer(mesajOriginal,exec){
-  if(exec.tip==='nerecunoscut')return'Nu am înțeles exact ce vrei să afli — pot răspunde la întrebări despre cantități vândute, stoc curent, comparații între perioade, topuri de produse, preconizări de aprovizionare, un dosar complet al unui produs sau poza lui (sau trimite direct codul/EAN-ul lui), sau pot crea un produs nou dacă îmi dai nume/poză/preț.';
+  if(exec.tip==='nerecunoscut')return'Nu am înțeles exact ce vrei să afli — pot răspunde la întrebări despre cantități vândute, stoc curent, comparații între perioade, topuri de produse, preconizări de aprovizionare, un dosar complet al unui produs sau poza lui (sau trimite direct codul/EAN-ul lui), pot crea un produs nou dacă îmi dai nume/poză/preț, sau pot adăuga stoc la produse deja existente dacă trimiți o poză cu lista/factura de la furnizor.';
   if(exec.eroare)return exec.eroare;
   // „arata_poza" — deterministic, SKIP peste formularea AI de mai jos: un token intern ([[poza:ID]]),
   // randat ca fotografie reală de aiChatFormatMsgHtml, nu text liber generat (ar putea scrie orice în
@@ -28575,6 +28576,26 @@ async function aiChatResolveProductFromImage(imageDataUrl){
     return null;
   }catch(e){console.warn('Identificare produs din poză (Asistent AI) eșuată:',e);return null;}
 }
+// ── Adăugare stoc la produse EXISTENTE, dintr-o poză cu listă/factură de furnizor (cerut direct, cu
+// captură reală: „sa putem sa adaugam stoc la produsele existente si prin chatbot" + o captură cu un
+// tabel de produse Jumbo, trimisă ca exemplu). Plan complet, toate deciziile luate explicit:
+// .tmp/grill-me/adaugare-stoc-prin-chat.md — decizia cheie (Q2, aleasă direct de user, nu recomandarea):
+// NU se construiește o UI nouă de confirmare în chat — se deschide direct ecranul deja matur „Importă
+// factură" (openInvoice + parseOrderScreenshots, EXACT perechea deja folosită programatic de
+// handlePresetCSV, nu doar din input de fișier), care rezolvă deja singur tot restul (linie nepotrivită cu
+// niciun produs existent, preț menționat pe listă, furnizor+număr factură, ambiguitate produs) — niciun
+// mecanism nou de proiectat/întreținut, zero duplicare. Întoarce numărul REAL de linii găsite
+// (invParsed.length, citit direct din starea deja calculată de parseOrderScreenshots) — niciodată
+// inventat de AI (principiul de bază al întregului Asistent AI, vezi antetul fișierului).
+async function aiChatAddStockFromImage(imageDataUrl){
+  const mt=imageDataUrl.match(/data:(image\/\w+);/)?.[1]||'image/jpeg';
+  const b64=imageDataUrl.split(',')[1];
+  const blob=base64ToBlob(b64,mt);
+  openInvoice();
+  invSourceName='Poză din Asistent AI';
+  await parseOrderScreenshots([blob]);
+  return invParsed.length;
+}
 // ── Orchestrator de top (UI → pipeline complet) ──
 async function aiChatSend(textRaw){
   const text=String(textRaw||'').trim();
@@ -28595,7 +28616,7 @@ async function aiChatSend(textRaw){
     // DIN poză înainte să renunțe; „creeaza_produs" rămâne neatins (are deja extragerea lui completă,
     // mai jos, pentru un produs NOU, nu o căutare printre cele existente).
     let pozaNerecunoscuta=false;
-    if(imageDataUrl&&intent.tip!=='creeaza_produs'&&!intent.produsNume&&!intent.produsCod){
+    if(imageDataUrl&&intent.tip!=='creeaza_produs'&&intent.tip!=='adauga_stoc'&&!intent.produsNume&&!intent.produsCod){
       const match=await aiChatResolveProductFromImage(imageDataUrl);
       if(match)intent.produsNume=match.name;
       else if(['info_produs','arata_poza','stoc_curent','cantitate_vanduta','comparatie_perioade','preconizare'].includes(intent.tip))pozaNerecunoscuta=true;
@@ -28606,6 +28627,13 @@ async function aiChatSend(textRaw){
       const asemanatoriTxt=draft.asemanatori.length?`\n\n⚠️ Ai deja ceva asemănător: ${draft.asemanatori.map(a=>a.nume).join(', ')} — verifică înainte să salvezi.`:'';
       const extrase=[draft.sku?'SKU '+draft.sku:'',draft.ean?'EAN '+draft.ean:'',draft.pretAchizitie?`Achiziție ${draft.pretAchizitie} ${draft.moneda||''}${draft.tipPret==='net'?' net':draft.tipPret==='cu_tva'?' cu TVA':''}`:''].filter(Boolean);
       await aiChatPersist('asistent',`Am pregătit un draft de produs: **${draft.nume||'(fără nume)'}**${draft.categorie?` · ${draft.categorie}`:''}${extrase.length?'\n'+extrase.join(' · '):''}${draft.pozaDecupata?'\n✓ Fotografia produsului a fost extrasă din screenshot.':''}${asemanatoriTxt}\n\nVerifică datele și apasă „Deschide ca produs nou”. Nimic nu se salvează până nu apeși „Salvează produs”.`,'creeaza_produs');
+    }else if(intent.tip==='adauga_stoc'){
+      if(!imageDataUrl){
+        await aiChatPersist('asistent','Trimite o poză cu lista/factura de produse ca să le adaug la stoc.','eroare');
+      }else{
+        const n=await aiChatAddStockFromImage(imageDataUrl);
+        await aiChatPersist('asistent',n?`Am găsit ${n} ${n===1?'produs':'produse'} în poză — am deschis „Importă factură”, verifică liniile (produse găsite/necunoscute, cantități, preț) și apasă „Aplică” acolo ca să le adaugi la stoc.`:'Nu am găsit niciun produs recognoscibil în poză — încearcă o poză mai clară, sau folosește „Importă factură” direct din Inventar.','adauga_stoc');
+      }
     }else if(pozaNerecunoscuta){
       await aiChatPersist('asistent','Nu am putut recunoaște exact produsul din poză — descrie-l în câteva cuvinte (nume sau cod), sau încearcă o poză mai clară.','eroare');
     }else{
@@ -28636,7 +28664,7 @@ function aiChatChipsHtml(){
 function aiChatQuickSend(q){aiChatSend(q);}
 function renderAiChat(){
   const html=AIC.length?AIC.map(m=>`<div class="aic-msg aic-${esc(m.rol)}">${aiChatFormatMsgHtml(m.continut)}</div>`).join('')
-    :`<div class="aic-empty"><strong style="color:var(--t1);font-size:24px">Salut! Sunt asistentul tău AI.</strong>Întreabă-mă orice despre vânzări, stoc sau preconizări — sau trimite-mi o poză ca să creez un produs nou.${aiChatChipsHtml()}</div>`;
+    :`<div class="aic-empty"><strong style="color:var(--t1);font-size:24px">Salut! Sunt asistentul tău AI.</strong>Întreabă-mă orice despre vânzări, stoc sau preconizări — trimite-mi o poză ca să creez un produs nou, sau o poză cu o listă/factură ca să adaug stoc la produse existente.${aiChatChipsHtml()}</div>`;
   const draftHtml=aiChatDraft?aiChatDraftHtml():'';
   ['aic-list-tab','aic-list-popup'].forEach(id=>{
     const el=document.getElementById(id);
