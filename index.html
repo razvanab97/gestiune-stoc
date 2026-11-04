@@ -4844,6 +4844,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:627,text:'Comenzi Platforme + Sincronizare — bug real reparat, raportat direct pe o comandă reală (#1027453916, Пеньо Георгиев Георгиев): „traducerea aici e gresita, pentru ca avem tractorul" — titlul original bulgăresc era despre un tractor cu remorcă, dar textul tradus afișat descria o husă de canapea, complet nelegată. Cauza: traducerea în lot (până la 25 de titluri deodată, într-un singur apel AI) poate amesteca ocazional, intern, răspunsul unui rând cu altul — o greșeală de model, nu de index (indexul în sine ajungea corect la rândul lui, doar conținutul textului era al altui titlu). Două reparații, legate: (1) odată ce un titlu avea ORICE traducere (chiar greșită), nu mai exista nicio cale din UI s-o corectezi — butonul „🌐 Traduce" dispărea complet; acum apare un „↻" mic lângă orice traducere deja afișată, în ambele locuri (Comenzi Platforme ȘI Sincronizare, același tipar), ca orice traducere greșită să fie reparabilă dintr-un click, fără să mai aștepți un fix de cod. (2) Traducerea în lot trece acum printr-o schemă JSON constrânsă (ca restul apelurilor AI din aplicație), cu un avertisment explicit în prompt să nu amestece titluri între ele — reduce riscul, nu-l elimină garantat, de-aia rămâne și soluția (1), ca plasă de siguranță reparabilă direct din UI. Verificat de 2 ori: sintaxă + 28 de verificări izolate pe funcțiile reale extrase din cod (butonul ↻ pe ambele ecrane, schema nouă corectă structural, wiring real — callAI primește schema, JSON.parse direct fără regex —, execuție reală a funcției de tradus în lot cu răspuns AI mockat — scrie corect pe index, ignoră în siguranță un index inexistent, nu atinge o linie deja română —, regresie completă pe traducerea unui singur titlu — neatinsă, risc diferit).',date:'2026-11-04'},
   {n:626,text:'Comenzi Platforme — bug real reparat, raportat direct pe o comandă reală (#1137088078, Fekete Mónika, titlu „...díszes karácsonyfa arany és piros gömbökkel... ünnepi mini fa"): „de ce nu am butonul de traducere a titlului?". Cauza: detecția de limbă maghiară verifica STRICT literele ő/ű — 2 din cele 9 vocale accentuate ale limbii, cele mai rare; titlul raportat avea á/é/í/ö/ü, dar niciun ő/ű, deci pica tăcut pe „deja citibil", fără traducere și fără buton. Lărgit la toate cele 9 litere maghiare (á/é/í/ó/ö/ő/ú/ü/ű, cu majuscule) — niciuna nu apare vreodată în ortografia română, deci zero risc de fals-pozitiv pe titluri deja românești. Reparația prinde, la fel, și traducerea automată de fundal de la import (nu doar butonul manual) — titluri maghiare ca acesta se vor traduce acum singure, fără să mai fie nevoie de niciun click. Verificat de 2 ori: sintaxă + 31 de verificări izolate pe funcția reală extrasă din cod (titlul EXACT din captură — acum detectat corect —, fiecare din cele 9 litere maghiare verificată separat, regresie completă pe bulgară/greacă/engleză/română, ordinea verificărilor neschimbată, toate cele 5 locuri care folosesc funcția neatinse).',date:'2026-11-04'},
   {n:625,text:'Inventar — sortare nouă, „Top vândute”, cerută direct: „in sectiunea vanzare la sortare sa avem si produsele in ordinea: top cele mai vandute, sa vedem care se vand cel mai mult si cum fluctueaza stocul astfel incat sa putem actualiza constant”. Adăugată ca a 4-a opțiune în dropdown-ul de sortare de lângă căutare (lângă „Adăugate recent”/„Stoc adăugat recent”/„Cele mai vechi”, neschimbate) — ordonează produsele descrescător după totalul vândut (p.sold, deja calculat la fiecare vânzare/corecție, fără agregare nouă). Fluctuația stocului cerută explicit se vede direct, fără nicio coloană nouă — tabelul arată deja, una lângă alta, Cumpărate/Vândute/Stoc pentru fiecare produs, deci sortat după cele mai vândute, primele rânduri arată imediat ce se vinde cel mai bine și cât a mai rămas din el, gata de reaprovizionat. Verificat de 2 ori: sintaxă + 13 verificări izolate pe logica reală de sortare (ordine descrescătoare corectă, produs fără nicio vânzare încă tratat ca 0 — nu crash, egalitate între 2 produse, regresie completă pe toate cele 3 sortări vechi + cea implicită pe coloană, poziția corectă în lanțul if/else, filtrul „stock_recent” neatins).',date:'2026-11-03'},
   {n:624,text:'Asistent AI — poate acum și adăuga stoc la produse deja EXISTENTE, nu doar interoga date sau crea produse noi, cerut direct cu 2 capturi reale: o conversație unde „adauga acest nou stoc pe produsele adiacente” cădea pe lista de intenții cunoscute (fără nicio opțiune de stoc) + un tabel cu produse de la furnizorul Jumbo, ca exemplu de listă. Trimiți o poză cu o listă/factură de la furnizor însoțită de un text clar („adaugă stoc”, „am primit marfa/comanda asta”) — intenție nouă, adauga_stoc, deosebită explicit de creeaza_produs (acolo userul descrie UN produs nou; aici recepționează stoc pentru produse deja din stoc). Pe baza unei alegeri directe, explicite (grill-me complet, .tmp/grill-me/adaugare-stoc-prin-chat.md): nu s-a construit o UI nouă de confirmare în chat — se deschide direct ecranul deja matur „Importă factură” (aceeași extragere AI din poză — parseOrderScreenshots — deja folosită acolo pentru facturi de la Maxy/Verk), care rezolvă deja singur linie nepotrivită, preț, furnizor+număr factură și ambiguitate de produs — niciun mecanism nou, paralel, de întreținut. Chat-ul doar anunță câte produse a găsit (numărul real, din starea deja calculată, niciodată inventat de AI) și trimite direct acolo — nimic nu se adaugă la stoc fără „Aplică”, apăsat manual, exact ca până acum. Verificat de 2 ori: sintaxă + 29 de verificări izolate pe funcțiile reale extrase din cod (extragerea corectă a mimetype/base64 din poză, ordinea corectă openInvoice→parseOrderScreenshots, numărul real de produse întors, gramatică singular/plural corectă în mesaj, mesaj distinct pe poză lipsă vs. 0 produse găsite, pre-verificarea „recunoaște un singur produs din poză” exclusă corect pentru noua intenție — fără apel AI irosit —, regresie completă pe creeaza_produs/celelalte intenții, wiring real pe schema de clasificare și pe ordinea ramurilor din aiChatSend) + regresie pe cele 2 suite anterioare din sesiune (AWB suplimentar #623, stoc insuficient comenzi #620-622), toate verzi.',date:'2026-11-03'},
@@ -17407,7 +17408,7 @@ function renderSyncImportPreview(){
       ${includeBtn}
       ${rowImg}
       <div class="inv-prev-nm" style="white-space:normal;flex:1;min-width:0;margin-right:0">
-        <div class="smi-row-title" style="display:flex;align-items:flex-start;gap:8px"><span style="flex:1">${esc(it.titluExtern)}${it.titluRo?` <span class="pcom-platform-title-ro">🌐 ${esc(it.titluRo)}</span>`:(pcomDetectScript(it.titluExtern)!=='latin'?` <button type="button" class="pcx-translate-btn" onclick="syncTranslateOneTitle(${idx})" title="Traducere automată a eșuat la import — încearcă din nou">🌐 Traduce</button>`:'')}</span><button type="button" class="smi-title-copy-btn" onclick="copyText(${esc(JSON.stringify(String(it.titluExtern)))})" title="Copiază titlul">⧉</button></div>
+        <div class="smi-row-title" style="display:flex;align-items:flex-start;gap:8px"><span style="flex:1">${esc(it.titluExtern)}${it.titluRo?` <span class="pcom-platform-title-ro">🌐 ${esc(it.titluRo)}</span> <button type="button" class="pcx-code-copy" onclick="syncTranslateOneTitle(${idx})" title="Traducerea pare greșită? Click pentru re-traducere">↻</button>`:(pcomDetectScript(it.titluExtern)!=='latin'?` <button type="button" class="pcx-translate-btn" onclick="syncTranslateOneTitle(${idx})" title="Traducere automată a eșuat la import — încearcă din nou">🌐 Traduce</button>`:'')}</span><button type="button" class="smi-title-copy-btn" onclick="copyText(${esc(JSON.stringify(String(it.titluExtern)))})" title="Copiază titlul">⧉</button></div>
         <div class="smi-imp-meta">${pnkTag}${tag}</div>
       </div>
       <div class="smi-pick smi-pick-lg" id="smi-pick-${idx}">${syncPickBtnHtml(idx)}</div>
@@ -17504,14 +17505,17 @@ async function syncTranslateForeignTitles(){
       const prompt=`Traduce în română titlurile de produse de mai jos (listări eMAG din Bulgaria sau Ungaria —
 bulgară sau maghiară — sau listări Trendyol cross-border, în engleză). Traducere scurtă, ca să se înțeleagă imediat despre ce produs e vorba.
 
-TITLURI (index: titlu):
-${linesText}
+IMPORTANT: fiecare index trebuie să primească STRICT traducerea titlului cu acel index — nu amesteca/confunda titluri între ele, chiar dacă par asemănătoare.
 
-Răspunde STRICT cu JSON, fără markdown: {"translations":[{"index":<index>,"ro":"<traducere scurtă în română>"}]}`;
-      const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert bulgară/maghiară/engleză→română pentru titluri de produse. Răspunzi DOAR cu JSON valid.',2000,'simple');
-      const objMatch=resp.match(/\{[\s\S]*\}/);
-      if(!objMatch)continue;
-      let parsed;try{parsed=JSON.parse(objMatch[0]);}catch(e){continue;}
+TITLURI (index: titlu):
+${linesText}`;
+      // Schema constrânsă (AI_PCOM_TRANSLATE_SCHEMA, definită lângă pcomTranslateForeignTitles — „același
+      // model", reparație identică, pe același bug raportat, vezi comentariul de-acolo).
+      let parsed;
+      try{
+        const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert bulgară/maghiară/engleză→română pentru titluri de produse.',2000,'simple',AI_PCOM_TRANSLATE_SCHEMA,'pcom_translate_titles');
+        parsed=JSON.parse(resp);
+      }catch(e){continue;}
       if(!Array.isArray(parsed.translations))continue;
       parsed.translations.forEach(t=>{
         const i=Number(t.index);
@@ -18098,6 +18102,22 @@ function pcomRematchAfterTranslate(idx){
   it.produsId=match?match.product.id:null;
   it.score=match?match.score:0;
 }
+// Schema constrânsă pentru traducerea în lot (cerut indirect — bug real raportat cu captură: „traducerea
+// aici e gresita, pentru ca avem tractorul", comanda #1027453916, titlul original era despre un tractor,
+// dar textul tradus afișat era despre o husă de canapea — modelul a amestecat, în interiorul unui singur
+// apel cu până la 25 de titluri deodată, răspunsul unui rând cu indexul altuia). Folosită de AMBELE
+// funcții-soră (pcomTranslateForeignTitles/syncTranslateForeignTitles, „același model", vezi comentariul
+// de la a doua) — la fel ca restul schemelor din fișier (ex. AI_IMG_SIMILAR_SCHEMA), reduce riscul ca
+// modelul să genereze un rezultat nestructurat/amestecat, dar NU-l elimină cu totul — vezi și butonul „↻"
+// nou, de lângă o traducere DEJA afișată (pcxLineHtml), ca plasă de siguranță reparabilă direct din UI.
+const AI_PCOM_TRANSLATE_SCHEMA={
+  type:'object',
+  properties:{translations:{type:'array',items:{type:'object',properties:{
+    index:{type:'number',description:'Indexul EXACT al titlului, copiat identic din lista primită (nu renumerota, nu inventa).'},
+    ro:{type:'string',description:'Traducerea scurtă în română STRICT a titlului cu acest index — nu amesteca/confunda cu alt titlu din aceeași listă, chiar dacă par asemănătoare.'}
+  },required:['index','ro'],additionalProperties:false}}},
+  required:['translations'],additionalProperties:false
+};
 async function pcomTranslateForeignTitles(){
   const idxs=pcImpParsed.map((x,i)=>i).filter(i=>pcomDetectScript(pcImpParsed[i].titluExtern)!=='latin'&&!pcImpParsed[i].titluRo);
   if(!idxs.length)return;
@@ -18109,14 +18129,15 @@ async function pcomTranslateForeignTitles(){
       const prompt=`Traduce în română titlurile de produse de mai jos (comenzi eMAG din Bulgaria/Ungaria/Grecia —
 bulgară, maghiară sau greacă — sau comenzi Trendyol cross-border, în engleză). Traducere scurtă, ca să se înțeleagă imediat despre ce produs e vorba.
 
-TITLURI (index: titlu):
-${linesText}
+IMPORTANT: fiecare index trebuie să primească STRICT traducerea titlului cu acel index — nu amesteca/confunda titluri între ele, chiar dacă par asemănătoare.
 
-Răspunde STRICT cu JSON, fără markdown: {"translations":[{"index":<index>,"ro":"<traducere scurtă în română>"}]}`;
-      const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert bulgară/maghiară/greacă/engleză→română pentru titluri de produse. Răspunzi DOAR cu JSON valid.',2000,'simple');
-      const objMatch=resp.match(/\{[\s\S]*\}/);
-      if(!objMatch)continue;
-      let parsed;try{parsed=JSON.parse(objMatch[0]);}catch(e){continue;}
+TITLURI (index: titlu):
+${linesText}`;
+      let parsed;
+      try{
+        const resp=await callAI([{role:'user',content:prompt}],'Ești traducător expert bulgară/maghiară/greacă/engleză→română pentru titluri de produse.',2000,'simple',AI_PCOM_TRANSLATE_SCHEMA,'pcom_translate_titles');
+        parsed=JSON.parse(resp);
+      }catch(e){continue;}
       if(!Array.isArray(parsed.translations))continue;
       parsed.translations.forEach(t=>{
         const i=Number(t.index);
@@ -21088,7 +21109,18 @@ function pcxLineHtml(idx,groupIdxs){
   // în .pcx-line-orig, care se afișează DOAR când diferă de `nm`) — deci butonul de traducere manuală
   // trebuie atașat direct la `nm` în acel caz, nu doar în blocul de mai jos.
   const foreignUntranslated=!it.titluRo&&it.titluExtern&&pcomDetectScript(it.titluExtern)!=='latin';
-  const translateChip=foreignUntranslated?` <button type="button" class="pcx-translate-btn" onclick="pcomTranslateOneTitle(${idx})" title="Traducere automată a eșuat la import — încearcă din nou">🌐 Traduce</button>`:(it.titluRo?` <span style="color:var(--acc);font-weight:400;font-style:normal">🌐 ${esc(it.titluRo)}</span>`:'');
+  // Retraducere posibilă și pe o linie DEJA tradusă (nu doar pe una netradusă, ca mai sus) — bug real,
+  // raportat direct, cu captură: „traducerea aici e gresita, pentru ca avem tractorul" (comanda
+  // #1027453916, titlul original bulgăresc era chiar despre un tractor, dar textul tradus afișat era
+  // despre o husă de canapea — traducerea în lot (pcomTranslateForeignTitles, până la 25 titluri deodată
+  // într-un singur prompt) poate amesteca ocazional rândul X cu răspunsul altui rând, o greșeală de
+  // model, nu de index — vezi reparația separată, cu schemă JSON, la acea funcție). Până acum, odată ce
+  // `titluRo` avea ORICE valoare, nu mai exista nicio cale din UI s-o corectezi — butonul „🌐 Traduce"
+  // dispărea complet, indiferent dacă traducerea era corectă sau nu. „↻" mic, lângă traducerea deja
+  // afișată, repetă EXACT același apel (pcomTranslateOneTitle) ca butonul de mai sus, de data asta
+  // suprascriind o valoare deja existentă — reutilizează .pcx-code-copy (deja un buton mic, generic),
+  // nicio clasă CSS nouă.
+  const translateChip=foreignUntranslated?` <button type="button" class="pcx-translate-btn" onclick="pcomTranslateOneTitle(${idx})" title="Traducere automată a eșuat la import — încearcă din nou">🌐 Traduce</button>`:(it.titluRo?` <span style="color:var(--acc);font-weight:400;font-style:normal">🌐 ${esc(it.titluRo)}</span> <button type="button" class="pcx-code-copy" onclick="pcomTranslateOneTitle(${idx})" title="Traducerea pare greșită? Click pentru re-traducere">↻</button>`:'');
   let matchTag;
   if(it.newProduct)matchTag=`<span style="color:var(--or);font-weight:700">🆕 produs nou</span>`;
   else if(it.viaPnk)matchTag=`<span style="color:var(--gr);font-weight:700">✓ Cod cunoscut</span>`;
