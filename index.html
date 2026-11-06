@@ -294,6 +294,15 @@ table td[style*="font-family:var(--mono)"],
 .dash-fc-table tbody tr:hover{background:var(--surf2)}
 .dash-fc-trunc{font-size:15px;color:var(--t3);padding:8px 4px 0;text-align:center}
 @media(max-width:900px){.dash-fc-months{grid-template-columns:1fr}.dash-fc-stats{grid-template-columns:1fr}.dash-fc-month-body{flex-wrap:wrap}}
+/* „Anul trecut, în detaliu" — companion la Preconizare (cerut direct: „sa vedem anumite statistici de
+   anul trecut") — grilă 2×2 de carduri mici; tab-urile lună/an reutilizează dash-toggle-wrap/btn
+   (deja existente, fără CSS nou pentru asta), barele reutilizează dash-fc-bar-row/dash-rank-row/
+   dash-hist-spark (toate deja existente) — STRICT markup nou aici, aproape niciun stil nou. */
+.dash-ly-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}
+.dash-ly-card{background:#FFF;border:1px solid #E7E4F7;border-radius:var(--r3);padding:16px 18px;min-width:0}
+.dash-ly-card-title{font-size:18px;font-weight:800;color:var(--t1);margin-bottom:10px}
+.dash-ly-empty-daily{font-size:16px;color:var(--t3);text-align:center;padding:10px 0;display:flex;flex-direction:column;align-items:center;gap:10px}
+@media(max-width:900px){.dash-ly-grid{grid-template-columns:1fr}}
 
 /* Dashboard overview — ierarhie calmă: stocul este punctul central, iar urgențele sunt grupate
    separat. Datele rămân aceleași din renderDashboard(), se schimbă strict prezentarea. */
@@ -3291,6 +3300,7 @@ button.pcx-include-btn.included{border-color:var(--gr)}
        „cum am stat în timp", separate până acum, fără niciun motiv) → ÎN DETALIU (restul, deja grupat). -->
   <div class="dash-zone-label"><span class="dash-zone-ic">🔮</span>Ce urmează</div>
   <div class="tb dash-fc dash-section" id="dash-forecast-section"></div>
+  <div class="tb dash-fc dash-section" id="dash-ly-section"></div>
 
   <div class="dash-zone-label"><span class="dash-zone-ic">📊</span>Performanță</div>
   <div class="tb dash-section">
@@ -4963,6 +4973,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:631,text:'Dashboard — secțiune nouă „📅 Anul trecut, în detaliu", companion la Preconizare, cerută direct după ce a fost arătată preconizarea: „hai sa vedem cum lucram cu aceasta sectiune, sa vedem anumite statistici de anul trecut" → ales explicit „Adaugă mai multe statistici din anul trecut" → toate 4 unghiurile propuse, inclusiv cel avansat: „aducem comenzile de anul trecut... se preiau pentru fiecare lună în parte". Taburi Noiembrie/Decembrie (anul trecut), 4 carduri: (1) Top produse — clasament pur după cantitatea din anul trecut (include și produse între timp discontinuate, marcate distinct — spre deosebire de tabelul de preconizare, care le exclude intenționat); (2) Pe categorii; (3) eMAG vs Trendyol — ambele platforme apar mereu, chiar la 0 buc., pentru o comparație reală (bug real prins chiar la verificarea vizuală — o lună cu Trendyol=0 arăta doar bara eMAG, înșelător pe un card titlat explicit „vs"); primele 3 citesc STRICT din vanzari_istoric_lunar, deja încărcat, fără niciun API/migrare nouă. (4) Trend zilnic — SINGURUL cu sursă nouă: tabelă separată, vanzari_istoric_zilnic (migrare SQL nouă, dată în chat), populată printr-un buton dedicat „📥 Adu trend zilnic", care reutilizează STRICT aceleași bucăți deja existente din Preconizare/Aprovizionare (eMAG /orders-historical + Trendyol pe bucăți de 14 zile) — descoperire directă în codul existent: liniile brute întors de ambele platforme AU DEJA data exactă per comandă (raw.data), doar aruncată la agregarea lunară folosită de VIL; aici nu se mai aruncă. Bug real găsit și reparat pe drum, înainte de orice push: cardul „Trend zilnic" rămânea blocat la nesfârșit pe „Se încarcă…" cât timp migrarea nu rulase, reîncercând tăcut la fiecare randare a Dashboard-ului — acum „încercat, indisponibil" se tratează ca „încercat, 0 rânduri" (consecvent cu restul tabelelor opționale din load()), arătând direct promptul + butonul de aducere. Verificat de 2 ori: sintaxă + CSS + 75 de verificări izolate pe funcțiile reale extrase din cod (agregare zilnică, scriere idempotentă, clasament/breakdown-uri din VIL, zero-fill pe zilele fără vânzări, randare completă — produs discontinuat marcat corect, fără date zilnice → promptul de backfill, cu date → sparkline —, butonul de aducere — succes, eroare parțială, dublu-click, gardă leneșă —, bug-ul „Se încarcă" la infinit — reprodus pe codul vechi, confirmat reparat) + confirmare vizuală directă cu Playwright, pe date reale din producție, desktop + mobil (ambele taburi, fără scurgere orizontală).',date:'2026-11-06'},
   {n:630,text:'Comenzi Platforme — AL DOILEA bug real reparat pe același picker manual de AWB, raportat direct imediat după fixul anterior (#629): „tot nu pot selecta aceasta comanda pentru acest awb, de ce?" — confirmat explicit, întrebat direct, că userul scria AWB-ul real în căsuța CORECTĂ, deci nu mai era problema de focus de la #629. Cauza reală, mult mai adâncă: comanda aleasă (Vinted, „Neinclus") nu avea încă niciun produs local ales (produsId lipsă — de-aia în listă apărea titlul brut Vinted, „Garaj parcare 4 niveluri Kruzzel 24646", nu un nume curat de produs din stoc). syncPcomLineCommitState refuză explicit, corect, să scrie comanda în bază fără un produs ales — dar nimic nu anunța userul de asta: AWB-ul se reținea doar în memorie, comanda rămânea tăcut „Neinclus", fără nicio eroare vizibilă, fără niciun semn că alegerea lui „nu a mers". Reparat în AMBELE locuri unde putea apărea (picker-ul manual + „🔗 Asociază" de pe o eroare AWB din clopoțel — care chiar arăta eronat toast de succes, „✓ AWB asociat manual", deși nu se scria nimic): acum, alegerea unei comenzi fără produs arată clar „AWB reținut pe comandă, dar ea nu are încă un produs ales — alege produsul în Comenzi Platforme, apoi se include automat cu acest AWB" — AWB-ul NU se pierde, se comite singur de îndată ce produsul e ales. Verificat de 2 ori: sintaxă + 23 de verificări izolate pe funcțiile reale extrase din cod (scenariul exact raportat — reprodus mai întâi pe codul vechi, confirmat ca eșec tăcut, apoi verificat reparat — regresie completă pe liniile cu produs deja ales, comit normal fără schimbări —, ramura „comandă deja comisă manual între timp" — neatinsă).',date:'2026-11-06'},
   {n:629,text:'Comenzi Platforme — bug real reparat, raportat direct: „desi selectez AWB si comanda, nu functioneaza, de ce?" (căsuța de căutare din picker-ul manual, mod „etichetă necitită"). Cauza: EXISTĂ 2 căsuțe separate — una, OBLIGATORIE, pentru AWB-ul citit manual de pe etichetă (ascunsă, fără focus), și una pentru căutarea comenzii (vizibilă, cu focus automat la deschidere) — dar focusul mergea mereu pe a DOUA, nu pe prima. Userul tasta normal în căsuța de căutare (ex. „vinted", chiar filtra corect lista), fără să observe niciodată că mai exista o căsuță separată, neatinsă, deasupra — eroarea apărea abia la click pe o comandă, fără nicio legătură vizibilă cu ce tocmai scrisese. Focusul merge acum întâi pe căsuța obligatorie de AWB; dacă totuși ajunge la click cu ea goală, eroarea redeschide picker-ul și mută focusul direct acolo, nu doar un mesaj abstract. Verificat de 2 ori: sintaxă + 17 verificări izolate pe funcțiile reale extrase din cod (focus corect în modul „unrecognized", regresie completă pe modurile „preview"/„error" — neatinse —, plasa de siguranță la click cu AWB gol, fluxul normal cu AWB completat — neatins).',date:'2026-11-06'},
   {n:628,text:'Dashboard — redesign cerut direct, în mai mulți pași: „fa un redesign aici - sa arate mai frumos... mai futurist... sa avem o sectiune cu preconizari de vanzari... vreau sa vad redesign cu sectiunile, asezate alfel... mai logic, mai usor de urmarit". (1) Secțiune nouă „🔮 Preconizare vânzări — față de anul trecut" — idee adusă direct din proiectul soră apartpro (FataDeAnulTrecut.tsx): tendință din ultimele 3 luni încheiate vs. aceleași 3 luni anul trecut (STRICT pe produsele cu istoric în ambii ani), preconizare per produs = anul trecut × tendință, niciodată sub ce s-a vândut deja; noiembrie + decembrie, standard (2 carduri) + zonă detaliată per produs (tabel extins, sortat după preconizare). Buton „🔄 Actualizează luna curentă" — aduce prin API (eMAG + Trendyol) STRICT luna curentă, fără să rerunere toate cele ~23 de luni din urmă. (2) Bug real găsit pe drum, separat: vanzari_istoric_lunar are 2454 rânduri reale, dar aplicația încărca tăcut doar primele 1000 (limita implicită Supabase, fără paginare) — lunile recente lipseau. Adăugat dbGetAll() (paginează complet), folosit pentru acest tabel. (3) Redesign vizual al secțiunilor existente — „altă perspectivă" asupra acelorași date, niciun calcul schimbat: Vânzări&achiziții din 6 cutii egale → cifră principală + chip-uri (Profit estimat evidențiat distinct); Vânzări pe canale — donut proporțional nou, lângă cardurile existente; Top produse vândute — din listă plată → clasament cu bare proporționale; Istoric lunar — bandă de bare cronologică deasupra tabelului. (4) Reorganizare pe zone etichetate — Ce urmează / Performanță / În detaliu — preconizarea mutată mult mai sus (imediat după „Necesită atenție"), Istoric lunar mutat lângă Vânzări&achiziții; bară-accent gradient unificată pe fiecare secțiune + urmă discretă de lumină în fundal. (5) „358 produse active" arată acum și totalul de bucăți fizice, în paranteză. Peste tot, codul partajat cu Raport vânzări (srKpiCard, .sr-prod-row, .sr-kpi-*) a rămas intenționat neatins — doar markup/clase noi, specifice Dashboard-ului. Verificat de 2 ori: sintaxă + CSS (de fiecare dată când s-a schimbat) + 83 de verificări izolate pe funcțiile reale extrase din cod (calculul de preconizare — tendință, plafon, produse comune, produs nou/discontinuat, arhivat exclus —, paginarea nouă, butonul de actualizare — succes, eroare parțială, dublu-click, gardă leneșă —) + confirmare vizuală directă cu Playwright, pe date reale din producție (449 produse, 2454 rânduri istoric), inclusiv un bug real de layout prins și reparat chiar așa (coloana „Preconizare" ieșea din zona vizibilă într-un card îngust — grid→flexbox).',date:'2026-11-06'},
@@ -6461,6 +6472,7 @@ function renderDashAnalytics(){
   const lowEl=document.getElementById('dash-lowstock-section');if(lowEl)lowEl.innerHTML=renderDashLowStockSection();
   const monthEl=document.getElementById('dash-monthly-section');if(monthEl)monthEl.innerHTML=renderDashMonthlySection();
   renderDashForecastSection();
+  renderDashLastYearSection();
 }
 
 // Altă perspectivă asupra acelorași 6 cifre (cerut direct: „vreau sa vad si un redesign al sectiunilor,
@@ -6897,6 +6909,146 @@ function renderDashForecastSection(){
     <div class="dash-fc-months">${monthsHtml}</div>
     ${tableHtml}`;
 }
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// ── ANUL TRECUT, ÎN DETALIU (Dashboard) — companion direct la Preconizare de mai sus, cerut explicit:
+// „hai sa vedem cum lucram cu aceasta sectiune, sa vedem anumite statistici de anul trecut". 4 unghiuri
+// noi pe ACELEAȘI 2 luni deja calculate de dashForecastCompute (dashFcData, setat chiar înainte, în
+// renderDashAnalytics): Top produse / Pe categorii / eMAG vs Trendyol citesc STRICT din VIL (deja
+// încărcat la pornire, din Preconizare) — Trend zilnic e singurul cu sursă nouă (VIZ, zilnic, vezi
+// ensureVizLoaded mai sus) — NU reutilizează d.luni[i].produse (care e filtrat la produse ÎNCĂ active,
+// din dashForecastCompute — corect acolo, pentru preconizare/restocare, dar ar ascunde aici produse
+// discontinuate care chiar au vândut bine anul trecut), citește direct din VIL, ca și celelalte 2.
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+let dashLyTab=0,dashLyBackfilling=false;
+function dashLyTopProduse(an,luna,limit){
+  const m=new Map();
+  VIL.forEach(v=>{
+    if(v.an!==an||v.luna!==luna)return;
+    const key=v.produsId?'p'+v.produsId:'t'+v.titluExtern;
+    if(!m.has(key))m.set(key,{produsId:v.produsId,titluExtern:v.titluExtern,cantitate:0});
+    m.get(key).cantitate+=v.cantitate;
+  });
+  return[...m.values()].sort((a,b)=>b.cantitate-a.cantitate).slice(0,limit);
+}
+function dashLyBreakdown(an,luna){
+  const pc=new Map(),pp=new Map();
+  VIL.forEach(v=>{
+    if(v.an!==an||v.luna!==luna)return;
+    const cat=v.categorie||'Nesortat';
+    pc.set(cat,(pc.get(cat)||0)+v.cantitate);
+    pp.set(v.platforma,(pp.get(v.platforma)||0)+v.cantitate);
+  });
+  return{
+    categorii:[...pc.entries()].map(([nume,cantitate])=>({nume,cantitate})).sort((a,b)=>b.cantitate-a.cantitate),
+    // Ordine FIXĂ (eMAG, apoi Trendyol), NU sortată după cantitate — spre deosebire de categorii (unde
+    // contează clasamentul), aici e o comparație directă „vs", ca la Vânzări pe canale mai sus (channels,
+    // renderDashChannelSection — TOATE canalele apar mereu, chiar la 0 — aceeași idee aici); confirmat
+    // direct, la verificarea vizuală: o lună cu Trendyol=0 arăta doar bara eMAG, înșelător pentru un card
+    // titlat explicit „eMAG vs Trendyol" — acum apar mereu amândouă, chiar dacă una e 0 buc.
+    platforme:['emag','trendyol'].map(nume=>({nume,cantitate:pp.get(nume)||0}))
+  };
+}
+function dashLyDaily(an,luna){
+  const map=new Map(),pre=`${an}-${String(luna).padStart(2,'0')}`;
+  VIZ.forEach(v=>{if((v.data||'').slice(0,7)===pre)map.set(v.data,(map.get(v.data)||0)+v.cantitate);});
+  const zile=new Date(an,luna,0).getDate(),out=[];
+  for(let z=1;z<=zile;z++){const d=`${pre}-${String(z).padStart(2,'0')}`;out.push({zi:z,data:d,cantitate:map.get(d)||0});}
+  return out;
+}
+// Oglinda dash-hist-spark (Istoric lunar, mai sus în fișier) — ACELEAȘI clase CSS, doar 28-31 bare în
+// loc de 12, deci etichetele text se arată doar din 5 în 5 zile (+ ziua 1 și ultima) — altfel s-ar
+// suprapune ilizibil; fiecare bară tot are title complet (data + cantitate exactă), la hover.
+function dashLyDailySparkline(rows){
+  const max=Math.max(1,...rows.map(r=>r.cantitate));
+  const showLbl=new Set([1,5,10,15,20,25,30,rows.length]);
+  const bars=rows.map(r=>{
+    const h=Math.max(3,Math.round(r.cantitate/max*52));
+    return`<div class="dash-hist-spark-bar" title="${esc(r.data)}: ${fmtQty(r.cantitate)} buc."><div class="dash-hist-spark-fill" style="height:${h}px;background:var(--tl)"></div><span>${showLbl.has(r.zi)?r.zi:''}</span></div>`;
+  }).join('');
+  return`<div class="dash-hist-spark">${bars}</div>`;
+}
+function dashLySetTab(i){dashLyTab=i;renderDashLastYearSection();}
+// Reutilizează STRICT aceleași bucăți deja existente/testate din backfillHistoricalSales/
+// dashFcRefreshCurrentMonth (eMAG /orders-historical + Trendyol pe bucăți de 14 zile) — scopat la cele
+// 2 luni deja arătate în Preconizare (dashFcData.luni), dar scriind ZILNIC (aggregateHistoricalLinesDaily/
+// writeHistoricalDays), nu lunar.
+async function dashLyBackfillDaily(){
+  if(dashLyBackfilling||!dashFcData)return;
+  dashLyBackfilling=true;
+  const btn=document.getElementById('dash-ly-backfill-btn');
+  if(btn){btn.disabled=true;btn.textContent='Se aduce…';}
+  try{
+    if(!syncMapsLoaded)await loadSyncMappings();
+    const erori=[];
+    for(const L of dashFcData.luni){
+      const an=L.an-1,luna=L.luna;
+      const{from,to}=monthBounds(an,luna);
+      let emagLines=[];
+      try{const r=await localEmagJson('/orders-historical',{from,to},120000);emagLines=r?.lines||[];}
+      catch(e){erori.push(`eMAG ${DASH_FC_LUNI[luna]} ${an}: ${e.message||e}`);}
+      let trendyolLines=[];
+      try{
+        for(const chunk of trendyolChunks(from,to)){
+          const r=await apiJson('/api/trendyol',{action:'orders-historical',startDate:chunk.startDate,endDate:chunk.endDate},60000);
+          trendyolLines.push(...(r?.lines||[]));
+        }
+      }catch(e){erori.push(`Trendyol ${DASH_FC_LUNI[luna]} ${an}: ${e.message||e}`);}
+      try{await writeHistoricalDays('emag',from,to,aggregateHistoricalLinesDaily('emag',emagLines));}catch(e){erori.push(`eMAG ${DASH_FC_LUNI[luna]} ${an} (scriere): ${e.message||e}`);}
+      try{await writeHistoricalDays('trendyol',from,to,aggregateHistoricalLinesDaily('trendyol',trendyolLines));}catch(e){erori.push(`Trendyol ${DASH_FC_LUNI[luna]} ${an} (scriere): ${e.message||e}`);}
+    }
+    vizLoaded=true;
+    renderDashLastYearSection();
+    toast(erori.length?`Adus, cu probleme: ${erori.join(' · ')}`:'✓ Trend zilnic adus din eMAG + Trendyol',erori.length?'err':undefined);
+  }catch(e){
+    toast('Eroare la aducere: '+(e.message||e),'err');
+  }finally{
+    dashLyBackfilling=false;
+    const btn2=document.getElementById('dash-ly-backfill-btn');
+    if(btn2){btn2.disabled=false;btn2.textContent='📥 Adu trend zilnic';}
+  }
+}
+function renderDashLastYearSection(){
+  const el=document.getElementById('dash-ly-section');if(!el)return;
+  if(!dashFcData){el.innerHTML='';return;}
+  if(!vizLoaded&&!vizLoading)ensureVizLoaded().then(()=>{if(document.getElementById('dash-ly-section'))renderDashLastYearSection();});
+  const L=dashFcData.luni[dashLyTab],an=L.an-1,luna=L.luna;
+  const tabsHtml=dashFcData.luni.map((Lx,i)=>`<button type="button" class="dash-toggle-btn ${i===dashLyTab?'on':''}" onclick="dashLySetTab(${i})">${esc(Lx.label)} ${Lx.an-1}</button>`).join('');
+  const topProduse=dashLyTopProduse(an,luna,8);
+  const maxTop=Math.max(1,...topProduse.map(x=>x.cantitate));
+  const RANK_COLORS=['var(--acc)','var(--tl)','var(--bl)','var(--gr)'];
+  const topHtml=topProduse.length?topProduse.map((x,i)=>{
+    const p=x.produsId?P.find(y=>y.id===x.produsId):null;
+    const nume=p?p.name:x.titluExtern;
+    const th=p&&p.img?`<img src="${esc(imgSrc(p.img))}" class="dash-rank-th" ${imgErrAttr(p.img,'pick')}>`:`<div class="dash-rank-th dash-rank-th-ph">📦</div>`;
+    const pct=Math.max(2,Math.round(x.cantitate/maxTop*100));
+    return`<div class="dash-rank-row" ${p?`onclick="openModal(${p.id})" style="cursor:pointer"`:''} title="${esc(nume)}${p?'':' (discontinuat)'}">
+      <div class="dash-rank-top"><div class="dash-rank-n">${i+1}</div>${th}<div class="dash-rank-nm">${esc(nume)}${p?'':' <span style="color:var(--t3);font-weight:500">· discontinuat</span>'}</div><div class="dash-rank-val">${fmtQty(x.cantitate)} buc.</div></div>
+      <div class="dash-rank-bar-wrap"><div class="dash-rank-bar" style="width:${pct}%;background:${RANK_COLORS[Math.min(i,3)]}"></div></div>
+    </div>`;
+  }).join(''):`<div class="dash-empty">Niciun istoric în ${esc(L.label)} ${an}.</div>`;
+  const brk=dashLyBreakdown(an,luna);
+  const maxCat=Math.max(1,...brk.categorii.map(c=>c.cantitate));
+  const catHtml=brk.categorii.length?brk.categorii.slice(0,8).map(c=>dashFcBar(c.nume,c.cantitate,maxCat,'var(--acc)')).join(''):`<div class="dash-empty">Fără date.</div>`;
+  const PLAT_LBL={emag:'eMAG',trendyol:'Trendyol'},PLAT_COLOR={emag:'var(--bl)',trendyol:'var(--dash-purch)'};
+  const maxPlat=Math.max(1,...brk.platforme.map(x=>x.cantitate));
+  const platHtml=brk.platforme.length?brk.platforme.map(x=>dashFcBar(PLAT_LBL[x.nume]||x.nume,x.cantitate,maxPlat,PLAT_COLOR[x.nume]||'var(--t3)')).join(''):`<div class="dash-empty">Fără date.</div>`;
+  const zilnic=vizLoaded?dashLyDaily(an,luna):[];
+  const areZile=zilnic.some(z=>z.cantitate>0);
+  const dailyHtml=!vizLoaded
+    ?`<div class="dash-empty">${vizLoading?'Se încarcă…':'—'}</div>`
+    :areZile
+      ?dashLyDailySparkline(zilnic)
+      :`<div class="dash-ly-empty-daily">Niciun istoric zilnic adus încă pentru ${esc(L.label)} ${an}.<button type="button" class="dash-fc-toggle" id="dash-ly-backfill-btn" onclick="dashLyBackfillDaily()">📥 Adu trend zilnic</button></div>`;
+  el.innerHTML=`<div class="tb-head"><div><div class="tb-title">📅 Anul trecut, în detaliu</div><div class="sr-section-sub" style="margin:2px 0 0">${esc(L.label)} ${an} — din aceeași sursă ca preconizarea de mai sus</div></div><div class="dash-toggle-wrap">${tabsHtml}</div></div>
+    <div class="dash-ly-grid">
+      <div class="dash-ly-card"><div class="dash-ly-card-title">🏆 Top produse</div>${topHtml}</div>
+      <div class="dash-ly-card"><div class="dash-ly-card-title">🗂️ Pe categorii</div>${catHtml}</div>
+      <div class="dash-ly-card"><div class="dash-ly-card-title">🛒 eMAG vs Trendyol</div>${platHtml}</div>
+      <div class="dash-ly-card"><div class="dash-ly-card-title">📈 Trend zilnic</div>${dailyHtml}</div>
+    </div>`;
+}
+
 function dashSearchInput(q){
   const drop=document.getElementById('dash-search-results');if(!drop)return;
   q=(q||'').trim();
@@ -8633,6 +8785,31 @@ let PCOM=[],pcomLoaded=false,pcImpParsed=[],pcImpPlatforma='emag',STAFF_QUEUE_ST
 // Agregat STRICT lunar (platformă, an, lună, produs/titlu extern, categorie, cantitate) — fără linii
 // brute, fără valoare RON, cum s-a decis explicit. Complet separat de platforma_comenzi/Staff.
 let VIL=[],vilBackfillRunning=false;
+// Istoric ZILNIC (nu lunar) — companion la VIL, STRICT pentru secțiunea „Anul trecut, în detaliu" din
+// Dashboard (trend zilnic), cerut direct: „aducem comenzile de anul trecut... se preiau pentru fiecare
+// lună în parte". Aceeași sursă (eMAG/Trendyol orders-historical), DOAR că liniile brute chiar au deja
+// data exactă per linie (raw.data — vezi orderLines/packageLines) — aici, spre deosebire de VIL, NU o
+// mai aruncăm la agregare. Încărcat LENEȘ (ensureVizLoaded), NU în load() de pornire — folosit STRICT
+// de acea secțiune, inutil de încărcat pe fiecare pagină/sesiune ca VIL (folosit și de Aprovizionare).
+let VIZ=[],vizLoaded=false,vizLoading=false;
+async function ensureVizLoaded(){
+  if(vizLoaded||vizLoading)return;
+  vizLoading=true;
+  try{
+    const rows=await dbGetAll('vanzari_istoric_zilnic?select=*');
+    VIZ=rows.map(r=>({platforma:r.platforma,data:r.data,produsId:r.produs_id,titluExtern:r.titlu_extern||'',categorie:r.categorie||'',cantitate:Number(r.cantitate)||0}));
+    vizLoaded=true;
+  }catch(e){
+    // vizLoaded=true ȘI pe eșec (nu doar pe succes) — altfel renderDashLastYearSection (care re-declanșează
+    // ensureVizLoaded la fiecare randare cât timp !vizLoaded) ar reîncerca tăcut la NESFÂRȘIT, la fiecare
+    // schimbare de filtru/tab din Dashboard, cât timp migrarea SQL nu a rulat încă — „încercat, indisponibil"
+    // tratat la fel ca „încercat, 0 rânduri" (consecvent cu restul tabelelor opționale din load()). Butonul
+    // „📥 Adu trend zilnic" tot funcționează oricând după asta — NU depinde de vizLoaded, scrie direct.
+    console.warn('vanzari_istoric_zilnic unavailable (rulează migrarea SQL din chat):',e);
+    vizLoaded=true;
+  }
+  finally{vizLoading=false;}
+}
 // Asistent AI — istoricul conversației (ai_chat_mesaje), încărcat LENEȘ (abia la prima deschidere a
 // tab-ului/pop-up-ului „🧠 Asistent", NU în load() de pornire — nu e date critice pentru restul
 // aplicației, vezi .tmp/grill-me/creierul-platformei-ai.md pentru planul complet.
@@ -20379,6 +20556,33 @@ async function writeHistoricalMonth(platforma,an,luna,rows){
   const body=rows.map(r=>({platforma,an,luna,produs_id:r.produsId,titlu_extern:r.titluExtern,categorie:r.categorie,cantitate:r.cantitate}));
   await dbPost('vanzari_istoric_lunar',body);
   VIL=VIL.filter(v=>!(v.platforma===platforma&&v.an===an&&v.luna===luna)).concat(rows.map(r=>({platforma,an,luna,produsId:r.produsId,titluExtern:r.titluExtern,categorie:r.categorie,cantitate:r.cantitate})));
+}
+// Variantă ZILNICĂ a lui aggregateHistoricalLines — identică, DOAR că grupează și după raw.data (ziua
+// exactă a comenzii, deja prezentă pe fiecare linie brută — orderLines/packageLines — dar aruncată de
+// varianta lunară de mai sus). Vezi VIZ/ensureVizLoaded.
+function aggregateHistoricalLinesDaily(platforma,lines){
+  const map=new Map();
+  lines.forEach(raw=>{
+    if(!raw.titluExtern||!(Number(raw.cantitate)>0)||!raw.data)return;
+    const produsId=matchHistoricalProduct(platforma,raw);
+    const key=raw.data+'|'+(produsId?'p'+produsId:'t'+raw.titluExtern);
+    if(!map.has(key)){
+      const categorie=produsId?(P.find(x=>x.id===produsId)?.category||'Nesortat'):guessHistoricalCategory(raw.titluExtern);
+      map.set(key,{data:raw.data,produsId:produsId||null,titluExtern:raw.titluExtern,categorie,cantitate:0});
+    }
+    map.get(key).cantitate+=Number(raw.cantitate)||0;
+  });
+  return[...map.values()];
+}
+// Scrie zilele dintr-un interval [from,to) — oglinda lui writeHistoricalMonth, aceeași idempotență
+// (șterge întâi intervalul, apoi inserează), doar cheiată pe (platformă, interval de date) nu (an,lună).
+async function writeHistoricalDays(platforma,from,to,rows){
+  await dbDelete(`vanzari_istoric_zilnic?platforma=eq.${platforma}&data=gte.${from}&data=lt.${to}`);
+  if(rows.length){
+    const body=rows.map(r=>({platforma,data:r.data,produs_id:r.produsId,titlu_extern:r.titluExtern,categorie:r.categorie,cantitate:r.cantitate}));
+    await dbPost('vanzari_istoric_zilnic',body);
+  }
+  VIZ=VIZ.filter(v=>!(v.platforma===platforma&&v.data>=from&&v.data<to)).concat(rows.map(r=>({platforma,data:r.data,produsId:r.produsId,titluExtern:r.titluExtern,categorie:r.categorie,cantitate:r.cantitate})));
 }
 // Operație unică, lungă, cu progres lună-cu-lună (cerut direct, Q9) — nu reluabilă în bucăți (dacă se
 // întrerupe, idempotentă: o re-apăsare recalculează curat, de la Q8).
