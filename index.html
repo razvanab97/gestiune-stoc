@@ -755,6 +755,19 @@ tr:hover td{background:var(--surf2)}
 .img-gallery-item img{width:100%;height:100%;object-fit:contain;border:1px solid var(--b1);border-radius:8px;background:var(--surf2)}
 .img-gallery-rm{position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;border:1px solid var(--b1);background:var(--surf);color:var(--t2);font-size:14px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
 .img-gallery-rm:hover{background:var(--rd);color:#fff;border-color:var(--rd)}
+.img-extra-block{margin:10px 0 6px;padding:10px 0;border-top:1px dashed #EEF2F6}
+/* Carusel poze (img + imgExtra, max 3 — vezi #632) — STRICT vederi mari (bulă AI, carduri Staff), nu
+   rândurile mici din liste. display:inline-block (nu block), ca wrapper-ul să ia EXACT dimensiunea
+   pozei din interior (width/height vin din clasa pozei, ex. .aic-pic/.stock-product-img, neatinse). */
+.img-carousel{position:relative;display:inline-block;line-height:0}
+.img-car-arrow{position:absolute;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:50%;border:none;background:rgba(16,24,40,.55);color:#fff;font-size:18px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;opacity:0;transition:opacity .15s ease}
+.img-carousel:hover .img-car-arrow{opacity:1}
+.img-car-arrow:hover{background:rgba(16,24,40,.8)}
+.img-car-arrow.left{left:4px}
+.img-car-arrow.right{right:4px}
+.img-car-dots{position:absolute;left:0;right:0;bottom:5px;display:flex;justify-content:center;gap:4px}
+.img-car-dot{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.55);box-shadow:0 0 0 1px rgba(16,24,40,.25)}
+.img-car-dot.on{background:#fff}
 .ai-analyze-btn{width:100%;padding:8px;font-size:26px;font-weight:500;background:var(--acc-light);color:var(--acc);border:1px solid var(--acc-mid);border-radius:var(--r);cursor:pointer;font-family:var(--font);transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px}
 .ai-analyze-btn:hover{background:var(--acc);color:var(--acc-fg)}
 .ai-analyze-btn:disabled{opacity:.5;cursor:default}
@@ -4454,6 +4467,14 @@ button.pcx-include-btn.included{border-color:var(--gr)}
               <button type="button" class="btn btn-sm" onclick="pasteImgFromClipboard()" title="Lipește o poză copiată (Cmd/Ctrl+V pe un screenshot)">📋</button>
               <button class="btn btn-sm" onclick="clearImg()">✕</button>
             </div>
+            <div class="img-extra-block">
+              <div style="font-size:15px;font-weight:700;color:#667085;margin:4px 0 6px">Poze suplimentare (opțional, până la 2) — săgeți stânga/dreapta peste tot unde apare poza produsului</div>
+              <div class="img-gallery" id="img-extra-list"></div>
+              <div style="display:flex;gap:6px;margin-top:6px">
+                <input type="text" id="f-img-extra-url" placeholder="URL poză suplimentară…" style="flex:1;font-size:17px;padding:8px 10px" onkeydown="if(event.key==='Enter'){event.preventDefault();addImgExtra();}">
+                <button type="button" class="btn btn-sm" onclick="addImgExtra()">+ Adaugă</button>
+              </div>
+            </div>
             <div style="margin:14px 0;padding:14px 0;border-top:1px solid #EEF2F6;border-bottom:1px solid #EEF2F6">
               <div style="font-size:17px;font-weight:800;color:#344054;margin-bottom:8px">Adaugă produs din link</div>
               <div style="display:flex;gap:6px;margin-bottom:6px">
@@ -4973,6 +4994,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:632,text:'Poze multiple la produs (1, 2, 3) + navigare cu săgeți — cerut direct, pe o captură din fișa produsului: „sa poti adauga mai multe poze la produs, 1, 2, 3 — iar cand sunt 2, 3, atat in staff cat si in alte sectiuni din aplicatie, sa poti sa dai pe o sageata la dreapta, stanga, sa vezi poza". Secțiune nouă „Poze suplimentare" (opțional, până la 2, URL-uri) chiar sub poza Principală din fișa produsului — SEPARATĂ, dedicat, de Galeria tematică de mai jos (care rămâne neatinsă, pentru AI/descriere client — decizie explicită, ca o poză de lifestyle generată de AI să nu ajungă din greșeală identificator rapid în Staff). Săgeți stânga/dreapta adăugate STRICT în vederi mai mari (decizie explicită, nu peste tot — un thumbnail de ~24px dintr-o listă densă n-ar avea loc pentru săgeți utilizabile): bula Asistentului AI la „arată-mi poza produsului", cardurile mari din Staff „📋 Raport stoc" și „↩ Retur" (un produs, o poză mare, pe tot ecranul), și linia de produs din „📦 Ambalare" (acolo exista deja un mecanism de cicluit prin click — acum are și săgeți explicite, alături, fără să schimbe ce era deja acolo). Rândurile mici din liste (Inventar, căutare, coada Staff) rămân neatinse, cu o singură poză, ca înainte. Bug real, prins DIRECT la verificarea vizuală cu Playwright (nu doar din citit codul): la navigare (click pe săgeată), atributele pozei (onerror/alt) se reconstruiau greșit doar din onclick/title — o poză #2/#3 eșuată la încărcare colapsa tot caruselul la 0×0 în loc să cadă pe placeholder, exact ca prima poză; reparat prin reținerea lor exactă pe wrapper (encodeURIComponent), nu reconstruite din markup. Verificat de 2 ori: sintaxă + CSS (ambele fișiere, index.html și staff.html) + 68 de verificări izolate pe funcțiile reale extrase din cod (combinarea img+poze suplimentare fără duplicate, degradare la poza simplă pentru cele ~99% din produse cu o singură poză, navigare cu wrap-around în ambele direcții, plafonul de 2 poze suplimentare cu mesaj clar, regresie completă pe mecanismul vechi de cicluit din Ambalare) + confirmare vizuală directă cu Playwright, în browser real, inclusiv bug-ul de mai sus — reprodus pe codul vechi, confirmat reparat pe codul nou. Necesită rularea migrării SQL din chat (coloană nouă pe produse, `img_extra`) — fără ea, poza Principală funcționează neschimbat, doar pozele suplimentare nu se pot salva încă.',date:'2026-11-06'},
   {n:631,text:'Dashboard — secțiune nouă „📅 Anul trecut, în detaliu", companion la Preconizare, cerută direct după ce a fost arătată preconizarea: „hai sa vedem cum lucram cu aceasta sectiune, sa vedem anumite statistici de anul trecut" → ales explicit „Adaugă mai multe statistici din anul trecut" → toate 4 unghiurile propuse, inclusiv cel avansat: „aducem comenzile de anul trecut... se preiau pentru fiecare lună în parte". Taburi Noiembrie/Decembrie (anul trecut), 4 carduri: (1) Top produse — clasament pur după cantitatea din anul trecut (include și produse între timp discontinuate, marcate distinct — spre deosebire de tabelul de preconizare, care le exclude intenționat); (2) Pe categorii; (3) eMAG vs Trendyol — ambele platforme apar mereu, chiar la 0 buc., pentru o comparație reală (bug real prins chiar la verificarea vizuală — o lună cu Trendyol=0 arăta doar bara eMAG, înșelător pe un card titlat explicit „vs"); primele 3 citesc STRICT din vanzari_istoric_lunar, deja încărcat, fără niciun API/migrare nouă. (4) Trend zilnic — SINGURUL cu sursă nouă: tabelă separată, vanzari_istoric_zilnic (migrare SQL nouă, dată în chat), populată printr-un buton dedicat „📥 Adu trend zilnic", care reutilizează STRICT aceleași bucăți deja existente din Preconizare/Aprovizionare (eMAG /orders-historical + Trendyol pe bucăți de 14 zile) — descoperire directă în codul existent: liniile brute întors de ambele platforme AU DEJA data exactă per comandă (raw.data), doar aruncată la agregarea lunară folosită de VIL; aici nu se mai aruncă. Bug real găsit și reparat pe drum, înainte de orice push: cardul „Trend zilnic" rămânea blocat la nesfârșit pe „Se încarcă…" cât timp migrarea nu rulase, reîncercând tăcut la fiecare randare a Dashboard-ului — acum „încercat, indisponibil" se tratează ca „încercat, 0 rânduri" (consecvent cu restul tabelelor opționale din load()), arătând direct promptul + butonul de aducere. Verificat de 2 ori: sintaxă + CSS + 75 de verificări izolate pe funcțiile reale extrase din cod (agregare zilnică, scriere idempotentă, clasament/breakdown-uri din VIL, zero-fill pe zilele fără vânzări, randare completă — produs discontinuat marcat corect, fără date zilnice → promptul de backfill, cu date → sparkline —, butonul de aducere — succes, eroare parțială, dublu-click, gardă leneșă —, bug-ul „Se încarcă" la infinit — reprodus pe codul vechi, confirmat reparat) + confirmare vizuală directă cu Playwright, pe date reale din producție, desktop + mobil (ambele taburi, fără scurgere orizontală).',date:'2026-11-06'},
   {n:630,text:'Comenzi Platforme — AL DOILEA bug real reparat pe același picker manual de AWB, raportat direct imediat după fixul anterior (#629): „tot nu pot selecta aceasta comanda pentru acest awb, de ce?" — confirmat explicit, întrebat direct, că userul scria AWB-ul real în căsuța CORECTĂ, deci nu mai era problema de focus de la #629. Cauza reală, mult mai adâncă: comanda aleasă (Vinted, „Neinclus") nu avea încă niciun produs local ales (produsId lipsă — de-aia în listă apărea titlul brut Vinted, „Garaj parcare 4 niveluri Kruzzel 24646", nu un nume curat de produs din stoc). syncPcomLineCommitState refuză explicit, corect, să scrie comanda în bază fără un produs ales — dar nimic nu anunța userul de asta: AWB-ul se reținea doar în memorie, comanda rămânea tăcut „Neinclus", fără nicio eroare vizibilă, fără niciun semn că alegerea lui „nu a mers". Reparat în AMBELE locuri unde putea apărea (picker-ul manual + „🔗 Asociază" de pe o eroare AWB din clopoțel — care chiar arăta eronat toast de succes, „✓ AWB asociat manual", deși nu se scria nimic): acum, alegerea unei comenzi fără produs arată clar „AWB reținut pe comandă, dar ea nu are încă un produs ales — alege produsul în Comenzi Platforme, apoi se include automat cu acest AWB" — AWB-ul NU se pierde, se comite singur de îndată ce produsul e ales. Verificat de 2 ori: sintaxă + 23 de verificări izolate pe funcțiile reale extrase din cod (scenariul exact raportat — reprodus mai întâi pe codul vechi, confirmat ca eșec tăcut, apoi verificat reparat — regresie completă pe liniile cu produs deja ales, comit normal fără schimbări —, ramura „comandă deja comisă manual între timp" — neatinsă).',date:'2026-11-06'},
   {n:629,text:'Comenzi Platforme — bug real reparat, raportat direct: „desi selectez AWB si comanda, nu functioneaza, de ce?" (căsuța de căutare din picker-ul manual, mod „etichetă necitită"). Cauza: EXISTĂ 2 căsuțe separate — una, OBLIGATORIE, pentru AWB-ul citit manual de pe etichetă (ascunsă, fără focus), și una pentru căutarea comenzii (vizibilă, cu focus automat la deschidere) — dar focusul mergea mereu pe a DOUA, nu pe prima. Userul tasta normal în căsuța de căutare (ex. „vinted", chiar filtra corect lista), fără să observe niciodată că mai exista o căsuță separată, neatinsă, deasupra — eroarea apărea abia la click pe o comandă, fără nicio legătură vizibilă cu ce tocmai scrisese. Focusul merge acum întâi pe căsuța obligatorie de AWB; dacă totuși ajunge la click cu ea goală, eroarea redeschide picker-ul și mută focusul direct acolo, nu doar un mesaj abstract. Verificat de 2 ori: sintaxă + 17 verificări izolate pe funcțiile reale extrase din cod (focus corect în modul „unrecognized", regresie completă pe modurile „preview"/„error" — neatinse —, plasa de siguranță la click cu AWB gol, fluxul normal cu AWB completat — neatins).',date:'2026-11-06'},
@@ -8386,6 +8408,7 @@ function dbToP(r){
     lastInvoicePriceTTC:r.last_invoice_price_ttc||0,lastInvoicePriceAt:r.last_invoice_price_at||'',
     stockAddedAt:r.stock_added_at||'',lastStockAddedQty:r.last_stock_added_qty||0,
     priceSell:r.price_sell||0,priceEmag:r.price_emag||0,priceTrendyol:r.price_trendyol||0,priceRec:r.price_rec||0,img:r.img||'',
+    imgExtra:Array.isArray(r.img_extra)?r.img_extra:[],
     colors:r.colors||'',sizes:r.sizes||'',material:r.material||'',dims:r.dims||'',notes:r.notes||'',
     description:r.description||'',images:Array.isArray(r.images)?r.images:[],_detailsLoaded:Object.prototype.hasOwnProperty.call(r,'description')||Object.prototype.hasOwnProperty.call(r,'images'),createdAt:r.created_at||'',updatedAt:r.updated_at||'',
     supplierOOS:!!r.supplier_oos,supplierOOSSince:r.supplier_oos_since||'',supplierRestockEta:r.supplier_restock_eta||'',supplierNotify:!!r.supplier_notify,supplierNotified:!!r.supplier_notified,
@@ -8407,6 +8430,9 @@ function pToDb(p){
   // actualizările rapide de stoc/preț, ca să nu ștergem datele deja din DB.
   if(p._detailsLoaded!==false){d.description=p.description||'';d.images=p.images||[];}
   if(!String(p.img||'').startsWith('lazy-product://'))d.img=p.img||'';
+  // imgExtra (poze suplimentare #2/#3, URL-uri — vezi #632) e eager, NU gated de _detailsLoaded ca
+  // description/images de mai sus — e deja prezent corect pe orice p din P (încărcat în PROD_COLS).
+  d.img_extra=p.imgExtra||[];
   if(p.internalCode)d.internal_code=p.internalCode;
   if(p.ean)d.ean=p.ean;
   // Preț „blocat" din ultima listare/factură — inclus STRICT când chiar e setat de un flux de
@@ -8769,7 +8795,7 @@ function safeLocalSet(key,value){
   try{localStorage.setItem(key,value);}
   catch(e){console.warn('Nu s-a putut scrie în localStorage ('+key+'):',e);}
 }
-let P=[],TS={},JL=[],OI=[],editId=null,sCol='name',sDir=1,jMode='sales',curImg='',curImages=[],selProd=new Set(),selSuppliers=new Set(),selStatus=new Set(),savingProduct=false,invSourceName='',jMonthDefaulted=false;
+let P=[],TS={},JL=[],OI=[],editId=null,sCol='name',sDir=1,jMode='sales',curImg='',curImages=[],curImgExtra=[],selProd=new Set(),selSuppliers=new Set(),selStatus=new Set(),savingProduct=false,invSourceName='',jMonthDefaulted=false;
 let compState={};
 let SYNCM=[],syncMapsLoaded=false,syncImpParsed=[],syncImpStockUpdates=[],syncImpDuplicates=[];
 let PLIPSA=[],pendingPlipsaCandidate=null;
@@ -8946,7 +8972,10 @@ function renderGenStatusBadge(){
 // contează pentru gestiune (stoc, prețuri, nume) se încarcă separat de poze, garantat rapid.
 // Constantă la nivel de modul (nu doar locală în load()) — reutilizată și de liveRefreshProducts,
 // ca reîmprospătarea din fundal să vadă exact aceleași coloane ca încărcarea inițială.
-const PROD_COLS='id,name,sku,ean,internal_code,category,supplier,bought,incoming_qty,sold,min_qty,price_buy_ttc,price_buy_prev_ttc,price_buy_changed_at,tva_acq,stock_added_at,last_stock_added_qty,last_invoice_price_ttc,last_invoice_price_at,price_sell,price_emag,price_trendyol,price_rec,colors,sizes,material,dims,notes,supplier_sources,created_at,updated_at,supplier_oos,supplier_oos_since,supplier_restock_eta,supplier_notify,supplier_notified,archived,archived_at,easybox_l,easybox_w,easybox_t';
+// img_extra (max 2 URL-uri, „poze suplimentare" — vezi #632) e STRICT URL-uri (fără upload/clipboard,
+// spre deosebire de img principal) — mereu mic, deci eager aici, NU lazy ca img (care poate fi o poză
+// încărcată/base64, potențial mare — vezi lazyProductImageRef/ensureProductImage mai jos în fișier).
+const PROD_COLS='id,name,sku,ean,internal_code,category,supplier,bought,incoming_qty,sold,min_qty,price_buy_ttc,price_buy_prev_ttc,price_buy_changed_at,tva_acq,stock_added_at,last_stock_added_qty,last_invoice_price_ttc,last_invoice_price_at,price_sell,price_emag,price_trendyol,price_rec,colors,sizes,material,dims,notes,supplier_sources,created_at,updated_at,supplier_oos,supplier_oos_since,supplier_restock_eta,supplier_notify,supplier_notified,archived,archived_at,easybox_l,easybox_w,easybox_t,img_extra';
 async function load(){
   showLoading('Se conectează la Supabase…');
   try{
@@ -9225,6 +9254,62 @@ function updateProductImageElements(id,url){
 function productImageTag(p,className,attrs){
   const cached=productImageUrls.get(String(p.id)+'|'+productImageVersion(p));
   return`<img src="${esc(cached||PRODUCT_IMAGE_PLACEHOLDER)}" data-product-image="${p.id}" class="${esc(className||'')}" loading="lazy" ${attrs||''}>`;
+}
+// Combină poza principală + pozele suplimentare (max 2, vezi #632) într-o singură listă, fără duplicate —
+// sursa unică pentru oriunde apare caruselul cu săgeți. Produsele cu o singură poză (marea majoritate)
+// întorc un array cu 1 element — apelantul (productImageCarouselTag) degradează la poza simplă, fără
+// săgeți, exact ca înainte.
+function productMainImages(p){
+  if(!p)return[];
+  const out=[];
+  if(p.img)out.push(p.img);
+  (p.imgExtra||[]).forEach(u=>{if(u&&!out.includes(u))out.push(u);});
+  return out;
+}
+// Carusel cu săgeți stânga/dreapta — cerut direct: „sa poti adauga mai multe poze la produs, 1, 2, 3...
+// sa poti sa dai pe o sageata la dreapta, stanga, sa vezi poza". STRICT pentru vederi mai mari (bula
+// Asistentului AI la „arată-mi poza", cardurile mari din Staff) — rândurile mici din liste dense
+// (Inventar/căutare) rămân neatinse, folosesc în continuare productImageTag simplu (cerut explicit —
+// săgeți pe un thumbnail de ~24px ar fi inutilizabile). Degradează automat la o poză simplă, fără săgeți,
+// pentru cele ~99% din produse cu o singură poză — zero cost/schimbare vizuală pentru ele.
+let imgCarouselIdx={};
+function productImageCarouselTag(p,className,attrs){
+  const imgs=productMainImages(p);
+  if(imgs.length<=1)return productImageTag(p,className,attrs);
+  const idx=Math.min(imgCarouselIdx[p.id]||0,imgs.length-1);
+  // Poza 0 (img) rămâne pe calea lazy EXISTENTĂ (productImageTag/data-product-image/IntersectionObserver,
+  // complet neatinsă) — index >0 e deja un string simplu din imgExtra (eager, mic — vezi PROD_COLS), deci
+  // randat direct, fără nicio infrastructură nouă de încărcare leneșă (nu are sens pentru un URL mic).
+  const mainTag=idx===0?productImageTag(p,className,attrs):`<img src="${esc(imgSrc(imgs[idx]))}" class="${esc(className||'')}" loading="lazy" ${attrs||''}>`;
+  const dots=imgs.map((_,i)=>`<span class="img-car-dot${i===idx?' on':''}"></span>`).join('');
+  // Bug real, prins direct la verificarea vizuală (Playwright, poză reală eșuată) — NU doar din citit
+  // codul: className/attrs reținute aici, pe WRAPPER (encodeURIComponent, ca ghilimelele din attrs —
+  // ex. onclick="...", onerror="..." — să nu rupă atributul data-car-attrs). imgCarouselNav de mai jos
+  // le recuperează de-AICI, nu din markup-ul deja randat al pozei (acolo era reconstruit doar din
+  // onclick/title — pierdea tăcut onerror/alt la fiecare navigare; o poză #2/#3 eșuată la încărcare
+  // colapsa tot caruselul la 0×0, fără fallback pe placeholder, în loc să cadă grațios ca prima poză).
+  return`<div class="img-carousel" data-car-id="${p.id}" data-car-class="${esc(className||'')}" data-car-attrs="${esc(encodeURIComponent(attrs||''))}">${mainTag}
+    <button type="button" class="img-car-arrow left" onclick="event.stopPropagation();imgCarouselNav(this,${p.id},-1)" title="Poza anterioară">‹</button>
+    <button type="button" class="img-car-arrow right" onclick="event.stopPropagation();imgCarouselNav(this,${p.id},1)" title="Poza următoare">›</button>
+    <div class="img-car-dots">${dots}</div>
+  </div>`;
+}
+// `host` = butonul de săgeată apăsat — urcăm la wrapper-ul lui (.img-carousel) ca să-l înlocuim STRICT
+// pe el (altă instanță a aceluiași produs, randată în altă parte a paginii în același moment, rămâne
+// neatinsă) — className/attrs se recuperează din data-car-class/data-car-attrs, reținute EXACT cum au
+// fost primite la primul randat (vezi comentariul din productImageCarouselTag) — nu reconstruite,
+// cu pierderi, din markup-ul curent al pozei.
+function imgCarouselNav(host,id,delta){
+  const p=P.find(x=>x.id===id);if(!p)return;
+  const imgs=productMainImages(p);if(imgs.length<=1)return;
+  const wrap=host.closest('.img-carousel');if(!wrap)return;
+  const className=wrap.dataset.carClass||'',attrs=wrap.dataset.carAttrs?decodeURIComponent(wrap.dataset.carAttrs):'';
+  const cur=imgCarouselIdx[id]||0;
+  imgCarouselIdx[id]=(cur+delta+imgs.length)%imgs.length;
+  // Reținut ÎNAINTE de outerHTML — după înlocuire, `wrap` rămâne un nod DETAȘAT, .parentElement ar da null.
+  const parent=wrap.parentElement;
+  wrap.outerHTML=productImageCarouselTag(p,className,attrs);
+  if(parent)observeProductImages(parent);
 }
 function observeProductImages(root){
   if(!('IntersectionObserver'in window))return;
@@ -16779,6 +16864,7 @@ function readProdFormData(){
     supplierSources:supplierSourcesDraft.slice(0,5),
     description:stripDiacritics(document.getElementById('f-description').value.trim()),
     images:curImages.slice(0,10),
+    imgExtra:curImgExtra.slice(0,2),
     easyboxL:parseFloat(document.getElementById('f-eb-l').value)||0,
     easyboxW:parseFloat(document.getElementById('f-eb-w').value)||0,
     easyboxT:parseFloat(document.getElementById('f-eb-t').value)||0,
@@ -16861,6 +16947,9 @@ async function openModal(id){
   curImages=Array.isArray(p?.images)?[...p.images]:[];
   document.getElementById('f-gallery-url').value='';
   renderImgGallery();
+  curImgExtra=Array.isArray(p?.imgExtra)?[...p.imgExtra]:[];
+  document.getElementById('f-img-extra-url').value='';
+  renderImgExtraList();
   const ebGuess=(!p?.easyboxL&&p?.dims)?parseDimsText(p.dims):null;
   document.getElementById('f-eb-l').value=p?.easyboxL||ebGuess?.[0]||'';
   document.getElementById('f-eb-w').value=p?.easyboxW||ebGuess?.[1]||'';
@@ -23283,6 +23372,26 @@ function addGalleryImg(){
 }
 function removeGalleryImg(i){curImages.splice(i,1);renderImgGallery();}
 
+/* POZE SUPLIMENTARE — „Principală" #2/#3 (max 2, URL-uri, vezi #632), DISTINCTE de Galeria tematică de
+   mai sus (acolo rămâne pentru AI/descriere client, poate avea multe poze, alt scop). Oglinda EXACTĂ a
+   galeriei tematice de deasupra (addGalleryImg/removeGalleryImg/renderImgGallery), doar plafonată la 2
+   — cele 2 chei (img + imgExtra) alimentează productMainImages(p), carusel-ul cu săgeți din Staff/alte
+   secțiuni (vezi mai jos în fișier), spre deosebire de Galeria tematică, care NU ajunge niciodată acolo. */
+function renderImgExtraList(){
+  const el=document.getElementById('img-extra-list');if(!el)return;
+  el.innerHTML=curImgExtra.map((u,i)=>`<div class="img-gallery-item"><img src="${esc(imgSrc(u))}" ${imgErrAttr(u)} alt="" title="${esc(u)}"><button type="button" class="img-gallery-rm" onclick="removeImgExtra(${i})" title="Elimină">×</button></div>`).join('');
+}
+function addImgExtra(){
+  const inp=document.getElementById('f-img-extra-url');
+  const u=inp.value.trim();
+  if(!u||!u.startsWith('http'))return;
+  if(curImgExtra.length>=2){toast('Maximum 2 poze suplimentare (3 în total, cu cea Principală)','err');return;}
+  if(!curImgExtra.includes(u))curImgExtra.push(u);
+  inp.value='';
+  renderImgExtraList();
+}
+function removeImgExtra(i){curImgExtra.splice(i,1);renderImgExtraList();}
+
 /* CATS */
 function buildCats(f){
   const g=document.getElementById('cat-g');if(!g)return;
@@ -29379,7 +29488,10 @@ function aiChatFormatMsgHtml(t){
 function aiChatProductPicHtml(id){
   const p=P.find(x=>x.id===id);
   if(!p)return'<span style="color:var(--t3)">(produsul nu mai există)</span>';
-  const img=productImageTag(p,'aic-pic',`alt="" onclick="openModal(${id})" title="Deschide fișa produsului" onerror="this.src=PRODUCT_IMAGE_PLACEHOLDER"`);
+  // Carusel (vezi #632) — „dă-mi poza produsului" e exact genul de „vedere mare, un produs, o poză" care
+  // beneficiază de săgeți, dacă produsul are poze suplimentare; degradează automat la poza simplă de
+  // dinainte (productImageTag) pentru restul produselor, cu o singură poză.
+  const img=productImageCarouselTag(p,'aic-pic',`alt="" onclick="openModal(${id})" title="Deschide fișa produsului" onerror="this.src=PRODUCT_IMAGE_PLACEHOLDER"`);
   return`<div class="aic-pic-wrap">${img}</div>`;
 }
 // Rândul unui candidat „posibil asemănător" — cerut direct, pe o captură reală: „sa primim si poza aici

@@ -136,9 +136,22 @@ button{cursor:pointer}
 .line.done{border-color:rgba(18,183,106,.4);background:rgba(236,253,243,.55)}
 .line.blocked{border-color:rgba(240,68,56,.4);background:rgba(254,243,242,.55)}
 .line-img-wrap{flex-shrink:0;width:172px}
+.line-img-main{position:relative}
 .line-img{width:172px;height:172px;border-radius:var(--r);object-fit:cover;border:1px solid var(--b1);background:var(--surf2);cursor:pointer}
 .line-img-ph{width:172px;height:172px;border-radius:var(--r);background:var(--surf2);border:1px dashed var(--b2);display:flex;align-items:center;justify-content:center;font-size:61px}
 .line-thumbs{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+/* Săgeți stânga/dreapta pentru poze multiple (#632) — reutilizate și la cardurile mari din Stoc/Retur
+   (.img-carousel, mai jos) — același stil, context diferit. MEREU vizibile (nu doar la hover, ca în
+   index.html) — Staff rulează tipic pe tabletă la ambalare, fără hover persistent; ascunse până la
+   hover n-ar fi descoperite niciodată acolo. */
+.img-car-arrow{position:absolute;top:50%;transform:translateY(-50%);width:28px;height:28px;border-radius:50%;border:none;background:rgba(16,24,40,.55);color:#fff;font-size:18px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.img-car-arrow:hover,.img-car-arrow:active{background:rgba(16,24,40,.8)}
+.img-car-arrow.left{left:4px}
+.img-car-arrow.right{right:4px}
+.img-carousel{position:relative}
+.img-car-dots{position:absolute;left:0;right:0;bottom:6px;display:flex;justify-content:center;gap:4px;pointer-events:none}
+.img-car-dot{width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,.55);box-shadow:0 0 0 1px rgba(16,24,40,.25)}
+.img-car-dot.on{background:#fff}
 .line-thumb{width:34px;height:34px;border-radius:6px;object-fit:cover;cursor:pointer;border:2px solid transparent;opacity:.6}
 .line-thumb.active{border-color:var(--acc);opacity:1}
 .line-info{flex:1;min-width:220px;display:flex;flex-direction:column;gap:8px}
@@ -858,8 +871,43 @@ function lineImgList(l){
   if(!p)return[];
   const list=[];
   if(p.img)list.push(p.img);
+  // img_extra (poze suplimentare dedicate, max 2 — vezi #632) ÎNAINTEA galeriei tematice (images) —
+  // aditiv, nu înlocuiește nimic: produsele care aveau deja poze din galerie aici le păstrează neatinse,
+  // doar se adaugă acum și cele noi, dedicate identificării rapide.
+  (p.img_extra||[]).forEach(u=>{if(u&&!list.includes(u))list.push(u);});
   (p.images||[]).forEach(u=>{if(u&&!list.includes(u))list.push(u);});
   return list;
+}
+
+// Oglinda lui productMainImages din index.html (vezi #632) — STRICT img + img_extra (NU images, galeria
+// tematică — spre deosebire de lineImgList de mai sus, aici e un identificator rapid, nu context de
+// verificat la ambalare, deci rămâne la cele max 3 poze dedicate).
+function productMainImages(p){
+  if(!p)return[];
+  const out=[];
+  if(p.img)out.push(p.img);
+  (p.img_extra||[]).forEach(u=>{if(u&&!out.includes(u))out.push(u);});
+  return out;
+}
+let prodCarIdx={};
+// Carusel pentru cardurile mari, un singur produs pe ecran (Stoc/Retur) — degradează la poza simplă
+// (ca înainte) pentru produsele cu o singură poză, fără nicio schimbare vizuală pentru ele.
+function productCarouselHtml(p,cls,phCls){
+  if(!p)return`<div class="${phCls}">📦</div>`;
+  const imgs=productMainImages(p);
+  if(!imgs.length)return`<div class="${phCls}">📦</div>`;
+  const idx=Math.min(prodCarIdx[p.id]||0,imgs.length-1);
+  const mainImg=`<img class="${cls}" src="${esc(imgSrc(imgs[idx]))}" onerror="this.outerHTML='<div class=&quot;${phCls}&quot;>📦</div>'">`;
+  if(imgs.length<=1)return mainImg;
+  const dots=imgs.map((_,i)=>`<span class="img-car-dot${i===idx?' on':''}"></span>`).join('');
+  return`<div class="img-carousel">${mainImg}<button type="button" class="img-car-arrow left" onclick="event.stopPropagation();prodCarouselNav(${p.id},-1)" title="Poza anterioară">‹</button><button type="button" class="img-car-arrow right" onclick="event.stopPropagation();prodCarouselNav(${p.id},1)" title="Poza următoare">›</button><div class="img-car-dots">${dots}</div></div>`;
+}
+function prodCarouselNav(id,delta){
+  const p=findProdus(id);if(!p)return;
+  const imgs=productMainImages(p);if(imgs.length<=1)return;
+  const cur=prodCarIdx[id]||0;
+  prodCarIdx[id]=(cur+delta+imgs.length)%imgs.length;
+  renderMain();
 }
 
 let lastLockedKey=undefined; // undefined != null, ca primul render (curKey posibil null) să nu fie ignorat
@@ -895,8 +943,15 @@ function lineThumbHtml(l){
   const imgHtml=activeUrl
     ?`<img class="line-img" src="${esc(imgSrc(activeUrl))}" onerror="this.outerHTML='<div class=&quot;line-img-ph&quot;>📦</div>'" onclick="cycleLineImg('${lk}')">`
     :`<div class="line-img-ph">📦</div>`;
+  // Săgeți explicite stânga/dreapta (cerut direct — #632) ALĂTURI de click-pe-poză/thumbnail-urile de
+  // mai jos (neatinse) — 3 căi către același rezultat, niciuna nu le înlocuiește pe celelalte.
+  const arrowsHtml=imgs.length>1?`<button type="button" class="img-car-arrow left" onclick="event.stopPropagation();cycleLineImg('${lk}',-1)" title="Poza anterioară">‹</button><button type="button" class="img-car-arrow right" onclick="event.stopPropagation();cycleLineImg('${lk}',1)" title="Poza următoare">›</button>`:'';
   const thumbsHtml=imgs.length>1?`<div class="line-thumbs">${imgs.map(u=>`<img class="line-thumb ${u===activeUrl?'active':''}" src="${esc(imgSrc(u))}" onclick="activeImg['${lk}']='${esc(u)}';renderMain()">`).join('')}</div>`:'';
-  return`<div class="line-img-wrap">${imgHtml}${thumbsHtml}</div>`;
+  // .line-img-main (nou, STRICT un wrapper de poziționare pentru săgeți) — separat de .line-img-wrap
+  // (neatins, dimensiunea lui vine din regulile existente la 172/144/116px) ca position:relative să NU
+  // includă și rândul de thumbnail-uri de mai jos (altfel săgețile, centrate vertical la 50%, ar ieși
+  // nealiniate cu poza — ar lua ca reper poza+thumbnail-urile împreună, nu doar poza).
+  return`<div class="line-img-wrap"><div class="line-img-main">${imgHtml}${arrowsHtml}</div>${thumbsHtml}</div>`;
 }
 
 function lineInfoHtml(l,showCheck){
@@ -989,11 +1044,13 @@ function navStep(dir){
   renderMain(true);
 }
 
-function cycleLineImg(lk){
+// dir implicit +1 — apelul vechi, de pe click-ul direct pe poză (cycleLineImg(lk)), rămâne neschimbat;
+// săgețile explicite (#632) trimit -1/+1 direct.
+function cycleLineImg(lk,dir=1){
   const imgs=lineImgList(findLineByKey(lk)||{});
   if(imgs.length<2)return;
   const cur=activeImg[lk]||imgs[0];
-  const idx=(imgs.indexOf(cur)+1)%imgs.length;
+  const idx=(imgs.indexOf(cur)+dir+imgs.length)%imgs.length;
   activeImg[lk]=imgs[idx];
   renderMain();
 }
@@ -1956,7 +2013,7 @@ function renderStockTab(host){
   const list=staffStockProducts();
   if(!list.length){host.innerHTML='<div class="empty"><div class="big">📋</div><div>Nu există produse active pentru raportul de stoc.</div></div>';return;}
   if(stockCardIdx>=list.length)stockCardIdx=list.length-1;
-  const p=list[stockCardIdx],current=staffStockQty(p),img=p.img?`<img class="stock-product-img" src="${esc(imgSrc(p.img))}" onerror="this.outerHTML='<div class=&quot;stock-product-ph&quot;>📦</div>'">`:'<div class="stock-product-ph">📦</div>';
+  const p=list[stockCardIdx],current=staffStockQty(p),img=productCarouselHtml(p,'stock-product-img','stock-product-ph');
   const sortBtn=(mode,label)=>`<button type="button" class="stock-sort-btn${stockSortMode===mode?' on':''}" onclick="setStockSort('${mode}')">${label}</button>`;
   host.innerHTML=`<div class="card stock-card" onpointerdown="startStockSwipe(event)" onpointerup="endStockSwipe(event)">
     <div class="stock-card-head"><div class="stock-card-title">📋 Raport stoc</div><div class="stock-card-pos">${stockCardIdx+1} din ${list.length}</div></div>
@@ -2075,7 +2132,7 @@ function renderReturnsTab(host){
   }
   const p=findProdus(returnsPickId);
   if(!p){returnsPickId=null;renderReturnsTab(host);return;}
-  const img=p.img?`<img class="stock-product-img" src="${esc(imgSrc(p.img))}" onerror="this.outerHTML='<div class=&quot;stock-product-ph&quot;>📦</div>'">`:'<div class="stock-product-ph">📦</div>';
+  const img=productCarouselHtml(p,'stock-product-img','stock-product-ph');
   const stock=Number(p.bought||0)-Number(p.sold||0);
   const reasonOpts=Object.entries(RETURN_REASONS).map(([k,label])=>`<option value="${k}" ${returnsMotiv===k?'selected':''}>${esc(label)}</option>`).join('');
   host.innerHTML=`<div class="card">
@@ -2205,7 +2262,7 @@ async function refreshStaffNow(){
   try{
     // Reîncarcă și produsele, nu doar comenzile: o asociere sau un produs adăugat recent în ERP devine
     // disponibil pe Staff imediat, fără refresh de browser și fără cache local intermediar.
-    const prodRows=await sb('GET','produse?select=id,name,sku,ean,internal_code,img,images,bought,sold,price_buy_ttc,archived&order=id.asc');
+    const prodRows=await sb('GET','produse?select=id,name,sku,ean,internal_code,img,images,img_extra,bought,sold,price_buy_ttc,archived&order=id.asc');
     PRODUSE=prodRows.map(p=>({...p,internalCode:p.internal_code}));
     // Alt telefon/tabletă poate fi cel care a bifat un curier ca „a venit" — reîncărcăm și asta, nu
     // doar comenzile, ca evidența să rămână la fel pe orice dispozitiv.
@@ -2360,7 +2417,7 @@ async function load(){
   renderStaffNameBadge();
   try{
     const [prodRows,comRows,prepackRows,msgRows,furnizorRows]=await Promise.all([
-      sb('GET','produse?select=id,name,sku,ean,internal_code,img,images,bought,sold,price_buy_ttc,archived&order=id.asc'),
+      sb('GET','produse?select=id,name,sku,ean,internal_code,img,images,img_extra,bought,sold,price_buy_ttc,archived&order=id.asc'),
       sbComenzi(staffComenziUrl()),
       sb('GET','pre_impachetate?select=*&folosit_la=is.null&order=created_at.asc').catch(e=>{console.warn('pre_impachetate indisponibil:',e);return[];}),
       sb('GET','staff_mesaje?select=*&rezolvat=is.false&order=created_at.asc').catch(e=>{console.warn('staff_mesaje indisponibil:',e);return[];}),
