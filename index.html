@@ -5003,6 +5003,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:637,text:'Sincronizare — buton nou pe fiecare rând din previzualizarea de import, „⚡ Salvează acum", cerut direct: „vreau sa avem undeva un buton prin care sincronizarea sa se salveze in timp real, pana la aplicarea butonului general si sa dispara din lista, o data sincronizat". Până acum, o mapare confirmată (sugestie AI, potrivire fuzzy, alegere manuală din picker, sau „✚ produs nou") aștepta tot lotul — singura cale de salvare era „Adaugă mapările selectate", care aplică totul deodată, la final. Modelul exista deja parțial (autoApplyConfidentSyncLines face exact asta, dar STRICT pe potrivirile prin PNK, automat, fără niciun buton) — acum extins cu un buton explicit, pe ORICE rând cu o potrivire, indiferent de starea „✓ Inclus"/„Neinclus": scrie direct în Supabase (produsul nou, dacă e cazul, apoi maparea) și dispare imediat din listă, fără să mai aștepte nimic altceva. Verificat de 2 ori: sintaxă + 47 de verificări izolate pe funcția reală extrasă din cod (rând cu produs deja ales — salvare directă —, rând „✚ produs nou" — creează produsul, apoi maparea, cu ID-ul corect —, eșec la crearea produsului — eroare clară, rândul rămâne în listă —, eșec la salvarea mapării — eroare clară, rândul rămâne în listă —, rând fără nicio potrivire — gardă, nimic nu se întâmplă —, fără conexiune Supabase, index invalid, ordinea în lista de mapări, platforma implicită) + confirmare vizuală directă cu Playwright, în browser real: ambele cazuri (produs existent și produs nou) salvate corect, rândurile dispar, toast-ul de confirmare apare, lista revine la ecranul normal când se golește complet.',date:'2026-11-08'},
   {n:636,text:'Comenzi Platforme — avertismentul de stoc de pe fiecare linie („Stoc actual X → după vânzare Y") devine un calcul paralel, CUMULAT pe tot lotul curent, nu doar pe propria linie — cerut direct, cu exemplu concret: „mai avem 2 x mousepad 90x40, pe parcurs ce cobor in jos si adaug 3 vanzari pe produs, vom ramane cu stoc local -1, e clar ca trebuie sa le comandam". Mecanismul exista deja (pcomStockWarningHtml, cu buton „🛒 Adaugă la comandat"), dar proiecta STRICT cantitatea PROPRIEI linii — 3 comenzi separate pe același produs, din același import, arătau FIECARE „mai rămâne 1" (2-1), fără ca vreuna să semnaleze că, ÎMPREUNĂ, depășesc stocul real (2-3=-1). Acum toate liniile acelui produs, din tot lotul, arată ACEEAȘI proiecție finală, cu o notă clară de unde vine cifra („3 buc. comandate în acest lot") — actualizată live, pe măsură ce aduni/modifici/exclude linii (reutilizează re-randarea deja existentă, niciun hook nou). Liniile deja scăzute REAL din stoc sau anulate sunt excluse din sumă (bug mai mic, prins și reparat pe drum, înainte de orice test: o comandă anulată NU trebuie să mai conteze ca cerere, indiferent dacă fusese deja aplicată sau nu — altfel rămânea numărată greșit). Verificat de 2 ori: sintaxă + 19 verificări izolate pe funcțiile reale extrase din cod (exemplul EXACT din cerere — 2 în stoc, 3 comenzi, toate 3 liniile arată -1 — regresie pe o singură comandă pe produs — neatinsă —, linie deja aplicată exclusă corect din sumă, linie anulată exclusă corect, linie amânată TOT contează, produse diferite nu se amestecă) + confirmare vizuală Playwright, cu scenariul exact din cerere, randat în browser real.',date:'2026-11-08'},
   {n:635,text:'Dashboard → cardul „Situația stocului" — linia mov redesenată complet, cerut direct, în 3 etape. (1) Era pur decorativă (SVG hardcodat, aria-hidden, zero legătură cu datele) — ales explicit, din opțiunile propuse: „Evoluția valorii stocului". (2) Extins direct, pe urmă: „sa putem merge cu mouseul pe anumite zile si sa vedem cat era stocul atunci ca produse si ca bani. Lasa o sectiune de 45 de zile" — reconstituit acum PE PRODUS (nu doar un total agregat), zi cu zi, din istoricul real de intrări (comenzi_stoc) și ieșiri (jurnal); hover pe orice zi din ultimele 45 arată data + câte produse aveau stoc + câte bucăți + valoarea (RON), cu tooltip propriu, mirror-uit după cel deja existent la „Evoluție vânzări". A 3-a metrică nouă, „Marjă estimată" (diferența dintre valoarea la preț de vânzare și cea la cost). (3) Eliminat subtitlul „O privire clară asupra inventarului disponibil." — cerut direct. Bug real, de 2 ori, prins DIRECT cu Playwright, nu doar vizual: (a) graficul, poziționat absolut peste card, ajunsese să stea peste textul „Marjă estimată" — confirmat explicit că acel text FURA click-urile/hover-ul destinate graficului pe o bună parte din el; reparat mutând graficul sub metrici, pe toată lățimea, în flux normal — nu se mai poate suprapune peste nimic. (b) la zilele de la capete (azi/acum 45 de zile), tooltip-ul ieșea din card — lățimea lui fusese presupusă fixă, nu măsurată; reparat măsurând lățimea reală a tooltip-ului înainte de poziționare. Verificat de 2 ori: sintaxă + CSS + 26 de verificări izolate pe funcțiile reale extrase din cod (reconstrucție per-produs zi cu zi, clamp la fiecare pas, produse arhivate excluse, poziționare tooltip la ambele capete — ambele bug-uri de mai sus reproduse pe varianta veche și confirmate reparate) + confirmare vizuală Playwright, pe date reale din producție, desktop și mobil.',date:'2026-11-08'},
   {n:634,text:'Dashboard → Preconizare vânzări — mai clar, cerut direct pe o captură: „nu inteleg ce scrie cu verde sau preconizarie, sa fie mai complet si mai bine asezat". (1) Paragraf nou, explicit, sub titlu: cum se calculează exact Preconizare (vândut deja + estimare pentru rest, din tendința față de anul trecut), în loc să rămână doar implicit din cifre. (2) Inelul cu procent (ex. „23%") primește acum o legendă dedesubt — „din preconizarea lunii, deja vândut" — înainte plutea fără context. (3) „▲ 84%" (verde) — cel mai punctual neclar, din captură — are acum text explicit lângă el: „+252 buc. față de noiembrie 2025", nu doar un procent izolat. (4) Bug real de layout, prins pe drum, direct cu Playwright: etichetele barelor („Vândut acum", „Preconizare") erau trunchiate („Vândut a...") — coloana lor era prea îngustă; lărgită, verificat acum fără nicio trunchiere. (5) Bug real separat, găsit tot verificând vizual: textul de tendință din antet („tendință aug-oct... față de anul trecut") ieșea din ecran pe mobil (nu se putea încadra pe rând, nu avea voie să treacă pe rândul următor) — acum se încadrează normal pe 2 rânduri. Verificat de 2 ori: sintaxă + CSS + regresie completă pe calculul de preconizare (40 verificări, neatins — doar afișarea s-a schimbat) + confirmare vizuală directă cu Playwright, desktop și mobil (fără nicio trunchiere/scurgere orizontală după fix).',date:'2026-11-08'},
@@ -18177,6 +18178,13 @@ function renderSyncImportPreview(){
     // produs care poate nici nu există încă în Inventar. Titlul se ajustează după caz, ca să fie
     // clar că apăsarea înlocuiește asocierea curentă, dacă există una.
     const hasMatch=!!it.produsId||!!it.newProduct;
+    // Salvare instant, per rând — cerut direct: „vreau sa avem undeva un buton prin care sincronizarea
+    // sa se salveze in timp real, pana la aplicarea butonului general si sa dispara din lista, o data
+    // sincronizat". autoApplyConfidentSyncLines (mai sus în fișier) face deja exact asta, dar STRICT
+    // pe liniile viaPnk, automat, fără buton — pentru restul (sugestie AI, potrivire fuzzy, ✚ produs
+    // nou), singura cale rămânea „Adaugă mapările selectate", care așteaptă tot lotul. Acum orice rând
+    // cu o potrivire (produs găsit SAU marcat „+ Nou") poate fi salvat separat, imediat.
+    const syncNowBtn=hasMatch?`<button type="button" class="btn btn-sm btn-acc" id="smi-sync-now-${idx}" onclick="applySyncImportLine(${idx})" title="Salvează ACUM doar această mapare — se scrie direct în Supabase și dispare din listă, fără să mai aștepți „Adaugă mapările selectate"">⚡ Salvează acum</button>`:'';
     const newBtn=it.newProduct?'':`<button type="button" class="btn btn-sm" onclick="markSyncRowNewProduct(${idx})" title="${hasMatch?'Asocierea de mai sus e greșită — nu există încă în Inventar, creează un produs nou cu acest titlu':'Nu există încă în Inventar — creează acum un produs nou cu acest titlu'}">+ Nou</button>`;
     const laterBtn=`<button type="button" class="btn btn-sm" onclick="parkSyncRowLater(${idx})" title="Pune deoparte în „📥 Produse eMAG lipsă din stoc" — o aduci în stoc mai târziu, când vrei, nu acum${hasMatch?' (renunță la asocierea de mai sus)':''}">🕓 Mai târziu</button>`;
     // Elimină doar din previzualizarea curentă (cerut direct — „nu avem treabă cu ea acum") — nu se
@@ -18194,7 +18202,7 @@ function renderSyncImportPreview(){
         <div class="smi-imp-meta">${pnkTag}${tag}</div>
       </div>
       <div class="smi-pick smi-pick-lg" id="smi-pick-${idx}">${syncPickBtnHtml(idx)}</div>
-      <div style="display:flex;gap:6px;flex-shrink:0">${newBtn}${laterBtn}${removeBtn}</div>
+      <div style="display:flex;gap:6px;flex-shrink:0">${syncNowBtn}${newBtn}${laterBtn}${removeBtn}</div>
     </div>`;
   }).join('');
   const includedCount=syncImpParsed.filter(x=>x.include).length;
@@ -18549,6 +18557,44 @@ async function applySyncImport(){
     toast('Eroare la salvare: '+err.message,'err');
   }finally{
     btn.disabled=false;btn.textContent='Adaugă mapările selectate';
+  }
+}
+// Oglinda lui applySyncImport, dar pe O SINGURĂ linie, chiar acum — cerut direct: „vreau sa avem undeva
+// un buton prin care sincronizarea sa se salveze in timp real, pana la aplicarea butonului general si
+// sa dispara din lista, o data sincronizat". Spre deosebire de autoApplyConfidentSyncLines (mai sus,
+// STRICT viaPnk, rulată automat, fără buton), asta merge pe ORICE rând cu o potrivire — sugestie AI,
+// potrivire fuzzy, alegere manuală din picker, sau „✚ produs nou" — indiferent de starea „✓ Inclus".
+async function applySyncImportLine(idx){
+  if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
+  const it=syncImpParsed[idx];if(!it||!(it.produsId||it.newProduct))return;
+  const platforma=document.getElementById('smi-preview').dataset.platforma||'emag';
+  const btn=document.getElementById('smi-sync-now-'+idx);
+  if(btn){btn.disabled=true;btn.textContent='Se salvează…';}
+  try{
+    let created=false;
+    if(!it.produsId&&it.newProduct){
+      const newP={name:it.titluExtern.slice(0,240),sku:null,bought:0,sold:0,minQty:0,priceBuyTTC:0,tvaAcq:0.21,priceSell:0,priceEmag:0,priceTrendyol:0,category:'',supplier:'',img:''};
+      const beforeLen=P.length;
+      const ok=await saveProdToDb(newP,null);
+      if(ok&&P.length>beforeLen){
+        it.produsId=P[P.length-1]?.id||null;
+        if(it.produsId)created=true;
+      }
+    }
+    if(!it.produsId){toast('Nu am putut crea produsul nou — încearcă din nou','err');return;}
+    const[row]=await dbPost('platforma_mapari',[syncMapToDb({platforma,titluExtern:it.titluExtern,idExtern:it.pnk||null,produsId:it.produsId,confirmat:true,tara:it.tara||''})]);
+    if(row)SYNCM=[dbToSyncMap(row),...SYNCM];
+    syncImpParsed.splice(idx,1);
+    if(syncImpParsed.length){renderSyncImportPreview();}
+    else{document.getElementById('smi-preview').innerHTML='';document.getElementById('smi-foot').style.display='none';localStorage.removeItem(SMIK);}
+    renderSyncPage();
+    if(created)renderTable();
+    toast(`✓ Mapare salvată${created?' (produs nou creat — completează preț/stoc/poză în Inventar)':''}`);
+  }catch(e){
+    toast('Eroare la salvare: '+(e.message||e),'err');
+  }finally{
+    const btn2=document.getElementById('smi-sync-now-'+idx);
+    if(btn2){btn2.disabled=false;btn2.textContent='⚡ Salvează acum';}
   }
 }
 /* COMENZI PLATFORME (import comenzi eMAG/Trendyol) */
