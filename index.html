@@ -20055,12 +20055,20 @@ async function pcomReassignCommittedProduct(idx,oldProdId){
 // prețul liniei la același raport, deci prețul rămânea „per cantitatea veche" (de obicei prețul
 // TOTAL al unei comenzi native de 1 „listare"), dar calculul îl trata ca preț PE BUCATA nouă, apoi îl
 // înmulțea din nou cu noua cantitate — profitul creștea la fiecare „+" în loc să reflecte corect că
-// aceiași bani se împart acum pe mai multe bucăți fizice. Același raport aplicat acum și aici.
+// aceiași bani se împart acum pe mai multe bucăți fizice.
+// IMPORTANT, corectat pe drum (prima variantă, ca și fixul vechi de la applyPcomSuggestedQty, împărțea
+// la ratio ȘI pretTotalCuTva — greșit): pretTotalCuTva (și pretTotalCuTvaRon, derivat din el) e banii
+// REALI, deja încasați pentru linia asta — nu trebuie să scadă doar fiindcă reinterpretăm câte din
+// unitățile NOASTRE de stoc reprezintă acea sumă. „Total încasări"/rapoartele de venit însumează exact
+// acest câmp (vezi pretTotalCuTvaRon peste tot în Jurnal/Raport vânzări) — dacă l-am fi împărțit și pe
+// el, veniturile reale ar fi apărut artificial mai mici după orice corecție de cantitate. Doar
+// pretFaraTva (citit STRICT de pcomSaleFinancials, pentru calculul de profit/marjă — niciodată pentru
+// venit) trebuie rescalat, ca motorul de calcul să împartă corect costul de achiziție pe bucățile
+// fizice reale, fără să atingă banii real încasați.
 function pcomRescalePriceForQty(it,newQty){
   const oldQty=Number(it.cantitate)||1,ratio=newQty/oldQty;
   if(ratio>0&&ratio!==1){
     it.pretFaraTva=Math.round((Number(it.pretFaraTva)||0)/ratio*100)/100;
-    it.pretTotalCuTva=Math.round((Number(it.pretTotalCuTva)||0)/ratio*100)/100;
   }
 }
 function pcomAdjustQty(idx,delta){
@@ -20163,19 +20171,18 @@ function pcomVintedGroupFinancialsHtml(groupIdxs){
 // Bug real, raportat direct pe o captură reală (titlu „Set 6 stații radio", produs intern „Statie
 // radio 2x BF888S" — cantitate corectă de la 1 la 3, dar profitul afișat ieșea +377.95 RON pe o
 // vânzare de 297.79 RON — profit mai mare decât vânzarea, imposibil economic): această funcție
-// schimba DOAR cantitatea, niciodată prețul liniei (pretFaraTva/pretTotalCuTva) — acesta reprezenta
-// banii plătiți pentru cantitatea VECHE (de obicei 1 „listare" cumpărată, adică tot pachetul de 6),
-// deci rămânea prețul TOTAL al pachetului, dar restul calculului (pcomSaleFinancials, la fel și
-// commitPcomLine la scrierea reală în bază) îl tratează ca preț PE BUCATA internă, apoi îl înmulțește
-// din nou cu noua cantitate — numărat dublu. Împărțim acum prețul cu ACELAȘI raport cu care se
-// înmulțește cantitatea — banii totali plătiți rămân identici (preț/bucată × bucăți = constant),
-// doar reîmpărțiți corect pe bucățile fizice reale, ca „la 3 produse" să însemne chiar 3 produse
-// peste tot în calcul, nu doar la stocul scăzut.
+// schimba DOAR cantitatea, niciodată prețul/bucată (pretFaraTva) — acesta reprezenta banii plătiți
+// pentru cantitatea VECHE (de obicei 1 „listare" cumpărată, adică tot pachetul de 6), dar restul
+// calculului (pcomSaleFinancials, la fel și commitPcomLine la scrierea reală în bază) îl tratează ca
+// preț PE BUCATA internă, apoi îl înmulțește din nou cu noua cantitate — numărat dublu. Împărțim
+// acum pretFaraTva cu ACELAȘI raport cu care se înmulțește cantitatea, ca „la 3 produse" să însemne
+// chiar 3 produse peste tot în calculul de profit, nu doar la stocul scăzut (vezi pcomRescalePriceForQty,
+// mai jos, pentru de ce pretTotalCuTva — banii REAL încasați — NU se atinge, spre deosebire de o primă
+// variantă a acestui fix, corectată pe drum).
 async function applyPcomSuggestedQty(idx){
   const it=pcImpParsed[idx];if(!it?.suggestedCantitate)return;
-  // Acum folosește același helper ca pcomAdjustQty/pcomSetQty (vezi comentariul de acolo) — identic
-  // matematic cu ce era aici înainte, doar extras, ca toate cele 3 căi care schimbă cantitatea unei
-  // linii să rămână garantat în sincron, nu doar coincident identice.
+  // Folosește același helper ca pcomAdjustQty/pcomSetQty (vezi comentariul de acolo), ca toate cele 3
+  // căi care schimbă cantitatea unei linii să rămână garantat în sincron, nu doar coincident identice.
   pcomRescalePriceForQty(it,it.suggestedCantitate);
   it.cantitate=it.suggestedCantitate;it.suggestedCantitate=null;
   renderPcomImportPreview();
