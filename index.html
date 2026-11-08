@@ -5003,6 +5003,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:638,text:'Comenzi Platforme — 2 bug-uri reale în calculul financiar de pe fiecare linie, raportate direct pe 2 comenzi reale, diferite: (1) „ce e 27.01?" pe o comandă eMAG de 4 buc. „Suport autoadeziv", care arăta „-71.8% marjă" — produsul costă doar 13.16 RON, deci era absurd. Cauza: costurile FIXE pe colet (transport real, contabilitate, ambalare — din setările implicite ale Calculator profit) se numărau o dată PE BUCATĂ, deci de 4 ori pentru un singur colet cu 4 bucăți, nu o dată pentru tot coletul — reparat împărțindu-le la cantitate înainte de calcul. (2) „cand dam plus, profitul ar trebui sa scada, de ce creste?" pe o comandă Trendyol („Set 4 Baofeng", cantitate corectată manual de la 1 la 2 cu săgeata +): prețul liniei (preț total al „1 set", la cantitatea veche) nu se rescala niciodată la ajustarea manuală a cantității — era deja reparat, dar DOAR la butonul „Titlul sugerează… Aplică", nu și la săgeata +/− sau la căsuța de cantitate editabilă manual. Extins același fix (rescalare proporțională a prețului, exact raportul vechi/nou) și acolo — acum profitul scade corect când spui sistemului că aceiași bani acoperă mai multe bucăți ale TALE. Pe lângă fix, prețul mare afișat ("27.01 RON") capătă eticheta „/buc" când cantitatea≠1, ca să fie clar de la ce pornește calculul. Verificat de 2 ori: sintaxă + 45 de verificări izolate pe funcțiile reale extrase din cod (ambele exemple EXACTE din rapoarte, reproduse și confirmate reparate — regresie completă la cantitate=1, neatinsă — invariant financiar verificat independent, pe mai multe cantități, eMAG și Trendyol — toate 3 căile care schimbă cantitatea rescalează identic prețul) + confirmare vizuală Playwright, pe server local, cu exact cele 2 comenzi din rapoarte, inclusiv simularea clickurilor reale pe săgeata +.',date:'2026-11-08'},
   {n:637,text:'Sincronizare — buton nou pe fiecare rând din previzualizarea de import, „⚡ Salvează acum", cerut direct: „vreau sa avem undeva un buton prin care sincronizarea sa se salveze in timp real, pana la aplicarea butonului general si sa dispara din lista, o data sincronizat". Până acum, o mapare confirmată (sugestie AI, potrivire fuzzy, alegere manuală din picker, sau „✚ produs nou") aștepta tot lotul — singura cale de salvare era „Adaugă mapările selectate", care aplică totul deodată, la final. Modelul exista deja parțial (autoApplyConfidentSyncLines face exact asta, dar STRICT pe potrivirile prin PNK, automat, fără niciun buton) — acum extins cu un buton explicit, pe ORICE rând cu o potrivire, indiferent de starea „✓ Inclus"/„Neinclus": scrie direct în Supabase (produsul nou, dacă e cazul, apoi maparea) și dispare imediat din listă, fără să mai aștepte nimic altceva. Verificat de 2 ori: sintaxă + 47 de verificări izolate pe funcția reală extrasă din cod (rând cu produs deja ales — salvare directă —, rând „✚ produs nou" — creează produsul, apoi maparea, cu ID-ul corect —, eșec la crearea produsului — eroare clară, rândul rămâne în listă —, eșec la salvarea mapării — eroare clară, rândul rămâne în listă —, rând fără nicio potrivire — gardă, nimic nu se întâmplă —, fără conexiune Supabase, index invalid, ordinea în lista de mapări, platforma implicită) + confirmare vizuală directă cu Playwright, în browser real: ambele cazuri (produs existent și produs nou) salvate corect, rândurile dispar, toast-ul de confirmare apare, lista revine la ecranul normal când se golește complet.',date:'2026-11-08'},
   {n:636,text:'Comenzi Platforme — avertismentul de stoc de pe fiecare linie („Stoc actual X → după vânzare Y") devine un calcul paralel, CUMULAT pe tot lotul curent, nu doar pe propria linie — cerut direct, cu exemplu concret: „mai avem 2 x mousepad 90x40, pe parcurs ce cobor in jos si adaug 3 vanzari pe produs, vom ramane cu stoc local -1, e clar ca trebuie sa le comandam". Mecanismul exista deja (pcomStockWarningHtml, cu buton „🛒 Adaugă la comandat"), dar proiecta STRICT cantitatea PROPRIEI linii — 3 comenzi separate pe același produs, din același import, arătau FIECARE „mai rămâne 1" (2-1), fără ca vreuna să semnaleze că, ÎMPREUNĂ, depășesc stocul real (2-3=-1). Acum toate liniile acelui produs, din tot lotul, arată ACEEAȘI proiecție finală, cu o notă clară de unde vine cifra („3 buc. comandate în acest lot") — actualizată live, pe măsură ce aduni/modifici/exclude linii (reutilizează re-randarea deja existentă, niciun hook nou). Liniile deja scăzute REAL din stoc sau anulate sunt excluse din sumă (bug mai mic, prins și reparat pe drum, înainte de orice test: o comandă anulată NU trebuie să mai conteze ca cerere, indiferent dacă fusese deja aplicată sau nu — altfel rămânea numărată greșit). Verificat de 2 ori: sintaxă + 19 verificări izolate pe funcțiile reale extrase din cod (exemplul EXACT din cerere — 2 în stoc, 3 comenzi, toate 3 liniile arată -1 — regresie pe o singură comandă pe produs — neatinsă —, linie deja aplicată exclusă corect din sumă, linie anulată exclusă corect, linie amânată TOT contează, produse diferite nu se amestecă) + confirmare vizuală Playwright, cu scenariul exact din cerere, randat în browser real.',date:'2026-11-08'},
   {n:635,text:'Dashboard → cardul „Situația stocului" — linia mov redesenată complet, cerut direct, în 3 etape. (1) Era pur decorativă (SVG hardcodat, aria-hidden, zero legătură cu datele) — ales explicit, din opțiunile propuse: „Evoluția valorii stocului". (2) Extins direct, pe urmă: „sa putem merge cu mouseul pe anumite zile si sa vedem cat era stocul atunci ca produse si ca bani. Lasa o sectiune de 45 de zile" — reconstituit acum PE PRODUS (nu doar un total agregat), zi cu zi, din istoricul real de intrări (comenzi_stoc) și ieșiri (jurnal); hover pe orice zi din ultimele 45 arată data + câte produse aveau stoc + câte bucăți + valoarea (RON), cu tooltip propriu, mirror-uit după cel deja existent la „Evoluție vânzări". A 3-a metrică nouă, „Marjă estimată" (diferența dintre valoarea la preț de vânzare și cea la cost). (3) Eliminat subtitlul „O privire clară asupra inventarului disponibil." — cerut direct. Bug real, de 2 ori, prins DIRECT cu Playwright, nu doar vizual: (a) graficul, poziționat absolut peste card, ajunsese să stea peste textul „Marjă estimată" — confirmat explicit că acel text FURA click-urile/hover-ul destinate graficului pe o bună parte din el; reparat mutând graficul sub metrici, pe toată lățimea, în flux normal — nu se mai poate suprapune peste nimic. (b) la zilele de la capete (azi/acum 45 de zile), tooltip-ul ieșea din card — lățimea lui fusese presupusă fixă, nu măsurată; reparat măsurând lățimea reală a tooltip-ului înainte de poziționare. Verificat de 2 ori: sintaxă + CSS + 26 de verificări izolate pe funcțiile reale extrase din cod (reconstrucție per-produs zi cu zi, clamp la fiecare pas, produse arhivate excluse, poziționare tooltip la ambele capete — ambele bug-uri de mai sus reproduse pe varianta veche și confirmate reparate) + confirmare vizuală Playwright, pe date reale din producție, desktop și mobil.',date:'2026-11-08'},
@@ -8737,7 +8738,22 @@ function pcomSaleFinancials(p,it,platforma){
   const tvaAcq=p.tvaAcq??0.21;
   const acqNet=p.priceBuyTTC>0?(tvaAcq>0?p.priceBuyTTC/(1+tvaAcq):p.priceBuyTTC):0;
   const sellNetRon=pcomToRon(it.pretFaraTva,it.moneda);
+  const qty=Math.max(1,Number(it.cantitate)||1);
   const v={...pcDefaultState(ch,acqNet),sell:sellNetRon};
+  // Bug real, raportat direct pe o comandă reală (4 buc. „Suport autoadeziv”, 27.01 RON/buc, cost
+  // achiziție 13.16 RON — arăta „-71.8% marjă”, absurd): costurile FIXE pe colet (transport real,
+  // contabilitate, ambalare, retur Trendyol, taxă import, marketing) vin din setările implicite ale
+  // Calculator profit, gândite „un colet = o vânzare" — corect la cantitate 1 (cazul uzual), dar
+  // apelanții (pcxFinancialsHtml/commitPcomLine/applyPcomImport/pcomReassignCommittedProduct/...)
+  // înmulțesc profitul rezultat cu it.cantitate pentru totalul liniei — fără împărțirea de mai jos,
+  // un transport de 20 RON (implicit) se număra o dată PE BUCATĂ, deci de 4 ori pentru un singur colet
+  // cu 4 bucăți din același produs, nu o singură dată pentru tot coletul. „acq”/„sell” rămân per bucată
+  // (chiar scalează cu cantitatea — se achiziționează/vinde de 4 ori mai mult), comisioanele (%) rămân
+  // procente (scalează deja corect cu prețul) — doar costurile FIXE, reale, pe colet se împart la
+  // cantitate, ca suma lor finală (după ce apelantul înmulțește înapoi cu cantitatea) să rămână corectă.
+  ['shipCharged','shipReal','accounting','packaging','misc','returnShip','importTax','other','marketing'].forEach(f=>{
+    if(v[f]!==undefined)v[f]=(Number(v[f])||0)/qty;
+  });
   const r=pcCalculate(ch,v);
   const vanzareFaraTva=r.sell,vanzareCuTva=Math.round(r.sell*(1+r.vat)*100)/100,profit=r.net,marja=Math.round(r.margin*100)/100;
   const minPret=ch==='emag'?(p.priceEmag||0):ch==='trendyol'?(p.priceTrendyol||0):(p.priceSell||0);
@@ -20031,9 +20047,27 @@ async function pcomReassignCommittedProduct(idx,oldProdId){
     toast(applied?`Comandă mutată pe „${newP.name}” ✓ — stoc și Jurnal corectate la ambele produse`:`Produs schimbat pe „${newP.name}” ✓ — salvat și în Staff`);
   }catch(e){toast('Nu am putut schimba produsul: '+(e.message||e),'err');revert();}
 }
+// Bug real, raportat direct pe o comandă reală (Trendyol, „Set of Baofeng BF-888S Radios, 4 Units" →
+// cantitate corectată manual de la 1 la 2 cu săgeata +/−, profitul afișat CREȘTEA la fiecare apăsare
+// de „+" în loc să scadă): EXACT bug-ul deja reparat la applyPcomSuggestedQty (vezi comentariul de
+// acolo — „Set 6 stații radio", +377.95 RON pe o vânzare de 297.79 RON), dar fixul nu fusese aplicat
+// și aici — săgeata manuală +/− și căsuța de cantitate editabilă schimbau cantitatea FĂRĂ să împartă
+// prețul liniei la același raport, deci prețul rămânea „per cantitatea veche" (de obicei prețul
+// TOTAL al unei comenzi native de 1 „listare"), dar calculul îl trata ca preț PE BUCATA nouă, apoi îl
+// înmulțea din nou cu noua cantitate — profitul creștea la fiecare „+" în loc să reflecte corect că
+// aceiași bani se împart acum pe mai multe bucăți fizice. Același raport aplicat acum și aici.
+function pcomRescalePriceForQty(it,newQty){
+  const oldQty=Number(it.cantitate)||1,ratio=newQty/oldQty;
+  if(ratio>0&&ratio!==1){
+    it.pretFaraTva=Math.round((Number(it.pretFaraTva)||0)/ratio*100)/100;
+    it.pretTotalCuTva=Math.round((Number(it.pretTotalCuTva)||0)/ratio*100)/100;
+  }
+}
 function pcomAdjustQty(idx,delta){
   const it=pcImpParsed[idx];
-  it.cantitate=Math.max(0.5,Math.round(((Number(it.cantitate)||1)+delta)*100)/100);
+  const newQty=Math.max(0.5,Math.round(((Number(it.cantitate)||1)+delta)*100)/100);
+  pcomRescalePriceForQty(it,newQty);
+  it.cantitate=newQty;
   it.suggestedCantitate=null;
   renderPcomImportPreview();
   pcomPersistQtyIfCommitted(idx);
@@ -20043,7 +20077,9 @@ function pcomAdjustQty(idx,delta){
 function pcomSetQty(idx,val){
   const it=pcImpParsed[idx];
   const n=Number(String(val).replace(',','.'));
-  it.cantitate=Math.max(0.5,Math.round((n||1)*100)/100);
+  const newQty=Math.max(0.5,Math.round((n||1)*100)/100);
+  pcomRescalePriceForQty(it,newQty);
+  it.cantitate=newQty;
   it.suggestedCantitate=null;
   // amânat cu setTimeout: onchange rulează în timpul unui blur pe input-ul din DOM-ul pe care tocmai
   // îl înlocuim — dacă îl înlocuim sincron aici, browserul aruncă "node no longer a child" pe unele căi
@@ -20137,12 +20173,11 @@ function pcomVintedGroupFinancialsHtml(groupIdxs){
 // peste tot în calcul, nu doar la stocul scăzut.
 async function applyPcomSuggestedQty(idx){
   const it=pcImpParsed[idx];if(!it?.suggestedCantitate)return;
-  const ratio=it.suggestedCantitate/(Number(it.cantitate)||1);
+  // Acum folosește același helper ca pcomAdjustQty/pcomSetQty (vezi comentariul de acolo) — identic
+  // matematic cu ce era aici înainte, doar extras, ca toate cele 3 căi care schimbă cantitatea unei
+  // linii să rămână garantat în sincron, nu doar coincident identice.
+  pcomRescalePriceForQty(it,it.suggestedCantitate);
   it.cantitate=it.suggestedCantitate;it.suggestedCantitate=null;
-  if(ratio>0){
-    it.pretFaraTva=Math.round((Number(it.pretFaraTva)||0)/ratio*100)/100;
-    it.pretTotalCuTva=Math.round((Number(it.pretTotalCuTva)||0)/ratio*100)/100;
-  }
   renderPcomImportPreview();
   // Linia poate fi deja comisă (confirmare instant, vezi autoCommitConfidentPcomLines) — hint-ul
   // „Titlul sugerează" nu se ascunde la comitere, deci „Aplică" se poate apăsa și DUPĂ ce comanda e
@@ -21893,12 +21928,17 @@ function pcxFinancialsHtml(idx){
   const totalProfit=Math.round(fin.profit*it.cantitate*100)/100;
   const profitColor=totalProfit<0?'--rd':(fin.marja<10?'--or':'--gr');
   const minLbl=fin.minPret>0?`<div class="pcx-fin-sub${fin.subMinim?' warn':''}">Preț minim: ${fin.minPret.toFixed(2)} RON${fin.subMinim?' ⚠ vândut sub minim':''}</div>`:'';
+  // „/buc” pe prețul unitar când cantitatea>1 — cerut direct, cu o comandă reală de 4 buc.: „ce e
+  // 27.01?” (era prețul PE BUCATĂ, afișat fără nicio etichetă, lângă un profit care e totalul liniei
+  // întregi — confuzie reală, nu doar calcul greșit). La cantitate 1 rămâne identic ca înainte (nimic
+  // de clarificat când prețul/bucată și totalul liniei sunt același număr).
+  const perBuc=it.cantitate!=1?'/buc':'';
   return`<div class="pcx-fin">
     <div class="pcx-fin-main">
-      <span class="pcx-fin-price">${fin.vanzareCuTva.toFixed(2)} RON</span>
+      <span class="pcx-fin-price">${fin.vanzareCuTva.toFixed(2)} RON${perBuc}</span>
       <span class="pcx-fin-profit" style="color:var(${profitColor})">${totalProfit>=0?'+':''}${totalProfit.toFixed(2)} RON <small>(${fin.marja.toFixed(1)}%)</small></span>
     </div>
-    <div class="pcx-fin-sub">Fără TVA: ${fin.vanzareFaraTva.toFixed(2)} RON</div>
+    <div class="pcx-fin-sub">Fără TVA: ${fin.vanzareFaraTva.toFixed(2)} RON${perBuc}</div>
     ${minLbl}
   </div>`;
 }
