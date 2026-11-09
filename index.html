@@ -5003,6 +5003,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:640,text:'Comenzi Platforme — verificare completă, „de la 0", a tot calculul financiar (sume vânzări + profit estimat), cerută direct după fixurile anterioare (#638). Găsite și reparate încă 2 probleme reale, în plus față de cele deja cunoscute: (1) Comenzile ANULATE contau în continuare la „Total încasări"/„Profit vânzări"/toate statisticile de pe Dashboard și Raport vânzări (Vânzări pe canale, Top produse, Pe categorii, graficul de profit) — peste tot ÎN REST în aplicație (AWB, picker, Staff, duplicate — zeci de locuri) o comandă anulată e deja exclusă automat, dar lipsea exact din agregările de bani. Reparat la sursă, printr-un singur punct comun (pcomActiveRows), folosit acum de toate cele 11 funcții care însumează vânzări/profit — pe datele reale găsite doar 2 comenzi anulate, însumând 173.31 RON, scăzute acum corect din total. (2) Liniile „soră" dintr-un lot Vinted consolidat („Grupează N articole" — prețul TOTAL stă doar pe prima linie, restul au preț 0, cerut direct la vremea respectivă) treceau prin calculul de profit normal cu venit 0, dar cost de achiziție real — ieșea un „profit" fals negativ, numărat în minus la fiecare total. Reparat: o linie cu preț 0 nu mai calculează deloc, rămâne 0 peste tot (8 rânduri reale găsite, -207.82 RON „pierdere" falsă, eliminată din total). Corecție de date aplicată și pe istoricul deja scris în bază pentru ambele (profit_estimat/marja_estimata recalculate pe cele 8 rânduri cu preț 0 — comenzile anulate nu au nevoie de corecție, sunt deja excluse la citire). Verificat de 2 ori: sintaxă + 74 de verificări izolate pe funcțiile reale extrase din cod (toate cele 11 funcții confirmate că folosesc pcomActiveRows, nu PCOM direct; gardă preț 0 cu exemplul EXACT din producție; regresie completă pe cazurile normale, neatinse) + confirmare directă pe pagina reală, locală, cu date live din producție (diferența exactă de 173.31 RON reprodusă și confirmată reparată).',date:'2026-11-09'},
   {n:639,text:'Sincronizare — căutarea de produs din picker-ul de mapare manuală caută acum pe CUVINTE, nu pe un singur șir literal — cerut direct, cu exemplu real: „brad nins" nu găsea „Brad decorativ de Craciun AB HOMES, nins, 28 cm" fiindcă „brad" și „nins" nu erau alăturate în nume (alte cuvinte stăteau între ele), iar căutarea veche cerea o singură potrivire, în ordine exactă. Acum fiecare cuvânt tastat trebuie găsit undeva în nume/SKU, indiferent de ordine sau alăturare — ca o căutare normală. Pe lângă asta, căutarea ignoră acum și diacriticele („brăd"/„brad" se potrivesc la fel), reutilizând stripDiacritics deja folosit peste tot la salvarea denumirilor. Verificat de 2 ori: sintaxă + 12 verificări izolate pe funcția reală extrasă din cod (exemplul EXACT din captură, cuvinte în ordine inversă, cuvânt din nume + cuvânt din SKU combinate, diacritice pe interogare și pe numele produsului, cuvânt absent — corect niciun rezultat, căutare goală, produs fără SKU, plafonul de 80 de rezultate neatins) + confirmare vizuală Playwright pe server local, pe date reale din producție.',date:'2026-11-08'},
   {n:638,text:'Comenzi Platforme — 2 bug-uri reale în calculul financiar de pe fiecare linie, raportate direct pe 2 comenzi reale, diferite: (1) „ce e 27.01?" pe o comandă eMAG de 4 buc. „Suport autoadeziv", care arăta „-71.8% marjă" — produsul costă doar 13.16 RON, deci era absurd. Cauza: costurile FIXE pe colet (transport real, contabilitate, ambalare — din setările implicite ale Calculator profit) se numărau o dată PE BUCATĂ, deci de 4 ori pentru un singur colet cu 4 bucăți, nu o dată pentru tot coletul — reparat împărțindu-le la cantitate înainte de calcul. (2) „cand dam plus, profitul ar trebui sa scada, de ce creste?" pe o comandă Trendyol („Set 4 Baofeng", cantitate corectată manual de la 1 la 2 cu săgeata +): prețul liniei (preț total al „1 set", la cantitatea veche) nu se rescala niciodată la ajustarea manuală a cantității — era deja reparat, dar DOAR la butonul „Titlul sugerează… Aplică", nu și la săgeata +/− sau la căsuța de cantitate editabilă manual. Extins același fix (rescalare proporțională a prețului, exact raportul vechi/nou) și acolo — acum profitul scade corect când spui sistemului că aceiași bani acoperă mai multe bucăți ale TALE. Pe lângă fix, prețul mare afișat ("27.01 RON") capătă eticheta „/buc" când cantitatea≠1, ca să fie clar de la ce pornește calculul. Verificat de 2 ori: sintaxă + 45 de verificări izolate pe funcțiile reale extrase din cod (ambele exemple EXACTE din rapoarte, reproduse și confirmate reparate — regresie completă la cantitate=1, neatinsă — invariant financiar verificat independent, pe mai multe cantități, eMAG și Trendyol — toate 3 căile care schimbă cantitatea rescalează identic prețul) + confirmare vizuală Playwright, pe server local, cu exact cele 2 comenzi din rapoarte, inclusiv simularea clickurilor reale pe săgeata +.',date:'2026-11-08'},
   {n:637,text:'Sincronizare — buton nou pe fiecare rând din previzualizarea de import, „⚡ Salvează acum", cerut direct: „vreau sa avem undeva un buton prin care sincronizarea sa se salveze in timp real, pana la aplicarea butonului general si sa dispara din lista, o data sincronizat". Până acum, o mapare confirmată (sugestie AI, potrivire fuzzy, alegere manuală din picker, sau „✚ produs nou") aștepta tot lotul — singura cale de salvare era „Adaugă mapările selectate", care aplică totul deodată, la final. Modelul exista deja parțial (autoApplyConfidentSyncLines face exact asta, dar STRICT pe potrivirile prin PNK, automat, fără niciun buton) — acum extins cu un buton explicit, pe ORICE rând cu o potrivire, indiferent de starea „✓ Inclus"/„Neinclus": scrie direct în Supabase (produsul nou, dacă e cazul, apoi maparea) și dispare imediat din listă, fără să mai aștepte nimic altceva. Verificat de 2 ori: sintaxă + 47 de verificări izolate pe funcția reală extrasă din cod (rând cu produs deja ales — salvare directă —, rând „✚ produs nou" — creează produsul, apoi maparea, cu ID-ul corect —, eșec la crearea produsului — eroare clară, rândul rămâne în listă —, eșec la salvarea mapării — eroare clară, rândul rămâne în listă —, rând fără nicio potrivire — gardă, nimic nu se întâmplă —, fără conexiune Supabase, index invalid, ordinea în lista de mapări, platforma implicită) + confirmare vizuală directă cu Playwright, în browser real: ambele cazuri (produs existent și produs nou) salvate corect, rândurile dispar, toast-ul de confirmare apare, lista revine la ecranul normal când se golește complet.',date:'2026-11-08'},
@@ -7277,16 +7278,23 @@ function purchasesByDate(){
   return map;
 }
 function currentYM(){const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;}
+// „Comandă anulată nu e o vânzare" — folosit de TOATE agregările de venit/profit de mai jos (Total
+// încasări, Profit vânzări, statistici pe canal/produs/categorie). Bug real, găsit verificând datele
+// din producție: !o.anulata e deja un tipar consecvent, aplicat peste tot ÎN REST în fișier (AWB,
+// picker, Staff, duplicate — zeci de locuri) — dar lipsea exact din agregările financiare, singurul
+// loc unde o comandă anulată chiar ajungea să conteze ca bani reali. Doar 2 comenzi anulate existau
+// efectiv în bază la reparație, dar funcția previne recurența pentru oricâte vor mai apărea.
+function pcomActiveRows(){return PCOM.filter(o=>!o.anulata);}
 // Vânzări prin eMAG/Trendyol (platforma_comenzi) — separate de JL (vânzările directe), ca să existe
 // o imagine completă a activității, nu doar canalul direct.
 function pcomAllTimeTotal(){
   let value=0,qty=0;
-  PCOM.forEach(o=>{value+=Number(o.pretTotalCuTvaRon)||0;qty+=Number(o.cantitate)||0;});
+  pcomActiveRows().forEach(o=>{value+=Number(o.pretTotalCuTvaRon)||0;qty+=Number(o.cantitate)||0;});
   return{value,qty};
 }
 function pcomThisMonthTotal(){
   const ym=currentYM();let value=0,qty=0;
-  PCOM.forEach(o=>{if(!String(o.data||'').startsWith(ym))return;value+=Number(o.pretTotalCuTvaRon)||0;qty+=Number(o.cantitate)||0;});
+  pcomActiveRows().forEach(o=>{if(!String(o.data||'').startsWith(ym))return;value+=Number(o.pretTotalCuTvaRon)||0;qty+=Number(o.cantitate)||0;});
   return{value,qty};
 }
 // Jurnalul conține automat un ecou al fiecărei vânzări eMAG/Trendyol (scris la import, cerință veche
@@ -7300,7 +7308,7 @@ function pcomThisMonthTotal(){
 // registru aditiv, nu dublează nimic la nivel combinat.
 function platformCoveredByDay(){
   const map={}; // "produsId|zi_import" -> cantitate
-  PCOM.forEach(o=>{
+  pcomActiveRows().forEach(o=>{
     const day=String(o.createdAt||o.data||'').slice(0,10);if(!day)return;
     const k=o.produsId+'|'+day;
     map[k]=(map[k]||0)+(Number(o.cantitate)||0);
@@ -7311,7 +7319,7 @@ function dedupedSalesByDate(){
   const out={};
   const ensure=d=>out[d]||(out[d]={direct:{qty:0,value:0},emag:{qty:0,value:0},trendyol:{qty:0,value:0},vinted:{qty:0,value:0}});
   const covered=platformCoveredByDay();
-  PCOM.forEach(o=>{
+  pcomActiveRows().forEach(o=>{
     const day=String(o.createdAt||o.data||'').slice(0,10);if(!day)return;
     // Bug real găsit, raportat direct („la statistică adaugă și Vinted") — Vinted nu doar lipsea din
     // statistici, era CONTABILIZAT GREȘIT la eMAG (orice platformă diferită de „trendyol" cădea automat
@@ -7361,7 +7369,7 @@ function profitInRange(from,to){
     });
   });
   // Profitul de platformă se atribuie perioadei comenzii (data), la fel ca pcomThisMonthTotal().
-  const platformProfit=PCOM.reduce((s,o)=>{const d=String(o.data||'').slice(0,10);return(d>=from&&d<=to)?s+(Number(o.profitEstimat)||0):s;},0);
+  const platformProfit=pcomActiveRows().reduce((s,o)=>{const d=String(o.data||'').slice(0,10);return(d>=from&&d<=to)?s+(Number(o.profitEstimat)||0):s;},0);
   return directProfit+platformProfit;
 }
 function estimatedProfitThisMonth(){
@@ -7468,7 +7476,7 @@ function profitByDate(){
       out[day.date]=(out[day.date]||0)+remaining*((Number(en.priceSell)||0)-cost);
     });
   });
-  PCOM.forEach(o=>{
+  pcomActiveRows().forEach(o=>{
     const d=String(o.data||'').slice(0,10);if(!d)return;
     out[d]=(out[d]||0)+(Number(o.profitEstimat)||0);
   });
@@ -7486,7 +7494,7 @@ function profitSeriesInRange(from,to){
 function comenziSeriesInRange(from,to,platforma){
   const seen=new Set();
   const out={};
-  PCOM.forEach(o=>{
+  pcomActiveRows().forEach(o=>{
     if(platforma!=='all'&&o.platforma!==platforma)return;
     const d=String(o.createdAt||o.data||'').slice(0,10);if(d<from||d>to)return;
     const key=(o.comandaId||('row'+o.id))+'|'+o.platforma;
@@ -7536,7 +7544,7 @@ function transportInRangeSimple(from,to){
 function srActiveProductsCount(from,to){
   const ids=new Set();
   JL.forEach(day=>{if(day.date<from||day.date>to)return;(day.entries||[]).forEach(en=>{if(en.qty>0)ids.add(en.id);});});
-  PCOM.forEach(o=>{const d=String(o.createdAt||o.data||'').slice(0,10);if(d>=from&&d<=to&&o.produsId)ids.add(o.produsId);});
+  pcomActiveRows().forEach(o=>{const d=String(o.createdAt||o.data||'').slice(0,10);if(d>=from&&d<=to&&o.produsId)ids.add(o.produsId);});
   return ids.size;
 }
 
@@ -7729,7 +7737,7 @@ function productSalesInRange(from,to){
       e.qty+=remaining;e.value+=remaining*(Number(en.priceSell)||0);e.profit+=remaining*((Number(en.priceSell)||0)-cost);
     });
   });
-  PCOM.forEach(o=>{
+  pcomActiveRows().forEach(o=>{
     const d=String(o.createdAt||o.data||'').slice(0,10);if(d<from||d>to||!o.produsId)return;
     const e=ensure(o.produsId,o.produsNume||'—');
     e.qty+=Number(o.cantitate)||0;e.value+=Number(o.pretTotalCuTvaRon)||0;e.profit+=Number(o.profitEstimat)||0;
@@ -7754,7 +7762,7 @@ function categorySalesInRange(from,to){
       e.qty+=remaining;e.value+=remaining*(Number(en.priceSell)||0);
     });
   });
-  PCOM.forEach(o=>{
+  pcomActiveRows().forEach(o=>{
     const d=String(o.createdAt||o.data||'').slice(0,10);if(d<from||d>to)return;
     const p=o.produsId?P.find(x=>x.id===o.produsId):null;
     const e=ensure(p?.category||'Fără categorie');
@@ -8739,6 +8747,15 @@ function pcomSaleFinancials(p,it,platforma){
   const tvaAcq=p.tvaAcq??0.21;
   const acqNet=p.priceBuyTTC>0?(tvaAcq>0?p.priceBuyTTC/(1+tvaAcq):p.priceBuyTTC):0;
   const sellNetRon=pcomToRon(it.pretFaraTva,it.moneda);
+  const minPret0=ch==='emag'?(p.priceEmag||0):ch==='trendyol'?(p.priceTrendyol||0):(p.priceSell||0);
+  // Rând cu preț 0 — niciodată o vânzare reală cu preț 0 în practică (singurul caz întâlnit: liniile
+  // „soră" dintr-un lot Vinted consolidat, „Grupează N articole", unde prețul TOTAL stă DOAR pe prima
+  // linie — vezi pcomVintedGroupFinancialsHtml/pcomSetVintedPret — restul rămân intenționat 0). Fără
+  // această gardă, liniile-soră treceau prin calculul normal cu venit 0, dar cost de achiziție real —
+  // ieșea un „profit" fals negativ (cost fără venit atribuit), numărat separat la Total profit, deși
+  // acel cost e deja acoperit de venitul consolidat de pe prima linie. Bug real, găsit verificând datele
+  // din producție (8 rânduri, -207.82 RON „pierdere" falsă, numărată în plus la fiecare total/profit).
+  if(!sellNetRon)return{vanzareFaraTva:0,vanzareCuTva:0,profit:0,marja:0,minPret:minPret0,subMinim:false};
   const qty=Math.max(1,Number(it.cantitate)||1);
   const v={...pcDefaultState(ch,acqNet),sell:sellNetRon};
   // Bug real, raportat direct pe o comandă reală (4 buc. „Suport autoadeziv”, 27.01 RON/buc, cost
@@ -8757,8 +8774,7 @@ function pcomSaleFinancials(p,it,platforma){
   });
   const r=pcCalculate(ch,v);
   const vanzareFaraTva=r.sell,vanzareCuTva=Math.round(r.sell*(1+r.vat)*100)/100,profit=r.net,marja=Math.round(r.margin*100)/100;
-  const minPret=ch==='emag'?(p.priceEmag||0):ch==='trendyol'?(p.priceTrendyol||0):(p.priceSell||0);
-  return{vanzareFaraTva,vanzareCuTva,profit,marja,minPret,subMinim:minPret>0&&vanzareCuTva<minPret};
+  return{vanzareFaraTva,vanzareCuTva,profit,marja,minPret:minPret0,subMinim:minPret0>0&&vanzareCuTva<minPret0};
 }
 function dbToPcom(r){
   return{id:r.id,platforma:r.platforma,data:r.data,comandaId:r.comanda_id||'',pnk:r.pnk||'',tara:r.tara||'',codProdus:r.cod_produs||'',
@@ -22979,7 +22995,7 @@ async function applyPcomImport(){
 }
 /* PROFIT VÂNZĂRI / TOTAL ÎNCASĂRI (agregări peste platforma_comenzi) */
 function pcomFilteredRows(platforma,periodDays){
-  let rows=PCOM;
+  let rows=pcomActiveRows();
   if(platforma&&platforma!=='all')rows=rows.filter(o=>o.platforma===platforma);
   if(periodDays&&periodDays!=='all'){
     const cutoff=new Date();cutoff.setDate(cutoff.getDate()-Number(periodDays));
