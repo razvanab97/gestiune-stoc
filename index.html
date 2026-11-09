@@ -5009,6 +5009,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:643,text:'Comenzi Platforme — reparat un bug real de performanță introdus chiar de butonul „📮 Alege AWB" (#641), raportat direct: „de ce merge usor greu platforma?". Măsurat cu Playwright, nu presupus: pe un lot mare (251 de linii, ca în producție), fiecare buton re-scana TOATE erorile AWB nerezolvate ȘI re-căuta încă o dată rândul din platforma_comenzi (deja găsit de cardul din jurul lui) — DOAR ca să afișeze o numărătoare „(N)". Pe un lot mare, costul strict al acestei funcții a scăzut de la sute de milisecunde la sub 15ms, confirmat cu un test care numără exact câte scanări mai rămân (0, înainte erau sute). Numărătoarea pe platformă se calculează acum o singură dată per randare (nu per linie), iar rândul deja găsit de card se transmite direct, în loc să fie recăutat. Nimic vizual nu s-a schimbat — exact aceleași numere, doar calculate o singură dată. Verificat de 2 ori: sintaxă + 15 verificări izolate pe funcțiile reale extrase din cod (numărătoarea pe platformă corectă, cache-ul rămâne neschimbat pe parcursul randării, 0 apeluri redundante — verificat direct, nu doar cronometrat, regresie completă pe toate condițiile de afișare a butonului) + măsurătoare reală, înainte/după, pe exact scenariul raportat.',date:'2026-11-09'},
   {n:642,text:'Comenzi Platforme — dată mică (📅) pe antetul fiecărei comenzi, lângă numărul ei, cerut direct: „sa avem si date cand a fost adaugata comanda, undeva mic". Arată data comenzii (câmpul din platformă, mereu disponibil — chiar și pe o linie încă necomisă în previzualizare, spre deosebire de data scrierii efective în bază, care există abia după comitere). Verificat de 2 ori: sintaxă + 7 verificări pe funcția reală de formatare (dată validă, lipsă, invalidă — fără crash) + confirmare vizuală Playwright pe server local.',date:'2026-11-09'},
   {n:641,text:'Comenzi Platforme — buton nou „📮 Alege AWB” pe fiecare linie fără AWB, cerut direct: „asa cum avem functia de selectare produs, pe tabul comenzii, asa sa avem si selectare AWB din cele potrivite pentru fiecare platforma, vinted la vinted, emag la emag, trendyol la trendyol. Cele care nu se asociaza automat, sa apara in toate categoriile". Apare exact unde apărea deja avertismentul pasiv „⚠️ Fără AWB" — acum e și acțiune: un dropdown căutabil cu toate AWB-urile citite dintr-un PDF, dar nerezolvate încă (aceleași din clopoțelul 🔔), filtrate pe platforma comenzii. Platforma unui AWB nerezolvat se deduce acum din semnale sigure (numele fișierului sursă — export direct din platformă — sau prefixul AWB-ului, pentru formatele deja dovedite exclusive unei platforme, din catalogul complet verificat la #600); pe formatele ambigue, folosite de mai multe platforme (Sameday/DPD/Cargus standard), nu se ghicește — AWB-ul rămâne vizibil în TOATE listele, exact cum s-a cerut. Aplicarea alegerii reutilizează 100% associateAwbErrorToOrder — aceeași funcție deja folosită de „🔗 Asociază" din clopoțel (acolo pornești de la AWB, alegi comanda; aici pornești de la comandă, alegi AWB-ul) — niciun cod nou de scriere, doar un punct de intrare în plus. Verificat de 2 ori: sintaxă + 30 de verificări izolate pe funcțiile reale extrase din cod (deducerea platformei pe toate semnalele din catalog, inclusiv cazul AMBIGUU — rămâne corect gol —, filtrarea candidaților pe fiecare platformă + cei nedeterminați peste tot, vizibilitatea butonului EXACT ca la avertismentul vechi, căutare pe cuvinte în dropdown, aplicarea cu argumentele corecte către associateAwbErrorToOrder) + confirmare vizuală Playwright pe server local, cu date reale amestecate cu date de test (inclusiv un AWB real, nerezolvat, din producție, apărut corect ca „nedeterminat — peste tot").',date:'2026-11-09'},
   {n:640,text:'Comenzi Platforme — verificare completă, „de la 0", a tot calculul financiar (sume vânzări + profit estimat), cerută direct după fixurile anterioare (#638). Găsite și reparate încă 2 probleme reale, în plus față de cele deja cunoscute: (1) Comenzile ANULATE contau în continuare la „Total încasări"/„Profit vânzări"/toate statisticile de pe Dashboard și Raport vânzări (Vânzări pe canale, Top produse, Pe categorii, graficul de profit) — peste tot ÎN REST în aplicație (AWB, picker, Staff, duplicate — zeci de locuri) o comandă anulată e deja exclusă automat, dar lipsea exact din agregările de bani. Reparat la sursă, printr-un singur punct comun (pcomActiveRows), folosit acum de toate cele 11 funcții care însumează vânzări/profit — pe datele reale găsite doar 2 comenzi anulate, însumând 173.31 RON, scăzute acum corect din total. (2) Liniile „soră" dintr-un lot Vinted consolidat („Grupează N articole" — prețul TOTAL stă doar pe prima linie, restul au preț 0, cerut direct la vremea respectivă) treceau prin calculul de profit normal cu venit 0, dar cost de achiziție real — ieșea un „profit" fals negativ, numărat în minus la fiecare total. Reparat: o linie cu preț 0 nu mai calculează deloc, rămâne 0 peste tot (8 rânduri reale găsite, -207.82 RON „pierdere" falsă, eliminată din total). Corecție de date aplicată și pe istoricul deja scris în bază pentru ambele (profit_estimat/marja_estimata recalculate pe cele 8 rânduri cu preț 0 — comenzile anulate nu au nevoie de corecție, sunt deja excluse la citire). Verificat de 2 ori: sintaxă + 74 de verificări izolate pe funcțiile reale extrase din cod (toate cele 11 funcții confirmate că folosesc pcomActiveRows, nu PCOM direct; gardă preț 0 cu exemplul EXACT din producție; regresie completă pe cazurile normale, neatinse) + confirmare directă pe pagina reală, locală, cu date live din producție (diferența exactă de 173.31 RON reprodusă și confirmată reparată).',date:'2026-11-09'},
@@ -19664,11 +19665,18 @@ function pcomPickBtnHtml(idx){
 // comenzii, asa sa avem si selectare AWB din cele potrivite pentru fiecare platforma". Apare EXACT
 // când apărea deja avertismentul pasiv „⚠️ Fără AWB" (comandă comisă, fără AWB, nu Vinted — acolo
 // „AWB"-ul e de fapt „Cod", editabil separat, vezi codHtml) — devine acum și acțiune, nu doar semnal.
-function pcomAwbPickBtnHtml(idx){
+// committedRow — opțional, ca apelantul (pcxLineHtml) să-l transmită pe cel deja găsit, în loc să se
+// re-caute aici (PCOM.find pe tot tabelul, a doua oară pe aceeași linie — parte din același bug de
+// performanță de mai sus: la o comandă cu sute de linii, pe un PCOM cu mii de rânduri reale, acel
+// re-căutat redundant conta la fel de mult cât scanarea AWB_ISSUES deja reparată). Fallback-ul (caută
+// singur) rămâne, pentru orice alt apelant care nu are deja rândul la îndemână.
+function pcomAwbPickBtnHtml(idx,committedRow){
   const it=pcImpParsed[idx];if(!it)return'';
-  const row=it._committedId?PCOM.find(o=>o.id===it._committedId):null;
+  const row=committedRow!==undefined?committedRow:(it._committedId?PCOM.find(o=>o.id===it._committedId):null);
   if(!row||row.anulata||row.awb||it.platforma==='vinted')return'';
-  const n=pcomAwbIssueCandidates(it.platforma).length;
+  // Citește din cache (pcomRecomputeAwbIssueCounts, calculat o dată per randare — vezi pcxRenderOrders),
+  // nu recalculează per linie — vezi comentariul de la cache, mai sus, pentru bug-ul real de performanță.
+  const n=pcomAwbIssueCountsByPlatform[String(it.platforma||'').toLowerCase()]||0;
   return`<button type="button" class="pcx-btn pcx-awb-pick-trigger" style="padding:4px 10px;font-size:14px;align-self:flex-start" onclick="openPcomAwbPick(event,${idx})" title="Alege un AWB deja citit (dintr-un PDF), dar nerezolvat încă — filtrat pe platforma acestei comenzi">📮 Alege AWB${n?` (${n})`:''}</button>`;
 }
 // La momentul asocierii (automată sau manuală), arată imediat stocul intern — actual și proiectat
@@ -22211,7 +22219,7 @@ function pcxLineHtml(idx,groupIdxs){
       ${includeBtn}
       ${cancelBtn}
       ${skipBtn}
-      ${pcomAwbPickBtnHtml(idx)}
+      ${pcomAwbPickBtnHtml(idx,committedRow)}
       <div class="smi-pick" id="pcmi-pick-${idx}">${pcomPickBtnHtml(idx)}</div>
       <button type="button" class="pcx-btn pcx-btn-danger" style="padding:4px 10px;font-size:14px" onclick="removePcomLine(${idx})" title="Elimină definitiv această linie din import">🗑 Șterge</button>
     </div>
@@ -22417,6 +22425,12 @@ function pcxRenderOrders(){
   renderStaleStaffOrdersCard();
   const host=document.getElementById('pcx-orders-list');if(!host)return;
   pcomComputeGroups();
+  // Bug real de performanță, raportat direct („de ce merge usor greu platforma?"), găsit cu o măsurare
+  // reală (Playwright): la 251 linii fără AWB, randarea sărea de la 74ms la 481ms — fiecare buton „Alege
+  // AWB” (pcomAwbPickBtnHtml) re-scana AWB_ISSUES (zeci de rânduri) DOAR ca să afișeze numărătoarea
+  // „(N)”, de 251 de ori, nu o dată. AWB_ISSUES nu se schimbă în timpul UNUI singur randaj — calculăm
+  // numărătoarea per platformă O SINGURĂ DATĂ aici, la începutul randării, nu per linie.
+  pcomRecomputeAwbIssueCounts();
   const q=(document.getElementById('pcx-search')?.value||'').toLowerCase().trim();
   const platF=document.getElementById('pcx-filter-platform')?.value||'all';
   const statF=document.getElementById('pcx-filter-status')?.value||'all';
@@ -25592,6 +25606,17 @@ function pcomAwbIssueCandidates(platforma){
     const inferred=awbErrorInferPlatform(x);
     return!inferred||inferred===plat;
   }).sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));
+}
+// Numărătoarea „(N)” de pe butonul „Alege AWB” — precalculată O SINGURĂ DATĂ per platformă, la
+// începutul unei randări (vezi pcxRenderOrders), nu per linie. Bug real de performanță, raportat
+// direct („de ce merge usor greu platforma?”): pcomAwbIssueCandidates (mai sus) scanează AWB_ISSUES de
+// la 0 — corect, dar ieftin DOAR dacă rulează o dată; apelat din pcomAwbPickBtnHtml, o dată per linie
+// fără AWB, pe o comandă cu sute de linii devenea sute de scanări ale aceleiași liste neschimbate.
+// AWB_ISSUES nu se schimbă în timpul unei randări — cache-ul ăsta scurt ține loc exact de atât.
+let pcomAwbIssueCountsByPlatform={};
+function pcomRecomputeAwbIssueCounts(){
+  pcomAwbIssueCountsByPlatform={};
+  ['emag','trendyol','vinted','direct'].forEach(plat=>{pcomAwbIssueCountsByPlatform[plat]=pcomAwbIssueCandidates(plat).length;});
 }
 // Include și comenzile ÎNCĂ necomise din previzualizare („Neinclus" — vezi resolveVintedDigitalLabelMatch
 // mai sus, aceeași reparație pe termen lung), nu doar cele deja scrise în platforma_comenzi — altfel
