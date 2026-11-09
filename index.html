@@ -3945,6 +3945,12 @@ button.pcx-include-btn.included{border-color:var(--gr)}
          deși logica de asociere rula corect pe fundal. Mutat ca frate direct al ambelor variante,
          niciodată ascuns doar pentru că se schimbă modul de prezentare. -->
     <div class="smi-pickdrop" id="pcmi-pickdrop"><div style="display:flex;gap:6px;align-items:center"><input type="text" id="pcmi-pick-search" placeholder="Caută produs după nume sau SKU…" oninput="filterPcomPickDebounced()" style="flex:1"><button type="button" class="btn btn-sm" style="flex-shrink:0;padding:6px 8px" onclick="pcomPickRecognizeImage()" title="Lipește o poză din clipboard (captură eMAG/Trendyol sau poza produsului) — AI recunoaște produsul">📋</button></div><div class="smi-pick-list" id="pcmi-pick-list"></div></div>
+    <!-- Picker de AWB pe linia de comandă — oglinda lui #pcmi-pickdrop de mai sus (produs), dar pentru
+         AWB — cerut direct: „asa cum avem functia de selectare produs ... asa sa avem si selectare AWB
+         din cele potrivite pentru fiecare platforma". Frate direct, la fel poziționat, din același motiv
+         (vezi comentariul de la #pcmi-pickdrop/#awb-pickdrop mai sus — altfel rămâne ascuns odată cu
+         #pcom-import-legacy la USE_PCOM_REDESIGN=true). -->
+    <div class="smi-pickdrop" id="pcmi-awb-pickdrop"><input type="text" id="pcmi-awb-pick-search" placeholder="Caută AWB după cod, comandă, fișier…" oninput="filterPcomAwbPickDebounced()"><div class="smi-pick-list" id="pcmi-awb-pick-list"></div></div>
     <!-- Același bug, aceeași reparație (vezi comentariul de mai sus la #pcmi-pickdrop) — găsit direct
          („nu pare să deschidă"): #awb-pickdrop stătea în interiorul #pcom-import-legacy, ascuns odată cu
          el la USE_PCOM_REDESIGN=true. Mutat aici, frate direct al ambelor variante. -->
@@ -5003,6 +5009,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:641,text:'Comenzi Platforme — buton nou „📮 Alege AWB” pe fiecare linie fără AWB, cerut direct: „asa cum avem functia de selectare produs, pe tabul comenzii, asa sa avem si selectare AWB din cele potrivite pentru fiecare platforma, vinted la vinted, emag la emag, trendyol la trendyol. Cele care nu se asociaza automat, sa apara in toate categoriile". Apare exact unde apărea deja avertismentul pasiv „⚠️ Fără AWB" — acum e și acțiune: un dropdown căutabil cu toate AWB-urile citite dintr-un PDF, dar nerezolvate încă (aceleași din clopoțelul 🔔), filtrate pe platforma comenzii. Platforma unui AWB nerezolvat se deduce acum din semnale sigure (numele fișierului sursă — export direct din platformă — sau prefixul AWB-ului, pentru formatele deja dovedite exclusive unei platforme, din catalogul complet verificat la #600); pe formatele ambigue, folosite de mai multe platforme (Sameday/DPD/Cargus standard), nu se ghicește — AWB-ul rămâne vizibil în TOATE listele, exact cum s-a cerut. Aplicarea alegerii reutilizează 100% associateAwbErrorToOrder — aceeași funcție deja folosită de „🔗 Asociază" din clopoțel (acolo pornești de la AWB, alegi comanda; aici pornești de la comandă, alegi AWB-ul) — niciun cod nou de scriere, doar un punct de intrare în plus. Verificat de 2 ori: sintaxă + 30 de verificări izolate pe funcțiile reale extrase din cod (deducerea platformei pe toate semnalele din catalog, inclusiv cazul AMBIGUU — rămâne corect gol —, filtrarea candidaților pe fiecare platformă + cei nedeterminați peste tot, vizibilitatea butonului EXACT ca la avertismentul vechi, căutare pe cuvinte în dropdown, aplicarea cu argumentele corecte către associateAwbErrorToOrder) + confirmare vizuală Playwright pe server local, cu date reale amestecate cu date de test (inclusiv un AWB real, nerezolvat, din producție, apărut corect ca „nedeterminat — peste tot").',date:'2026-11-09'},
   {n:640,text:'Comenzi Platforme — verificare completă, „de la 0", a tot calculul financiar (sume vânzări + profit estimat), cerută direct după fixurile anterioare (#638). Găsite și reparate încă 2 probleme reale, în plus față de cele deja cunoscute: (1) Comenzile ANULATE contau în continuare la „Total încasări"/„Profit vânzări"/toate statisticile de pe Dashboard și Raport vânzări (Vânzări pe canale, Top produse, Pe categorii, graficul de profit) — peste tot ÎN REST în aplicație (AWB, picker, Staff, duplicate — zeci de locuri) o comandă anulată e deja exclusă automat, dar lipsea exact din agregările de bani. Reparat la sursă, printr-un singur punct comun (pcomActiveRows), folosit acum de toate cele 11 funcții care însumează vânzări/profit — pe datele reale găsite doar 2 comenzi anulate, însumând 173.31 RON, scăzute acum corect din total. (2) Liniile „soră" dintr-un lot Vinted consolidat („Grupează N articole" — prețul TOTAL stă doar pe prima linie, restul au preț 0, cerut direct la vremea respectivă) treceau prin calculul de profit normal cu venit 0, dar cost de achiziție real — ieșea un „profit" fals negativ, numărat în minus la fiecare total. Reparat: o linie cu preț 0 nu mai calculează deloc, rămâne 0 peste tot (8 rânduri reale găsite, -207.82 RON „pierdere" falsă, eliminată din total). Corecție de date aplicată și pe istoricul deja scris în bază pentru ambele (profit_estimat/marja_estimata recalculate pe cele 8 rânduri cu preț 0 — comenzile anulate nu au nevoie de corecție, sunt deja excluse la citire). Verificat de 2 ori: sintaxă + 74 de verificări izolate pe funcțiile reale extrase din cod (toate cele 11 funcții confirmate că folosesc pcomActiveRows, nu PCOM direct; gardă preț 0 cu exemplul EXACT din producție; regresie completă pe cazurile normale, neatinse) + confirmare directă pe pagina reală, locală, cu date live din producție (diferența exactă de 173.31 RON reprodusă și confirmată reparată).',date:'2026-11-09'},
   {n:639,text:'Sincronizare — căutarea de produs din picker-ul de mapare manuală caută acum pe CUVINTE, nu pe un singur șir literal — cerut direct, cu exemplu real: „brad nins" nu găsea „Brad decorativ de Craciun AB HOMES, nins, 28 cm" fiindcă „brad" și „nins" nu erau alăturate în nume (alte cuvinte stăteau între ele), iar căutarea veche cerea o singură potrivire, în ordine exactă. Acum fiecare cuvânt tastat trebuie găsit undeva în nume/SKU, indiferent de ordine sau alăturare — ca o căutare normală. Pe lângă asta, căutarea ignoră acum și diacriticele („brăd"/„brad" se potrivesc la fel), reutilizând stripDiacritics deja folosit peste tot la salvarea denumirilor. Verificat de 2 ori: sintaxă + 12 verificări izolate pe funcția reală extrasă din cod (exemplul EXACT din captură, cuvinte în ordine inversă, cuvânt din nume + cuvânt din SKU combinate, diacritice pe interogare și pe numele produsului, cuvânt absent — corect niciun rezultat, căutare goală, produs fără SKU, plafonul de 80 de rezultate neatins) + confirmare vizuală Playwright pe server local, pe date reale din producție.',date:'2026-11-08'},
   {n:638,text:'Comenzi Platforme — 2 bug-uri reale în calculul financiar de pe fiecare linie, raportate direct pe 2 comenzi reale, diferite: (1) „ce e 27.01?" pe o comandă eMAG de 4 buc. „Suport autoadeziv", care arăta „-71.8% marjă" — produsul costă doar 13.16 RON, deci era absurd. Cauza: costurile FIXE pe colet (transport real, contabilitate, ambalare — din setările implicite ale Calculator profit) se numărau o dată PE BUCATĂ, deci de 4 ori pentru un singur colet cu 4 bucăți, nu o dată pentru tot coletul — reparat împărțindu-le la cantitate înainte de calcul. (2) „cand dam plus, profitul ar trebui sa scada, de ce creste?" pe o comandă Trendyol („Set 4 Baofeng", cantitate corectată manual de la 1 la 2 cu săgeata +): prețul liniei (preț total al „1 set", la cantitatea veche) nu se rescala niciodată la ajustarea manuală a cantității — era deja reparat, dar DOAR la butonul „Titlul sugerează… Aplică", nu și la săgeata +/− sau la căsuța de cantitate editabilă manual. Extins același fix (rescalare proporțională a prețului, exact raportul vechi/nou) și acolo — acum profitul scade corect când spui sistemului că aceiași bani acoperă mai multe bucăți ale TALE. Pe lângă fix, prețul mare afișat ("27.01 RON") capătă eticheta „/buc" când cantitatea≠1, ca să fie clar de la ce pornește calculul. Verificat de 2 ori: sintaxă + 45 de verificări izolate pe funcțiile reale extrase din cod (ambele exemple EXACTE din rapoarte, reproduse și confirmate reparate — regresie completă la cantitate=1, neatinsă — invariant financiar verificat independent, pe mai multe cantități, eMAG și Trendyol — toate 3 căile care schimbă cantitatea rescalează identic prețul) + confirmare vizuală Playwright, pe server local, cu exact cele 2 comenzi din rapoarte, inclusiv simularea clickurilor reale pe săgeata +.',date:'2026-11-08'},
@@ -9060,6 +9067,7 @@ const renderJurnalDebounced=debounce(()=>renderJurnal(),200);
 const renderArchivePageDebounced=debounce(()=>renderArchivePage(),200);
 const filterSmProductPickDebounced=debounce(()=>filterSmProductPick(),150);
 const filterPcomPickDebounced=debounce(()=>filterPcomPick(),150);
+const filterPcomAwbPickDebounced=debounce(()=>filterPcomAwbPick(),150);
 const filterInvPickDebounced=debounce(()=>filterInvPick(),150);
 const filterSyncPickDebounced=debounce(()=>filterSyncPick(),150);
 const filterMergePickDebounced=debounce(()=>filterMergePick(),150);
@@ -19651,6 +19659,17 @@ function pcomPickBtnHtml(idx){
   const nm=p?`${esc(p.name)}${p.sku?' · '+esc(p.sku):''}`:'— alege produs —';
   return`<button type="button" class="smi-pick-btn" onclick="openPcomPick(event,${idx})">${th}<span class="smi-pick-nm">${nm}</span><span class="smi-pick-car">▾</span></button>`;
 }
+// „Alege AWB" pe fiecare linie — cerut direct: „asa cum avem functia de selectare produs, pe tabul
+// comenzii, asa sa avem si selectare AWB din cele potrivite pentru fiecare platforma". Apare EXACT
+// când apărea deja avertismentul pasiv „⚠️ Fără AWB" (comandă comisă, fără AWB, nu Vinted — acolo
+// „AWB"-ul e de fapt „Cod", editabil separat, vezi codHtml) — devine acum și acțiune, nu doar semnal.
+function pcomAwbPickBtnHtml(idx){
+  const it=pcImpParsed[idx];if(!it)return'';
+  const row=it._committedId?PCOM.find(o=>o.id===it._committedId):null;
+  if(!row||row.anulata||row.awb||it.platforma==='vinted')return'';
+  const n=pcomAwbIssueCandidates(it.platforma).length;
+  return`<button type="button" class="pcx-btn pcx-awb-pick-trigger" style="padding:4px 10px;font-size:14px;align-self:flex-start" onclick="openPcomAwbPick(event,${idx})" title="Alege un AWB deja citit (dintr-un PDF), dar nerezolvat încă — filtrat pe platforma acestei comenzi">📮 Alege AWB${n?` (${n})`:''}</button>`;
+}
 // La momentul asocierii (automată sau manuală), arată imediat stocul intern — actual și proiectat
 // după scăderea cantității de mai jos — ca omul să decidă pe loc: confirmă vânzarea (nu face nimic)
 // sau amână livrarea (nu se scade stocul, linia rămâne deoparte pentru mai târziu). Butonul de amânare
@@ -22191,6 +22210,7 @@ function pcxLineHtml(idx,groupIdxs){
       ${includeBtn}
       ${cancelBtn}
       ${skipBtn}
+      ${pcomAwbPickBtnHtml(idx)}
       <div class="smi-pick" id="pcmi-pick-${idx}">${pcomPickBtnHtml(idx)}</div>
       <button type="button" class="pcx-btn pcx-btn-danger" style="padding:4px 10px;font-size:14px" onclick="removePcomLine(${idx})" title="Elimină definitiv această linie din import">🗑 Șterge</button>
     </div>
@@ -22754,6 +22774,59 @@ async function pickPcomNewProduct(){
 document.addEventListener('click',ev=>{
   if(!ev.target.closest('#pcmi-pickdrop')&&!ev.target.closest('.smi-pick-btn')){
     const d=document.getElementById('pcmi-pickdrop');
+    if(d)d.classList.remove('on');
+  }
+});
+// Picker de AWB pe linia de comandă — oglinda lui openPcomPick/pickPcomProduct de mai sus, dar pentru
+// AWB în loc de produs: sursa e AWB_ISSUES (erorile nerezolvate din staff_awb_erori — vezi
+// pcomAwbIssueCandidates, filtrate pe platforma ACESTEI comenzi + cele fără platformă determinată).
+// Aplicarea reutilizează 100% associateAwbErrorToOrder, aceeași funcție folosită de picker-ul invers
+// (🔗 Asociază din clopoțel — pornește de la AWB, alegi comanda); aici pornim de la comandă, alegem AWB-ul.
+let pcomAwbPickIdx=null,pcomAwbPickVisible=null;
+function openPcomAwbPick(ev,idx){
+  ev.stopPropagation();
+  pcomAwbPickIdx=idx;
+  const drop=document.getElementById('pcmi-awb-pickdrop');
+  const btn=ev.currentTarget.getBoundingClientRect();
+  let left=btn.left,top=btn.bottom+4;
+  if(left+460>window.innerWidth)left=window.innerWidth-470;
+  if(top+420>window.innerHeight)top=Math.max(8,btn.top-424);
+  drop.style.left=zoomAdjust(left)+'px';drop.style.top=zoomAdjust(top)+'px';
+  drop.classList.add('on');
+  const search=document.getElementById('pcmi-awb-pick-search');
+  search.value='';
+  filterPcomAwbPick();
+  search.focus();
+}
+function pcomAwbIssueSearchText(x){return[x.awb,x.comanda_id,x.source_file,x.reason].filter(Boolean).join(' ').toLowerCase();}
+function renderPcomAwbPickRows(matches){
+  pcomAwbPickVisible=matches;
+  const list=document.getElementById('pcmi-awb-pick-list');
+  const rows=matches.map((x,i)=>{
+    const loc=x.comanda_id?`comandă #${esc(x.comanda_id)} găsită pe etichetă`:(x.source_file?esc(x.source_file)+(x.source_page?' p.'+x.source_page:''):'sursă necunoscută');
+    return`<div class="smi-pick-item" onclick="pickPcomAwbIssue(${i})"><div class="smi-pick-th-ph">📮</div><span class="smi-pick-item-nm"><b style="font-family:var(--mono)">${esc(x.awb)}</b><br><small style="color:var(--t3)">${loc}</small></span></div>`;
+  }).join('');
+  list.innerHTML=rows||`<div class="smi-pick-item" style="color:var(--t3);cursor:default">Niciun AWB nerezolvat disponibil pentru această platformă</div>`;
+}
+function filterPcomAwbPick(){
+  const it=pcImpParsed[pcomAwbPickIdx];if(!it)return;
+  const pool=pcomAwbIssueCandidates(it.platforma);
+  const raw=stripDiacritics(document.getElementById('pcmi-awb-pick-search').value.toLowerCase().trim());
+  const tokens=raw.split(/\s+/).filter(Boolean);
+  const matches=(tokens.length?pool.filter(x=>{const hay=stripDiacritics(pcomAwbIssueSearchText(x));return tokens.every(t=>hay.includes(t));}):pool).slice(0,80);
+  renderPcomAwbPickRows(matches);
+}
+async function pickPcomAwbIssue(i){
+  const x=pcomAwbPickVisible?.[i];const idx=pcomAwbPickIdx;const it=pcImpParsed[idx];
+  if(!x||!it)return;
+  const row=it._committedId?PCOM.find(o=>o.id===it._committedId):null;if(!row)return;
+  document.getElementById('pcmi-awb-pickdrop').classList.remove('on');
+  await associateAwbErrorToOrder(x,{comandaId:row.comandaId,platforma:row.platforma,_pending:false});
+  renderPcomImportPreview();
+}
+document.addEventListener('click',ev=>{
+  if(!ev.target.closest('#pcmi-awb-pickdrop')&&!ev.target.closest('.pcx-awb-pick-trigger')){
+    const d=document.getElementById('pcmi-awb-pickdrop');
     if(d)d.classList.remove('on');
   }
 });
@@ -25476,6 +25549,35 @@ function awbInferPlatformHint(p){
   if(p.cargusEmagLabel||p.cargusEmagAmbiguous||p.emagFoundUnmatched||p.emagHuLabel||p.emagHuAmbiguous||p.courier==='GLS')return'eMAG';
   if(p.vintedDigitalLabel||p.vintedAmbiguous||p.cargusClickCollectLabel)return'Vinted';
   return'';
+}
+// Aceeași idee ca awbInferPlatformHint, dar pe un rând DEJA SALVAT din staff_awb_erori (nu pe
+// rezultatul live al parseAwbLabelText — acela are steaguri detaliate, staff_awb_erori are doar
+// awb/source_file/reason text) — cerut direct: „asa cum avem functia de selectare produs ... asa sa
+// avem si selectare AWB din cele potrivite pentru fiecare platforma, vinted la vinted, emag la emag,
+// trendyol la trendyol". Coloana `platforma` există deja în schemă, dar nu e scrisă nicăieri încă
+// (confirmat direct pe date reale — toate cele 84 de erori nerezolvate din producție au platforma=null)
+// — deducem acum din semnale SIGURE, deja cunoscute din catalogul de etichete (vezi fiabilitate-citire-
+// awb.md): numele fișierului sursă (export direct din platformă, deci de încredere) sau prefixul AWB-
+// ului pentru formatele deja dovedite exclusive unei platforme. Niciun semnal ambiguu (Sameday/DPD/
+// Cargus standard, folosite de mai multe platforme) — rămâne gol, nu ghicim, cerut explicit „cele care
+// nu se asociaza automat, sa apara in toate categoriile".
+function awbErrorInferPlatform(x){
+  const file=String(x?.source_file||'').toLowerCase(),awb=String(x?.awb||'').toUpperCase();
+  if(/vinted/.test(file))return'vinted';
+  if(/emag/.test(file)||/^012emg/i.test(awb)||/^gls[_-]/.test(file))return'emag';
+  return'';
+}
+// Candidați pentru picker-ul de AWB de pe o linie de comandă — strict erorile încă nerezolvate
+// (AWB_ISSUES e deja filtrat resolved=false la încărcare), cu AWB citit (fără AWB, nimic de ales —
+// la fel ca assocLink din clopoțel), de pe PLATFORMA comenzii curente SAU cu platformă nedeterminată
+// (apar peste tot, cerut explicit, mai sus).
+function pcomAwbIssueCandidates(platforma){
+  const plat=String(platforma||'').toLowerCase();
+  return AWB_ISSUES.filter(x=>{
+    if(!x.awb)return false;
+    const inferred=awbErrorInferPlatform(x);
+    return!inferred||inferred===plat;
+  }).sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));
 }
 // Include și comenzile ÎNCĂ necomise din previzualizare („Neinclus" — vezi resolveVintedDigitalLabelMatch
 // mai sus, aceeași reparație pe termen lung), nu doar cele deja scrise în platforma_comenzi — altfel
