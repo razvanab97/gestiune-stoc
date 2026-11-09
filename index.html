@@ -5065,6 +5065,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:652,text:'Listă locală de aprovizionare — control complet nou pentru lucrul practic cu comenzile: sus arată acum câte comenzi pot fi pregătite integral chiar acum și câte se pot pregăti după sosirea mărfii deja marcată „pe drum”, fără a considera marfa drept recepționată. Lista are căutare rapidă după produs, cod furnizor sau EAN. A fost adăugată și „Numărătoare paralelă”: într-o singură bară cauți produsul, introduci cantitatea și îl adaugi în verificarea locală; la „Finalizează” primești comparația clară, produs cu produs, între ce ai ales și recomandarea ERP calculată din comenzile curente/stoc. Nu scrie în stoc sau comenzi. Din același loc, „Capturi furnizor” deschide fluxul existent de citire AI a mai multor screenshot-uri pentru comenzile pe drum.',date:'2026-11-10'},
   {n:651,text:'Listă locală de aprovizionare — corecție găsită direct pe ecranul real: previzualizarea avea 228 comenzi, iar lista arăta doar 219 fiindcă liniile „Amânată” erau excluse din greșeală. Acum toate comenzile vizibile în Comenzi Platforme intră în listă, inclusiv amânatele (marcate explicit). Pentru titlurile de pachete/seturi, de exemplu „Set 10 cutii…”, lista arată și folosește la necesarul de stoc cantitatea fizică sugerată de titlu, nu doar numărul de listări; rămâne un indicator galben informativ și nu rescrie automat comanda sau stocul din ERP.',date:'2026-11-09'},
   {n:650,text:'Comenzi Platforme — centralizatorul de comandat a devenit listă locală separată, în stilul fișierului Metro: platforma rămâne doar sursa instantaneului de comenzi și stoc; din butonul „📊 Deschide lista locală de comandat” se deschide o fereastră independentă, pregătită de tipărire sau „Salvează ca PDF”. Include TOATE comenzile vizibile din previzualizarea curentă (eMAG, Trendyol și Vinted, inclusiv produsele repetate pe mai multe comenzi, grupate corect pe același produs), nu doar cele bifate „Inclus”. Fiecare produs are fotografia reală, codul furnizorului/EAN când există, numărul total de bucăți comandate, stocul, rezervarea și necesarul exact de reaprovizionare. Pozele sunt încărcate explicit înainte de randare, inclusiv pentru produse ale căror imagini nu fuseseră încă văzute în Inventar.',date:'2026-11-09'},
   {n:649,text:'Comenzi Platforme — fereastră locală nouă „📊 Centralizator comenzi & stoc”, cerută direct pentru verificarea ultimelor comenzi eMAG și Trendyol: grupează produsele reale din previzualizarea curentă (sau, dacă ea e goală, comenzile active salvate), cu număr de comenzi, cantitate totală cerută, stoc ERP, bucăți deja aplicate, rezervări încă neaplicate, stoc după rezervare și exact ce trebuie comandat. O comandă deja aplicată rămâne vizibilă, dar nu se scade a doua oară din stoc; liniile fără produs asociat sunt arătate separat și nu primesc valori inventate. Din fiecare lipsă se poate adăuga produsul direct în lista existentă „Produse de comandat”.',date:'2026-11-09'},
@@ -22478,16 +22479,55 @@ function pcxStockShortageList(){
   });
   return out.sort((a,b)=>b.deficit-a.deficit);
 }
-// Imaginea completă a comenzilor aflate ACUM în Comenzi Platforme. Dacă există
-// previzualizarea curentă, ea este sursa corectă (poate conține linii încă necomise); dacă nu, folosim
-// comenzile active salvate. Nu le combinăm, ca aceeași comandă să nu poată fi numărată de două ori.
-function pcomOrderStockSummary(){
+// Sursa unică a listei locale: previzualizarea actuală câștigă, fiindcă poate conține și linii încă
+// necomise. Dacă ea e goală, cădem pe comenzile active salvate. Nu le combinăm, ca o comandă să nu
+// fie numărată de două ori.
+function pcomCurrentOrderSource(){
   const plats=new Set(['emag','trendyol','vinted']);
   // Lista locală este o verificare completă de aprovizionare: include și liniile „Amânată”, altfel
   // totalul nu mai corespunde cu contorul din previzualizare și exact produsele fără stoc pot dispărea.
   const draft=pcImpParsed.filter(x=>plats.has(x.platforma||pcImpPlatforma)&&!x._cancelledId);
   const source=draft.length?draft:PCOM.filter(x=>plats.has(x.platforma)&&!x.anulata&&!x.impachetat);
-  const sourceLabel=draft.length?'previzualizarea curentă':'comenzile active salvate';
+  return{source,sourceLabel:draft.length?'previzualizarea curentă':'comenzile active salvate'};
+}
+function pcomLineIsApplied(it){
+  const committed=it._committedId?PCOM.find(x=>Number(x.id)===Number(it._committedId)):it;
+  return!!(committed&&committed.efecteAplicate===true);
+}
+function pcomLinePhysicalQty(it,applied=pcomLineIsApplied(it)){
+  const amount=Math.max(0,parseQtyVal(it.cantitate,0)),suggested=Math.max(0,parseQtyVal(it.suggestedCantitate,0));
+  return!applied&&suggested>0?suggested:amount;
+}
+// Simulare locală: nu rezervă și nu schimbă nimic în ERP. Răspunsul arată câte comenzi complete se
+// pot pregăti în ordinea lor actuală, mai întâi din stocul fizic, apoi și după sosirea mărfii deja
+// înregistrate ca „pe drum”. O comandă cu mai multe produse este gata numai când le are pe toate.
+function pcomOrderReadiness(source,withIncoming=false){
+  const stock=new Map(P.filter(p=>!p.archived).map(p=>[Number(p.id),Math.max(0,qty(p)+(withIncoming?Math.max(0,parseQtyVal(p.incomingQty,0)):0))]));
+  const orders=new Map();
+  source.forEach((it,i)=>{
+    const platforma=it.platforma||pcImpPlatforma;
+    const key=platforma+'|'+(it.comandaId||it.id||('linie-'+i));
+    const order=orders.get(key)||{key,platforma,id:it.comandaId||it.id||'',lines:[]};
+    order.lines.push(it);orders.set(key,order);
+  });
+  let ready=0,blocked=0;
+  orders.forEach(order=>{
+    const needed=new Map();let can=true;
+    order.lines.forEach(it=>{
+      if(pcomLineIsApplied(it))return;// stocul a fost deja scăzut în momentul includerii
+      const id=Number(it.produsId)||0;
+      if(!id||!P.some(p=>Number(p.id)===id)){can=false;return;}
+      needed.set(id,(needed.get(id)||0)+pcomLinePhysicalQty(it,false));
+    });
+    needed.forEach((n,id)=>{if((stock.get(id)||0)<n)can=false;});
+    if(can){ready++;needed.forEach((n,id)=>stock.set(id,(stock.get(id)||0)-n));}
+    else blocked++;
+  });
+  return{total:orders.size,ready,blocked};
+}
+// Imaginea completă a comenzilor aflate ACUM în Comenzi Platforme.
+function pcomOrderStockSummary(){
+  const{source,sourceLabel}=pcomCurrentOrderSource();
   const groups=new Map();
   source.forEach((it,i)=>{
     const platforma=it.platforma||pcImpPlatforma;
@@ -22496,17 +22536,15 @@ function pcomOrderStockSummary(){
     const rawTitle=it.titluRo||it.produsNume||it.titluExtern||'Produs neasociat';
     const key=p?'p:'+p.id:'u:'+platforma+':'+String(rawTitle).trim().toLowerCase();
     const row=groups.get(key)||{p:null,title:rawTitle,platforme:new Set(),orders:new Set(),cantitate:0,cantitateFizica:0,rezervat:0,aplicat:0,linii:0,amanate:0,pachetSugerat:0};
-    const committed=it._committedId?PCOM.find(x=>Number(x.id)===Number(it._committedId)):it;
     // O linie comisă deja cu efecte aplicate are cantitatea deja scăzută în ERP; o arătăm în total,
     // însă nu o mai scădem încă o dată din stocul disponibil.
-    const applied=committed&&committed.efecteAplicate===true;
+    const applied=pcomLineIsApplied(it);
     const amount=Math.max(0,parseQtyVal(it.cantitate,0));
     // „Set 10 …”/„Pachet 3 …” are o sugestie deja calculată, dar încă neaplicată intenționat în
     // comandă. Pentru lista de APROVIZIONARE arătăm necesarul fizic propus, etichetat clar, fără să
     // schimbăm automat cantitatea oficială ori stocul; o comandă deja aplicată rămâne strict la cifra
     // real scrisă în ERP.
-    const suggested=Math.max(0,parseQtyVal(it.suggestedCantitate,0));
-    const physical=!applied&&suggested>0?suggested:amount;
+    const physical=pcomLinePhysicalQty(it,applied);
     row.p=p;row.title=p?.name||rawTitle;row.cantitate+=amount;row.cantitateFizica+=physical;row.linii++;
     if(physical!==amount)row.pachetSugerat+=physical-amount;
     if(it.amanat)row.amanate+=physical;
@@ -22521,7 +22559,8 @@ function pcomOrderStockSummary(){
     const deficit=after===null?null:Math.max(0,Math.round(-after*100)/100);
     return{...r,stock,after,deficit,platforme:[...r.platforme],orders:r.orders.size};
   }).sort((a,b)=>(b.deficit||0)-(a.deficit||0)||a.title.localeCompare(b.title,'ro'));
-  return{rows,sourceLabel,totalOrders:new Set(source.map((x,i)=>(x.platforma||pcImpPlatforma)+'|'+(x.comandaId||x.id||('linie-'+i)))).size,totalLines:source.length};
+  const totalOrders=new Set(source.map((x,i)=>(x.platforma||pcImpPlatforma)+'|'+(x.comandaId||x.id||('linie-'+i)))).size;
+  return{rows,sourceLabel,totalOrders,totalLines:source.length,readyNow:pcomOrderReadiness(source,false),readyAfterIncoming:pcomOrderReadiness(source,true)};
 }
 // Listă locală separată, în aceeași idee ca fișierul Metro: platforma doar oferă instantaneul de
 // comenzi+stoc, iar fereastra poate rămâne deschisă, poate fi tipărită sau salvată ca PDF fără să
@@ -22538,14 +22577,34 @@ async function openPcomOrderStockSummary(){
   const cards=s.rows.map(x=>{
     const plat=x.platforme.map(p=>`<span class="tag ${p}">${esc(pcomPlatLabel(p))}</span>`).join('')+(x.amanate?'<span class="tag hold">Include și amânate</span>':'');
     const meta=`${x.orders} ${x.orders===1?'comandă':'comenzi'}${x.linii!==x.orders?` · ${x.linii} linii`:''}`;
-    if(!x.p)return`<article class="card unmatched"><div class="photo missing">?</div><div class="main"><div class="tags">${plat}<span class="tag warn">Fără asociere</span></div><h2>${esc(x.title)}</h2><p>${esc(meta)} · ${fmtQty(x.cantitate)} buc. comandate</p><div class="unmatched-note">Alege produsul corect în Comenzi Platforme pentru a putea verifica stocul.</div></div></article>`;
+    if(!x.p)return`<article class="card unmatched" data-search="${esc((x.title+' '+x.platforme.join(' ')).toLowerCase())}"><div class="photo missing">?</div><div class="main"><div class="tags">${plat}<span class="tag warn">Fără asociere</span></div><h2>${esc(x.title)}</h2><p>${esc(meta)} · ${fmtQty(x.cantitate)} buc. comandate</p><div class="unmatched-note">Alege produsul corect în Comenzi Platforme pentru a putea verifica stocul.</div></div></article>`;
     const image=images.get(x.p.id)||PRODUCT_IMAGE_PLACEHOLDER;
-    const status=x.deficit>0?`<div class="need"><b>De comandat</b><strong>${fmtQty(x.deficit)} buc.</strong></div>`:`<div class="enough">✓ Stoc suficient</div>`;
+    const incoming=Math.max(0,parseQtyVal(x.p.incomingQty,0));
+    const afterIncoming=x.after===null?null:Math.round((x.after+incoming)*100)/100;
+    const deficitAfterIncoming=afterIncoming===null?null:Math.max(0,Math.round(-afterIncoming*100)/100);
+    const status=x.deficit>0?`<div class="need"><b>De comandat</b><strong>${fmtQty(x.deficit)} buc.</strong>${incoming&&deficitAfterIncoming===0?'<small>Acoperit după sosire</small>':''}</div>`:`<div class="enough">✓ Stoc suficient</div>`;
     const packNote=x.pachetSugerat?`<p class="pack-note">📦 Titlurile pachetelor indică <b>${fmtQty(x.cantitateFizica)} buc. fizice</b> pentru ${fmtQty(x.cantitate)} listări; necesarul de stoc folosește această cifră.</p>`:'';
-    return`<article class="card ${x.deficit>0?'short':''}"><img class="photo" src="${esc(image)}" alt="" onerror="this.classList.add('broken')"><div class="main"><div class="tags">${plat}${x.deficit>0?'<span class="tag danger">Necesită comandă</span>':''}</div><h2>${esc(x.title)}</h2><p class="code">${x.p.sku?`Cod furnizor: <b>${esc(x.p.sku)}</b>`:'Fără cod furnizor'}${x.p.ean?` · EAN: ${esc(x.p.ean)}`:''}</p><p class="meta">${esc(meta)} · <b>${fmtQty(x.cantitateFizica)} buc.</b> necesare${x.pachetSugerat?` (${fmtQty(x.cantitate)} listări)`:''}</p>${packNote}<div class="stats"><div><span>Stoc ERP</span><b>${fmtQty(x.stock)}</b></div><div><span>Rezervat</span><b>${fmtQty(x.rezervat)}</b></div><div><span>Rămâne</span><b class="${x.after<0?'red':''}">${fmtQty(x.after)}</b></div>${status}</div></div></article>`;
+    const transit=incoming?`<div><span>Pe drum</span><b>${fmtQty(incoming)}</b></div><div><span>După sosire</span><b class="${afterIncoming<0?'red':''}">${fmtQty(afterIncoming)}</b></div>`:'';
+    return`<article class="card ${x.deficit>0?'short':''}" data-search="${esc((x.title+' '+(x.p.sku||'')+' '+(x.p.ean||'')+' '+x.platforme.join(' ')).toLowerCase())}"><img class="photo" src="${esc(image)}" alt="" onerror="this.classList.add('broken')"><div class="main"><div class="tags">${plat}${x.deficit>0?'<span class="tag danger">Necesită comandă</span>':''}</div><h2>${esc(x.title)}</h2><p class="code">${x.p.sku?`Cod furnizor: <b>${esc(x.p.sku)}</b>`:'Fără cod furnizor'}${x.p.ean?` · EAN: ${esc(x.p.ean)}`:''}</p><p class="meta">${esc(meta)} · <b>${fmtQty(x.cantitateFizica)} buc.</b> necesare${x.pachetSugerat?` (${fmtQty(x.cantitate)} listări)`:''}</p>${packNote}<div class="stats"><div><span>Stoc ERP</span><b>${fmtQty(x.stock)}</b></div><div><span>Rezervat</span><b>${fmtQty(x.rezervat)}</b></div><div><span>Rămâne</span><b class="${x.after<0?'red':''}">${fmtQty(x.after)}</b></div>${transit}${status}</div></div></article>`;
   }).join('');
   const html=`<!doctype html><html lang="ro"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Verificare comenzi & stoc</title><style>*{box-sizing:border-box}body{margin:0;background:#f4f7fb;color:#182230;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}.wrap{max-width:1160px;margin:auto;padding:34px 30px 60px}.top{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;margin-bottom:24px}.eyebrow{font-size:12px;font-weight:800;letter-spacing:.12em;color:#6b4eff;text-transform:uppercase}.top h1{margin:6px 0 7px;font-size:32px;letter-spacing:-.04em}.top p{margin:0;color:#667085;line-height:1.5}.actions{display:flex;gap:8px;flex-shrink:0}.actions button{border:0;border-radius:10px;padding:11px 14px;font:inherit;font-weight:700;cursor:pointer;background:#fff;color:#344054;box-shadow:0 1px 3px #1018281a}.actions .print{background:#19152f;color:#fff}.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px}.kpi{background:#fff;border:1px solid #e8ebf0;border-radius:16px;padding:15px 17px;box-shadow:0 5px 16px #10182808}.kpi span{display:block;font-size:13px;color:#667085;margin-bottom:5px}.kpi b{font-size:25px}.kpi.alert{background:#fff7f6;border-color:#ffd5d1}.kpi.alert b{color:#d92d20}.notice{background:#eef3ff;border:1px solid #d8e2ff;color:#475467;border-radius:12px;padding:12px 14px;font-size:14px;line-height:1.45;margin-bottom:18px}.list{display:grid;gap:13px}.card{background:#fff;border:1px solid #e5e9f0;border-radius:18px;padding:14px;display:flex;gap:18px;box-shadow:0 6px 18px #10182808;break-inside:avoid}.card.short{border-color:#f5c6c1;background:linear-gradient(135deg,#fff 0%,#fffafa 100%)}.photo{width:132px;height:132px;object-fit:contain;background:#f6f7fa;border-radius:13px;flex:0 0 auto;border:1px solid #edf0f4}.photo.broken{visibility:hidden}.photo.missing{display:grid;place-items:center;font-size:46px;color:#98a2b3}.main{min-width:0;flex:1}.tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px}.tag{font-size:12px;font-weight:800;padding:4px 8px;border-radius:999px;background:#f1f3f6;color:#475467}.tag.emag{background:#eeeaff;color:#5a42cd}.tag.trendyol{background:#fff0df;color:#c36a00}.tag.vinted{background:#e5f8f1;color:#087a5e}.tag.hold{background:#fff7df;color:#a15c00}.tag.danger,.tag.warn{background:#fff0ef;color:#d92d20}.main h2{font-size:19px;line-height:1.3;margin:0 0 6px}.main p{margin:4px 0;font-size:14px;color:#667085}.main .code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px}.pack-note{display:inline-block!important;margin-top:8px!important;padding:6px 8px;border-radius:8px;background:#fff7df;color:#8c5b00!important;font-size:13px!important}.stats{display:flex;align-items:stretch;gap:18px;margin-top:14px;padding-top:12px;border-top:1px solid #edf0f4}.stats>div{min-width:70px}.stats span{display:block;font-size:12px;color:#98a2b3;margin-bottom:3px}.stats b{font-size:18px}.stats .red{color:#d92d20}.need{margin-left:auto;background:#fee4e2;border-radius:10px;padding:8px 12px;color:#b42318;min-width:120px}.need b{font-size:12px;display:block}.need strong{font-size:19px}.enough{margin-left:auto;color:#067647;font-size:14px;font-weight:800;align-self:center}.unmatched-note{margin-top:13px;background:#fff4e5;color:#b54708;padding:9px 11px;border-radius:9px;font-size:13px}@media(max-width:720px){.wrap{padding:20px 14px}.top{display:block}.actions{margin-top:14px}.kpis{grid-template-columns:repeat(2,1fr)}.card{gap:11px}.photo{width:92px;height:92px}.main h2{font-size:16px}.stats{gap:10px;flex-wrap:wrap}.need,.enough{margin-left:0}}@media print{body{background:#fff}.wrap{max-width:none;padding:0}.actions{display:none}.top{margin-bottom:14px}.top h1{font-size:25px}.kpis{gap:8px}.kpi{box-shadow:none;padding:10px}.card{box-shadow:none;margin-bottom:8px}.photo{width:86px;height:86px}.main h2{font-size:16px}.stats{margin-top:8px;padding-top:8px}.notice{font-size:12px;margin-bottom:10px}}</style></head><body><main class="wrap"><header class="top"><div><div class="eyebrow">Listă locală de aprovizionare</div><h1>Comenzi &amp; stoc</h1><p>Generată ${esc(new Date().toLocaleString('ro-RO'))} · eMAG, Trendyol și Vinted din ${esc(s.sourceLabel)}.</p></div><div class="actions"><button onclick="window.close()">Închide</button><button class="print" onclick="window.print()">🖨️ Tipărește / Salvează PDF</button></div></header><section class="kpis"><div class="kpi"><span>Comenzi analizate</span><b>${s.totalOrders}</b></div><div class="kpi"><span>Produse asociate</span><b>${known.length}</b></div><div class="kpi ${missing.length?'alert':''}"><span>De reaprovizionat</span><b>${missing.length}</b></div><div class="kpi ${unmatched.length?'alert':''}"><span>Fără asociere</span><b>${unmatched.length}</b></div></section><div class="notice">Include toate comenzile vizibile, inclusiv cele amânate. Pentru un titlu de tip „Set/Pachet”, necesarul fizic propus este marcat cu galben; nu modifică automat comanda ori stocul din ERP.</div><section class="list">${cards||'<div class="notice">Nu există comenzi de centralizat acum.</div>'}</section></main></body></html>`;
-  w.document.open();w.document.write(html);w.document.close();w.focus();
+  // Catalogul pentru numărătoarea paralelă rămâne strict local în fereastră. Nu schimbă stocul și nu
+  // creează comenzi; este doar foaia de verificare pe care utilizatorul o completează în timp ce ia
+  // comenzile la rând. Recomandarea ERP e păstrată lângă fiecare produs pentru comparația finală.
+  const needByProduct=new Map(known.map(x=>[Number(x.p.id),x.deficit||0]));
+  const tallyCatalog=P.filter(p=>!p.archived).map(p=>({id:Number(p.id),name:String(p.name||''),sku:String(p.sku||''),ean:String(p.ean||''),need:needByProduct.get(Number(p.id))||0,stock:Math.max(0,qty(p)),incoming:Math.max(0,parseQtyVal(p.incomingQty,0))}));
+  const tallyJson=JSON.stringify(tallyCatalog).replace(/</g,'\\u003c').replace(/>/g,'\\u003e').replace(/&/g,'\\u0026');
+  const readiness=`<section class="readiness"><div><span>Pregătibile acum</span><b>${s.readyNow.ready} din ${s.readyNow.total} comenzi</b><small>au toate produsele disponibile în stoc</small></div><div><span>După sosirea mărfii în drum</span><b>${s.readyAfterIncoming.ready} din ${s.readyAfterIncoming.total} comenzi</b><small>folosește doar cantitățile deja înregistrate ca „pe drum”</small></div></section>`;
+  const tally=`<section class="tally"><div class="tally-head"><div><div class="eyebrow">Control manual</div><h2>Numărătoare paralelă</h2><p>Adaugă produsele și cantitățile pe care le confirmi pentru comanda furnizorului. Nu modifică ERP-ul.</p></div><div id="tally-total" class="tally-total">0 produse · 0 buc.</div></div><div class="tally-add"><input id="tally-product" list="tally-products" placeholder="Caută produs după nume, cod sau EAN…"><datalist id="tally-products"></datalist><input id="tally-qty" type="number" min="0.01" step="0.01" value="1" aria-label="Cantitate"><button type="button" onclick="addTallyLine()">+ Adaugă</button></div><div id="tally-list" class="tally-list"></div><div class="tally-actions"><button type="button" class="finalize" onclick="finalizeTally()">✓ Finalizează numărătoarea</button><button type="button" onclick="clearTally()">Resetează</button><button type="button" onclick="if(window.opener&&window.opener.openFurnizorComanda){window.opener.openFurnizorComanda();window.close()}">📷 Adaugă capturi comandă furnizor</button></div><div id="tally-conclusion" class="tally-conclusion" aria-live="polite"></div></section>`;
+  const finder=`<div class="finder"><input id="local-search" oninput="filterCards(this.value)" placeholder="Caută în comenzile curente: produs, cod furnizor sau EAN…"><span id="local-search-count"></span></div>`;
+  const childScript='<script>'+`const inventory=${tallyJson};let tally=[];const safe=s=>String(s||'');function fillTallyOptions(){const d=document.getElementById('tally-products');d.innerHTML='';inventory.forEach(p=>{const o=document.createElement('option');o.value=p.name+(p.sku?' · '+p.sku:'')+(p.ean?' · '+p.ean:'');d.appendChild(o);});}function updateTally(){const list=document.getElementById('tally-list'),total=document.getElementById('tally-total');list.innerHTML='';let qty=0;tally.forEach((x,i)=>{qty+=x.qty;const row=document.createElement('div');row.className='tally-row';const text=document.createElement('span');text.textContent=x.name+(x.sku?' · '+x.sku:'')+' — '+x.qty+' buc.'+(x.need?' · ERP recomandă '+x.need:'');const remove=document.createElement('button');remove.type='button';remove.textContent='Șterge';remove.onclick=()=>{tally.splice(i,1);updateTally();};row.append(text,remove);list.appendChild(row);});total.textContent=tally.length+' produse · '+qty+' buc.';}function addTallyLine(){const field=document.getElementById('tally-product'),q=Math.max(0,Number(document.getElementById('tally-qty').value)||0),value=field.value.trim().toLowerCase();const p=inventory.find(x=>(x.name+(x.sku?' · '+x.sku:'')+(x.ean?' · '+x.ean:'')).toLowerCase()===value||x.name.toLowerCase()===value||x.sku.toLowerCase()===value||x.ean.toLowerCase()===value);if(!p||!q){field.focus();return;}const old=tally.find(x=>x.id===p.id);if(old)old.qty+=q;else tally.push({id:p.id,name:p.name,sku:p.sku,qty:q,need:p.need,stock:p.stock,incoming:p.incoming});field.value='';document.getElementById('tally-qty').value='1';updateTally();}function clearTally(){tally=[];document.getElementById('tally-conclusion').innerHTML='';updateTally();}function finalizeTally(){const box=document.getElementById('tally-conclusion');box.innerHTML='';if(!tally.length){box.textContent='Adaugă cel puțin un produs înainte de finalizare.';return;}const selected=tally.reduce((n,x)=>n+x.qty,0),recommended=tally.reduce((n,x)=>n+x.need,0),h=document.createElement('h3'),p=document.createElement('p'),list=document.createElement('div');h.textContent='Concluzie numărătoare';p.textContent='Ai selectat '+selected+' buc. din '+tally.length+' produse. ERP recomandă '+recommended+' buc. pentru aceste produse, pe baza comenzilor curente și a stocului actual.';tally.forEach(x=>{const row=document.createElement('div');const diff=x.qty-x.need;row.textContent=x.name+' — selectat '+x.qty+' · recomandat '+x.need+(diff===0?' ✓':diff>0?' · cu '+diff+' peste recomandare':' · cu '+Math.abs(diff)+' sub recomandare');list.appendChild(row);});box.append(h,p,list);}function filterCards(value){const q=value.toLowerCase().trim(),cards=[...document.querySelectorAll('.card[data-search]')];let visible=0;cards.forEach(card=>{const show=!q||card.dataset.search.includes(q);card.style.display=show?'flex':'none';if(show)visible++;});document.getElementById('local-search-count').textContent=q?visible+' rezultate':'';}fillTallyOptions();updateTally();`+'</scr'+'ipt>';
+  const enhancedHtml=html
+    .replace('</style>',`.readiness{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 0 18px}.readiness>div{background:linear-gradient(135deg,#f0fdf7,#eff8ff);border:1px solid #cdeedb;border-radius:14px;padding:14px 16px}.readiness span,.readiness small{display:block;color:#667085;font-size:13px}.readiness b{display:block;font-size:21px;color:#067647;margin:5px 0}.finder{margin:0 0 14px;display:flex;gap:10px;align-items:center}.finder input{width:100%;border:1px solid #d0d5dd;border-radius:11px;padding:12px 14px;font:inherit}.finder span{white-space:nowrap;font-size:13px;color:#667085}.tally{background:#fff;border:1px solid #d9d6fe;border-radius:18px;padding:18px;margin:0 0 18px;box-shadow:0 6px 18px #10182808}.tally-head{display:flex;justify-content:space-between;gap:15px}.tally h2{margin:3px 0 5px;font-size:21px}.tally-head p{font-size:13px}.tally-total{background:#f4f3ff;color:#5b47c9;border-radius:10px;padding:9px 11px;height:max-content;font-weight:800;white-space:nowrap}.tally-add{display:grid;grid-template-columns:1fr 110px auto;gap:9px;margin-top:14px}.tally-add input{border:1px solid #d0d5dd;border-radius:10px;padding:11px;font:inherit}.tally button{border:1px solid #d0d5dd;background:#fff;border-radius:10px;padding:10px 12px;font:inherit;font-weight:750;cursor:pointer}.tally-add button,.tally .finalize{border-color:#5b47c9;background:#5b47c9;color:#fff}.tally-list{display:grid;gap:7px;margin-top:11px}.tally-row{display:flex;justify-content:space-between;gap:10px;align-items:center;background:#f8f9fc;border-radius:9px;padding:8px 10px;font-size:13px}.tally-row button{padding:5px 8px;color:#b42318}.tally-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:13px}.tally-conclusion{display:grid;gap:5px;margin-top:13px;border-radius:10px;background:#f0fdf7;color:#175c42;padding:0}.tally-conclusion:not(:empty){padding:12px}.tally-conclusion h3,.tally-conclusion p{margin:0}.tally-conclusion div{font-size:13px}@media(max-width:720px){.readiness{grid-template-columns:1fr}.tally-head{display:block}.tally-total{display:inline-block;margin-top:8px}.tally-add{grid-template-columns:1fr 84px}.tally-add button{grid-column:1/-1}.finder{display:block}.finder span{display:block;margin-top:5px}}</style>`)
+    .replace('<button onclick="window.close()">','<button onclick="if(window.opener&&window.opener.openFurnizorComanda){window.opener.openFurnizorComanda();window.close()}">📷 Capturi furnizor</button><button onclick="window.close()">')
+    .replace('<div class="notice">Include toate comenzile vizibile',readiness+tally+'<div class="notice">Include toate comenzile vizibile')
+    .replace('<section class="list">',finder+'<section class="list">')
+    .replace('</body>',childScript+'</body>');
+  w.document.open();w.document.write(enhancedHtml);w.document.close();w.focus();
 }
 function renderPcomStockShortage(){
   const host=document.getElementById('pcx-stock-shortage');if(!host)return;
