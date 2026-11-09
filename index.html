@@ -5065,6 +5065,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:655,text:'Listă locală de aprovizionare — reparat un defect de sursă: dacă era prezentă o previzualizare curentă (de exemplu doar Trendyol), lista lua EXCLUSIV acea previzualizare și omitea comenzile eMAG deja salvate, deși erau vizibile în tabelul Comenzi Platforme. Acum unește previzualizarea cu toate comenzile active salvate (eMAG, Trendyol, Vinted), eliminând numai duplicatele reale ale aceleiași linii. Cantitățile pe platforme și TOTAL COMUN pornesc astfel din aceleași comenzi afișate în ERP.',date:'2026-11-10'},
   {n:654,text:'Listă locală de aprovizionare — numărătoarea manuală este acum separată pe platforme: începe implicit cu Trendyol, se finalizează acolo, apoi se trece pe eMAG sau Vinted fără amestecarea produselor/cantităților. Fiecare produs din lista mare arată distinct câte bucăți vin din fiecare platformă, doar acolo unde există comandă. La final, concluzia păstrează totalurile separate și adaugă TOTAL COMUN: ce a fost selectat pe toate platformele, lipsa calculată din stocul ERP și ce mai rămâne de comandat.',date:'2026-11-10'},
   {n:653,text:'Numărătoare paralelă — fiecare produs adăugat manual în lista locală are acum și miniatura produsului, încărcată din fotografia reală deja salvată în ERP. Astfel poți confirma vizual produsul înainte să stabilești cantitatea sau să finalizezi concluzia, fără a încărca din nou imagini și fără modificări în stoc.',date:'2026-11-10'},
   {n:652,text:'Listă locală de aprovizionare — control complet nou pentru lucrul practic cu comenzile: sus arată acum câte comenzi pot fi pregătite integral chiar acum și câte se pot pregăti după sosirea mărfii deja marcată „pe drum”, fără a considera marfa drept recepționată. Lista are căutare rapidă după produs, cod furnizor sau EAN. A fost adăugată și „Numărătoare paralelă”: într-o singură bară cauți produsul, introduci cantitatea și îl adaugi în verificarea locală; la „Finalizează” primești comparația clară, produs cu produs, între ce ai ales și recomandarea ERP calculată din comenzile curente/stoc. Nu scrie în stoc sau comenzi. Din același loc, „Capturi furnizor” deschide fluxul existent de citire AI a mai multor screenshot-uri pentru comenzile pe drum.',date:'2026-11-10'},
@@ -22481,16 +22482,24 @@ function pcxStockShortageList(){
   });
   return out.sort((a,b)=>b.deficit-a.deficit);
 }
-// Sursa unică a listei locale: previzualizarea actuală câștigă, fiindcă poate conține și linii încă
-// necomise. Dacă ea e goală, cădem pe comenzile active salvate. Nu le combinăm, ca o comandă să nu
-// fie numărată de două ori.
+// Lista locală trebuie să arate COMPLET ce se vede în Comenzi Platforme: previzualizarea poate conține
+// doar ultima platformă încărcată (de ex. Trendyol), în timp ce eMAG rămâne deja salvată în PCOM. Le
+// reunim, însă eliminăm aceleași linii reale, ca o comandă restaurată din PCOM să nu fie numărată de 2 ori.
 function pcomCurrentOrderSource(){
   const plats=new Set(['emag','trendyol','vinted']);
   // Lista locală este o verificare completă de aprovizionare: include și liniile „Amânată”, altfel
   // totalul nu mai corespunde cu contorul din previzualizare și exact produsele fără stoc pot dispărea.
   const draft=pcImpParsed.filter(x=>plats.has(x.platforma||pcImpPlatforma)&&!x._cancelledId);
-  const source=draft.length?draft:PCOM.filter(x=>plats.has(x.platforma)&&!x.anulata&&!x.impachetat);
-  return{source,sourceLabel:draft.length?'previzualizarea curentă':'comenzile active salvate'};
+  const keyOf=x=>{
+    const plat=x.platforma||pcImpPlatforma,id=x.comandaId||x.pachetId||'';
+    const external=x.pnk||x.codProdus||x.titluExtern||x.produsNume||'';
+    return[plat,id,String(external).trim().toLowerCase(),Number(x.produsId)||0].join('|');
+  };
+  const known=new Set(draft.map(keyOf));
+  const saved=PCOM.filter(x=>plats.has(x.platforma)&&!x.anulata&&!x.impachetat&&!known.has(keyOf(x)));
+  const source=[...draft,...saved];
+  const sourceLabel=draft.length&&saved.length?'previzualizarea curentă + comenzile active salvate':draft.length?'previzualizarea curentă':'comenzile active salvate';
+  return{source,sourceLabel};
 }
 function pcomLineIsApplied(it){
   const committed=it._committedId?PCOM.find(x=>Number(x.id)===Number(it._committedId)):it;
