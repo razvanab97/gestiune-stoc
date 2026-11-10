@@ -5074,6 +5074,8 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:668,text:'Comenzi Platforme — comenzile cu AWB deja asociat urcă acum deasupra celor fără, în cadrul aceleiași platforme, cerut direct: „in momentul in care adaugam comenzile pe baza AWB urilor, acestea sa vina in partea de sus a sectiunii, peste cele care nu au fost finalizate prin AWB pentru a fi mai usor sa le urmarim". Sortare stabilă — doar desparte „are AWB" de „nu are", fără să amestece ordinea relativă deja existentă (cronologică, cea mai nouă prima) în interiorul fiecărei grupe. Aceeași regulă („are AWB?") e acum o singură funcție (pcxGroupAwb), reutilizată atât pentru sortare cât și pentru eticheta vizuală din antetul cardului — nu două copii care ar putea diverge. Verificat de 2 ori: sintaxă + 13 verificări izolate pe funcțiile reale extrase din cod (eMAG/Trendyol citite din comanda deja scrisă în bază, Vinted citit din rândul local — cazuri separate, ambele corecte; grup multi-produs citește din prima linie; index lipsă nu crapă; simularea exactă a sortării) + confirmare directă Playwright pe server local, cu 4 comenzi reale eMAG însămânțate (una singură cu AWB): comanda cu AWB a urcat corect prima, restul au rămas în ordinea lor cronologică originală, fără să fie amestecate — plus regresia completă pe cele 3 suite existente din aceeași zonă de cod (AWB picker, performanță, dată comandă), toate verzi.',date:'2026-11-10'},
+  {n:667,text:'Numărătoare paralelă — eliminată complet vederea generală de comenzi de sub numărătoare. Zona de jos arată acum permanent numai produsele introduse manual și cantitățile lor; dacă nu ai adăugat nimic, afișează clar lista goală.',date:'2026-11-10'},
   {n:666,text:'Asistent AI — buton nou, dedicat, „📸 Creează produs direct dintr-un screenshot", cerut direct cu o captură reală (pagina unui produs Jumbo). Ocolește complet clasificarea de intenție (AI-ul nu mai ghicește „ce vrea userul" dintr-un text — aici intenția e explicită, din click) — fie consumă direct o poză deja atașată (📷/lipire), fie deschide propriul picker de fișier, iar fișierul ales merge direct la creare, fără un pas intermediar „acum apasă Trimite". Pe lângă poză/SKU-sau-EAN, deja extrase, acum preia explicit și prețul (deja susținut de extragere, verificat să fie corect cules) și titlul — garantat acum FĂRĂ diacritice, indiferent de sursă (înainte doar fallback-ul din poză era curățat, nu și un nume ajuns pe altă cale). Verificarea de duplicate, cerută explicit „dupa poza, titlu si coduri" — primele două existau deja (nume/categorie fuzzy + comparație vizuală); acum verifică și pe COD (SKU/EAN) exact, cel mai tare semnal dintre toate — un produs cu codul identic apare primul în listă, cu mesaj și casetă VERZI, distincte de potrivirile doar „posibile" (portocaliu) — înainte, orice potrivire (chiar și una confirmată 100% vizual) tot arăta cu caseta de avertizare portocalie, mesaj inexact „confirmat vizual" inclusiv pentru un cod identic, care n-a trecut deloc prin comparația de poze. Verificat de 2 ori: sintaxă + CSS (balans acolade, 2 metode independente) + confirmare directă Playwright pe server local, cu un produs real însămânțat cu codul EXACT pe care mock-ul AI-ului „îl citește" din poză: clasificarea de intenție confirmată complet ocolită (niciun apel „ai_chat_intent"), titlul confirmat fără diacritice, SKU/preț confirmate corect preluate, produsul cu cod identic confirmat primul în listă cu caseta verde corectă, plus scenariul cu o poză deja atașată (consumată direct, fără al doilea picker).',date:'2026-11-10'},
   {n:665,text:'Listă locală de aprovizionare — fiecare comandă analizată poate fi bifată „Comandată” direct din rezultatul „Potrivește stocul cu comenzile”. Bifa este o evidență locală, se păstrează la refresh și nu modifică stocul sau comenzile din ERP.',date:'2026-11-10'},
   {n:664,text:'Numărătoare paralelă — lista de jos este acum o vedere curată, construită exclusiv din produsele și cantitățile introduse manual de tine. Am eliminat numărătoarea veche reconstruită automat: nu mai amestecă recomandările AI sau toate comenzile cu selecția ta.',date:'2026-11-10'},
@@ -22347,7 +22349,7 @@ function pcxOrderCardHtml(idxs,gIdx){
     const src=p2&&p2.img?imgSrc(p2.img):(pcImpParsed[i].vintedImg||'');
     return src?`<img src="${esc(src)}" loading="lazy">`:'';
   }).filter(Boolean).join('');
-  const awbForHeader=it0.platforma==='vinted'?it0.awb:(PCOM.find(o=>o.id===it0._committedId)?.awb||'');
+  const awbForHeader=pcxGroupAwb(idxs);
   // Comenzi expediate în mai multe colete (cerut direct: „unele comenzi au 2/3 awb uri") — citit mereu
   // din rândul PCOM (nu din linia locală, chiar și la Vinted mai sus) — awbExtra există STRICT acolo.
   const awbExtraForHeader=PCOM.find(o=>o.id===it0._committedId)?.awbExtra||[];
@@ -22659,6 +22661,7 @@ async function openPcomOrderStockSummary(){
     .replace('</head>','<style>.allocation-order{display:flex;align-items:center;gap:8px}.allocation-order .allocation-check{margin-left:auto;padding:5px 8px;font-size:12px;background:#fff;border-color:currentColor}.allocation-order .allocation-check.done{background:#067647;color:#fff;border-color:#067647}</style></head>')
     .replace('</head>','<style>.tally-saved{font-size:12px;color:#067647;font-weight:800;margin-left:auto;align-self:flex-start;padding:6px 8px;border-radius:8px;background:#ecfdf3}</style></head>')
     .replace('</head>','<style>.tally-platform-select{display:flex;align-items:center;gap:9px;flex-wrap:wrap;margin:12px 0 2px;font-size:13px;font-weight:800;color:#475467}.tally-platform-select select{border:1px solid #8b7cf6;border-radius:9px;padding:8px 28px 8px 10px;background:#f7f5ff;color:#4d3bc4;font:inherit;font-weight:800}.tally-platform-select span{font-size:12px;font-weight:600;color:#667085}</style></head>')
+    .replace('</head>','<script>window.addEventListener("load",()=>{if(typeof finalizeTally==="function")finalizeTally()})</script></head>')
     .replace('</head>','<style>.tally-detail{display:grid;gap:4px;margin-top:11px;padding:10px;border-radius:9px;background:#fff;border:1px solid #cce9d8}.tally-detail h4{margin:0 0 3px;font-size:13px;color:#175c42}.tally-detail div{display:flex;justify-content:space-between;gap:14px;font-size:13px}.tally-detail span{min-width:0}.tally-detail b{white-space:nowrap;color:#067647}</style></head>')
     .replace('</head>','<style>.tally-orders{display:grid;gap:4px;margin-top:11px;padding:10px;border-radius:9px;background:#f8fafc;border:1px solid #dbe4ee}.tally-orders h4{margin:0 0 3px;font-size:13px;color:#344054}.tally-orders div{display:flex;justify-content:space-between;gap:14px;font-size:13px}.tally-orders span{min-width:0}.tally-orders b{white-space:nowrap;font-size:12px}.tally-orders b.ready{color:#067647}.tally-orders b.wait{color:#b54708}</style></head>')
     .replace('</head>','<style>.tally-products-note{margin:0 0 12px;padding:10px 12px;border-radius:10px;background:#f4f3ff;border:1px solid #d9d6fe;color:#4d3bc4;font-size:13px;font-weight:700}.card.tally-picked{border-color:#9b8afb!important;background:linear-gradient(135deg,#fff 0%,#faf9ff 100%)}.tally-on-card{margin:10px 0 0;padding:8px 10px;border-radius:8px;background:#f0edff;color:#4d3bc4;font-size:13px;font-weight:800}.tally-rank{background:#ede9fe!important;color:#5b21b6!important}</style></head>')
@@ -22680,6 +22683,15 @@ function renderPcomStockShortage(){
   host.className='pcx-shortage';
   host.innerHTML=`<div class="pcx-shortage-hd">⚠️ ${list.length} produs${list.length===1?'':'e'} fără stoc suficient pentru comenzile curente</div>${list.map(x=>`<div class="pcx-shortage-row"><div class="pcx-shortage-info"><b>${esc(x.p.name)}</b><span>comandat ${fmtQty(x.comandat)} · stoc ${fmtQty(x.stoc)} · lipsesc <b style="color:var(--rd)">${fmtQty(x.deficit)}</b>${x.linii>1?` (${x.linii} comenzi)`:''}</span></div><button type="button" class="pcx-btn" onclick="addToReorderList(${x.p.id});renderPcomStockShortage()">+ Adaugă la comandat</button></div>`).join('')}`;
 }
+// AWB-ul asociat unui grup (dacă există) — extras ca funcție reutilizabilă, un singur loc de întreținut
+// pentru aceeași regulă folosită în 2 locuri: eticheta vizuală din antetul cardului (pcxOrderCardHtml,
+// mai jos) ȘI sortarea „AWB deasupra" din pcxRenderOrders, cerută direct.
+function pcxGroupAwb(idxs){
+  const it0=pcImpParsed[idxs[0]];
+  if(!it0)return'';
+  return it0.platforma==='vinted'?(it0.awb||''):(PCOM.find(o=>o.id===it0._committedId)?.awb||'');
+}
+function pcxGroupHasAwb(idxs){return!!pcxGroupAwb(idxs);}
 function pcxRenderOrders(){
   renderCancelledPcomList();
   renderStaleStaffOrdersCard();
@@ -22716,7 +22728,13 @@ function pcxRenderOrders(){
     const list=buckets[plat];if(!list||!list.length)return'';
     const cls=plat==='trendyol'?'trendyol':plat==='vinted'?'vinted':'emag';
     const hd=`<div class="pcx-plat-divider"><span class="pcx-badge pcx-badge-${cls}">${esc(pcomPlatLabel(plat))}</span><span class="pcx-plat-divider-count">${list.length} ${list.length===1?'comandă':'comenzi'}</span></div>`;
-    return hd+list.map(idxs=>pcxOrderCardHtml(idxs,pcomGroups.indexOf(idxs))).join('');
+    // Comenzile cu AWB deja asociat urcă deasupra celor fără, în cadrul aceleiași platforme — cerut
+    // direct: „in momentul in care adaugam comenzile pe baza AWB urilor, acestea sa vina in partea de
+    // sus a sectiunii, peste cele care nu au fost finalizate prin AWB...mai usor sa le urmarim". Sortare
+    // STABILĂ (Array#sort e stabilă din ES2019) — doar desparte „are AWB" de „nu are", fără să
+    // amestece ordinea relativă din interiorul fiecărei grupe (cea din pcomGroups, neatinsă).
+    const sortedList=[...list].sort((a,b)=>(pcxGroupHasAwb(b)?1:0)-(pcxGroupHasAwb(a)?1:0));
+    return hd+sortedList.map(idxs=>pcxOrderCardHtml(idxs,pcomGroups.indexOf(idxs))).join('');
   }).join('');
   host.innerHTML=filtered.length?html:pcxSearchFallbackHtml(q);
   // Numărători — informative, pe TOATE liniile (nu doar cele filtrate), ca la legacy (updPcomImportInfo)
