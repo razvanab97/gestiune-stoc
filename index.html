@@ -5074,6 +5074,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:670,text:'Căutare pe cuvinte, în 5 locuri deodată (Vânzări azi, Inventar, bara de căutare din Dashboard, carduri Raport stoc, Produse arhivate) — toate folosesc aceeași funcție centrală (prodMatchesSearch), reparată o singură dată. Cerut direct: „sa recomande produsele dupa orice caracter, daca scriu 60, imi da ce produse au 60 in titlu, daca scriu cutie, imi da ce titlu are cuvantul acesta". Înainte, tot query-ul tastat (ex. „cutie 60L") trebuia să apară LIPIT, exact în acea ordine, undeva într-un singur câmp — „Cutie depozitare plastic 60L" nu se găsea, deși conține ambele cuvinte, doar separate de alte cuvinte. Acum fiecare cuvânt din căutare trebuie să apară UNDEVA în textul combinat al produsului (nume, SKU, cod intern, categorie, furnizor, note, material, dimensiuni, culori, EAN, coduri de la alți furnizori, coduri externe din Sincronizare), indiferent de ordine/distanță — chiar și din câmpuri diferite — exact tiparul deja dovedit la AWB (awbPickWordsMatch) și la Sincronizare (filterSyncPick). Căutarea pe cifre (ex. „1234" găsește „ABC-1234") rămâne separată, verificată tot per câmp, ca să nu contopească greșit cifre de la capătul unui câmp cu începutul următorului. Verificat de 2 ori: sintaxă + 24 de verificări izolate pe funcția reală extrasă din cod (exact exemplul din captură — „cutie 60L" găsește „Cutie depozitare plastic 60L cu capac" — plus toate cele 9 tipuri de câmpuri existente, neatinse, și un test dedicat care confirmă explicit că nu se contopesc cifre din 2 câmpuri diferite) + confirmare directă Playwright pe server local, cu produsul exact din captură: „cutie 60L", „60" și „cutie" îl găsesc toate, „cutie 999" (al doilea cuvânt inexistent) nu-l găsește, iar același fix funcționează identic și pe căutarea din Inventar.',date:'2026-11-10'},
   {n:669,text:'Comenzi Platforme — bug real reparat, raportat direct cu o captură: eroarea „Scrie AWB-ul citit de pe etichetă înainte să alegi comanda" apărea uneori chiar și cu AWB-ul vizibil, scris corect, în căsuță. Cauza: picker-ul de asociere manuală (etichetă complet necitită) golea ÎNTOTDEAUNA căsuța obligatorie de AWB la deschidere — corect când treci la un rând NOU (altfel un AWB vechi ar rămâne agățat de o comandă greșită), dar și la un al doilea click pe ACELAȘI buton „🔗 Asociază manual" (din grabă, dublu-click, sau un click care a aterizat din nou pe același rând) — ștergând tăcut tot ce tocmai tastase omul, fără niciun semnal vizibil, înainte ca eroarea să apară la alegerea comenzii. Reparat la toate cele 3 puncte de intrare ale aceluiași picker (etichetă parțial citită, complet necitită, eroare din clopoțel): un al doilea click pe EXACT același rând, cu dropdown-ul deja deschis, nu mai reface deschiderea — un rând diferit tot resetează, corect. Verificat de 2 ori: sintaxă + 14 verificări izolate pe funcțiile reale extrase din cod (toate cele 3 puncte de intrare, pe rândul-același vs. rând-diferit, plus cazurile deja existente neatinse) + confirmare directă Playwright pe server local, reproducând exact scenariul din captură (scriere AWB → al doilea click pe același buton → AWB-ul rămâne scris → alegerea comenzii NU mai declanșează eroarea falsă), cu scrierea reală în Supabase interceptată explicit (niciun risc pe date de producție) — plus regresie pe rând diferit (tot resetează) și pe căsuță chiar goală (eroarea tot apare, corect).',date:'2026-11-10'},
   {n:668,text:'Comenzi Platforme — comenzile cu AWB deja asociat urcă acum deasupra celor fără, în cadrul aceleiași platforme, cerut direct: „in momentul in care adaugam comenzile pe baza AWB urilor, acestea sa vina in partea de sus a sectiunii, peste cele care nu au fost finalizate prin AWB pentru a fi mai usor sa le urmarim". Sortare stabilă — doar desparte „are AWB" de „nu are", fără să amestece ordinea relativă deja existentă (cronologică, cea mai nouă prima) în interiorul fiecărei grupe. Aceeași regulă („are AWB?") e acum o singură funcție (pcxGroupAwb), reutilizată atât pentru sortare cât și pentru eticheta vizuală din antetul cardului — nu două copii care ar putea diverge. Verificat de 2 ori: sintaxă + 13 verificări izolate pe funcțiile reale extrase din cod (eMAG/Trendyol citite din comanda deja scrisă în bază, Vinted citit din rândul local — cazuri separate, ambele corecte; grup multi-produs citește din prima linie; index lipsă nu crapă; simularea exactă a sortării) + confirmare directă Playwright pe server local, cu 4 comenzi reale eMAG însămânțate (una singură cu AWB): comanda cu AWB a urcat corect prima, restul au rămas în ordinea lor cronologică originală, fără să fie amestecate — plus regresia completă pe cele 3 suite existente din aceeași zonă de cod (AWB picker, performanță, dată comandă), toate verzi.',date:'2026-11-10'},
   {n:667,text:'Numărătoare paralelă — eliminată complet vederea generală de comenzi de sub numărătoare. Zona de jos arată acum permanent numai produsele introduse manual și cantitățile lor; dacă nu ai adăugat nimic, afișează clar lista goală.',date:'2026-11-10'},
@@ -16294,24 +16295,31 @@ function prodMatchesSearch(p,qRaw){
   // sectiunea de cautare". EAN-ul e deja salvat pe produse (câmp existent, folosit deja prioritar la
   // potrivirea de la Importă factură — vezi findExistingProduct), dar căutarea „prin secțiunea de
   // căutare" (Inventar, bara de căutare de sus, carduri Raport stoc) nu-l verifica deloc până acum.
-  const vals=[p.name,p.sku,p.internalCode,p.category,p.supplier,p.notes,p.material,p.dims,p.colors,p.ean];
-  if(vals.some(v=>invSearchNorm(v).includes(q)))return true;
-  if(qd.length>=3&&vals.some(v=>invSearchDigits(v).includes(qd)))return true;
-  // Coduri „Alt furnizor" (supplierSources) — bug real, raportat direct, cu un cod real existent ca
-  // sursă alternativă pe un produs: „daca avem deja produsul la alt furnizor, de ce nu se gaseste dupa
-  // SKU-ul produsului?". Căutarea verifica deja p.sku (codul propriu), dar niciodată codurile de la
-  // sursele alternative salvate pe produs — exact genul de cod după care ai căuta dacă vine dintr-o
-  // factură/comandă a ACELUI furnizor secundar, nu a celui principal. findExistingProduct (Importă
-  // factură/Comandă furnizor) verifică deja aceste coduri — doar căutarea „prin secțiunea de căutare" nu.
-  const altSkus=(p.supplierSources||[]).map(s=>s?.sku).filter(Boolean);
-  if(altSkus.some(v=>invSearchNorm(v).includes(q)))return true;
-  if(qd.length>=3&&altSkus.some(v=>invSearchDigits(v).includes(qd)))return true;
-  // SKU extern — codurile PNK mapate pe acest produs în Sincronizare (platforma_mapari), nu doar
-  // codurile proprii — la cerere directă, căutarea trebuie să găsească produsul și după codul de pe
-  // eMAG/Trendyol, nu doar după nume/SKU/cod intern.
-  const ext=SYNCM.filter(m=>m.produsId===p.id&&m.idExtern).map(m=>m.idExtern);
-  if(ext.some(v=>invSearchNorm(v).includes(q)))return true;
-  return qd.length>=3&&ext.some(v=>invSearchDigits(v).includes(qd));
+  const vals=[p.name,p.sku,p.internalCode,p.category,p.supplier,p.notes,p.material,p.dims,p.colors,p.ean,
+    // Coduri „Alt furnizor" (supplierSources) — bug real, raportat direct, cu un cod real existent ca
+    // sursă alternativă pe un produs: „daca avem deja produsul la alt furnizor, de ce nu se gaseste dupa
+    // SKU-ul produsului?". Căutarea verifica deja p.sku (codul propriu), dar niciodată codurile de la
+    // sursele alternative salvate pe produs — exact genul de cod după care ai căuta dacă vine dintr-o
+    // factură/comandă a ACELUI furnizor secundar, nu a celui principal. findExistingProduct (Importă
+    // factură/Comandă furnizor) verifică deja aceste coduri — doar căutarea „prin secțiunea de căutare" nu.
+    ...(p.supplierSources||[]).map(s=>s?.sku).filter(Boolean),
+    // SKU extern — codurile PNK mapate pe acest produs în Sincronizare (platforma_mapari), nu doar
+    // codurile proprii — la cerere directă, căutarea trebuie să găsească produsul și după codul de pe
+    // eMAG/Trendyol, nu doar după nume/SKU/cod intern.
+    ...SYNCM.filter(m=>m.produsId===p.id&&m.idExtern).map(m=>m.idExtern)];
+  // Căutare pe cuvinte, cerut direct — „sa recomande produsele dupa orice caracter...daca scriu cutie
+  // 60L": un singur .includes() pe tot query-ul deodată (ca înainte) nu găsea „Cutie depozitare plastic
+  // 60L" la căutarea „cutie 60L" — cuvintele nu erau lipite, exact în ordinea asta. Acum fiecare cuvânt
+  // din căutare trebuie să apară UNDEVA în textul combinat al produsului, indiferent de ordine/distanță
+  // (chiar și din câmpuri diferite) — exact tiparul deja folosit la AWB (awbPickWordsMatch) și la
+  // picker-ul din Sincronizare (filterSyncPick). Căutarea pe cifre (qd, mai jos) rămâne SEPARATĂ, per
+  // câmp — alipirea tuturor câmpurilor într-un singur text, înainte de a elimina non-cifrele, ar contopi
+  // greșit cifre de la capătul unui câmp cu începutul următorului (ex. „...12"+„34..." → „1234", o
+  // potrivire falsă).
+  const hay=vals.map(invSearchNorm).join(' ');
+  const words=q.split(/\s+/).filter(Boolean);
+  if(words.every(w=>hay.includes(w)))return true;
+  return qd.length>=3&&vals.some(v=>invSearchDigits(v).includes(qd));
 }
 function renderSearch(){
   const q=(document.getElementById('ss-inp').value||'').trim();
