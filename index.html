@@ -2505,6 +2505,10 @@ body .tt-widget .tt-panel{left:calc(100% + 14px);bottom:-84px;width:min(400px,ca
 .aic-ico-btn{border-radius:50%;width:40px;height:40px;padding:0;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;border:none;background:none;color:var(--t3);cursor:pointer;transition:background .15s,color .15s}
 .aic-ico-btn:hover{background:var(--acc-light);color:var(--acc)}
 .aic-ico-btn.aic-mic-on{background:var(--rd-bg);color:var(--rd);animation:aicBounce 1s ease-in-out infinite}
+/* Butonul dedicat „Creează produs din screenshot" — cerut direct — iese vizual în evidență (accent mov,
+   nu neutru ca atașare/voce), ca să se vadă clar că e acțiunea „specială", nu doar o unealtă oarecare. */
+.aic-create-btn{background:var(--acc-light);color:var(--acc)}
+.aic-create-btn:hover{background:var(--acc);color:#fff}
 .aic-send-btn{border-radius:50%;width:40px;height:40px;padding:0;display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0;border:none;background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;cursor:pointer;box-shadow:0 4px 12px rgba(118,87,246,.35);transition:transform .15s,box-shadow .15s}
 .aic-send-btn:hover{transform:scale(1.06);box-shadow:0 6px 16px rgba(118,87,246,.45)}
 .aic-pending{display:flex;align-items:center;gap:8px;padding:8px 12px;background:var(--acc-light);border-radius:14px;font-size:18px;color:var(--t2);margin-top:10px;border:1px solid var(--acc-mid)}
@@ -2519,6 +2523,7 @@ body .tt-widget .tt-panel{left:calc(100% + 14px);bottom:-84px;width:min(400px,ca
 .aic-draft-img-ph{width:120px;height:120px;flex-shrink:0;border-radius:12px;background:linear-gradient(135deg,var(--acc-light),#fff);border:1px dashed var(--acc-mid);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;font-size:14px;color:var(--t3)}
 .aic-draft-body{flex:1;min-width:0}
 .aic-draft-warn{color:var(--or);font-size:17px;background:var(--or-bg);border:1px solid #FDE6C2;border-radius:12px;padding:10px 12px}
+.aic-draft-warn.aic-draft-match{color:var(--gr);background:var(--gr-bg);border-color:#A6E9C9}
 .aic-draft-warn a{color:var(--acc);font-weight:700}
 .aic-draft .btn-acc{align-self:stretch;text-align:center;border-radius:999px;background:linear-gradient(135deg,var(--acc),var(--acc2));border:none;font-weight:700;padding:11px 18px}
 /* Candidați „posibil asemănător" — rând ORIZONTAL de carduri mici, nu listă stivuită (rundă 2, cerut
@@ -4132,6 +4137,8 @@ button.pcx-include-btn.included{border-color:var(--gr)}
     <div class="aic-inrow">
       <button type="button" class="aic-ico-btn" onclick="document.getElementById('aic-img-tab').click()" title="Atașează o poză">📷</button>
       <input type="file" id="aic-img-tab" accept="image/*" style="display:none" onchange="aiChatPickImage(event,'tab')">
+      <button type="button" class="aic-ico-btn aic-create-btn" onclick="aiChatCreateFromScreenshot('tab')" title="Creează produs direct dintr-un screenshot">📸</button>
+      <input type="file" id="aic-create-img-tab" accept="image/*" style="display:none" onchange="aiChatCreateFromScreenshotFile(event,'tab')">
       <button type="button" class="aic-ico-btn aic-mic-btn" id="aic-mic-tab" onclick="aiChatToggleVoice('tab')" title="Scrie prin voce">🎤</button>
       <textarea id="aic-input-tab" rows="2" placeholder="Scrie o întrebare sau o cerere…" onkeydown="aiChatInputKeydown(event,'tab')" onpaste="aiChatPasteImage(event,'tab')"></textarea>
       <button type="button" class="aic-send-btn" onclick="aiChatSendFrom('tab')" aria-label="Trimite" title="Trimite">➤</button>
@@ -5047,6 +5054,8 @@ poza principală a produsului — orice apel openImgZoom(src) deschide aceeași 
     <div class="aic-inrow">
       <button type="button" class="aic-ico-btn" onclick="document.getElementById('aic-img-popup').click()" title="Atașează o poză">📷</button>
       <input type="file" id="aic-img-popup" accept="image/*" style="display:none" onchange="aiChatPickImage(event,'popup')">
+      <button type="button" class="aic-ico-btn aic-create-btn" onclick="aiChatCreateFromScreenshot('popup')" title="Creează produs direct dintr-un screenshot">📸</button>
+      <input type="file" id="aic-create-img-popup" accept="image/*" style="display:none" onchange="aiChatCreateFromScreenshotFile(event,'popup')">
       <button type="button" class="aic-ico-btn aic-mic-btn" id="aic-mic-popup" onclick="aiChatToggleVoice('popup')" title="Scrie prin voce">🎤</button>
       <textarea id="aic-input-popup" rows="2" placeholder="Scrie o întrebare…" onkeydown="aiChatInputKeydown(event,'popup')" onpaste="aiChatPasteImage(event,'popup')"></textarea>
       <button type="button" class="aic-send-btn" onclick="aiChatSendFrom('popup')" aria-label="Trimite" title="Trimite">➤</button>
@@ -5065,6 +5074,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:666,text:'Asistent AI — buton nou, dedicat, „📸 Creează produs direct dintr-un screenshot", cerut direct cu o captură reală (pagina unui produs Jumbo). Ocolește complet clasificarea de intenție (AI-ul nu mai ghicește „ce vrea userul" dintr-un text — aici intenția e explicită, din click) — fie consumă direct o poză deja atașată (📷/lipire), fie deschide propriul picker de fișier, iar fișierul ales merge direct la creare, fără un pas intermediar „acum apasă Trimite". Pe lângă poză/SKU-sau-EAN, deja extrase, acum preia explicit și prețul (deja susținut de extragere, verificat să fie corect cules) și titlul — garantat acum FĂRĂ diacritice, indiferent de sursă (înainte doar fallback-ul din poză era curățat, nu și un nume ajuns pe altă cale). Verificarea de duplicate, cerută explicit „dupa poza, titlu si coduri" — primele două existau deja (nume/categorie fuzzy + comparație vizuală); acum verifică și pe COD (SKU/EAN) exact, cel mai tare semnal dintre toate — un produs cu codul identic apare primul în listă, cu mesaj și casetă VERZI, distincte de potrivirile doar „posibile" (portocaliu) — înainte, orice potrivire (chiar și una confirmată 100% vizual) tot arăta cu caseta de avertizare portocalie, mesaj inexact „confirmat vizual" inclusiv pentru un cod identic, care n-a trecut deloc prin comparația de poze. Verificat de 2 ori: sintaxă + CSS (balans acolade, 2 metode independente) + confirmare directă Playwright pe server local, cu un produs real însămânțat cu codul EXACT pe care mock-ul AI-ului „îl citește" din poză: clasificarea de intenție confirmată complet ocolită (niciun apel „ai_chat_intent"), titlul confirmat fără diacritice, SKU/preț confirmate corect preluate, produsul cu cod identic confirmat primul în listă cu caseta verde corectă, plus scenariul cu o poză deja atașată (consumată direct, fără al doilea picker).',date:'2026-11-10'},
   {n:665,text:'Listă locală de aprovizionare — fiecare comandă analizată poate fi bifată „Comandată” direct din rezultatul „Potrivește stocul cu comenzile”. Bifa este o evidență locală, se păstrează la refresh și nu modifică stocul sau comenzile din ERP.',date:'2026-11-10'},
   {n:664,text:'Numărătoare paralelă — lista de jos este acum o vedere curată, construită exclusiv din produsele și cantitățile introduse manual de tine. Am eliminat numărătoarea veche reconstruită automat: nu mai amestecă recomandările AI sau toate comenzile cu selecția ta.',date:'2026-11-10'},
   {n:663,text:'Numărătoare paralelă — vederea de produse de jos este acum filtrată strict după numărătoarea ta: după „Finalizează” rămân vizibile doar produsele introduse în Trendyol/eMAG/Vinted, cu cifrele selectate în card. Cardurile care nu fac parte din numărătoare sunt doar ascunse din fereastra locală; nu se șterg din ERP. Dacă resetezi toate sesiunile de numărătoare, lista completă reapare.',date:'2026-11-10'},
@@ -29994,8 +30004,22 @@ async function aiChatCreateProductDraft(intent,imageDataUrl){
     // ca recomandare de verificat manual. Decizia de a adăuga sursa rămâne mereu la utilizator.
     asemanatori=confirmati.length?confirmati:candidati.slice(0,3).map(c=>({...c,confirmatVizual:false}));
   }else if(candidati.length)asemanatori=candidati.slice(0,3).map(c=>({...c,confirmatVizual:false}));
+  // Verificare și pe COD (SKU/EAN), nu doar titlu+poză — cerut direct: „dupa ce se cauta sa vada daca mai
+  // avem in sistem ceva asemanator, dupa poza, titlu si coduri". findExistingProduct e EXACTĂ (nu fuzzy),
+  // deci un cod identic e un semnal mult mai tare decât „posibil asemănător" — intră primul în listă,
+  // confirmatVizual:true, ca să arate cu mesajul verde „Produs existent recomandat", nu doar avertisment.
+  // name:'' intenționat — findExistingProduct e deja protejată împotriva unui query gol care s-ar
+  // „potrivi" orice produs (vezi comentariul din funcție); aici contează STRICT codul.
+  if(extras.sku&&extras.sku!=='null'||extras.ean&&extras.ean!=='null'){
+    const codMatch=findExistingProduct({ean:extras.ean&&extras.ean!=='null'?extras.ean:'',sku:extras.sku&&extras.sku!=='null'?extras.sku:'',name:''});
+    if(codMatch)asemanatori=[{id:codMatch.product.id,nume:codMatch.product.name,img:codMatch.product.img,confirmatVizual:true,confirmatCod:true},...asemanatori.filter(a=>a.id!==codMatch.product.id)];
+  }
   const validTitle=v=>v&&v!=='null'?stripDiacritics(String(v).trim()):'';
   const titluri=[{title:validTitle(extras.numeRecomandat||extras.nume),label:'✓ Recomandat'},{title:validTitle(extras.numeAlternativ),label:'Variantă alternativă'},{title:validTitle(extras.numeSursa),label:'Titlu furnizor'}].filter(x=>x.title).filter((x,i,a)=>a.findIndex(y=>y.title===x.title)===i);
+  // Titlul final NU mai poate scăpa cu diacritice, indiferent de sursă (text scris de user sau poză) —
+  // cerut direct: „titlu fara diacritice". Înainte era strict la fallback-ul din poză (rândul de mai sus
+  // la „nume"); acum e garantat, necondiționat, pe orice cale ar fi ajuns.
+  nume=stripDiacritics(nume);
   return{nume,categorie,pret,imageDataUrl:pozaProdus,asemanatori,titluri,
     sku:extras.sku&&extras.sku!=='null'?String(extras.sku).trim():'',ean:extras.ean&&extras.ean!=='null'?String(extras.ean).trim():'',pretAchizitie:Number(extras.pretAchizitie)||0,moneda:String(extras.moneda||'').toUpperCase(),tipPret:extras.tipPret||'necunoscut',
     furnizor:extras.furnizor&&extras.furnizor!=='null'?stripDiacritics(extras.furnizor):'',material:extras.material&&extras.material!=='null'?stripDiacritics(extras.material):'',dimensiuni:extras.dimensiuni&&extras.dimensiuni!=='null'?extras.dimensiuni:'',culori:extras.culori&&extras.culori!=='null'?stripDiacritics(extras.culori):'',descriere:extras.descriere&&extras.descriere!=='null'?stripDiacritics(extras.descriere):'',pozaDecupata:!!extras.zonaProdus&&!!pozaProdus};
@@ -30137,6 +30161,15 @@ async function aiChatAddStockFromImage(imageDataUrl){
   return invParsed.length;
 }
 // ── Orchestrator de top (UI → pipeline complet) ──
+// Mesajul de rezumat al unui draft de produs — extras ca funcție separată, reutilizată de AMBELE căi
+// care duc la „creeaza_produs": chat-ul obișnuit (clasificare AI, mai jos) ȘI butonul dedicat „Creează
+// produs din poză" (aiChatRunCreateFromImage, fără nicio clasificare) — un singur loc de întreținut
+// pentru formatul mesajului, nu două copii care ar putea diverge.
+async function aiChatPersistDraftMessage(draft){
+  const asemanatoriTxt=draft.asemanatori.length?`\n\n⚠️ Ai deja ceva asemănător: ${draft.asemanatori.map(a=>a.nume).join(', ')} — verifică înainte să salvezi.`:'';
+  const extrase=[draft.sku?'SKU '+draft.sku:'',draft.ean?'EAN '+draft.ean:'',draft.pretAchizitie?`Achiziție ${draft.pretAchizitie} ${draft.moneda||''}${draft.tipPret==='net'?' net':draft.tipPret==='cu_tva'?' cu TVA':''}`:''].filter(Boolean);
+  await aiChatPersist('asistent',`Am pregătit un draft de produs: **${draft.nume||'(fără nume)'}**${draft.categorie?` · ${draft.categorie}`:''}${extrase.length?'\n'+extrase.join(' · '):''}${draft.pozaDecupata?'\n✓ Fotografia produsului a fost extrasă din screenshot.':''}${asemanatoriTxt}\n\nVerifică datele și apasă „Deschide ca produs nou”. Nimic nu se salvează până nu apeși „Salvează produs”.`,'creeaza_produs');
+}
 // „Pași de gândire" vizibili, rundă 2 („functii futuriste", cerut direct) — nu e doar un „Mă gândesc…"
 // generic: fiecare etichetă apare exact când pasul REAL din aiChatSend chiar se termină (log-ul de mai
 // jos trece pasul anterior la „terminat" și arată noul pas ca activ), randat de aiChatStepsCardHtml.
@@ -30183,9 +30216,7 @@ async function aiChatSend(textRaw){
       aiChatDraft=draft;
       if(draft.nume)aiChatContext={nume:draft.nume,produsId:draft.produsId||null};
       aiChatSetStep('Pregătesc răspunsul…');
-      const asemanatoriTxt=draft.asemanatori.length?`\n\n⚠️ Ai deja ceva asemănător: ${draft.asemanatori.map(a=>a.nume).join(', ')} — verifică înainte să salvezi.`:'';
-      const extrase=[draft.sku?'SKU '+draft.sku:'',draft.ean?'EAN '+draft.ean:'',draft.pretAchizitie?`Achiziție ${draft.pretAchizitie} ${draft.moneda||''}${draft.tipPret==='net'?' net':draft.tipPret==='cu_tva'?' cu TVA':''}`:''].filter(Boolean);
-      await aiChatPersist('asistent',`Am pregătit un draft de produs: **${draft.nume||'(fără nume)'}**${draft.categorie?` · ${draft.categorie}`:''}${extrase.length?'\n'+extrase.join(' · '):''}${draft.pozaDecupata?'\n✓ Fotografia produsului a fost extrasă din screenshot.':''}${asemanatoriTxt}\n\nVerifică datele și apasă „Deschide ca produs nou”. Nimic nu se salvează până nu apeși „Salvează produs”.`,'creeaza_produs');
+      await aiChatPersistDraftMessage(draft);
     }else if(intent.tip==='adauga_stoc'){
       aiChatSetStep('Pregătesc răspunsul…');
       if(!imageDataUrl){
@@ -30216,6 +30247,51 @@ async function aiChatSend(textRaw){
   }
   aiChatBusy=false;aiChatCurStep='';aiChatStepsLog=[];
   renderAiChat();
+}
+// ── Buton dedicat „Creează produs din screenshot" — cerut direct: „sa avem un buton in Asisten Ai pe
+// care atunci cand il apasam...sa se creeze produs in platforma noastra interna". Ocolește COMPLET
+// clasificarea de intenție (AI-ul nu mai ghicește „ce vrea userul" dintr-un mesaj text — aici intenția e
+// explicită, din click-ul pe buton), deci merge mai repede și mai sigur direct pe fluxul de creare —
+// aceeași extragere (nume fără diacritice, SKU/EAN, preț) și aceeași verificare de duplicate (poză+titlu+
+// cod) ca la creeaza_produs prin chat, doar fără pasul de ghicit intenția.
+async function aiChatRunCreateFromImage(imageDataUrl){
+  if(aiChatBusy)return;
+  aiChatBusy=true;aiChatStepsLog=[];aiChatCurStep='';
+  await aiChatEnsureHistory();
+  await aiChatPersist('user','(poză atașată — creează produs)','');
+  renderAiChat();
+  try{
+    aiChatSetStep('Analizez poza și verific dacă există deja…');
+    const draft=await aiChatCreateProductDraft({produsNume:null,categorie:null,produsCreatPret:null},imageDataUrl);
+    aiChatDraft=draft;
+    if(draft.nume)aiChatContext={nume:draft.nume,produsId:draft.produsId||null};
+    aiChatSetStep('Pregătesc răspunsul…');
+    await aiChatPersistDraftMessage(draft);
+  }catch(e){
+    await aiChatPersist('asistent','A apărut o eroare la procesarea pozei: '+(e.message||e),'eroare');
+  }
+  aiChatBusy=false;aiChatCurStep='';aiChatStepsLog=[];
+  renderAiChat();
+}
+// Click pe buton: o poză deja atașată (📷/lipire) se consumă direct; altfel deschide picker-ul dedicat —
+// fișierul ales merge direct la creare, fără pasul intermediar „acum apasă Trimite".
+function aiChatCreateFromScreenshot(source){
+  if(aiChatBusy)return;
+  if(aiChatPendingImage){
+    const img=aiChatPendingImage;
+    aiChatPendingImage='';aiChatRenderPending();
+    aiChatRunCreateFromImage(img);
+  }else{
+    document.getElementById('aic-create-img-'+source)?.click();
+  }
+}
+async function aiChatCreateFromScreenshotFile(ev,source){
+  const file=ev.target.files[0];ev.target.value='';
+  if(!file)return;
+  await aiChatSetPendingImageFromBlob(file);
+  const img=aiChatPendingImage;
+  aiChatPendingImage='';aiChatRenderPending();
+  await aiChatRunCreateFromImage(img);
 }
 
 // ── Randare (ambele suprafețe — tab + pop-up, ACEEAȘI conversație, vezi Q3) ──
@@ -30383,7 +30459,16 @@ function aiChatDraftHtml(){
   // Poză + detalii alăturate (rundă 2, „mai lat") — fără poză (teoretic posibil, deși creeaza_produs
   // cere mereu o poză azi), un placeholder etichetat ia locul ei, nu o cutie goală.
   const img=d.imageDataUrl?`<img src="${esc(d.imageDataUrl)}" class="aic-draft-img">`:'<div class="aic-draft-img-ph"><span style="font-size:26px">📦</span><span>poză produs</span></div>';
-  const asem=d.asemanatori.length?`<div class="aic-draft-warn"><div style="margin-bottom:8px">${d.asemanatori.some(a=>a.confirmatVizual)?'✓ <strong>Produs existent recomandat</strong> — confirmat vizual.':'⚠️ <strong>Produs posibil asemănător</strong> — verifică fotografia înainte de alegere.'}</div><div class="aic-sim-row">${d.asemanatori.map(aiChatSimRowHtml).join('')}</div></div>`:'';
+  // Mesaj + culoare diferite după sursa potrivirii — un cod identic (SKU/EAN) e un semnal tare, diferit
+  // de o comparație vizuală reușită (ambele „sigure", caseta verde) sau doar un nume/categorie fuzzy
+  // (caseta portocalie, „verifică tu"); „confirmat vizual" ar fi fost inexact pentru un cod identic, care
+  // n-a trecut deloc prin comparația de poze — cerut direct, pe verificare.
+  const hasCodMatch=d.asemanatori.some(a=>a.confirmatCod);
+  const hasVizualMatch=d.asemanatori.some(a=>a.confirmatVizual&&!a.confirmatCod);
+  const warnMsg=hasCodMatch?'✓ <strong>Produs existent</strong> — cod identic (SKU/EAN) găsit în stoc.'
+    :hasVizualMatch?'✓ <strong>Produs existent recomandat</strong> — confirmat vizual.'
+    :'⚠️ <strong>Produs posibil asemănător</strong> — verifică fotografia înainte de alegere.';
+  const asem=d.asemanatori.length?`<div class="aic-draft-warn${hasCodMatch||hasVizualMatch?' aic-draft-match':''}"><div style="margin-bottom:8px">${warnMsg}</div><div class="aic-sim-row">${d.asemanatori.map(aiChatSimRowHtml).join('')}</div></div>`:'';
   // SKU și Achiziție au acum și propriul buton de copiere (cerut direct) — reutilizează exact
   // pcx-code-copy/pcxCopyCode, aceeași pereche folosită deja pentru SKU/PNK pe linia unei comenzi
   // (Comenzi Platforme); EAN rămâne text simplu, nu a fost cerut.
