@@ -5074,6 +5074,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:669,text:'Comenzi Platforme — bug real reparat, raportat direct cu o captură: eroarea „Scrie AWB-ul citit de pe etichetă înainte să alegi comanda" apărea uneori chiar și cu AWB-ul vizibil, scris corect, în căsuță. Cauza: picker-ul de asociere manuală (etichetă complet necitită) golea ÎNTOTDEAUNA căsuța obligatorie de AWB la deschidere — corect când treci la un rând NOU (altfel un AWB vechi ar rămâne agățat de o comandă greșită), dar și la un al doilea click pe ACELAȘI buton „🔗 Asociază manual" (din grabă, dublu-click, sau un click care a aterizat din nou pe același rând) — ștergând tăcut tot ce tocmai tastase omul, fără niciun semnal vizibil, înainte ca eroarea să apară la alegerea comenzii. Reparat la toate cele 3 puncte de intrare ale aceluiași picker (etichetă parțial citită, complet necitită, eroare din clopoțel): un al doilea click pe EXACT același rând, cu dropdown-ul deja deschis, nu mai reface deschiderea — un rând diferit tot resetează, corect. Verificat de 2 ori: sintaxă + 14 verificări izolate pe funcțiile reale extrase din cod (toate cele 3 puncte de intrare, pe rândul-același vs. rând-diferit, plus cazurile deja existente neatinse) + confirmare directă Playwright pe server local, reproducând exact scenariul din captură (scriere AWB → al doilea click pe același buton → AWB-ul rămâne scris → alegerea comenzii NU mai declanșează eroarea falsă), cu scrierea reală în Supabase interceptată explicit (niciun risc pe date de producție) — plus regresie pe rând diferit (tot resetează) și pe căsuță chiar goală (eroarea tot apare, corect).',date:'2026-11-10'},
   {n:668,text:'Comenzi Platforme — comenzile cu AWB deja asociat urcă acum deasupra celor fără, în cadrul aceleiași platforme, cerut direct: „in momentul in care adaugam comenzile pe baza AWB urilor, acestea sa vina in partea de sus a sectiunii, peste cele care nu au fost finalizate prin AWB pentru a fi mai usor sa le urmarim". Sortare stabilă — doar desparte „are AWB" de „nu are", fără să amestece ordinea relativă deja existentă (cronologică, cea mai nouă prima) în interiorul fiecărei grupe. Aceeași regulă („are AWB?") e acum o singură funcție (pcxGroupAwb), reutilizată atât pentru sortare cât și pentru eticheta vizuală din antetul cardului — nu două copii care ar putea diverge. Verificat de 2 ori: sintaxă + 13 verificări izolate pe funcțiile reale extrase din cod (eMAG/Trendyol citite din comanda deja scrisă în bază, Vinted citit din rândul local — cazuri separate, ambele corecte; grup multi-produs citește din prima linie; index lipsă nu crapă; simularea exactă a sortării) + confirmare directă Playwright pe server local, cu 4 comenzi reale eMAG însămânțate (una singură cu AWB): comanda cu AWB a urcat corect prima, restul au rămas în ordinea lor cronologică originală, fără să fie amestecate — plus regresia completă pe cele 3 suite existente din aceeași zonă de cod (AWB picker, performanță, dată comandă), toate verzi.',date:'2026-11-10'},
   {n:667,text:'Numărătoare paralelă — eliminată complet vederea generală de comenzi de sub numărătoare. Zona de jos arată acum permanent numai produsele introduse manual și cantitățile lor; dacă nu ai adăugat nimic, afișează clar lista goală.',date:'2026-11-10'},
   {n:666,text:'Asistent AI — buton nou, dedicat, „📸 Creează produs direct dintr-un screenshot", cerut direct cu o captură reală (pagina unui produs Jumbo). Ocolește complet clasificarea de intenție (AI-ul nu mai ghicește „ce vrea userul" dintr-un text — aici intenția e explicită, din click) — fie consumă direct o poză deja atașată (📷/lipire), fie deschide propriul picker de fișier, iar fișierul ales merge direct la creare, fără un pas intermediar „acum apasă Trimite". Pe lângă poză/SKU-sau-EAN, deja extrase, acum preia explicit și prețul (deja susținut de extragere, verificat să fie corect cules) și titlul — garantat acum FĂRĂ diacritice, indiferent de sursă (înainte doar fallback-ul din poză era curățat, nu și un nume ajuns pe altă cale). Verificarea de duplicate, cerută explicit „dupa poza, titlu si coduri" — primele două existau deja (nume/categorie fuzzy + comparație vizuală); acum verifică și pe COD (SKU/EAN) exact, cel mai tare semnal dintre toate — un produs cu codul identic apare primul în listă, cu mesaj și casetă VERZI, distincte de potrivirile doar „posibile" (portocaliu) — înainte, orice potrivire (chiar și una confirmată 100% vizual) tot arăta cu caseta de avertizare portocalie, mesaj inexact „confirmat vizual" inclusiv pentru un cod identic, care n-a trecut deloc prin comparația de poze. Verificat de 2 ori: sintaxă + CSS (balans acolade, 2 metode independente) + confirmare directă Playwright pe server local, cu un produs real însămânțat cu codul EXACT pe care mock-ul AI-ului „îl citește" din poză: clasificarea de intenție confirmată complet ocolită (niciun apel „ai_chat_intent"), titlul confirmat fără diacritice, SKU/preț confirmate corect preluate, produsul cu cod identic confirmat primul în listă cu caseta verde corectă, plus scenariul cu o poză deja atașată (consumată direct, fără al doilea picker).',date:'2026-11-10'},
@@ -25949,6 +25950,10 @@ function openAwbPickDropdownAt(anchorEl,prefill){
 }
 function openAwbPick(ev,idx){
   ev.stopPropagation();
+  // Click (dublu, din grabă, sau din greșeală pe un rând apropiat) pe ACELAȘI declanșator, cu dropdown-ul
+  // deja deschis pentru EXACT același rând — nu reluăm deschiderea. Vezi explicația completă la
+  // openAwbUnrecognizedPick (mai jos), unde miza e cea mai mare (acolo se poate pierde un AWB deja scris).
+  if(document.getElementById('awb-pickdrop')?.classList.contains('on')&&awbPickMode==='preview'&&awbPickIdx===idx)return;
   awbPickMode='preview';
   awbPickIdx=idx;
   // Cerut direct — „când e vorba de eMAG HU, să încerce să asocieze după nume client” + „să primesc la
@@ -25971,6 +25976,16 @@ function openAwbPick(ev,idx){
 // în thumbnail-ul de-alături) și să-l scrie o singură dată, odată cu alegerea comenzii.
 function openAwbUnrecognizedPick(ev,idx){
   ev.stopPropagation();
+  // Bug real, raportat direct cu o captură („ce inseamna asta" — eroarea „Scrie AWB-ul..." apărea deși
+  // AWB-ul era vizibil, tastat corect, în căsuță): openAwbPickDropdownAt golește ÎNTOTDEAUNA căsuța de
+  // AWB manual la deschidere (corect, când treci la un rând NOU — altfel un AWB vechi ar rămâne agățat de
+  // o comandă greșită). Problema era un al doilea click pe „Asociază manual" — din grabă, dublu-click, sau
+  // un click greșit pe rândul de-alături (lista de erori se poate redesena/muta între timp) — pe EXACT
+  // ACELAȘI rând, cu dropdown-ul deja deschis: relua deschiderea, ștergând tăcut AWB-ul deja tastat, fără
+  // niciun semnal vizibil — următorul click pe o comandă pica atunci exact pe garda „căsuță goală" de mai
+  // jos (pickAwbOrder), cu un mesaj fără nicio legătură vizibilă cu ce tocmai scrisese omul. Un rând
+  // DIFERIT (alt idx) tot resetează, corect — acolo golirea chiar e necesară.
+  if(document.getElementById('awb-pickdrop')?.classList.contains('on')&&awbPickMode==='unrecognized'&&awbPickUnrecognizedIdx===idx)return;
   awbPickMode='unrecognized';
   awbPickUnrecognizedIdx=idx;
   openAwbPickDropdownAt(ev.currentTarget,'');
@@ -25984,6 +25999,9 @@ function openAwbUnrecognizedPick(ev,idx){
 function openAwbErrorPick(ev,id){
   ev.stopPropagation();
   const x=AWB_ISSUES.find(e=>e.id===id);if(!x)return;
+  // Același click dublu/greșit, pe EXACT aceeași eroare — nu relua (vezi explicația la
+  // openAwbUnrecognizedPick); o eroare DIFERITĂ (alt id) tot resetează, corect.
+  if(document.getElementById('awb-pickdrop')?.classList.contains('on')&&awbPickMode==='error'&&awbPickErrorRow?.id===id)return;
   awbPickMode='error';
   awbPickErrorRow=x;
   openAwbPickDropdownAt(ev.currentTarget);
