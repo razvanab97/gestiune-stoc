@@ -996,6 +996,7 @@ tr:hover td{background:var(--surf2)}
    pe rândul inclus) deja folosite la Comenzi Platforme (.pcom-prev-row), plus un toolbar de
    selecție în bloc (Selectează tot/Deselectează tot) — pe 53+ listări, bifatul unul câte unul era
    greoi. */
+.smi-enter-hint{margin-left:16px;font-size:20px;font-weight:500;color:var(--t3);opacity:.9}
 .smi-preview-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--b1);font-size:24px;color:var(--t3)}
 /* CADRU FIX pentru previzualizarea Sincronizare (cerut direct: „toată zona să fie ca un cadru fix, cu
    toate setările sus și jos, iar produsele de sincronizat să intre în cadranul acela și de fiecare dată
@@ -5103,6 +5104,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:684,text:'Sincronizare — Enter confirmă acum ultimul produs FĂRĂ click pe el, cerut direct: „Enter să funcționeze cu confirmarea produsului selectat, pe principiul: ultimul se confirmă prin Enter, chiar dacă nu e click-ul pe acel produs". Înainte, Enter salva un rând doar dacă dădeai întâi click pe el (focus pe rând) — fără click nu se întâmpla nimic. Acum: (1) Enter cu un rând selectat (cu click, sau tocmai ai ales produsul din picker) îl salvează pe ACEL rând; (2) Enter fără niciun rând selectat salvează ULTIMUL rând din listă — fluxul de jos în sus: salvezi ultimul, cel de deasupra coboară în locul lui, Enter din nou. Selecția rămâne la aceeași poziție după orice salvare/bifă/alegere (înainte focusul se pierdea la fiecare redesenare), iar dacă dispare ultimul rând, coboară pe noul ultim. Siguranță: dacă ultimul rând nu e vizibil în cadru, primul Enter doar îl aduce în vedere și îl selectează (nu salvează pe nevăzute); dacă n-are produs asociat, spune clar de ce nu se salvează, în loc să nu facă nimic; Enter nu salvează cât timp un modal, un picker sau o fereastră mobilă (ex. Asistentul AI) e activă. În plus, un Enter dublu repede (sau Enter + click) nu mai poate scrie aceeași mapare de două ori, iar un Enter apăsat cât se salvează ultimul rând se aplică pe noul ultim. Indiciu vizibil în cadru: „↵ Enter = salvează rândul selectat (implicit ultimul)".',date:'2026-11-11'},
   {n:683,text:'Ferestrele mobile (Asistent AI, Notițe, Preț privat) — bug real, raportat direct: „de ce nu putem să mutăm toată zona asta a AI-ului până la limita din dreapta a paginii, ci e blocat acolo". Cauza: tragerea nu ținea cont de zoom-ul paginii (butonul −/+ din header). La zoom 80%, limita din dreapta/jos se calcula cu lățimea/înălțimea nezoomată a ferestrei (600px în loc de 480px), deci fereastra se oprea cu ~200px înainte de margine (reprodus: 205px la zoom 80%), iar în timpul tragerii rămânea în urma cursorului și sărea la început. Acum tot calculul se face în pixeli vizuali, convertiți o singură dată la atribuire (zoomAdjust) — fereastra urmărește cursorul exact și ajunge lipită de oricare margine, la orice zoom. Aceeași reparație pe toate cele 3 ferestre (aveau codul de tragere copiat identic, acum e o singură funcție, makeWidgetDraggable). La zoom 100% nimic nu se schimbă.',date:'2026-11-11'},
   {n:682,text:'Asistent AI — 3 lucruri cerute direct, pe o captură reală cu cardul „Produs posibil asemănător". (1) Cardul de produs nou (poza, numele, SKU/preț, „Folosește" pe candidații asemănători, „Deschide ca produs nou") era randat separat, mereu LIPIT la finalul listei, deci mesajele noi apăreau deasupra lui și el rămânea „fix" — acum stă în conversație, sub mesajul care l-a generat, și derulează odată cu istoricul când adaugi text sau poză (poți avea mai multe carduri deodată, fiecare cu butoanele lui). (2) După ce ai ales — „Folosește" pe un produs existent sau „Deschide ca produs nou" — cardul dispare din conversație (derularea rămâne unde era). (3) Prețul scris ca text se adaugă automat la produsul generat: „24.99", „24,99 lei", „preț 24.99", „5 euro", „24.99 fără TVA", fie scris în mesaj împreună cu poza, fie în căsuța de mesaj înainte de butonul „Creează produs din screenshot". Se tratează ca preț de ACHIZIȚIE (cu TVA implicit, în lei implicit; „vând cu…" rămâne preț de vânzare), bate prețul citit din screenshot și apare pe card cu eticheta „✎ din mesaj"; la „Deschide ca produs nou" ajunge direct în câmpurile de preț, iar la „Folosește" în prețul sursei „Alt furnizor". O poză trimisă cu un mesaj care e DOAR un preț nu mai poate fi confundată cu un cod de produs. Clasificatorul AI primește 3 câmpuri noi (preț/monedă/TVA), plus un parser local ca plasă de siguranță.',date:'2026-11-11'},
   {n:681,text:'Modalul de produs („Produs nou" / editare) — tastatura, cerută direct: „butonul Enter să funcționeze ca Salvează și Esc ca închidere". Enter în orice câmp de text/număr apasă acum „Salvează produs" (înainte nu făcea nimic). Nu salvează din greșeală: nu în câmpurile mari de text (acolo Enter rămâne rând nou; Ctrl/⌘+Enter salvează și de acolo), nu pe butoane/linkuri/liste (își fac singure treaba), nu în câmpurile cu autocompletare (furnizor — Enter alege sugestia, nu salvează un produs pe jumătate completat) și nu cât timp e deschis un picker de produs sau alt dialog deasupra. Esc închidea deja modalul, cu aceeași confirmare „Ai modificări nesalvate" ca la × / Anulează (păstrată, ca să nu pierzi ce ai tastat; Enter pe acea confirmare = Renunț). Fix în plus: Esc cu un picker de produs deschis închidea și picker-ul, și TOT modalul — acum închide doar picker-ul, iar al doilea Esc închide modalul. Pe pagina Sincronizare, Enter pe un rând din fundal nu mai poate salva rândul respectiv cât timp un modal (ex. Produs nou) e deschis deasupra.',date:'2026-11-11'},
@@ -18380,7 +18382,7 @@ function renderSyncImportPreview(){
     const p=it.produsId?P.find(x=>x.id===it.produsId):null;
     const rowImg=it.newProduct?`<div class="pcom-row-img-ph">🆕</div>`:(p&&p.img?`<img src="${esc(imgSrc(p.img))}" class="pcom-row-img" ${imgErrAttr(p.img,'pcomrow')}>`:`<div class="pcom-row-img-ph">📦</div>`);
     const includeBtn=`<button type="button" class="pcom-include-toggle${it.include?' on':''}" onclick="toggleSyncRowInclude(${idx})" title="${it.include?'Se va mapa — click pentru a exclude':'Exclusă — click pentru a include'}">${it.include?'✓ Inclus':'Neinclus'}</button>`;
-    return`<div class="pcom-prev-row${it.include?' pcom-row-included':''}" data-row-idx="${idx}" tabindex="0" title="Click pe rând, apoi Enter = salvează / C = copiază PNK">
+    return`<div class="pcom-prev-row${it.include?' pcom-row-included':''}" data-row-idx="${idx}" tabindex="0" title="Enter = salvează rândul selectat (fără niciun rând selectat: ultimul din listă) / C = copiază PNK">
       ${includeBtn}
       ${rowImg}
       <div class="inv-prev-nm" style="white-space:normal;flex:1;min-width:0;margin-right:0">
@@ -18392,13 +18394,18 @@ function renderSyncImportPreview(){
     </div>`;
   }).join('');
   const includedCount=syncImpParsed.filter(x=>x.include).length;
-  const toolbarHtml=`<div class="smi-preview-toolbar"><span>${includedCount} din ${syncImpParsed.length} selectate</span><div style="display:flex;gap:8px"><button type="button" class="btn btn-sm" onclick="toggleSyncImportAll(true)">☑️ Selectează tot</button><button type="button" class="btn btn-sm" onclick="toggleSyncImportAll(false)">☐ Deselectează tot</button></div></div>`;
+  const toolbarHtml=`<div class="smi-preview-toolbar"><span>${includedCount} din ${syncImpParsed.length} selectate<span class="smi-enter-hint" title="Enter salvează rândul selectat (cel pe care ai dat click / ai ales produsul). Dacă niciun rând nu e selectat, salvează ULTIMUL rând din listă — fără să mai fie nevoie de click pe el.">↵ Enter = salvează rândul selectat (implicit ultimul)</span></span><div style="display:flex;gap:8px"><button type="button" class="btn btn-sm" onclick="toggleSyncImportAll(true)">☑️ Selectează tot</button><button type="button" class="btn btn-sm" onclick="toggleSyncImportAll(false)">☐ Deselectează tot</button></div></div>`;
   const keepTop=document.getElementById('smi-rows')?.scrollTop||0;
+  // Rândul selectat (focusat) rămâne selectat și după redesenare — la aceeași poziție; dacă tocmai a dispărut ultimul
+  // rând, selecția coboară pe noul ultim. Fără asta, după orice salvare/alegere/bifă focusul se pierdea și Enter nu mai
+  // avea pe ce rând să lucreze (cerut direct: Enter să confirme „ultimul” fără click).
+  const fa=document.activeElement,faRow=fa&&fa.closest?fa.closest('#smi-rows [data-row-idx]'):null,keepFocusIdx=faRow?Number(faRow.dataset.rowIdx):null;
   prev.innerHTML=`<div class="inv-preview"><div class="inv-prev-title">Previzualizare (${syncImpParsed.length} listări)</div>${toolbarHtml}<div class="smi-rows" id="smi-rows">${rows}</div></div>`+
     `<div class="smi-pickdrop" id="smi-pickdrop"><div style="display:flex;gap:6px;align-items:center"><input type="text" id="smi-pick-search" placeholder="Caută produs după nume sau SKU…" oninput="filterSyncPickDebounced()" style="flex:1"><button type="button" class="btn btn-sm" style="flex-shrink:0;padding:6px 8px" onclick="syncPickRecognizeImage()" title="Lipește o poză din clipboard (captură eMAG/Trendyol sau poza produsului) — AI recunoaște produsul">📋</button></div><div class="smi-pick-list" id="smi-pick-list"></div></div>`;
   document.getElementById('smi-foot').style.display='flex';
   // același loc în cadru după orice redesenare (salvare/eliminare/bifă): rândul de dedesubt urcă în locul celui dispărut
   const rowsEl=document.getElementById('smi-rows');if(rowsEl&&keepTop)rowsEl.scrollTop=keepTop;
+  if(keepFocusIdx!=null&&syncImpParsed.length){const fe=document.querySelector(`#smi-rows [data-row-idx="${Math.min(keepFocusIdx,syncImpParsed.length-1)}"]`);if(fe)fe.focus({preventScroll:true});}
   updSyncImportInfo();
   saveSyncImportState();
 }
@@ -18753,8 +18760,11 @@ function pickSyncProduct(id){
   const host=document.getElementById('smi-pick-'+syncPickIdx);
   if(host)host.innerHTML=syncPickBtnHtml(syncPickIdx);
   document.getElementById('smi-pickdrop').classList.remove('on');
+  const pickedIdx=syncPickIdx;
   syncPickIdx=null;
   renderSyncImportPreview();
+  // produsul tocmai ales rămâne „rândul selectat” — Enter îl confirmă, fără click pe rând
+  const pickedRow=document.querySelector(`#smi-rows [data-row-idx="${pickedIdx}"]`);if(pickedRow)pickedRow.focus({preventScroll:true});
 }
 document.addEventListener('click',ev=>{
   if(!ev.target.closest('#smi-pickdrop')&&!ev.target.closest('.smi-pick-btn')){
@@ -18856,9 +18866,13 @@ async function applySyncImport(){
 // sa dispara din lista, o data sincronizat". Spre deosebire de autoApplyConfidentSyncLines (mai sus,
 // STRICT viaPnk, rulată automat, fără buton), asta merge pe ORICE rând cu o potrivire — sugestie AI,
 // potrivire fuzzy, alegere manuală din picker, sau „✚ produs nou" — indiferent de starea „✓ Inclus".
+const syncSavingItems=new WeakSet();let syncEnterQueued=false;
 async function applySyncImportLine(idx){
   if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
   const it=syncImpParsed[idx];if(!it||!(it.produsId||it.newProduct))return;
+  // Enter apăsat de două ori repede (sau Enter + click) pe ACELAȘI rând nu mai poate scrie maparea de două ori
+  if(syncSavingItems.has(it))return;
+  syncSavingItems.add(it);
   const platforma=document.getElementById('smi-preview').dataset.platforma||'emag';
   const btn=document.getElementById('smi-sync-now-'+idx);
   if(btn){btn.disabled=true;btn.textContent='Se salvează…';}
@@ -18876,7 +18890,7 @@ async function applySyncImportLine(idx){
     if(!it.produsId){toast('Nu am putut crea produsul nou — încearcă din nou','err');return;}
     const[row]=await dbPost('platforma_mapari',[syncMapToDb({platforma,titluExtern:it.titluExtern,idExtern:it.pnk||null,produsId:it.produsId,confirmat:true,tara:it.tara||''})]);
     if(row)SYNCM=[dbToSyncMap(row),...SYNCM];
-    syncImpParsed.splice(idx,1);
+    const kIdx=syncImpParsed.indexOf(it);if(kIdx>-1)syncImpParsed.splice(kIdx,1); // pe referință: indexul captat poate fi depășit dacă între timp a dispărut alt rând
     if(syncImpParsed.length){renderSyncImportPreview();}
     else{document.getElementById('smi-preview').innerHTML='';document.getElementById('smi-foot').style.display='none';clearSyncImportState();}
     renderSyncPage();
@@ -18885,9 +18899,27 @@ async function applySyncImportLine(idx){
   }catch(e){
     toast('Eroare la salvare: '+(e.message||e),'err');
   }finally{
+    syncSavingItems.delete(it);
     const btn2=document.getElementById('smi-sync-now-'+idx);
     if(btn2){btn2.disabled=false;btn2.textContent='⚡ Salvează acum';}
+    // un Enter apăsat cât se salva ultimul rând așteaptă și se aplică pe NOUL ultim rând, după ce a dispărut cel salvat
+    if(syncEnterQueued){syncEnterQueued=false;syncConfirmLastRow();}
   }
+}
+// Enter FĂRĂ niciun rând selectat = confirmă ULTIMUL rând din listă (cerut direct: „ultimul se confirmă prin Enter,
+// chiar dacă nu e click-ul pe acel produs” — fluxul de jos în sus: salvezi ultimul, următorul coboară în locul lui).
+// Siguranță: dacă ultimul rând nu e vizibil în cadru, nu se salvează „pe nevăzute” — doar se aduce în vedere și se
+// selectează (următorul Enter îl salvează); dacă n-are produs asociat, se spune clar de ce nu se salvează.
+function syncConfirmLastRow(){
+  const idx=syncImpParsed.length-1;if(idx<0)return;
+  const it=syncImpParsed[idx];
+  if(syncSavingItems.has(it)){syncEnterQueued=true;return;}
+  const el=document.querySelector(`#smi-rows [data-row-idx="${idx}"]`),box=document.getElementById('smi-rows');
+  if(!el||!box)return;
+  const er=el.getBoundingClientRect(),br=box.getBoundingClientRect();
+  if(er.bottom<br.top+8||er.top>br.bottom-8){el.scrollIntoView({block:'nearest'});el.focus({preventScroll:true});toast('Ultimul rând era în afara vederii — l-am adus aici. Apasă Enter din nou ca să-l salvezi.');return;}
+  if(!(it.produsId||it.newProduct)){el.focus({preventScroll:true});toast('Ultimul rând nu are produs asociat — alege produsul (▾), „+ Nou” sau „Mai târziu”','err');return;}
+  applySyncImportLine(idx);
 }
 /* COMENZI PLATFORME (import comenzi eMAG/Trendyol) */
 function pcomMode(mode){
@@ -29799,7 +29831,11 @@ function syncRowKeyHandler(e){
   // .pcom-prev-row:focus), altfel closest() n-are de la ce pleca — un <div> simplu nu primește
   // niciodată focus doar din click, indiferent în ce ordine „cobori" prin listă.
   const rowEl=ae?.closest?.('[data-row-idx]');
-  if(!rowEl)return;
+  if(!rowEl){
+    // niciun rând selectat: Enter confirmă ultimul rând (doar dacă focusul e pe pagină/în cadru, nu într-o fereastră mobilă, link etc.)
+    if(e.key==='Enter'&&!e.repeat&&!e.defaultPrevented&&!e.isComposing&&!e.ctrlKey&&!e.metaKey&&!e.altKey&&syncImpParsed.length&&document.getElementById('smi-foot')?.style.display!=='none'&&!document.querySelector('.smi-pickdrop.on')&&(!ae||ae===document.body||ae===document.documentElement||ae.closest?.('#smi-frame'))){e.preventDefault();syncConfirmLastRow();}
+    return;
+  }
   const idx=Number(rowEl.dataset.rowIdx);
   if(!Number.isFinite(idx))return;
   const it=syncImpParsed[idx];if(!it)return;
