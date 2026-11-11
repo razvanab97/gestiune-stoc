@@ -997,6 +997,21 @@ tr:hover td{background:var(--surf2)}
    selecție în bloc (Selectează tot/Deselectează tot) — pe 53+ listări, bifatul unul câte unul era
    greoi. */
 .smi-preview-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--b1);font-size:24px;color:var(--t3)}
+/* CADRU FIX pentru previzualizarea Sincronizare (cerut direct: „toată zona să fie ca un cadru fix, cu
+   toate setările sus și jos, iar produsele de sincronizat să intre în cadranul acela și de fiecare dată
+   când actualizăm un produs și dispare, să coboare următorul în aceeași poziție"). Titlul + selecția în
+   bloc rămân sus, butoanele „Resetează / Sugerează cu AI / Adaugă mapările" jos, iar DOAR lista de
+   rânduri (#smi-rows) derulează între ele — la un rând salvat/eliminat, cel de dedesubt urcă exact în
+   locul lui (poziția de derulare se păstrează la fiecare redesenare, vezi renderSyncImportPreview).
+   Activ doar cât există rânduri (#smi-preview nu e gol); fără suport pentru :has() rămâne aspectul vechi. */
+#smi-foot{margin-top:12px}
+#smi-frame{scroll-margin-top:76px}
+#smi-frame:has(#smi-preview:not(:empty)){display:flex;flex-direction:column;height:calc(100vh - 130px);min-height:460px;margin-top:1.25rem;border:1px solid var(--b1);border-radius:var(--r2);background:var(--surf2);overflow:hidden}
+#smi-frame:has(#smi-preview:not(:empty)) #smi-preview{flex:1;min-height:0;display:flex;flex-direction:column}
+#smi-frame:has(#smi-preview:not(:empty)) .inv-preview{flex:1;min-height:0;display:flex;flex-direction:column;margin:0;padding:14px 16px 0;border:0;border-radius:0;background:transparent}
+#smi-frame:has(#smi-preview:not(:empty)) .inv-prev-title,#smi-frame:has(#smi-preview:not(:empty)) .smi-preview-toolbar{flex-shrink:0}
+#smi-frame:has(#smi-preview:not(:empty)) .smi-rows{flex:1;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:2px 8px 14px 0}
+#smi-frame:has(#smi-preview:not(:empty)) #smi-foot{flex-shrink:0;margin-top:0;padding:12px 16px;border-top:1px solid var(--b1);background:var(--surf)}
 .smi-row-title{font-weight:600;font-size:26px;color:var(--t1);line-height:1.35;margin-bottom:4px}
 .smi-title-copy-btn{flex-shrink:0;border:1px solid var(--b2);background:var(--surf);color:var(--t3);border-radius:6px;font-size:19px;padding:2px 6px;cursor:pointer;line-height:1.4}
 .smi-title-copy-btn:hover{border-color:var(--acc);color:var(--acc)}
@@ -3823,14 +3838,16 @@ button.pcx-include-btn.included{border-color:var(--gr)}
       </div>
     </div>
     <div id="smi-parsing" style="display:none;font-size:24px;color:var(--t3);margin:8px 0"><span class="spin"></span> Se procesează fișierul…</div>
+    <div id="smi-frame">
     <div id="smi-preview"></div>
-    <div id="smi-foot" style="display:none;justify-content:space-between;align-items:center;margin-top:12px;gap:10px;flex-wrap:wrap">
+    <div id="smi-foot" style="display:none;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
       <span style="font-size:24px;color:var(--t3)"><span id="smi-info"></span><span id="smi-cloud-status" style="margin-left:14px;font-size:21px" title="Previzualizarea se salvează automat în Supabase (setari_app) — o regăsești și de pe alt browser"></span></span>
       <div style="display:flex;gap:8px">
         <button class="btn btn-sm" onclick="resetSyncImportPage()" title="Golește previzualizarea curentă — rămâne salvată automat altfel, chiar dacă schimbi pagina sau revii mâine">↻ Resetează</button>
         <button class="btn btn-sm" id="smi-ai-btn" onclick="suggestSyncImportWithAI()" title="AI sugerează produsul pentru liniile fără o potrivire sigură — tu doar confirmi sau alegi altceva">🤖 Sugerează cu AI</button>
         <button class="btn btn-sm btn-acc" id="smi-apply-btn" onclick="applySyncImport()" disabled>Adaugă mapările selectate</button>
       </div>
+    </div>
     </div>
     <div id="smi-stock-preview"></div>
     <div id="smi-duplicate-preview"></div>
@@ -5086,6 +5103,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:680,text:'Sincronizare — previzualizarea de la „Import în masă din fișier" e acum un CADRU FIX, cerut direct: „vreau ca toată zona să fie ca un cadru fix, cu toate setările sus și jos, iar produsele de sincronizat să intre în cadranul acela și de fiecare dată când actualizăm un produs și dispare, să coboare următorul în aceeași poziție". Cadrul are înălțimea ecranului: sus rămân titlul „Previzualizare (N listări)" și bara „N din M selectate / Selectează tot / Deselectează tot", jos rămân „↻ Resetează", „🤖 Sugerează cu AI", „Adaugă mapările selectate" și indicatorul „☁ salvat în cloud" — toate mereu vizibile, fără să mai derulezi pagina până la capătul unei liste de sute de rânduri. Doar lista de produse derulează în interiorul cadrului. La „⚡ Salvează acum", „🕓 Mai târziu" sau „🗑️ Elimină", rândul dispare și cel de dedesubt urcă exact în locul lui (poziția de derulare din cadru se păstrează la fiecare redesenare — înainte, lista se reconstruia de la zero și sărea la început), deci poți apăsa același buton de la aceeași poziție rând după rând. Doar prezentare: nicio logică de potrivire/salvare nu s-a schimbat.',date:'2026-11-11'},
   {n:679,text:'Sincronizare — previzualizarea de la „Import în masă din fișier" se salvează acum și în Supabase, nu doar în browser, cerut direct: „verifică că actualizările făcute în secțiunea sincronizare se salvează și în Supabase, să rămână salvat, am impresia că nu s-a salvat de ieri până astăzi". Verificat în baza de date: mapările CONFIRMATE se scriu corect (ex. azi 71 eMAG + 7 Trendyol), dar tot ce lăsai neaplicat în previzualizare (produsul ales pe fiecare rând, bifele, „Elimină", sugestiile AI — ex. cele 371 de mapări selectate din captură) trăia DOAR în localStorage (cheia sm6_sync_import): local unui singur browser, iar dacă cota era plină scrierea eșua silențios (safeLocalSet doar loga un console.warn) — deci putea dispărea de la o zi la alta fără nicio urmă în Supabase. Acum, la 2 secunde după ultima schimbare, previzualizarea se salvează și în cloud (setari_app, cheia sync_import_draft, aceeași tehnică ca la Comenzi Platforme), iar lângă „N mapări selectate" apare un indicator „☁ salvat în cloud HH:MM" (sau „⚠ nesalvat în cloud", cu avertisment, dacă nu a mers). La deschiderea paginii se verifică și cloud-ul: o previzualizare mai nouă salvată de pe alt browser/dispozitiv (sau după ce localStorage s-a golit) o înlocuiește pe cea locală; draftul local existent se urcă automat în cloud la prima încărcare. Se golește peste tot (local + cloud) la „↻ Resetează" sau când ultima linie a fost aplicată/pusă deoparte. În plus, „Adaugă mapările selectate" nu mai e totul-sau-nimic: înainte, UN SINGUR rând cu produs șters/îmbinat între timp (previzualizarea putea fi veche de o zi) făcea ca baza de date să respingă tot lotul de 371 și nu se salva nimic — acum rândurile cu produs inexistent rămân în listă (nealese, cu avertisment), cele deja mapate pe același produs nu se dublează, iar restul se scriu pe loturi de 50 (un lot respins se reîncearcă rând cu rând). Nimic din logica de potrivire/aplicare existentă nu s-a schimbat.',date:'2026-11-11'},
   {n:678,text:'Comenzi Platforme — lista „⚠️ N produse fără stoc suficient" (din „🔍 Doar lipsurile de stoc") se poate restrânge acum la click pe antet, cerut direct: „doar lipsa stoc, cand apasam, sa se restranga". Putea avea zeci de rânduri (37 în captură) și rămânea mereu desfășurată, fără nicio cale de a o restrânge înapoi fără să cauți din nou butonul original. Antetul (cu numărul total) rămâne mereu vizibil; rândurile se ascund/reapar la click, cu un chevron (▾/▸) care arată starea. Starea de restrângere se păstrează explicit peste re-randare — un click pe „+ Adaugă la comandat" (care re-randează toată lista) nu o mai redeschide tăcut. Verificat de 2 ori: sintaxă + 2 rulări Playwright separate pe server local, cu un produs real fără stoc suficient — deschidere, restrângere, redeschidere, și confirmarea explicită că starea restrânsă supraviețuiește re-randării de la „+ Adaugă la comandat"; plus confirmarea că și starea „✓ Stoc suficient" (fără rânduri) rămâne clic-abilă, fără nicio eroare.',date:'2026-11-11'},
   {n:677,text:'Picker de produs (Comenzi Platforme) — 3 îmbunătățiri cerute direct. (1) Poza produsului asociat comenzii e acum clic-abilă, deschide lightbox-ul deja existent în aplicație (openImgZoom, nu un tab nou), ca să confirmi dintr-o privire „care a fost asociată comenzii". (2) Fiecare rând din listă arată acum stocul curent (verde dacă există, roșu dacă nu), cerut direct: „sa vedem ce selectam si daca avem stoc". (3) Navigare cu tastatura — săgeți sus/jos mută rândul selectat, Enter confirmă alegerea, Esc închide picker-ul deschis din greșeală — UN SINGUR handler generic, care funcționează automat pe toate cele ~8 picker-e de produs din aplicație (Comenzi Platforme, Sincronizare, Import factură, Alt furnizor, Merge produse, AWB-uri), nu doar pe cel din captură — fără cod nou per picker, reutilizează click()-ul deja existent pe fiecare rând. Stânga/dreapta nu au sens aici (lista e strict verticală, o singură coloană). Escape exista deja, generic; acum e extins cu navigarea și confirmarea. Verificat de 2 ori: sintaxă + 2 rulări Playwright separate pe server local — poza deschide lightbox-ul cu imaginea corectă (confirmat prin click real, nu doar citirea atributului), stocul apare corect per produs cu date reale de producție, navigarea cu săgeți avansează/recoboară corect prin listă iar Enter/Escape funcționează — plus un test dedicat, pe un picker complet sintetic, independent de orice funcție din aplicație, care confirmă genericitatea reală a mecanismului.',date:'2026-11-11'},
@@ -18376,9 +18394,12 @@ function renderSyncImportPreview(){
   }).join('');
   const includedCount=syncImpParsed.filter(x=>x.include).length;
   const toolbarHtml=`<div class="smi-preview-toolbar"><span>${includedCount} din ${syncImpParsed.length} selectate</span><div style="display:flex;gap:8px"><button type="button" class="btn btn-sm" onclick="toggleSyncImportAll(true)">☑️ Selectează tot</button><button type="button" class="btn btn-sm" onclick="toggleSyncImportAll(false)">☐ Deselectează tot</button></div></div>`;
-  prev.innerHTML=`<div class="inv-preview"><div class="inv-prev-title">Previzualizare (${syncImpParsed.length} listări)</div>${toolbarHtml}${rows}</div>`+
+  const keepTop=document.getElementById('smi-rows')?.scrollTop||0;
+  prev.innerHTML=`<div class="inv-preview"><div class="inv-prev-title">Previzualizare (${syncImpParsed.length} listări)</div>${toolbarHtml}<div class="smi-rows" id="smi-rows">${rows}</div></div>`+
     `<div class="smi-pickdrop" id="smi-pickdrop"><div style="display:flex;gap:6px;align-items:center"><input type="text" id="smi-pick-search" placeholder="Caută produs după nume sau SKU…" oninput="filterSyncPickDebounced()" style="flex:1"><button type="button" class="btn btn-sm" style="flex-shrink:0;padding:6px 8px" onclick="syncPickRecognizeImage()" title="Lipește o poză din clipboard (captură eMAG/Trendyol sau poza produsului) — AI recunoaște produsul">📋</button></div><div class="smi-pick-list" id="smi-pick-list"></div></div>`;
   document.getElementById('smi-foot').style.display='flex';
+  // același loc în cadru după orice redesenare (salvare/eliminare/bifă): rândul de dedesubt urcă în locul celui dispărut
+  const rowsEl=document.getElementById('smi-rows');if(rowsEl&&keepTop)rowsEl.scrollTop=keepTop;
   updSyncImportInfo();
   saveSyncImportState();
 }
