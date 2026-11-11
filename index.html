@@ -1223,6 +1223,8 @@ tr:hover td{background:var(--surf2)}
 .smi-pick-item:last-child{border-bottom:none}
 .smi-pick-item:hover,.smi-pick-item.smi-pick-item-active{background:var(--acc-light);border-left-color:var(--acc);transform:translateX(2px)}
 .smi-pick-item-nm{flex:1;min-width:0;white-space:normal;line-height:1.35}
+.smi-pick-price{display:block;margin-top:3px;font-size:.78em;font-weight:700;color:var(--acc);line-height:1.25}
+.smi-pick-price.none{color:var(--t3);font-weight:500}
 .smi-pick-stock{font-size:13px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap;flex-shrink:0}
 .smi-pick-stock.ok{background:var(--gr-bg);color:var(--gr)}
 .smi-pick-stock.zero{background:var(--rd-bg);color:var(--rd)}
@@ -5104,6 +5106,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:685,text:'Sincronizare — prețul de ACHIZIȚIE apare acum și la alegerea produsului, cerut direct: „să apară și prețul aici, de achiziție, unde setăm produsul". În lista picker-ului (cea cu căutarea „cuvert…"), sub numele și SKU-ul fiecărui produs se vede „Achiziție 24,99 lei" (cu TVA, cum e în fișa produsului), iar în caseta produsului deja ales pe fiecare rând, la fel — ca să compari costul chiar când alegi între produse asemănătoare, fără să deschizi fișa fiecăruia. Un produs fără preț de achiziție completat arată explicit „Achiziție: fără preț", nu un spațiu gol. Doar afișare: nimic din potrivire/salvare nu s-a schimbat.',date:'2026-11-11'},
   {n:684,text:'Sincronizare — Enter confirmă acum ultimul produs FĂRĂ click pe el, cerut direct: „Enter să funcționeze cu confirmarea produsului selectat, pe principiul: ultimul se confirmă prin Enter, chiar dacă nu e click-ul pe acel produs". Înainte, Enter salva un rând doar dacă dădeai întâi click pe el (focus pe rând) — fără click nu se întâmpla nimic. Acum: (1) Enter cu un rând selectat (cu click, sau tocmai ai ales produsul din picker) îl salvează pe ACEL rând; (2) Enter fără niciun rând selectat salvează ULTIMUL rând din listă — fluxul de jos în sus: salvezi ultimul, cel de deasupra coboară în locul lui, Enter din nou. Selecția rămâne la aceeași poziție după orice salvare/bifă/alegere (înainte focusul se pierdea la fiecare redesenare), iar dacă dispare ultimul rând, coboară pe noul ultim. Siguranță: dacă ultimul rând nu e vizibil în cadru, primul Enter doar îl aduce în vedere și îl selectează (nu salvează pe nevăzute); dacă n-are produs asociat, spune clar de ce nu se salvează, în loc să nu facă nimic; Enter nu salvează cât timp un modal, un picker sau o fereastră mobilă (ex. Asistentul AI) e activă. În plus, un Enter dublu repede (sau Enter + click) nu mai poate scrie aceeași mapare de două ori, iar un Enter apăsat cât se salvează ultimul rând se aplică pe noul ultim. Indiciu vizibil în cadru: „↵ Enter = salvează rândul selectat (implicit ultimul)".',date:'2026-11-11'},
   {n:683,text:'Ferestrele mobile (Asistent AI, Notițe, Preț privat) — bug real, raportat direct: „de ce nu putem să mutăm toată zona asta a AI-ului până la limita din dreapta a paginii, ci e blocat acolo". Cauza: tragerea nu ținea cont de zoom-ul paginii (butonul −/+ din header). La zoom 80%, limita din dreapta/jos se calcula cu lățimea/înălțimea nezoomată a ferestrei (600px în loc de 480px), deci fereastra se oprea cu ~200px înainte de margine (reprodus: 205px la zoom 80%), iar în timpul tragerii rămânea în urma cursorului și sărea la început. Acum tot calculul se face în pixeli vizuali, convertiți o singură dată la atribuire (zoomAdjust) — fereastra urmărește cursorul exact și ajunge lipită de oricare margine, la orice zoom. Aceeași reparație pe toate cele 3 ferestre (aveau codul de tragere copiat identic, acum e o singură funcție, makeWidgetDraggable). La zoom 100% nimic nu se schimbă.',date:'2026-11-11'},
   {n:682,text:'Asistent AI — 3 lucruri cerute direct, pe o captură reală cu cardul „Produs posibil asemănător". (1) Cardul de produs nou (poza, numele, SKU/preț, „Folosește" pe candidații asemănători, „Deschide ca produs nou") era randat separat, mereu LIPIT la finalul listei, deci mesajele noi apăreau deasupra lui și el rămânea „fix" — acum stă în conversație, sub mesajul care l-a generat, și derulează odată cu istoricul când adaugi text sau poză (poți avea mai multe carduri deodată, fiecare cu butoanele lui). (2) După ce ai ales — „Folosește" pe un produs existent sau „Deschide ca produs nou" — cardul dispare din conversație (derularea rămâne unde era). (3) Prețul scris ca text se adaugă automat la produsul generat: „24.99", „24,99 lei", „preț 24.99", „5 euro", „24.99 fără TVA", fie scris în mesaj împreună cu poza, fie în căsuța de mesaj înainte de butonul „Creează produs din screenshot". Se tratează ca preț de ACHIZIȚIE (cu TVA implicit, în lei implicit; „vând cu…" rămâne preț de vânzare), bate prețul citit din screenshot și apare pe card cu eticheta „✎ din mesaj"; la „Deschide ca produs nou" ajunge direct în câmpurile de preț, iar la „Folosește" în prețul sursei „Alt furnizor". O poză trimisă cu un mesaj care e DOAR un preț nu mai poate fi confundată cu un cod de produs. Clasificatorul AI primește 3 câmpuri noi (preț/monedă/TVA), plus un parser local ca plasă de siguranță.',date:'2026-11-11'},
@@ -18332,7 +18335,7 @@ function syncPickBtnHtml(idx){
   }
   const p=it.produsId?P.find(x=>x.id===it.produsId):null;
   const th=p?(p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'pick')}>`:`<div class="smi-pick-th-ph">📦</div>`):'';
-  const nm=p?`${esc(p.name)}${p.sku?' · '+esc(p.sku):''}`:'— alege produs —';
+  const nm=p?`${esc(p.name)}${p.sku?' · '+esc(p.sku):''}${syncPickPriceHtml(p)}`:'— alege produs —';
   return`<button type="button" class="smi-pick-btn" onclick="openSyncPick(event,${idx})">${th}<span class="smi-pick-nm">${nm}</span><span class="smi-pick-car">▾</span></button>`;
 }
 // Pentru o listare fără nicio potrivire în inventar (nici PNK, nici titlu, nici AI) — la cerere directă,
@@ -18709,12 +18712,21 @@ function openSyncPick(ev,idx){
   filterSyncPick();
   search.focus();
 }
+// Prețul de achiziție (cu TVA) sub numele produsului, în picker-ul din Sincronizare și în caseta produsului ales —
+// cerut direct: „să apară și prețul aici, de achiziție, unde setăm produsul". Ca să vezi costul chiar în momentul în
+// care alegi între produse asemănătoare, fără să deschizi fișa fiecăruia. Un produs fără preț de achiziție
+// completat arată explicit „fără preț", nu un spațiu gol care ar putea fi luat drept „gratis".
+function syncPickPriceHtml(p){
+  const v=Number(p&&p.priceBuyTTC)||0;
+  return v>0?`<span class="smi-pick-price" title="Preț de achiziție, cu TVA">Achiziție ${pcMoney(v)}</span>`
+    :`<span class="smi-pick-price none" title="Produsul nu are preț de achiziție completat">Achiziție: fără preț</span>`;
+}
 function renderSyncPickRows(prods){
   const list=document.getElementById('smi-pick-list');
   const cur=syncImpParsed[syncPickIdx]?.produsId||null;
   list.innerHTML=prods.map(p=>{
     const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'pick')}>`:`<div class="smi-pick-th-ph">📦</div>`;
-    return`<div class="smi-pick-item" onclick="pickSyncProduct(${p.id})" style="${p.id===cur?'background:var(--surf2)':''}">${th}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</span></div>`;
+    return`<div class="smi-pick-item" onclick="pickSyncProduct(${p.id})" style="${p.id===cur?'background:var(--surf2)':''}">${th}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}${syncPickPriceHtml(p)}</span></div>`;
   }).join('')||`<div class="smi-pick-item" style="color:var(--t3);cursor:default">Niciun produs găsit</div>`;
 }
 // Căutare pe CUVINTE, nu pe un singur șir literal — cerut direct, cu exemplu real: „brad nins" nu
