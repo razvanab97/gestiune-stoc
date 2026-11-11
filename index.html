@@ -5103,6 +5103,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:683,text:'Ferestrele mobile (Asistent AI, Notițe, Preț privat) — bug real, raportat direct: „de ce nu putem să mutăm toată zona asta a AI-ului până la limita din dreapta a paginii, ci e blocat acolo". Cauza: tragerea nu ținea cont de zoom-ul paginii (butonul −/+ din header). La zoom 80%, limita din dreapta/jos se calcula cu lățimea/înălțimea nezoomată a ferestrei (600px în loc de 480px), deci fereastra se oprea cu ~200px înainte de margine (reprodus: 205px la zoom 80%), iar în timpul tragerii rămânea în urma cursorului și sărea la început. Acum tot calculul se face în pixeli vizuali, convertiți o singură dată la atribuire (zoomAdjust) — fereastra urmărește cursorul exact și ajunge lipită de oricare margine, la orice zoom. Aceeași reparație pe toate cele 3 ferestre (aveau codul de tragere copiat identic, acum e o singură funcție, makeWidgetDraggable). La zoom 100% nimic nu se schimbă.',date:'2026-11-11'},
   {n:682,text:'Asistent AI — 3 lucruri cerute direct, pe o captură reală cu cardul „Produs posibil asemănător". (1) Cardul de produs nou (poza, numele, SKU/preț, „Folosește" pe candidații asemănători, „Deschide ca produs nou") era randat separat, mereu LIPIT la finalul listei, deci mesajele noi apăreau deasupra lui și el rămânea „fix" — acum stă în conversație, sub mesajul care l-a generat, și derulează odată cu istoricul când adaugi text sau poză (poți avea mai multe carduri deodată, fiecare cu butoanele lui). (2) După ce ai ales — „Folosește" pe un produs existent sau „Deschide ca produs nou" — cardul dispare din conversație (derularea rămâne unde era). (3) Prețul scris ca text se adaugă automat la produsul generat: „24.99", „24,99 lei", „preț 24.99", „5 euro", „24.99 fără TVA", fie scris în mesaj împreună cu poza, fie în căsuța de mesaj înainte de butonul „Creează produs din screenshot". Se tratează ca preț de ACHIZIȚIE (cu TVA implicit, în lei implicit; „vând cu…" rămâne preț de vânzare), bate prețul citit din screenshot și apare pe card cu eticheta „✎ din mesaj"; la „Deschide ca produs nou" ajunge direct în câmpurile de preț, iar la „Folosește" în prețul sursei „Alt furnizor". O poză trimisă cu un mesaj care e DOAR un preț nu mai poate fi confundată cu un cod de produs. Clasificatorul AI primește 3 câmpuri noi (preț/monedă/TVA), plus un parser local ca plasă de siguranță.',date:'2026-11-11'},
   {n:681,text:'Modalul de produs („Produs nou" / editare) — tastatura, cerută direct: „butonul Enter să funcționeze ca Salvează și Esc ca închidere". Enter în orice câmp de text/număr apasă acum „Salvează produs" (înainte nu făcea nimic). Nu salvează din greșeală: nu în câmpurile mari de text (acolo Enter rămâne rând nou; Ctrl/⌘+Enter salvează și de acolo), nu pe butoane/linkuri/liste (își fac singure treaba), nu în câmpurile cu autocompletare (furnizor — Enter alege sugestia, nu salvează un produs pe jumătate completat) și nu cât timp e deschis un picker de produs sau alt dialog deasupra. Esc închidea deja modalul, cu aceeași confirmare „Ai modificări nesalvate" ca la × / Anulează (păstrată, ca să nu pierzi ce ai tastat; Enter pe acea confirmare = Renunț). Fix în plus: Esc cu un picker de produs deschis închidea și picker-ul, și TOT modalul — acum închide doar picker-ul, iar al doilea Esc închide modalul. Pe pagina Sincronizare, Enter pe un rând din fundal nu mai poate salva rândul respectiv cât timp un modal (ex. Produs nou) e deschis deasupra.',date:'2026-11-11'},
   {n:680,text:'Sincronizare — previzualizarea de la „Import în masă din fișier" e acum un CADRU FIX, cerut direct: „vreau ca toată zona să fie ca un cadru fix, cu toate setările sus și jos, iar produsele de sincronizat să intre în cadranul acela și de fiecare dată când actualizăm un produs și dispare, să coboare următorul în aceeași poziție". Cadrul are înălțimea ecranului: sus rămân titlul „Previzualizare (N listări)" și bara „N din M selectate / Selectează tot / Deselectează tot", jos rămân „↻ Resetează", „🤖 Sugerează cu AI", „Adaugă mapările selectate" și indicatorul „☁ salvat în cloud" — toate mereu vizibile, fără să mai derulezi pagina până la capătul unei liste de sute de rânduri. Doar lista de produse derulează în interiorul cadrului. La „⚡ Salvează acum", „🕓 Mai târziu" sau „🗑️ Elimină", rândul dispare și cel de dedesubt urcă exact în locul lui (poziția de derulare din cadru se păstrează la fiecare redesenare — înainte, lista se reconstruia de la zero și sărea la început), deci poți apăsa același buton de la aceeași poziție rând după rând. Doar prezentare: nicio logică de potrivire/salvare nu s-a schimbat.',date:'2026-11-11'},
@@ -5823,23 +5824,7 @@ function saveNotepadDebounced(){
   try{const v=localStorage.getItem(NPK),ta=document.getElementById('notepad-text');if(v&&ta)ta.value=v;}catch(e){}
   const widget=document.getElementById('notepad-widget'),head=document.getElementById('notepad-head');
   if(!widget||!head)return;
-  let dragging=false,offX=0,offY=0;
-  head.addEventListener('pointerdown',e=>{
-    if(e.target.closest('button'))return;
-    const r=widget.getBoundingClientRect();
-    widget.style.left=r.left+'px';widget.style.top=r.top+'px';widget.style.right='auto';widget.style.bottom='auto';
-    offX=e.clientX-r.left;offY=e.clientY-r.top;
-    dragging=true;
-    head.setPointerCapture(e.pointerId);
-    e.preventDefault();
-  });
-  head.addEventListener('pointermove',e=>{
-    if(!dragging)return;
-    const nx=Math.max(0,Math.min(window.innerWidth-widget.offsetWidth,e.clientX-offX));
-    const ny=Math.max(0,Math.min(window.innerHeight-widget.offsetHeight,e.clientY-offY));
-    widget.style.left=nx+'px';widget.style.top=ny+'px';
-  });
-  head.addEventListener('pointerup',()=>{dragging=false;});
+  makeWidgetDraggable(widget,head);
 })();
 
 // ── PREȚ PRIVAT (buton 🏷️ din header) — lipești o poză de produs, AI recunoaște produsul din stoc,
@@ -6069,23 +6054,7 @@ function renderPretPrivat(){
 (function initPretPrivat(){
   const widget=document.getElementById('pp-widget'),head=document.getElementById('pp-head');
   if(!widget||!head)return;
-  let dragging=false,offX=0,offY=0;
-  head.addEventListener('pointerdown',e=>{
-    if(e.target.closest('button'))return;
-    const r=widget.getBoundingClientRect();
-    widget.style.left=r.left+'px';widget.style.top=r.top+'px';widget.style.right='auto';widget.style.bottom='auto';
-    offX=e.clientX-r.left;offY=e.clientY-r.top;
-    dragging=true;
-    head.setPointerCapture(e.pointerId);
-    e.preventDefault();
-  });
-  head.addEventListener('pointermove',e=>{
-    if(!dragging)return;
-    const nx=Math.max(0,Math.min(window.innerWidth-widget.offsetWidth,e.clientX-offX));
-    const ny=Math.max(0,Math.min(window.innerHeight-widget.offsetHeight,e.clientY-offY));
-    widget.style.left=nx+'px';widget.style.top=ny+'px';
-  });
-  head.addEventListener('pointerup',()=>{dragging=false;});
+  makeWidgetDraggable(widget,head);
 })();
 
 // ── NOTIFICĂRI MIȘCĂRI DE STOC (intrări/ieșiri, cu dată și oră) ──
@@ -8402,6 +8371,34 @@ function loadZoom(){
 // afara ecranului de îndată ce zoom-ul nu mai e 100%. Orice cod care face drop.style.left/top din
 // getBoundingClientRect() trebuie să împartă la (zoomLevel/100) înainte de atribuire.
 function zoomAdjust(px){return px/(zoomLevel/100);}
+// Tragerea ferestrelor mobile (Notițe, Preț privat, Asistent AI) — ține cont de zoom-ul paginii (html{zoom}).
+// Bug real, raportat direct („de ce nu putem muta toată zona asta a AI-ului până la limita din dreapta a
+// paginii, ci e blocat acolo"): getBoundingClientRect/clientX/innerWidth sunt în pixeli VIZUALI, dar
+// style.left/top și offsetWidth sunt în pixeli de layout (înmulțiți încă o dată cu zoom). Limita din dreapta
+// se calcula cu offsetWidth nezoomat (600 în loc de 480 la zoom 80%), deci fereastra se oprea cu ~200px înainte
+// de margine, iar la tragere rămânea în urma cursorului. Acum tot calculul e în pixeli vizuali și se
+// convertește o singură dată, la atribuire (zoomAdjust); la zoom 100% comportamentul e identic cu cel vechi.
+function makeWidgetDraggable(widget,head){
+  let dragging=false,offX=0,offY=0;
+  head.addEventListener('pointerdown',e=>{
+    if(e.target.closest('button'))return;
+    const r=widget.getBoundingClientRect();
+    widget.style.left=zoomAdjust(r.left)+'px';widget.style.top=zoomAdjust(r.top)+'px';widget.style.right='auto';widget.style.bottom='auto';
+    offX=e.clientX-r.left;offY=e.clientY-r.top;
+    dragging=true;
+    head.setPointerCapture(e.pointerId);
+    e.preventDefault();
+  });
+  head.addEventListener('pointermove',e=>{
+    if(!dragging)return;
+    const r=widget.getBoundingClientRect(); // dimensiunea vizuală curentă (fereastra poate fi redimensionată)
+    const nx=Math.max(0,Math.min(window.innerWidth-r.width,e.clientX-offX));
+    const ny=Math.max(0,Math.min(window.innerHeight-r.height,e.clientY-offY));
+    widget.style.left=zoomAdjust(nx)+'px';widget.style.top=zoomAdjust(ny)+'px';
+  });
+  head.addEventListener('pointerup',()=>{dragging=false;});
+  head.addEventListener('pointercancel',()=>{dragging=false;});
+}
 function zoomIn(){zoomLevel=Math.min(ZOOM_MAX,zoomLevel+ZOOM_STEP);applyZoom();safeLocalSet(ZOOM_KEY,String(zoomLevel));}
 function zoomOut(){zoomLevel=Math.max(ZOOM_MIN,zoomLevel-ZOOM_STEP);applyZoom();safeLocalSet(ZOOM_KEY,String(zoomLevel));}
 function zoomReset(){zoomLevel=100;applyZoom();safeLocalSet(ZOOM_KEY,'100');}
@@ -30987,23 +30984,7 @@ function closeAiChatWidget(){document.getElementById('aic-widget').classList.rem
 (function initAiChatWidget(){
   const widget=document.getElementById('aic-widget'),head=document.getElementById('aic-head');
   if(!widget||!head)return;
-  let dragging=false,offX=0,offY=0;
-  head.addEventListener('pointerdown',e=>{
-    if(e.target.closest('button'))return;
-    const r=widget.getBoundingClientRect();
-    widget.style.left=r.left+'px';widget.style.top=r.top+'px';widget.style.right='auto';widget.style.bottom='auto';
-    offX=e.clientX-r.left;offY=e.clientY-r.top;
-    dragging=true;
-    head.setPointerCapture(e.pointerId);
-    e.preventDefault();
-  });
-  head.addEventListener('pointermove',e=>{
-    if(!dragging)return;
-    const nx=Math.max(0,Math.min(window.innerWidth-widget.offsetWidth,e.clientX-offX));
-    const ny=Math.max(0,Math.min(window.innerHeight-widget.offsetHeight,e.clientY-offY));
-    widget.style.left=nx+'px';widget.style.top=ny+'px';
-  });
-  head.addEventListener('pointerup',()=>{dragging=false;});
+  makeWidgetDraggable(widget,head);
 })();
 // Lipire poză din clipboard ORIUNDE în zona Asistent AI, nu doar cu cursorul exact în caseta de text —
 // cerut direct: „sa putem adauga poze din clipboard". onpaste-ul de pe cele 2 textarea (mai sus) rămâne
