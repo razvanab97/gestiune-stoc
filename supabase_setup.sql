@@ -119,6 +119,7 @@ create table if not exists platforma_mapari (
 alter table platforma_mapari add column if not exists tara text;
 alter table platforma_mapari add column if not exists stoc_extern integer;
 alter table platforma_mapari add column if not exists stoc_extern_actualizat_la timestamptz;
+alter table platforma_mapari add column if not exists componente jsonb; -- seturi: [{produs_id,cantitate},...], principalul primul (migration_platforma_mapari_set.sql)
 create index if not exists idx_platforma_mapari_tara on platforma_mapari(platforma, tara);
 
 -- COMENZI PLASATE LA FURNIZOR, ÎNCĂ PE DRUM — separat de comenzi_stoc/facturi deja sosite.
