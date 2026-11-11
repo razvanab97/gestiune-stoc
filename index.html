@@ -3845,7 +3845,8 @@ button.pcx-include-btn.included{border-color:var(--gr)}
     <div id="smi-preview"></div>
     <div id="smi-foot" style="display:none;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
       <span style="font-size:24px;color:var(--t3)"><span id="smi-info"></span><span id="smi-cloud-status" style="margin-left:14px;font-size:21px" title="Previzualizarea se salvează automat în Supabase (setari_app) — o regăsești și de pe alt browser"></span></span>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end">
+        <button class="btn btn-sm" id="smi-undo-btn" onclick="syncUndoLast()" disabled title="Nimic de anulat">↶ Anulează</button>
         <button class="btn btn-sm" onclick="resetSyncImportPage()" title="Golește previzualizarea curentă — rămâne salvată automat altfel, chiar dacă schimbi pagina sau revii mâine">↻ Resetează</button>
         <button class="btn btn-sm" id="smi-ai-btn" onclick="suggestSyncImportWithAI()" title="AI sugerează produsul pentru liniile fără o potrivire sigură — tu doar confirmi sau alegi altceva">🤖 Sugerează cu AI</button>
         <button class="btn btn-sm btn-acc" id="smi-apply-btn" onclick="applySyncImport()" disabled>Adaugă mapările selectate</button>
@@ -5106,6 +5107,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:686,text:'Sincronizare — Cmd+Z (Ctrl+Z pe Windows) anulează ultima acțiune, cerut direct: „combinația CMD+Z să aducă înapoi ultima setare/acțiune pe care am făcut-o în platformă". Funcționează în pagina Sincronizare, în lanț (Cmd+Z de mai multe ori anulează pe rând acțiunile, de la ultima spre prima), și are și un buton „↶ Anulează" în subsolul cadrului (titlul lui spune ce anulează). Se pot anula: „⚡ Salvează acum" / Enter (se șterge DOAR maparea creată de acea acțiune, din Supabase, iar linia revine în previzualizare la aceeași poziție, selectată), „Adaugă mapările selectate" (tot lotul, într-o singură anulare), „🕓 Mai târziu" (se șterge intrarea din „Produse lipsă din stoc"), „🗑️ Elimină", alegerea unui produs din picker, bifa/debifa unui rând și „Selectează/Deselectează tot", „+ Nou", „🤖 Sugerează cu AI" și „↻ Resetează". Dacă o salvare a creat un produs nou în Inventar, anularea îl lasă acolo (nu șterge produse) și linia rămâne legată de el, ca la o nouă salvare să nu se creeze încă unul. Cmd+Z NU se atinge de tastarea din câmpuri de text (căutarea din picker, Asistentul AI etc. — acolo anulează tastarea, ca până acum) și nu face nimic cât un modal e deschis. O previzualizare nouă (fișier importat / resincronizare) golește istoricul de anulare. Momentan doar pentru Sincronizare — celelalte pagini nu au anulare.',date:'2026-11-11'},
   {n:685,text:'Sincronizare — prețul de ACHIZIȚIE apare acum și la alegerea produsului, cerut direct: „să apară și prețul aici, de achiziție, unde setăm produsul". În lista picker-ului (cea cu căutarea „cuvert…"), sub numele și SKU-ul fiecărui produs se vede „Achiziție 24,99 lei" (cu TVA, cum e în fișa produsului), iar în caseta produsului deja ales pe fiecare rând, la fel — ca să compari costul chiar când alegi între produse asemănătoare, fără să deschizi fișa fiecăruia. Un produs fără preț de achiziție completat arată explicit „Achiziție: fără preț", nu un spațiu gol. Doar afișare: nimic din potrivire/salvare nu s-a schimbat.',date:'2026-11-11'},
   {n:684,text:'Sincronizare — Enter confirmă acum ultimul produs FĂRĂ click pe el, cerut direct: „Enter să funcționeze cu confirmarea produsului selectat, pe principiul: ultimul se confirmă prin Enter, chiar dacă nu e click-ul pe acel produs". Înainte, Enter salva un rând doar dacă dădeai întâi click pe el (focus pe rând) — fără click nu se întâmpla nimic. Acum: (1) Enter cu un rând selectat (cu click, sau tocmai ai ales produsul din picker) îl salvează pe ACEL rând; (2) Enter fără niciun rând selectat salvează ULTIMUL rând din listă — fluxul de jos în sus: salvezi ultimul, cel de deasupra coboară în locul lui, Enter din nou. Selecția rămâne la aceeași poziție după orice salvare/bifă/alegere (înainte focusul se pierdea la fiecare redesenare), iar dacă dispare ultimul rând, coboară pe noul ultim. Siguranță: dacă ultimul rând nu e vizibil în cadru, primul Enter doar îl aduce în vedere și îl selectează (nu salvează pe nevăzute); dacă n-are produs asociat, spune clar de ce nu se salvează, în loc să nu facă nimic; Enter nu salvează cât timp un modal, un picker sau o fereastră mobilă (ex. Asistentul AI) e activă. În plus, un Enter dublu repede (sau Enter + click) nu mai poate scrie aceeași mapare de două ori, iar un Enter apăsat cât se salvează ultimul rând se aplică pe noul ultim. Indiciu vizibil în cadru: „↵ Enter = salvează rândul selectat (implicit ultimul)".',date:'2026-11-11'},
   {n:683,text:'Ferestrele mobile (Asistent AI, Notițe, Preț privat) — bug real, raportat direct: „de ce nu putem să mutăm toată zona asta a AI-ului până la limita din dreapta a paginii, ci e blocat acolo". Cauza: tragerea nu ținea cont de zoom-ul paginii (butonul −/+ din header). La zoom 80%, limita din dreapta/jos se calcula cu lățimea/înălțimea nezoomată a ferestrei (600px în loc de 480px), deci fereastra se oprea cu ~200px înainte de margine (reprodus: 205px la zoom 80%), iar în timpul tragerii rămânea în urma cursorului și sărea la început. Acum tot calculul se face în pixeli vizuali, convertiți o singură dată la atribuire (zoomAdjust) — fereastra urmărește cursorul exact și ajunge lipită de oricare margine, la orice zoom. Aceeași reparație pe toate cele 3 ferestre (aveau codul de tragere copiat identic, acum e o singură funcție, makeWidgetDraggable). La zoom 100% nimic nu se schimbă.',date:'2026-11-11'},
@@ -18058,7 +18060,7 @@ async function resyncEmagActiveListings(market){
     // local deja folosit la „Adu comenzi eMAG”, ca resincronizarea să funcționeze fără Vercel Pro/IP fix.
     const data=await localEmagJson('/offers-active',{market},180000);
     const rows=Array.isArray(data.offers)?data.offers:[];
-    syncImpParsed=[];syncImpStockUpdates=[];syncImpDuplicates=[];
+    syncImpParsed=[];syncImpStockUpdates=[];syncImpDuplicates=[];syncUndoClear();
     const seen=new Set();
     rows.forEach(it=>{
       const titlu=String(it.titluExtern||'').trim(),pnk=String(it.pnk||'').trim();
@@ -18095,7 +18097,7 @@ async function handleSyncImportFile(ev){
   parsing.style.display='block';
   document.getElementById('smi-preview').innerHTML='';
   document.getElementById('smi-foot').style.display='none';
-  syncImpParsed=[];
+  syncImpParsed=[];syncUndoClear();
   syncImpStockUpdates=[];
   syncImpDuplicates=[];
   let inactiveSkipped=0;
@@ -18342,6 +18344,8 @@ function syncPickBtnHtml(idx){
 // „dacă nu există produs, trebuie importat". Creează un produs „schelet" (doar numele, din titlul
 // extern) — utilizatorul completează preț/stoc/poză ulterior în Inventar, ca la orice produs nou.
 function markSyncRowNewProduct(idx){
+  const itN=syncImpParsed[idx],snapN=syncRowSnap(itN);
+  syncUndoPush('marcarea ca „produs nou”',()=>{syncRowRestore(itN,snapN);renderSyncImportPreview();});
   syncImpParsed[idx].newProduct=true;
   syncImpParsed[idx].produsId=null;
   syncImpParsed[idx].include=true;
@@ -18397,7 +18401,7 @@ function renderSyncImportPreview(){
     </div>`;
   }).join('');
   const includedCount=syncImpParsed.filter(x=>x.include).length;
-  const toolbarHtml=`<div class="smi-preview-toolbar"><span>${includedCount} din ${syncImpParsed.length} selectate<span class="smi-enter-hint" title="Enter salvează rândul selectat (cel pe care ai dat click / ai ales produsul). Dacă niciun rând nu e selectat, salvează ULTIMUL rând din listă — fără să mai fie nevoie de click pe el.">↵ Enter = salvează rândul selectat (implicit ultimul)</span></span><div style="display:flex;gap:8px"><button type="button" class="btn btn-sm" onclick="toggleSyncImportAll(true)">☑️ Selectează tot</button><button type="button" class="btn btn-sm" onclick="toggleSyncImportAll(false)">☐ Deselectează tot</button></div></div>`;
+  const toolbarHtml=`<div class="smi-preview-toolbar"><span>${includedCount} din ${syncImpParsed.length} selectate<span class="smi-enter-hint" title="Enter salvează rândul selectat (cel pe care ai dat click / ai ales produsul). Dacă niciun rând nu e selectat, salvează ULTIMUL rând din listă — fără să mai fie nevoie de click pe el.">↵ Enter = salvează rândul selectat (implicit ultimul) · ⌘Z = anulează</span></span><div style="display:flex;gap:8px"><button type="button" class="btn btn-sm" onclick="toggleSyncImportAll(true)">☑️ Selectează tot</button><button type="button" class="btn btn-sm" onclick="toggleSyncImportAll(false)">☐ Deselectează tot</button></div></div>`;
   const keepTop=document.getElementById('smi-rows')?.scrollTop||0;
   // Rândul selectat (focusat) rămâne selectat și după redesenare — la aceeași poziție; dacă tocmai a dispărut ultimul
   // rând, selecția coboară pe noul ultim. Fără asta, după orice salvare/alegere/bifă focusul se pierdea și Enter nu mai
@@ -18413,18 +18417,24 @@ function renderSyncImportPreview(){
   saveSyncImportState();
 }
 function toggleSyncRowInclude(idx){
-  syncImpParsed[idx].include=!syncImpParsed[idx].include;
+  const itI=syncImpParsed[idx],prevI=itI.include;
+  itI.include=!itI.include;
+  syncUndoPush(prevI?'debifarea unui rând':'bifarea unui rând',()=>{itI.include=prevI;renderSyncImportPreview();});
   renderSyncImportPreview();
 }
 function removeSyncRow(idx){
+  const itR=syncImpParsed[idx];
   syncImpParsed.splice(idx,1);
+  if(itR)syncUndoPush(`eliminarea rândului „${String(itR.titluExtern||'').slice(0,40)}”`,()=>syncUndoReinsert([{it:itR,idx}]));
   renderSyncImportPreview();
 }
 // Bifat/debifat în bloc — la cerere directă, pe o listă de 50+ rânduri era greoi să bifezi unul
 // câte unul. Nu forțează nimic la aplicare: rândurile fără produs asociat tot rămân excluse de
 // applySyncImport (are nevoie de produsId sau newProduct, nu doar de include=true).
 function toggleSyncImportAll(val){
+  const prevAll=syncImpParsed.map(it=>[it,it.include]);
   syncImpParsed.forEach(it=>{it.include=val;});
+  syncUndoPush(val?'„Selectează tot”':'„Deselectează tot”',()=>{prevAll.forEach(([it,v])=>{it.include=v;});renderSyncImportPreview();});
   renderSyncImportPreview();
 }
 // Previzualizarea neaplicată nu mai dispare la schimbarea paginii sau la reîncărcare — la cerere
@@ -18523,6 +18533,8 @@ async function loadSyncImportState(){
 }
 function resetSyncImportPage(){
   if((syncImpParsed.length||syncImpStockUpdates.length||syncImpDuplicates.length)&&!confirm('Golești previzualizarea curentă? Ce nu ai aplicat încă se pierde (mapările deja adăugate rămân salvate, neatinse).'))return;
+  const oldReset={platforma:document.getElementById('smi-preview')?.dataset.platforma||'emag',parsed:syncImpParsed,stockUpdates:syncImpStockUpdates,duplicates:syncImpDuplicates,savedAt:0};
+  syncUndoPush('golirea previzualizării',()=>{syncApplyDraft(oldReset);saveSyncImportState();});
   syncImpParsed=[];syncImpStockUpdates=[];syncImpDuplicates=[];
   clearSyncImportState();
   document.getElementById('smi-preview').innerHTML='';
@@ -18759,6 +18771,8 @@ async function syncPickRecognizeImage(){
 }
 function pickSyncProduct(id){
   if(syncPickIdx==null)return;
+  const itP=syncImpParsed[syncPickIdx],snapP=itP?syncRowSnap(itP):null;
+  if(itP)syncUndoPush('alegerea produsului',()=>{syncRowRestore(itP,snapP);renderSyncImportPreview();});
   syncImpParsed[syncPickIdx].produsId=id||null;
   syncImpParsed[syncPickIdx].newProduct=false;
   syncImpParsed[syncPickIdx].include=!!id;
@@ -18842,16 +18856,16 @@ async function applySyncImport(){
     const already=resolved.filter(it=>!stale.includes(it)&&(m=>m&&m.produsId===it.produsId)(findSyncMapEntry(platforma,it.titluExtern,it.pnk||'',it.tara||'')));
     const toPost=resolved.filter(it=>!stale.includes(it)&&!already.includes(it));
     const toDb=it=>syncMapToDb({platforma,titluExtern:it.titluExtern,idExtern:it.pnk||null,produsId:it.produsId,confirmat:true,tara:it.tara||''});
-    const posted=new Set();let rows=[],failed=0,lastErr='';
+    const posted=new Set(),postedRow=new Map();let rows=[],failed=0,lastErr='';
     for(let i=0;i<toPost.length;i+=50){
       const chunk=toPost.slice(i,i+50);
-      try{rows=rows.concat(await dbPost('platforma_mapari',chunk.map(toDb)));chunk.forEach(it=>posted.add(it));}
+      try{const rr=await dbPost('platforma_mapari',chunk.map(toDb));rows=rows.concat(rr);chunk.forEach((it,i)=>{posted.add(it);postedRow.set(it,rr[i]);});}
       catch(e){
         lastErr=String(e.message||e);
         // eroare de rețea/timeout: nu știm dacă lotul a intrat — NU reîncercăm rând cu rând (ar putea dubla)
         if(/Conexiune Supabase blocată|Failed to fetch|NetworkError|Load failed/i.test(lastErr)){failed+=toPost.length-i;break;}
         for(const it of chunk){
-          try{rows=rows.concat(await dbPost('platforma_mapari',[toDb(it)]));posted.add(it);}
+          try{const r1=await dbPost('platforma_mapari',[toDb(it)]);rows=rows.concat(r1);posted.add(it);postedRow.set(it,r1[0]);}
           catch(e2){failed++;lastErr=String(e2.message||e2);}
         }
       }
@@ -18860,7 +18874,17 @@ async function applySyncImport(){
     // Rămân în listă doar liniile care NU s-au aplicat (produs nou eșuat la creare, produs inexistent,
     // rând respins) — la fel ca la import factură, ca să nu dispară din vedere fără să se fi întâmplat ceva.
     const appliedSet=new Set([...posted,...already]);
+    const removedEntries=syncImpParsed.map((it,i)=>({it,idx:i})).filter(x=>appliedSet.has(x.it));
     syncImpParsed=syncImpParsed.filter(it=>!appliedSet.has(it));
+    if(removedEntries.length){
+      const mapIds=[...posted].map(it=>postedRow.get(it)&&postedRow.get(it).id).filter(Boolean),createdItems=toAdd.filter(it=>it.newProduct&&it.produsId&&posted.has(it));
+      syncUndoPush(`salvarea a ${posted.size} mapări`,async()=>{
+        for(let i=0;i<mapIds.length;i+=100)await dbDelete('platforma_mapari?id=in.('+mapIds.slice(i,i+100).join(',')+')');
+        const idset=new Set(mapIds);SYNCM=SYNCM.filter(m=>!idset.has(m.id));
+        createdItems.forEach(it=>{it.newProduct=false;});
+        syncUndoReinsert(removedEntries);renderSyncPage();
+      },createdItems.length?`${createdItems.length} produse noi create rămân în Inventar`:'');
+    }
     if(syncImpParsed.length){renderSyncImportPreview();}
     else{document.getElementById('smi-preview').innerHTML='';document.getElementById('smi-foot').style.display='none';clearSyncImportState();}
     renderSyncPage();
@@ -18878,6 +18902,60 @@ async function applySyncImport(){
 // sa dispara din lista, o data sincronizat". Spre deosebire de autoApplyConfidentSyncLines (mai sus,
 // STRICT viaPnk, rulată automat, fără buton), asta merge pe ORICE rând cu o potrivire — sugestie AI,
 // potrivire fuzzy, alegere manuală din picker, sau „✚ produs nou" — indiferent de starea „✓ Inclus".
+// ── ANULARE (Cmd/Ctrl+Z) în Sincronizare — cerut direct: „combinația CMD+Z să aducă înapoi ultima setare/acțiune pe
+// care am făcut-o în platformă". Stivă LIFO de acțiuni reversibile; fiecare acțiune își înregistrează PROPRIA
+// anulare: salvările de mapări șterg DOAR rândul creat de acțiunea respectivă (după id-ul întors la scriere) și
+// readuc linia în previzualizare, la aceeași poziție; restul (alegere produs, bife, „Elimină", „+ Nou", „Mai târziu",
+// sugestii AI, golire) restaurează starea de dinainte. Intrarea se scoate din stivă abia după ce anularea a reușit.
+const syncUndoStack=[];let syncUndoBusy=false;
+const SYNC_ROW_FIELDS=['produsId','newProduct','include','viaAi','aiUncertain','viaPnk','score'];
+function syncRowSnap(it){const o={};SYNC_ROW_FIELDS.forEach(k=>{o[k]=it[k];});return o;}
+function syncRowRestore(it,o){if(!it||!o)return;SYNC_ROW_FIELDS.forEach(k=>{if(o[k]===undefined)delete it[k];else it[k]=o[k];});}
+function syncUndoPush(label,undo,note){
+  syncUndoStack.push({label,undo,note:note||''});
+  if(syncUndoStack.length>60)syncUndoStack.shift();
+  syncUndoUpdateBtn();
+}
+function syncUndoClear(){syncUndoStack.length=0;syncUndoUpdateBtn();}
+function syncUndoUpdateBtn(){
+  const b=document.getElementById('smi-undo-btn');if(!b)return;
+  const top=syncUndoStack[syncUndoStack.length-1];
+  b.disabled=!top;
+  b.title=top?`Anulează: ${top.label} (⌘Z / Ctrl+Z)`:'Nimic de anulat';
+}
+async function syncUndoLast(){
+  if(syncUndoBusy)return;
+  const entry=syncUndoStack[syncUndoStack.length-1];
+  if(!entry){toast('Nimic de anulat în Sincronizare');return;}
+  syncUndoBusy=true;syncUndoUpdateBtn();
+  try{
+    await entry.undo();
+    syncUndoStack.pop();
+    toast(`↶ Anulat: ${entry.label}${entry.note?' — '+entry.note:''}`);
+  }catch(e){
+    console.warn('Anulare eșuată:',e);
+    toast(`Nu am putut anula „${entry.label}”: ${e.message||e}`,'err');
+  }finally{syncUndoBusy=false;syncUndoUpdateBtn();}
+}
+// Readuce în previzualizare liniile scoase (la pozițiile lor), le arată și o selectează pe prima — ca un Enter
+// imediat după anulare să lucreze pe ea.
+function syncUndoReinsert(items){
+  const sorted=[...items].sort((a,b)=>a.idx-b.idx);
+  sorted.forEach(({it,idx})=>{if(!syncImpParsed.includes(it))syncImpParsed.splice(Math.max(0,Math.min(idx,syncImpParsed.length)),0,it);});
+  renderSyncImportPreview();
+  const first=sorted[0];if(first){const at=syncImpParsed.indexOf(first.it);const el=document.querySelector(`#smi-rows [data-row-idx="${at}"]`);if(el){el.scrollIntoView({block:'nearest'});el.focus({preventScroll:true});}}
+}
+// „Sugerează cu AI" modifică multe rânduri deodată — o anulare restaurează exact rândurile schimbate.
+(function wrapSyncAiUndo(){
+  const orig=window.suggestSyncImportWithAI;if(typeof orig!=='function')return;
+  window.suggestSyncImportWithAI=async function(){
+    const before=syncImpParsed.map(it=>[it,syncRowSnap(it)]);
+    const r=await orig.apply(this,arguments);
+    const changed=before.filter(([it,sn])=>JSON.stringify(syncRowSnap(it))!==JSON.stringify(sn));
+    if(changed.length)syncUndoPush(`sugestiile AI (${changed.length} rânduri)`,()=>{changed.forEach(([it,sn])=>syncRowRestore(it,sn));renderSyncImportPreview();});
+    return r;
+  };
+})();
 const syncSavingItems=new WeakSet();let syncEnterQueued=false;
 async function applySyncImportLine(idx){
   if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
@@ -18903,6 +18981,11 @@ async function applySyncImportLine(idx){
     const[row]=await dbPost('platforma_mapari',[syncMapToDb({platforma,titluExtern:it.titluExtern,idExtern:it.pnk||null,produsId:it.produsId,confirmat:true,tara:it.tara||''})]);
     if(row)SYNCM=[dbToSyncMap(row),...SYNCM];
     const kIdx=syncImpParsed.indexOf(it);if(kIdx>-1)syncImpParsed.splice(kIdx,1); // pe referință: indexul captat poate fi depășit dacă între timp a dispărut alt rând
+    syncUndoPush(`salvarea mapării „${String(it.titluExtern||'').slice(0,40)}”`,async()=>{
+      if(row&&row.id){await dbDelete('platforma_mapari?id=eq.'+row.id);SYNCM=SYNCM.filter(m=>m.id!==row.id);}
+      if(created)it.newProduct=false; // produsul creat există deja în Inventar — la o nouă salvare se leagă, nu se creează încă unul
+      syncUndoReinsert([{it,idx:kIdx>-1?kIdx:0}]);renderSyncPage();
+    },created?'produsul nou creat rămâne în Inventar':'');
     if(syncImpParsed.length){renderSyncImportPreview();}
     else{document.getElementById('smi-preview').innerHTML='';document.getElementById('smi-foot').style.display='none';clearSyncImportState();}
     renderSyncPage();
@@ -24227,6 +24310,10 @@ async function parkSyncRowLater(idx){
     const [row]=await dbPost('platforma_produse_lipsa',plipsaToDb({platforma,idExtern:it.pnk||null,titluExtern:it.titluExtern}));
     PLIPSA.unshift(dbToPlipsa(row));
     syncImpParsed.splice(idx,1);
+    syncUndoPush(`„Mai târziu” pe „${String(it.titluExtern||'').slice(0,40)}”`,async()=>{
+      if(row&&row.id){await dbDelete('platforma_produse_lipsa?id=eq.'+row.id);PLIPSA=PLIPSA.filter(x=>x.id!==row.id);}
+      syncUndoReinsert([{it,idx}]);renderSyncMissingList();
+    });
     if(syncImpParsed.length){renderSyncImportPreview();}
     else{document.getElementById('smi-preview').innerHTML='';document.getElementById('smi-foot').style.display='none';clearSyncImportState();}
     renderSyncMissingList();
@@ -24236,6 +24323,7 @@ async function parkSyncRowLater(idx){
     // ca fiind deja gestionat (dispare din previzualizare, fără duplicat în listă)
     if(/duplicate key|already exists|23505/i.test(String(err.message||err))){
       syncImpParsed.splice(idx,1);
+      syncUndoPush(`„Mai târziu” pe „${String(it.titluExtern||'').slice(0,40)}”`,()=>syncUndoReinsert([{it,idx}]));
       if(syncImpParsed.length){renderSyncImportPreview();}
       else{document.getElementById('smi-preview').innerHTML='';document.getElementById('smi-foot').style.display='none';clearSyncImportState();}
       toast('Era deja pusă deoparte');
@@ -29813,6 +29901,14 @@ function syncRowKeyHandler(e){
   if(!document.getElementById('page-sync')?.classList.contains('on'))return;
   if(document.querySelector('.ov.on'))return; // un modal deschis (ex. Produs nou) își are propriul Enter — nu salva rândul din fundal
   const ae=document.activeElement;
+  // Cmd/Ctrl+Z = anulează ultima acțiune din Sincronizare. NU în câmpuri de text/ferestre mobile (acolo Cmd+Z anulează tastarea).
+  if((e.metaKey||e.ctrlKey)&&!e.shiftKey&&!e.altKey&&(e.key==='z'||e.key==='Z')){
+    const tgZ=ae&&ae.tagName;
+    if(tgZ==='INPUT'||tgZ==='TEXTAREA'||tgZ==='SELECT'||(ae&&ae.isContentEditable)||(ae&&ae.closest&&ae.closest('.pp-widget')))return;
+    e.preventDefault();
+    if(!e.repeat)syncUndoLast();
+    return;
+  }
   if(e.key==='Enter'&&ae?.id==='smi-pick-search'&&document.getElementById('smi-pickdrop')?.classList.contains('on')){
     const idx=syncPickIdx;
     const first=document.querySelector('#smi-pick-list .smi-pick-item[onclick]');
