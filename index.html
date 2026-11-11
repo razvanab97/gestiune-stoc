@@ -5103,6 +5103,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:681,text:'Modalul de produs („Produs nou" / editare) — tastatura, cerută direct: „butonul Enter să funcționeze ca Salvează și Esc ca închidere". Enter în orice câmp de text/număr apasă acum „Salvează produs" (înainte nu făcea nimic). Nu salvează din greșeală: nu în câmpurile mari de text (acolo Enter rămâne rând nou; Ctrl/⌘+Enter salvează și de acolo), nu pe butoane/linkuri/liste (își fac singure treaba), nu în câmpurile cu autocompletare (furnizor — Enter alege sugestia, nu salvează un produs pe jumătate completat) și nu cât timp e deschis un picker de produs sau alt dialog deasupra. Esc închidea deja modalul, cu aceeași confirmare „Ai modificări nesalvate" ca la × / Anulează (păstrată, ca să nu pierzi ce ai tastat; Enter pe acea confirmare = Renunț). Fix în plus: Esc cu un picker de produs deschis închidea și picker-ul, și TOT modalul — acum închide doar picker-ul, iar al doilea Esc închide modalul. Pe pagina Sincronizare, Enter pe un rând din fundal nu mai poate salva rândul respectiv cât timp un modal (ex. Produs nou) e deschis deasupra.',date:'2026-11-11'},
   {n:680,text:'Sincronizare — previzualizarea de la „Import în masă din fișier" e acum un CADRU FIX, cerut direct: „vreau ca toată zona să fie ca un cadru fix, cu toate setările sus și jos, iar produsele de sincronizat să intre în cadranul acela și de fiecare dată când actualizăm un produs și dispare, să coboare următorul în aceeași poziție". Cadrul are înălțimea ecranului: sus rămân titlul „Previzualizare (N listări)" și bara „N din M selectate / Selectează tot / Deselectează tot", jos rămân „↻ Resetează", „🤖 Sugerează cu AI", „Adaugă mapările selectate" și indicatorul „☁ salvat în cloud" — toate mereu vizibile, fără să mai derulezi pagina până la capătul unei liste de sute de rânduri. Doar lista de produse derulează în interiorul cadrului. La „⚡ Salvează acum", „🕓 Mai târziu" sau „🗑️ Elimină", rândul dispare și cel de dedesubt urcă exact în locul lui (poziția de derulare din cadru se păstrează la fiecare redesenare — înainte, lista se reconstruia de la zero și sărea la început), deci poți apăsa același buton de la aceeași poziție rând după rând. Doar prezentare: nicio logică de potrivire/salvare nu s-a schimbat.',date:'2026-11-11'},
   {n:679,text:'Sincronizare — previzualizarea de la „Import în masă din fișier" se salvează acum și în Supabase, nu doar în browser, cerut direct: „verifică că actualizările făcute în secțiunea sincronizare se salvează și în Supabase, să rămână salvat, am impresia că nu s-a salvat de ieri până astăzi". Verificat în baza de date: mapările CONFIRMATE se scriu corect (ex. azi 71 eMAG + 7 Trendyol), dar tot ce lăsai neaplicat în previzualizare (produsul ales pe fiecare rând, bifele, „Elimină", sugestiile AI — ex. cele 371 de mapări selectate din captură) trăia DOAR în localStorage (cheia sm6_sync_import): local unui singur browser, iar dacă cota era plină scrierea eșua silențios (safeLocalSet doar loga un console.warn) — deci putea dispărea de la o zi la alta fără nicio urmă în Supabase. Acum, la 2 secunde după ultima schimbare, previzualizarea se salvează și în cloud (setari_app, cheia sync_import_draft, aceeași tehnică ca la Comenzi Platforme), iar lângă „N mapări selectate" apare un indicator „☁ salvat în cloud HH:MM" (sau „⚠ nesalvat în cloud", cu avertisment, dacă nu a mers). La deschiderea paginii se verifică și cloud-ul: o previzualizare mai nouă salvată de pe alt browser/dispozitiv (sau după ce localStorage s-a golit) o înlocuiește pe cea locală; draftul local existent se urcă automat în cloud la prima încărcare. Se golește peste tot (local + cloud) la „↻ Resetează" sau când ultima linie a fost aplicată/pusă deoparte. În plus, „Adaugă mapările selectate" nu mai e totul-sau-nimic: înainte, UN SINGUR rând cu produs șters/îmbinat între timp (previzualizarea putea fi veche de o zi) făcea ca baza de date să respingă tot lotul de 371 și nu se salva nimic — acum rândurile cu produs inexistent rămân în listă (nealese, cu avertisment), cele deja mapate pe același produs nu se dublează, iar restul se scriu pe loturi de 50 (un lot respins se reîncearcă rând cu rând). Nimic din logica de potrivire/aplicare existentă nu s-a schimbat.',date:'2026-11-11'},
   {n:678,text:'Comenzi Platforme — lista „⚠️ N produse fără stoc suficient" (din „🔍 Doar lipsurile de stoc") se poate restrânge acum la click pe antet, cerut direct: „doar lipsa stoc, cand apasam, sa se restranga". Putea avea zeci de rânduri (37 în captură) și rămânea mereu desfășurată, fără nicio cale de a o restrânge înapoi fără să cauți din nou butonul original. Antetul (cu numărul total) rămâne mereu vizibil; rândurile se ascund/reapar la click, cu un chevron (▾/▸) care arată starea. Starea de restrângere se păstrează explicit peste re-randare — un click pe „+ Adaugă la comandat" (care re-randează toată lista) nu o mai redeschide tăcut. Verificat de 2 ori: sintaxă + 2 rulări Playwright separate pe server local, cu un produs real fără stoc suficient — deschidere, restrângere, redeschidere, și confirmarea explicită că starea restrânsă supraviețuiește re-randării de la „+ Adaugă la comandat"; plus confirmarea că și starea „✓ Stoc suficient" (fără rânduri) rămâne clic-abilă, fără nicio eroare.',date:'2026-11-11'},
@@ -24658,7 +24659,7 @@ document.addEventListener('click',ev=>{
 // Stânga/dreapta nu au sens aici — lista e strict verticală (o singură coloană), niciun picker nu are
 // rânduri una lângă alta.
 document.addEventListener('keydown',ev=>{
-  if(ev.key==='Escape'){document.querySelectorAll('.smi-pickdrop.on').forEach(d=>d.classList.remove('on'));return;}
+  if(ev.key==='Escape'){const openDrops=document.querySelectorAll('.smi-pickdrop.on');openDrops.forEach(d=>d.classList.remove('on'));if(openDrops.length)ev._pickClosed=true;return;}
   if(ev.key!=='ArrowDown'&&ev.key!=='ArrowUp'&&ev.key!=='Enter')return;
   const drop=document.querySelector('.smi-pickdrop.on');
   if(!drop)return;
@@ -29703,7 +29704,29 @@ function toast(m,type){
   t.classList.add('on');clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('on'),type==='err'?6500:2800);
 }
 
-document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){if(document.getElementById('ov-imgzoom')?.classList.contains('on')){closeImgZoom();return;}closeModal();closeInvoice();closeAiChatWidget();}});
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){if(ev._pickClosed)return;if(document.getElementById('ov-imgzoom')?.classList.contains('on')){closeImgZoom();return;}closeModal();closeInvoice();closeAiChatWidget();}});
+// Tastatura în modalul de produs (cerut direct: „Enter să funcționeze ca Salvează și Esc ca închidere"):
+// Esc închide modalul (handlerul de mai sus, cu aceeași confirmare „Ai modificări nesalvate" ca la ×/Anulează;
+// dacă era deschis un picker de produs, Esc închide DOAR picker-ul), Enter apasă „Salvează produs".
+// Enter NU salvează în: textarea (rând nou — acolo Ctrl/⌘+Enter salvează), butoane/linkuri/select (își fac
+// singure treaba), câmpurile cu autocompletare (Enter alege sugestia, nu salvează un produs pe jumătate
+// completat), câmpurile care își tratează singure Enter (defaultPrevented), un picker deschis sau alt
+// dialog deasupra modalului.
+document.addEventListener('keydown',ev=>{
+  if(ev.key!=='Enter'||ev.defaultPrevented||ev.isComposing||ev.repeat)return;
+  const ov=document.getElementById('ov');
+  if(!ov||!ov.classList.contains('on')||document.querySelectorAll('.ov.on').length>1)return;
+  if(document.querySelector('.smi-pickdrop.on'))return;
+  const t=ev.target,tag=t&&t.tagName,mod=ev.ctrlKey||ev.metaKey;
+  if(t&&t!==document.body&&!ov.contains(t))return;
+  if(!mod){
+    if(tag==='TEXTAREA'||tag==='BUTTON'||tag==='A'||tag==='SUMMARY'||tag==='SELECT'||t?.isContentEditable)return;
+    if(tag==='INPUT'&&(t.hasAttribute('list')||['checkbox','radio','file','button','submit','range','color'].includes(t.type)))return;
+  }
+  const btn=document.getElementById('save-prod-btn');if(btn&&btn.disabled)return;
+  ev.preventDefault();
+  saveProd();
+});
 function rptCardKeyHandler(e){
   if(!document.getElementById('page-raport')?.classList.contains('on'))return;
   if(!rptCardProds.length)return;
@@ -29746,6 +29769,7 @@ document.addEventListener('keydown',arrowScrollKeyHandler);
 //    pe fiecare rând, renderSyncImportPreview).
 function syncRowKeyHandler(e){
   if(!document.getElementById('page-sync')?.classList.contains('on'))return;
+  if(document.querySelector('.ov.on'))return; // un modal deschis (ex. Produs nou) își are propriul Enter — nu salva rândul din fundal
   const ae=document.activeElement;
   if(e.key==='Enter'&&ae?.id==='smi-pick-search'&&document.getElementById('smi-pickdrop')?.classList.contains('on')){
     const idx=syncPickIdx;
