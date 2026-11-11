@@ -1205,8 +1205,11 @@ tr:hover td{background:var(--surf2)}
 .smi-pick-list{overflow-y:auto;flex:1;padding:4px}
 .smi-pick-item{display:flex;align-items:center;gap:12px;padding:14px;cursor:pointer;font-size:25px;border-radius:10px;border-bottom:1px solid var(--b1);border-left:3px solid transparent;transition:background .12s,border-left-color .12s,transform .12s}
 .smi-pick-item:last-child{border-bottom:none}
-.smi-pick-item:hover{background:var(--acc-light);border-left-color:var(--acc);transform:translateX(2px)}
+.smi-pick-item:hover,.smi-pick-item.smi-pick-item-active{background:var(--acc-light);border-left-color:var(--acc);transform:translateX(2px)}
 .smi-pick-item-nm{flex:1;min-width:0;white-space:normal;line-height:1.35}
+.smi-pick-stock{font-size:13px;font-weight:800;padding:3px 9px;border-radius:999px;white-space:nowrap;flex-shrink:0}
+.smi-pick-stock.ok{background:var(--gr-bg);color:var(--gr)}
+.smi-pick-stock.zero{background:var(--rd-bg);color:var(--rd)}
 .inv-foot{padding:1.1rem 2rem;border-top:1px solid var(--b1);display:flex;gap:8px;justify-content:space-between;align-items:center;background:#FFFFFF;flex-wrap:wrap}
 .invx-foot-stats{display:flex;gap:16px;flex-wrap:wrap;font-size:17px;color:#6B7280}
 .invx-foot-stats strong{color:#172033;font-family:var(--mono);font-variant-numeric:tabular-nums}
@@ -5078,6 +5081,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:677,text:'Picker de produs (Comenzi Platforme) — 3 îmbunătățiri cerute direct. (1) Poza produsului asociat comenzii e acum clic-abilă, deschide lightbox-ul deja existent în aplicație (openImgZoom, nu un tab nou), ca să confirmi dintr-o privire „care a fost asociată comenzii". (2) Fiecare rând din listă arată acum stocul curent (verde dacă există, roșu dacă nu), cerut direct: „sa vedem ce selectam si daca avem stoc". (3) Navigare cu tastatura — săgeți sus/jos mută rândul selectat, Enter confirmă alegerea, Esc închide picker-ul deschis din greșeală — UN SINGUR handler generic, care funcționează automat pe toate cele ~8 picker-e de produs din aplicație (Comenzi Platforme, Sincronizare, Import factură, Alt furnizor, Merge produse, AWB-uri), nu doar pe cel din captură — fără cod nou per picker, reutilizează click()-ul deja existent pe fiecare rând. Stânga/dreapta nu au sens aici (lista e strict verticală, o singură coloană). Escape exista deja, generic; acum e extins cu navigarea și confirmarea. Verificat de 2 ori: sintaxă + 2 rulări Playwright separate pe server local — poza deschide lightbox-ul cu imaginea corectă (confirmat prin click real, nu doar citirea atributului), stocul apare corect per produs cu date reale de producție, navigarea cu săgeți avansează/recoboară corect prin listă iar Enter/Escape funcționează — plus un test dedicat, pe un picker complet sintetic, independent de orice funcție din aplicație, care confirmă genericitatea reală a mecanismului.',date:'2026-11-11'},
   {n:676,text:'Comenzi Platforme — beculeț verde, sub eticheta eMAG/Trendyol/Vinted a fiecărei comenzi, când stocul curent acoperă produsul/produsele comenzii — cerut direct: „atunci cand avem stoc pentru un produs din comanda, sau a aparut in stoc dupa, sa apara un beculet verde sub emag / trendyol”. Verifică stocul ACUM, nu la momentul comenzii — o reaprovizionare ulterioară apare automat la următoarea randare, fără nimic suplimentar de apăsat. La o comandă cu mai multe produse, beculețul arată doar dacă TOATE produsele au stoc suficient (nu doar unul); rămâne strict un semnal rapid per comandă, fără să țină cont de alte comenzi care așteaptă același stoc — pentru asta rămâne „Comenzi & stoc” → „Ce poate fi expediat acum”. Verificat de 2 ori: sintaxă + 2 rulări Playwright separate pe server local — stoc suficient/insuficient, comandă-pachet cu un produs fără stoc (corect, fără beculeț), comandă fără produs asociat (fără beculeț), și confirmarea explicită că o realimentare ulterioară face beculețul să apară fără alt declanșator — plus verificarea că numărul de elemente din antetul cardului a rămas neschimbat (nu a stricat grila responsive pe niciun breakpoint).',date:'2026-11-11'},
   {n:675,text:'Import factură (AI, din Inventar) — reparat un gol real în instrucțiunile date modelului, găsit la verificarea cerinței directe „din factura asta preia pretul cu TVA”: facturile RO standard au des coloane separate „VALOARE”/„PRET UNITAR” (fără TVA) și „VALOARE CU TVA”, iar modelul nu avea nicio regulă explicită despre care să folosească — risca să citească prețul FĂRĂ TVA, deși acel preț devine priceBuyTTC („TTC” = cu TVA), folosit peste tot în aplicație la marjă/profit. Adăugată o regulă explicită (în instrucțiuni + în schema structurată), cu exemplu real, exact din factura JUMBO trimisă: cantitate 4, preț unitar fără TVA 16,52 Lei, valoare cu TVA 79,96 Lei → priceBuy=19,99 (79,96÷4), nu 16,52. Dacă o factură arată un singur preț dar menționează un procent de TVA separat, modelul calculează acum singur prețul cu TVA; dacă nu există deloc TVA pe document, folosește prețul neschimbat. Notă de transparență: fiind o instrucțiune pentru AI (nu logică determinist-testabilă local, fără endpoint-ul Vercel), verificarea posibilă de aici a fost: sintaxă (2 ori) + validarea manuală a formulei pe exact cele 5 linii din factura reală trimisă (toate rotunjite corect, cifre .99 plauzibile) — o reimportare reală, prin aplicație, rămâne recomandată pentru confirmare finală.',date:'2026-11-10'},
   {n:674,text:'Comenzi & stoc — în secțiunea „Ce poate fi expediat acum”, comenzile eMAG/Trendyol/Vinted rămân sortate strict după termenul de expediere (urgența reală), dar acum fiecare rând are o etichetă + un contur colorat pe platformă (aceleași culori deja folosite la carduri), ca să se distingă dintr-o privire, cerut direct: „emag si trendyol sa fie delimitate totusi”. Ordinea de urgență nu s-a schimbat — doar devine lizibilă când platformele se amestecă. Verificat de 2 ori: sintaxă + 2 rulări Playwright pe server local, confirmând explicit culori distincte per platformă și ordinea neschimbată față de calculul de alocare.',date:'2026-11-10'},
@@ -22204,7 +22208,10 @@ function pcxCopyCode(btn,text){
 function pcxLineHtml(idx,groupIdxs){
   const it=pcImpParsed[idx];
   const p=it.produsId?P.find(x=>x.id===it.produsId):null;
-  const img=p&&p.img?`<img src="${esc(imgSrc(p.img))}" class="pcx-line-img" ${imgErrAttr(p.img,'pcx')}>`
+  // Poză clic-abilă (cerut direct — „sa putem sa apasam pe poza produsului sa vedem care a fost
+  // asociata comenzii"): lightbox-ul deja existent în aplicație (openImgZoom/#ov-imgzoom, folosit și
+  // la poze de etichetă AWB — vezi #597), nu un tab nou, ca omul să rămână pe aceeași pagină.
+  const img=p&&p.img?`<img src="${esc(imgSrc(p.img))}" class="pcx-line-img" style="cursor:zoom-in" onclick="openImgZoom('${esc(imgSrc(p.img).replace(/'/g,"\\'"))}')" title="Click pentru mărire — vezi care produs a fost asociat" ${imgErrAttr(p.img,'pcx')}>`
     :(it.vintedImg?`<a href="${esc(it.vintedImg)}" target="_blank" title="Captura originală — click pentru mărire"><img src="${esc(it.vintedImg)}" class="pcx-line-img"></a>`
     :`<div class="pcx-line-img-ph">${it.newProduct?'🆕':'📦'}</div>`);
   const nm=p?esc(p.name):(it.newProduct?'Produs nou — de adăugat':(it.titluExtern?esc(it.titluExtern):'— fără produs asociat —'));
@@ -23152,9 +23159,12 @@ function renderPcomPickRows(prods){
   // Uneori produsul chiar nu există deloc încă în stoc — omul poate marca explicit linia ca „produs nou",
   // ca la aplicare să fie creat automat (ca la importul de facturi), nu doar sărit peste.
   const newRow=`<div class="smi-pick-item" onclick="pickPcomNewProduct()" style="border-bottom:1px solid var(--b1);${curNew?'background:var(--surf2)':''}"><div class="smi-pick-th-ph">🆕</div><span class="smi-pick-item-nm" style="color:var(--or)">Nu există — trebuie adăugat ca produs nou</span></div>`;
+  // Stoc în timp real pe fiecare rând (cerut direct — „sa vedem ce selectam si daca avem stoc"): qty(p)
+  // citește direct din P, deci reflectă mereu valoarea curentă, nu una înghețată la deschiderea listei.
   const rows=prods.map(p=>{
     const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'pick')}>`:`<div class="smi-pick-th-ph">📦</div>`;
-    return`<div class="smi-pick-item" onclick="pickPcomProduct(${p.id})" style="${p.id===cur&&!curNew?'background:var(--surf2)':''}">${th}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</span></div>`;
+    const st=qty(p);
+    return`<div class="smi-pick-item" onclick="pickPcomProduct(${p.id})" style="${p.id===cur&&!curNew?'background:var(--surf2)':''}">${th}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</span><span class="smi-pick-stock ${st>0?'ok':'zero'}">${st>0?'Stoc '+fmtQty(st):'Fără stoc'}</span></div>`;
   }).join('');
   list.innerHTML=newRow+(rows||`<div class="smi-pick-item" style="color:var(--t3);cursor:default">Niciun produs găsit</div>`);
 }
@@ -24507,8 +24517,28 @@ document.addEventListener('click',ev=>{
   if(t&&t.closest&&t.closest('.smi-pick-btn,.cf-pick-trigger,.awb-pick-trigger,.inv-search-img-btn'))return;
   document.querySelectorAll('.smi-pickdrop.on').forEach(d=>{if(!d.contains(t))d.classList.remove('on');});
 },true);
+// Navigare cu tastatura în orice picker de produs (toate cele ~8 `.smi-pickdrop` din aplicație —
+// Comenzi Platforme, Sincronizare, Import factură, Alt furnizor, Merge produse, AWB-uri ...) — cerut
+// direct: „sa functioneze tastele de sus jos ... pentru a selecta un produs in sectiunea de selectare
+// produse de peste tot + butonul enter de confirmare”. UN SINGUR handler, generic — fiecare picker
+// existent rămâne neschimbat (își randază în continuare rândurile `.smi-pick-item` cu `onclick`-ul lui
+// exact ca până acum); Enter doar declanșează `.click()` pe rândul activ, fără cod nou per picker.
+// Stânga/dreapta nu au sens aici — lista e strict verticală (o singură coloană), niciun picker nu are
+// rânduri una lângă alta.
 document.addEventListener('keydown',ev=>{
-  if(ev.key==='Escape')document.querySelectorAll('.smi-pickdrop.on').forEach(d=>d.classList.remove('on'));
+  if(ev.key==='Escape'){document.querySelectorAll('.smi-pickdrop.on').forEach(d=>d.classList.remove('on'));return;}
+  if(ev.key!=='ArrowDown'&&ev.key!=='ArrowUp'&&ev.key!=='Enter')return;
+  const drop=document.querySelector('.smi-pickdrop.on');
+  if(!drop)return;
+  const items=[...drop.querySelectorAll('.smi-pick-item')].filter(x=>typeof x.onclick==='function');
+  if(!items.length)return;
+  let i=items.findIndex(x=>x.classList.contains('smi-pick-item-active'));
+  if(ev.key==='Enter'){ev.preventDefault();items[i<0?0:i].click();return;}
+  ev.preventDefault();
+  i=ev.key==='ArrowDown'?Math.min(items.length-1,i+1):Math.max(0,i-1);
+  items.forEach(x=>x.classList.remove('smi-pick-item-active'));
+  items[i].classList.add('smi-pick-item-active');
+  items[i].scrollIntoView({block:'nearest'});
 });
 async function applyFurnizorComanda(){
   const furnizor=document.getElementById('cf-furnizor').value.trim();
