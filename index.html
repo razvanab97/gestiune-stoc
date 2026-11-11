@@ -3825,7 +3825,7 @@ button.pcx-include-btn.included{border-color:var(--gr)}
     <div id="smi-parsing" style="display:none;font-size:24px;color:var(--t3);margin:8px 0"><span class="spin"></span> Se procesează fișierul…</div>
     <div id="smi-preview"></div>
     <div id="smi-foot" style="display:none;justify-content:space-between;align-items:center;margin-top:12px;gap:10px;flex-wrap:wrap">
-      <span id="smi-info" style="font-size:24px;color:var(--t3)"></span>
+      <span style="font-size:24px;color:var(--t3)"><span id="smi-info"></span><span id="smi-cloud-status" style="margin-left:14px;font-size:21px" title="Previzualizarea se salvează automat în Supabase (setari_app) — o regăsești și de pe alt browser"></span></span>
       <div style="display:flex;gap:8px">
         <button class="btn btn-sm" onclick="resetSyncImportPage()" title="Golește previzualizarea curentă — rămâne salvată automat altfel, chiar dacă schimbi pagina sau revii mâine">↻ Resetează</button>
         <button class="btn btn-sm" id="smi-ai-btn" onclick="suggestSyncImportWithAI()" title="AI sugerează produsul pentru liniile fără o potrivire sigură — tu doar confirmi sau alegi altceva">🤖 Sugerează cu AI</button>
@@ -5086,6 +5086,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:679,text:'Sincronizare — previzualizarea de la „Import în masă din fișier" se salvează acum și în Supabase, nu doar în browser, cerut direct: „verifică că actualizările făcute în secțiunea sincronizare se salvează și în Supabase, să rămână salvat, am impresia că nu s-a salvat de ieri până astăzi". Verificat în baza de date: mapările CONFIRMATE se scriu corect (ex. azi 71 eMAG + 7 Trendyol), dar tot ce lăsai neaplicat în previzualizare (produsul ales pe fiecare rând, bifele, „Elimină", sugestiile AI — ex. cele 371 de mapări selectate din captură) trăia DOAR în localStorage (cheia sm6_sync_import): local unui singur browser, iar dacă cota era plină scrierea eșua silențios (safeLocalSet doar loga un console.warn) — deci putea dispărea de la o zi la alta fără nicio urmă în Supabase. Acum, la 2 secunde după ultima schimbare, previzualizarea se salvează și în cloud (setari_app, cheia sync_import_draft, aceeași tehnică ca la Comenzi Platforme), iar lângă „N mapări selectate" apare un indicator „☁ salvat în cloud HH:MM" (sau „⚠ nesalvat în cloud", cu avertisment, dacă nu a mers). La deschiderea paginii se verifică și cloud-ul: o previzualizare mai nouă salvată de pe alt browser/dispozitiv (sau după ce localStorage s-a golit) o înlocuiește pe cea locală; draftul local existent se urcă automat în cloud la prima încărcare. Se golește peste tot (local + cloud) la „↻ Resetează" sau când ultima linie a fost aplicată/pusă deoparte. În plus, „Adaugă mapările selectate" nu mai e totul-sau-nimic: înainte, UN SINGUR rând cu produs șters/îmbinat între timp (previzualizarea putea fi veche de o zi) făcea ca baza de date să respingă tot lotul de 371 și nu se salva nimic — acum rândurile cu produs inexistent rămân în listă (nealese, cu avertisment), cele deja mapate pe același produs nu se dublează, iar restul se scriu pe loturi de 50 (un lot respins se reîncearcă rând cu rând). Nimic din logica de potrivire/aplicare existentă nu s-a schimbat.',date:'2026-11-11'},
   {n:678,text:'Comenzi Platforme — lista „⚠️ N produse fără stoc suficient" (din „🔍 Doar lipsurile de stoc") se poate restrânge acum la click pe antet, cerut direct: „doar lipsa stoc, cand apasam, sa se restranga". Putea avea zeci de rânduri (37 în captură) și rămânea mereu desfășurată, fără nicio cale de a o restrânge înapoi fără să cauți din nou butonul original. Antetul (cu numărul total) rămâne mereu vizibil; rândurile se ascund/reapar la click, cu un chevron (▾/▸) care arată starea. Starea de restrângere se păstrează explicit peste re-randare — un click pe „+ Adaugă la comandat" (care re-randează toată lista) nu o mai redeschide tăcut. Verificat de 2 ori: sintaxă + 2 rulări Playwright separate pe server local, cu un produs real fără stoc suficient — deschidere, restrângere, redeschidere, și confirmarea explicită că starea restrânsă supraviețuiește re-randării de la „+ Adaugă la comandat"; plus confirmarea că și starea „✓ Stoc suficient" (fără rânduri) rămâne clic-abilă, fără nicio eroare.',date:'2026-11-11'},
   {n:677,text:'Picker de produs (Comenzi Platforme) — 3 îmbunătățiri cerute direct. (1) Poza produsului asociat comenzii e acum clic-abilă, deschide lightbox-ul deja existent în aplicație (openImgZoom, nu un tab nou), ca să confirmi dintr-o privire „care a fost asociată comenzii". (2) Fiecare rând din listă arată acum stocul curent (verde dacă există, roșu dacă nu), cerut direct: „sa vedem ce selectam si daca avem stoc". (3) Navigare cu tastatura — săgeți sus/jos mută rândul selectat, Enter confirmă alegerea, Esc închide picker-ul deschis din greșeală — UN SINGUR handler generic, care funcționează automat pe toate cele ~8 picker-e de produs din aplicație (Comenzi Platforme, Sincronizare, Import factură, Alt furnizor, Merge produse, AWB-uri), nu doar pe cel din captură — fără cod nou per picker, reutilizează click()-ul deja existent pe fiecare rând. Stânga/dreapta nu au sens aici (lista e strict verticală, o singură coloană). Escape exista deja, generic; acum e extins cu navigarea și confirmarea. Verificat de 2 ori: sintaxă + 2 rulări Playwright separate pe server local — poza deschide lightbox-ul cu imaginea corectă (confirmat prin click real, nu doar citirea atributului), stocul apare corect per produs cu date reale de producție, navigarea cu săgeți avansează/recoboară corect prin listă iar Enter/Escape funcționează — plus un test dedicat, pe un picker complet sintetic, independent de orice funcție din aplicație, care confirmă genericitatea reală a mecanismului.',date:'2026-11-11'},
   {n:676,text:'Comenzi Platforme — beculeț verde, sub eticheta eMAG/Trendyol/Vinted a fiecărei comenzi, când stocul curent acoperă produsul/produsele comenzii — cerut direct: „atunci cand avem stoc pentru un produs din comanda, sau a aparut in stoc dupa, sa apara un beculet verde sub emag / trendyol”. Verifică stocul ACUM, nu la momentul comenzii — o reaprovizionare ulterioară apare automat la următoarea randare, fără nimic suplimentar de apăsat. La o comandă cu mai multe produse, beculețul arată doar dacă TOATE produsele au stoc suficient (nu doar unul); rămâne strict un semnal rapid per comandă, fără să țină cont de alte comenzi care așteaptă același stoc — pentru asta rămâne „Comenzi & stoc” → „Ce poate fi expediat acum”. Verificat de 2 ori: sintaxă + 2 rulări Playwright separate pe server local — stoc suficient/insuficient, comandă-pachet cu un produs fără stoc (corect, fără beculeț), comandă fără produs asociat (fără beculeț), și confirmarea explicită că o realimentare ulterioară face beculețul să apară fără alt declanșator — plus verificarea că numărul de elemente din antetul cardului a rămas neschimbat (nu a stricat grila responsive pe niciun breakpoint).',date:'2026-11-11'},
@@ -9142,6 +9143,7 @@ const PCIK='sm6_pcom_import';
 // se blochează Safari-ul sau schimbi calculatorul. Vezi savePcomImportState/loadPcomImportState mai jos.
 const PCOM_DRAFT_SETTINGS_KEY='pcom_import_draft';
 const SMIK='sm6_sync_import';
+const SYNC_DRAFT_SETTINGS_KEY='sync_import_draft';
 let invLines=[],invParsed=[],catSuggestTimer=null,lastNameForCat='',invShippingCostRon=0,catSuggestNewCat='';
 let sbReady=false;
 let eFacturaEmagDate=localStorage.getItem(EFK)||'';
@@ -18398,19 +18400,54 @@ function toggleSyncImportAll(val){
 // Previzualizarea neaplicată nu mai dispare la schimbarea paginii sau la reîncărcare — la cerere
 // directă, rămâne exact cum ai lăsat-o (linii, asocieri, sugestii AI) până o aplici sau apeși
 // „↻ Resetează" explicit. Ține și stock/duplicate preview-urile din același upload, nu doar liniile.
-function saveSyncImportState(){
-  safeLocalSet(SMIK,JSON.stringify({platforma:document.getElementById('smi-preview')?.dataset.platforma||'emag',parsed:syncImpParsed,stockUpdates:syncImpStockUpdates,duplicates:syncImpDuplicates}));
-}
-function loadSyncImportState(){
+// Backup în cloud (setari_app, ca la Comenzi Platforme — pcom_import_draft): până acum alegerile din
+// „Import în masă din fișier" (produs asociat, bife, „Elimină", sugestii AI) trăiau DOAR în
+// localStorage — local unui singur browser, iar la cota plină scrierea eșua SILENȚIOS (safeLocalSet) —
+// deci puteau dispărea de la o zi la alta fără nicio urmă în Supabase (raportat direct: „am impresia că
+// nu s-a salvat de ieri până astăzi"). Acum localStorage rămâne copia rapidă, iar la 2s după ultima
+// schimbare previzualizarea se salvează și în cloud, cu un indicator vizibil lângă „N mapări selectate".
+let syncCloudDraftTimer=null,syncCloudFailWarned=false,syncDraftStamp=0,syncLoadingDraft=false;
+function syncCloudStatusSet(t){const el=document.getElementById('smi-cloud-status');if(el)el.textContent=t||'';}
+function syncImportSnapshot(){return{platforma:document.getElementById('smi-preview')?.dataset.platforma||'emag',parsed:syncImpParsed,stockUpdates:syncImpStockUpdates,duplicates:syncImpDuplicates,savedAt:syncDraftStamp};}
+function syncImportIsEmpty(s){return!(s&&(s.parsed?.length||s.stockUpdates?.length||s.duplicates?.length));}
+async function syncImportCloudWrite(value){
   try{
-    const raw=localStorage.getItem(SMIK);
-    if(!raw)return;
-    const saved=JSON.parse(raw);
-    if(!saved)return;
+    const r=await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:SYNC_DRAFT_SETTINGS_KEY,value})});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    syncCloudFailWarned=false;
+    syncCloudStatusSet(value?'☁ salvat în cloud '+new Date().toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}):'');
+    return true;
+  }catch(e){
+    console.warn('Nu am putut salva previzualizarea Sincronizare în cloud (rămâne salvată local):',e);
+    if(value)syncCloudStatusSet('⚠ nesalvat în cloud');
+    if(value&&!syncCloudFailWarned){syncCloudFailWarned=true;toast('⚠ Previzualizarea Sincronizare nu s-a putut salva în cloud — rămâne doar pe acest browser. Aplică mapările curând, ca să nu le pierzi.','err');}
+    return false;
+  }
+}
+function saveSyncImportState(){
+  if(syncLoadingDraft)return;
+  syncDraftStamp=Date.now();
+  const snap=syncImportSnapshot();
+  safeLocalSet(SMIK,JSON.stringify(snap));
+  clearTimeout(syncCloudDraftTimer);
+  if(syncImportIsEmpty(snap)){syncCloudStatusSet('');syncImportCloudWrite('');return;}
+  syncCloudStatusSet('☁ se salvează…');
+  syncCloudDraftTimer=setTimeout(()=>{const s=syncImportSnapshot();syncImportCloudWrite(syncImportIsEmpty(s)?'':JSON.stringify(s));},2000);
+}
+// Golește previzualizarea peste tot (local + cloud) — folosită când ultima linie a fost aplicată/pusă
+// deoparte sau la „↻ Resetează", ca un draft vechi să nu fie oferit din greșeală la recuperare.
+function clearSyncImportState(){
+  clearTimeout(syncCloudDraftTimer);
+  try{localStorage.removeItem(SMIK);}catch(e){}
+  syncCloudStatusSet('');
+  syncImportCloudWrite('');
+}
+function syncApplyDraft(saved){
+  syncLoadingDraft=true;
+  try{
     syncImpParsed=Array.isArray(saved.parsed)?saved.parsed:[];
     syncImpStockUpdates=Array.isArray(saved.stockUpdates)?saved.stockUpdates:[];
     syncImpDuplicates=Array.isArray(saved.duplicates)?saved.duplicates:[];
-    if(!syncImpParsed.length&&!syncImpStockUpdates.length&&!syncImpDuplicates.length)return;
     const sel=document.getElementById('smi-platforma');if(sel&&saved.platforma)sel.value=saved.platforma;
     if(syncImpParsed.length){
       document.getElementById('smi-preview').dataset.platforma=saved.platforma||'emag';
@@ -18418,12 +18455,46 @@ function loadSyncImportState(){
     }
     renderSyncStockPreview();
     renderSyncDuplicatesPreview();
-  }catch(e){console.warn('Nu s-a putut reîncărca previzualizarea Sincronizare:',e);}
+  }finally{syncLoadingDraft=false;}
+  syncDraftStamp=Number(saved.savedAt)||0;
+}
+async function loadSyncImportState(){
+  let local=null;
+  try{const raw=localStorage.getItem(SMIK);local=raw?JSON.parse(raw):null;}catch(e){console.warn('Nu s-a putut citi previzualizarea Sincronizare locală:',e);}
+  const hasLocal=!syncImportIsEmpty(local);
+  if(hasLocal){try{syncApplyDraft(local);}catch(e){console.warn('Nu s-a putut reîncărca previzualizarea Sincronizare:',e);}}
+  // Verifică și cloud-ul: o previzualizare mai nouă salvată de pe alt browser/dispozitiv (sau când
+  // localStorage s-a golit/blocat) înlocuiește copia locală, doar dacă între timp n-ai atins nimic aici.
+  let cloud=null;
+  try{
+    const r=await fetch('/api/settings?key='+encodeURIComponent(SYNC_DRAFT_SETTINGS_KEY));
+    const d=await r.json();
+    cloud=d?.value?JSON.parse(d.value):null;
+  }catch(e){console.warn('Nu am putut verifica backup-ul Sincronizare din cloud:',e);return;}
+  const hasCloud=!syncImportIsEmpty(cloud);
+  const localStamp=hasLocal?(Number(local.savedAt)||0):0;
+  if(syncDraftStamp!==localStamp)return;
+  if(hasCloud&&(Number(cloud.savedAt)||0)>localStamp){
+    try{
+      syncApplyDraft(cloud);
+      safeLocalSet(SMIK,JSON.stringify(cloud));
+      syncCloudStatusSet('☁ recuperat din cloud');
+      toast(`↻ Previzualizare Sincronizare recuperată din cloud (${syncImpParsed.length} listări) — salvată automat, posibil de pe alt browser/dispozitiv`);
+    }catch(e){console.warn('Nu s-a putut aplica draftul Sincronizare din cloud:',e);}
+    return;
+  }
+  // Draftul local (mai nou sau singurul) nu era încă în cloud — îl urcăm acum, o singură dată.
+  if(hasLocal){
+    if(!localStamp)syncDraftStamp=Date.now();
+    const snap=syncImportSnapshot();
+    safeLocalSet(SMIK,JSON.stringify(snap));
+    syncImportCloudWrite(JSON.stringify(snap));
+  }
 }
 function resetSyncImportPage(){
   if((syncImpParsed.length||syncImpStockUpdates.length||syncImpDuplicates.length)&&!confirm('Golești previzualizarea curentă? Ce nu ai aplicat încă se pierde (mapările deja adăugate rămân salvate, neatinse).'))return;
   syncImpParsed=[];syncImpStockUpdates=[];syncImpDuplicates=[];
-  localStorage.removeItem(SMIK);
+  clearSyncImportState();
   document.getElementById('smi-preview').innerHTML='';
   document.getElementById('smi-foot').style.display='none';
   document.getElementById('smi-stock-preview').innerHTML='';
@@ -18719,17 +18790,41 @@ async function applySyncImport(){
       }
     }
     const resolved=toAdd.filter(x=>x.produsId);
-    const rows=resolved.length?await dbPost('platforma_mapari',resolved.map(it=>syncMapToDb({platforma,titluExtern:it.titluExtern,idExtern:it.pnk||null,produsId:it.produsId,confirmat:true,tara:it.tara||''}))):[];
+    // Până acum UN SINGUR rând invalid (produs șters/îmbinat între timp — previzualizarea poate fi veche de
+    // o zi) făcea ca FK-ul să respingă TOT lotul, deci nimic nu se salva (raportat direct: „nu s-a salvat de
+    // ieri până azi"). Acum: (1) rândurile cu produs inexistent se scot din lot și rămân în listă, nealese;
+    // (2) cele deja mapate pe ACELAȘI produs (previzualizare aplicată între timp, ex. de pe alt browser) nu
+    // se mai dublează; (3) restul se scriu pe loturi de 50, iar un lot respins se reîncearcă rând cu rând.
+    const stale=resolved.filter(it=>!P.some(x=>x.id===it.produsId));
+    stale.forEach(it=>{it.produsId=null;it.score=0;it.include=false;});
+    const already=resolved.filter(it=>!stale.includes(it)&&(m=>m&&m.produsId===it.produsId)(findSyncMapEntry(platforma,it.titluExtern,it.pnk||'',it.tara||'')));
+    const toPost=resolved.filter(it=>!stale.includes(it)&&!already.includes(it));
+    const toDb=it=>syncMapToDb({platforma,titluExtern:it.titluExtern,idExtern:it.pnk||null,produsId:it.produsId,confirmat:true,tara:it.tara||''});
+    const posted=new Set();let rows=[],failed=0,lastErr='';
+    for(let i=0;i<toPost.length;i+=50){
+      const chunk=toPost.slice(i,i+50);
+      try{rows=rows.concat(await dbPost('platforma_mapari',chunk.map(toDb)));chunk.forEach(it=>posted.add(it));}
+      catch(e){
+        lastErr=String(e.message||e);
+        // eroare de rețea/timeout: nu știm dacă lotul a intrat — NU reîncercăm rând cu rând (ar putea dubla)
+        if(/Conexiune Supabase blocată|Failed to fetch|NetworkError|Load failed/i.test(lastErr)){failed+=toPost.length-i;break;}
+        for(const it of chunk){
+          try{rows=rows.concat(await dbPost('platforma_mapari',[toDb(it)]));posted.add(it);}
+          catch(e2){failed++;lastErr=String(e2.message||e2);}
+        }
+      }
+    }
     SYNCM=rows.map(dbToSyncMap).concat(SYNCM);
-    // Rămân în listă doar liniile care NU s-au aplicat (produs nou eșuat la creare) — la fel ca la
-    // import factură, ca să nu dispară din vedere fără să se fi întâmplat de fapt nimic pentru ele.
-    const appliedSet=new Set(resolved);
+    // Rămân în listă doar liniile care NU s-au aplicat (produs nou eșuat la creare, produs inexistent,
+    // rând respins) — la fel ca la import factură, ca să nu dispară din vedere fără să se fi întâmplat ceva.
+    const appliedSet=new Set([...posted,...already]);
     syncImpParsed=syncImpParsed.filter(it=>!appliedSet.has(it));
     if(syncImpParsed.length){renderSyncImportPreview();}
-    else{document.getElementById('smi-preview').innerHTML='';document.getElementById('smi-foot').style.display='none';localStorage.removeItem(SMIK);}
+    else{document.getElementById('smi-preview').innerHTML='';document.getElementById('smi-foot').style.display='none';clearSyncImportState();}
     renderSyncPage();
     if(created)renderTable();
-    toast(`${rows.length} mapări adăugate${created?` (${created} produse noi create — completează preț/stoc/poză în Inventar)`:''} ✓`);
+    const extra=[already.length?`${already.length} erau deja mapate`:'',stale.length?`${stale.length} cu produs șters/îmbinat — realege-le`:'',failed?`${failed} respinse (${lastErr.slice(0,90)})`:''].filter(Boolean).join(' · ');
+    toast(`${rows.length} mapări adăugate${created?` (${created} produse noi create — completează preț/stoc/poză în Inventar)`:''}${extra?` · ${extra}`:''} ${failed||stale.length?'⚠':'✓'}`,failed||stale.length?'err':undefined);
   }catch(err){
     toast('Eroare la salvare: '+err.message,'err');
   }finally{
@@ -18763,7 +18858,7 @@ async function applySyncImportLine(idx){
     if(row)SYNCM=[dbToSyncMap(row),...SYNCM];
     syncImpParsed.splice(idx,1);
     if(syncImpParsed.length){renderSyncImportPreview();}
-    else{document.getElementById('smi-preview').innerHTML='';document.getElementById('smi-foot').style.display='none';localStorage.removeItem(SMIK);}
+    else{document.getElementById('smi-preview').innerHTML='';document.getElementById('smi-foot').style.display='none';clearSyncImportState();}
     renderSyncPage();
     if(created)renderTable();
     toast(`✓ Mapare salvată${created?' (produs nou creat — completează preț/stoc/poză în Inventar)':''}`);
@@ -24069,7 +24164,7 @@ async function parkSyncRowLater(idx){
     PLIPSA.unshift(dbToPlipsa(row));
     syncImpParsed.splice(idx,1);
     if(syncImpParsed.length){renderSyncImportPreview();}
-    else{document.getElementById('smi-preview').innerHTML='';document.getElementById('smi-foot').style.display='none';localStorage.removeItem(SMIK);}
+    else{document.getElementById('smi-preview').innerHTML='';document.getElementById('smi-foot').style.display='none';clearSyncImportState();}
     renderSyncMissingList();
     toast('Pusă deoparte — vezi „📥 Produse eMAG lipsă din stoc" ✓');
   }catch(err){
@@ -24078,7 +24173,7 @@ async function parkSyncRowLater(idx){
     if(/duplicate key|already exists|23505/i.test(String(err.message||err))){
       syncImpParsed.splice(idx,1);
       if(syncImpParsed.length){renderSyncImportPreview();}
-      else{document.getElementById('smi-preview').innerHTML='';document.getElementById('smi-foot').style.display='none';localStorage.removeItem(SMIK);}
+      else{document.getElementById('smi-preview').innerHTML='';document.getElementById('smi-foot').style.display='none';clearSyncImportState();}
       toast('Era deja pusă deoparte');
       return;
     }
