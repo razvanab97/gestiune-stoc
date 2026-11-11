@@ -5103,6 +5103,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:682,text:'Asistent AI — 3 lucruri cerute direct, pe o captură reală cu cardul „Produs posibil asemănător". (1) Cardul de produs nou (poza, numele, SKU/preț, „Folosește" pe candidații asemănători, „Deschide ca produs nou") era randat separat, mereu LIPIT la finalul listei, deci mesajele noi apăreau deasupra lui și el rămânea „fix" — acum stă în conversație, sub mesajul care l-a generat, și derulează odată cu istoricul când adaugi text sau poză (poți avea mai multe carduri deodată, fiecare cu butoanele lui). (2) După ce ai ales — „Folosește" pe un produs existent sau „Deschide ca produs nou" — cardul dispare din conversație (derularea rămâne unde era). (3) Prețul scris ca text se adaugă automat la produsul generat: „24.99", „24,99 lei", „preț 24.99", „5 euro", „24.99 fără TVA", fie scris în mesaj împreună cu poza, fie în căsuța de mesaj înainte de butonul „Creează produs din screenshot". Se tratează ca preț de ACHIZIȚIE (cu TVA implicit, în lei implicit; „vând cu…" rămâne preț de vânzare), bate prețul citit din screenshot și apare pe card cu eticheta „✎ din mesaj"; la „Deschide ca produs nou" ajunge direct în câmpurile de preț, iar la „Folosește" în prețul sursei „Alt furnizor". O poză trimisă cu un mesaj care e DOAR un preț nu mai poate fi confundată cu un cod de produs. Clasificatorul AI primește 3 câmpuri noi (preț/monedă/TVA), plus un parser local ca plasă de siguranță.',date:'2026-11-11'},
   {n:681,text:'Modalul de produs („Produs nou" / editare) — tastatura, cerută direct: „butonul Enter să funcționeze ca Salvează și Esc ca închidere". Enter în orice câmp de text/număr apasă acum „Salvează produs" (înainte nu făcea nimic). Nu salvează din greșeală: nu în câmpurile mari de text (acolo Enter rămâne rând nou; Ctrl/⌘+Enter salvează și de acolo), nu pe butoane/linkuri/liste (își fac singure treaba), nu în câmpurile cu autocompletare (furnizor — Enter alege sugestia, nu salvează un produs pe jumătate completat) și nu cât timp e deschis un picker de produs sau alt dialog deasupra. Esc închidea deja modalul, cu aceeași confirmare „Ai modificări nesalvate" ca la × / Anulează (păstrată, ca să nu pierzi ce ai tastat; Enter pe acea confirmare = Renunț). Fix în plus: Esc cu un picker de produs deschis închidea și picker-ul, și TOT modalul — acum închide doar picker-ul, iar al doilea Esc închide modalul. Pe pagina Sincronizare, Enter pe un rând din fundal nu mai poate salva rândul respectiv cât timp un modal (ex. Produs nou) e deschis deasupra.',date:'2026-11-11'},
   {n:680,text:'Sincronizare — previzualizarea de la „Import în masă din fișier" e acum un CADRU FIX, cerut direct: „vreau ca toată zona să fie ca un cadru fix, cu toate setările sus și jos, iar produsele de sincronizat să intre în cadranul acela și de fiecare dată când actualizăm un produs și dispare, să coboare următorul în aceeași poziție". Cadrul are înălțimea ecranului: sus rămân titlul „Previzualizare (N listări)" și bara „N din M selectate / Selectează tot / Deselectează tot", jos rămân „↻ Resetează", „🤖 Sugerează cu AI", „Adaugă mapările selectate" și indicatorul „☁ salvat în cloud" — toate mereu vizibile, fără să mai derulezi pagina până la capătul unei liste de sute de rânduri. Doar lista de produse derulează în interiorul cadrului. La „⚡ Salvează acum", „🕓 Mai târziu" sau „🗑️ Elimină", rândul dispare și cel de dedesubt urcă exact în locul lui (poziția de derulare din cadru se păstrează la fiecare redesenare — înainte, lista se reconstruia de la zero și sărea la început), deci poți apăsa același buton de la aceeași poziție rând după rând. Doar prezentare: nicio logică de potrivire/salvare nu s-a schimbat.',date:'2026-11-11'},
   {n:679,text:'Sincronizare — previzualizarea de la „Import în masă din fișier" se salvează acum și în Supabase, nu doar în browser, cerut direct: „verifică că actualizările făcute în secțiunea sincronizare se salvează și în Supabase, să rămână salvat, am impresia că nu s-a salvat de ieri până astăzi". Verificat în baza de date: mapările CONFIRMATE se scriu corect (ex. azi 71 eMAG + 7 Trendyol), dar tot ce lăsai neaplicat în previzualizare (produsul ales pe fiecare rând, bifele, „Elimină", sugestiile AI — ex. cele 371 de mapări selectate din captură) trăia DOAR în localStorage (cheia sm6_sync_import): local unui singur browser, iar dacă cota era plină scrierea eșua silențios (safeLocalSet doar loga un console.warn) — deci putea dispărea de la o zi la alta fără nicio urmă în Supabase. Acum, la 2 secunde după ultima schimbare, previzualizarea se salvează și în cloud (setari_app, cheia sync_import_draft, aceeași tehnică ca la Comenzi Platforme), iar lângă „N mapări selectate" apare un indicator „☁ salvat în cloud HH:MM" (sau „⚠ nesalvat în cloud", cu avertisment, dacă nu a mers). La deschiderea paginii se verifică și cloud-ul: o previzualizare mai nouă salvată de pe alt browser/dispozitiv (sau după ce localStorage s-a golit) o înlocuiește pe cea locală; draftul local existent se urcă automat în cloud la prima încărcare. Se golește peste tot (local + cloud) la „↻ Resetează" sau când ultima linie a fost aplicată/pusă deoparte. În plus, „Adaugă mapările selectate" nu mai e totul-sau-nimic: înainte, UN SINGUR rând cu produs șters/îmbinat între timp (previzualizarea putea fi veche de o zi) făcea ca baza de date să respingă tot lotul de 371 și nu se salva nimic — acum rândurile cu produs inexistent rămân în listă (nealese, cu avertisment), cele deja mapate pe același produs nu se dublează, iar restul se scriu pe loturi de 50 (un lot respins se reîncearcă rând cu rând). Nimic din logica de potrivire/aplicare existentă nu s-a schimbat.',date:'2026-11-11'},
@@ -9142,7 +9143,7 @@ async function ensureVizLoaded(){
 // Asistent AI — istoricul conversației (ai_chat_mesaje), încărcat LENEȘ (abia la prima deschidere a
 // tab-ului/pop-up-ului „🧠 Asistent", NU în load() de pornire — nu e date critice pentru restul
 // aplicației, vezi .tmp/grill-me/creierul-platformei-ai.md pentru planul complet.
-let AIC=[],aiChatHistoryLoaded=false,aiChatBusy=false,aiChatPendingImage='',aiChatDraft=null;
+let AIC=[],aiChatHistoryLoaded=false,aiChatBusy=false,aiChatPendingImage='',aiChatDraft=null,aiChatDraftSeq=0;
 // Stare nouă, rundă 2 („functii futuriste", cerut direct): aiChatContext ține minte ultimul produs
 // discutat (afișat ca „🔗 Context activ" sub antet); aiChatStepsLog/aiChatCurStep reflectă pașii REALI
 // din aiChatSend (nu doar un „Mă gândesc…" generic); aiChatRecognition ține recunoașterea vocală activă
@@ -30299,9 +30300,12 @@ const AI_CHAT_INTENT_SCHEMA={
     subMinim:{type:['boolean','null'],description:'Pentru "stoc_curent" — true dacă userul cere STRICT produsele sub stocul minim (ex. "ce trebuie reaprovizionat"). null/false altfel.'},
     limitaTop:{type:['number','null'],description:'Pentru "top_produse" — câte produse, dacă userul a specificat (ex. "top 10" -> 10). null pentru implicit.'},
     lunaTinta:{type:['number','null'],description:'Pentru "preconizare" — luna (1-12) pentru care se cere (ex. "cât ar trebui să aduc pentru noiembrie" -> 11). null dacă nu e specificată (implicit luna curentă).'},
-    produsCreatPret:{type:['number','null'],description:'Pentru "creeaza_produs" — prețul de vânzare, dacă userul l-a menționat explicit. null dacă nu e menționat (AI-ul NU inventează un preț dintr-o poză).'}
+    produsCreatPret:{type:['number','null'],description:'Pentru "creeaza_produs" — prețul de VÂNZARE, DOAR dacă userul spune explicit că e de vânzare („vând cu", „preț de vânzare"). null altfel (AI-ul NU inventează un preț dintr-o poză). Un preț scris fără alte precizări e prețul de ACHIZIȚIE — vezi produsPretAchizitie.'},
+    produsPretAchizitie:{type:['number','null'],description:'Pentru "creeaza_produs" — prețul de ACHIZIȚIE (de la furnizor) scris de user în mesaj, ex. „preț 24,99", „24.99 lei", „l-am luat cu 5 euro" -> 24.99 / 24.99 / 5. null dacă nu scrie niciun preț.'},
+    produsPretMoneda:{type:['string','null'],enum:['RON','EUR',null],description:'Moneda produsPretAchizitie: "EUR" doar dacă userul spune euro/EUR/€, altfel "RON". null dacă nu e niciun preț.'},
+    produsPretTva:{type:['string','null'],enum:['cu_tva','net',null],description:'"net" doar dacă userul spune explicit „fără TVA"/„net"/„+ TVA"; "cu_tva" altfel (implicit, inclusiv „cu TVA"). null dacă nu e niciun preț.'}
   },
-  required:['tip','produsNume','produsCod','categorie','perioadaTip','perioadaN','perioadaOffsetLuni','perioadaOffsetAni','perioadaAn','perioadaLuna','comparaCuAnterioara','subMinim','limitaTop','lunaTinta','produsCreatPret'],
+  required:['tip','produsNume','produsCod','categorie','perioadaTip','perioadaN','perioadaOffsetLuni','perioadaOffsetAni','perioadaAn','perioadaLuna','comparaCuAnterioara','subMinim','limitaTop','lunaTinta','produsCreatPret','produsPretAchizitie','produsPretMoneda','produsPretTva'],
   additionalProperties:false
 };
 // Context conversațional — cerut direct („sa inteleaga tot ce i cer baza pe produsele din stoc"):
@@ -30315,7 +30319,7 @@ function aiChatRecentContext(){
   return AIC.slice(-6).map(m=>`${m.rol==='user'?'User':'Asistent'}: ${String(m.continut||'').replace(/\[\[poza:\d+\]\]/g,'(poză produs)').slice(0,300)}`).join('\n');
 }
 async function aiChatClassifyIntent(mesaj,hasImage,context){
-  const system=`Ești clasificatorul de intenții pentru asistentul AI al unei aplicații de gestiune stoc. Încadrezi mesajul userului STRICT într-unul din tipurile cunoscute și extragi parametrii din ce a scris — NU calculezi nimic, NU inventezi cifre. Un mesaj format DOAR dintr-un cod/număr (EAN/SKU/cod de bare, fără alte cuvinte) înseamnă "info_produs", cu produsCod acel text exact. Categorii disponibile: ${CATS.join(', ')}. Azi este ${td()}.${context?`\n\nContextul conversației recente (ultimele schimburi) — folosește-l STRICT pentru referințe implicite ("el"/"acela"/"produsul ăsta"/"poza lui", fără alt detaliu, referindu-se la ce s-a discutat chiar înainte); dacă userul chiar menționează acum un alt produs explicit, ignoră contextul și folosește ce a scris:\n${context}`:''}`;
+  const system=`Ești clasificatorul de intenții pentru asistentul AI al unei aplicații de gestiune stoc. Încadrezi mesajul userului STRICT într-unul din tipurile cunoscute și extragi parametrii din ce a scris — NU calculezi nimic, NU inventezi cifre. Un mesaj format DOAR dintr-un cod/număr (EAN/SKU/cod de bare, fără alte cuvinte) înseamnă "info_produs", cu produsCod acel text exact — EXCEPȚIE: dacă userul a atașat și o poză, iar mesajul e doar un PREȚ (ex. "24.99", "24,99 lei", "preț 25", "5 euro"), NU un cod, tipul este "creeaza_produs" (produsNume null) cu acel preț în produsPretAchizitie. La "creeaza_produs", orice preț scris de user fără precizarea "de vânzare" e prețul de ACHIZIȚIE (produsPretAchizitie), nu de vânzare. Categorii disponibile: ${CATS.join(', ')}. Azi este ${td()}.${context?`\n\nContextul conversației recente (ultimele schimburi) — folosește-l STRICT pentru referințe implicite ("el"/"acela"/"produsul ăsta"/"poza lui", fără alt detaliu, referindu-se la ce s-a discutat chiar înainte); dacă userul chiar menționează acum un alt produs explicit, ignoră contextul și folosește ce a scris:\n${context}`:''}`;
   const content=hasImage?`[Userul a atașat și o poză]\n${mesaj}`:mesaj;
   const resp=await callAI([{role:'user',content}],system,600,'simple',AI_CHAT_INTENT_SCHEMA,'ai_chat_intent');
   return JSON.parse(resp);
@@ -30363,9 +30367,39 @@ function aiChatCropProductImage(imageDataUrl,zona){
   if(vals.some(n=>!Number.isFinite(n))||vals[0]<0||vals[1]<0||vals[2]<10||vals[3]<10||vals[0]+vals[2]>100||vals[1]+vals[3]>100)return Promise.resolve('');
   return new Promise(resolve=>{const img=new Image();img.onload=()=>{const sx=Math.round(img.naturalWidth*vals[0]/100),sy=Math.round(img.naturalHeight*vals[1]/100),sw=Math.round(img.naturalWidth*vals[2]/100),sh=Math.round(img.naturalHeight*vals[3]/100);if(!sw||!sh){resolve('');return;}const scale=Math.min(1,1200/Math.max(sw,sh)),canvas=document.createElement('canvas');canvas.width=Math.max(1,Math.round(sw*scale));canvas.height=Math.max(1,Math.round(sh*scale));canvas.getContext('2d').drawImage(img,sx,sy,sw,sh,0,0,canvas.width,canvas.height);resolve(canvas.toDataURL('image/jpeg',.9));};img.onerror=()=>resolve('');img.src=imageDataUrl;});
 }
+// Prețul scris de user în mesaj, alături de poză (cerut direct: „voi trece ca text și prețul și să-l adauge
+// automat când se generează produsul"). Deterministic, ca plasă de siguranță peste clasificatorul AI (care
+// poate lua un „24.99" singur drept cod): „24.99", „24,99 lei", „preț 24.99", „5 euro", „24.99 fără TVA".
+// Întoarce null dacă nu e un preț clar sau dacă e vorba de prețul de VÂNZARE (acela rămâne la AI, produsCreatPret).
+// doarPret = mesajul nu conține nimic în afară de preț (și cuvinte-umplutură) — doar atunci îl tratăm singuri
+// drept „creează produs", fără să ne bazăm pe clasificator.
+function aiChatParsePriceText(text){
+  const raw=String(text||'').trim();if(!raw)return null;
+  const t=stripDiacritics(raw).toLowerCase();
+  if(/\b(vand|vanzare|vinde|vindem)\b/.test(t))return null;
+  const num='(\\d{1,6}(?:[.,]\\d{1,2})?)';
+  const m=t.match(new RegExp(num+'\\s*(?:lei|ron|eur|euro|€)(?![a-z])'))
+    ||t.match(new RegExp(num+'\\s*(?:\\+\\s*tva|(?:cu|fara)\\s+tva|net(?![a-z]))'))
+    ||t.match(new RegExp('(?:\\bpret(?:ul)?|\\bcost(?:a)?|\\bachizit\\w*|\\bluat\\s+cu)\\s*(?:de|este|e|:|=|-)?\\s*'+num))
+    ||t.match(/^\s*(\d{1,4}(?:[.,]\d{1,2})?)\s*$/); // număr „gol”: max 4 cifre, ca un SKU scurt să nu fie luat drept preț
+  if(!m)return null;
+  const pret=Math.round(parseFloat(m[1].replace(',','.'))*100)/100;
+  if(!(pret>0&&pret<=100000))return null;
+  const moneda=/\b(eur|euro)\b|€/.test(t)?'EUR':'RON';
+  const tipPret=/\b(fara\s+tva|net|exclusiv\s+tva)\b|\+\s*tva/.test(t)?'net':'cu_tva';
+  const rest=t.replace(m[0],' ').replace(/\b(pret|pretul|cost|costa|achizitie|achizitionat|lei|ron|eur|euro|cu|fara|tva|net|de|este|e|la|am|luat|produs|produsul|nou|creeaza|adauga|exclusiv)\b/g,' ').replace(/[^a-z]/g,'');
+  return{pret,moneda,tipPret,doarPret:rest.length===0};
+}
+// Prețul de achiziție din mesaj: întâi ce a extras clasificatorul AI, apoi parserul deterministic.
+function aiChatResolveTextPrice(intent,text){
+  const ai=Number(intent?.produsPretAchizitie)||0;
+  if(ai>0)return{pret:Math.round(ai*100)/100,moneda:intent.produsPretMoneda==='EUR'?'EUR':'RON',tipPret:intent.produsPretTva==='net'?'net':'cu_tva'};
+  const pp=aiChatParsePriceText(text);
+  return pp?{pret:pp.pret,moneda:pp.moneda,tipPret:pp.tipPret}:null;
+}
 async function aiChatCreateProductDraft(intent,imageDataUrl){
   let nume=intent.produsNume||'',categorie=intent.categorie&&CATS.includes(intent.categorie)?intent.categorie:'';
-  const pret=intent.produsCreatPret||null;let extras={},pozaProdus='';
+  const pret=intent.produsCreatPret||null,pt=intent.pretText||null;let extras={},pozaProdus='';
   if(imageDataUrl)try{extras=await aiChatExtractProductVisual(imageDataUrl);if(!nume&&(extras.numeRecomandat||extras.nume))nume=stripDiacritics(extras.numeRecomandat||extras.nume);if(!categorie&&extras.categorie&&CATS.includes(extras.categorie))categorie=extras.categorie;pozaProdus=extras.zonaProdus?await aiChatCropProductImage(imageDataUrl,extras.zonaProdus):(extras.tipImagine==='fotografie_produs'?imageDataUrl:'');}catch(e){console.warn('Extragerea completă din imagine pentru draft produs a eșuat:',e);}
   const candidati=aiFindSimilarProductCandidates(nume,categorie,5);
   let asemanatori=[];
@@ -30393,7 +30427,7 @@ async function aiChatCreateProductDraft(intent,imageDataUrl){
   // la „nume"); acum e garantat, necondiționat, pe orice cale ar fi ajuns.
   nume=stripDiacritics(nume);
   return{nume,categorie,pret,imageDataUrl:pozaProdus,asemanatori,titluri,
-    sku:extras.sku&&extras.sku!=='null'?String(extras.sku).trim():'',ean:extras.ean&&extras.ean!=='null'?String(extras.ean).trim():'',pretAchizitie:Number(extras.pretAchizitie)||0,moneda:String(extras.moneda||'').toUpperCase(),tipPret:extras.tipPret||'necunoscut',
+    sku:extras.sku&&extras.sku!=='null'?String(extras.sku).trim():'',ean:extras.ean&&extras.ean!=='null'?String(extras.ean).trim():'',pretAchizitie:pt?pt.pret:(Number(extras.pretAchizitie)||0),moneda:pt?pt.moneda:String(extras.moneda||'').toUpperCase(),tipPret:pt?pt.tipPret:(extras.tipPret||'necunoscut'),pretDinText:!!pt,
     furnizor:extras.furnizor&&extras.furnizor!=='null'?stripDiacritics(extras.furnizor):'',material:extras.material&&extras.material!=='null'?stripDiacritics(extras.material):'',dimensiuni:extras.dimensiuni&&extras.dimensiuni!=='null'?extras.dimensiuni:'',culori:extras.culori&&extras.culori!=='null'?stripDiacritics(extras.culori):'',descriere:extras.descriere&&extras.descriere!=='null'?stripDiacritics(extras.descriere):'',pozaDecupata:!!extras.zonaProdus&&!!pozaProdus};
 }
 // Comparație vizuală DOAR pe candidații deja filtrați prin titlu/categorie (aiFindSimilarProductCandidates)
@@ -30421,8 +30455,18 @@ function aiChatSourcePriceTTC(d){
   if(d.tipPret==='net')price*=1.21;
   return Math.round(price*100)/100;
 }
-function aiChatUseExistingProduct(productId){
-  const d=aiChatDraft,p=P.find(x=>x.id===productId);if(!d||!p)return;
+// Fiecare draft e atașat mesajului lui din istoric (m._draft, vezi aiChatPersistDraftMessage) și are propriul
+// id — cardul stă în conversație și derulează odată cu ea, în loc să rămână „fix" la finalul listei (cerut
+// direct). După ce ai ales („Folosește" sau „Deschide ca produs nou"), cardul dispare din conversație.
+function aiChatDraftById(did){
+  if(did==null)return aiChatDraft;
+  for(const m of AIC)if(m._draft&&m._draft._id===did)return m._draft;
+  return null;
+}
+function aiChatResolveDraft(d){if(d){d.resolved=true;renderAiChat(true);}}
+function aiChatUseExistingProduct(productId,did){
+  const d=aiChatDraftById(did),p=P.find(x=>x.id===productId);if(!d||!p)return;
+  aiChatResolveDraft(d);
   openModal(productId).then(()=>{
     peTab('prices');
     const details=document.querySelector('.pe-alt-supplier');if(details)details.open=true;
@@ -30434,9 +30478,10 @@ function aiChatUseExistingProduct(productId){
     toast(d.furnizor&&d.sku&&priceTTC?'Sursa nouă este completată. Verifică și apasă „+ Adaugă sursă”.':'Produsul existent este deschis. Completează ce lipsește la „Alt furnizor”, apoi apasă „+ Adaugă sursă”.');
   });
 }
-function aiChatOpenDraft(){
-  if(!aiChatDraft)return;
-  const d=aiChatDraft;
+function aiChatOpenDraft(did){
+  const d=aiChatDraftById(did);
+  if(!d)return;
+  aiChatResolveDraft(d);
   openModal().then(()=>{
     if(d.nume)document.getElementById('f-name').value=d.nume;
     setProductTitleOptions(d.titluri||[]);
@@ -30476,9 +30521,11 @@ async function aiChatEnsureHistory(){
   }catch(e){console.warn('Istoric asistent AI indisponibil (rulează migrarea SQL din chat):',e);}
 }
 async function aiChatPersist(rol,continut,tip){
-  AIC.push({rol,continut,tip:tip||'',createdAt:new Date().toISOString()});
-  if(!sbReady)return;
+  const m={rol,continut,tip:tip||'',createdAt:new Date().toISOString()};
+  AIC.push(m);
+  if(!sbReady)return m;
   try{await dbPost('ai_chat_mesaje',{rol,continut,tip_intrebare:tip||null});}catch(e){console.warn('Nu am putut salva mesajul în istoric:',e);}
+  return m;
 }
 async function aiChatClearHistory(){
   if(!confirm('Ștergi tot istoricul conversației cu asistentul?'))return;
@@ -30540,7 +30587,8 @@ async function aiChatAddStockFromImage(imageDataUrl){
 async function aiChatPersistDraftMessage(draft){
   const asemanatoriTxt=draft.asemanatori.length?`\n\n⚠️ Ai deja ceva asemănător: ${draft.asemanatori.map(a=>a.nume).join(', ')} — verifică înainte să salvezi.`:'';
   const extrase=[draft.sku?'SKU '+draft.sku:'',draft.ean?'EAN '+draft.ean:'',draft.pretAchizitie?`Achiziție ${draft.pretAchizitie} ${draft.moneda||''}${draft.tipPret==='net'?' net':draft.tipPret==='cu_tva'?' cu TVA':''}`:''].filter(Boolean);
-  await aiChatPersist('asistent',`Am pregătit un draft de produs: **${draft.nume||'(fără nume)'}**${draft.categorie?` · ${draft.categorie}`:''}${extrase.length?'\n'+extrase.join(' · '):''}${draft.pozaDecupata?'\n✓ Fotografia produsului a fost extrasă din screenshot.':''}${asemanatoriTxt}\n\nVerifică datele și apasă „Deschide ca produs nou”. Nimic nu se salvează până nu apeși „Salvează produs”.`,'creeaza_produs');
+  const dm=await aiChatPersist('asistent',`Am pregătit un draft de produs: **${draft.nume||'(fără nume)'}**${draft.categorie?` · ${draft.categorie}`:''}${extrase.length?'\n'+extrase.join(' · '):''}${draft.pozaDecupata?'\n✓ Fotografia produsului a fost extrasă din screenshot.':''}${asemanatoriTxt}\n\nVerifică datele și apasă „Deschide ca produs nou”. Nimic nu se salvează până nu apeși „Salvează produs”.`,'creeaza_produs');
+  draft._id=++aiChatDraftSeq;if(dm)dm._draft=draft;
 }
 // „Pași de gândire" vizibili, rundă 2 („functii futuriste", cerut direct) — nu e doar un „Mă gândesc…"
 // generic: fiecare etichetă apare exact când pasul REAL din aiChatSend chiar se termină (log-ul de mai
@@ -30566,6 +30614,9 @@ async function aiChatSend(textRaw){
   try{
     aiChatSetStep('Înțeleg întrebarea…');
     const intent=await aiChatClassifyIntent(text||'Creează produs din poza atașată',!!imageDataUrl,context);
+    // Poză + mesaj care e DOAR un preț („24.99”, „preț 25 lei”) = creează produs cu acel preț de achiziție, indiferent
+    // de ce ghicește clasificatorul (un număr singur poate părea un cod -> „info_produs”).
+    if(imageDataUrl&&intent.tip!=='creeaza_produs'&&intent.tip!=='adauga_stoc'){const pp=aiChatParsePriceText(text);if(pp&&pp.doarPret){intent.tip='creeaza_produs';intent.produsNume=null;intent.produsCod=null;}}
     aiChatSetStep('Caut în date…');
     // Poză atașată, dar fără niciun nume/cod identificat din text — încearcă să recunoască produsul
     // DIN poză înainte să renunțe; „creeaza_produs" rămâne neatins (are deja extragerea lui completă,
@@ -30584,6 +30635,7 @@ async function aiChatSend(textRaw){
       if(pm)aiChatContext={nume:pm.product.name,produsId:pm.product.id};
     }
     if(intent.tip==='creeaza_produs'){
+      intent.pretText=aiChatResolveTextPrice(intent,text);
       const draft=await aiChatCreateProductDraft(intent,imageDataUrl);
       aiChatDraft=draft;
       if(draft.nume)aiChatContext={nume:draft.nume,produsId:draft.produsId||null};
@@ -30626,15 +30678,16 @@ async function aiChatSend(textRaw){
 // explicită, din click-ul pe buton), deci merge mai repede și mai sigur direct pe fluxul de creare —
 // aceeași extragere (nume fără diacritice, SKU/EAN, preț) și aceeași verificare de duplicate (poză+titlu+
 // cod) ca la creeaza_produs prin chat, doar fără pasul de ghicit intenția.
-async function aiChatRunCreateFromImage(imageDataUrl){
+async function aiChatRunCreateFromImage(imageDataUrl,text=''){
   if(aiChatBusy)return;
   aiChatBusy=true;aiChatStepsLog=[];aiChatCurStep='';
   await aiChatEnsureHistory();
-  await aiChatPersist('user','(poză atașată — creează produs)','');
+  await aiChatPersist('user','(poză atașată — creează produs)'+(text?' · '+text:''),'');
   renderAiChat();
   try{
     aiChatSetStep('Analizez poza și verific dacă există deja…');
-    const draft=await aiChatCreateProductDraft({produsNume:null,categorie:null,produsCreatPret:null},imageDataUrl);
+    const pp=aiChatParsePriceText(text);
+    const draft=await aiChatCreateProductDraft({produsNume:null,categorie:null,produsCreatPret:null,pretText:pp?{pret:pp.pret,moneda:pp.moneda,tipPret:pp.tipPret}:null},imageDataUrl);
     aiChatDraft=draft;
     if(draft.nume)aiChatContext={nume:draft.nume,produsId:draft.produsId||null};
     aiChatSetStep('Pregătesc răspunsul…');
@@ -30652,7 +30705,9 @@ function aiChatCreateFromScreenshot(source){
   if(aiChatPendingImage){
     const img=aiChatPendingImage;
     aiChatPendingImage='';aiChatRenderPending();
-    aiChatRunCreateFromImage(img);
+    // prețul scris în căsuța de mesaj (ex. „24.99”) se preia automat la produsul generat
+    const ta=document.getElementById('aic-input-'+source),txt=ta?ta.value.trim():'';if(ta)ta.value='';
+    aiChatRunCreateFromImage(img,txt);
   }else{
     document.getElementById('aic-create-img-'+source)?.click();
   }
@@ -30663,7 +30718,8 @@ async function aiChatCreateFromScreenshotFile(ev,source){
   await aiChatSetPendingImageFromBlob(file);
   const img=aiChatPendingImage;
   aiChatPendingImage='';aiChatRenderPending();
-  await aiChatRunCreateFromImage(img);
+  const ta=document.getElementById('aic-input-'+source),txt=ta?ta.value.trim():'';if(ta)ta.value='';
+  await aiChatRunCreateFromImage(img,txt);
 }
 
 // ── Randare (ambele suprafețe — tab + pop-up, ACEEAȘI conversație, vezi Q3) ──
@@ -30699,21 +30755,24 @@ function aiChatStepsCardHtml(){
   const curHtml=aiChatCurStep?`<div class="aic-step-live"><span class="aic-dots"><span></span><span></span><span></span></span><span>${esc(aiChatCurStep)}</span></div>`:'';
   return`<div class="aic-msg aic-asistent-wrap"><div class="aic-avatar">🧠</div><div class="aic-card aic-steps-card">${doneHtml}${curHtml}</div></div>`;
 }
-function renderAiChat(){
-  const html=AIC.length?AIC.map(m=>m.rol==='asistent'
+function renderAiChat(keepScroll){
+  // Cardul de produs nou (draft) stă SUB mesajul care l-a generat (m._draft), nu mai e lipit la finalul listei —
+  // cerut direct: „când adăugăm text sau poză, să se piardă în scrolul chatului, să nu mai rămână fix".
+  const draftOf=m=>m._draft&&!m._draft.resolved?aiChatDraftHtml(m._draft):'';
+  const html=AIC.length?AIC.map(m=>(m.rol==='asistent'
     ?`<div class="aic-msg aic-asistent-wrap"><div class="aic-avatar">🧠</div><div class="aic-card">${aiChatFormatMsgHtml(m.continut)}</div></div>`
-    :`<div class="aic-msg aic-user">${aiChatFormatMsgHtml(m.continut)}</div>`
+    :`<div class="aic-msg aic-user">${aiChatFormatMsgHtml(m.continut)}</div>`)+draftOf(m)
   ).join('')
     :`<div class="aic-empty"><strong style="color:var(--t1);font-size:24px">Salut! Sunt asistentul tău AI.</strong>Întreabă-mă orice despre vânzări, stoc sau preconizări — trimite-mi o poză ca să creez un produs nou, sau o poză cu o listă/factură ca să adaug stoc la produse existente.${aiChatChipsHtml()}</div>`;
-  const draftHtml=aiChatDraft?aiChatDraftHtml():'';
   const stepsHtml=aiChatStepsCardHtml();
   const ctxHtml=aiChatContextChipHtml();
   ['aic-context-tab','aic-context-popup'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=ctxHtml;});
   ['aic-list-tab','aic-list-popup'].forEach(id=>{
     const el=document.getElementById(id);
     if(!el)return;
-    el.innerHTML=html+stepsHtml+draftHtml;
-    aiChatScrollToBottom(el);
+    const prevTop=el.scrollTop;
+    el.innerHTML=html+stepsHtml;
+    if(keepScroll)el.scrollTop=prevTop;else aiChatScrollToBottom(el);
   });
 }
 // Bug real, raportat direct: „lucru ramane in urma, sa fie mereu actualizat" — chat-ul nu rămânea
@@ -30819,15 +30878,15 @@ function aiChatProductPicHtml(id){
 // eticheta scurtată la „Folosește" (fără „produsul existent", redundant lângă poză+nume) — identic cu
 // eticheta deja folosită la o sursă „Alt furnizor" (useSupplierSource), nu o formulare nouă.
 // Card, nu rând stivuit — rundă 2, cerut direct („mai lat"): mai multe candidate încap unul lângă altul.
-function aiChatSimRowHtml(a){
+function aiChatSimRowHtml(a,did){
   const p=P.find(x=>x.id===a.id);
   const thumb=p?productImageTag(p,'aic-sim-thumb',`alt="" onerror="this.src=PRODUCT_IMAGE_PLACEHOLDER"`)
     :a.img?`<img src="${esc(a.img)}" class="aic-sim-thumb" onerror="this.style.visibility='hidden'">`
     :'<span class="aic-sim-thumb aic-sim-thumb-ph">📦</span>';
-  return`<div class="aic-sim-card">${thumb}<a href="#" class="aic-sim-nm" onclick="openModal(${a.id});return false">${esc(a.nume)}</a><button type="button" class="btn aic-sim-btn" onclick="aiChatUseExistingProduct(${a.id})">Folosește</button></div>`;
+  return`<div class="aic-sim-card">${thumb}<a href="#" class="aic-sim-nm" onclick="openModal(${a.id});return false">${esc(a.nume)}</a><button type="button" class="btn aic-sim-btn" onclick="aiChatUseExistingProduct(${a.id},${did})">Folosește</button></div>`;
 }
-function aiChatDraftHtml(){
-  const d=aiChatDraft;if(!d)return'';
+function aiChatDraftHtml(d){
+  if(!d)return'';
   // Poză + detalii alăturate (rundă 2, „mai lat") — fără poză (teoretic posibil, deși creeaza_produs
   // cere mereu o poză azi), un placeholder etichetat ia locul ei, nu o cutie goală.
   const img=d.imageDataUrl?`<img src="${esc(d.imageDataUrl)}" class="aic-draft-img">`:'<div class="aic-draft-img-ph"><span style="font-size:26px">📦</span><span>poză produs</span></div>';
@@ -30840,18 +30899,18 @@ function aiChatDraftHtml(){
   const warnMsg=hasCodMatch?'✓ <strong>Produs existent</strong> — cod identic (SKU/EAN) găsit în stoc.'
     :hasVizualMatch?'✓ <strong>Produs existent recomandat</strong> — confirmat vizual.'
     :'⚠️ <strong>Produs posibil asemănător</strong> — verifică fotografia înainte de alegere.';
-  const asem=d.asemanatori.length?`<div class="aic-draft-warn${hasCodMatch||hasVizualMatch?' aic-draft-match':''}"><div style="margin-bottom:8px">${warnMsg}</div><div class="aic-sim-row">${d.asemanatori.map(aiChatSimRowHtml).join('')}</div></div>`:'';
+  const asem=d.asemanatori.length?`<div class="aic-draft-warn${hasCodMatch||hasVizualMatch?' aic-draft-match':''}"><div style="margin-bottom:8px">${warnMsg}</div><div class="aic-sim-row">${d.asemanatori.map(a=>aiChatSimRowHtml(a,d._id)).join('')}</div></div>`:'';
   // SKU și Achiziție au acum și propriul buton de copiere (cerut direct) — reutilizează exact
   // pcx-code-copy/pcxCopyCode, aceeași pereche folosită deja pentru SKU/PNK pe linia unei comenzi
   // (Comenzi Platforme); EAN rămâne text simplu, nu a fost cerut.
   const meta=[
     d.sku?`SKU: ${esc(d.sku)} <button type="button" class="pcx-code-copy" onclick="pcxCopyCode(this,'${esc(d.sku)}')" title="Copiază SKU">⧉</button>`:'',
     d.ean?`EAN: ${esc(d.ean)}`:'',
-    d.pretAchizitie?`Achiziție: ${esc(d.pretAchizitie)} ${esc(d.moneda||'')}${d.tipPret==='net'?' net':d.tipPret==='cu_tva'?' cu TVA':''} <button type="button" class="pcx-code-copy" onclick="pcxCopyCode(this,'${esc(d.pretAchizitie)}')" title="Copiază prețul de achiziție">⧉</button>`:'',
+    d.pretAchizitie?`Achiziție: ${esc(d.pretAchizitie)} ${esc(d.moneda||'')}${d.tipPret==='net'?' net':d.tipPret==='cu_tva'?' cu TVA':''}${d.pretDinText?' <span style="color:var(--acc);font-weight:600" title="Prețul scris de tine în mesaj">✎ din mesaj</span>':''} <button type="button" class="pcx-code-copy" onclick="pcxCopyCode(this,'${esc(d.pretAchizitie)}')" title="Copiază prețul de achiziție">⧉</button>`:'',
   ].filter(Boolean);
   const titluri=d.titluri?.length?`<div style="font-size:16px;color:var(--t2);margin-top:4px">${d.titluri.map(x=>`${esc(x.label)}: ${esc(x.title)}`).join(' · ')}</div>`:'';
   const body=`<div class="aic-draft-body"><div><strong>${esc(d.nume||'(fără nume)')}</strong>${d.categorie?` · ${esc(d.categorie)}`:''}</div>${titluri}${meta.length?`<div style="font-size:17px;color:var(--t2);margin-top:8px">${meta.join(' · ')}</div>`:''}${d.pozaDecupata?'<div style="font-size:16px;color:var(--gr);font-weight:700;margin-top:7px">✓ Poză produs decupată din screenshot</div>':''}</div>`;
-  return`<div class="aic-draft"><div class="aic-draft-top">${img}${body}</div>${asem}<button type="button" class="btn btn-acc" onclick="aiChatOpenDraft()">Deschide ca produs nou</button></div>`;
+  return`<div class="aic-draft"><div class="aic-draft-top">${img}${body}</div>${asem}<button type="button" class="btn btn-acc" onclick="aiChatOpenDraft(${d._id})">Deschide ca produs nou</button></div>`;
 }
 
 // ── Input (text + poză, ambele suprafețe) ──
