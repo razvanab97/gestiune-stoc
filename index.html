@@ -1218,6 +1218,8 @@ tr:hover td{background:var(--surf2)}
 .smi-pickdrop.on{display:flex}
 .smi-pickdrop input{margin:13px 10px 10px;width:calc(100% - 20px);font-size:25px;padding:10px 14px;border:1px solid var(--b2);border-radius:var(--r);background:var(--surf2)}
 .smi-pickdrop input:focus{outline:none;border-color:var(--acc);background:var(--surf)}
+.smi-pickdrop input:disabled{opacity:.45;cursor:not-allowed}
+.awb-pick-locked-note{margin:0 10px 10px;padding:10px 12px;border-radius:var(--r);background:var(--or-bg);color:var(--or);font-size:20px;font-weight:700;line-height:1.35}
 .smi-pick-list{overflow-y:auto;flex:1;padding:4px}
 .smi-pick-item{display:flex;align-items:center;gap:12px;padding:14px;cursor:pointer;font-size:25px;border-radius:10px;border-bottom:1px solid var(--b1);border-left:3px solid transparent;transition:background .12s,border-left-color .12s,transform .12s}
 .smi-pick-item:last-child{border-bottom:none}
@@ -4066,7 +4068,7 @@ button.pcx-include-btn.included{border-color:var(--gr)}
          pot asocia usor". Vizibil STRICT în modul „unrecognized" (openAwbUnrecognizedPick) — etichetă
          complet necitită, fără niciun AWB extras automat, omul îl tastează aici, citit direct de pe
          etichetă/thumbnail, o singură dată cu alegerea comenzii din listă. -->
-    <div class="smi-pickdrop" id="awb-pickdrop"><input type="text" id="awb-pick-awb-input" placeholder="AWB citit de pe etichetă…" style="display:none;margin-bottom:6px"><input type="text" id="awb-pick-search" placeholder="Caută după platformă, client, comandă sau produs…" oninput="filterAwbPickDebounced()"><div class="smi-pick-list" id="awb-pick-list"></div></div>
+    <div class="smi-pickdrop" id="awb-pickdrop"><input type="text" id="awb-pick-awb-input" placeholder="AWB citit de pe etichetă…" style="display:none;margin-bottom:6px" oninput="awbPickGuardRequired()"><input type="text" id="awb-pick-search" placeholder="Caută după platformă, client, comandă sau produs…" oninput="filterAwbPickDebounced()"><div id="awb-pick-locked-note" class="awb-pick-locked-note" style="display:none">⬆️ Scrie întâi AWB-ul citit de pe etichetă, mai sus — abia apoi poți căuta și alege comanda.</div><div class="smi-pick-list" id="awb-pick-list"></div></div>
     <div id="pcom-import-redesign" style="display:none"></div>
     </div>
 
@@ -5125,6 +5127,8 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:689,text:'Asociază AWB-uri (etichetă complet necitită, „🔗 Asociază manual") — raportat din nou, direct: „iarasi aceeasi problema care nu s-a mai rezolvat”. Reverificat explicit, cu teste directe (nu doar citire de cod): cele 2 cauze reparate anterior (dublu-click pe același rând ștergea tăcut AWB-ul tastat; focusul mergea greșit pe căutare în loc de căsuța obligatorie) rămân corect reparate, confirmate din nou. Problema reală: AWB-ul obligatoriu stă într-o căsuță SEPARATĂ, deasupra căutării — ușor de ratat la procesare rapidă, pe multe facturi la rând, mai ales că eroarea apărea abia DUPĂ ce alegeai comanda, fără nicio legătură vizibilă cu ecranul din fața ta. Acum căutarea și lista de comenzi rămân vizibil BLOCATE (căutarea dezactivată, lista ascunsă, cu un mesaj explicit „⬆️ Scrie întâi AWB-ul...") cât timp căsuța de AWB e goală — imposibil să ajungi la eroare fără să vezi întâi exact ce lipsește; se deblochează automat de îndată ce scrii ceva, se reblochează dacă ștergi din greșeală. Nu afectează celelalte moduri ale aceluiași picker (AWB deja citit automat, eroare din clopoțel) — acolo AWB-ul e deja cunoscut, nu mai trebuie reintrodus. Verificat de 2 ori: sintaxă + 3 rulări Playwright separate pe server local — blocare/deblocare/reblocare confirmate, fluxul complet (scrie AWB → caută → alege comanda) funcționează identic ca înainte, iar celelalte moduri rămân neblocate.',date:'2026-11-12'},
+  {n:688,text:'Vinted — bug real reparat, raportat direct cu o captură (conversația Vinted cu „christinag163”): numele cumpărătorului lipsea din comenzile cu UN SINGUR produs recunoscute din captură de ecran, deși modelul AI îl extrăgea deja corect (câmpul `cumparator`, folosit corect pe liniile de tip „lot”, dar aruncat, hardcodat gol, pe liniile de produs individual — exact cazul cel mai comun). Fără el, singurul reper vizibil pentru a asocia manual un AWB era ID-ul tehnic generat local („VNT-...” — Vinted nu arată niciun număr de comandă propriu-zis către vânzător, deci acel ID nu există nicăieri fizic de verificat/recunoscut). Acum numele cumpărătorului/destinatarului apare peste tot unde era deja afișat (antetul comenzii, rândul extins) de îndată ce apare în captură. Verificat de 2 ori: sintaxă + 2 rulări Playwright separate pe server local, cu modelul AI simulat explicit (fără apel real) — exact exemplul din captură („christinag163”) apare corect, randat real în UI, plus regresie pe cazul fără cumpărător vizibil (rămâne gol, nu crapă) și pe linia de tip „lot” (neatinsă, funcționează la fel ca înainte).',date:'2026-11-12'},
   {n:687,text:'Sincronizare — SETURI: o listare poate fi mapată pe DOUĂ SAU MAI MULTE produse, cerut direct: „când avem un set, să putem adăuga două sau mai multe produse; prețul de achiziție să se facă dintre cele 2 ca un total; iar la comanda pentru acest set, calculul să se facă pe baza prețului final". Pe fiecare rând din previzualizare, sub produsul ales, apare „➕ Set? Adaugă alt produs" — alegi componentele din același picker (cu prețul de achiziție vizibil), fiecare cu cantitate (×1, ×2…), iar blocul „🧩 Set" arată lista și „Achiziție total" (suma componentelor × cantități, cu avertisment dacă vreuna n-are preț). Mapările-set se văd în lista de mapări cu eticheta „🧩 set · N produse · achiziție total X lei". La COMENZI: dacă o linie de comandă corespunde unui set, profitul și marja se calculează pe costul de achiziție TOTAL al setului (nu doar al produsului principal), cu o mențiune pe linie („🧩 Set: A + B · cost achiziție total X lei"). Anularea (Cmd+Z) acoperă adăugarea/scoaterea componentelor și cantitățile. IMPORTANT: seturile se salvează în coloana nouă `platforma_mapari.componente` — rulează o singură dată `migration_platforma_mapari_set.sql` în Supabase (SQL Editor); până atunci mapările obișnuite merg exact ca înainte, iar un set spune clar că lipsește migrarea și NU se salvează pe jumătate. DEOCAMDATĂ la o comandă pentru set stocul se scade doar pentru produsul principal (mențiunea e pe linie) — scăderea pentru toate componentele (stoc, Jurnal, Staff, reversări) e pasul următor, separat, fiindcă atinge fluxul critic de comenzi.',date:'2026-11-11'},
   {n:686,text:'Sincronizare — Cmd+Z (Ctrl+Z pe Windows) anulează ultima acțiune, cerut direct: „combinația CMD+Z să aducă înapoi ultima setare/acțiune pe care am făcut-o în platformă". Funcționează în pagina Sincronizare, în lanț (Cmd+Z de mai multe ori anulează pe rând acțiunile, de la ultima spre prima), și are și un buton „↶ Anulează" în subsolul cadrului (titlul lui spune ce anulează). Se pot anula: „⚡ Salvează acum" / Enter (se șterge DOAR maparea creată de acea acțiune, din Supabase, iar linia revine în previzualizare la aceeași poziție, selectată), „Adaugă mapările selectate" (tot lotul, într-o singură anulare), „🕓 Mai târziu" (se șterge intrarea din „Produse lipsă din stoc"), „🗑️ Elimină", alegerea unui produs din picker, bifa/debifa unui rând și „Selectează/Deselectează tot", „+ Nou", „🤖 Sugerează cu AI" și „↻ Resetează". Dacă o salvare a creat un produs nou în Inventar, anularea îl lasă acolo (nu șterge produse) și linia rămâne legată de el, ca la o nouă salvare să nu se creeze încă unul. Cmd+Z NU se atinge de tastarea din câmpuri de text (căutarea din picker, Asistentul AI etc. — acolo anulează tastarea, ca până acum) și nu face nimic cât un modal e deschis. O previzualizare nouă (fișier importat / resincronizare) golește istoricul de anulare. Momentan doar pentru Sincronizare — celelalte pagini nu au anulare.',date:'2026-11-11'},
   {n:685,text:'Sincronizare — prețul de ACHIZIȚIE apare acum și la alegerea produsului, cerut direct: „să apară și prețul aici, de achiziție, unde setăm produsul". În lista picker-ului (cea cu căutarea „cuvert…"), sub numele și SKU-ul fiecărui produs se vede „Achiziție 24,99 lei" (cu TVA, cum e în fișa produsului), iar în caseta produsului deja ales pe fiecare rând, la fel — ca să compari costul chiar când alegi între produse asemănătoare, fără să deschizi fișa fiecăruia. Un produs fără preț de achiziție completat arată explicit „Achiziție: fără preț", nu un spațiu gol. Doar afișare: nimic din potrivire/salvare nu s-a schimbat.',date:'2026-11-11'},
@@ -22063,8 +22067,13 @@ async function vintedRunRecognition(imageContent,previewSrc){
         if(decision==='cancel')continue;
         if(decision==='view'){goToPcomIssue(dup.comandaId);continue;}
       }
+      // comandaId e strict un ID tehnic, generat local (Vinted nu arată niciun număr de comandă
+      // propriu-zis către vânzător) — bug real, raportat direct: linia de produs individual arunca
+      // numele cumpărătorului deja extras de AI (parsed.cumparator), spre deosebire de rândul „lot” de
+      // mai jos, care îl folosea corect. Fără el, singurul reper vizibil pentru asocierea unui AWB era
+      // acel ID tehnic, nefolositor de recunoscut dintr-o etichetă/conversație reală.
       pcImpParsed.push({platforma:'vinted',comandaId:'VNT-'+Date.now().toString(36).toUpperCase()+Math.random().toString(36).slice(2,5).toUpperCase(),
-        pachetId:'',data:td(),pnk:'',tara:'',codProdus:'',clientNume:'',titluExtern:r.produs,vintedImg:previewSrc||'',
+        pachetId:'',data:td(),pnk:'',tara:'',codProdus:'',clientNume:parsed.cumparator||'',titluExtern:r.produs,vintedImg:previewSrc||'',
         cantitate:1,suggestedCantitate:0,pretFaraTva:Math.round(pretTotalCuTva/1.21*100)/100,pretTotalCuTva,moneda,
         produsId,score,viaPnk:false,viaTitle:false,viaCode:false,
         include:false,awb:'',_source:'vinted'});
@@ -26514,6 +26523,27 @@ function openAwbPickDropdownAt(anchorEl,prefill){
   // o comandă, fără nicio legătură vizibilă cu ce tocmai tastase. Focusul merge acum întâi pe căsuța
   // obligatorie — userul vede imediat placeholder-ul ei („AWB citit de pe etichetă…") cu cursorul înăuntru.
   if(awbPickMode==='unrecognized'&&awbInput)awbInput.focus();else search.focus();
+  awbPickGuardRequired();
+}
+// Bug raportat din nou, direct — „iarasi aceeasi problema" — pe exact eroarea deja reparată de 2 ori
+// (dublu-click pe același rând, focus greșit la deschidere). Reverificat acum, din nou, direct (nu doar
+// citit codul): ambele cauze vechi rămân reparate — niciuna din ele nu mai golește căsuța. Rămânea totuși
+// posibil, pur și simplu, să nu observi că AWB-ul OBLIGATORIU stă într-o căsuță SEPARATĂ, deasupra
+// căutării — ușor de ratat, mai ales la procesare rapidă, pe mai multe facturi la rând. Căutarea/lista
+// rămân acum vizibil BLOCATE (gri, neclicabile) cât timp căsuța de AWB e goală — mesajul explică exact
+// ce lipsește, ÎNAINTE să apuci să cauți/alegi o comandă, nu abia după, cu un toast fără nicio legătură
+// vizibilă cu ecranul din fața ta.
+function awbPickGuardRequired(){
+  const required=awbPickMode==='unrecognized';
+  const awbInput=document.getElementById('awb-pick-awb-input');
+  const locked=required&&!(awbInput?.value||'').trim();
+  const search=document.getElementById('awb-pick-search');
+  const list=document.getElementById('awb-pick-list');
+  const note=document.getElementById('awb-pick-locked-note');
+  if(!search||!list||!note)return;
+  search.disabled=locked;
+  list.style.display=locked?'none':'';
+  note.style.display=locked?'block':'none';
 }
 function openAwbPick(ev,idx){
   ev.stopPropagation();
