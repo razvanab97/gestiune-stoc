@@ -5265,6 +5265,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:703,text:'Comenzi Platforme — avertismentul de stoc de pe fiecare linie devine SECVENȚIAL, nu doar un agregat static, cerut direct: „in ordinea in care se asociaza produs pe comanda, sa se scada artificial stocul in sectiunea comenzi platforme. astfel incat, daca intra comanda cu acelasi produs si deja avem stoc 0, sa intre fara stoc si produsul sa primeasca -1, -2 s a m d". Până acum (#636), toate comenzile pe același produs, din tot lotul, arătau ACEEAȘI proiecție finală (agregat) — util ca să vezi CĂ depășești stocul, dar nu și CARE anume comenzi rămân efectiv fără. Acum fiecare comandă arată poziția ei reală în coadă: stocul rămas ÎNAINTE de ea (după ce comenzile mai urgente din lot și-au „prins" deja bucățile) → stocul rămas DUPĂ — exact exemplul cerut: stoc 0, 3 comenzi pe același produs → prima arată „Fără stoc → după -1", a doua „→ după -2", a treia „→ după -3". Ordinea e după termenul de expediere (cel mai apropiat întâi), NU ordinea de pe ecran — același criteriu de prioritate deja folosit la alocarea de stoc din „Listă locală de aprovizionare" (pcomOrderReadiness) — altfel butonul „📦 Cu stoc sus"/filtrele ar fi schimbat cifrele fără niciun sens, de fiecare dată când le apeși. Strict vizual — nu atinge stocul real, doar un calcul paralel recalculat la fiecare randare; liniile deja aplicate real sau anulate rămân excluse, ca stocul lor deja scăzut să nu se numere a doua oară. Verificat de 2 ori: sintaxă (node --check, de 2 ori) + verificări izolate cu Playwright, cu produse sintetice de test (fără risc pe producție): EXACT scenariul din cerere (stoc 0, 3 comenzi, termene diferite, -1/-2/-3 în ordinea deadline-ului, nu a ordinii brute din listă), stoc sănătos afișat normal, o linie deja aplicată nu „fură" stoc a doua oară de la celelalte — plus regresie cu 50 de comenzi reale de producție, randate fără nicio eroare.',date:'2026-11-16'},
   {n:702,text:'Comenzi Platforme — ANULAT #701 (AWB obligatoriu pentru „Inclus”/Staff), neînțelegere corectată direct: „nu asta am cerut, am cerut expres ca atunci cand selectam produsul pentru comanda sa nu devina inclus automat. automat devine cand se adauga awb. sa putem apasa inclus in continuare manual". #701 mersese prea departe, blocând și click-ul manual pe „✓ Inclus"/„✓ Selectează toate" fără AWB — exact ce omul NU a cerut. Regula corectă, acum clară și restaurată la ce era deja valabil de la #698 (neschimbat de atunci): alegerea produsului nu auto-include niciodată; devine automat „Inclus" când i se asociază un AWB real; ȘI, separat, omul tot poate apăsa manual „✓ Inclus”/„✓ Selectează toate" oricând, indiferent de AWB — trei căi distincte, nu una condiționată de alta. Verificat de 2 ori: sintaxă (node --check, de 2 ori) + 4 verificări izolate cu Playwright, cu produse reale din inventar: toggle manual și „Selectează toate" (pe platformă și global) funcționează din nou fără AWB, iar alegerea unui produs din picker tot NU auto-include (regula #698, intactă) — zero erori JS.',date:'2026-11-16'},
   {n:701,text:'Comenzi Platforme — AWB obligatoriu pentru ca o comandă să devină „✓ Inclus"/vizibilă în Staff, cerut direct, după o rundă de clarificări pe un caz real (16 comenzi deja incluse, fără AWB): „ideea e buna, dar, doar atunci cand noi selectam asta asta - inclus care duce la vizibilitatea in staff. Momentul in care se seleacteaza un produs pe comanda, nu inseamna automat ca e si inclus si trebuie s ajunga in staff". Alegerea produsului nu mai autoinclude de mult (#698) — rămânea totuși o portiță reală: click manual pe „✓ Inclus"/„✓ Selectează toate" (pe o platformă sau global) tot funcționa FĂRĂ niciun AWB, trimițând comanda direct în Staff. Acum cere explicit un AWB real pe ACESTE căi — sursa de adevăr e comanda deja scrisă în bază (nu copia locală de pe linie, care poate rămâne în urmă după o asociere ulterioară din alt picker). Nu la Vinted, unde „AWB" e de fapt „Cod", opțional, nu un pas obligatoriu de expediere ca la eMAG/Trendyol (regulă deja existentă, #671). Căile de auto-includere prin AWB real (citire etichetă din dosar, „📮 Alege AWB") rămân complet neatinse — AWB-ul există deja, prin definiție, când acelea rulează. Debifarea (a redeveni „Neinclus") rămâne neschimbată, fără nicio condiție. Comenzile deja incluse fără AWB dinainte de această regulă NU sunt atinse retroactiv — rămân exact cum erau, nicio scoatere din Staff fără să fie cerută explicit. Verificat de 2 ori: sintaxă (node --check, de 2 ori) + 6 verificări izolate cu Playwright, pe funcțiile reale din aplicație, cu produse reale din inventar (scrierile către bază mockuite): toggle manual blocat fără AWB + mesaj explicativ, funcționează normal cu AWB, Vinted exceptat corect, „Selectează toate" (pe platformă și global) include doar liniile cu AWB și lasă restul neincluse, debifarea unei linii fără AWB nu e afectată — zero erori JS.',date:'2026-11-16'},
   {n:700,text:'Comenzi Platforme — buton nou „👁 Vezi AWB" lângă „Schimbă AWB", cerut direct: „langa schimba AWB sa avem si vezi AWB ca la Staff si sa putem apasa pe ea". Staff are deja o miniatură a etichetei (poză făcută pe tabletă sau recuperată automat din PDF-ul sursă, #548); aici, în admin, nu există cameră — în loc de o a doua miniatură, un buton care deschide lightbox-ul deja existent în aplicație (openImgZoom, același mecanism de la poza produsului și de la etichetele din „Asociază AWB-uri"). Apare STRICT pe comenzile care chiar au o poză de etichetă salvată (`awb_preview_url`) — pe restul nu arată nimic, ca să nu sugereze fals că ar exista ceva de văzut. Câmpul exista deja în bază, dar nu era deloc citit în admin (doar scris/recuperat pe fundal) — adăugat acum la maparea DB→aplicație. Verificat de 2 ori: sintaxă (node --check, de 2 ori) + confirmare directă Playwright, cu date reale de producție: pe o comandă reală cu poză salvată, butonul apare și click-ul deschide lightbox-ul cu EXACT URL-ul corect din bază; pe o comandă reală fără poză, butonul nu apare deloc — zero erori JS.',date:'2026-11-16'},
@@ -20385,6 +20386,44 @@ function pcomPendingQtyForProduct(produsId){
   });
   return sum;
 }
+// Scădere ARTIFICIALĂ, secvențială a stocului în Comenzi Platforme — cerut direct: „in ordinea in care
+// se asociaza produs pe comanda, sa se scada artificial stocul... daca intra comanda cu acelasi produs
+// si deja avem stoc 0, sa intre fara stoc si produsul sa primeasca -1, -2 s.a.m.d.". Până acum
+// (pcomPendingQtyForProduct/#636), toate liniile ACELUIAȘI produs din lot arătau ACEEAȘI proiecție
+// finală (agregat static) — util ca să vezi CĂ depășești stocul, dar nu și CARE anume comenzi, exact,
+// rămân fără. Acum fiecare linie arată poziția ei REALĂ în coadă: stocul rămas ÎNAINTE de ea (după ce
+// comenzile mai urgente din lot și-au „prins” deja bucățile) → stocul rămas DUPĂ ea. Ordinea e după
+// termenul de expediere (cel mai apropiat întâi) — ACELAȘI criteriu de prioritate deja folosit la
+// alocarea de stoc din „Listă locală de aprovizionare" (pcomOrderReadiness), nu ordinea de pe ecran
+// (care se schimbă la fiecare filtru/sortare — „📦 Cu stoc sus” ar face ca aceleași comenzi să arate
+// cifre diferite de fiecare dată, fără niciun sens). STRICT vizual — nu atinge stocul real (qty(p)),
+// doar un calcul paralel, local, recalculat la fiecare randare; liniile deja aplicate real sau anulate
+// sunt excluse (la fel ca la #636), ca stocul lor deja scăzut să nu se numere a doua oară.
+let pcomSeqStockCache={};
+function pcomRecomputeSeqStock(){
+  pcomSeqStockCache={};
+  const byProduct={};
+  pcImpParsed.forEach((it,idx)=>{
+    if(!it.produsId)return;
+    const row=it._committedId?PCOM.find(o=>o.id===it._committedId):null;
+    if(row&&(row.efecteAplicate||row.anulata))return;
+    (byProduct[it.produsId]=byProduct[it.produsId]||[]).push(idx);
+  });
+  Object.keys(byProduct).forEach(pid=>{
+    const idxs=byProduct[pid];
+    idxs.sort((a,b)=>{
+      const ta=pcImpParsed[a].termenExpediere||'9999',tb=pcImpParsed[b].termenExpediere||'9999';
+      return ta<tb?-1:ta>tb?1:0;
+    });
+    const p=P.find(x=>x.id===Number(pid));
+    let running=p?qty(p):0;
+    idxs.forEach(idx=>{
+      const before=running;
+      running-=Number(pcImpParsed[idx].cantitate)||0;
+      pcomSeqStockCache[idx]={before,after:running};
+    });
+  });
+}
 function pcomStockWarningHtml(idx){
   const it=pcImpParsed[idx];
   if(!it.produsId)return'';
@@ -20395,14 +20434,17 @@ function pcomStockWarningHtml(idx){
   // proiecție „după vânzare" (ar scădea cantitatea a doua oară pe ecran) și nici „Amână livrarea".
   const appliedRow=it._committedId?PCOM.find(o=>o.id===it._committedId):null;
   if(appliedRow&&appliedRow.efecteAplicate&&!appliedRow.anulata)return`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:5px"><span style="font-size:21px;color:var(--t3);font-variant-numeric:tabular-nums">Stoc actual ${fmtQty(cur)} · deja scăzut pentru această comandă — poți modifica cantitatea sau produsul</span></div>`;
+  const seq=pcomSeqStockCache[idx];
+  const before=seq?seq.before:cur;
+  const after=seq?seq.after:cur-(Number(it.cantitate)||0);
+  const problem=after<=0;
+  // „deja prinse de comenzi mai urgente" — apare DOAR când stocul de dinaintea ACESTEI comenzi e deja
+  // mai mic decât stocul real din ERP, adică există cel puțin o altă comandă pe același produs, cu
+  // termen de expediere mai apropiat, înaintea ei în coadă.
+  const consumedBefore=cur-before;
   const pendingQty=pcomPendingQtyForProduct(it.produsId);
-  const proj=cur-pendingQty;
-  const problem=proj<=0;
-  // „(X buc. comandate în acest lot)" apare DOAR când suma diferă de cantitatea proprie — adică mai
-  // există cel puțin o altă linie, din acest lot, pe același produs — ca omul să înțeleagă imediat DE
-  // UNDE vine cifra, nu doar că diferă de ce s-ar aștepta uitându-se STRICT la comanda asta.
   const multiLine=pendingQty!==(Number(it.cantitate)||0);
-  const stockLbl=`<span style="font-size:21px;font-weight:${problem?700:400};color:var(${problem?'--rd':'--t3'});font-variant-numeric:tabular-nums">${problem?'⚠️ ':''}Stoc actual ${fmtQty(cur)} → după vânzare ${fmtQty(proj)}${multiLine?` <span style="font-weight:600;color:var(--t3)">(${fmtQty(pendingQty)} buc. comandate în acest lot)</span>`:''}</span>`;
+  const stockLbl=`<span style="font-size:21px;font-weight:${problem?700:400};color:var(${problem?'--rd':'--t3'});font-variant-numeric:tabular-nums">${problem?'⚠️ ':''}${before<=0?'Fără stoc':`Stoc ${fmtQty(before)}`} → după ${fmtQty(after)}${consumedBefore>0?` <span style="font-weight:600;color:var(--t3)">(${fmtQty(consumedBefore)} buc. deja «prinse» de comenzi mai urgente din lot)</span>`:(multiLine?` <span style="font-weight:600;color:var(--t3)">(${fmtQty(pendingQty)} buc. comandate în acest lot)</span>`:'')}</span>`;
   const btn=it.amanat
     ?`<button type="button" class="btn btn-sm" style="color:#16A34A;border-color:rgba(34,197,94,.35);background:rgba(34,197,94,.04);border-radius:8px;height:34px" onclick="togglePcomAmanat(${idx})">↺ Anulează amânarea</button>`
     :`<button type="button" class="btn btn-sm" style="color:#B45309;border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.05);border-radius:8px;height:34px" onclick="togglePcomAmanat(${idx})">⏳ Amână livrarea</button>`;
@@ -23700,6 +23742,9 @@ function pcxRenderOrders(){
   // „(N)”, de 251 de ori, nu o dată. AWB_ISSUES nu se schimbă în timpul UNUI singur randaj — calculăm
   // numărătoarea per platformă O SINGURĂ DATĂ aici, la începutul randării, nu per linie.
   pcomRecomputeAwbIssueCounts();
+  // Același tipar — calculăm stocul secvențial artificial O SINGURĂ DATĂ aici (vezi pcomRecomputeSeqStock),
+  // nu per linie, pentru același motiv de performanță de mai sus.
+  pcomRecomputeSeqStock();
   const q=(document.getElementById('pcx-search')?.value||'').toLowerCase().trim();
   const platF=document.getElementById('pcx-filter-platform')?.value||'all';
   const statF=document.getElementById('pcx-filter-status')?.value||'all';
