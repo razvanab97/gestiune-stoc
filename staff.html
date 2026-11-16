@@ -339,6 +339,7 @@ button{cursor:pointer}
   <div class="tabbar">
     <button class="tab-btn on" data-tab="pack" onclick="setTab('pack')"><span class="ic">📦</span>Împachetare</button>
     <button class="tab-btn" data-tab="waiting" onclick="setTab('waiting')"><span class="ic">⏸</span>În așteptare<span class="tab-badge" id="waiting-badge" style="display:none"></span></button>
+    <button class="tab-btn" data-tab="awaitawb" onclick="setTab('awaitawb')"><span class="ic">⏳</span>Așteaptă AWB<span class="tab-badge" id="awaitawb-badge" style="display:none"></span></button>
     <button class="tab-btn" data-tab="finalized" onclick="setTab('finalized')"><span class="ic">✓</span>Finalizate azi</button>
     <button class="tab-btn" data-tab="search" onclick="setTab('search')"><span class="ic">🔍</span>Căutare</button>
     <button class="tab-btn" data-tab="stock" onclick="setTab('stock')"><span class="ic">📋</span>Raport stoc</button>
@@ -596,6 +597,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:439,date:'16.11.2026',text:'Coada de împachetat arată acum DOAR comenzile care au AWB — cerut direct: „când adăugăm AWB-uri în platformă, în Staff să apară doar comenzile care au AWB-uri". O comandă eMAG/Trendyol trimisă la împachetare, dar încă fără AWB, nu mai apare la „📦 Împachetare"; trece într-un tab nou, „⏳ Așteaptă AWB" (cu badge cu numărul lor), unde se vede clar ce comenzi lipsesc. De îndată ce i se asociază AWB-ul în aplicație și apeși „↻ Reîncarcă", comanda intră automat înapoi în coada de împachetat. Nu afectează vânzările directe (n-au AWB din principiu) și nici Vinted (acolo „AWB" e un Cod opțional) — ele rămân la Împachetare, exact ca înainte. Comenzile vechi, neîmpachetate (dinaintea resetului de 22:00) rămân pe calea „În așteptare", neschimbate. Contorul de sus („X comenzi" / procentul) numără doar comenzile gata de împachetat (cu AWB), nu și pe cele care așteaptă AWB. Verificat de 2 ori: sintaxă (node --check) + 2 rulări Playwright pe server local cu comenzi controlate — eMAG/Trendyol fără AWB scoase din coadă și mutate în „Așteaptă AWB", eMAG CU AWB rămâne la împachetat, Vinted fără cod și vânzarea directă rămân la împachetat, badge-ul arată numărul corect, tabul randează lista, zero erori JS.'},
   {n:438,date:'12.10.2026',text:'Imaginile produselor — recuperate și afișate corect, raportat direct (captură: comanda #535228705, „Covoraș impermeabil din silicon", fără poză). Cauza: 42 de produse active aveau imaginea ca LINK către furnizorul Verk (verk.store), care și-a schimbat/șters pozele — linkurile întorceau 404, deci în Staff rămânea un gol (poza era ascunsă, fără nicio căsuță în loc). Recuperate toate cele 42: pagina fiecărui produs la Verk a fost regăsită după ID-ul din numele pozei, imaginea curentă a fost verificată vizual produs cu produs și salvată în stocarea PROPRIE a aplicației (/api/ai-image — stabilă, nu mai depinde de furnizor), apoi legată de produs; plus ghiozdanul Sonic (poză curată din dosarul Research). În plus, când o imagine totuși nu se poate încărca, Staff arată acum căsuța „📦" (la comanda curentă, în liste și în Raport stoc), în loc de un spațiu gol — se vede imediat că poza lipsește. Au rămas fără poză: 5 produse ARHIVATE ale căror imagini erau pe vechiul proiect Supabase (nu mai există; Urs de pluș, Set breloc, Raft depozit, Suport perie, Dozator) și 43 de produse fără nicio imagine (40 arhivate, 3 active: Globuri Set 100, Proiector laser, Saltea electrică). Verificat: URL-urile funcționale 319 → 362 din 367 externe, direct și prin proxy, iar căsuța „📦" testată pe o imagine moartă.'},
   {n:437,date:'07.10.2026',text:'„↩ Readu în Împachetare" din „În așteptare" — cerut direct (cu poză a tabletei: comanda #533427463, „Din ziua anterioară", avea doar „Finalizează coletul"). Acum orice comandă din Așteptare are butonul „↩ Readu în Împachetare": pe card (sub „Finalizează coletul"), pe fiecare rând din listă („↩ Împachetare") și, deasupra listei, „↩ Readu toate cele din ziua anterioară (N) în Împachetare" — dintr-un click (cu confirmare). Comanda devine o comandă de azi, de finalizat: o „Din ziua anterioară" primește o retrimitere explicită spre împachetare (data trimiterii = acum — nimic nu reintră singur, ca la #435); o comandă cu problemă raportată cere confirmarea că problema e rezolvată (ca „✓ Problemă rezolvată"), apoi trece în Împachetare — în bloc nu se mută niciodată comenzile cu problemă. Merge și pe vânzările directe din Jurnal. După acțiune apare „↩ Comandă readusă în Împachetare — ANULEAZĂ · 10s" (anularea readuce comanda în Așteptare, cu data și problema vechi); apăsat din card, trece pe următoarea comandă din Așteptare, apăsat din listă rămâi pe listă. Dacă o scriere eșuează la mijloc, ce se scrisese se restaurează — nu rămâne nimic pe jumătate. Verificat de 2 ori: sintaxă + 24 de teste pe funcțiile reale (inclusiv clasificarea comenzilor, undo, Jurnal, în bloc, eșec la scriere) + test în pagina reală cu scrierile interceptate — confirmat că în baza reală nu s-a atins nimic.'},
   {n:436,date:'06.10.2026',text:'„⏸ În așteptare" — navigare între comenzi, raportat direct („nu pot trece la următoarea, apare doar 1 comandă"). Cardul din „În așteptare" avea doar „← Înapoi la listă", fără „Anterioară / Următoare" ca în „Împachetare" — cu cele 5 comenzi trecute în așteptare la resetul de 22:00 se putea lucra doar una câte una, întorcându-te de fiecare dată la listă. Acum cardul are „◀ Anterioară", „☰ Lista" și „Următoare ▶" (dezactivate la capete), contorul „Comanda 2 din 5 în așteptare" și tastele ←/→ ca la Împachetare. Butonul „Înapoi" nu mai e întins pe tot cardul. După „Finalizează coletul" din Așteptare, comanda rămâne pe ecran cu „✓ Comandă finalizată" în fereastra de 10s de anulare (în loc să sară brusc în listă), iar Următoare/Anterioară merg normal de acolo. Verificat de 2 ori: sintaxă + parcurs complet 1→5 și înapoi, tastele ←/→, capetele listei și starea de după finalizare (simulată în memorie, fără scrieri în bază).'},
@@ -749,14 +751,22 @@ function computeOrders(){
     g.waiting=g.hasUnresolvedIssue||g.carried;
     g.oldDone=g.finalized&&packedMs<B;
     g.finalizedToday=g.finalized&&packedMs>=B;
+    // Cerut direct: „când adăugăm AWB-uri în platformă, în Staff să apară doar comenzile care au AWB-uri".
+    // O comandă eMAG/Trendyol trimisă la împachetare, dar încă FĂRĂ AWB, iese din coada de împachetat și
+    // intră în tabul separat „⏳ Așteaptă AWB"; de îndată ce i se asociază AWB-ul în aplicație (și Staff
+    // reîncarcă), g.awb devine completat, awaitingAwb devine false, iar comanda intră automat în coadă.
+    // Nu atinge vânzările directe (n-au AWB din principiu) și nici Vinted (acolo „AWB" e un Cod opțional) —
+    // decizie explicită a utilizatorului. Comenzile vechi fără AWB rămân pe calea „În așteptare" (carried).
+    g.awaitingAwb=(g.platforma==='emag'||g.platforma==='trendyol')&&!g.awb&&!g.finalized&&!g.hasUnresolvedIssue&&!g.carried;
   });
 }
-function packQueue(){return ORDERS.filter(o=>!o.finalized&&!o.waiting);}
+function packQueue(){return ORDERS.filter(o=>!o.finalized&&!o.waiting&&!o.awaitingAwb);}
 function waitingQueue(){return ORDERS.filter(o=>o.waiting);}
+function awaitingAwbQueue(){return ORDERS.filter(o=>o.awaitingAwb);}
 // listă completă (inclusiv comenzi deja împachetate) pt. navigare Anterioară/Următoare —
 // packQueue() se golește pe măsură ce lucrezi, așa că butonul "Anterioară" ar rămâne mereu
 // dezactivat dacă ar naviga tot peste packQueue (nu mai există "înainte" în coada care se micșorează)
-function navQueue(){return ORDERS.filter(o=>!o.waiting&&!o.oldDone);}
+function navQueue(){return ORDERS.filter(o=>!o.waiting&&!o.oldDone&&!o.awaitingAwb);}
 function finalizedTodayQueue(){return ORDERS.filter(o=>o.finalizedToday).sort((a,b)=>{
   const at=a=>a.lines.map(l=>l.impachetat_at).filter(Boolean).sort().slice(-1)[0]||'';
   return at(b).localeCompare(at(a));
@@ -785,7 +795,9 @@ function renderProgress(){
   const waitingCount=waitingQueue().length;
   // Doar „ziua de lucru" curentă (după ultimul 22:00 / „Coadă nouă"): comenzile împachetate înainte de
   // prag (oldDone) nu mai intră în contor, ca să pornească de la 0 / 0.
-  const total=ORDERS.filter(o=>!o.waiting&&!o.oldDone).length;
+  // „Așteaptă AWB" (eMAG/Trendyol fără AWB) se exclude din contorul de împachetat, exact ca „În așteptare" —
+  // nu e încă de lucru la împachetat; rămâne vizibil separat, cu propriul badge.
+  const total=ORDERS.filter(o=>!o.waiting&&!o.oldDone&&!o.awaitingAwb).length;
   const done=ORDERS.filter(o=>o.finalized&&!o.oldDone).length;
   const remaining=packQueue().length;
   document.getElementById('progress-txt').textContent=total?`${remaining} comenzi`:'Nicio comandă';
@@ -794,6 +806,9 @@ function renderProgress(){
   document.getElementById('progress-pct').textContent=`${done} / ${total} (${pct}%)`;
   const badge=document.getElementById('waiting-badge');
   if(waitingCount){badge.style.display='inline-block';badge.textContent=waitingCount;}else{badge.style.display='none';}
+  const awaitCount=awaitingAwbQueue().length;
+  const awbBadge=document.getElementById('awaitawb-badge');
+  if(awbBadge){if(awaitCount){awbBadge.style.display='inline-block';awbBadge.textContent=awaitCount;}else{awbBadge.style.display='none';}}
   const pc=prepackEligibleLines().length;
   const pbadge=document.getElementById('prepack-badge');
   if(pbadge){if(pc){pbadge.style.display='inline-block';pbadge.textContent=pc;}else{pbadge.style.display='none';}}
@@ -925,6 +940,7 @@ function renderMain(resetScroll=false){
   }
   if(activeTab==='pack')renderPackTab(host);
   else if(activeTab==='waiting')renderWaitingTab(host);
+  else if(activeTab==='awaitawb')renderAwaitAwbTab(host);
   else if(activeTab==='finalized')renderFinalizedTab(host);
   else if(activeTab==='search')renderSearchTab(host);
   else if(activeTab==='stock')renderStockTab(host);
@@ -1659,6 +1675,29 @@ async function requeueAllCarried(){
 }
 
 /* ── În așteptare ── */
+// Tabul „⏳ Așteaptă AWB" — listă read-only cu comenzile eMAG/Trendyol trimise la împachetare, dar încă
+// fără AWB (cerut direct: „în Staff să apară doar comenzile care au AWB-uri"). Nu se împachetează de aici;
+// de îndată ce li se asociază AWB-ul în aplicație și Staff reîncarcă, trec automat în Împachetare.
+function renderAwaitAwbTab(host){
+  const q=awaitingAwbQueue();
+  if(!q.length){host.innerHTML=`<div class="empty"><div class="big">✅</div><div>Toate comenzile eMAG/Trendyol au AWB — nimic în așteptarea AWB-ului.</div></div>`;return;}
+  const intro=`<div style="padding:12px 14px;margin-bottom:10px;background:var(--surf2);border:1px solid var(--b2);border-radius:12px;font-size:16px;color:var(--t3);line-height:1.4">⏳ ${q.length} ${q.length===1?'comandă eMAG/Trendyol așteaptă':'comenzi eMAG/Trendyol așteaptă'} AWB. Nu apar la Împachetare până nu li se asociază AWB-ul în aplicație — după ce asociezi AWB-urile, apasă „↻ Reîncarcă" și trec automat în coada de împachetat.</div>`;
+  host.innerHTML=intro+`<div class="search-page-list">${q.map(o=>awaitAwbListItemHtml(o)).join('')}</div>`;
+}
+function awaitAwbListItemHtml(o){
+  const l0=o.lines[0],p0=findProdus(l0.produs_id);
+  const im=p0&&p0.img?`<img class="list-item-th" src="${esc(imgSrc(p0.img))}" onerror="this.outerHTML='<div class=&quot;list-item-th-ph&quot;>📦</div>'">`:`<div class="list-item-th-ph">📦</div>`;
+  const nm=o.lines.map(x=>x.produs_nume||x.titlu_extern).filter(Boolean).join(', ');
+  const pl=o.platforma==='emag'?'eMAG':o.platforma==='trendyol'?'Trendyol':esc(o.platforma);
+  return`<div class="list-item">
+    ${im}
+    <div class="list-item-main">
+      <div class="list-item-nm">${pl}${o.comandaId?' · #'+esc(o.comandaId):''}${o.clientNume?' · '+esc(o.clientNume):''}</div>
+      <div class="list-item-issue">⏳ AWB în așteptare — ${esc(nm)}</div>
+    </div>
+    <div class="list-item-time">${o.sentAt?esc(timeAgo(o.sentAt)):''}</div>
+  </div>`;
+}
 function renderWaitingTab(host){
   const q=waitingQueue();
   if(!q.length){host.innerHTML=`<div class="empty"><div class="big">✅</div><div>Nicio comandă în așteptare.</div></div>`;return;}
