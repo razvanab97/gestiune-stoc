@@ -5265,6 +5265,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:702,text:'Comenzi Platforme — ANULAT #701 (AWB obligatoriu pentru „Inclus”/Staff), neînțelegere corectată direct: „nu asta am cerut, am cerut expres ca atunci cand selectam produsul pentru comanda sa nu devina inclus automat. automat devine cand se adauga awb. sa putem apasa inclus in continuare manual". #701 mersese prea departe, blocând și click-ul manual pe „✓ Inclus"/„✓ Selectează toate" fără AWB — exact ce omul NU a cerut. Regula corectă, acum clară și restaurată la ce era deja valabil de la #698 (neschimbat de atunci): alegerea produsului nu auto-include niciodată; devine automat „Inclus" când i se asociază un AWB real; ȘI, separat, omul tot poate apăsa manual „✓ Inclus”/„✓ Selectează toate" oricând, indiferent de AWB — trei căi distincte, nu una condiționată de alta. Verificat de 2 ori: sintaxă (node --check, de 2 ori) + 4 verificări izolate cu Playwright, cu produse reale din inventar: toggle manual și „Selectează toate" (pe platformă și global) funcționează din nou fără AWB, iar alegerea unui produs din picker tot NU auto-include (regula #698, intactă) — zero erori JS.',date:'2026-11-16'},
   {n:701,text:'Comenzi Platforme — AWB obligatoriu pentru ca o comandă să devină „✓ Inclus"/vizibilă în Staff, cerut direct, după o rundă de clarificări pe un caz real (16 comenzi deja incluse, fără AWB): „ideea e buna, dar, doar atunci cand noi selectam asta asta - inclus care duce la vizibilitatea in staff. Momentul in care se seleacteaza un produs pe comanda, nu inseamna automat ca e si inclus si trebuie s ajunga in staff". Alegerea produsului nu mai autoinclude de mult (#698) — rămânea totuși o portiță reală: click manual pe „✓ Inclus"/„✓ Selectează toate" (pe o platformă sau global) tot funcționa FĂRĂ niciun AWB, trimițând comanda direct în Staff. Acum cere explicit un AWB real pe ACESTE căi — sursa de adevăr e comanda deja scrisă în bază (nu copia locală de pe linie, care poate rămâne în urmă după o asociere ulterioară din alt picker). Nu la Vinted, unde „AWB" e de fapt „Cod", opțional, nu un pas obligatoriu de expediere ca la eMAG/Trendyol (regulă deja existentă, #671). Căile de auto-includere prin AWB real (citire etichetă din dosar, „📮 Alege AWB") rămân complet neatinse — AWB-ul există deja, prin definiție, când acelea rulează. Debifarea (a redeveni „Neinclus") rămâne neschimbată, fără nicio condiție. Comenzile deja incluse fără AWB dinainte de această regulă NU sunt atinse retroactiv — rămân exact cum erau, nicio scoatere din Staff fără să fie cerută explicit. Verificat de 2 ori: sintaxă (node --check, de 2 ori) + 6 verificări izolate cu Playwright, pe funcțiile reale din aplicație, cu produse reale din inventar (scrierile către bază mockuite): toggle manual blocat fără AWB + mesaj explicativ, funcționează normal cu AWB, Vinted exceptat corect, „Selectează toate" (pe platformă și global) include doar liniile cu AWB și lasă restul neincluse, debifarea unei linii fără AWB nu e afectată — zero erori JS.',date:'2026-11-16'},
   {n:700,text:'Comenzi Platforme — buton nou „👁 Vezi AWB" lângă „Schimbă AWB", cerut direct: „langa schimba AWB sa avem si vezi AWB ca la Staff si sa putem apasa pe ea". Staff are deja o miniatură a etichetei (poză făcută pe tabletă sau recuperată automat din PDF-ul sursă, #548); aici, în admin, nu există cameră — în loc de o a doua miniatură, un buton care deschide lightbox-ul deja existent în aplicație (openImgZoom, același mecanism de la poza produsului și de la etichetele din „Asociază AWB-uri"). Apare STRICT pe comenzile care chiar au o poză de etichetă salvată (`awb_preview_url`) — pe restul nu arată nimic, ca să nu sugereze fals că ar exista ceva de văzut. Câmpul exista deja în bază, dar nu era deloc citit în admin (doar scris/recuperat pe fundal) — adăugat acum la maparea DB→aplicație. Verificat de 2 ori: sintaxă (node --check, de 2 ori) + confirmare directă Playwright, cu date reale de producție: pe o comandă reală cu poză salvată, butonul apare și click-ul deschide lightbox-ul cu EXACT URL-ul corect din bază; pe o comandă reală fără poză, butonul nu apare deloc — zero erori JS.',date:'2026-11-16'},
   {n:699,text:'Sincronizare — bug real, grav, raportat direct cu 2 capturi: o comandă Trendyol reală (titlu „Princess Castle Kids Play Tent, Pink, 135x105cm...") afișa „În sistem: Amortizor Usa, Ajustabil...” — un produs complet neînrudit — deși PNK-ul avea deja, din august, o mapare corectă confirmată („Cort pentru copii ROTUND", verificată pe 19/19 comenzi reale deja aplicate). Cauza reală: `platforma_mapari` a crescut la 1791 rânduri, dar încărcarea (`loadSyncMappings`) nu pagina deloc — se oprea tăcut la limita implicită Supabase/PostgREST (1000 rânduri) — exact riscul deja semnalat la introducerea lui `dbGetAll` („restul tabelelor mari au același risc latent”), de data asta lovit concret. Mapările mai vechi decât cele mai noi 1000 deveneau invizibile în `SYNCM`; mai grav, verificarea „există deja o mapare pentru acest cod?” de la confirmarea unei potriviri se bazează tot pe `SYNCM` încărcat — o mapare veche invizibilă nu mai împiedica deloc crearea uneia NOI, greșite, pentru același cod (exact cum apăruse maparea greșită „Amortizor Usa”, pe 28 octombrie) — bug auto-agravant, din ce în ce mai multe mapări vechi dispărând pe măsură ce tabela creștea. Fix cod: `loadSyncMappings` paginează acum complet (`dbGetAll`), ca la `vanzari_istoric_lunar`. Fix date: verificat direct în producție — am găsit 6 coduri (PNK/cod) cu mapări confirmate CONFLICTUALE (produse diferite pentru același cod). Ștearsă direct DOAR cea din capturi (dovadă fermă — 19/19 comenzi reale deja aplicate, toate pe produsul corect). Celelalte 5 rămân NEATINSE — 2 cu potrivire clară după text/dimensiuni în titlu, 3 genuin ambigue (fără comenzi reale încă, text neconcludent) — semnalate separat utilizatorului, de confirmat înainte de orice ștergere. Verificat de 2 ori: sintaxă (node --check) + confirmare directă live (Playwright + interogări reale Supabase): SYNCM încarcă acum toate cele 1791 rânduri (nu 1000), PNK-ul din captură rezolvă corect „Cort pentru copii ROTUND” după ștergerea mapării greșite.',date:'2026-11-16'},
@@ -21368,33 +21369,15 @@ async function autoCommitConfidentPcomLines(lines,sendToStaff=false){
   for(const i of idxs)await syncPcomLineCommitState(i,sendToStaff);
   renderPcomImportPreview();
 }
-// AWB obligatoriu pentru a deveni „Inclus"/vizibil în Staff — cerut direct, după o rundă de clarificări
-// („ce se întâmplă cu cele rămase incluse fără AWB?" → „ideea e bună, dar doar atunci când NOI selectăm
-// asta — inclus care duce la vizibilitatea în Staff. Momentul în care se selectează un produs pe comandă
-// nu înseamnă automat că e și inclus și trebuie să ajungă în Staff"). Alegerea produsului NU mai
-// autoinclude de mult (vezi pickPcomProduct, #698) — rămânea totuși o portiță: click manual pe „✓
-// Inclus”/„✓ Selectează toate” tot funcționa FĂRĂ niciun AWB, trimițând comanda direct în Staff. Acum
-// cere explicit un AWB real înainte să poată deveni „Inclus" pe ACESTE căi — sursa de adevăr e comanda
-// deja scrisă în bază (PCOM), nu copia locală `it.awb`, care poate rămâne în urmă după o asociere
-// ulterioară prin alt picker (vezi associateAwbErrorToOrder, scrie direct pe PCOM, nu și pe pcImpParsed).
-// Nu la Vinted — acolo „awb" e de fapt „Cod", opțional (vezi #671/awbMissingWarn), nu un pas obligatoriu
-// de expediere ca la eMAG/Trendyol. Căile de auto-includere prin AWB real (citire etichetă, asociere
-// manuală din „📮 Alege AWB") rămân neatinse — AWB-ul există deja, prin definiție, când acelea rulează.
-// NU retroactiv: comenzile deja „Inclus" fără AWB dinainte de această regulă rămân neatinse (nicio
-// scoatere din Staff fără să fie cerută explicit).
-function pcomLineAwb(it){
-  if(!it)return'';
-  const row=it._committedId?PCOM.find(o=>o.id===it._committedId):null;
-  return(row?row.awb:it.awb)||'';
-}
-function pcomRequiresAwbToInclude(it){return it.platforma!=='vinted'&&!pcomLineAwb(it);}
+// CORECTARE (#701 anulat) — AWB obligatoriu pentru Inclus/Staff fusese o neînțelegere a cererii
+// anterioare; cerut direct, clar: „nu asta am cerut, am cerut expres ca atunci cand selectam produsul
+// pentru comanda sa nu devina inclus automat. automat devine cand se adauga awb. sa putem apasa inclus
+// in continuare manual". Regula corectă, cea deja implementată la #698 și neschimbată de atunci: alegerea
+// produsului NU auto-include (pickPcomProduct), devine automat „Inclus" când i se asociază un AWB real
+// (citire etichetă/„📮 Alege AWB"), ȘI, separat, omul tot poate apăsa manual „✓ Inclus”/„✓ Selectează
+// toate” oricând, indiferent de AWB — exact ca înainte de #701, acum revenit.
 async function togglePcomInclude(idx){
-  const it=pcImpParsed[idx];if(!it)return;
-  if(!it.include&&pcomRequiresAwbToInclude(it)){
-    toast('Are nevoie de un AWB asociat înainte să poată fi „Inclus” și trimisă în Staff — alege-l mai întâi (📮 Alege AWB)','err');
-    return;
-  }
-  it.include=!it.include;
+  pcImpParsed[idx].include=!pcImpParsed[idx].include;
   renderPcomImportPreview();
   await syncPcomLineCommitState(idx);
 }
@@ -21402,14 +21385,12 @@ async function togglePcomInclude(idx){
 // fiecare produs era greoaie. Un click include tot ce mai e neinclus DOAR din secțiunea acelei
 // platforme (nu tot importul) — fiecare linie trece prin exact același commit ca la bifarea manuală.
 async function includeAllPcomPlatform(plat){
-  const idxs=pcImpParsed.map((x,i)=>i).filter(i=>pcImpParsed[i].platforma===plat&&!pcImpParsed[i].include&&!pcomRequiresAwbToInclude(pcImpParsed[i]));
-  const skippedNoAwb=pcImpParsed.filter(x=>x.platforma===plat&&!x.include&&pcomRequiresAwbToInclude(x)).length;
-  if(!idxs.length){if(skippedNoAwb)toast(`${skippedNoAwb} ${skippedNoAwb===1?'comandă rămâne':'comenzi rămân'} neincluse — fără AWB asociat încă`,'err');return;}
+  const idxs=pcImpParsed.map((x,i)=>i).filter(i=>pcImpParsed[i].platforma===plat&&!pcImpParsed[i].include);
+  if(!idxs.length)return;
   idxs.forEach(i=>{pcImpParsed[i].include=true;});
   renderPcomImportPreview();
   for(const i of idxs)await syncPcomLineCommitState(i);
   renderPcomImportPreview();
-  if(skippedNoAwb)toast(`${idxs.length} incluse ✓ · ${skippedNoAwb} rămase neincluse — fără AWB asociat încă`);
 }
 // Debifare în bloc a tuturor liniilor „✓ Inclus” (cerut direct) — oglinda lui includeAllPcom. Debifarea unei
 // linii deja create ȘTERGE comanda din bază (uncommitPcomLine) ⇒ iese și din Staff, deci în bloc trebuie
@@ -21458,15 +21439,14 @@ async function excludeAllPcom(){
 async function includeAllPcom(){
   const idxs=pcImpParsed.map((it,i)=>i).filter(i=>{
     const it=pcImpParsed[i];
-    return!!it.produsId&&!it.include&&!it.amanat&&!pcomRequiresAwbToInclude(it);
+    return!!it.produsId&&!it.include&&!it.amanat;
   });
-  const skippedNoAwb=pcImpParsed.filter(it=>it.produsId&&!it.include&&!it.amanat&&pcomRequiresAwbToInclude(it)).length;
-  if(!idxs.length){toast(skippedNoAwb?`${skippedNoAwb} ${skippedNoAwb===1?'comandă are':'comenzi au'} produs ales, dar fără AWB asociat încă — nu pot fi incluse`:'Nu există comenzi asociate rămase de selectat','err');return;}
+  if(!idxs.length){toast('Nu există comenzi asociate rămase de selectat');return;}
   idxs.forEach(i=>{pcImpParsed[i].include=true;});
   renderPcomImportPreview();
   for(const i of idxs)await syncPcomLineCommitState(i);
   renderPcomImportPreview();
-  toast(`${idxs.length} ${idxs.length===1?'comandă selectată':'comenzi selectate'} ✓${skippedNoAwb?` · ${skippedNoAwb} rămase neincluse — fără AWB`:''}`);
+  toast(`${idxs.length} ${idxs.length===1?'comandă selectată':'comenzi selectate'} ✓`);
 }
 
 // „▶️ Rulează rutina zilnică" (grill-me: .tmp/grill-me/logica-comenzi-platforme-zilnic.md) — un singur
