@@ -5265,6 +5265,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:705,text:'Comenzi Platforme — „Aplică import" mai complet, 3 recomandări proprii cerute direct („hai 1, 2 si 3"), după reparația de la #704: (1) confirmare cu rezumat ÎNAINTE de aplicarea în masă — arată exact ce se va scădea (produs, cantitate, nr. comenzi), agregat pe produs, nu pe linie, ultima șansă de a prinde o potrivire greșită de produs (ex. tipul de incident „cort"/„Amortizor Usa" din sesiune) înainte să se scadă stocul real; (2) o linie care eșuează la aplicare arată ACUM, direct pe card, motivul exact al eșecului + un buton „🔁 Reîncearcă" — până acum motivul ajungea DOAR în consola browserului, invizibil, chiar dacă linia rămânea corect vizibilă; (3) card nou „↺ Aplicate acum" — permite anularea unei aplicări DEJA făcute (stoc, Jurnal, „Vânzări azi" revin exact ca înainte, comanda revine neaplicată, gata de corectat produsul greșit și reaplicat), scopat intenționat STRICT la liniile aplicate în sesiunea curentă (se pierde la reîncărcare) — pentru o aplicare mai veche, ziua exactă scrisă în Jurnal nu mai poate fi determinată sigur, rămâne corecție manuală ca până acum. Verificat de 2 ori: sintaxă (node --check, de 2 ori) + 5 verificări izolate cu Playwright, produse sintetice: confirmarea arată corect produsul/cantitatea și Cancel chiar oprește aplicarea (stoc neschimbat), accept continuă normal; o linie eșuată (eroare simulată) arată mesajul pe card și se reaplică cu succes la reîncercare; „↺ Anulează aplicarea" readuce stocul, Jurnalul și Vânzările azi EXACT la 0 și linia înapoi, neaplicată — zero erori JS, rulat de 2 ori.',date:'2026-11-16'},
   {n:704,text:'Comenzi Platforme — bug GRAV reparat, găsit chiar la cererea „revizuiește și explică-mi cum funcționează Aplică import, am impresia că face ceva greșit": o comandă anulată prin „🚫 Anulează" (sau din problemele raportate de Staff) PROMITE explicit în dialog „Rămâne vizibil aici, dar dispare din coada Staff. Nu atinge stocul" — dar anularea nu scotea linia și din starea „✓ Inclus" a previzualizării, iar „Aplică import"/„✓ Aplică tot" nu verifica NICIODATĂ dacă o linie era anulată, doar dacă era „Inclus". Rezultat confirmat printr-un test izolat, cu produs sintetic: anulezi o comandă deja inclusă → apeși „Aplică import" → stocul SE SCADE REAL pentru ea, exact opusul mesajului din dialog. Reparat în 2 locuri: (1) anularea (anuleazaLiniePlatforma, folosită de ambele butoane de anulare) debifează automat „Inclus" pe linie, la fel cum se face deja la o comandă anulată redescoperită la reimport; (2) gardă suplimentară, defensivă, direct în applyPcomImport — refuză să aplice orice linie a cărei comandă e deja anulată în bază, indiferent cum a rămas „Inclus" (acoperă și o previzualizare locală veche, salvată în browser ÎNAINTE de acest fix, cu o comandă deja anulată rămasă contaminată „Inclus"); (3) dacă garda de la (2) chiar prinde o astfel de linie, acum apare EXPLICIT în mesajul de la final („⚠ N ignorate — anulate anterior"), nu dispare tăcut, ca omul să vadă clar că ceva a fost oprit intenționat, nu că butonul n-a făcut nimic. Verificat de 2 ori: sintaxă (node --check, de 2 ori) + 3 verificări izolate cu Playwright, produse sintetice, fără risc pe producție: reproducerea exactă a bugului (acum stocul NU se mai scade), un draft „vechi" contaminat (Inclus+anulat direct, fără să treacă prin anulare în sesiunea curentă) e oprit la fel ȘI apare în mesaj, și o comandă normală, neanulată, se aplică exact ca înainte (stoc scăzut, linie scoasă din previzualizare) — zero erori JS, rulat de 2 ori.',date:'2026-11-16'},
   {n:703,text:'Comenzi Platforme — avertismentul de stoc de pe fiecare linie devine SECVENȚIAL, nu doar un agregat static, cerut direct: „in ordinea in care se asociaza produs pe comanda, sa se scada artificial stocul in sectiunea comenzi platforme. astfel incat, daca intra comanda cu acelasi produs si deja avem stoc 0, sa intre fara stoc si produsul sa primeasca -1, -2 s a m d". Până acum (#636), toate comenzile pe același produs, din tot lotul, arătau ACEEAȘI proiecție finală (agregat) — util ca să vezi CĂ depășești stocul, dar nu și CARE anume comenzi rămân efectiv fără. Acum fiecare comandă arată poziția ei reală în coadă: stocul rămas ÎNAINTE de ea (după ce comenzile mai urgente din lot și-au „prins" deja bucățile) → stocul rămas DUPĂ — exact exemplul cerut: stoc 0, 3 comenzi pe același produs → prima arată „Fără stoc → după -1", a doua „→ după -2", a treia „→ după -3". Ordinea e după termenul de expediere (cel mai apropiat întâi), NU ordinea de pe ecran — același criteriu de prioritate deja folosit la alocarea de stoc din „Listă locală de aprovizionare" (pcomOrderReadiness) — altfel butonul „📦 Cu stoc sus"/filtrele ar fi schimbat cifrele fără niciun sens, de fiecare dată când le apeși. Strict vizual — nu atinge stocul real, doar un calcul paralel recalculat la fiecare randare; liniile deja aplicate real sau anulate rămân excluse, ca stocul lor deja scăzut să nu se numere a doua oară. Verificat de 2 ori: sintaxă (node --check, de 2 ori) + verificări izolate cu Playwright, cu produse sintetice de test (fără risc pe producție): EXACT scenariul din cerere (stoc 0, 3 comenzi, termene diferite, -1/-2/-3 în ordinea deadline-ului, nu a ordinii brute din listă), stoc sănătos afișat normal, o linie deja aplicată nu „fură" stoc a doua oară de la celelalte — plus regresie cu 50 de comenzi reale de producție, randate fără nicio eroare.',date:'2026-11-16'},
   {n:702,text:'Comenzi Platforme — ANULAT #701 (AWB obligatoriu pentru „Inclus”/Staff), neînțelegere corectată direct: „nu asta am cerut, am cerut expres ca atunci cand selectam produsul pentru comanda sa nu devina inclus automat. automat devine cand se adauga awb. sa putem apasa inclus in continuare manual". #701 mersese prea departe, blocând și click-ul manual pe „✓ Inclus"/„✓ Selectează toate" fără AWB — exact ce omul NU a cerut. Regula corectă, acum clară și restaurată la ce era deja valabil de la #698 (neschimbat de atunci): alegerea produsului nu auto-include niciodată; devine automat „Inclus" când i se asociază un AWB real; ȘI, separat, omul tot poate apăsa manual „✓ Inclus”/„✓ Selectează toate" oricând, indiferent de AWB — trei căi distincte, nu una condiționată de alta. Verificat de 2 ori: sintaxă (node --check, de 2 ori) + 4 verificări izolate cu Playwright, cu produse reale din inventar: toggle manual și „Selectează toate" (pe platformă și global) funcționează din nou fără AWB, iar alegerea unui produs din picker tot NU auto-include (regula #698, intactă) — zero erori JS.',date:'2026-11-16'},
@@ -20434,6 +20435,50 @@ function pcomRecomputeSeqStock(){
     });
   });
 }
+// „↺ Anulează aplicarea" — cerut direct: „cum facem mai corect și complet acest import cand se apasa".
+// Scopat INTENȚIONAT doar la liniile aplicate ÎN SESIUNEA CURENTĂ (nu persistă, se pierde la reîncărcare)
+// — altfel, pentru o comandă aplicată cu zile în urmă, nu există nicio cale sigură de a ști retroactiv
+// exact ce zi a scris saveJurnalEntry/saveTodaySale (acelea scriu mereu pe td() DE LA MOMENTUL aplicării,
+// nu pe data comenzii — vezi comentariul de la saveJurnalEntry), deci o corectare greșită de Jurnal ar
+// risca să atingă ziua GREȘITĂ. Pentru o aplicare mai veche, corectarea rămâne manuală, ca până acum.
+let pcomRecentApplies={};
+function dismissRecentApplies(){pcomRecentApplies={};renderRecentAppliesCard();}
+// Reface exact ce a scris applyPcomImport pentru O SINGURĂ linie: stoc, ecoul din Jurnal (reverseJurnalEcho,
+// deja folosit la fel de deletePcomBatch) și „Vânzări azi" — apoi readuce comanda în previzualizare,
+// neaplicată, gata de corectat (ex. produs greșit potrivit) și reaplicat, sau anulată normal.
+async function revertAppliedPcomLine(id){
+  const row=PCOM.find(o=>o.id===id);
+  const rec=pcomRecentApplies[id];
+  if(!row||!rec)return;
+  if(!confirm(`Anulezi aplicarea pentru „${row.produsNume||row.titluExtern||'acest produs'}" (${fmtQty(rec.cantitate)} buc.)? Stocul, Jurnalul și „Vânzări azi" revin la valoarea de ÎNAINTE de „Aplică import" — comanda rămâne, neaplicată, ca să poți corecta produsul/cantitatea și reaplica, sau anula normal.`))return;
+  if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
+  try{
+    const p=P.find(x=>x.id===rec.produsId);
+    if(p){
+      p.sold=Math.max(0,(p.sold||0)-rec.cantitate);
+      await dbPatch(`produse?id=eq.${p.id}`,{sold:p.sold});
+    }
+    await reverseJurnalEcho(rec.produsId,rec.day,rec.cantitate);
+    await dbPatch(`platforma_comenzi?id=eq.${id}`,{efecte_aplicate:false});
+    row.efecteAplicate=false;
+    delete pcomRecentApplies[id];
+    await logMove('in',p?p.name:(row.produsNume||'produs'),rec.cantitate,`Revenire „Aplică import" (comandă ${row.comandaId||'—'}) — aplicare anulată manual`,p?p.id:row.produsId);
+    if(!pcImpParsed.some(x=>x._committedId===id))pcImpParsed.push(pcomLineFromCommittedOrder(row));
+    renderPcomImportPreview();renderPcomImportHistory();renderTable();renderToday();renderDashboard();
+    toast('↺ Aplicarea a fost anulată — comanda e înapoi, neaplicată, deasupra în previzualizare');
+  }catch(e){toast('Nu am putut anula aplicarea: '+(e.message||e),'err');}
+}
+function renderRecentAppliesCard(){
+  const card=document.getElementById('pcx-recent-applies-card'),list=document.getElementById('pcx-recent-applies-list');
+  if(!card||!list)return;
+  const ids=Object.keys(pcomRecentApplies).filter(id=>{const o=PCOM.find(x=>x.id===Number(id));return o&&o.efecteAplicate&&!o.anulata;});
+  card.style.display=ids.length?'':'none';
+  if(!ids.length){list.innerHTML='';return;}
+  list.innerHTML=ids.map(id=>{
+    const rec=pcomRecentApplies[id],row=PCOM.find(o=>o.id===Number(id));
+    return`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${esc(rec.produsNume)}</strong> <span style="color:var(--t3);font-family:var(--mono)">· ${esc(pcomPlatLabel(rec.platforma))}${rec.comandaId?' #'+esc(rec.comandaId):''}</span><div class="jp-meta">${fmtQty(rec.cantitate)} buc.${row?.awb?' · 📮 '+esc(row.awb):''}</div></div><button type="button" class="btn btn-sm" style="color:var(--rd);border-color:var(--rd)" onclick="revertAppliedPcomLine(${id})">↺ Anulează aplicarea</button></div>`;
+  }).join('')+`<button type="button" class="btn btn-sm" style="margin-top:8px" onclick="dismissRecentApplies()">✕ Închide — nu mai anulez nimic din astea</button>`;
+}
 function pcomStockWarningHtml(idx){
   const it=pcImpParsed[idx];
   if(!it.produsId)return'';
@@ -22956,6 +23001,10 @@ function pcxLineHtml(idx,groupIdxs){
   // Comandă regăsită la reimport, dar anulată anterior (vezi pcomApiImportGate) — nu revine automat
   // „Inclus" (ar contrazice tăcut motivul notat), doar vizibilă, cu opțiunea explicită de reconsiderare.
   const reconsiderNote=it._cancelledId?`<div style="color:var(--rd);font-weight:700;font-size:15px;margin-top:2px">🚫 A fost anulată anterior${it._cancelledMotiv?': '+esc(it._cancelledMotiv):''} <button type="button" class="pcx-btn" style="padding:1px 8px;font-size:14px" onclick="reconsiderPcomLine(${idx})">↺ Reconsideră</button></div>`:'';
+  // Vizibil direct pe card, cerut direct — până acum, motivul exact al unui eșec la „Aplică import"
+  // ajungea DOAR în consola browserului (console.warn), invizibil; linia rămânea pe ecran (deja corect),
+  // dar fără nicio explicație despre CE anume a eșuat sau cum se repară.
+  const applyErrorNote=it._applyError?`<div style="color:var(--rd);font-weight:700;font-size:15px;margin-top:2px">⚠️ Nu s-a aplicat: ${esc(it._applyError)} <button type="button" class="pcx-btn" style="padding:1px 8px;font-size:14px" onclick="applyPcomImport()">🔁 Reîncearcă</button></div>`:'';
   const includeBtn=it._committing
     ?`<span class="pcx-order-status pending">⏳ ...</span>`
     :`<button type="button" class="pcx-order-status pcx-include-btn ${it.include?'included':'pending'}" onclick="togglePcomInclude(${idx})" title="${it.include?'Comandă creată, vizibilă în Staff — click pentru a anula':'Click pentru a confirma — scrie comanda și apare imediat în Staff'}">${it.include?'✓ Inclus':'Neinclus'}</button>`;
@@ -22984,6 +23033,7 @@ function pcxLineHtml(idx,groupIdxs){
       ${committedNote}
       ${issueNote}
       ${reconsiderNote}
+      ${applyErrorNote}
     </div>
     ${hasFin?`<div class="pcx-line-fin">${financialHtml}${stockHtml}</div>`:''}
     <div class="pcx-line-actions">
@@ -23744,6 +23794,7 @@ function pcxGroupHasAwb(idxs){return!!pcxGroupAwb(idxs);}
 function pcxRenderOrders(){
   renderCancelledPcomList();
   renderStaleStaffOrdersCard();
+  renderRecentAppliesCard();
   const host=document.getElementById('pcx-orders-list');if(!host)return;
   pcomComputeGroups();
   // Bug real de performanță, raportat direct („de ce merge usor greu platforma?"), găsit cu o măsurare
@@ -23941,6 +23992,11 @@ function renderPcomRedesign(){
           <button type="button" class="pcx-btn" onclick="searchPcomReactivate()">🔍 Caută</button>
         </div>
         <div id="pcom-reactivate-results"></div>
+      </div>
+      <div class="pcx-card pcx-card-compact" id="pcx-recent-applies-card" style="display:none">
+        <div class="pcx-card-title">↺ Aplicate acum — de anulat dacă e o greșeală</div>
+        <div style="font-size:16px;color:var(--t3);margin:4px 0 8px">Comenzi al căror stoc a fost chiar scăzut, în ultimele minute, în sesiunea curentă (se pierde la reîncărcarea paginii). Dacă vreuna a fost aplicată din greșeală (ex. produs greșit potrivit), o poți anula aici — stocul, Jurnalul și „Vânzări azi" revin exact ca înainte.</div>
+        <div id="pcx-recent-applies-list"></div>
       </div>
       <div class="pcx-card pcx-card-compact" id="pcx-stale-staff-card" style="display:none">
         <div class="pcx-card-title">🕓 Comenzi rămase în urmă din Staff</div>
@@ -24312,6 +24368,24 @@ async function applyPcomImport(){
     if(amanateCount||newProductCount||unmatchedCount||cancelledSkippedCount)toast(`Nimic de aplicat acum${amanateCount?` · ${amanateCount} amânate`:''}${newProductCount?` · ${newProductCount} produse noi de adăugat mai întâi`:''}${unmatchedCount?` · ${unmatchedCount} linii fără produs — alege manual mai jos`:''}${cancelledSkippedCount?` · ⚠ ${cancelledSkippedCount} ignorate — anulate anterior`:''}`);
     return;
   }
+  // Confirmare cu rezumat înainte de aplicarea în masă, cerut direct — ultima șansă de a prinde o
+  // potrivire greșită de produs ÎNAINTE să se scadă stocul real (vezi incidentul real din sesiune: „cort"
+  // potrivit greșit cu „Amortizor Usa", nescăzut la timp fiindcă nimic nu arăta un rezumat înainte de
+  // aplicare). Agregat pe produs (nu o linie pe comandă) — mult mai scurt și mai relevant la loturi mari,
+  // unde același produs apare pe multe comenzi deodată.
+  const byProdSummary=new Map();
+  toApply.forEach(x=>{
+    const cur=byProdSummary.get(x.produsId)||{name:(P.find(p=>p.id===x.produsId)||{}).name||'?',qty:0,orders:0};
+    cur.qty+=Number(x.cantitate)||0;cur.orders++;
+    byProdSummary.set(x.produsId,cur);
+  });
+  const prodLines=[...byProdSummary.values()].sort((a,b)=>b.qty-a.qty);
+  const totalQty=prodLines.reduce((s,x)=>s+x.qty,0);
+  const MAXSHOW=15;
+  const prodListTxt=prodLines.slice(0,MAXSHOW).map(x=>`• ${x.name} — ${fmtQty(x.qty)} buc. (${x.orders} ${x.orders===1?'comandă':'comenzi'})`).join('\n')
+    +(prodLines.length>MAXSHOW?`\n… și încă ${prodLines.length-MAXSHOW} produse`:'');
+  if(!confirm(`Aplici stocul pentru ${toApply.length} ${toApply.length===1?'comandă':'comenzi'} · ${prodLines.length} produse · ${fmtQty(totalQty)} buc. total:\n\n${prodListTxt}\n\nContinui?`))return;
+  const applyDay=td();
   // Bug real raportat direct („apăs pe Aplică import și nu merge"): butonul VIZIBIL în redesign
   // (#pcx-apply-btn, activ implicit — USE_PCOM_REDESIGN=true) nu primea NICIUN feedback la click —
   // codul actualiza doar butonul vechi, ascuns (#pcmi-apply-btn, display:none), care există în DOM dar
@@ -24332,6 +24406,11 @@ async function applyPcomImport(){
       // conține și eMAG și Trendyol) — cu fallback pe selecția globală pentru previzualizări vechi,
       // salvate local înainte de acest câmp.
       const platforma=it.platforma||pcImpPlatforma;
+      // Șters la ÎNCEPUTUL fiecărei tentative, nu doar la succes — altfel o eroare veche, deja afișată
+      // pe card, ar rămâne vizibilă la nesfârșit, inclusiv după ce linia chiar se aplică cu succes mai
+      // târziu (comportament corect doar fiindcă linia e scoasă din pcImpParsed la succes — dar mai jos,
+      // la eșec, trebuie mereu rescrisă curat, nu adăugată la una veche).
+      delete it._applyError;
       try{
         // Linia a fost deja scrisă în bază la click pe „✓ Inclus” (vezi commitPcomLine) — aici mai
         // rămâne DOAR partea de stoc/Jurnal/activitate, nu se mai inserează comanda a doua oară.
@@ -24339,6 +24418,10 @@ async function applyPcomImport(){
         // DUPĂ ce stocul/Jurnalul chiar se scriu mai jos (nu înainte — dacă scrierea eșuează, rândul
         // trebuie să rămână marcat ca neaplicat, ca să poată fi reîncercat corect mai târziu).
         let markAppliedId=it._committedId||null;
+        // Separat de markAppliedId (care controlează fluxul de mai sus) — ține minte DOAR id-ul rândului
+        // ca să poată fi oferit „↺ Anulează aplicarea" (pcomRecentApplies) dacă linia chiar se aplică cu
+        // succes mai jos; nu influențează nicio decizie din restul funcției.
+        let appliedRowId=it._committedId||null;
         if(!it._committedId){
           const totalRon=pcomToRon(it.pretTotalCuTva,it.moneda);
           const fin=pcomSaleFinancials(p,it,platforma);
@@ -24369,9 +24452,10 @@ async function applyPcomImport(){
               }catch(e){/* migrarea coloanei efecte_aplicate nu a rulat încă — tratăm conservator mai jos */}
               if(!ex||ex.efecte_aplicate!==false){ok++;succeeded.add(it);continue;}
               markAppliedId=ex.id;
+              appliedRowId=ex.id;
             }else throw errInsert;
           }
-          if(inserted?.[0])PCOM.unshift(dbToPcom(inserted[0]));
+          if(inserted?.[0]){PCOM.unshift(dbToPcom(inserted[0]));appliedRowId=inserted[0].id;}
           // memorează asocierea, pe două fire în paralel — cod (PNK/cod de bare) ȘI titlu exact — într-un
           // try separat de restul liniei: dacă tabela platforma_mapari nu are încă rulată migrarea coloanei
           // "tara", nu trebuie ca asta să anuleze comanda+stocul deja salvate. Al doilea fir (titlu) contează
@@ -24446,10 +24530,21 @@ async function applyPcomImport(){
         // propriul rând din platforma_comenzi (vezi comentariul de la saveJurnalEntry) — nu o vânzare
         // directă nouă, separată.
         await saveJurnalEntry(p,it.cantitate,false);
+        // Fereastră de revenire, cerut direct: „cum facem mai corect și complet acest import" — permite
+        // „↺ Anulează aplicarea" (revertAppliedPcomLine) DOAR pentru liniile aplicate ACUM, în sesiunea
+        // curentă (vezi renderRecentAppliesCard) — ziua reținută aici e cea folosită deja mai sus de
+        // saveJurnalEntry/saveTodaySale (td() la momentul apăsării, nu la momentul revenirii), ca
+        // reversul să corecteze exact rândul de Jurnal/Vânzări azi scris cu adevărat, indiferent cât de
+        // târziu în sesiune se apasă „Anulează aplicarea".
+        if(appliedRowId)pcomRecentApplies[appliedRowId]={produsId:p.id,produsNume:p.name,cantitate:it.cantitate,platforma,comandaId:it.comandaId,day:applyDay};
         ok++;
         succeeded.add(it);
       }catch(errLine){
         console.warn('Linie import comenzi eșuată:',it,errLine);
+        // Vizibil direct pe card (vezi pcxLineHtml/applyErrorNote), cerut direct — până acum motivul exact
+        // ajungea DOAR în consola browserului, invizibil; linia rămânea pe ecran (deja corect, nu se
+        // pierde), dar fără nicio explicație despre CE anume a eșuat sau cum se repară.
+        it._applyError=String(errLine?.message||errLine||'Eroare necunoscută');
         failed++;
       }
     }
