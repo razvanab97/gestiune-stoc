@@ -3559,6 +3559,20 @@ button.pcx-include-btn.included{border-color:var(--gr)}
   </div>
   <section class="dash-attention" id="dash-attention"></section>
 
+  <!-- „Comenzi furnizor pe drum", cerut direct — vrea cel mai vizibil loc posibil, primul lucru văzut
+       la logare: „stiu ca avem ceva de genul in platforma... verifica si spune mi cum sa facem sa fie
+       cat mai simplu". Până acum trăia doar ca un cărticel mic, ascuns în Raport stoc (#rpt-furnizor-card)
+       — mult prea departe de prima vedere ca să fie de folos zilnic. Secțiune ÎNTOTDEAUNA vizibilă
+       (nu se ascunde la 0 comenzi active) — cu „+ Comandă nouă" chiar aici, ca să nu mai fie nevoie să
+       navighezi până în Inventar doar ca să adaugi o comandă.-->
+  <section class="tb dash-section" id="dash-furnizor-section">
+    <div class="tb-head">
+      <div><div class="tb-title">📥 Comenzi furnizor — pe drum</div><div class="sr-section-sub" style="margin:2px 0 0">Marfă comandată, încă neajunsă — nu atinge stocul. Termen automat 7 zile.</div></div>
+      <button type="button" class="btn btn-sm btn-acc" onclick="openFurnizorComanda()">+ Comandă nouă</button>
+    </div>
+    <div id="dash-furnizor-list"></div>
+  </section>
+
   <!-- Reorganizare pe ZONE logice (cerut direct, de 2 ori: „vreau sa vad redesign cu sectiunile, asezate
        alfel... mai logic, mai usor de urmarit") — aceleași 6 secțiuni, NICIUN id schimbat (randarea JS
        țintește strict id-ul, nu poziția în pagină, deci mutarea e 100% sigură), doar ordinea + etichete
@@ -5099,8 +5113,9 @@ poza principală a produsului — orice apel openImgZoom(src) deschide aceeași 
         <button type="button" class="btn btn-sm" style="margin-top:6px" onclick="parseFurnizorPastedText()">🤖 Extrage din text</button>
       </div>
       <div class="fld" style="flex:0 0 auto">
-        <label>sau încarcă poze (screenshot-uri)</label>
-        <input type="file" id="cf-file" accept="image/*" multiple onchange="handleFurnizorFiles(event)">
+        <label>sau încarcă poze/factura (PDF)</label>
+        <input type="file" id="cf-file" accept="image/*,application/pdf" multiple onchange="handleFurnizorFiles(event)">
+        <div id="cf-invoice-files"></div>
       </div>
     </div>
     <div id="cf-parsing" style="display:none;font-size:20px;color:var(--t3);margin:10px 0"><span class="spin"></span> Se analizează cu AI…</div>
@@ -5265,6 +5280,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:706,text:'Dashboard — card nou „📥 Comenzi furnizor — pe drum", cerut direct: „stiu ca avem ceva de genul in platforma, dar verifica si spune mi cum sa facem sa fie cat mai simplu". Mecanismul (tabela comenzi_furnizor) exista deja, dar trăia doar ca un cărticel mic, ascuns în Raport stoc — mult prea departe de prima vedere ca să fie de folos zilnic. Acum e PRIMUL lucru vizibil la logare (chiar sub „Necesită atenție"), rămâne afișat și la 0 comenzi active (cu îndemn clar de adăugare), și sortează automat cea mai urgentă comandă primul (termen depășit > termen cel mai apropiat). Trei completări concrete cerute: (1) „adăugăm produsele" — rămâne exact fluxul deja existent (AI din text/poză, picker manual, „produs nou"), doar mult mai vizibil, cu buton „+ Comandă nouă" direct pe card; (2) „adăugăm facturile dacă le avem deja" — gol real găsit verificând: încărcarea accepta DOAR poze, iar fișierul însuși nu se salva nicăieri (folosit o dată la extragere AI, apoi pierdut) — acum accepă și PDF (extragere text, aceeași tehnică deja folosită la facturile din Inventar) ȘI salvează fișierul original (Storage, bucket nou) — „📄 Vezi factura" direct pe card, oricând mai târziu; (3) termen „aprox. 1 săptămână" + ce se întâmplă la expirare — deja implementat corect (7 zile de la data estimativă sau de la plasare, marcare automată „⛔ nu a ajuns"), confirmat să rămână AȘA, nu ștergere automată (o comandă cu bani reali în ea nu trebuie să dispară tăcut) — acum vizibil și countdown-ul („⏳ mai ai Nz") înainte de expirare, nu doar flag-ul roșu după. Migrare SQL + bucket Storage necesare, date în chat (nu scrise ca fișier nou în repo, convenție deja stabilită). Verificat de 2 ori: sintaxă (node --check, de 2 ori) + 7 verificări izolate cu Playwright: matematica termenului (prioritate dată estimativă, 7 zile corect), card gol cu îndemn, 3 comenzi cu sortare/badge-uri/factură corecte, „Vezi factura" (PDF→tab nou, poză→lightbox), degradare grațioasă dacă migrarea coloanei „facturi" nu a rulat încă (reîncercare automată, fără ea), extragere PDF reală (text simulat → AI → produs parsat corect, fișier original „salvat"), navigare din clopoțel spre Dashboard — zero erori JS, rulat de 2 ori.',date:'2026-11-17'},
   {n:705,text:'Comenzi Platforme — „Aplică import" mai complet, 3 recomandări proprii cerute direct („hai 1, 2 si 3"), după reparația de la #704: (1) confirmare cu rezumat ÎNAINTE de aplicarea în masă — arată exact ce se va scădea (produs, cantitate, nr. comenzi), agregat pe produs, nu pe linie, ultima șansă de a prinde o potrivire greșită de produs (ex. tipul de incident „cort"/„Amortizor Usa" din sesiune) înainte să se scadă stocul real; (2) o linie care eșuează la aplicare arată ACUM, direct pe card, motivul exact al eșecului + un buton „🔁 Reîncearcă" — până acum motivul ajungea DOAR în consola browserului, invizibil, chiar dacă linia rămânea corect vizibilă; (3) card nou „↺ Aplicate acum" — permite anularea unei aplicări DEJA făcute (stoc, Jurnal, „Vânzări azi" revin exact ca înainte, comanda revine neaplicată, gata de corectat produsul greșit și reaplicat), scopat intenționat STRICT la liniile aplicate în sesiunea curentă (se pierde la reîncărcare) — pentru o aplicare mai veche, ziua exactă scrisă în Jurnal nu mai poate fi determinată sigur, rămâne corecție manuală ca până acum. Verificat de 2 ori: sintaxă (node --check, de 2 ori) + 5 verificări izolate cu Playwright, produse sintetice: confirmarea arată corect produsul/cantitatea și Cancel chiar oprește aplicarea (stoc neschimbat), accept continuă normal; o linie eșuată (eroare simulată) arată mesajul pe card și se reaplică cu succes la reîncercare; „↺ Anulează aplicarea" readuce stocul, Jurnalul și Vânzările azi EXACT la 0 și linia înapoi, neaplicată — zero erori JS, rulat de 2 ori.',date:'2026-11-16'},
   {n:704,text:'Comenzi Platforme — bug GRAV reparat, găsit chiar la cererea „revizuiește și explică-mi cum funcționează Aplică import, am impresia că face ceva greșit": o comandă anulată prin „🚫 Anulează" (sau din problemele raportate de Staff) PROMITE explicit în dialog „Rămâne vizibil aici, dar dispare din coada Staff. Nu atinge stocul" — dar anularea nu scotea linia și din starea „✓ Inclus" a previzualizării, iar „Aplică import"/„✓ Aplică tot" nu verifica NICIODATĂ dacă o linie era anulată, doar dacă era „Inclus". Rezultat confirmat printr-un test izolat, cu produs sintetic: anulezi o comandă deja inclusă → apeși „Aplică import" → stocul SE SCADE REAL pentru ea, exact opusul mesajului din dialog. Reparat în 2 locuri: (1) anularea (anuleazaLiniePlatforma, folosită de ambele butoane de anulare) debifează automat „Inclus" pe linie, la fel cum se face deja la o comandă anulată redescoperită la reimport; (2) gardă suplimentară, defensivă, direct în applyPcomImport — refuză să aplice orice linie a cărei comandă e deja anulată în bază, indiferent cum a rămas „Inclus" (acoperă și o previzualizare locală veche, salvată în browser ÎNAINTE de acest fix, cu o comandă deja anulată rămasă contaminată „Inclus"); (3) dacă garda de la (2) chiar prinde o astfel de linie, acum apare EXPLICIT în mesajul de la final („⚠ N ignorate — anulate anterior"), nu dispare tăcut, ca omul să vadă clar că ceva a fost oprit intenționat, nu că butonul n-a făcut nimic. Verificat de 2 ori: sintaxă (node --check, de 2 ori) + 3 verificări izolate cu Playwright, produse sintetice, fără risc pe producție: reproducerea exactă a bugului (acum stocul NU se mai scade), un draft „vechi" contaminat (Inclus+anulat direct, fără să treacă prin anulare în sesiunea curentă) e oprit la fel ȘI apare în mesaj, și o comandă normală, neanulată, se aplică exact ca înainte (stoc scăzut, linie scoasă din previzualizare) — zero erori JS, rulat de 2 ori.',date:'2026-11-16'},
   {n:703,text:'Comenzi Platforme — avertismentul de stoc de pe fiecare linie devine SECVENȚIAL, nu doar un agregat static, cerut direct: „in ordinea in care se asociaza produs pe comanda, sa se scada artificial stocul in sectiunea comenzi platforme. astfel incat, daca intra comanda cu acelasi produs si deja avem stoc 0, sa intre fara stoc si produsul sa primeasca -1, -2 s a m d". Până acum (#636), toate comenzile pe același produs, din tot lotul, arătau ACEEAȘI proiecție finală (agregat) — util ca să vezi CĂ depășești stocul, dar nu și CARE anume comenzi rămân efectiv fără. Acum fiecare comandă arată poziția ei reală în coadă: stocul rămas ÎNAINTE de ea (după ce comenzile mai urgente din lot și-au „prins" deja bucățile) → stocul rămas DUPĂ — exact exemplul cerut: stoc 0, 3 comenzi pe același produs → prima arată „Fără stoc → după -1", a doua „→ după -2", a treia „→ după -3". Ordinea e după termenul de expediere (cel mai apropiat întâi), NU ordinea de pe ecran — același criteriu de prioritate deja folosit la alocarea de stoc din „Listă locală de aprovizionare" (pcomOrderReadiness) — altfel butonul „📦 Cu stoc sus"/filtrele ar fi schimbat cifrele fără niciun sens, de fiecare dată când le apeși. Strict vizual — nu atinge stocul real, doar un calcul paralel recalculat la fiecare randare; liniile deja aplicate real sau anulate rămân excluse, ca stocul lor deja scăzut să nu se numere a doua oară. Verificat de 2 ori: sintaxă (node --check, de 2 ori) + verificări izolate cu Playwright, cu produse sintetice de test (fără risc pe producție): EXACT scenariul din cerere (stoc 0, 3 comenzi, termene diferite, -1/-2/-3 în ordinea deadline-ului, nu a ordinii brute din listă), stoc sănătos afișat normal, o linie deja aplicată nu „fură" stoc a doua oară de la celelalte — plus regresie cu 50 de comenzi reale de producție, randate fără nicio eroare.',date:'2026-11-16'},
@@ -6293,12 +6309,9 @@ async function loadStaffIssues(){
     // estimativă), o trecem automat pe „nu a sosit" — reutilizează exact fluxul deja existent (bară
     // Staff, clopoțel, rezolvare din admin), nu unul nou. Scriere idempotentă (PATCH pe aceleași
     // câmpuri) — sigură chiar dacă rulează din mai multe file/sesiuni admin la fiecare poll de 60s.
-    const nowMs=Date.now();
     for(const r of furRows.filter(x=>!x.nu_a_sosit&&x.created_at)){
-      const anchor=new Date(r.data_estimativa||r.created_at);
-      if(isNaN(anchor))continue;
-      const deadline=new Date(anchor);deadline.setDate(deadline.getDate()+7);
-      if(nowMs<=deadline.getTime())continue;
+      const info=furnizorDeadlineInfo(r);
+      if(!info.deadline||!info.overdue)continue;
       try{
         const body={nu_a_sosit:true,nu_a_sosit_at:new Date().toISOString(),nu_a_sosit_nota:'Termenul de livrare (7 zile) a expirat automat',nu_a_sosit_rezolvat:false};
         await dbPatch(`comenzi_furnizor?id=eq.${r.id}`,body);
@@ -6316,7 +6329,18 @@ async function loadStaffIssues(){
     comRows.forEach(r=>{const o=PCOM.find(x=>x.id===r.id);if(o){o.staffBlocked=true;o.staffIssueResolved=false;o.staffIssueType=r.staff_issue_type||'';o.staffIssueNote=r.staff_issue_note||'';}});
     renderNotif();
     renderFurnizorStockCard();
+    renderFurnizorDashboardCard();
   }catch(e){console.warn('Nu s-au putut citi problemele raportate de Staff:',e);}
+}
+// Extrasă separat — folosită atât la marcarea automată „nu a sosit" (mai sus, în loadStaffIssues) cât
+// și la afișarea termenului rămas (renderFurnizorDashboardCard) — un singur loc care calculează
+// termenul, ca cele 2 să nu poată ajunge vreodată să-l vadă diferit.
+function furnizorDeadlineInfo(r){
+  const anchor=new Date(r.data_estimativa||r.created_at);
+  if(isNaN(anchor))return{deadline:null,daysLeft:null,overdue:false};
+  const deadline=new Date(anchor);deadline.setDate(deadline.getDate()+7);
+  const msLeft=deadline.getTime()-Date.now();
+  return{deadline,daysLeft:Math.ceil(msLeft/86400000),overdue:msLeft<0};
 }
 // Extrasă separat din renderFurnizorStockCard — folosită și la ștergerea unei comenzi întregi, mai jos
 // (deleteFurnizorOrderGroup), ca cele 2 locuri să nu poată ajunge vreodată să identifice grupuri diferit.
@@ -6350,6 +6374,55 @@ function renderFurnizorStockCard(){
     }).join('')}`;
   }).join('');
 }
+// Deschide factura/poza atașată unei comenzi furnizor (comenzi_furnizor.facturi) — PDF în tab nou
+// (viewer-ul nativ al browserului), poză în lightbox-ul deja folosit în toată aplicația (openImgZoom).
+function openFurnizorFactura(url){
+  if(/\.pdf($|\?)/i.test(url))window.open(url,'_blank');
+  else openImgZoom(url);
+}
+// Cardul NOU, proeminent, de pe Dashboard — cerut direct: „stiu ca avem ceva de genul in platforma...
+// sa se vada cat mai simplu". Spre deosebire de renderFurnizorStockCard (mic, ascuns în Raport stoc),
+// ăsta rămâne mereu vizibil (inclusiv la 0 comenzi active, cu un îndemn clar de adăugare) și arată
+// explicit termenul rămas pe fiecare comandă — nu doar flag-ul roșu DUPĂ ce a expirat deja.
+function renderFurnizorDashboardCard(){
+  const host=document.getElementById('dash-furnizor-list');if(!host)return;
+  if(!FURNIZOR_ADMIN.length){
+    host.innerHTML=`<div style="font-size:16px;color:var(--t3);padding:4px 0">Nicio comandă în așteptare — adaugă una cu „+ Comandă nouă".</div>`;
+    return;
+  }
+  const groups={};
+  FURNIZOR_ADMIN.forEach(r=>{
+    const key=furnizorGroupKey(r);
+    (groups[key]=groups[key]||{key,furnizor:r.furnizor||'',comandaRef:r.comanda_ref||'',rows:[]}).rows.push(r);
+  });
+  // Cea mai urgentă (termen cel mai apropiat) primul — nu ordinea de creare, ca atenția să cadă mereu
+  // pe comanda care are cel mai puțin timp rămas, nu pe ultima adăugată.
+  const list=Object.values(groups).sort((a,b)=>{
+    const da=furnizorDeadlineInfo(a.rows[0]).deadline,db=furnizorDeadlineInfo(b.rows[0]).deadline;
+    if(!da||!db)return 0;
+    return da-db;
+  });
+  host.innerHTML=list.map(g=>{
+    const label=`${esc(g.furnizor||'Furnizor')}${g.comandaRef?' · #'+esc(g.comandaRef):''}`;
+    const info=furnizorDeadlineInfo(g.rows[0]);
+    const anyIssue=g.rows.some(r=>r.nu_a_sosit&&!r.nu_a_sosit_rezolvat);
+    const deadlineBadge=anyIssue?`<span style="color:var(--rd);font-weight:700;margin-left:8px">⛔ nu a ajuns</span>`
+      :!info.deadline?''
+      :info.overdue?`<span style="color:var(--rd);font-weight:700;margin-left:8px">⛔ termen depășit</span>`
+      :`<span style="color:${info.daysLeft<=2?'var(--or)':'var(--t3)'};font-weight:700;margin-left:8px">⏳ mai ai ${info.daysLeft}z</span>`;
+    // Facturi/poze atașate — primul rând al grupului le poartă (scrise identic pe toate liniile la
+    // trimitere, redundant intenționat, dat fiind schema per-produs, nu per-comandă — vezi applyFurnizorComanda).
+    const facturi=Array.isArray(g.rows[0]?.facturi)?g.rows[0].facturi:[];
+    const facturiBtns=facturi.map(f=>`<button type="button" class="btn btn-sm" onclick="openFurnizorFactura('${esc(f.url).replace(/'/g,"\\'")}')" title="${esc(f.name||'')}">📄 ${facturi.length>1?'Factură':'Vezi factura'}</button>`).join('');
+    const delBtn=`<button type="button" class="btn btn-sm" style="color:var(--rd);border-color:var(--rd)" title="Șterge această comandă" onclick="deleteFurnizorOrderGroup('${esc(g.key).replace(/'/g,"\\'")}','${label.replace(/'/g,"\\'")}')">🗑️</button>`;
+    const prodsHtml=g.rows.map(r=>{
+      const p=r.produs_id?P.find(x=>x.id===r.produs_id):null;
+      const restul=Math.max(0,(Number(r.cantitate_comandata)||0)-(Number(r.cantitate_sosita)||0));
+      return`${esc(p?p.name:r.titlu_extern)} (${fmtQty(r.cantitate_comandata)} buc${r.cantitate_sosita>0?` · sosit ${fmtQty(r.cantitate_sosita)}/rest ${fmtQty(restul)}`:''})`;
+    }).join(' · ');
+    return`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${label}</strong>${deadlineBadge}<div class="jp-meta">${prodsHtml}</div></div><div style="display:flex;gap:6px;flex-wrap:wrap;align-self:flex-start">${facturiBtns}${delBtn}</div></div>`;
+  }).join('');
+}
 async function deleteFurnizorOrderGroup(key,label){
   if(!confirm(`Ștergi comanda ${label}? Nu poate fi anulat.`))return;
   if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
@@ -6359,7 +6432,7 @@ async function deleteFurnizorOrderGroup(key,label){
   try{
     await dbDelete(`comenzi_furnizor?id=in.(${ids.join(',')})`);
     FURNIZOR_ADMIN=FURNIZOR_ADMIN.filter(r=>!ids.includes(r.id));
-    renderFurnizorStockCard();
+    renderFurnizorStockCard();renderFurnizorDashboardCard();
     toast('✓ Comandă ștearsă din marfa așteptată');
   }catch(e){toast('Eroare la ștergere: '+(e.message||e),'err');}
 }
@@ -6663,16 +6736,19 @@ function notifIssueRowHtml(x){
   const readyNote=stockReady?`<div class="notif-meta" style="color:var(--gr);font-weight:700">✓ Stoc disponibil acum — ${fmtQty(qty(p))} buc.</div>`:'';
   return`<div class="notif-row notif-issue"><span class="notif-ic">⛔</span><div><div class="notif-name">${esc(x.nume||'Produs')}</div><div class="notif-meta">${esc(label)}${x.nota?' — '+esc(x.nota):''}${dt?' · '+dt:''}</div>${readyNote}<div class="notif-issue-actions">${verLink}<button type="button" class="notif-issue-btn" onclick="resolveStaffIssueAdmin('${x.table}',${x.id})">✓ Rezolvată</button><button type="button" class="notif-issue-btn notif-issue-btn-danger" onclick="cancelStaffIssueOrder('${x.table}',${x.id})">🚫 Anulează</button></div></div></div>`;
 }
+// Dusă acum spre Dashboard (dash-furnizor-section), nu Raport stoc — cerut direct: comenzile furnizor
+// au acum cel mai vizibil loc posibil, primul lucru văzut la logare, nu mai sunt ascunse în Raport stoc.
 function goToFurnizorStock(){
-  const btn=document.querySelector('.h-tab[data-page="raport"]');
-  if(btn)goPage('raport',btn);
+  const btn=document.querySelector('.h-tab[data-page="dashboard"]');
+  if(btn)goPage('dashboard',btn);
+  document.getElementById('dash-furnizor-section')?.scrollIntoView({behavior:'smooth',block:'start'});
 }
 async function resolveFurnizorIssueAdmin(id){
   try{
     await dbPatch(`comenzi_furnizor?id=eq.${id}`,{nu_a_sosit_rezolvat:true});
     const r=FURNIZOR_ADMIN.find(x=>x.id===id);if(r)r.nu_a_sosit_rezolvat=true;
     FURNIZOR_ISSUES=FURNIZOR_ISSUES.filter(x=>x.id!==id);
-    renderNotif();renderFurnizorStockCard();
+    renderNotif();renderFurnizorStockCard();renderFurnizorDashboardCard();
     toast('✓ Problemă marcată rezolvată');
   }catch(e){toast('Nu am putut marca problema rezolvată: '+(e.message||e),'err');}
 }
@@ -7569,6 +7645,7 @@ function renderDashboard(){
     <button type="button" class="dash-attention-item out" onclick="goDashToStockStatus('out')"><span class="dash-attention-ic">📦</span><span><span class="dash-attention-num">${outC}</span><span class="dash-attention-label">Epuizate${oosC?` · <span class="dash-attention-sublink" onclick="event.stopPropagation();goDashToSupplierOOS()">${oosC} la furnizor</span>`:''}</span></span></button>
     <button type="button" class="dash-attention-item low" onclick="goDashToStockStatus('low')"><span class="dash-attention-ic">⚠️</span><span><span class="dash-attention-num">${lowC}</span><span class="dash-attention-label">Stoc scăzut</span></span></button>
     <button type="button" class="dash-attention-item order" onclick="goDashToReorder()"><span class="dash-attention-ic">🛒</span><span><span class="dash-attention-num">${reorderCount}</span><span class="dash-attention-label">De comandat</span></span></button>`;
+  renderFurnizorDashboardCard();
   renderDashAnalytics();
 }
 // ── VÂNZĂRI & ACHIZIȚII (dashboard) ──
@@ -25324,13 +25401,20 @@ function renderSupplierDatalist(){
    al ALTUI furnizor se adaugă automat „Alt furnizor" pe produs (vezi ensureAltSupplierSource). Ajunge în
    Staff (comenzi_furnizor); stocul NU se atinge — se adaugă la sosire, prin Importă factură (cost mediu). ── */
 let furnizorImpParsed=[];
+// Fișierele ORIGINALE (poză/PDF) ale facturii/confirmării, atașate comenzii — cerut direct: „adaugam
+// facturile daca le avem deja". Separat de furnizorImpParsed (care ține produsele EXTRASE din ele) —
+// AI-ul citește textul/imaginea o singură dată, dar fișierul original rămâne salvat (Storage), ca să
+// poată fi revăzut mai târziu direct de pe cardul comenzii (vezi openFurnizorFactura).
+let furnizorInvoiceFiles=[];
 function openFurnizorComanda(){
   furnizorImpParsed=[];
+  furnizorInvoiceFiles=[];
   document.getElementById('cf-furnizor').value='';
   document.getElementById('cf-comanda-ref').value='';
   document.getElementById('cf-data-estimativa').value='';
   document.getElementById('cf-paste-text').value='';
   document.getElementById('cf-file').value='';
+  document.getElementById('cf-invoice-files').innerHTML='';
   document.getElementById('cf-preview').innerHTML='';
   document.getElementById('cf-parsing').style.display='none';
   renderInvCatDatalist();
@@ -25399,23 +25483,72 @@ ${text}`;
   document.getElementById('cfx-status').textContent='Gata';
   parsing.style.display='none';
 }
+// Upload direct din File (nu dintr-un dataURL, ca la uploadProductImageToStorage/uploadAwbPreviewToStorage
+// — aici avem deja fișierul real din <input type=file>, fetch îl trimite direct ca body, fără dus-întors
+// prin base64). Bucket separat (furnizor-facturi) — necesită migrarea SQL rulată o dată în Supabase.
+async function uploadFurnizorFileToStorage(file){
+  const ext=(file.name.split('.').pop()||'bin').toLowerCase();
+  const filename=Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.'+ext;
+  const r=await fetch(`${SUPA_URL}/storage/v1/object/furnizor-facturi/${filename}`,{
+    method:'POST',
+    headers:{apikey:SUPA_KEY,Authorization:'Bearer '+SUPA_KEY,'Content-Type':file.type||'application/octet-stream'},
+    body:file
+  });
+  if(!r.ok)throw new Error('Storage upload a eșuat: '+await r.text());
+  return `${SUPA_URL}/storage/v1/object/public/furnizor-facturi/${filename}`;
+}
+function renderFurnizorInvoiceFiles(){
+  const host=document.getElementById('cf-invoice-files');if(!host)return;
+  if(!furnizorInvoiceFiles.length){host.innerHTML='';return;}
+  host.innerHTML=`<div style="font-size:14px;color:var(--t3);margin:6px 0 2px">Fișiere atașate (vizibile mai târziu, pe comandă):</div>`
+    +furnizorInvoiceFiles.map((f,i)=>`<span class="inv-match" style="margin:2px 4px 2px 0">📄 ${esc(f.name)} <span style="cursor:pointer;color:var(--rd)" onclick="removeFurnizorInvoiceFile(${i})">✕</span></span>`).join('');
+}
+function removeFurnizorInvoiceFile(i){furnizorInvoiceFiles.splice(i,1);renderFurnizorInvoiceFiles();}
 async function handleFurnizorFiles(ev){
   const files=[...(ev.target.files||[])];if(!files.length)return;
   const parsing=document.getElementById('cf-parsing');
-  parsing.style.display='block';parsing.innerHTML=`<span class="spin"></span> Se analizează ${files.length>1?files.length+' poze':'poza'} cu AI…`;
+  parsing.style.display='block';parsing.innerHTML=`<span class="spin"></span> Se analizează ${files.length>1?files.length+' fișiere':'fișierul'} cu AI…`;
   document.getElementById('cfx-status').textContent='Se analizează…';
   try{
-    const rawDataUrls=await Promise.all(files.map(f=>new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(f);})));
-    const dataUrls=await Promise.all(rawDataUrls.map(u=>resizeImageDataUrl(u,1400,.85)));
-    const content=[{type:'text',text:`Ești expert în citirea paginilor de confirmare comandă plasată la un furnizor (ex. Jumbo, alți distribuitori en-gros/retail). Extrage TOATE produsele din ${dataUrls.length>1?'aceste poze — sunt capturi succesive ale ACELEIAȘI comenzi (scroll pe aceeași pagină)':'această poză'}: denumire completă, cod produs (dacă apare), cantitate comandată, prețul TOTAL al liniei. Caută și numărul comenzii, dacă apare undeva pe pagină.`}];
-    dataUrls.forEach(u=>{
-      const mt=u.match(/data:(image\/\w+);/)?.[1]||'image/jpeg';
-      const b64=u.split(',')[1];
-      if(b64&&b64.length>=100)content.push({type:'image',source:{type:'base64',media_type:mt,data:b64}});
-    });
-    const resp=await callAI([{role:'user',content}],'Ești expert în citirea comenzilor plasate la furnizori. Extragi date structurate, exacte.',2000,'analysis',FURNIZOR_ORDER_SCHEMA,'furnizor_order_extraction');
-    await furnizorApplyAiResult(resp);
-  }catch(e){toast('Eroare la citirea imaginii: '+(e.message||e),'err');}
+    // Salvarea fișierului ORIGINAL (pentru „📄 Vezi factura" mai târziu) e complet separată de citirea
+    // AI de mai jos — un eșec de upload (ex. migrarea bucket-ului nu a rulat încă) nu trebuie să blocheze
+    // extragerea produselor, și invers.
+    for(const f of files){
+      try{
+        const url=await uploadFurnizorFileToStorage(f);
+        furnizorInvoiceFiles.push({url,name:f.name});
+      }catch(eUp){console.warn('Nu am putut salva fișierul original — "Vezi factura" nu va fi disponibil pentru el (rulează migrarea bucket-ului furnizor-facturi?):',eUp);}
+    }
+    renderFurnizorInvoiceFiles();
+    const pdfFiles=files.filter(f=>f.type==='application/pdf');
+    const imageFiles=files.filter(f=>f.type.startsWith('image/'));
+    if(imageFiles.length){
+      const rawDataUrls=await Promise.all(imageFiles.map(f=>new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(f);})));
+      const dataUrls=await Promise.all(rawDataUrls.map(u=>resizeImageDataUrl(u,1400,.85)));
+      const content=[{type:'text',text:`Ești expert în citirea paginilor de confirmare comandă plasată la un furnizor (ex. Jumbo, alți distribuitori en-gros/retail). Extrage TOATE produsele din ${dataUrls.length>1?'aceste poze — sunt capturi succesive ale ACELEIAȘI comenzi (scroll pe aceeași pagină)':'această poză'}: denumire completă, cod produs (dacă apare), cantitate comandată, prețul TOTAL al liniei. Caută și numărul comenzii, dacă apare undeva pe pagină.`}];
+      dataUrls.forEach(u=>{
+        const mt=u.match(/data:(image\/\w+);/)?.[1]||'image/jpeg';
+        const b64=u.split(',')[1];
+        if(b64&&b64.length>=100)content.push({type:'image',source:{type:'base64',media_type:mt,data:b64}});
+      });
+      const resp=await callAI([{role:'user',content}],'Ești expert în citirea comenzilor plasate la furnizori. Extragi date structurate, exacte.',2000,'analysis',FURNIZOR_ORDER_SCHEMA,'furnizor_order_extraction');
+      await furnizorApplyAiResult(resp);
+    }
+    // PDF (factură/confirmare comandă) — cerut direct: „adaugam facturile daca le avem deja". Extragem
+    // textul direct (PDF.js, aceeași tehnică deja folosită la facturile din Inventar/etichetele AWB), nu
+    // trimitem pagina ca imagine — mult mai fiabil pe tabele cu multe produse decât citirea vizuală.
+    for(const f of pdfFiles){
+      const pages=await extractPdfPagesText(f);
+      const pdfText=pages.join('\n');
+      if(!pdfText||pdfText.trim().length<20){toast(`„${f.name}" — nu am găsit text în PDF`,'err');continue;}
+      const prompt=`Ești expert în citirea comenzilor plasate la furnizori (ex. Jumbo, alți distribuitori). Extrage TOATE produsele din textul de mai jos, extras dintr-un PDF de confirmare comandă/factură: denumire completă, cod produs (dacă apare), cantitate comandată, prețul TOTAL al liniei. Caută și numărul comenzii, dacă apare.
+
+TEXT PDF:
+${pdfText.slice(0,40000)}`;
+      const resp=await callAI([{role:'user',content:prompt}],'Ești expert în citirea comenzilor plasate la furnizori. Extragi date structurate, exacte.',2000,'analysis',FURNIZOR_ORDER_SCHEMA,'furnizor_order_extraction');
+      await furnizorApplyAiResult(resp);
+    }
+  }catch(e){toast('Eroare la citirea fișierului: '+(e.message||e),'err');}
   document.getElementById('cfx-status').textContent='Gata';
   parsing.style.display='none';
   ev.target.value='';
@@ -25652,21 +25785,38 @@ async function applyFurnizorComanda(){
         if('ean' in body)w.prod.ean=body.ean;
       }catch(e){altFailN++;console.warn('Nu am putut adăuga „Alt furnizor"/EAN pe produsul',w.prod.id,e);}
     }
-    // 3) Comanda propriu-zisă, spre Staff.
-    const rows=furnizorImpParsed.map(it=>({furnizor,comanda_ref:comandaRef,titlu_extern:it.titluExtern,cod_extern:it.codExtern||null,produs_id:it.produsId,cantitate_comandata:it.cantitate,pret:it.pret||0,data_estimativa:dataEstimativa}));
-    let dateSkipped=false;
+    // 3) Comanda propriu-zisă, spre Staff. facturi — scrisă identic pe TOATE liniile lotului (redundant,
+    // intenționat: schema e per-produs, nu per-comandă, la fel ca furnizor/comanda_ref mai sus).
+    const rows=furnizorImpParsed.map(it=>({furnizor,comanda_ref:comandaRef,titlu_extern:it.titluExtern,cod_extern:it.codExtern||null,produs_id:it.produsId,cantitate_comandata:it.cantitate,pret:it.pret||0,data_estimativa:dataEstimativa,facturi:furnizorInvoiceFiles}));
+    let dateSkipped=false,facturiSkipped=false,inserted=[];
     try{
-      await dbPost('comenzi_furnizor',rows);
+      inserted=await dbPost('comenzi_furnizor',rows);
     }catch(e){
-      // Coloană nouă (data_estimativa) — degradare grațioasă dacă migration_comenzi_furnizor.sql nu a
-      // rulat încă (fără asta, TOT lotul ar eșua la scriere doar din cauza unui câmp opțional).
-      if(!/data_estimativa/i.test(String(e.message||e)))throw e;
-      await dbPost('comenzi_furnizor',rows.map(({data_estimativa,...rest})=>rest));
-      dateSkipped=true;
+      // Coloane noi (data_estimativa/facturi) — degradare grațioasă dacă migrarea SQL corespunzătoare
+      // nu a rulat încă (fără asta, TOT lotul ar eșua la scriere doar din cauza unui câmp opțional).
+      if(/data_estimativa/i.test(String(e.message||e))){
+        try{
+          inserted=await dbPost('comenzi_furnizor',rows.map(({data_estimativa,...rest})=>rest));
+          dateSkipped=true;
+        }catch(e2){
+          if(!/facturi/i.test(String(e2.message||e2)))throw e2;
+          inserted=await dbPost('comenzi_furnizor',rows.map(({data_estimativa,facturi,...rest})=>rest));
+          dateSkipped=true;facturiSkipped=true;
+        }
+      }else if(/facturi/i.test(String(e.message||e))){
+        inserted=await dbPost('comenzi_furnizor',rows.map(({facturi,...rest})=>rest));
+        facturiSkipped=true;
+      }else throw e;
     }
+    // Cardul de Dashboard trebuie să arate comanda IMEDIAT, nu abia la următorul poll (60s) — bug real
+    // de UX, prezent deja și la cardul vechi din Raport stoc, pe care-l preluam altfel fără să-l observ:
+    // nimic nu adăuga rândurile proaspăt scrise în FURNIZOR_ADMIN după salvare.
+    if(Array.isArray(inserted)&&inserted.length)FURNIZOR_ADMIN=inserted.concat(FURNIZOR_ADMIN);
+    furnizorInvoiceFiles=[];
     if(createdN||altN){renderTable();renderSupplierDatalist();furnizorPickProds=null;invPickProds=null;}
     const extra=[createdN?`${createdN} produse noi create (stoc 0)`:'',altN?`${altN} surse „Alt furnizor" adăugate`:'',createFailN?`⚠ ${createFailN} produse noi NU s-au putut crea (au rămas doar text)`:'',altFullN?`${altFullN} produse au deja 5 surse alternative`:'',altFailN?`⚠ ${altFailN} surse „Alt furnizor" nescrise`:''].filter(Boolean);
-    toast(`✓ ${rows.length} produse trimise ca și comandă așteptată — apar în Staff${extra.length?' · '+extra.join(' · '):''}${dateSkipped?' (dată estimativă neinclusă — rulează migration_comenzi_furnizor.sql)':''}`,(dateSkipped||createFailN||altFailN)?'err':undefined);
+    toast(`✓ ${rows.length} produse trimise ca și comandă așteptată — apar în Staff${extra.length?' · '+extra.join(' · '):''}${dateSkipped?' (dată estimativă neinclusă — rulează migration_comenzi_furnizor.sql)':''}${facturiSkipped?' (factura neatașată — rulează migrarea coloanei facturi)':''}`,(dateSkipped||facturiSkipped||createFailN||altFailN)?'err':undefined);
+    renderFurnizorDashboardCard();renderFurnizorStockCard();
     closeFurnizorComanda();
   }catch(e){
     toast('Eroare la salvare: '+(e.message||e)+' (rulează migration_comenzi_furnizor.sql?)','err');
