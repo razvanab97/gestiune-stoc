@@ -4979,6 +4979,7 @@ button.pcx-include-btn.included{border-color:var(--gr)}
         </div>
         <input type="text" id="cat-s" class="cat-s" placeholder="Caută categorie..." oninput="buildCats(this.value)">
         <div class="cat-g" id="cat-g"></div>
+        <button type="button" class="btn btn-sm" style="margin-top:10px" onclick="openCatDupCheck()">🧹 Verifică duplicate categorii</button>
       </div>
       <div class="pe-section" style="margin-top:16px">
         <div class="sec">Etichete</div>
@@ -5132,6 +5133,24 @@ poza principală a produsului — orice apel openImgZoom(src) deschide aceeași 
 </div>
 </div>
 
+<!-- Unificare categorii aproape-duplicate (diacritice/majuscule) — cerut direct: „Umerase"/„Umerașe",
+     „animale de companie"/„Animale de companie" etc. Doar PREVIZUALIZARE la deschidere — nimic nu se
+     schimbă în bază până nu apeși explicit „✓ Unifică" pe un grup anume. -->
+<div class="ov" id="ov-catdup" onclick="if(event.target===this)closeCatDupCheck()">
+<div class="inv-modal" style="max-width:640px" onclick="event.stopPropagation()">
+  <div class="inv-head">
+    <div>
+      <h2>🧹 Categorii aproape-duplicate</h2>
+      <div style="font-size:19px;color:#6B7280;font-weight:500;margin-top:2px">Variante care diferă DOAR prin diacritice sau litere mari/mici — probabil aceeași categorie. Nimic nu se schimbă până nu apeși „✓ Unifică" pe un grup anume.</div>
+    </div>
+    <button class="m-close" onclick="closeCatDupCheck()">×</button>
+  </div>
+  <div class="inv-body">
+    <div id="catdup-list"></div>
+  </div>
+</div>
+</div>
+
 <div id="inv-checklist-print"></div>
 <div id="pk-print"></div>
 <div id="sr-print"></div>
@@ -5280,6 +5299,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:707,text:'Categorii produse — bug GRAV reparat, raportat direct cu captură: lista de categorii (picker din fișa produsului + promptul AI-ului la crearea unui draft din poză) arăta/alegea dintr-o SINGURĂ categorie ("Umerașe"), deși produse reale din bază (ex. „Garaj parcare 4 niveluri Kruzzel 24646") aveau categoria „Jucarii" — AI-ul punea „Umerașe" și pe o jucărie, un platou decorativ, o pătură, fiindcă literalmente nu avea de unde alege altceva. Cauza: CATS citea STRICT din localStorage (customCategories) — NIMIC, niciunde, nu-l completa din categoriile REALE deja folosite de cele 610 produse din Supabase (43 distincte, verificat direct); pe acest browser, lista locală se redusese la practic un rând. Reparat la rădăcină: CATS se reconstruiește acum (rebuildCats) din valorile distincte produse.category + localStorage, la încărcare ȘI la fiecare reîmprospătare periodică (nu există o tabelă separată de categorii în schemă, verificat). Completări: (1) căutarea „Caută categorie..." ignoră acum diacritice/majuscule („jucar" găsește „Jucarii", „umerase" găsește „Umerașe"); (2) promptul AI-ului (draft din poză + celelalte 3 fluxuri care aleg categorie: analiză poză din Inventar, import din URL, import din screenshot) alege acum explicit DUPĂ TIPUL produsului, nu culoare/material, și poate răspunde „niciuna" (câmp gol) — NU prima din listă — dacă nimic nu se potrivește clar; (3) ORICE loc care altfel ar fi creat o categorie nouă (addCustomCategory, cele 4 fluxuri AI de mai sus) verifică ÎNTÂI dacă există deja o variantă echivalentă (doar diacritice/majuscule diferite) — motivul exact pentru care existau deja duplicate reale în bază: „Umerașe"/„Umerase" (71/4 produse), „Jucarii"/„Jucării" (23/3), „Casă"/„Casa" (7/1), „animale de companie"/„Animale de companie" (15/1); (4) unealtă nouă „🧹 Verifică duplicate categorii" (tab Categorii și etichete) — arată EXACT aceste 4 grupuri găsite live, cu alegere manuală a formei care rămâne per grup; NIMIC nu se scrie în bază până la click explicit pe „✓ Unifică" pe un grup anume. Verificat de 2 ori: sintaxă (node --check, de 2 ori) + 9 verificări izolate cu Playwright: reconstruirea CATS din produse reale (nu doar din lista locală redusă), findCatCI (potrivire exactă, insensibilă la diacritice/majuscule, fără fals-pozitiv pe substring), căutarea din picker, addCustomCategory fără duplicat nou, sugestiile AI (catSuggestChipsHtml) cu formă canonică, un draft AI simulat EXACT ca raportul (jucărie → „Jucarii" corect; o categorie inexistentă → gol, nu forțată), gruparea duplicatelor pe date sintetice + pe datele REALE de producție (confirmă cele 4 grupuri de mai sus, doar citire), aplicarea unificării pe date sintetice (niciun rând real touched în acest test) — zero erori JS, rulat de 2 ori.',date:'2026-11-17'},
   {n:706,text:'Dashboard — card nou „📥 Comenzi furnizor — pe drum", cerut direct: „stiu ca avem ceva de genul in platforma, dar verifica si spune mi cum sa facem sa fie cat mai simplu". Mecanismul (tabela comenzi_furnizor) exista deja, dar trăia doar ca un cărticel mic, ascuns în Raport stoc — mult prea departe de prima vedere ca să fie de folos zilnic. Acum e PRIMUL lucru vizibil la logare (chiar sub „Necesită atenție"), rămâne afișat și la 0 comenzi active (cu îndemn clar de adăugare), și sortează automat cea mai urgentă comandă primul (termen depășit > termen cel mai apropiat). Trei completări concrete cerute: (1) „adăugăm produsele" — rămâne exact fluxul deja existent (AI din text/poză, picker manual, „produs nou"), doar mult mai vizibil, cu buton „+ Comandă nouă" direct pe card; (2) „adăugăm facturile dacă le avem deja" — gol real găsit verificând: încărcarea accepta DOAR poze, iar fișierul însuși nu se salva nicăieri (folosit o dată la extragere AI, apoi pierdut) — acum accepă și PDF (extragere text, aceeași tehnică deja folosită la facturile din Inventar) ȘI salvează fișierul original (Storage, bucket nou) — „📄 Vezi factura" direct pe card, oricând mai târziu; (3) termen „aprox. 1 săptămână" + ce se întâmplă la expirare — deja implementat corect (7 zile de la data estimativă sau de la plasare, marcare automată „⛔ nu a ajuns"), confirmat să rămână AȘA, nu ștergere automată (o comandă cu bani reali în ea nu trebuie să dispară tăcut) — acum vizibil și countdown-ul („⏳ mai ai Nz") înainte de expirare, nu doar flag-ul roșu după. Migrare SQL + bucket Storage necesare, date în chat (nu scrise ca fișier nou în repo, convenție deja stabilită). Verificat de 2 ori: sintaxă (node --check, de 2 ori) + 7 verificări izolate cu Playwright: matematica termenului (prioritate dată estimativă, 7 zile corect), card gol cu îndemn, 3 comenzi cu sortare/badge-uri/factură corecte, „Vezi factura" (PDF→tab nou, poză→lightbox), degradare grațioasă dacă migrarea coloanei „facturi" nu a rulat încă (reîncercare automată, fără ea), extragere PDF reală (text simulat → AI → produs parsat corect, fișier original „salvat"), navigare din clopoțel spre Dashboard — zero erori JS, rulat de 2 ori.',date:'2026-11-17'},
   {n:705,text:'Comenzi Platforme — „Aplică import" mai complet, 3 recomandări proprii cerute direct („hai 1, 2 si 3"), după reparația de la #704: (1) confirmare cu rezumat ÎNAINTE de aplicarea în masă — arată exact ce se va scădea (produs, cantitate, nr. comenzi), agregat pe produs, nu pe linie, ultima șansă de a prinde o potrivire greșită de produs (ex. tipul de incident „cort"/„Amortizor Usa" din sesiune) înainte să se scadă stocul real; (2) o linie care eșuează la aplicare arată ACUM, direct pe card, motivul exact al eșecului + un buton „🔁 Reîncearcă" — până acum motivul ajungea DOAR în consola browserului, invizibil, chiar dacă linia rămânea corect vizibilă; (3) card nou „↺ Aplicate acum" — permite anularea unei aplicări DEJA făcute (stoc, Jurnal, „Vânzări azi" revin exact ca înainte, comanda revine neaplicată, gata de corectat produsul greșit și reaplicat), scopat intenționat STRICT la liniile aplicate în sesiunea curentă (se pierde la reîncărcare) — pentru o aplicare mai veche, ziua exactă scrisă în Jurnal nu mai poate fi determinată sigur, rămâne corecție manuală ca până acum. Verificat de 2 ori: sintaxă (node --check, de 2 ori) + 5 verificări izolate cu Playwright, produse sintetice: confirmarea arată corect produsul/cantitatea și Cancel chiar oprește aplicarea (stoc neschimbat), accept continuă normal; o linie eșuată (eroare simulată) arată mesajul pe card și se reaplică cu succes la reîncercare; „↺ Anulează aplicarea" readuce stocul, Jurnalul și Vânzările azi EXACT la 0 și linia înapoi, neaplicată — zero erori JS, rulat de 2 ori.',date:'2026-11-16'},
   {n:704,text:'Comenzi Platforme — bug GRAV reparat, găsit chiar la cererea „revizuiește și explică-mi cum funcționează Aplică import, am impresia că face ceva greșit": o comandă anulată prin „🚫 Anulează" (sau din problemele raportate de Staff) PROMITE explicit în dialog „Rămâne vizibil aici, dar dispare din coada Staff. Nu atinge stocul" — dar anularea nu scotea linia și din starea „✓ Inclus" a previzualizării, iar „Aplică import"/„✓ Aplică tot" nu verifica NICIODATĂ dacă o linie era anulată, doar dacă era „Inclus". Rezultat confirmat printr-un test izolat, cu produs sintetic: anulezi o comandă deja inclusă → apeși „Aplică import" → stocul SE SCADE REAL pentru ea, exact opusul mesajului din dialog. Reparat în 2 locuri: (1) anularea (anuleazaLiniePlatforma, folosită de ambele butoane de anulare) debifează automat „Inclus" pe linie, la fel cum se face deja la o comandă anulată redescoperită la reimport; (2) gardă suplimentară, defensivă, direct în applyPcomImport — refuză să aplice orice linie a cărei comandă e deja anulată în bază, indiferent cum a rămas „Inclus" (acoperă și o previzualizare locală veche, salvată în browser ÎNAINTE de acest fix, cu o comandă deja anulată rămasă contaminată „Inclus"); (3) dacă garda de la (2) chiar prinde o astfel de linie, acum apare EXPLICIT în mesajul de la final („⚠ N ignorate — anulate anterior"), nu dispare tăcut, ca omul să vadă clar că ceva a fost oprit intenționat, nu că butonul n-a făcut nimic. Verificat de 2 ori: sintaxă (node --check, de 2 ori) + 3 verificări izolate cu Playwright, produse sintetice, fără risc pe producție: reproducerea exactă a bugului (acum stocul NU se mai scade), un draft „vechi" contaminat (Inclus+anulat direct, fără să treacă prin anulare în sesiunea curentă) e oprit la fel ȘI apare în mesaj, și o comandă normală, neanulată, se aplică exact ca înainte (stoc scăzut, linie scoasă din previzualizare) — zero erori JS, rulat de 2 ori.',date:'2026-11-16'},
@@ -9463,16 +9483,42 @@ let sbReady=false;
 let eFacturaEmagDate=localStorage.getItem(EFK)||'';
 let eFacturaEmagEdit=!eFacturaEmagDate;
 
-// Categorii custom - salvate în localStorage
+// Categorii — bug real, raportat direct cu captură: picker-ul din fișa de produs ȘI promptul AI-ului
+// (creare draft din poză) arătau/alegeau dintr-o listă redusă la o SINGURĂ valoare („Umerașe"), deși
+// produse reale din Supabase aveau zeci de alte categorii. Cauza: CATS citea STRICT din localStorage
+// (customCategories) — nimic, niciunde, nu-l completa vreodată din categoriile REALE deja folosite de
+// produsele din bază. Pe acest browser, acea listă locală se redusese, dintr-un motiv sau altul, la
+// practic un singur rând. Acum CATS se reconstruiește (rebuildCats, apelată după ce P se încarcă din
+// Supabase) din valorile DISTINCTE ale produse.category + ce e în localStorage — localStorage rămâne
+// util DOAR pentru o categorie adăugată manual ÎNAINTE ca vreun produs s-o folosească, unită cu ce
+// există deja, nu în locul ei. Nu există o tabelă separată de categorii în schemă (verificat în
+// supabase_setup.sql) — produse.category e singura sursă reală.
 let CATS = JSON.parse(localStorage.getItem('customCategories') || '[]');
-
+function rebuildCats(){
+  const fromProducts=new Set();
+  P.forEach(p=>{const c=String(p.category||'').trim();if(c)fromProducts.add(c);});
+  const custom=JSON.parse(localStorage.getItem('customCategories')||'[]');
+  CATS=[...new Set([...fromProducts,...custom])].sort((a,b)=>a.localeCompare(b,'ro'));
+}
+// Compară ignorând diacritice și litere mari/mici — cerut direct: căutarea „Caută categorie..." trebuia
+// să găsească „Jucarii" scriind „jucar", „Umerașe" scriind „umerase". Refolosită și ca gardă anti-
+// duplicat: orice loc care altfel ar fi creat o categorie NOUĂ (addCustomCategory, importuri AI) o
+// caută întâi aici — dacă există deja o variantă echivalentă (doar diacritice/majuscule diferite),
+// se refolosește EA (forma deja canonică), nu se mai creează un al doilea rând aproape-identic.
+function catNorm(s){return stripDiacritics(String(s||'')).toLowerCase().trim();}
+function findCatCI(name){
+  const key=catNorm(name);
+  if(!key)return null;
+  return CATS.find(c=>catNorm(c)===key)||null;
+}
 // Funcție pentru a adăuga categorie nouă
 function addCustomCategory(catName){
   catName = catName.trim();
-  if(!catName || CATS.includes(catName)) return;
-  CATS.push(catName);
-  CATS.sort();
-  safeLocalSet('customCategories', JSON.stringify(CATS));
+  if(!catName || findCatCI(catName)) return;
+  const custom=JSON.parse(localStorage.getItem('customCategories')||'[]');
+  custom.push(catName);
+  safeLocalSet('customCategories', JSON.stringify(custom));
+  rebuildCats();
   buildCats('');
   toast('Categorie adăugată ✓');
 }
@@ -9616,6 +9662,7 @@ async function load(){
 
     const rows=await prodPromise;
     P=rows.map(r=>dbToP({...r,img:lazyProductImageRef(r.id)}));
+    rebuildCats();
 
     // today sales
     const todayRows=await todayPromise;
@@ -9756,6 +9803,7 @@ async function liveRefreshProducts(){
   try{
     const rows=await dbGet(`produse?select=${PROD_COLS}&order=id.asc`);
     P=rows.map(r=>dbToP({...r,img:lazyProductImageRef(r.id)}));
+    rebuildCats();
     // Inventarul/Vânzările (page-stoc) sunt randate mereu, indiferent de tab-ul activ — la fel ca la
     // load() inițial. Restul paginilor se reîmprospătează doar dacă chiar sunt vizibile acum, ca să
     // nu recalculăm degeaba ecrane pe care nimeni nu le vede în acest moment.
@@ -10364,9 +10412,17 @@ const CAT_SUGGEST_SCHEMA={
 // (catSuggestNewCat, citită de selectNewSuggestedCat la click) — extras separat de apelul AI în sine, ca
 // logica de filtrare/randare să fie testabilă determinist, fără să depindă de un răspuns live.
 function catSuggestChipsHtml(d){
-  catSuggestNewCat=d.categorieNoua&&!CATS.includes(d.categorieNoua)?String(d.categorieNoua).trim():'';
+  // findCatCI (nu CATS.includes strict) — altfel AI-ul ar propune ca „nouă" o categorie care deja
+  // există, doar scrisă cu alte diacritice/majuscule (ex. "jucarii" când avem deja "Jucarii"),
+  // creând exact genul de duplicat aproape-identic pe care vrem să-l evităm.
+  const existingChips=new Set();
+  (d.existente||[]).forEach(c=>{const m=findCatCI(c);if(m)existingChips.add(m);});
+  const newCatRaw=d.categorieNoua?String(d.categorieNoua).trim():'';
+  const newMatch=newCatRaw?findCatCI(newCatRaw):null;
+  if(newMatch)existingChips.add(newMatch);
+  catSuggestNewCat=(newCatRaw&&!newMatch)?newCatRaw:'';
   const chips=[
-    ...(d.existente||[]).filter(c=>CATS.includes(c)).map(c=>`<span class="cat-chip" onclick="selectCat('${esc(c)}')">✦ ${esc(c)}</span>`),
+    ...[...existingChips].map(c=>`<span class="cat-chip" onclick="selectCat('${esc(c)}')">✦ ${esc(c)}</span>`),
     ...(catSuggestNewCat?[`<span class="cat-chip cat-chip-new" onclick="selectNewSuggestedCat()" title="Nicio categorie existentă nu se potrivește bine — adaugă și selectează asta">+ ${esc(catSuggestNewCat)} (nouă)</span>`]:[])
   ];
   return chips.length?chips.join(''):'<span class="cat-chip-loading" style="color:var(--t3)">Nicio sugestie clară</span>';
@@ -10422,13 +10478,13 @@ Răspunde ÎNTOTDEAUNA cu un obiect JSON valid, fără text suplimentar, fără 
 
     const userPrompt=`Analizează această imagine de produs și extrage:
 1. Numele produsului (cât mai specific, cu brand dacă e vizibil)
-2. Categoria cea mai potrivită din lista de categorii (exact cum apare în listă)
+2. Categoria — alege DUPĂ TIPUL produsului (ce ESTE obiectul: jucărie, decorațiune, umeraș etc.), NU după culoare sau material. EXACT din lista de categorii, cuvânt cu cuvânt. Dacă NICIO categorie nu se potrivește clar, pune null — nu alegi una la întâmplare și nu inventezi o categorie nouă.
 3. Cod/SKU dacă e vizibil pe produs sau ambalaj
 4. Culori disponibile dacă sunt vizibile
 5. Note scurte utile pentru stoc
 
 Răspunde STRICT în formatul JSON:
-{"name":"<nume produs>","category":"<categorie exactă din listă>","sku_hint":"<cod dacă există, altfel null>","colors":"<culori dacă vizibile, altfel null>","notes":"<observație scurtă>"}`;
+{"name":"<nume produs>","category":"<categorie exactă din listă, sau null dacă nicio categorie nu se potrivește clar>","sku_hint":"<cod dacă există, altfel null>","colors":"<culori dacă vizibile, altfel null>","notes":"<observație scurtă>"}`;
 
     const resp=await callAI(
       [{role:'user',content:[imgContent,{type:'text',text:userPrompt}]}],
@@ -10442,6 +10498,10 @@ Răspunde STRICT în formatul JSON:
     const match=jsonStr.match(/\{[\s\S]*\}/);
     if(!match) throw new Error('Răspuns invalid de la AI');
     const info=JSON.parse(match[0]);
+    // findCatCI — nu strict CATS.includes: dacă AI-ul (contrar instrucțiunii) întoarce o categorie cu
+    // alte diacritice/majuscule decât forma deja existentă, o recunoaștem tot ca potrivire (forma
+    // canonică existentă e cea folosită), nu o respingem silențios ca „inexistentă".
+    const catMatch=(info.category&&info.category!=='null')?findCatCI(info.category):null;
 
     // Auto-fill fields if empty
     if(info.name&&!document.getElementById('f-name').value.trim()){
@@ -10458,14 +10518,14 @@ Răspunde STRICT în formatul JSON:
     // Show results
     res.innerHTML=
       `<strong>✦ Produs detectat:</strong> ${esc(info.name||'—')}<br>`+
-      (info.category?`<strong>Categorie:</strong> <span class="cat-chip" onclick="selectCat('${esc(info.category)}')" style="cursor:pointer;display:inline-flex;margin:2px 0">📷 ${esc(info.category)}</span><br>`:'')+ 
+      (catMatch?`<strong>Categorie:</strong> <span class="cat-chip" onclick="selectCat('${esc(catMatch)}')" style="cursor:pointer;display:inline-flex;margin:2px 0">📷 ${esc(catMatch)}</span><br>`:'')+
       (info.colors&&info.colors!=='null'?`<strong>Culori:</strong> ${esc(info.colors)}<br>`:'')+
       (info.notes?`<em style="opacity:.8">${esc(info.notes)}</em>`:'');
 
-    if(info.category&&CATS.includes(info.category)){
+    if(catMatch){
       document.getElementById('cat-suggest').innerHTML=
-        `<span class="cat-chip" onclick="selectCat('${esc(info.category)}')">📷 ${esc(info.category)}</span>`;
-      selectCat(info.category);
+        `<span class="cat-chip" onclick="selectCat('${esc(catMatch)}')">📷 ${esc(catMatch)}</span>`;
+      selectCat(catMatch);
     }
     toast('Imagine analizată ✓');
   }catch(err){
@@ -10528,7 +10588,7 @@ Extrage toate informațiile utile pentru adăugarea produsului într-un sistem d
 2. URL-ul imaginii principale (full URL complet, nu relativ)
 3. Codul SKU / cod produs / cod articol / model NUMAI dacă este afișat explicit și etichetat în conținutul paginii
 3b. Codul EAN/GTIN (codul de bare global, de obicei 13 cifre, uneori 8) NUMAI dacă apare explicit etichetat ca „EAN"/„Cod EAN"/„GTIN"/„Barcode" — diferit de codul producătorului/SKU-ul furnizorului
-4. Categoria cea mai potrivită, EXACT din lista: ${CATS.join(', ')}
+4. Categoria — alege DUPĂ TIPUL produsului (ce ESTE obiectul), NU după culoare sau material. EXACT din lista: ${CATS.join(', ')}. Dacă NICIO categorie nu se potrivește clar, null — nu alegi una la întâmplare și nu inventezi o categorie nouă.
 5. Prețul curent al produsului ca număr și moneda
 6. Furnizorul/magazinul, materialul, dimensiunile, culorile și o descriere scurtă
 
@@ -10616,8 +10676,13 @@ Răspunde STRICT cu JSON:
     }
 
     if(productData.category&&productData.category!=='null'){
-      const cat=String(productData.category).trim();
-      if(cat&&!CATS.includes(cat))addCustomCategory(cat);
+      const catRaw=String(productData.category).trim();
+      // findCatCI întâi — altfel o categorie întoarsă de AI cu alte diacritice/majuscule decât forma
+      // deja existentă (ex. "jucarii" când avem deja "Jucarii") ar fi creată ca o categorie NOUĂ,
+      // aproape-duplicat, exact genul de problemă semnalată direct („Umerase"/"Umerașe" etc.).
+      const match=catRaw?findCatCI(catRaw):null;
+      const cat=match||catRaw;
+      if(catRaw&&!match)addCustomCategory(catRaw);
       if(cat)selectCat(cat);
       status.innerHTML+=`<br><span style="color:var(--gr)">✓ Categorie: ${esc(cat)}</span>`;
     }else if(productData.title){
@@ -10752,7 +10817,7 @@ async function importFromScreenshot(rawDataUrls){
 2. titleRecommended: un titlu ROMÂNESC clar, comercial și corect, bazat pe ce este produsul în realitate și pe specificațiile vizibile. Corectează titlurile de pagină prea vagi sau greșite; nu inventa caracteristici.
 3. titleAlternative: o a doua variantă, mai scurtă, pentru același produs, cu alte cuvinte relevante. Dacă nu se poate formula sigur, null.
 4. Codul SKU / cod produs / cod articol / model NUMAI dacă apare explicit etichetat pe pagină (ex. "Product code", "Cod produs", "SKU", "Model", "Art. no.") — altfel null
-5. Categoria cea mai potrivită, EXACT din lista: ${CATS.join(', ')}
+5. Categoria — alege DUPĂ TIPUL produsului (ce ESTE obiectul), NU după culoare sau material. EXACT din lista: ${CATS.join(', ')}. Dacă NICIO categorie nu se potrivește clar, null — nu alegi una la întâmplare și nu inventezi o categorie nouă.
 6. Prețul de achiziție afișat (numărul curent/final, ignoră preț vechi tăiat), moneda și dacă scrie net/fără TVA sau cu TVA
 7. supplier: magazinul/furnizorul vizibil în logo, antet, bara de navigare sau URL. Completează-l și când este doar în logo (ex. logo "iWant!" → supplier "iWant!"). Nu-l confunda cu brandul produsului.
 8. Materialul, dimensiunile, culorile disponibile, dacă apar, și o descriere scurtă
@@ -10787,8 +10852,11 @@ Răspunde STRICT cu JSON, fără text suplimentar, fără markdown:
       status.innerHTML+=`<br><span style="color:var(--gr)">✓ Furnizor: ${esc(d.supplier)}</span>`;
     }
     if(d.category&&d.category!=='null'){
-      const cat=String(d.category).trim();
-      if(cat&&!CATS.includes(cat))addCustomCategory(cat);
+      const catRaw=String(d.category).trim();
+      // findCatCI întâi — vezi comentariul identic din importFromUrl, mai sus.
+      const match=catRaw?findCatCI(catRaw):null;
+      const cat=match||catRaw;
+      if(catRaw&&!match)addCustomCategory(catRaw);
       if(cat)selectCat(cat);
       status.innerHTML+=`<br><span style="color:var(--gr)">✓ Categorie: ${esc(cat)}</span>`;
     }else if(title)suggestCatFromName();
@@ -25343,10 +25411,80 @@ function buildCats(f){
   const g=document.getElementById('cat-g');if(!g)return;
   const ch=document.querySelector('.cat-g input[type=radio]:checked');
   const sv=ch?ch.value:(editId?(P.find(p=>p.id===editId)||{}).category||'':'');
-  const lo=f.toLowerCase();
-  g.innerHTML=CATS.filter(c=>!lo||c.toLowerCase().includes(lo)).map(c=>`<label class="${c===sv?'sel':''}"><input type="radio" name="cat" value="${esc(c)}" ${c===sv?'checked':''} onchange="updCats()">${esc(c)}</label>`).join('');
+  // Ignoră diacritice și majuscule — cerut direct: „jucar" trebuie să găsească „Jucarii", „umerase"
+  // trebuie să găsească „Umerașe", indiferent cum a scris omul căutarea.
+  const lo=catNorm(f);
+  g.innerHTML=CATS.filter(c=>!lo||catNorm(c).includes(lo)).map(c=>`<label class="${c===sv?'sel':''}"><input type="radio" name="cat" value="${esc(c)}" ${c===sv?'checked':''} onchange="updCats()">${esc(c)}</label>`).join('');
 }
 function updCats(){document.querySelectorAll('.cat-g label').forEach(l=>l.classList.toggle('sel',l.querySelector('input')?.checked||false));}
+
+// ── CATEGORII APROAPE-DUPLICATE (diacritice/majuscule) ── cerut direct: „Umerase"/„Umerașe",
+// „animale de companie"/„Animale de companie" etc. — variante distincte DOAR prin formatare, create
+// probabil la momente diferite (import AI, scris manual). DOAR previzualizare + alegere manuală a
+// formei canonice per grup; nimic nu se scrie în bază până la click explicit pe „✓ Unifică".
+function catDupGroups(){
+  const counts=new Map();
+  P.forEach(p=>{const c=String(p.category||'').trim();if(c)counts.set(c,(counts.get(c)||0)+1);});
+  const byNorm=new Map();
+  counts.forEach((n,c)=>{
+    const key=catNorm(c);
+    if(!byNorm.has(key))byNorm.set(key,[]);
+    byNorm.get(key).push({cat:c,count:n});
+  });
+  const groups=[];
+  byNorm.forEach(variants=>{
+    if(variants.length<2)return;
+    // Implicit preselectat: varianta cu cele mai multe produse — doar o PROPUNERE, omul poate alege
+    // oricare din grup înainte de a apăsa „✓ Unifică".
+    variants.sort((a,b)=>b.count-a.count);
+    groups.push({variants});
+  });
+  groups.sort((a,b)=>b.variants.reduce((s,v)=>s+v.count,0)-a.variants.reduce((s,v)=>s+v.count,0));
+  return groups;
+}
+let catDupGroupsCache=[];
+function renderCatDupList(){
+  const host=document.getElementById('catdup-list');if(!host)return;
+  catDupGroupsCache=catDupGroups();
+  if(!catDupGroupsCache.length){host.innerHTML='<div style="font-size:16px;color:var(--t3)">Nicio categorie aproape-duplicată găsită — toate categoriile distincte diferă cu adevărat între ele.</div>';return;}
+  host.innerHTML=catDupGroupsCache.map((g,gi)=>{
+    const options=g.variants.map((v,vi)=>`<label style="display:flex;align-items:center;gap:6px;margin:3px 0"><input type="radio" name="catdup-${gi}" value="${esc(v.cat)}" ${vi===0?'checked':''}>${esc(v.cat)} <span style="color:var(--t3)">(${v.count} ${v.count===1?'produs':'produse'})</span></label>`).join('');
+    return`<div class="pcom-batch-row" style="flex-direction:column;align-items:stretch;gap:6px">
+      <div style="font-weight:700">${g.variants.map(v=>esc(v.cat)).join(' / ')}</div>
+      <div>${options}</div>
+      <button type="button" class="btn btn-sm btn-acc" style="align-self:flex-start" onclick="applyCatDupMerge(${gi})">✓ Unifică</button>
+    </div>`;
+  }).join('');
+}
+function openCatDupCheck(){renderCatDupList();document.getElementById('ov-catdup').classList.add('on');}
+function closeCatDupCheck(){document.getElementById('ov-catdup').classList.remove('on');}
+// Rescrie direct produse.category pentru TOATE produsele celorlalte variante din grup, spre forma
+// aleasă — câte un PATCH separat per variantă (nu un singur `category=in.(...)`, ca să nu mai fie
+// nevoie de logica de quoting/escapare a listei PostgREST pentru valori cu spații). Ireversibil automat
+// — cerut explicit să nu se schimbe nimic fără confirmare, de-asta și dialogul de mai jos.
+async function applyCatDupMerge(gi){
+  const g=catDupGroupsCache[gi];if(!g)return;
+  const chosen=document.querySelector(`input[name="catdup-${gi}"]:checked`)?.value;
+  if(!chosen)return;
+  const others=g.variants.map(v=>v.cat).filter(c=>c!==chosen);
+  if(!others.length)return;
+  const totalAffected=g.variants.filter(v=>v.cat!==chosen).reduce((s,v)=>s+v.count,0);
+  if(!confirm(`Unifici ${others.map(c=>`„${c}"`).join(', ')} → „${chosen}"? ${totalAffected} ${totalAffected===1?'produs va avea':'produse vor avea'} categoria rescrisă. Nu poate fi anulat automat.`))return;
+  if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
+  try{
+    for(const other of others){
+      await dbPatch(`produse?category=eq.${encodeURIComponent(other)}`,{category:chosen});
+    }
+    P.forEach(p=>{if(others.includes(String(p.category||'').trim()))p.category=chosen;});
+    // Scoate variantele unificate din lista adăugată manual, dacă erau acolo — altfel ar reapărea ca
+    // opțiune „fantomă" în picker, deși niciun produs mai folosește forma veche.
+    const custom=JSON.parse(localStorage.getItem('customCategories')||'[]').filter(c=>!others.includes(c));
+    safeLocalSet('customCategories',JSON.stringify(custom));
+    rebuildCats();
+    renderTable();renderCatDupList();buildCats('');
+    toast(`✓ Unificat — ${totalAffected} ${totalAffected===1?'produs actualizat':'produse actualizate'}`);
+  }catch(e){toast('Eroare la unificare: '+(e.message||e),'err');}
+}
 
 /* INVOICE */
 function openInvoice(){
@@ -31343,7 +31481,7 @@ function aiChatExecuteIntent(intent){
   // „5902802907004"), apoi numele, fuzzy — findExistingProduct deja face exact această ordine.
   const produsMatch=(intent.produsNume||intent.produsCod)?findExistingProduct({ean:intent.produsCod||'',sku:intent.produsCod||'',name:intent.produsNume||''}):null;
   const produsId=produsMatch?produsMatch.product.id:null;
-  const categorie=intent.categorie&&CATS.includes(intent.categorie)?intent.categorie:null;
+  const categorie=intent.categorie?findCatCI(intent.categorie):null;
   if(intent.tip==='info_produs'){
     if(!produsId)return{tip:intent.tip,rezultat:null,eroare:'Nu am găsit niciun produs după codul/numele dat — verifică te rog, sau încearcă cu numele complet.'};
     const r=aiProductDossier(produsId);
@@ -31460,7 +31598,7 @@ async function aiChatExtractProductVisual(imageDataUrl){
   const mt=imageDataUrl.match(/data:(image\/\w+);/)?.[1]||'image/jpeg',b64=imageDataUrl.split(',')[1];
   if(!b64||b64.length<100)throw new Error('Imagine prea mică sau coruptă');
   const prompt=`Analizează imaginea pentru crearea unui produs în gestiune. Poate fi fotografie de produs sau screenshot al unei pagini de furnizor.
-Extrage DOAR informația vizibilă: numeSursa = titlul văzut la furnizor (tradus în română doar dacă e altă limbă); numeRecomandat = titlu românesc clar, comercial și corect, bazat pe produsul real și specificațiile vizibile, care corectează titlurile prea vagi; numeAlternativ = o a doua variantă mai scurtă, cu alte cuvinte relevante; nume = aceeași valoare ca numeRecomandat. Categorie EXACT din lista ${CATS.join(', ')}. Cod furnizor/SKU/model dacă este etichetat explicit SAU dacă apare clar ca model/cod în titlu, inclusiv cod cu cratimă precum „SOL-EQ” sau „VC-05”; EAN/GTIN doar dacă este etichetat explicit; preț de achiziție, monedă și dacă scrie net/fără TVA sau cu TVA; furnizorul/magazinul: caută-l inclusiv în logo, antet, bara de navigare sau URL-ul vizibil — de exemplu logo „iWant!” înseamnă furnizor „iWant!” — și completează-l chiar dacă nu apare lângă preț; material, dimensiuni, culori și descriere scurtă. Nu inventa nimic și nu trata ID-ul paginii sau un număr de navigare drept cod produs.
+Extrage DOAR informația vizibilă: numeSursa = titlul văzut la furnizor (tradus în română doar dacă e altă limbă); numeRecomandat = titlu românesc clar, comercial și corect, bazat pe produsul real și specificațiile vizibile, care corectează titlurile prea vagi; numeAlternativ = o a doua variantă mai scurtă, cu alte cuvinte relevante; nume = aceeași valoare ca numeRecomandat. Categorie — alege DUPĂ TIPUL produsului (ce ESTE obiectul: jucărie, decorațiune, umeraș etc.), NU după culoare sau material. EXACT din lista ${CATS.join(', ')}, cuvânt cu cuvânt. Dacă NICIO categorie din listă nu se potrivește clar tipului de produs, pune null — nu alegi una la întâmplare (nu e obligatoriu să alegi una doar ca să ai ce răspunde) și nu inventezi o categorie nouă. Cod furnizor/SKU/model dacă este etichetat explicit SAU dacă apare clar ca model/cod în titlu, inclusiv cod cu cratimă precum „SOL-EQ” sau „VC-05”; EAN/GTIN doar dacă este etichetat explicit; preț de achiziție, monedă și dacă scrie net/fără TVA sau cu TVA; furnizorul/magazinul: caută-l inclusiv în logo, antet, bara de navigare sau URL-ul vizibil — de exemplu logo „iWant!” înseamnă furnizor „iWant!” — și completează-l chiar dacă nu apare lângă preț; material, dimensiuni, culori și descriere scurtă. Nu inventa nimic și nu trata ID-ul paginii sau un număr de navigare drept cod produs.
 Pentru screenshot de pagină, tipImagine este screenshot_pagina iar zonaProdus este fotografia MARE a produsului, fără meniuri/text/thumbnails, în procente 0-100 ale imaginii: x/y/latime/inaltime. Pentru fotografie directă, tipImagine este fotografie_produs și zonaProdus null.`;
   const resp=await callAI([{role:'user',content:[{type:'image',source:{type:'base64',media_type:mt,data:b64}},{type:'text',text:prompt}]}],
     'Ești un extractor riguros de date comerciale. Răspunzi doar cu JSON-ul cerut și nu ghicești câmpuri lipsă.',1200,'analysis',AI_CHAT_PRODUCT_VISUAL_SCHEMA,'ai_chat_product_visual');
@@ -31503,9 +31641,14 @@ function aiChatResolveTextPrice(intent,text){
   return pp?{pret:pp.pret,moneda:pp.moneda,tipPret:pp.tipPret}:null;
 }
 async function aiChatCreateProductDraft(intent,imageDataUrl){
-  let nume=intent.produsNume||'',categorie=intent.categorie&&CATS.includes(intent.categorie)?intent.categorie:'';
+  // findCatCI (nu CATS.includes strict) — altfel o categorie întoarsă corect de AI, dar cu alte
+  // diacritice/majuscule decât forma deja existentă, ar fi respinsă silențios ca „inexistentă" și
+  // câmpul ar rămâne gol degeaba; folosind forma canonică deja existentă, nu se mai creează niciun
+  // duplicat. Rezultat gol ('') dacă AI-ul chiar n-a găsit nicio potrivire clară (permis explicit în
+  // prompt) — NU prima categorie din listă.
+  let nume=intent.produsNume||'',categorie=intent.categorie?(findCatCI(intent.categorie)||''):'';
   const pret=intent.produsCreatPret||null,pt=intent.pretText||null;let extras={},pozaProdus='';
-  if(imageDataUrl)try{extras=await aiChatExtractProductVisual(imageDataUrl);if(!nume&&(extras.numeRecomandat||extras.nume))nume=stripDiacritics(extras.numeRecomandat||extras.nume);if(!categorie&&extras.categorie&&CATS.includes(extras.categorie))categorie=extras.categorie;pozaProdus=extras.zonaProdus?await aiChatCropProductImage(imageDataUrl,extras.zonaProdus):(extras.tipImagine==='fotografie_produs'?imageDataUrl:'');}catch(e){console.warn('Extragerea completă din imagine pentru draft produs a eșuat:',e);}
+  if(imageDataUrl)try{extras=await aiChatExtractProductVisual(imageDataUrl);if(!nume&&(extras.numeRecomandat||extras.nume))nume=stripDiacritics(extras.numeRecomandat||extras.nume);if(!categorie&&extras.categorie)categorie=findCatCI(extras.categorie)||'';pozaProdus=extras.zonaProdus?await aiChatCropProductImage(imageDataUrl,extras.zonaProdus):(extras.tipImagine==='fotografie_produs'?imageDataUrl:'');}catch(e){console.warn('Extragerea completă din imagine pentru draft produs a eșuat:',e);}
   const candidati=aiFindSimilarProductCandidates(nume,categorie,5);
   let asemanatori=[];
   if(candidati.length&&pozaProdus){
