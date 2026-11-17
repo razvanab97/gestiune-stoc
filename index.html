@@ -989,6 +989,16 @@ tr:hover td{background:var(--surf2)}
 .cf-drop-t{font-size:18px;color:#1e1b4b}.cf-drop-s{font-size:14px;color:#64748b}
 .cf-drop kbd{font-family:var(--mono);background:#fff;border:1px solid #c7d2fe;border-radius:6px;padding:1px 6px;font-size:13px}
 .cf-paste-btn{margin-top:10px;width:100%;border-radius:12px}
+.cf-tray{margin-top:12px;padding:14px;border-radius:18px;background:#fff;border:1px solid #c7d2fe;box-shadow:0 0 0 4px rgba(99,102,241,.08)}
+.cf-tray-head{display:flex;flex-wrap:wrap;gap:8px;align-items:baseline;font-size:17px;color:#1e1b4b}
+.cf-tray-list{display:flex;flex-wrap:wrap;gap:10px;margin:12px 0}
+.cf-tray-it{position:relative;width:86px;height:86px;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0;background:#f8fafc}
+.cf-tray-it img{width:100%;height:100%;object-fit:cover;cursor:zoom-in}
+.cf-tray-it span{position:absolute;left:5px;top:5px;background:rgba(15,23,42,.75);color:#fff;font-size:12px;font-weight:700;border-radius:6px;padding:1px 6px}
+.cf-tray-it button{position:absolute;right:4px;top:4px;width:24px;height:24px;border-radius:8px;border:none;background:rgba(255,255,255,.92);cursor:pointer;font-size:13px}
+.cf-tray-act{display:flex;gap:8px;flex-wrap:wrap}.cf-tray-act .btn-acc{background:linear-gradient(135deg,#4f46e5,#0891b2);border:none;color:#fff}
+.cf-dup{display:flex;gap:14px;align-items:flex-start;padding:16px 18px;border-radius:18px;background:linear-gradient(135deg,#fff7ed,#fef2f2);border:1px solid #fdba74;font-size:17px;color:#7c2d12;line-height:1.5}
+.cf-dup-ic{flex-shrink:0;width:40px;height:40px;border-radius:12px;display:grid;place-items:center;background:#f97316;color:#fff;font-size:20px;font-weight:800}
 .cf-modal #cf-preview{display:flex;flex-direction:column;gap:12px}
 .inv-prev-row.cf-row{align-items:flex-start;gap:14px;padding:16px 18px;border:1px solid #e3e7f5;border-left:5px solid #cbd5e1;border-radius:18px;background:#fff;font-size:19px;box-shadow:0 8px 22px -18px rgba(30,27,75,.5)}
 .inv-prev-row.cf-row:last-child{border-bottom:1px solid #e3e7f5}
@@ -5155,7 +5165,7 @@ poza principală a produsului — orice apel openImgZoom(src) deschide aceeași 
       </div>
       <div class="invx-summary-card">
         <div class="invx-summary-lbl">Referință comandă</div>
-        <input type="text" id="cf-comanda-ref" class="invx-summary-input" placeholder="opțional">
+        <input type="text" id="cf-comanda-ref" class="invx-summary-input" placeholder="opțional" oninput="renderFurnizorImportPreview()">
       </div>
       <div class="invx-summary-card">
         <div class="invx-summary-lbl">Dată estimativă (gata la furnizor)</div>
@@ -5180,8 +5190,9 @@ poza principală a produsului — orice apel openImgZoom(src) deschide aceeași 
       </div>
       <div class="fld" style="flex:1;min-width:280px">
         <label>sau încarcă poze/factura (PDF)</label>
-        <div class="cf-drop"><input type="file" id="cf-file" accept="image/*,application/pdf" multiple onchange="handleFurnizorFiles(event)"><div class="cf-drop-ic">⬆</div><div class="cf-drop-t"><b>Alege sau trage aici</b> poze / PDF</div><div class="cf-drop-s">sau apasă <kbd>⌘V</kbd> oriunde în fereastră</div></div>
+        <div class="cf-drop"><input type="file" id="cf-file" accept="image/*,application/pdf" multiple onchange="furnizorFilesPicked(event)"><div class="cf-drop-ic">⬆</div><div class="cf-drop-t"><b>Alege sau trage aici</b> poze / PDF</div><div class="cf-drop-s">mai multe poze deodată · sau <kbd>⌘V</kbd> de câte ori vrei</div></div>
         <button type="button" class="btn btn-sm cf-paste-btn" onclick="pasteFurnizorFromClipboardBtn()" title="Ia poza copiată (captură de ecran, poză copiată din browser)">📋 Lipește poza din clipboard</button>
+        <div id="cf-tray"></div>
         <div id="cf-invoice-files"></div>
       </div>
     </div>
@@ -5365,6 +5376,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:729,text:'Comandă furnizor așteptată — mai multe poze dintr-o comandă deodată + avertisment de comandă dublă, cerut direct: „să poți adăuga mai multe poze dintr-o comandă o dată; de asemenea, dacă o comandă se aseamănă sau se duplică, să ne menționeze, în caz că o punem mai mult de o dată". (1) Pozele (alese din PC, mai multe deodată, sau lipite cu ⌘V de câte ori vrei) se strâng într-o „tavă" cu miniaturi numerotate (poți scoate una greșită), apoi „🤖 Citește cele N poze" le trimite ÎMPREUNĂ la AI, ca o singură comandă (capturi succesive, fără dubluri între ele). Dacă aceeași linie apare de două ori (capturi care se suprapun), e sărită automat, cu mesaj. (2) Pe măsură ce completezi, fereastra compară cu comenzile deja pe drum: același număr de comandă = „Comanda pare deja adăugată!"; același furnizor și majoritatea produselor identice = „Seamănă cu o comandă deja pe drum" (cu câte produse se potrivesc și data). La „Trimite ca așteptată" primești confirmare dacă e dublă — inclusiv dacă același număr de comandă a fost adăugat în trecut și a sosit deja. Verificat de 2 ori: Playwright (tavă cu 3 poze → o singură citire AI, linie dublă sărită, avertisment după nr. comandă și după produse, confirmare la trimitere, fără scrieri reale) — zero erori JS.',date:'2026-11-17'},
   {n:728,text:'Pop-up-uri reproiectate — „Comandă furnizor așteptată" și „Importă factură", cerut direct: „redesign la pop-up-urile de genul, să fie mai futuriste, ușor mai mari, mai clare". Antet întunecat cu gradient indigo→cyan și iconiță, bandă de lumină sus, fundal estompat, colțuri mai rotunde; câmpurile de sus se aprind la focus. Comanda furnizor e mai lată (1080px) și fiecare linie e acum un card clar: titlul mare, apoi „pastile" separate pentru cod / bucăți / preț (cu echivalentul în RON), bara colorată în stânga arată starea (verde = potrivit din stoc, portocaliu = produs nou, roșu = fără produs, cyan = transport), iar alegerea produsului e mai lată (numele se citește întreg). Zona de poze/PDF e un pătrat mare de „trage aici", cu ⌘V și butonul de clipboard. Doar aspectul s-a schimbat — aceleași butoane și aceeași logică. Verificat de 2 ori: Playwright (capturi + regresie comenzi furnizor, sosire, clipboard) — zero erori JS.',date:'2026-11-17'},
   {n:727,text:'Comenzi furnizor — comenzile trimise doar dintr-o captură (clipboard), fără factură, cer acum factura la sosire, cerut direct: „la adăugarea din clipboard, fără factură, să apară «adaugă factura și adaugă în stoc», pentru că asta nu e factura comenzii și n-ar fi corect să adăugăm fără factură". Pe cardul „📥 Comenzi furnizor — pe drum", la astfel de comenzi (ex. Skroutz de azi) butonul devine „📄 Adaugă factura și adaugă în stoc": se deschide „Importă factură" goală (doar furnizorul și nr. comenzii completate), încarci factura reală (PDF/poză), o verifici și apeși „Aplică" — stocul intră din factură (prețuri, transport, cantități reale), iar produsele comenzii găsite pe factură se închid automat; cele care lipsesc de pe factură rămân pe drum. „Aplică" nu merge până nu e încărcată factura. Comenzile cu factură atașată (PDF) păstrează „✓ A sosit — adaugă în stoc", completat automat, ca înainte. Verificat de 2 ori: Playwright (comandă din clipboard → butonul nou, blocare fără factură, după factură doar produsul găsit se închide; comandă cu PDF → butonul vechi) — zero erori JS.',date:'2026-11-17'},
   {n:726,text:'Comandă furnizor așteptată — poze direct din clipboard, cerut direct: „să putem adăuga aici poze și din clipboard, nu doar din PC". Copiezi o captură de ecran sau o poză (din pagina furnizorului, din WhatsApp, din browser) și apeși ⌘V oriunde în fereastra „Comandă furnizor așteptată" — sau butonul nou „📋 Lipește poza din clipboard". Poza trece exact prin același flux ca una aleasă din PC: citire AI a produselor + păstrată ca document atașat („Vezi factura"). Textul lipit în câmpul de text funcționează ca înainte. Verificat de 2 ori: Playwright cu ⌘V simulat (poză) și cu text — zero erori JS.',date:'2026-11-17'},
@@ -25986,6 +25998,7 @@ let furnizorInvoiceFiles=[];
 function openFurnizorComanda(){
   furnizorImpParsed=[];
   furnizorInvoiceFiles=[];
+  try{furnizorTrayClear();}catch(e){}
   document.getElementById('cf-furnizor').value='';
   document.getElementById('cf-comanda-ref').value='';
   document.getElementById('cf-data-estimativa').value='';
@@ -26013,15 +26026,42 @@ document.addEventListener('paste',ev=>{
   const imgs=[...(ev.clipboardData?.items||[])].filter(i=>i.kind==='file'&&/^image\/|^application\/pdf$/.test(i.type)).map(i=>i.getAsFile()).filter(Boolean);
   if(!imgs.length)return;   // text simplu -> se lipește normal în câmp
   ev.preventDefault();
-  handleFurnizorFiles({target:{files:furnizorClipFiles(imgs),value:''}});
+  furnizorTrayAdd(furnizorClipFiles(imgs));
 });
+// Mai multe poze din ACEEAȘI comandă (cerut direct: „să poți adăuga mai multe poze dintr-o comandă o dată")
+// — pozele (alese din PC sau lipite cu ⌘V, una câte una) se strâng întâi într-o tavă, apoi „Citește pozele"
+// le trimite pe toate ÎMPREUNĂ la AI, ca un singur document (capturi succesive, fără dubluri între ele).
+// PDF-urile se citesc direct, ca înainte.
+let furnizorTray=[];
+function furnizorTrayAdd(files){
+  const imgs=files.filter(f=>f.type.startsWith('image/')),pdfs=files.filter(f=>f.type==='application/pdf');
+  imgs.forEach(f=>{furnizorTray.push({file:f,url:URL.createObjectURL(f)});});
+  renderFurnizorTray();
+  if(pdfs.length)handleFurnizorFiles({target:{files:pdfs,value:''}});
+  if(imgs.length)toast(`${furnizorTray.length} ${furnizorTray.length===1?'poză':'poze'} în tavă — adaugă restul, apoi „Citește pozele"`);
+}
+function furnizorFilesPicked(ev){furnizorTrayAdd([...(ev.target.files||[])]);ev.target.value='';}
+function furnizorTrayRemove(i){const t=furnizorTray.splice(i,1)[0];try{URL.revokeObjectURL(t.url);}catch(e){}renderFurnizorTray();}
+function furnizorTrayClear(){furnizorTray.forEach(t=>{try{URL.revokeObjectURL(t.url);}catch(e){}});furnizorTray=[];renderFurnizorTray();}
+function renderFurnizorTray(){
+  const box=document.getElementById('cf-tray');if(!box)return;
+  if(!furnizorTray.length){box.innerHTML='';return;}
+  box.innerHTML=`<div class="cf-tray"><div class="cf-tray-head"><b>📸 ${furnizorTray.length} ${furnizorTray.length===1?'poză':'poze'} din comandă</b><span class="cf-note">se citesc împreună, ca o singură comandă</span></div>
+    <div class="cf-tray-list">${furnizorTray.map((t,i)=>`<div class="cf-tray-it"><img src="${t.url}" onclick="openImgZoom('${t.url}')" title="${esc(t.file.name)}"><span>${i+1}</span><button type="button" onclick="furnizorTrayRemove(${i})" title="Scoate poza">✕</button></div>`).join('')}</div>
+    <div class="cf-tray-act"><button type="button" class="btn btn-sm btn-acc" onclick="furnizorTrayRead()">🤖 Citește ${furnizorTray.length===1?'poza':'cele '+furnizorTray.length+' poze'}</button><button type="button" class="btn btn-sm" onclick="furnizorTrayClear()">Golește</button></div></div>`;
+}
+async function furnizorTrayRead(){
+  if(!furnizorTray.length)return;
+  const files=furnizorTray.map(t=>t.file);furnizorTrayClear();
+  await handleFurnizorFiles({target:{files,value:''}});
+}
 async function pasteFurnizorFromClipboardBtn(){
   try{
     if(!navigator.clipboard?.read)throw new Error('nesuportat');
     const items=await navigator.clipboard.read(),blobs=[];
     for(const it of items){const t=it.types.find(x=>x.startsWith('image/'));if(t)blobs.push(await it.getType(t));}
     if(!blobs.length){toast('În clipboard nu e nicio poză — copiază întâi o captură/poză','warn');return;}
-    await handleFurnizorFiles({target:{files:furnizorClipFiles(blobs),value:''}});
+    furnizorTrayAdd(furnizorClipFiles(blobs));
   }catch(e){toast('Nu am acces direct la clipboard — apasă ⌘V în fereastră','warn');}
 }
 const FURNIZOR_ORDER_SCHEMA={
@@ -26081,8 +26121,44 @@ async function furnizorApplyAiResult(resp){
     const transport=!!it.esteTransport||FURNIZOR_TRANSPORT_RE.test(String(it.name||'').trim());
     return{titluExtern:String(it.name||'').trim(),codExtern:cod,eanExtern:ean,cantitate:Math.max(0,Number(it.qty)||0)||1,pret:Math.max(0,Number(it.pret)||0),produsId:transport?null:(match?match.product.id:null),score:transport?0:(match?match.score:0),transport,newProduct:false,category:'',img:''};
   });
-  furnizorImpParsed=furnizorImpParsed.concat(newLines);
+  // Aceeași linie citită de două ori (capturi care se suprapun, aceeași poză lipită de 2 ori) — o sărim.
+  const lineKey=x=>[String(x.codExtern||'').toLowerCase()||normalizeForFurnizorDup(x.titluExtern),Number(x.cantitate)||0,Math.round((Number(x.pret)||0)*100)].join('|');
+  const seen=new Set(furnizorImpParsed.map(lineKey));let dupN=0;
+  const fresh=newLines.filter(x=>{const k=lineKey(x);if(seen.has(k)){dupN++;return false;}seen.add(k);return true;});
+  furnizorImpParsed=furnizorImpParsed.concat(fresh);
+  if(dupN)toast(`${dupN} ${dupN===1?'linie era deja în listă':'linii erau deja în listă'} (aceeași poză/captură) — ${dupN===1?'sărită':'sărite'}`,'warn');
   renderFurnizorImportPreview();
+}
+function normalizeForFurnizorDup(t){return String(t||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^a-z0-9]+/g,' ').trim();}
+// Comandă duplicată/asemănătoare (cerut direct: „dacă o comandă se aseamănă sau se duplică să ne menționeze,
+// în caz că o punem mai mult de o dată") — comparăm cu comenzile furnizor încă pe drum: același nr. de
+// comandă = duplicat sigur; altfel, același furnizor și ≥60% din produse identice = foarte probabil aceeași.
+function furnizorDupMatches(){
+  const furnizor=normalizeForFurnizorDup(document.getElementById('cf-furnizor')?.value);
+  const ref=normalizeForFurnizorDup(document.getElementById('cf-comanda-ref')?.value);
+  const lines=furnizorImpParsed.filter(x=>!x.transport);
+  // o linie e „aceeași" dacă are același produs SAU același cod SAU același nume
+  const keysOf=(pid,cod,t)=>[pid?'p'+pid:'',cod?'c'+String(cod).trim().toLowerCase():'',normalizeForFurnizorDup(t)?'t'+normalizeForFurnizorDup(t):''].filter(Boolean);
+  const mine=lines.map(x=>keysOf(x.produsId,x.codExtern,x.titluExtern)).filter(k=>k.length);
+  const groups={};(Array.isArray(FURNIZOR_ADMIN)?FURNIZOR_ADMIN:[]).forEach(r=>{(groups[furnizorGroupKey(r)]=groups[furnizorGroupKey(r)]||[]).push(r);});
+  const out=[];
+  Object.values(groups).forEach(rows=>{
+    const r0=rows[0],gRef=normalizeForFurnizorDup(r0.comanda_ref);
+    const label=`${r0.furnizor||'Furnizor'}${r0.comanda_ref?' #'+r0.comanda_ref:''} · adăugată ${r0.created_at?new Date(r0.created_at).toLocaleDateString('ro-RO'):''}`;
+    if(ref&&gRef&&ref===gRef){out.push({kind:'ref',label,same:rows.length,total:rows.length});return;}
+    if(!mine.length)return;
+    const theirs=new Set(rows.flatMap(r=>keysOf(r.produs_id,r.cod_extern,r.titlu_extern)));
+    const same=mine.filter(ks=>ks.some(k=>theirs.has(k))).length;
+    const sameSupplier=!!furnizor&&normalizeForFurnizorDup(r0.furnizor)===furnizor;
+    const ratio=same/Math.min(mine.length,rows.length);
+    if(same>=2&&ratio>=.6&&(sameSupplier||ratio>=.9))out.push({kind:'similar',label,same,total:mine.length});
+    else if(same===1&&mine.length===1&&rows.length===1&&sameSupplier)out.push({kind:'similar',label,same,total:1});
+  });
+  return out.sort((a,b)=>(a.kind==='ref'?0:1)-(b.kind==='ref'?0:1)||b.same-a.same);
+}
+function furnizorDupHtml(){
+  const m=furnizorDupMatches();if(!m.length)return'';
+  return`<div class="cf-dup"><div class="cf-dup-ic">⚠</div><div><b>${m[0].kind==='ref'?'Comanda pare deja adăugată!':'Seamănă cu o comandă deja pe drum'}</b>${m.slice(0,3).map(x=>`<div>${x.kind==='ref'?'Același număr de comandă':`${x.same} din ${x.total} produse identice`} — <b>${esc(x.label)}</b></div>`).join('')}<div class="cf-note">Verifică pe Dashboard („📥 Comenzi furnizor — pe drum") să nu o pui de două ori.</div></div></div>`;
 }
 async function parseFurnizorPastedText(){
   const text=document.getElementById('cf-paste-text').value.trim();
@@ -26178,7 +26254,7 @@ function renderFurnizorImportPreview(){
   const unmatchedN=furnizorImpParsed.filter(x=>!x.produsId&&!x.newProduct&&!x.transport).length;
   const mon=furnizorMoneda();
   const bulk=unmatchedN?`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px"><button type="button" class="btn btn-sm" onclick="markAllFurnizorUnmatchedAsNew()" title="Marchează toate liniile fără potrivire ca produse noi — se creează la „Trimite ca așteptată", cu stoc 0">🆕 Produs nou pentru toate cele ${unmatchedN} nepotrivite</button><span style="font-size:15px;color:var(--t3)">Se creează cu stoc 0 — nu atinge stocul.</span></div>`:'';
-  box.innerHTML=bulk+furnizorImpParsed.map((it,idx)=>{
+  box.innerHTML=furnizorDupHtml()+bulk+furnizorImpParsed.map((it,idx)=>{
     const pricePill=it.pret?`<span class="cf-pill price">${it.pret.toFixed(2)} ${mon}${mon==='EUR'?` <small>≈ ${furnizorToRon(it.pret).toFixed(2)} RON</small>`:''}</span>`:'';
     if(it.transport)return`<div class="inv-prev-row cf-row transport">
       <div class="cf-row-main"><div class="cf-row-title">🚚 Transport <span class="cf-muted">— ${esc(it.titluExtern)}</span></div>
@@ -26370,6 +26446,16 @@ async function applyFurnizorComanda(){
   const transportRon=Math.round(furnizorImpParsed.filter(x=>x.transport).reduce((a,x)=>a+furnizorToRon(x.pret),0)*100)/100;
   const comandaRef=document.getElementById('cf-comanda-ref').value.trim()||null;
   const dataEstimativa=document.getElementById('cf-data-estimativa').value||null;
+  {
+    const dups=furnizorDupMatches();
+    let past=null;
+    if(comandaRef&&!dups.some(d=>d.kind==='ref')&&sbReady){try{past=(await dbGet(`comenzi_furnizor?select=id,created_at,finalizat&comanda_ref=eq.${encodeURIComponent(comandaRef)}&limit=1`))?.[0]||null;}catch(e){}}
+    if(dups.length||past){
+      const msg=dups.length?`${dups[0].kind==='ref'?'Comanda cu același număr e deja pe drum':'Comanda seamănă cu una deja pe drum'}:\n${dups.slice(0,3).map(d=>'• '+d.label+(d.kind==='ref'?'':` (${d.same} din ${d.total} produse identice)`)).join('\n')}`
+        :`Comanda #${comandaRef} a mai fost adăugată pe ${new Date(past.created_at).toLocaleDateString('ro-RO')}${past.finalizat?' (și a sosit deja)':''}.`;
+      if(!confirm(msg+'\n\nO trimiți totuși (încă o dată)?'))return;
+    }
+  }
   const btn=document.getElementById('cf-apply-btn');btn.disabled=true;btn.textContent='Se salvează…';
   try{
     // 1) Produse noi marcate „🆕" — create cu stoc 0 (comanda e încă pe drum), cu furnizorul comenzii,
