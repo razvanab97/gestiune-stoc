@@ -5308,6 +5308,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:723,text:'Comenzi furnizor — confirmare sosire cu intrare automată în stoc, cerut direct: „să putem confirma o astfel de comandă care e pe drum, atunci când a ajuns, și să se ducă automat factura în stoc și să se adauge acolo". Pe fiecare comandă din „📥 Comenzi furnizor — pe drum" (Dashboard) apare „✓ A sosit — adaugă în stoc": deschide „Importă factură" deja completată din comandă — produsele asociate, cantitățile comandate, prețul unitar în RON, transportul, furnizorul și numărul comenzii. Verifici (poți corecta cantitățile primite sau alege produsul la liniile nepotrivite) și apeși „Aplică": stocul crește exact ca la orice factură (cost mediu ponderat, transportul împărțit pe bucăți, Istoric „Comenzi stoc", mișcări de stoc), iar liniile intrate în stoc sunt închise automat pe comanda furnizor — dispar din „pe drum" și din Staff („Marfă furnizor"). Liniile lăsate nerezolvate rămân pe drum, pentru mai târziu. Verificat de 2 ori: Playwright cu o comandă sintetică (2 produse, unul nepotrivit, 50 RON transport, fără scrieri reale): factura se deschide completată corect, stocul crește (2→6), costul include transportul (25 + 10 = 35 RON/buc), Istoric stoc salvat, doar linia aplicată se închide; la a doua aplicare (produs nou) comanda dispare complet de pe card + regresie comenzi furnizor/Dashboard — zero erori JS.',date:'2026-11-17'},
   {n:722,text:'Comandă furnizor așteptată — transport și monedă, cerut direct, pe o comandă Maxy reală (linia „delivery · 125.93"): „aici să selectăm transport, iar prețul în cazul ăsta e în euro". Înainte, AI-ului i se cerea explicit prețul „în lei", deci prețurile în EUR erau salvate ca RON, iar linia de livrare rămânea „doar text" (sau devenea produs nou și apărea în Staff ca marfă de primit). Acum, exact ca la Importă factură: (1) câmp nou „Monedă prețuri" (RON/EUR), completat automat de AI din document; prețurile EUR se arată și convertite (≈ RON) și se salvează în RON (inclusiv prețul de achiziție al produselor noi și „Alt furnizor"), cu același curs folosit deja la facturi; (2) liniile de transport („delivery/shipping/transport/livrare…") sunt marcate automat „🚚 Transport", iar orice linie poate fi marcată/demarcată manual — nu devin produse, nu apar în Staff, totalul lor (în RON) se salvează pe comandă și apare pe cardul „Comenzi furnizor — pe drum". Necesită coloana nouă `transport` (SQL în chat) — până atunci comanda se salvează normal, cu avertisment că transportul n-a fost salvat. Verificat de 2 ori: Playwright pe o comandă EUR cu „delivery" (monedă detectată, transport marcat automat, „Produs nou pentru toate" nu-l atinge, prețuri convertite corect, produsul nou cu preț în RON, fără coloana transport → salvare normală + avertisment, cu coloana → transport 638.47 RON salvat și afișat pe Dashboard) — zero erori JS.',date:'2026-11-17'},
   {n:721,text:'Comenzi Platforme — alegerea produsului pe o linie nu mai „rămâne blocată" și nu mai poate ajunge pe altă comandă, bug GRAV, raportat direct: „încerc să setez produsul corect și nu mă lasă, rămâne blocat pe acesta" (#581154471). Cauza, reprodusă exact: lista de produse ținea minte doar POZIȚIA liniei; reîmprospătarea automată (la 5 minute) scoate între timp din previzualizare comenzile care nu mai sunt deschise pe eMAG (azi multe, după emiterea AWB-urilor) — pozițiile se mutau, iar produsul ales era scris pe comanda de dedesubt, în timp ce linia aleasă rămânea neschimbată. Acum lista (și cea de AWB de pe linie) ține minte comanda însăși; dacă aceasta a dispărut între timp, nu se scrie nimic nicăieri și primești un mesaj. În plus, dacă eMAG nu răspunde pentru o țară (RO/BG/HU) la o reîmprospătare, comenzile acelei țări nu mai sunt scoase din previzualizare (înainte erau scoase și readuse cu potrivirea automată, pierzând produsul ales manual). Verificat: în bază nu a ajuns niciun produs greșit (95 de comenzi azi, toate conform codului). Verificat de 2 ori: Playwright (linie scoasă între deschiderea listei și alegere → produsul ajunge pe comanda corectă, cealaltă neatinsă; linie dispărută complet → nimic scris; țară eMAG fără răspuns → comenzile ei rămân) — zero erori JS.',date:'2026-11-17'},
   {n:720,text:'Marcajul verde „am lucrat pe comanda asta" — un marcaj șters din bază nu mai e „reînviat" de browser. Găsit verificând: varianta de la #712 urca la fiecare sincronizare (20s) ORICE marcaj din lista locală a browserului care lipsea din bază — deci o ștergere din bază era anulată imediat de orice browser deschis care îl preluase deja. Acum baza e sursa de adevăr: se urcă strict marcajele care chiar n-au putut fi salvate la copiere (offline/tabela încă inexistentă), iar restul se iau din bază. Verificat de 2 ori: Playwright cu rețeaua spre tabelă blocată (fără tabelă → local; cu tabelă → marcaje din alt dispozitiv, copiere nouă salvată; ștergere în bază → nu mai revine) — zero erori JS.',date:'2026-11-17'},
@@ -6443,6 +6444,51 @@ function openFurnizorFactura(url){
   if(/\.pdf($|\?)/i.test(url))window.open(url,'_blank');
   else openImgZoom(url);
 }
+// Confirmare sosire comandă furnizor → intră în stoc — cerut direct: „să putem confirma o astfel de comandă
+// care e pe drum, atunci când a ajuns, și să se ducă automat factura în stoc și să se adauge acolo".
+// Nu dublăm logica de stoc: deschidem „Importă factură" deja completată din comandă (produse, cantități,
+// preț unitar în RON, transport, furnizor, nr. comandă) — omul verifică/corectează și apasă „Aplică";
+// applyInvoice face restul exact ca la orice factură (cost mediu ponderat, transport pe bucată, Istoric
+// „Comenzi stoc", mișcări de stoc). Abia după aplicare, liniile chiar intrate în stoc sunt închise pe
+// comanda furnizor (finalizat — dispar din „pe drum" și din Staff); cele lăsate nerezolvate rămân deschise.
+let invFromFurnizor=null;
+function openFurnizorArrival(key){
+  const rows=FURNIZOR_ADMIN.filter(r=>furnizorGroupKey(r)===key);
+  if(!rows.length){toast('Comanda nu mai e pe drum','err');return;}
+  openInvoice();
+  invFromFurnizor={key,rowIds:rows.map(r=>r.id)};
+  const r0=rows[0];
+  invSourceName=`Comandă furnizor ${r0.furnizor||''}${r0.comanda_ref?' #'+r0.comanda_ref:''}`.trim();
+  document.getElementById('inv-number').value=r0.comanda_ref||'';
+  const sup=document.getElementById('inv-supplier');if(sup)sup.value=r0.furnizor||'';
+  const tr=Math.max(0,Number(r0.transport)||0);
+  invShippingCostRon=tr;
+  const shipEl=document.getElementById('inv-shipping');if(shipEl){shipEl.value=tr?tr.toFixed(2):'';if(tr)shipEl.dataset.manual='1';}
+  document.getElementById('inv-lines').innerHTML='';invLines=[];
+  invParsed=rows.map(r=>{
+    const qty=Math.max(0,Number(r.cantitate_comandata)||0);
+    const unit=qty>0?Math.round((Number(r.pret)||0)/qty*100)/100:0;
+    const p=r.produs_id?P.find(x=>x.id===r.produs_id):null;
+    const item={name:p?.name||r.titlu_extern||'',sku:r.cod_extern||null,ean:null,qty,priceBuy:unit,currency:'RON',piecesPerUnit:1,
+      lineTotalOriginal:Number(r.pret)||0,calculatedFromTotal:false,aiConfidence:100,warnings:[],_normalized:true,costRon:unit,_furnizorRowId:r.id};
+    if(p){item.produsId=p.id;item.newProduct=false;}
+    return item;
+  });
+  renderInvPreview();
+  toast('Verifică cantitățile primite (le poți corecta) și apasă „Aplică" — stocul crește și comanda se închide');
+}
+async function furnizorMarkArrived(ids){
+  if(!ids.length)return{ok:0,fail:0};
+  const now=new Date().toISOString();let ok=0,fail=0;
+  for(const id of ids){
+    const r=FURNIZOR_ADMIN.find(x=>x.id===id);
+    try{await dbPatch(`comenzi_furnizor?id=eq.${id}`,{finalizat:true,finalizat_at:now,cantitate_sosita:Number(r?.cantitate_comandata)||0});ok++;}
+    catch(e){fail++;console.warn('Nu am putut închide linia comenzii furnizor',id,e);}
+  }
+  FURNIZOR_ADMIN=FURNIZOR_ADMIN.filter(x=>!ids.includes(x.id));
+  renderFurnizorDashboardCard();renderFurnizorStockCard();
+  return{ok,fail};
+}
 // Cardul NOU, proeminent, de pe Dashboard — cerut direct: „stiu ca avem ceva de genul in platforma...
 // sa se vada cat mai simplu". Spre deosebire de renderFurnizorStockCard (mic, ascuns în Raport stoc),
 // ăsta rămâne mereu vizibil (inclusiv la 0 comenzi active, cu un îndemn clar de adăugare) și arată
@@ -6485,7 +6531,7 @@ function renderFurnizorDashboardCard(){
     }).join(' · ');
     const transportRon=Number(g.rows[0]?.transport)||0;
     const transportTxt=transportRon>0?` · <span title="Transport comandă">🚚 transport ${transportRon.toFixed(2)} RON</span>`:'';
-    return`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${label}</strong>${deadlineBadge}<div class="jp-meta">${prodsHtml}${transportTxt}</div></div><div style="display:flex;gap:6px;flex-wrap:wrap;align-self:flex-start">${facturiBtns}${delBtn}</div></div>`;
+    return`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${label}</strong>${deadlineBadge}<div class="jp-meta">${prodsHtml}${transportTxt}</div></div><div style="display:flex;gap:6px;flex-wrap:wrap;align-self:flex-start"><button type="button" class="btn btn-sm btn-acc" onclick="openFurnizorArrival('${esc(g.key).replace(/'/g,"\\'")}')" title="Marfa a ajuns — o adaugi în stoc (ca o factură importată) și comanda se închide">✓ A sosit — adaugă în stoc</button>${facturiBtns}${delBtn}</div></div>`;
   }).join('');
 }
 async function deleteFurnizorOrderGroup(key,label){
@@ -25789,7 +25835,7 @@ async function applyCatDupMerge(gi){
 
 /* INVOICE */
 function openInvoice(){
-  invLines=[];invParsed=[];invSourceName='Manual';invPickProds=null;invPickIdx=null;invShippingCostRon=0;
+  invLines=[];invParsed=[];invSourceName='Manual';invPickProds=null;invPickIdx=null;invShippingCostRon=0;invFromFurnizor=null;
   document.getElementById('inv-lines').innerHTML='';
   document.getElementById('inv-preview').innerHTML='';
   document.getElementById('inv-file').value='';
@@ -30055,6 +30101,14 @@ async function applyInvoice(){
       continue;
     }
   }
+  // Comandă furnizor confirmată sosită (vezi openFurnizorArrival) — închidem STRICT liniile chiar intrate
+  // în stoc acum (produs ales sau „produs nou"); cele lăsate nerezolvate rămân deschise, pe drum.
+  let furnizorClosed=null;
+  if(invFromFurnizor){
+    const doneIds=invParsed.filter(it=>it._furnizorRowId&&(it.produsId||it.newProduct)).map(it=>it._furnizorRowId);
+    furnizorClosed=await furnizorMarkArrived(doneIds);
+    if(!invParsed.some(it=>it._furnizorRowId&&!it.produsId&&!it.newProduct))invFromFurnizor=null;
+  }
   if(orderDetails.length){
     await saveStockOrderHistory({
       source:invSourceName||'Import stoc',
@@ -30096,7 +30150,7 @@ async function applyInvoice(){
   }else{
     closeInvoice();
   }
-  toast(`✓ ${created} produse noi · ${updated} actualizate${skipped?' · '+skipped+' coduri sărite':''}${receivedLines?' · '+fmtQty(receivedQty)+' buc. recepționate':''}${extraQty?' · '+fmtQty(extraQty)+' buc. extra':''}${altCreated?` · ${altCreated} surse „Alt furnizor" adăugate automat`:''}${unresolved?` · ⚠ ${unresolved} linii mai au nevoie de produs ales manual`:''}`);
+  toast(`✓ ${created} produse noi · ${updated} actualizate${furnizorClosed?` · 📥 comanda furnizor închisă (${furnizorClosed.ok} linii${furnizorClosed.fail?`, ⚠ ${furnizorClosed.fail} neînchise — verifică pe Dashboard`:''})`:''}${skipped?' · '+skipped+' coduri sărite':''}${receivedLines?' · '+fmtQty(receivedQty)+' buc. recepționate':''}${extraQty?' · '+fmtQty(extraQty)+' buc. extra':''}${altCreated?` · ${altCreated} surse „Alt furnizor" adăugate automat`:''}${unresolved?` · ⚠ ${unresolved} linii mai au nevoie de produs ales manual`:''}`);
 }
 
 
