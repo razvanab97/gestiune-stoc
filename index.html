@@ -5126,6 +5126,7 @@ poza principală a produsului — orice apel openImgZoom(src) deschide aceeași 
       <div class="fld" style="flex:0 0 auto">
         <label>sau încarcă poze/factura (PDF)</label>
         <input type="file" id="cf-file" accept="image/*,application/pdf" multiple onchange="handleFurnizorFiles(event)">
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap"><button type="button" class="btn btn-sm" onclick="pasteFurnizorFromClipboardBtn()" title="Ia poza copiată (captură de ecran, poză copiată din browser)">📋 Lipește poza din clipboard</button><span style="font-size:12px;color:var(--t3)">sau apasă ⌘V oriunde în fereastră</span></div>
         <div id="cf-invoice-files"></div>
       </div>
     </div>
@@ -5309,6 +5310,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:726,text:'Comandă furnizor așteptată — poze direct din clipboard, cerut direct: „să putem adăuga aici poze și din clipboard, nu doar din PC". Copiezi o captură de ecran sau o poză (din pagina furnizorului, din WhatsApp, din browser) și apeși ⌘V oriunde în fereastra „Comandă furnizor așteptată" — sau butonul nou „📋 Lipește poza din clipboard". Poza trece exact prin același flux ca una aleasă din PC: citire AI a produselor + păstrată ca document atașat („Vezi factura"). Textul lipit în câmpul de text funcționează ca înainte. Verificat de 2 ori: Playwright cu ⌘V simulat (poză) și cu text — zero erori JS.',date:'2026-11-17'},
   {n:725,text:'Listă locală (Comenzi & stoc) — marfa de la furnizor pe drum se vede acum și sus, nu doar în cardurile din secțiunea 2 (întrebat direct „unde?"): pătrat nou „🚚 Pe drum de la furnizor" lângă celelalte cifre (bucăți + câte produse), iar în „1 · Produse pe platforme" fiecare produs care are marfă pe drum primește eticheta mică 🚚 X lângă stoc (furnizorul și nr. comenzii la hover). Verificat de 2 ori: Playwright cu comenzi furnizor sintetice — zero erori JS.',date:'2026-11-17'},
   {n:724,text:'Listă locală (Comenzi & stoc) — comenzile de la furnizor aflate pe drum apar acum și aici, cerut direct: „când mă duc în secțiunea asta locală să vedem cum stăm cu stocurile și cu comenzile, să apară și aceste colete de pe drum, dar cu un simbol mic distinctiv". Fiecare produs dintr-o comandă furnizor încă neconfirmată („📥 Comenzi furnizor — pe drum" de pe Dashboard) primește pe card eticheta mică 🚚 „X pe drum" (cu furnizorul și nr. comenzii la hover; roșie cu ⚠ dacă termenul a expirat), iar cantitatea intră în „Comandat la furnizor" și scade din „Rămâne de comandat" — nu mai apare ca lipsă ceva deja comandat. Intră și în calculul „după sosirea mărfii". Dispare automat când apeși „✓ A sosit" și aplici factura. Produsele pe drum fără comenzi de clienți apar și ele, ca să vezi tot ce vine. Verificat de 2 ori: Playwright cu comenzi furnizor sintetice (fără scrieri reale) — zero erori JS.',date:'2026-11-17'},
   {n:723,text:'Comenzi furnizor — confirmare sosire cu intrare automată în stoc, cerut direct: „să putem confirma o astfel de comandă care e pe drum, atunci când a ajuns, și să se ducă automat factura în stoc și să se adauge acolo". Pe fiecare comandă din „📥 Comenzi furnizor — pe drum" (Dashboard) apare „✓ A sosit — adaugă în stoc": deschide „Importă factură" deja completată din comandă — produsele asociate, cantitățile comandate, prețul unitar în RON, transportul, furnizorul și numărul comenzii. Verifici (poți corecta cantitățile primite sau alege produsul la liniile nepotrivite) și apeși „Aplică": stocul crește exact ca la orice factură (cost mediu ponderat, transportul împărțit pe bucăți, Istoric „Comenzi stoc", mișcări de stoc), iar liniile intrate în stoc sunt închise automat pe comanda furnizor — dispar din „pe drum" și din Staff („Marfă furnizor"). Liniile lăsate nerezolvate rămân pe drum, pentru mai târziu. Verificat de 2 ori: Playwright cu o comandă sintetică (2 produse, unul nepotrivit, 50 RON transport, fără scrieri reale): factura se deschide completată corect, stocul crește (2→6), costul include transportul (25 + 10 = 35 RON/buc), Istoric stoc salvat, doar linia aplicată se închide; la a doua aplicare (produs nou) comanda dispare complet de pe card + regresie comenzi furnizor/Dashboard — zero erori JS.',date:'2026-11-17'},
@@ -25924,6 +25926,28 @@ function openFurnizorComanda(){
   document.getElementById('ov-cf').classList.add('on');
 }
 function closeFurnizorComanda(){document.getElementById('ov-cf').classList.remove('on');}
+// Poze din clipboard (cerut direct: „să putem adăuga aici poze și din clipboard, nu doar din PC") — ⌘V oriunde
+// în fereastră sau butonul „📋 Lipește poza din clipboard"; trec prin același flux ca fișierele alese din PC.
+function furnizorClipFiles(blobs){
+  const ts=Date.now();
+  return blobs.map((b,i)=>new File([b],`clipboard-${ts}${blobs.length>1?'-'+(i+1):''}.${(b.type.split('/')[1]||'png').replace('jpeg','jpg')}`,{type:b.type||'image/png'}));
+}
+document.addEventListener('paste',ev=>{
+  if(!document.getElementById('ov-cf')?.classList.contains('on'))return;
+  const imgs=[...(ev.clipboardData?.items||[])].filter(i=>i.kind==='file'&&/^image\/|^application\/pdf$/.test(i.type)).map(i=>i.getAsFile()).filter(Boolean);
+  if(!imgs.length)return;   // text simplu -> se lipește normal în câmp
+  ev.preventDefault();
+  handleFurnizorFiles({target:{files:furnizorClipFiles(imgs),value:''}});
+});
+async function pasteFurnizorFromClipboardBtn(){
+  try{
+    if(!navigator.clipboard?.read)throw new Error('nesuportat');
+    const items=await navigator.clipboard.read(),blobs=[];
+    for(const it of items){const t=it.types.find(x=>x.startsWith('image/'));if(t)blobs.push(await it.getType(t));}
+    if(!blobs.length){toast('În clipboard nu e nicio poză — copiază întâi o captură/poză','warn');return;}
+    await handleFurnizorFiles({target:{files:furnizorClipFiles(blobs),value:''}});
+  }catch(e){toast('Nu am acces direct la clipboard — apasă ⌘V în fereastră','warn');}
+}
 const FURNIZOR_ORDER_SCHEMA={
   type:'object',
   properties:{
