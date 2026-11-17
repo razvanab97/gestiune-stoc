@@ -5310,6 +5310,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:727,text:'Comenzi furnizor — comenzile trimise doar dintr-o captură (clipboard), fără factură, cer acum factura la sosire, cerut direct: „la adăugarea din clipboard, fără factură, să apară «adaugă factura și adaugă în stoc», pentru că asta nu e factura comenzii și n-ar fi corect să adăugăm fără factură". Pe cardul „📥 Comenzi furnizor — pe drum", la astfel de comenzi (ex. Skroutz de azi) butonul devine „📄 Adaugă factura și adaugă în stoc": se deschide „Importă factură" goală (doar furnizorul și nr. comenzii completate), încarci factura reală (PDF/poză), o verifici și apeși „Aplică" — stocul intră din factură (prețuri, transport, cantități reale), iar produsele comenzii găsite pe factură se închid automat; cele care lipsesc de pe factură rămân pe drum. „Aplică" nu merge până nu e încărcată factura. Comenzile cu factură atașată (PDF) păstrează „✓ A sosit — adaugă în stoc", completat automat, ca înainte. Verificat de 2 ori: Playwright (comandă din clipboard → butonul nou, blocare fără factură, după factură doar produsul găsit se închide; comandă cu PDF → butonul vechi) — zero erori JS.',date:'2026-11-17'},
   {n:726,text:'Comandă furnizor așteptată — poze direct din clipboard, cerut direct: „să putem adăuga aici poze și din clipboard, nu doar din PC". Copiezi o captură de ecran sau o poză (din pagina furnizorului, din WhatsApp, din browser) și apeși ⌘V oriunde în fereastra „Comandă furnizor așteptată" — sau butonul nou „📋 Lipește poza din clipboard". Poza trece exact prin același flux ca una aleasă din PC: citire AI a produselor + păstrată ca document atașat („Vezi factura"). Textul lipit în câmpul de text funcționează ca înainte. Verificat de 2 ori: Playwright cu ⌘V simulat (poză) și cu text — zero erori JS.',date:'2026-11-17'},
   {n:725,text:'Listă locală (Comenzi & stoc) — marfa de la furnizor pe drum se vede acum și sus, nu doar în cardurile din secțiunea 2 (întrebat direct „unde?"): pătrat nou „🚚 Pe drum de la furnizor" lângă celelalte cifre (bucăți + câte produse), iar în „1 · Produse pe platforme" fiecare produs care are marfă pe drum primește eticheta mică 🚚 X lângă stoc (furnizorul și nr. comenzii la hover). Verificat de 2 ori: Playwright cu comenzi furnizor sintetice — zero erori JS.',date:'2026-11-17'},
   {n:724,text:'Listă locală (Comenzi & stoc) — comenzile de la furnizor aflate pe drum apar acum și aici, cerut direct: „când mă duc în secțiunea asta locală să vedem cum stăm cu stocurile și cu comenzile, să apară și aceste colete de pe drum, dar cu un simbol mic distinctiv". Fiecare produs dintr-o comandă furnizor încă neconfirmată („📥 Comenzi furnizor — pe drum" de pe Dashboard) primește pe card eticheta mică 🚚 „X pe drum" (cu furnizorul și nr. comenzii la hover; roșie cu ⚠ dacă termenul a expirat), iar cantitatea intră în „Comandat la furnizor" și scade din „Rămâne de comandat" — nu mai apare ca lipsă ceva deja comandat. Intră și în calculul „după sosirea mărfii". Dispare automat când apeși „✓ A sosit" și aplici factura. Produsele pe drum fără comenzi de clienți apar și ele, ca să vezi tot ce vine. Verificat de 2 ori: Playwright cu comenzi furnizor sintetice (fără scrieri reale) — zero erori JS.',date:'2026-11-17'},
@@ -6457,6 +6458,25 @@ function openFurnizorFactura(url){
 // „Comenzi stoc", mișcări de stoc). Abia după aplicare, liniile chiar intrate în stoc sunt închise pe
 // comanda furnizor (finalizat — dispar din „pe drum" și din Staff); cele lăsate nerezolvate rămân deschise.
 let invFromFurnizor=null;
+// Comandă trimisă doar din captură/clipboard/text (fără factura reală a furnizorului) — cerut direct: „la
+// adăugarea din clipboard, fără factură, să apară «adaugă factura și adaugă în stoc», pentru că asta nu e
+// factura comenzii și n-ar fi corect să adăugăm fără factură". Factură = orice document atașat care nu e
+// captură de ecran (PDF sau poză încărcată, nu „clipboard-…"/„Screenshot…").
+const FURNIZOR_NOT_INVOICE_RE=/^(clipboard-|screenshot|screen shot|captur)/i;
+function furnizorHasInvoice(rows){
+  const f=Array.isArray(rows?.[0]?.facturi)?rows[0].facturi:[];
+  return f.some(x=>x&&x.url&&!FURNIZOR_NOT_INVOICE_RE.test(String(x.name||'')));
+}
+function openFurnizorArrivalWithInvoice(key){
+  const rows=FURNIZOR_ADMIN.filter(r=>furnizorGroupKey(r)===key);
+  if(!rows.length){toast('Comanda nu mai e pe drum','err');return;}
+  openInvoice();
+  invFromFurnizor={key,rowIds:rows.map(r=>r.id),needInvoice:true,invoiceFile:''};
+  const r0=rows[0];
+  document.getElementById('inv-number').value=r0.comanda_ref||'';
+  const sup=document.getElementById('inv-supplier');if(sup)sup.value=r0.furnizor||'';
+  toast(`Încarcă factura reală de la ${r0.furnizor||'furnizor'} (PDF sau poză) — după „Aplică", produsele din comandă găsite pe factură se închid automat`);
+}
 function openFurnizorArrival(key){
   const rows=FURNIZOR_ADMIN.filter(r=>furnizorGroupKey(r)===key);
   if(!rows.length){toast('Comanda nu mai e pe drum','err');return;}
@@ -6536,7 +6556,7 @@ function renderFurnizorDashboardCard(){
     }).join(' · ');
     const transportRon=Number(g.rows[0]?.transport)||0;
     const transportTxt=transportRon>0?` · <span title="Transport comandă">🚚 transport ${transportRon.toFixed(2)} RON</span>`:'';
-    return`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${label}</strong>${deadlineBadge}<div class="jp-meta">${prodsHtml}${transportTxt}</div></div><div style="display:flex;gap:6px;flex-wrap:wrap;align-self:flex-start"><button type="button" class="btn btn-sm btn-acc" onclick="openFurnizorArrival('${esc(g.key).replace(/'/g,"\\'")}')" title="Marfa a ajuns — o adaugi în stoc (ca o factură importată) și comanda se închide">✓ A sosit — adaugă în stoc</button>${facturiBtns}${delBtn}</div></div>`;
+    return`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${label}</strong>${deadlineBadge}<div class="jp-meta">${prodsHtml}${transportTxt}</div></div><div style="display:flex;gap:6px;flex-wrap:wrap;align-self:flex-start">${furnizorHasInvoice(g.rows)?`<button type="button" class="btn btn-sm btn-acc" onclick="openFurnizorArrival('${esc(g.key).replace(/'/g,"\\'")}')" title="Marfa a ajuns — o adaugi în stoc (ca o factură importată) și comanda se închide">✓ A sosit — adaugă în stoc</button>`:`<button type="button" class="btn btn-sm btn-acc" onclick="openFurnizorArrivalWithInvoice('${esc(g.key).replace(/'/g,"\\'")}')" title="Comanda a fost trimisă doar dintr-o captură, fără factură — încarci factura reală și abia apoi intră în stoc">📄 Adaugă factura și adaugă în stoc</button>`}${facturiBtns}${delBtn}</div></div>`;
   }).join('');
 }
 async function deleteFurnizorOrderGroup(key,label){
@@ -26386,6 +26406,7 @@ function addInvLine(){
 function removeInvLine(id){document.getElementById(id)?.remove();invLines=invLines.filter(x=>x!==id);previewInv();}
 function handleInvFile(ev){
   const files=[...(ev.target.files||[])];if(!files.length)return;
+  if(invFromFurnizor?.needInvoice)invFromFurnizor.invoiceFile=files.map(f=>f.name).join(', ');
   // Mai multe poze deodată = capturi succesive ale ACELEIAȘI comenzi (comandă lungă, cu scroll) —
   // singurul caz din tot input-ul ăsta care acceptă multi-select real. PDF/CSV/Numbers rămân un
   // singur fișier per import, ca înainte.
@@ -30052,6 +30073,7 @@ function generateStockOrderChecklist(idx){
   printChecklist(items,{orderNum:o.invoiceNumber||'',sourceLabel:o.source||'',dateLabel:new Date(o.createdAt||Date.now()).toLocaleDateString('ro-RO')});
 }
 async function applyInvoice(){
+  if(invFromFurnizor?.needInvoice&&!invFromFurnizor.invoiceFile){toast('Încarcă întâi factura furnizorului — comanda a fost trimisă doar din captură, fără factură','err');return;}
   showLoading('Se importă factura…');
   let updated=0,created=0,skipped=0,receivedLines=0,receivedQty=0,extraQty=0,unresolved=0,altCreated=0;
   const stockStamp=new Date().toISOString();
@@ -30142,7 +30164,13 @@ async function applyInvoice(){
   // Comandă furnizor confirmată sosită (vezi openFurnizorArrival) — închidem STRICT liniile chiar intrate
   // în stoc acum (produs ales sau „produs nou"); cele lăsate nerezolvate rămân deschise, pe drum.
   let furnizorClosed=null;
-  if(invFromFurnizor){
+  if(invFromFurnizor?.needInvoice){
+    // factura reală, citită separat: închidem liniile comenzii al căror produs apare pe factură
+    const got=new Set(invParsed.filter(it=>it.produsId).map(it=>Number(it.produsId)));
+    const doneIds=FURNIZOR_ADMIN.filter(r=>invFromFurnizor.rowIds.includes(r.id)&&r.produs_id&&got.has(Number(r.produs_id))).map(r=>r.id);
+    furnizorClosed=await furnizorMarkArrived(doneIds);
+    invFromFurnizor=null;
+  }else if(invFromFurnizor){
     const doneIds=invParsed.filter(it=>it._furnizorRowId&&(it.produsId||it.newProduct)).map(it=>it._furnizorRowId);
     furnizorClosed=await furnizorMarkArrived(doneIds);
     if(!invParsed.some(it=>it._furnizorRowId&&!it.produsId&&!it.newProduct))invFromFurnizor=null;
