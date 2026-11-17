@@ -34,7 +34,7 @@ function orderLines(order,market='RO'){
     const qty=num(p.quantity),priceExVat=num(p.sale_price),currency=String(p.currency||order.currency||EMAG_MARKETS[market].currency).toUpperCase();
     return{
       comandaId:String(order.id||''),pachetId:String(order.id||''),data:String(order.date||order.created||'').slice(0,10),
-      pnk:String(p.part_number||p.part_number_key||p.ext_part_number||''),codProdus:String(p.ext_part_number||p.product_id||''),
+      pnk:String(p.part_number||p.part_number_key||p.ext_part_number||''),pnkEmag:String(p.part_number_key||''),codProdus:String(p.ext_part_number||p.product_id||''),
       clientNume:String(customer.name||customer.shipping_contact||''),titluExtern:String(p.name||''),cantitate:qty,
       pretFaraTva:priceExVat,pretTotalCuTva:Math.round(priceExVat*qty*(1+vatRate)*100)/100,moneda:currency,
       tara:market,orderId:String(order.id||'')
