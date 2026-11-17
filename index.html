@@ -5299,6 +5299,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:708,text:'Comenzi Platforme — stoc secvențial și „📦 Cu stoc sus" reparate, 3 cereri directe pe capturi reale: (1) „ar trebui să fie cele mai vechi pe acest produs" — alocarea artificială a stocului (#703) sorta GREȘIT după termenul de expediere: o comandă mai nouă, dar cu termen mai apropiat, „sărea" înaintea uneia mai vechi și o lăsa pe minus. #703 pretindea că urmează criteriul din „Listă locală de aprovizionare" — fals: acela sortează după ora PLASĂRII comenzii. Acum ambele folosesc exact aceeași funcție (pclTs) — cea mai veche comandă primește stocul întâi; textul de pe card spune acum „prinse de comenzi mai vechi". (2) „am stabilit că sus vor veni doar cele cu stoc, dacă stocul e cu -, de ce mai apare?" — „Cu stoc sus" (și punctul verde) verificau doar stocul BRUT al produsului, fără să știe de alocarea secvențială — carduri cu „Fără stoc → după -3" urcau totuși sus. Acum folosesc aceeași alocare afișată pe card. (3) „comenzile urgente să fie primele, apoi cele mai puțin urgente, la eMAG dar și Trendyol" — cu „Cu stoc sus" activ, în fiecare grupă (cu stoc / fără stoc) comenzile se ordonează după termenul de expediere, cel mai apropiat primul; AWB rămâne criteriu de departajare. Verificat de 2 ori: sintaxă + Playwright (comandă veche vs. nouă pe stoc 1 — cea veche ia bucata; fără stoc coboară sub toate cele cu stoc; în interiorul grupelor ordinea pe urgență, eMAG și Trendyol separat; regresie pe 50 de comenzi reale) — zero erori JS.',date:'2026-11-17'},
   {n:707,text:'Categorii produse — bug GRAV reparat, raportat direct cu captură: lista de categorii (picker din fișa produsului + promptul AI-ului la crearea unui draft din poză) arăta/alegea dintr-o SINGURĂ categorie ("Umerașe"), deși produse reale din bază (ex. „Garaj parcare 4 niveluri Kruzzel 24646") aveau categoria „Jucarii" — AI-ul punea „Umerașe" și pe o jucărie, un platou decorativ, o pătură, fiindcă literalmente nu avea de unde alege altceva. Cauza: CATS citea STRICT din localStorage (customCategories) — NIMIC, niciunde, nu-l completa din categoriile REALE deja folosite de cele 610 produse din Supabase (43 distincte, verificat direct); pe acest browser, lista locală se redusese la practic un rând. Reparat la rădăcină: CATS se reconstruiește acum (rebuildCats) din valorile distincte produse.category + localStorage, la încărcare ȘI la fiecare reîmprospătare periodică (nu există o tabelă separată de categorii în schemă, verificat). Completări: (1) căutarea „Caută categorie..." ignoră acum diacritice/majuscule („jucar" găsește „Jucarii", „umerase" găsește „Umerașe"); (2) promptul AI-ului (draft din poză + celelalte 3 fluxuri care aleg categorie: analiză poză din Inventar, import din URL, import din screenshot) alege acum explicit DUPĂ TIPUL produsului, nu culoare/material, și poate răspunde „niciuna" (câmp gol) — NU prima din listă — dacă nimic nu se potrivește clar; (3) ORICE loc care altfel ar fi creat o categorie nouă (addCustomCategory, cele 4 fluxuri AI de mai sus) verifică ÎNTÂI dacă există deja o variantă echivalentă (doar diacritice/majuscule diferite) — motivul exact pentru care existau deja duplicate reale în bază: „Umerașe"/„Umerase" (71/4 produse), „Jucarii"/„Jucării" (23/3), „Casă"/„Casa" (7/1), „animale de companie"/„Animale de companie" (15/1); (4) unealtă nouă „🧹 Verifică duplicate categorii" (tab Categorii și etichete) — arată EXACT aceste 4 grupuri găsite live, cu alegere manuală a formei care rămâne per grup; NIMIC nu se scrie în bază până la click explicit pe „✓ Unifică" pe un grup anume. Verificat de 2 ori: sintaxă (node --check, de 2 ori) + 9 verificări izolate cu Playwright: reconstruirea CATS din produse reale (nu doar din lista locală redusă), findCatCI (potrivire exactă, insensibilă la diacritice/majuscule, fără fals-pozitiv pe substring), căutarea din picker, addCustomCategory fără duplicat nou, sugestiile AI (catSuggestChipsHtml) cu formă canonică, un draft AI simulat EXACT ca raportul (jucărie → „Jucarii" corect; o categorie inexistentă → gol, nu forțată), gruparea duplicatelor pe date sintetice + pe datele REALE de producție (confirmă cele 4 grupuri de mai sus, doar citire), aplicarea unificării pe date sintetice (niciun rând real touched în acest test) — zero erori JS, rulat de 2 ori.',date:'2026-11-17'},
   {n:706,text:'Dashboard — card nou „📥 Comenzi furnizor — pe drum", cerut direct: „stiu ca avem ceva de genul in platforma, dar verifica si spune mi cum sa facem sa fie cat mai simplu". Mecanismul (tabela comenzi_furnizor) exista deja, dar trăia doar ca un cărticel mic, ascuns în Raport stoc — mult prea departe de prima vedere ca să fie de folos zilnic. Acum e PRIMUL lucru vizibil la logare (chiar sub „Necesită atenție"), rămâne afișat și la 0 comenzi active (cu îndemn clar de adăugare), și sortează automat cea mai urgentă comandă primul (termen depășit > termen cel mai apropiat). Trei completări concrete cerute: (1) „adăugăm produsele" — rămâne exact fluxul deja existent (AI din text/poză, picker manual, „produs nou"), doar mult mai vizibil, cu buton „+ Comandă nouă" direct pe card; (2) „adăugăm facturile dacă le avem deja" — gol real găsit verificând: încărcarea accepta DOAR poze, iar fișierul însuși nu se salva nicăieri (folosit o dată la extragere AI, apoi pierdut) — acum accepă și PDF (extragere text, aceeași tehnică deja folosită la facturile din Inventar) ȘI salvează fișierul original (Storage, bucket nou) — „📄 Vezi factura" direct pe card, oricând mai târziu; (3) termen „aprox. 1 săptămână" + ce se întâmplă la expirare — deja implementat corect (7 zile de la data estimativă sau de la plasare, marcare automată „⛔ nu a ajuns"), confirmat să rămână AȘA, nu ștergere automată (o comandă cu bani reali în ea nu trebuie să dispară tăcut) — acum vizibil și countdown-ul („⏳ mai ai Nz") înainte de expirare, nu doar flag-ul roșu după. Migrare SQL + bucket Storage necesare, date în chat (nu scrise ca fișier nou în repo, convenție deja stabilită). Verificat de 2 ori: sintaxă (node --check, de 2 ori) + 7 verificări izolate cu Playwright: matematica termenului (prioritate dată estimativă, 7 zile corect), card gol cu îndemn, 3 comenzi cu sortare/badge-uri/factură corecte, „Vezi factura" (PDF→tab nou, poză→lightbox), degradare grațioasă dacă migrarea coloanei „facturi" nu a rulat încă (reîncercare automată, fără ea), extragere PDF reală (text simulat → AI → produs parsat corect, fișier original „salvat"), navigare din clopoțel spre Dashboard — zero erori JS, rulat de 2 ori.',date:'2026-11-17'},
   {n:705,text:'Comenzi Platforme — „Aplică import" mai complet, 3 recomandări proprii cerute direct („hai 1, 2 si 3"), după reparația de la #704: (1) confirmare cu rezumat ÎNAINTE de aplicarea în masă — arată exact ce se va scădea (produs, cantitate, nr. comenzi), agregat pe produs, nu pe linie, ultima șansă de a prinde o potrivire greșită de produs (ex. tipul de incident „cort"/„Amortizor Usa" din sesiune) înainte să se scadă stocul real; (2) o linie care eșuează la aplicare arată ACUM, direct pe card, motivul exact al eșecului + un buton „🔁 Reîncearcă" — până acum motivul ajungea DOAR în consola browserului, invizibil, chiar dacă linia rămânea corect vizibilă; (3) card nou „↺ Aplicate acum" — permite anularea unei aplicări DEJA făcute (stoc, Jurnal, „Vânzări azi" revin exact ca înainte, comanda revine neaplicată, gata de corectat produsul greșit și reaplicat), scopat intenționat STRICT la liniile aplicate în sesiunea curentă (se pierde la reîncărcare) — pentru o aplicare mai veche, ziua exactă scrisă în Jurnal nu mai poate fi determinată sigur, rămâne corecție manuală ca până acum. Verificat de 2 ori: sintaxă (node --check, de 2 ori) + 5 verificări izolate cu Playwright, produse sintetice: confirmarea arată corect produsul/cantitatea și Cancel chiar oprește aplicarea (stoc neschimbat), accept continuă normal; o linie eșuată (eroare simulată) arată mesajul pe card și se reaplică cu succes la reîncercare; „↺ Anulează aplicarea" readuce stocul, Jurnalul și Vânzările azi EXACT la 0 și linia înapoi, neaplicată — zero erori JS, rulat de 2 ori.',date:'2026-11-16'},
@@ -20548,13 +20549,19 @@ function pcomPendingQtyForProduct(produsId){
 // (pcomPendingQtyForProduct/#636), toate liniile ACELUIAȘI produs din lot arătau ACEEAȘI proiecție
 // finală (agregat static) — util ca să vezi CĂ depășești stocul, dar nu și CARE anume comenzi, exact,
 // rămân fără. Acum fiecare linie arată poziția ei REALĂ în coadă: stocul rămas ÎNAINTE de ea (după ce
-// comenzile mai urgente din lot și-au „prins” deja bucățile) → stocul rămas DUPĂ ea. Ordinea e după
-// termenul de expediere (cel mai apropiat întâi) — ACELAȘI criteriu de prioritate deja folosit la
-// alocarea de stoc din „Listă locală de aprovizionare" (pcomOrderReadiness), nu ordinea de pe ecran
-// (care se schimbă la fiecare filtru/sortare — „📦 Cu stoc sus” ar face ca aceleași comenzi să arate
-// cifre diferite de fiecare dată, fără niciun sens). STRICT vizual — nu atinge stocul real (qty(p)),
-// doar un calcul paralel, local, recalculat la fiecare randare; liniile deja aplicate real sau anulate
-// sunt excluse (la fel ca la #636), ca stocul lor deja scăzut să nu se numere a doua oară.
+// comenzile mai vechi din lot și-au „prins” deja bucățile) → stocul rămas DUPĂ ea.
+// Ordinea e după data/ora PLASĂRII comenzii (cea mai veche întâi) — corectat direct, pe un caz real
+// („dacă e fără stoc de ce apare comanda aceasta inclusă în stoc? ar trebui să fie cele mai vechi pe
+// acest produs"): #703 (varianta inițială) sorta greșit după termenul de expediere, pretinzând (greșit)
+// că ar fi „același criteriu deja folosit la... pcomOrderReadiness" — funcția aceea nu există; cea REALĂ
+// (pclAllocate/pclTs, din „Listă locală de aprovizionare") sortează de fapt după ora plasării, nu după
+// termen — o comandă mai nouă, dar cu termen mai apropiat, putea „sări" înaintea uneia mai vechi, exact
+// simptomul raportat. Reutilizează pclTs direct, ca cele 2 funcții să nu poată ajunge vreodată să
+// prioritizeze diferit aceleași comenzi. Nu ordinea de pe ecran (care se schimbă la fiecare filtru/
+// sortare — „📦 Cu stoc sus” ar face ca aceleași comenzi să arate cifre diferite de fiecare dată, fără
+// niciun sens). STRICT vizual — nu atinge stocul real (qty(p)), doar un calcul paralel, local,
+// recalculat la fiecare randare; liniile deja aplicate real sau anulate sunt excluse (la fel ca la
+// #636), ca stocul lor deja scăzut să nu se numere a doua oară.
 let pcomSeqStockCache={};
 function pcomRecomputeSeqStock(){
   pcomSeqStockCache={};
@@ -20568,7 +20575,7 @@ function pcomRecomputeSeqStock(){
   Object.keys(byProduct).forEach(pid=>{
     const idxs=byProduct[pid];
     idxs.sort((a,b)=>{
-      const ta=pcImpParsed[a].termenExpediere||'9999',tb=pcImpParsed[b].termenExpediere||'9999';
+      const ta=pclTs(pcImpParsed[a]),tb=pclTs(pcImpParsed[b]);
       return ta<tb?-1:ta>tb?1:0;
     });
     const p=P.find(x=>x.id===Number(pid));
@@ -20638,13 +20645,13 @@ function pcomStockWarningHtml(idx){
   const before=seq?seq.before:cur;
   const after=seq?seq.after:cur-(Number(it.cantitate)||0);
   const problem=after<=0;
-  // „deja prinse de comenzi mai urgente" — apare DOAR când stocul de dinaintea ACESTEI comenzi e deja
-  // mai mic decât stocul real din ERP, adică există cel puțin o altă comandă pe același produs, cu
-  // termen de expediere mai apropiat, înaintea ei în coadă.
+  // „deja prinse de comenzi mai vechi" — apare DOAR când stocul de dinaintea ACESTEI comenzi e deja
+  // mai mic decât stocul real din ERP, adică există cel puțin o altă comandă pe același produs, plasată
+  // mai devreme (pclTs), înaintea ei în coadă.
   const consumedBefore=cur-before;
   const pendingQty=pcomPendingQtyForProduct(it.produsId);
   const multiLine=pendingQty!==(Number(it.cantitate)||0);
-  const stockLbl=`<span style="font-size:21px;font-weight:${problem?700:400};color:var(${problem?'--rd':'--t3'});font-variant-numeric:tabular-nums">${problem?'⚠️ ':''}${before<=0?'Fără stoc':`Stoc ${fmtQty(before)}`} → după ${fmtQty(after)}${consumedBefore>0?` <span style="font-weight:600;color:var(--t3)">(${fmtQty(consumedBefore)} buc. deja «prinse» de comenzi mai urgente din lot)</span>`:(multiLine?` <span style="font-weight:600;color:var(--t3)">(${fmtQty(pendingQty)} buc. comandate în acest lot)</span>`:'')}</span>`;
+  const stockLbl=`<span style="font-size:21px;font-weight:${problem?700:400};color:var(${problem?'--rd':'--t3'});font-variant-numeric:tabular-nums">${problem?'⚠️ ':''}${before<=0?'Fără stoc':`Stoc ${fmtQty(before)}`} → după ${fmtQty(after)}${consumedBefore>0?` <span style="font-weight:600;color:var(--t3)">(${fmtQty(consumedBefore)} buc. deja «prinse» de comenzi mai vechi din lot)</span>`:(multiLine?` <span style="font-weight:600;color:var(--t3)">(${fmtQty(pendingQty)} buc. comandate în acest lot)</span>`:'')}</span>`;
   const btn=it.amanat
     ?`<button type="button" class="btn btn-sm" style="color:#16A34A;border-color:rgba(34,197,94,.35);background:rgba(34,197,94,.04);border-radius:8px;height:34px" onclick="togglePcomAmanat(${idx})">↺ Anulează amânarea</button>`
     :`<button type="button" class="btn btn-sm" style="color:#B45309;border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.05);border-radius:8px;height:34px" onclick="togglePcomAmanat(${idx})">⏳ Amână livrarea</button>`;
@@ -23208,14 +23215,19 @@ function pcxFmtShortDate(iso){
 // direct: „atunci cand avem stoc pentru un produs din comanda, sau a aparut in stoc dupa, sa apara un
 // beculet verde”. Verifică stocul ACUM (nu la momentul comenzii) — o reaprovizionare ulterioară se
 // reflectă automat, fără nimic suplimentar de declanșat, din moment ce P se citește mereu live.
-// Rămâne simplu, independent per comandă — NU simulează alocarea concurentă cu alte comenzi (asta
-// rămâne în „Comenzi & stoc” → „Ce poate fi expediat acum”, unde contează și ordinea de urgență).
+// Ține cont de alocarea secvențială (comenzile mai vechi pe același produs „prind" stocul întâi).
 function pcxOrderStockReady(idxs){
   return idxs.every(i=>{
     const it=pcImpParsed[i];
     if(pcomLineIsApplied(it))return true;// deja scăzut din stoc — nu mai are rost să blocheze semnalul
     const p=it.produsId?P.find(x=>x.id===it.produsId&&!x.archived):null;
     if(!p)return false;// fără produs asociat (sau arhivat între timp) — nu putem confirma stocul
+    // Bug real, raportat direct: „am stabilit ca sus vor veni doar cele cu stoc, daca stocul e cu -, de ce
+    // mai apare?" — semnalul verifica doar stocul BRUT (qty(p)), fără să știe că alte comenzi mai vechi pe
+    // același produs „prinseseră" deja bucățile; carduri cu „Fără stoc → după -3" urcau sus/aveau punct
+    // verde. Acum folosește alocarea secvențială (pcomSeqStockCache), aceeași afișată pe card.
+    const seq=pcomSeqStockCache[i];
+    if(seq)return seq.after>=0;
     return qty(p)>=Math.max(0,parseQtyVal(it.cantitate,0));
   });
 }
@@ -23936,6 +23948,12 @@ function pcxGroupAwb(idxs){
   return it0.platforma==='vinted'?(it0.awb||''):(PCOM.find(o=>o.id===it0._committedId)?.awb||'');
 }
 function pcxGroupHasAwb(idxs){return!!pcxGroupAwb(idxs);}
+// Cel mai apropiat termen de expediere din grup, ca timestamp comparabil (fără termen → la coadă).
+function pcxGroupDeadline(idxs){
+  let best=Infinity;
+  idxs.forEach(i=>{const t=Date.parse(pcImpParsed[i]?.termenExpediere||'');if(!isNaN(t)&&t<best)best=t;});
+  return best;
+}
 function pcxRenderOrders(){
   renderCancelledPcomList();
   renderStaleStaffOrdersCard();
@@ -23984,8 +24002,14 @@ function pcxRenderOrders(){
     // Cu „📦 Cu stoc sus" activ, stocul e criteriul PRIMAR (cu stoc → sus, fără stoc → jos), iar AWB
     // rămâne criteriul secundar; altfel, doar AWB (comportamentul dinainte). Sortare stabilă (ES2019),
     // deci ordinea relativă din pcomGroups rămâne neatinsă în cadrul fiecărei grupe de egalitate.
+    // Cerut direct: cu „Cu stoc sus" activ, în fiecare grupă (cu/fără stoc) cele mai urgente (termen de
+    // expediere cel mai apropiat) primele, apoi cele mai puțin urgente — eMAG și Trendyol deopotrivă.
     const sortedList=[...list].sort((a,b)=>{
-      if(pcxStockSort){const d=(pcxOrderStockReady(b)?1:0)-(pcxOrderStockReady(a)?1:0);if(d)return d;}
+      if(pcxStockSort){
+        const d=(pcxOrderStockReady(b)?1:0)-(pcxOrderStockReady(a)?1:0);if(d)return d;
+        const ta=pcxGroupDeadline(a),tb=pcxGroupDeadline(b);
+        if(ta!==tb)return ta<tb?-1:1;
+      }
       return (pcxGroupHasAwb(b)?1:0)-(pcxGroupHasAwb(a)?1:0);
     });
     return hd+sortedList.map(idxs=>pcxOrderCardHtml(idxs,pcomGroups.indexOf(idxs))).join('');
