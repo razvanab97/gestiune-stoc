@@ -5302,6 +5302,9 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:720,text:'Marcajul verde „am lucrat pe comanda asta" — un marcaj șters din bază nu mai e „reînviat" de browser. Găsit verificând: varianta de la #712 urca la fiecare sincronizare (20s) ORICE marcaj din lista locală a browserului care lipsea din bază — deci o ștergere din bază era anulată imediat de orice browser deschis care îl preluase deja. Acum baza e sursa de adevăr: se urcă strict marcajele care chiar n-au putut fi salvate la copiere (offline/tabela încă inexistentă), iar restul se iau din bază. Verificat de 2 ori: Playwright cu rețeaua spre tabelă blocată (fără tabelă → local; cu tabelă → marcaje din alt dispozitiv, copiere nouă salvată; ștergere în bază → nu mai revine) — zero erori JS.',date:'2026-11-17'},
+  {n:719,text:'Comenzi Platforme — comenzile incluse, cu AWB, nu mai dispar din previzualizare, raportat direct: „nu mai apar nici cele cu AWB în previzualizare Comenzi Platforme". Verificat pe date reale: 57 de comenzi incluse cu AWB, încă neaplicate (stoc nescăzut), dar previzualizarea avea 301 linii, NICIUNA cu AWB — 34 lipseau complet, iar la 23 linia nu avea AWB-ul pe ea. Cauza: previzualizarea fusese reconstruită de la zero, iar reconstruirea aduce din eMAG doar comenzile „Noi/În lucru" — o comandă cu AWB emis trece pe eMAG în „Pregătită" și nu mai era adusă (deci nici „Aplică import" n-o mai vedea). Acum, la deschiderea paginii și la fiecare reîmprospătare automată, orice comandă inclusă, neaplicată, neanulată, din ultimele 7 zile, care lipsește din previzualizare e readusă automat din bază, cu AWB-ul ei; liniile existente fără AWB primesc AWB-ul din bază. Comenzile mai vechi (câteva din septembrie, lăsate intenționat deoparte) rămân neatinse. Verificat de 2 ori: Playwright pe previzualizarea ta reală + comenzile reale (toate cele 51 de comenzi recente prezente, toate cu AWB, fără dubluri, fără cele vechi, a doua rulare nu mai adaugă nimic) + regresie Aplică import/stoc/AWB — zero erori JS.',date:'2026-11-17'},
+  {n:718,text:'Comenzi Platforme — eticheta „NOU" apare doar pe comenzile cu adevărat noi, raportat direct: „de ce apare NOU la toate? trebuie să apară nou doar la ultimele importate". Verificat: toate cele 301 linii erau marcate NOU, inclusiv comenzi din 06.11. Cauza: NOU însemna „linie adăugată în previzualizare la ultimul import" — la orice reconstruire a previzualizării, importul re-adăuga TOATE comenzile, toate NOU, iar marcajul se salva odată cu previzualizarea. Acum se ține un istoric al comenzilor deja văzute: NOU = comandă văzută pentru prima dată în ultimul import care a adus ceva nou (o comandă deja Inclusă în bază nu e nouă); rămâne NOU până la următorul lot de comenzi noi, nu dispare la fiecare reîmprospătare automată. Prima dată după actualizare nu e nimic NOU (tot ce există e considerat văzut) — apare la următoarea comandă nouă. Verificat de 2 ori: Playwright (previzualizarea reală cu 301/301 NOU → 0 după încărcare; lot nou eMAG+Trendyol concurent → doar cele 2 noi; reîmprospătare fără nimic nou → rămân; lot următor → doar cea nouă; după reîncărcare → același rezultat; o singură etichetă vizibilă pe card) — zero erori JS.',date:'2026-11-17'},
   {n:717,text:'Asociază AWB-uri — etichetele duplicate sunt semnalate clar, cerut direct după întrebarea „de ce în Staff apar doar 51 de comenzi, deși AWB-uri sunt 54?". Verificat pe datele reale: 54 de fișiere azi, dintre care 3 erau aceeași etichetă descărcată de 2 ori (browserul adaugă „(1)" la nume) → 51 de comenzi distincte, exact cât arăta Staff — fiecare copie apărea însă ca o asociere separată „✓ găsită", umflând numărătoarea. Acum: (1) a doua apariție a aceluiași AWB în lot e afișată separat, gri, „↺ Duplicat — e aceeași etichetă ca <fișierul original> — ignorată", exclusă din găsite/negăsite și nu se mai scrie a doua oară; numărătoarea arată „N găsite, …, D duplicate ignorate"; (2) o etichetă recitită pe o comandă care are deja exact acel AWB arată „deja asociat — fără schimbare", nu „înlocuiește <același AWB>"; (3) o copie „… (1).pdf" a unei etichete recunoscute după numele fișierului nu mai cade la „format nerecunoscut". Corectată direct și comanda Trendyol #11801996367 (Barvara Antoniadoy): AWB principal 2872790793 (era numărul comenzii, cu cel real doar ca suplimentar). Verificat de 2 ori: sintaxă + Playwright (eticheta + copia „(1)" + o etichetă diferită: 2 găsite, 1 duplicat ignorat, AWB scris o singură dată; re-citire pe AWB existent → „deja asociat") + regresie asociere AWB — zero erori JS.',date:'2026-11-17'},
   {n:716,text:'Asociere AWB eMAG Bulgaria/Ungaria — produsul se recunoaște acum sigur, din prima, cerut direct, pe 2 etichete Sameday Bulgaria reale (#1027901672, #1027895754): „ai numărul comenzii în AWB... repară pentru viitor să nu se mai întâmple". Comanda era găsită corect (numărul ei e în codul AWB-ului), dar produsul NU: titlul e în bulgară, iar codul folosit la potrivire era codul NOSTRU de vânzător, încă neasociat pe piața BG — linia rămânea „Neinclus" („găsită, dar produsul nu s-a potrivit automat"). eMAG trimite însă și PNK-ul propriu al produsului (part_number_key), IDENTIC pe RO/BG/HU — verificat direct: comanda BG cu globuri are DPCYW63BM, exact oferta RO deja asociată în Sincronizare (1.110 din 1.367 oferte RO active au PNK-ul asociat). Conectorul eMAG transmite acum acest PNK, iar aplicația îl folosește când codul nostru nu are încă asociere — produsul e recunoscut, comanda se include automat cu AWB și ajunge în Staff. Nu schimbă nicio potrivire existentă (e doar ultima variantă sigură înainte de potrivirea după nume). Conectorul local a fost repornit cu noua versiune. Verificat de 2 ori: sintaxă + Playwright pe liniile REALE de la eMAG și asocierile reale din Sincronizare (situația de la prima etichetă: fără PNK eMAG → „Neinclus"; cu el → produs recunoscut, inclusă automat cu AWB, trimisă spre Staff) + regresie asociere AWB — zero erori JS.',date:'2026-11-17'},
   {n:715,text:'Asociere AWB — o comandă cu numărul comenzii salvat pe post de AWB nu mai blochează eticheta ei reală, cerut direct, pe eticheta ACS/DPD Grecia (Unknown-106.pdf, Trendyol #11801996367): „abia ți-am dat situația asta, de ce apare ca necunoscut?". Cauza: la o asociere manuală anterioară, în căsuța „AWB citit de pe etichetă" s-a scris numărul comenzii (11801996367); comanda a rămas cu acest „AWB", considerată „are deja AWB" și exclusă din orice potrivire — eticheta ei reală nu mai avea cu ce să se asocieze. Acum: (1) un AWB identic cu numărul comenzii e tratat ca „fără AWB real" — comanda rămâne candidată; (2) la asociere, AWB-ul real de pe etichetă îl ÎNLOCUIEȘTE pe cel greșit (nu se mai adaugă ca „suplimentar"); (3) asocierea manuală nu mai acceptă numărul comenzii în căsuța de AWB — explică ce trebuie scris (numărul de urmărire de lângă codul de bare). Verificat de 2 ori: sintaxă + Playwright pe situația exactă (comanda cu AWB=nr. comenzii, eticheta citită de AI cu numele „Barvara Antoniadoy" → asociată, AWB devine 2872790793, nimic adăugat ca suplimentar; numărul comenzii scris manual ca AWB → refuzat cu mesaj) + regresie pe asocierea AWB — zero erori JS.',date:'2026-11-17'},
@@ -6738,7 +6741,38 @@ function pcomLineFromCommittedOrder(o){
     cantitate:o.cantitate||1,suggestedCantitate:0,pretFaraTva:o.pretFaraTva||0,pretTotalCuTva:o.pretTotalCuTva||0,
     moneda:o.moneda||'RON',score:o.produsId?1:0,viaPnk:false,viaTitle:false,viaCode:false,
     include:true,awb:o.awb||'',awbSourceFile:o.awbSourceFile||'',awbSourcePage:o.awbSourcePage||null,awbCourier:o.awbCourier||'',
+    termenExpediere:o.termenExpediere||'',
     _source:'api',_committedId:o.id,_restoredFromGate:true};
+}
+// Bug real, raportat direct: „nu mai apar nici cele cu AWB în previzualizare Comenzi Platforme" — verificat
+// pe date reale: 57 de comenzi incluse, cu AWB, încă NEaplicate (stoc nescăzut) în bază, dar 34 lipseau
+// din previzualizare (care avea 301 linii, niciuna cu AWB). Cauza: previzualizarea fusese reconstruită de
+// la zero, iar reconstruirea aduce din eMAG doar comenzile „Noi/În lucru" — o comandă cu AWB emis trece pe
+// eMAG în „Pregătită" și nu mai e adusă, deși în aplicație e Inclusă și neaplicată (deci nici „Aplică
+// import" nu o mai vedea). Acum orice comandă inclusă, neaplicată, neanulată, din ultimele 7 zile, care
+// lipsește din previzualizare, e readusă automat din bază (cu AWB-ul ei). Comenzile mai vechi rămân
+// neatinse, ca înainte (vezi AUTO_APPLY_CUTOFF — câteva din septembrie lăsate intenționat deoparte).
+function pcomEnsureRecentCommittedInPreview(){
+  const cutoff=Date.now()-7*86400000;
+  const haveIds=new Set(pcImpParsed.map(x=>x._committedId).filter(Boolean));
+  const lineKey=x=>[x.platforma,x.comandaId,x.pnk||'',String(x.titluExtern||'').toLowerCase().trim()].join('|');
+  const haveKeys=new Set(pcImpParsed.map(lineKey));
+  let added=0;
+  // Liniile deja prezente, dar rămase fără AWB pe linie deși comanda din bază îl are (asociat între timp,
+  // din alt flux/dispozitiv) — sincronizate, ca previzualizarea, sortarea „cu AWB" și Aplică import să-l vadă.
+  pcImpParsed.forEach(x=>{
+    if(!x._committedId)return;
+    const o=PCOM.find(r=>r.id===x._committedId);
+    if(o&&o.awb&&awbNorm(x.awb)!==awbNorm(o.awb)){Object.assign(x,{awb:o.awb,awbSourceFile:o.awbSourceFile||'',awbSourcePage:o.awbSourcePage||null,awbCourier:o.awbCourier||''});added++;}
+  });
+  PCOM.forEach(o=>{
+    if(o.efecteAplicate!==false||o.anulata||haveIds.has(o.id))return;
+    const t=Date.parse(o.createdAt||'');if(!t||t<cutoff)return;
+    const line=pcomLineFromCommittedOrder(o);
+    if(haveKeys.has(lineKey(line)))return;
+    pcImpParsed.push(line);haveIds.add(o.id);haveKeys.add(lineKey(line));added++;
+  });
+  return added;
 }
 async function pullPcomOrderToPreview(idsStr){
   const ids=String(idsStr).split(',').map(Number).filter(Boolean);
@@ -20100,8 +20134,7 @@ async function handlePcomImportFile(ev){
     // fiecărei platforme — ca previzualizarea să arate secțiuni curate, separate de o linie. Rulează pe
     // TOATĂ previzualizarea (inclusiv liniile de dinainte), ca gruparea să rămână corectă și după
     // adăugări succesive.
-    pcImpParsed.forEach(x=>delete x._recentImport);
-    for(let i=preExistingCount;i<pcImpParsed.length;i++)pcImpParsed[i]._recentImport=true;
+    pcomApplyRecentFlags(newLines,false);
     if(platforma==='both'||platforma==='all3'){
       const ord={emag:0,trendyol:1,vinted:2};
       pcImpParsed.sort((a,b)=>(ord[a.platforma]??3)-(ord[b.platforma]??3));
@@ -20223,12 +20256,8 @@ async function importTrendyolApiOrders(silent=false){
       added++;if(state==='restored')restored++;if(state==='cancelled')cancelled++;if(line.produsId)matched++;newLines.push(line);
     }
     if(!added){if(removed)renderPcomImportPreview();if(!silent)toast(duplicates?`Nicio linie Trendyol nouă pentru ${startDate}${endDate!==startDate?' → '+endDate:''} — ${duplicates} sunt deja aplicate sau în previzualizare.`:'Nu există comenzi Trendyol deschise pentru intervalul ales.');return;}
-    // Marcăm liniile noi direct (nu un interval de indici) — la reîncărcarea paginii, acest import
-    // rulează concurent cu importul eMAG (refreshPcomAvailableOrdersOnLoad), care golește o singură
-    // dată flag-urile _recentImport înainte de a porni ambele; aici doar adăugăm, nu mai ștergem,
-    // altfel un apel l-ar putea șterge pe cel abia pus de celălalt.
-    if(!silent)pcImpParsed.forEach(x=>delete x._recentImport);
-    newLines.forEach(x=>x._recentImport=true);
+    // Marcajul NOU — vezi pcomApplyRecentFlags (istoric de comenzi văzute, nu „linie adăugată acum”).
+    pcomApplyRecentFlags(newLines,silent);
     renderPcomImportPreview();
     const noMatch=added-matched,aiBtn=document.getElementById('pcmi-ai-btn');if(aiBtn)aiBtn.style.display=noMatch?'':'none';
     if(!silent)toast(`${added} linii Trendyol aduse · ${matched} asociate${restored?` · ${restored} recuperate pentru Staff`:''}${cancelled?` · ${cancelled} anulate anterior — de reconsiderat`:''}${noMatch?` · ${noMatch} necesită confirmare`:''}${duplicates?` · ${duplicates} deja aplicate/în previzualizare (ignorate)`:''} · AWB-urile sunt preluate pentru Staff.`);
@@ -20257,8 +20286,7 @@ async function importEmagApiOrders(silent=false){
     if(!added){if(removed)renderPcomImportPreview();if(!silent)toast(duplicates?`Nicio comandă eMAG nouă — ${duplicates} linii sunt deja aplicate sau în previzualizare.`:'Nu există comenzi eMAG noi sau în lucru.',unavailable.size?'warn':undefined);return;}
     // Vezi importTrendyolApiOrders pentru explicația marcării prin referință în loc de interval de
     // indici — cele două rulează concurent la reîncărcarea paginii, pe același pcImpParsed.
-    if(!silent)pcImpParsed.forEach(x=>delete x._recentImport);
-    newLines.forEach(x=>x._recentImport=true);
+    pcomApplyRecentFlags(newLines,silent);
     renderPcomImportPreview();
     const noMatch=added-matched,aiBtn=document.getElementById('pcmi-ai-btn');if(aiBtn)aiBtn.style.display=noMatch?'':'none';
     if(!silent)toast(`${added} linii eMAG noi/în lucru aduse · ${matched} asociate${restored?` · ${restored} recuperate pentru Staff`:''}${cancelled?` · ${cancelled} anulate anterior — de reconsiderat`:''}${noMatch?` · ${noMatch} necesită confirmare`:''}${duplicates?` · ${duplicates} deja aplicate/în previzualizare (ignorate)`:''}${unavailable.size?` · Atenție: ${[...unavailable].join(', ')} neconfigurat/blocat`:''}`,unavailable.size?'warn':undefined);
@@ -20440,11 +20468,55 @@ function pcxKeepTrendyolDateRangeFresh(){
   trendEnd.value=today;
   trendStart.value=newStart.toISOString().slice(0,10);
 }
+// „NOU" — cerut direct, pe o captură cu NOU pe toate cele ~300 de comenzi: „trebuie să apară nou doar la
+// ultimele importate". Înainte, NOU însemna „linie adăugată în previzualizare la ultimul import" — dar
+// ori de câte ori previzualizarea era reconstruită (golită, resetată, deschisă pe alt dispozitiv), următorul
+// import re-adăuga TOATE comenzile disponibile, toate NOU (verificat: 301/301 linii marcate, inclusiv
+// comenzi din 06.11), iar marcajul se salva apoi odată cu previzualizarea. Acum NOU se decide după un
+// istoric al comenzilor DEJA văzute (platformă+număr, în acest browser): NOU = comandă văzută pentru prima
+// oară în ultimul import care a adus ceva cu adevărat nou (o comandă deja în bază — Inclusă — nu e nouă).
+// Rămâne NOU până vine următorul lot de comenzi noi, nu dispare la fiecare reîmprospătare automată.
+const PCX_SEEN_KEY='sm6_pcx_seen_orders',PCX_LASTBATCH_KEY='sm6_pcx_last_new_batch';
+let pcxSeen=null,pcomSilentRunAt=0;
+function pcxSeenKey(x){return(x.platforma||'')+'|'+(x.comandaId||x.pachetId||'');}
+function pcxSeenMap(){
+  if(pcxSeen)return pcxSeen;
+  try{pcxSeen=JSON.parse(localStorage.getItem(PCX_SEEN_KEY)||'null');}catch(e){pcxSeen=null;}
+  if(!pcxSeen||typeof pcxSeen!=='object'){
+    // Prima rulare: tot ce există deja (previzualizare + bază) e „văzut" — nimic nu devine NOU retroactiv.
+    pcxSeen={};
+    pcImpParsed.forEach(x=>{pcxSeen[pcxSeenKey(x)]=0;});
+    PCOM.forEach(o=>{pcxSeen[pcxSeenKey(o)]=0;});
+    pcxSeenSave();
+  }
+  return pcxSeen;
+}
+function pcxSeenSave(){
+  const entries=Object.entries(pcxSeen||{});
+  if(entries.length>8000){entries.sort((a,b)=>b[1]-a[1]);pcxSeen=Object.fromEntries(entries.slice(0,8000));}
+  safeLocalSet(PCX_SEEN_KEY,JSON.stringify(pcxSeen));
+}
+function pcomRefreshRecentFlags(){
+  const seen=pcxSeenMap(),last=Number(localStorage.getItem(PCX_LASTBATCH_KEY))||0;
+  pcImpParsed.forEach(x=>{const t=seen[pcxSeenKey(x)];if(last&&t!=null&&t>=last&&!x._restoredFromGate)x._recentImport=true;else delete x._recentImport;});
+}
+// newLines = liniile tocmai adăugate de un import; silent = parte din reîmprospătarea automată (eMAG +
+// Trendyol rulează concurent — folosesc ACELAȘI moment de lot, ca unul să nu-l „stingă" pe celălalt).
+function pcomApplyRecentFlags(newLines,silent){
+  const seen=pcxSeenMap(),stamp=(silent&&pcomSilentRunAt)||Date.now();
+  let fresh=0;
+  (newLines||[]).forEach(l=>{
+    const k=pcxSeenKey(l);if(!k||k.endsWith('|'))return;
+    if(!(k in seen)){seen[k]=l._committedId||l._restoredFromGate?0:stamp;if(seen[k])fresh++;}
+  });
+  if(fresh)safeLocalSet(PCX_LASTBATCH_KEY,String(stamp));
+  pcxSeenSave();
+  pcomRefreshRecentFlags();
+}
 async function runPcomSilentImport(){
-  // Golim o singură dată, aici, înainte de a porni ambele importuri — fiecare, rulat individual
-  // (silent=false, din buton), tot golește-și-retaghează ca înainte; doar varianta silențioasă,
-  // concurentă, sare peste acel pas ca să nu se șteargă reciproc flag-urile „NOU”.
-  pcImpParsed.forEach(x=>delete x._recentImport);
+  // Același moment de lot pentru ambele importuri concurente (vezi pcomApplyRecentFlags).
+  pcomSilentRunAt=Date.now();
+  if(pcomEnsureRecentCommittedInPreview())renderPcomImportPreview();
   pcxKeepTrendyolDateRangeFresh();
   await Promise.allSettled([importEmagApiOrders(true),importTrendyolApiOrders(true)]);
 }
@@ -23155,18 +23227,30 @@ function pcxWorkedSet(){
 }
 function pcxWorkedSaveLocal(){safeLocalSet(PCX_WORKED_KEY,JSON.stringify([...pcxWorkedSet()].slice(-3000)));}
 function pcxOrderWorked(platforma,comandaId){return!!comandaId&&pcxWorkedSet().has(platforma+'|'+comandaId);}
-// Încarcă marcajele din bază și le unește cu cele locale; marcajele făcute doar local (înainte de
-// migrare / offline) se urcă acum în bază, o singură dată.
+// Baza e sursa de adevăr. Se urcă STRICT marcajele care chiar n-au putut fi salvate la copiere (offline /
+// tabela încă inexistentă — lista „în așteptare", PCX_WORKED_PENDING_KEY), nu tot ce are browserul local.
+// Bug real, găsit verificând: varianta inițială urca la fiecare sincronizare (20s) ORICE marcaj local absent
+// din bază — un marcaj șters din bază era „reînviat" imediat de orice browser deschis care îl preluase deja.
+// O singură excepție: prima folosire a tabelei (goală) — atunci se urcă toate marcajele locale existente.
+const PCX_WORKED_PENDING_KEY='sm6_pcx_worked_pending';
+function pcxWorkedPending(){try{return new Set(JSON.parse(localStorage.getItem(PCX_WORKED_PENDING_KEY)||'[]'));}catch(e){return new Set();}}
+function pcxWorkedPendingSave(set){safeLocalSet(PCX_WORKED_PENDING_KEY,JSON.stringify([...set].slice(-3000)));}
 async function loadWorkedOrdersFromDb(){
   if(!sbReady)return false;
   let rows;
   try{rows=await dbGetAll('comenzi_lucrate?select=platforma,comanda_id&order=id.asc');}
   catch(e){console.warn('comenzi_lucrate indisponibil (rulează migrarea SQL din chat) — marcajele „lucrat" rămân doar în acest browser:',e);pcxWorkedDbOk=false;return false;}
   pcxWorkedDbOk=true;
-  const s=pcxWorkedSet(),inDb=new Set(rows.map(r=>r.platforma+'|'+r.comanda_id));
-  inDb.forEach(k=>s.add(k));
-  const localOnly=[...s].filter(k=>!inDb.has(k)).map(k=>{const i=k.indexOf('|');return{platforma:k.slice(0,i),comanda_id:k.slice(i+1)};}).filter(r=>r.comanda_id);
-  if(localOnly.length){try{await dbPost('comenzi_lucrate',localOnly);}catch(e){console.warn('Nu am putut urca marcajele locale „lucrat":',e);}}
+  const inDb=new Set(rows.map(r=>r.platforma+'|'+r.comanda_id));
+  const pending=pcxWorkedPending();
+  if(!rows.length)pcxWorkedSet().forEach(k=>pending.add(k));
+  const toUpload=[...pending].filter(k=>!inDb.has(k)).map(k=>{const i=k.indexOf('|');return{platforma:k.slice(0,i),comanda_id:k.slice(i+1)};}).filter(r=>r.comanda_id);
+  if(toUpload.length){
+    try{await dbPost('comenzi_lucrate',toUpload);toUpload.forEach(r=>inDb.add(r.platforma+'|'+r.comanda_id));pending.clear();}
+    catch(e){console.warn('Nu am putut urca marcajele „lucrat" în așteptare:',e);}
+  }else pending.clear();
+  pcxWorkedPendingSave(pending);
+  pcxWorkedOrders=new Set([...inDb,...pending]);
   pcxWorkedSaveLocal();
   return true;
 }
@@ -23178,12 +23262,15 @@ async function pcxCopyOrderId(btn,platforma,comandaId){
   pcxWorkedSaveLocal();
   const span=btn.closest('.pcx-order-id');
   if(span){span.classList.add('worked');btn.title='Copiat deja — ai lucrat pe această comandă';}
-  if(!isNew||!sbReady)return;
+  if(!isNew)return;
+  const pending=pcxWorkedPending();
+  if(!sbReady){pending.add(k);pcxWorkedPendingSave(pending);return;}
   try{await dbPost('comenzi_lucrate',{platforma,comanda_id:String(comandaId)});pcxWorkedDbOk=true;}
   catch(e){
     // deja marcată de pe alt dispozitiv (cheie unică) — exact starea dorită, nu e o eroare
     if(/duplicate key|23505|already exists/i.test(String(e.message||e)))return;
-    console.warn('Marcajul „lucrat" nu s-a salvat în bază (rămâne local):',e);
+    console.warn('Marcajul „lucrat" nu s-a salvat în bază (va fi reîncercat):',e);
+    pending.add(k);pcxWorkedPendingSave(pending);
   }
 }
 // O linie de produs, compactă — reutilizează FRAGMENTELE deja calculate corect în altă parte
@@ -24367,6 +24454,8 @@ function renderPcomRedesign(){
 function applyPcomImportDraft(saved){
   pcImpParsed=saved.parsed;
   pcImpPlatforma=saved.platforma||'emag';
+  // marcajul NOU salvat în draft poate fi vechi (vezi pcomApplyRecentFlags) — recalculat din istoric
+  pcomRefreshRecentFlags();
   // Fantomele (comenzi incluse deja aplicate între timp) NU se curăță aici, la restaurare — cerut
   // explicit: curățarea se întâmplă STRICT seara, după ora 22:00, o singură trecere pe zi, ca restul
   // safety net-ului (vezi pcomPruneAppliedGhosts/autoApplyStalePendingImports), nu la orice deschidere
@@ -24401,6 +24490,7 @@ async function loadPcomImportState(){
       toast(`↻ Previzualizare recuperată din cloud (${cloud.parsed.length} linii) — salvată automat, posibil de pe alt browser/dispozitiv`);
     }
   }catch(e){console.warn('Nu s-a putut reîncărca previzualizarea Comenzi Platforme:',e);}
+  finally{if(pcomEnsureRecentCommittedInPreview())renderPcomImportPreview();}
 }
 function resetPcomImportPage(){
   const pendingCommitted=pcImpParsed.filter(x=>x._committedId);
