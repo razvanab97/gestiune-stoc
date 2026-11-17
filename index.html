@@ -5302,6 +5302,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:713,text:'Asociere AWB automată — etichetele ACS/DPD Grecia (și orice etichetă fără număr de comandă) se asociază acum singure după numele clientului, cerut direct, cu etichetă reală (Trendyol #11801996367, „Barvara Antoniadoy"): „vezi cum faci sistemul să asocieze comenzile atunci când adaug AWB-ul direct, să nu mai caut eu". Cauza: eticheta nu are numărul comenzii, deci sistemul caută după nume + sumă — dar suma era un filtru OBLIGATORIU, iar eticheta ACS tipărește „COD 14.00 €" în timp ce comanda are 17.17 € (suma curierului nu e mereu totalul comenzii); comanda era eliminată înainte să i se compare măcar numele, deși era IDENTIC. Acum: un nume clar (≥85%) ajunge, suma potrivită rămâne doar criteriu de departajare (ex. același client cu 2 comenzi — câștigă cea cu suma etichetei; dacă niciuna nu are suma, rămâne „ambiguu, verifică manual", nu ghicește). În plus, numele se compară și între alfabete: comanda în greacă/chirilică („Βαρβάρα Αντωνιάδου") se potrivește acum cu numele latin de pe etichetă („Barvara Antoniadoy"). Neschimbat: un client cu alt nume, chiar cu aceeași sumă, NU se asociază. Verificat de 2 ori: sintaxă + Playwright pe date reale (eticheta din captură → exact #11801996367) + cazuri izolate (greacă↔latin, același client cu 2 comenzi, nume diferit, nume slab + sumă diferită, flux complet AI → asociere) — zero erori JS.',date:'2026-11-17'},
   {n:712,text:'Comenzi Platforme — marcajul verde „am lucrat pe comanda asta" (după copierea numărului) se salvează acum în PLATFORMĂ, nu doar în browser, cerut direct: „asta să rămână salvat complet în platformă, să știm că am trecut prin această comandă și când dăm refresh". Tabelă nouă comenzi_lucrate (platformă + nr. comandă, unică) — verde pe orice dispozitiv/browser, după refresh sau reimport; marcajele făcute pe alt dispozitiv apar singure în cel mult 20s. Marcajele deja făcute până acum în acest browser se urcă automat în bază la prima încărcare. Necesită migrarea SQL din chat — până atunci funcționează ca înainte (doar în browserul curent), fără erori. Verificat de 2 ori: sintaxă + Playwright (fără tabelă: rămâne local, zero erori; cu tabelă: marcaj din alt dispozitiv apare verde, marcajele locale vechi urcate în bază, copiere nouă scrisă în bază, copiere pe o comandă deja marcată în altă parte fără eroare).',date:'2026-11-17'},
   {n:711,text:'Comenzi Platforme — buton nou „✗ Nu e pe stoc" pe fiecare linie, cerut direct: „să putem seta aici în comenzi fără stoc, astfel încât să se actualizeze și în stocul standard și să coboare comanda din cu stoc în fără stoc". Pentru cazul în care sistemul arată stoc (ex. „Stoc 3"), dar fizic produsul nu e pe raft: te întreabă câte bucăți ai fizic (implicit 0), corectează stocul real al produsului în Inventar (aceeași regulă ca „Actualizează stocul" din Raport stoc) și înregistrează scăderea în Mișcări de stoc. Comanda trece imediat pe „Fără stoc", coboară sub cele cu stoc în „📦 Cu stoc sus" și primește butoanele „Amână livrarea"/„Adaugă la comandat"; dacă ai fizic câteva bucăți, le primesc întâi comenzile mai vechi. Apare doar când sistemul arată stoc > 0. Verificat de 2 ori: sintaxă + Playwright (produs sintetic, stoc 3 → 0: stocul din Inventar devine 0, comanda coboară sub cea cu stoc, mișcarea „ieșire 3 buc." apare cu sursa comenzii; poza produsului neatinsă) — zero erori JS.',date:'2026-11-17'},
   {n:710,text:'Comenzi Platforme — numărul comenzii devine VERDE după ce îl copiezi (butonul ⧉ de lângă el), cerut direct: „o comandă copiată să se transforme din albastru în verde, astfel încât să știm pe care am lucrat". Rămâne verde și după reîncărcarea paginii sau un nou import (ținut în browser, pe platformă + număr comandă); celelalte comenzi rămân albastre. Verificat de 2 ori: sintaxă + Playwright (albastru înainte, verde imediat după copiere, doar pe comanda copiată, persistă după reload) — zero erori JS.',date:'2026-11-17'},
@@ -22243,15 +22244,32 @@ async function extractAwbLabelDataWithAIVision(blob,pageNum){
 // Cerut explicit — „nu mă interesează că e chirilic, grecesc" — deci comparăm direct textul brut
 // (trim+lowercase, FĂRĂ normalizarea de alfabet) când niciunul din nume nu conține deloc litere/cifre
 // latine, în loc să ne bazăm pe rezultatul degenerat al fuzzyMatch.
+// Transliterare greacă/chirilică → latină — cerut direct („să asocieze comenzile când adaug AWB-ul, să nu
+// mai caut eu"): etichetele ACS/DPD Grecia și Bulgaria tipăresc des numele în latină („Barvara
+// Antoniadoy"), în timp ce comanda Trendyol îl poate avea în alfabetul original („Βαρβάρα Αντωνιάδου")
+// — sau invers. Fără transliterare, scorul era 0 (alfabete diferite = niciun caracter comun). Variantele
+// ambigue (ου→ou/oy, η/υ/ι→i) se nivelează: mai jos comparăm ambele părți DUPĂ aceeași normalizare.
+const NAME_TRANSLIT={'ου':'u','ού':'u','ει':'i','οι':'i','αι':'e','μπ':'mp','ντ':'nt','γκ':'gk','θ':'th','χ':'h','ψ':'ps','ξ':'x','φ':'f','α':'a','ά':'a','β':'v','γ':'g','δ':'d','ε':'e','έ':'e','ζ':'z','η':'i','ή':'i','ι':'i','ί':'i','ϊ':'i','ΐ':'i','κ':'k','λ':'l','μ':'m','ν':'n','ο':'o','ό':'o','π':'p','ρ':'r','σ':'s','ς':'s','τ':'t','υ':'i','ύ':'i','ϋ':'i','ω':'o','ώ':'o',
+  'щ':'sht','ш':'sh','ч':'ch','ж':'zh','ц':'ts','ю':'yu','я':'ya','х':'h','й':'y','ъ':'a','ь':'','а':'a','б':'b','в':'v','г':'g','д':'d','е':'e','з':'z','и':'i','к':'k','л':'l','м':'m','н':'n','о':'o','п':'p','р':'r','с':'s','т':'t','у':'u','ф':'f'};
+const NAME_TRANSLIT_RE=new RegExp(Object.keys(NAME_TRANSLIT).sort((a,b)=>b.length-a.length).join('|'),'g');
+function nameTranslit(s){
+  return String(s||'').toLowerCase().replace(NAME_TRANSLIT_RE,c=>NAME_TRANSLIT[c])
+    // greeklish latin: aceleași nivelări ca mai sus, ca „Antoniadoy"/„Antoniadou"/„Αντωνιάδου" să coincidă
+    .replace(/o[uy]/g,'u').replace(/ch/g,'h').replace(/ph/g,'f').replace(/y/g,'i').replace(/w/g,'o').replace(/v/g,'b');
+}
 function safeNameScore(q,candidate){
   const rawQ=String(q||'').trim().toLowerCase(),rawC=String(candidate||'').trim().toLowerCase();
   if(!rawQ||!rawC)return 0;
   if(!/[a-z0-9]/i.test(rawQ)||!/[a-z0-9]/i.test(rawC)){
     if(rawQ===rawC)return 1;
     if(rawQ.includes(rawC)||rawC.includes(rawQ))return 0.9;
-    return 0;
+    // alfabete diferite sau ambele ne-latine — comparăm după transliterare, nu niciodată pe textul
+    // „gol" rămas după fuzzyMatch (vezi comentariul de mai sus).
+    const tq=nameTranslit(rawQ),tc=nameTranslit(rawC);
+    if(!/[a-z]/.test(tq)||!/[a-z]/.test(tc))return 0;
+    return fuzzyMatch(tq,tc);
   }
-  return fuzzyMatch(q,candidate);
+  return Math.max(fuzzyMatch(q,candidate),fuzzyMatch(nameTranslit(rawQ),nameTranslit(rawC)));
 }
 // Potrivire universală după nume+sumă+conținut, pe TOATE platformele deodată (generalizare a
 // resolveEmagHuLabelMatch, care era scopată doar la eMAG Ungaria) — folosită doar când AI-ul a reușit să
@@ -22298,20 +22316,28 @@ function resolveAwbByNameAndAmount(extracted){
     if(o.produs&&!g.produs)g.produs=o.produs;
     groups.set(key,g);
   });
+  // Suma NU mai e filtru obligatoriu când numele clientului se potrivește clar — bug real, raportat direct,
+  // cu etichetă reală ACS/DPD Grecia (Trendyol #11801996367, „Barvara Antoniadoy", nume IDENTIC cu cel din
+  // comandă): eticheta tipărea „COD 14.00 €", iar comanda avea 17.17 € — suma de pe eticheta curierului nu
+  // e mereu totalul comenzii (valoare declarată, fără transport/discount etc.), deci comanda era eliminată
+  // înainte să i se calculeze măcar numele. Acum: suma potrivită rămâne bonus de departajare (+0.1, ex. 2
+  // comenzi ale aceluiași client), iar o sumă diferită exclude DOAR candidații fără nume clar (≥0.85).
   const scored=[...groups.values()]
-    .filter(g=>sumaRon==null||Math.abs(g.total-sumaRon)<=Math.max(2,g.total*0.02))
     .map(g=>{
+      const amountOk=sumaRon!=null&&Math.abs(g.total-sumaRon)<=Math.max(2,g.total*0.02);
       const nameScore=nameQ?safeNameScore(nameQ,g.nume):0;
       const titleScore=prodQ&&g.produs?fuzzyMatch(prodQ,g.produs):0;
-      return{g,score:Math.max(nameScore,titleScore)};
+      const base=Math.max(nameScore,titleScore);
+      return{g,base,amountOk,nameScore,score:base+(amountOk?0.1:0)};
     })
-    .filter(x=>(nameQ||prodQ)?x.score>=0.5:true)
+    .filter(x=>sumaRon==null||x.amountOk||x.nameScore>=0.85)
+    .filter(x=>(nameQ||prodQ)?x.base>=0.5:true)
     .sort((a,b)=>b.score-a.score);
   const best=scored[0];
   if(!best)return null;
   const second=scored[1];
   if(second&&second.score>=best.score-0.05&&(second.g.comandaId!==best.g.comandaId||second.g.platforma!==best.g.platforma))return{ambiguous:true};
-  return{comandaId:best.g.comandaId,platforma:best.g.platforma,pending:best.g.pending,matchScore:best.score};
+  return{comandaId:best.g.comandaId,platforma:best.g.platforma,pending:best.g.pending,matchScore:best.base};
 }
 // Punct unic folosit de AMBELE fluxuri (fișier ales manual / dosar Desktop/AWB-uri) — vezi
 // extractAwbLabelDataWithAI/resolveAwbByNameAndAmount mai sus. Întoarce un obiect „p" compatibil cu
