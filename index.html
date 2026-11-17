@@ -5376,6 +5376,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:730,text:'Căutare „inteligentă" peste tot, cerut direct: „toate search-urile de peste tot fă-le mai smart, să găsească după mai multe forme ale cuvintelor — ex. caut cutie depozitare de 120L, poate fi l mic, mare, în n feluri — să fie de ajuns să scriu un cuvânt și să-mi recomande orice se găsește". Un singur motor de căutare nou, folosit acum de: căutarea principală (bara de sus, Inventar, Dashboard, Arhivă), toate listele „alege produs" (Importă factură, Comandă furnizor, Comenzi Platforme, Sincronizare, Unificare, Vinted, Raport stoc, Listă locală), asocierea AWB, filtrul din Comenzi Platforme, Jurnal și Istoric comenzi stoc. Ce știe: (1) fără diacritice și majuscule; (2) unitățile scrise oricum: 120L = 120 l = 120 litri = 120 ltr (la fel cm, mm, ml, kg, g, m, buc, W, V); dimensiuni 90x40 = 90 x 40 = 90×40 (găsește și doar după 90 sau 40); (3) cuvintele în orice ordine și în orice formă: „cut" găsește „cutie", „cutii"/„cutiile" găsesc „cutie", o bucată din cuvânt („pozit" → „depozitare"), o greșeală de o literă („depozitre"); (4) cuvintele de legătură (de, cu, pentru…) sunt ignorate — „cutie de 120 litri" = „cutie 120l"; (5) rezultatele cele mai potrivite apar primele. Căutarea după EAN/cod (cifre) funcționează ca înainte. Verificat de 2 ori: Playwright pe produsele reale (ex. „cutie 120 litri", „CUTIE 120L", „cutii depozitare", „depozitre 120", „mouse 90 x 40") + regresie pe toate listele — zero erori JS.',date:'2026-11-17'},
   {n:729,text:'Comandă furnizor așteptată — mai multe poze dintr-o comandă deodată + avertisment de comandă dublă, cerut direct: „să poți adăuga mai multe poze dintr-o comandă o dată; de asemenea, dacă o comandă se aseamănă sau se duplică, să ne menționeze, în caz că o punem mai mult de o dată". (1) Pozele (alese din PC, mai multe deodată, sau lipite cu ⌘V de câte ori vrei) se strâng într-o „tavă" cu miniaturi numerotate (poți scoate una greșită), apoi „🤖 Citește cele N poze" le trimite ÎMPREUNĂ la AI, ca o singură comandă (capturi succesive, fără dubluri între ele). Dacă aceeași linie apare de două ori (capturi care se suprapun), e sărită automat, cu mesaj. (2) Pe măsură ce completezi, fereastra compară cu comenzile deja pe drum: același număr de comandă = „Comanda pare deja adăugată!"; același furnizor și majoritatea produselor identice = „Seamănă cu o comandă deja pe drum" (cu câte produse se potrivesc și data). La „Trimite ca așteptată" primești confirmare dacă e dublă — inclusiv dacă același număr de comandă a fost adăugat în trecut și a sosit deja. Verificat de 2 ori: Playwright (tavă cu 3 poze → o singură citire AI, linie dublă sărită, avertisment după nr. comandă și după produse, confirmare la trimitere, fără scrieri reale) — zero erori JS.',date:'2026-11-17'},
   {n:728,text:'Pop-up-uri reproiectate — „Comandă furnizor așteptată" și „Importă factură", cerut direct: „redesign la pop-up-urile de genul, să fie mai futuriste, ușor mai mari, mai clare". Antet întunecat cu gradient indigo→cyan și iconiță, bandă de lumină sus, fundal estompat, colțuri mai rotunde; câmpurile de sus se aprind la focus. Comanda furnizor e mai lată (1080px) și fiecare linie e acum un card clar: titlul mare, apoi „pastile" separate pentru cod / bucăți / preț (cu echivalentul în RON), bara colorată în stânga arată starea (verde = potrivit din stoc, portocaliu = produs nou, roșu = fără produs, cyan = transport), iar alegerea produsului e mai lată (numele se citește întreg). Zona de poze/PDF e un pătrat mare de „trage aici", cu ⌘V și butonul de clipboard. Doar aspectul s-a schimbat — aceleași butoane și aceeași logică. Verificat de 2 ori: Playwright (capturi + regresie comenzi furnizor, sosire, clipboard) — zero erori JS.',date:'2026-11-17'},
   {n:727,text:'Comenzi furnizor — comenzile trimise doar dintr-o captură (clipboard), fără factură, cer acum factura la sosire, cerut direct: „la adăugarea din clipboard, fără factură, să apară «adaugă factura și adaugă în stoc», pentru că asta nu e factura comenzii și n-ar fi corect să adăugăm fără factură". Pe cardul „📥 Comenzi furnizor — pe drum", la astfel de comenzi (ex. Skroutz de azi) butonul devine „📄 Adaugă factura și adaugă în stoc": se deschide „Importă factură" goală (doar furnizorul și nr. comenzii completate), încarci factura reală (PDF/poză), o verifici și apeși „Aplică" — stocul intră din factură (prețuri, transport, cantități reale), iar produsele comenzii găsite pe factură se închid automat; cele care lipsesc de pe factură rămân pe drum. „Aplică" nu merge până nu e încărcată factura. Comenzile cu factură atașată (PDF) păstrează „✓ A sosit — adaugă în stoc", completat automat, ca înainte. Verificat de 2 ori: Playwright (comandă din clipboard → butonul nou, blocare fără factură, după factură doar produsul găsit se închide; comandă cu PDF → butonul vechi) — zero erori JS.',date:'2026-11-17'},
@@ -6232,7 +6233,7 @@ function ppSearchByName(v){
   const q=v.trim().toLowerCase();
   if(q.length<2){box.innerHTML='';box.style.display='none';return;}
   box.style.display='flex';
-  const results=P.filter(p=>!p.archived&&(p.name.toLowerCase().includes(q)||(p.sku||'').toLowerCase().includes(q)||(p.internalCode||'').toLowerCase().includes(q))).slice(0,12);
+  const results=smartFilter(P.filter(p=>!p.archived),q,smartProdText).slice(0,12);
   box.innerHTML=results.length?results.map(p=>{
     const pth=p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'pp')}>`:`<div class="smi-pick-th-ph">📦</div>`;
     return`<div class="smi-pick-item" onclick="ppPickProduct(${p.id})">${pth}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</span></div>`;
@@ -6770,7 +6771,7 @@ function staleReassignSearch(id,q){
   if(!box)return;
   const query=String(q||'').trim().toLowerCase();
   if(!query){box.style.display='none';box.innerHTML='';return;}
-  const matches=P.filter(p=>`${p.name||''} ${p.sku||''} ${p.internalCode||''} ${p.ean||''}`.toLowerCase().includes(query)).slice(0,8);
+  const matches=smartFilter(P,query,smartProdText).slice(0,8);
   if(!matches.length){box.innerHTML='<div class="rpt-card-search-empty">Niciun produs găsit</div>';box.style.display='block';return;}
   box.innerHTML=matches.map(p=>`<div class="rpt-card-search-row" onmousedown="event.preventDefault()" onclick="staleReassignPick(${id},${p.id})">${esc(p.name||'—')}${p.sku?' · SKU '+esc(p.sku):''}${p.archived?' <span style="color:var(--or)">(arhivat)</span>':''}</div>`).join('');
   box.style.display='block';
@@ -7709,7 +7710,7 @@ function dashSearchInput(q){
   const drop=document.getElementById('dash-search-results');if(!drop)return;
   q=(q||'').trim();
   if(!q){drop.classList.remove('on');drop.innerHTML='';return;}
-  const hits=P.filter(p=>!p.archived&&prodMatchesSearch(p,q)).slice(0,8);
+  const hits=smartSortByName(P.filter(p=>!p.archived&&prodMatchesSearch(p,q)),q).slice(0,8);
   if(!hits.length){drop.classList.add('on');drop.innerHTML=`<div class="sr-prod-row" style="color:var(--t3)">Niciun produs găsit</div>`;return;}
   drop.classList.add('on');
   drop.innerHTML=hits.map(p=>{
@@ -16915,6 +16916,85 @@ function openCalcForResearch(){
 }
 
 /* TODAY SEARCH */
+// ── Căutare „inteligentă", comună pentru TOATE căutările de produse/comenzi (cerut direct: „toate search-urile
+// de peste tot fă-le mai smart, să găsească după mai multe forme ale cuvintelor — ex. cutie depozitare 120L,
+// poate fi l mic, mare, în n feluri — să fie de ajuns să scriu un cuvânt și să-mi recomande orice se găsește").
+// Normalizează: fără diacritice / majuscule; unități lipite de număr (120 L = 120l = 120 litri = 120 ltr;
+// la fel cm, mm, ml, kg, g, m, buc, W, V); dimensiuni (90 x 40 = 90x40 = 90×40, plus 90 și 40 separat);
+// fiecare cuvânt căutat trebuie să apară undeva, în orice ordine, prin: potrivire exactă, început de cuvânt
+// („cut" → „cutie"), aceeași rădăcină („cutii"/„cutie"/„cutiile"), bucată din cuvânt („pozit" → „depozitare")
+// sau o greșeală de o literă („depozitre"). Cuvintele de legătură (de, cu, pentru…) sunt ignorate. Rezultatele
+// se ordonează după cât de bine se potrivesc.
+const SMART_UNITS=[[/(\d)\s*(?:litri|litru|litre|liters?|ltr|lt|l)(?![a-z])/g,'$1l'],[/(\d)\s*(?:mililitri|ml)(?![a-z])/g,'$1ml'],[/(\d)\s*(?:centimetri|centimetru|cm)(?![a-z])/g,'$1cm'],[/(\d)\s*(?:milimetri|milimetru|mm)(?![a-z])/g,'$1mm'],[/(\d)\s*(?:kilograme|kilogram|kg)(?![a-z])/g,'$1kg'],[/(\d)\s*(?:grame|gram|gr|g)(?![a-z])/g,'$1g'],[/(\d)\s*(?:metri|metru|m)(?![a-z])/g,'$1m'],[/(\d)\s*(?:bucati|bucata|buc|pcs|szt|pz)(?![a-z])/g,'$1buc'],[/(\d)\s*(?:wati|watt|w)(?![a-z])/g,'$1w'],[/(\d)\s*(?:volti|volt|v)(?![a-z])/g,'$1v']];
+const SMART_STOP=new Set(['de','si','sau','cu','pentru','la','din','in','pe','pt','a','al','ale','un','o','the','for','and','with','of']);
+const SMART_SUFFIX=['urilor','urile','ilor','elor','ului','iile','uri','ele','ile','lor','ii','ei','ul','le','a','e','i','u','s'];
+function smartNormText(v){
+  let t=String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[şș]/g,'s').replace(/[ţț]/g,'t');
+  t=t.replace(/(\d),(\d)/g,'$1.$2').replace(/(\d)\s*[x×*]\s*(?=\d)/g,'$1x');
+  SMART_UNITS.forEach(([re,to])=>{t=t.replace(re,to);});
+  return t;
+}
+function smartStem(w){
+  if(w.length<=3||/\d/.test(w))return w;
+  for(const suf of SMART_SUFFIX)if(w.endsWith(suf)&&w.length-suf.length>=3)return w.slice(0,-suf.length);
+  return w;
+}
+function smartWords(v){
+  const out=[];
+  smartNormText(v).split(/[^a-z0-9.]+/).forEach(w=>{
+    w=w.replace(/^\.+|\.+$/g,'');if(!w)return;out.push(w);
+    if(/^\d[\d.]*x\d/.test(w))w.split('x').forEach(x=>{if(x)out.push(x);});   // 90x40 -> și 90, 40
+  });
+  return out;
+}
+const SMART_CACHE=new Map();
+function smartPrep(text){
+  const k=String(text||'');let c=SMART_CACHE.get(k);
+  if(!c){if(SMART_CACHE.size>30000)SMART_CACHE.clear();const words=smartWords(k);c={words,stems:words.map(smartStem)};SMART_CACHE.set(k,c);}
+  return c;
+}
+function smartQuery(q){
+  const ws=smartWords(q),kept=ws.filter(w=>!SMART_STOP.has(w));
+  return(kept.length?kept:ws).map(w=>({w,s:smartStem(w),d:/\d/.test(w)}));
+}
+function smartLev1(a,b){   // distanța de editare e ≤ 1?
+  if(a===b)return true;const la=a.length,lb=b.length;if(Math.abs(la-lb)>1)return false;
+  let i=0,j=0,diff=0;
+  while(i<la&&j<lb){if(a[i]===b[j]){i++;j++;continue;}if(++diff>1)return false;if(la>lb)i++;else if(lb>la)j++;else{i++;j++;}}
+  return diff+(la-i)+(lb-j)<=1;
+}
+function smartTokScore(t,c){
+  let best=0;
+  for(let k=0;k<c.words.length;k++){
+    const w=c.words[k],ws=c.stems[k];let sc=0;
+    if(w===t.w)sc=4;
+    else if(t.d){if(w.startsWith(t.w)&&(t.w.length>=4||!/^\d/.test(w.slice(t.w.length))))sc=3;else if(t.w.length>=4&&w.includes(t.w))sc=1.5;}   // „120" → 120l/120cm, nu 1200…/EAN
+    else if(w.startsWith(t.w))sc=3;
+    else if(ws===t.s)sc=3.5;
+    else if(t.s.length>=3&&(ws.startsWith(t.s)||(ws.length>=3&&(ws.length>=t.s.length-2||(w===ws&&w.length<=4&&t.w.length>=6))&&t.s.startsWith(ws))))sc=2.5;
+    else if(t.w.length>=3&&w.includes(t.w))sc=1.5;
+    else if(t.w.length>=5&&(smartLev1(t.w,w)||smartLev1(t.s,ws)||(w.length>t.w.length&&smartLev1(t.w,w.slice(0,t.w.length)))))sc=1;
+    if(sc>best){best=sc;if(sc===4)break;}
+  }
+  return best;
+}
+function smartScoreQ(text,Q){
+  if(!Q.length)return 1;
+  const c=smartPrep(text);let tot=0;
+  for(const t of Q){const sc=smartTokScore(t,c);if(!sc)return 0;tot+=sc;}
+  if(c.words.length&&c.words[0].startsWith(Q[0].w))tot+=.5;   // începe cu primul cuvânt căutat
+  return tot;
+}
+function smartScore(text,q){return smartScoreQ(text,smartQuery(q));}
+function smartMatch(text,q){return smartScoreQ(text,smartQuery(q))>0;}
+function smartSortByName(list,q){const Q=smartQuery(q);return list.map((p,i)=>({p,i,sc:smartScoreQ(smartProdText(p),Q)})).sort((a,b)=>b.sc-a.sc||a.i-b.i).map(o=>o.p);}
+function smartProdText(p){return[p.name,p.sku,p.internalCode,p.ean].filter(Boolean).join(' ');}
+// filtrează + ordonează după potrivire (cele mai bune primele; la egalitate, ordinea inițială)
+function smartFilter(list,q,textOf){
+  const Q=smartQuery(q);if(!Q.length)return list.slice();
+  const out=[];list.forEach((x,i)=>{const sc=smartScoreQ(textOf(x),Q);if(sc>0)out.push({x,sc,i});});
+  out.sort((a,b)=>b.sc-a.sc||a.i-b.i);return out.map(o=>o.x);
+}
 function invSearchNorm(v){
   return String(v||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
 }
@@ -16947,16 +17027,14 @@ function prodMatchesSearch(p,qRaw){
   // câmp — alipirea tuturor câmpurilor într-un singur text, înainte de a elimina non-cifrele, ar contopi
   // greșit cifre de la capătul unui câmp cu începutul următorului (ex. „...12"+„34..." → „1234", o
   // potrivire falsă).
-  const hay=vals.map(invSearchNorm).join(' ');
-  const words=q.split(/\s+/).filter(Boolean);
-  if(words.every(w=>hay.includes(w)))return true;
-  return qd.length>=3&&vals.some(v=>invSearchDigits(v).includes(qd));
+  if(smartMatch(vals.filter(Boolean).join(' '),qRaw))return true;
+  return/^[\d\s.\-]+$/.test(String(qRaw).trim())&&qd.length>=3&&vals.some(v=>invSearchDigits(v).includes(qd));
 }
 function renderSearch(){
   const q=(document.getElementById('ss-inp').value||'').trim();
   const drop=document.getElementById('ss-drop');
   if(!q){drop.classList.remove('on');drop.innerHTML='';return;}
-  const hits=P.filter(p=>!p.archived&&prodMatchesSearch(p,q));
+  const hits=smartSortByName(P.filter(p=>!p.archived&&prodMatchesSearch(p,q)),q);
   if(!hits.length){drop.classList.add('on');drop.innerHTML=`<div class="ss-row" style="color:var(--t3)">Niciun produs găsit</div>`;return;}
   drop.classList.add('on');
   drop.innerHTML=hits.map(p=>{
@@ -17562,7 +17640,7 @@ function openMergePick(ev){
 function filterMergePick(){
   const q=document.getElementById('merge-pick-search').value.toLowerCase().trim();
   const list=document.getElementById('merge-pick-list');
-  const matches=(q?mergePickProds.filter(p=>p.name.toLowerCase().includes(q)||(p.sku&&p.sku.toLowerCase().includes(q))):mergePickProds).slice(0,80);
+  const matches=(q?smartFilter(mergePickProds,q,smartProdText):mergePickProds).slice(0,80);
   list.innerHTML=matches.map(p=>{
     const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'pick')}>`:`<div class="smi-pick-th-ph">📦</div>`;
     return`<div class="smi-pick-item" onclick="pickMergeTarget(${p.id})">${th}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</span></div>`;
@@ -18494,7 +18572,7 @@ function renderSmProductPickCandidates(products){
 }
 function filterSmProductPick(){
   const q=document.getElementById('sm-produs-pick-search').value.toLowerCase().trim();
-  const matches=(q?smProdPickList.filter(p=>p.name.toLowerCase().includes(q)||(p.sku&&p.sku.toLowerCase().includes(q))):smProdPickList).slice(0,80);
+  const matches=(q?smartFilter(smProdPickList,q,smartProdText):smProdPickList).slice(0,80);
   renderSmProductPickCandidates(matches);
 }
 function pickSmProduct(id){
@@ -19414,10 +19492,7 @@ function renderSyncPickRows(prods){
 function filterSyncPick(){
   const raw=stripDiacritics(document.getElementById('smi-pick-search').value.toLowerCase().trim());
   const tokens=raw.split(/\s+/).filter(Boolean);
-  const matches=(tokens.length?syncPickProds.filter(p=>{
-    const hay=stripDiacritics(p.name.toLowerCase())+' '+stripDiacritics((p.sku||'').toLowerCase());
-    return tokens.every(t=>hay.includes(t));
-  }):syncPickProds).slice(0,80);
+  const matches=(tokens.length?smartFilter(syncPickProds,raw,smartProdText):syncPickProds).slice(0,80);
   renderSyncPickRows(matches);
 }
 // „📋 din imagine" pe rândurile din previzualizare (nu doar la „Adaugă mapare nouă") — cerut direct.
@@ -21149,7 +21224,7 @@ function rptReorderSearchInput(q){
   if(!box)return;
   const query=String(q||'').trim().toLowerCase();
   if(!query){box.style.display='none';box.innerHTML='';return;}
-  const matches=P.filter(p=>!p.archived&&`${p.name||''} ${p.sku||''} ${p.internalCode||''} ${p.ean||''}`.toLowerCase().includes(query)).slice(0,8);
+  const matches=smartFilter(P.filter(p=>!p.archived),query,smartProdText).slice(0,8);
   if(!matches.length){box.innerHTML='<div class="rpt-card-search-empty">Niciun produs găsit</div>';box.style.display='block';return;}
   box.innerHTML=matches.map(p=>{
     const s=qty(p),stocLbl=s<=0?'fără stoc':'stoc '+fmtQty(s);
@@ -23047,7 +23122,7 @@ function vintedLotSearch(idx,v){
   const q=v.trim().toLowerCase();
   if(q.length<2){box.innerHTML='';box.style.display='none';return;}
   box.style.display='flex';
-  const results=P.filter(p=>!p.archived&&(p.name.toLowerCase().includes(q)||(p.sku||'').toLowerCase().includes(q))).slice(0,8);
+  const results=smartFilter(P.filter(p=>!p.archived),q,smartProdText).slice(0,8);
   box.innerHTML=results.length?results.map(p=>`<div class="smi-pick-item" onclick="vintedLotPick(${idx},${p.id})"><span class="smi-pick-item-nm">${esc(p.name)}</span></div>`).join(''):`<div class="pp-hint" style="padding:6px 2px">Niciun produs găsit</div>`;
 }
 function vintedLotPick(idx,id){
@@ -23731,7 +23806,7 @@ function pcxFilteredGroups(q,platF,statF){
     if(statF==='pending'&&(idxs.some(i=>pcImpParsed[i].include)||!idxs.every(i=>pcImpParsed[i].produsId||pcImpParsed[i].newProduct)))return false;
     if(q){
       const hay=idxs.map(i=>{const it=pcImpParsed[i];const p=it.produsId?P.find(x=>x.id===it.produsId):null;return[it.comandaId,it.clientNume,it.titluExtern,it.awb,p?.name,p?.sku].filter(Boolean).join(' ');}).join(' ').toLowerCase();
-      if(!hay.includes(q))return false;
+      if(!hay.includes(q)&&!smartMatch(hay,q))return false;
     }
     return true;
   });
@@ -24230,7 +24305,7 @@ function pclFilter(v){
   PCL.q=String(v||'');const q=stripDiacritics(PCL.q).toLowerCase().trim();
   let shown=0;
   document.querySelectorAll('#pcl-root .pcl-card[data-s],#pcl-root .pcl-prow[data-s]').forEach(el=>{
-    const ok=!q||stripDiacritics(el.dataset.s).includes(q);el.style.display=ok?'':'none';if(ok&&el.classList.contains('pcl-card'))shown++;
+    const ok=!q||smartMatch(el.dataset.s,q);el.style.display=ok?'':'none';if(ok&&el.classList.contains('pcl-card'))shown++;
   });
   const n=document.getElementById('pcl-search-n');if(n)n.textContent=q?shown+' produse':'';
 }
@@ -24258,9 +24333,7 @@ function pclOpenPick(ev,mode,arg){
 function pclPickFilter(){
   const words=stripDiacritics(document.getElementById('pcl-pick-search').value||'').toLowerCase().split(/\s+/).filter(Boolean);
   const cur=PCL.pick&&PCL.pick.mode==='draft'?(PCL.draft[PCL.pick.arg]||{}).produsId:null;
-  const list=P.filter(p=>!p.archived&&(!PCL.pick||PCL.pick.mode!=='subst'||p.id!==PCL.pick.arg)).filter(p=>{
-    const h=stripDiacritics((p.name||'')+' '+(p.sku||'')+' '+(p.ean||'')).toLowerCase();return words.every(w=>h.includes(w));
-  }).slice(0,80);
+  const list=smartFilter(P.filter(p=>!p.archived&&(!PCL.pick||PCL.pick.mode!=='subst'||p.id!==PCL.pick.arg)),words.join(' '),smartProdText).slice(0,80);
   document.getElementById('pcl-pick-list').innerHTML=list.map(p=>{
     const st=qty(p);
     return`<div class="smi-pick-item" onclick="pclPickChoose(${p.id})" style="${p.id===cur?'background:var(--surf2)':''}">${pclImg(p,'smi-pick-th')}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}${syncPickPriceHtml(p)}</span><span class="smi-pick-stock ${st>0?'ok':'zero'}">${st>0?'Stoc '+fmtQty(st):'Fără stoc'}</span></div>`;
@@ -24751,7 +24824,7 @@ function renderPcomPickRows(prods){
 }
 function filterPcomPick(){
   const q=document.getElementById('pcmi-pick-search').value.toLowerCase().trim();
-  const matches=(q?pcomPickProds.filter(p=>p.name.toLowerCase().includes(q)||(p.sku&&p.sku.toLowerCase().includes(q))):pcomPickProds).slice(0,80);
+  const matches=(q?smartFilter(pcomPickProds,q,smartProdText):pcomPickProds).slice(0,80);
   renderPcomPickRows(matches);
 }
 // „📋 din imagine" pe picker-ul de produs de la o linie de comandă — cerut direct. Aceeași logică
@@ -26387,7 +26460,7 @@ function filterFurnizorPick(){
   const q=(document.getElementById('cf-pick-search')?.value||'').toLowerCase().trim();
   const list=document.getElementById('cf-pick-list');if(!list)return;
   const pool=furnizorPickProds||[];
-  const matches=(q?pool.filter(p=>p.name.toLowerCase().includes(q)||(p.sku&&p.sku.toLowerCase().includes(q))):pool).slice(0,80);
+  const matches=(q?smartFilter(pool,q,smartProdText):pool).slice(0,80);
   list.innerHTML=matches.map(p=>{
     const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'cf')}>`:`<div class="smi-pick-th-ph">📦</div>`;
     return`<div class="smi-pick-item" onclick="pickFurnizorProduct(${p.id})">${th}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</span></div>`;
@@ -26916,7 +26989,7 @@ function scFilterProducts(q){
   q=q.trim().toLowerCase();
   // Fără text de căutare, arată TOATE produsele (sortate alfabetic) — selectabile prin derulare,
   // nu doar prin căutare — cerut direct.
-  const matches=(q?P.filter(p=>!p.archived&&(p.name.toLowerCase().includes(q)||(p.sku&&p.sku.toLowerCase().includes(q)))):P.filter(p=>!p.archived).slice().sort((a,b)=>a.name.localeCompare(b.name))).slice(0,q?20:200);
+  const matches=(q?smartFilter(P.filter(p=>!p.archived),q,smartProdText):P.filter(p=>!p.archived).slice().sort((a,b)=>a.name.localeCompare(b.name))).slice(0,q?20:200);
   box.innerHTML=matches.map(p=>{
     const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'sc')}>`:`<div class="smi-pick-th-ph">📦</div>`;
     return`<div class="smi-pick-item" onclick="scPickProduct(${p.id})">${th}<span class="smi-pick-item-nm">${esc(p.name)}${p.sku?' · '+esc(p.sku):''}</span></div>`;
@@ -28226,7 +28299,7 @@ function awbPickSearchText(o){
 // Fiecare cuvânt din căutare trebuie să apară UNDEVA în text, indiferent de ordine/distanță — nu un
 // singur substring literal (vezi filterAwbPick, de ce contează).
 function awbPickWordsMatch(text,words){
-  return words.every(w=>text.includes(w));
+  return smartMatch(text,words.join(' '));
 }
 let awbPickSeq=0;
 async function filterAwbPick(){
@@ -29782,7 +29855,7 @@ function filterInvPick(){
   const list=document.getElementById('invmi-pick-list');
   const cur=invParsed[invPickIdx]?.produsId||null;
   const curNew=!!invParsed[invPickIdx]?.newProduct;
-  const matches=(q?invPickProds.filter(p=>p.name.toLowerCase().includes(q)||(p.sku&&p.sku.toLowerCase().includes(q))):invPickProds).slice(0,80);
+  const matches=(q?smartFilter(invPickProds,q,smartProdText):invPickProds).slice(0,80);
   const newRow=`<div class="smi-pick-item" onclick="pickInvNewProduct()" style="border-bottom:1px solid var(--b1);${curNew?'background:var(--surf2)':''}"><div class="smi-pick-th-ph">🆕</div><span class="smi-pick-item-nm" style="color:var(--or)">Nu există — adaugă ca produs nou</span></div>`;
   const rows=matches.map(p=>{
     const th=p.img?`<img src="${esc(imgSrc(p.img))}" class="smi-pick-th" ${imgErrAttr(p.img,'pick')}>`:`<div class="smi-pick-th-ph">📦</div>`;
@@ -31098,7 +31171,7 @@ function rptCardSearchInput(q){
   if(!box)return;
   const query=String(q||'').trim().toLowerCase();
   if(!query){box.style.display='none';box.innerHTML='';return;}
-  const matches=P.filter(p=>!p.archived&&`${p.name||''} ${p.sku||''} ${p.internalCode||''} ${p.ean||''}`.toLowerCase().includes(query)).slice(0,8);
+  const matches=smartFilter(P.filter(p=>!p.archived),query,smartProdText).slice(0,8);
   if(!matches.length){box.innerHTML='<div class="rpt-card-search-empty">Niciun produs găsit</div>';box.style.display='block';return;}
   box.innerHTML=matches.map(p=>`<div class="rpt-card-search-row" onclick="rptCardSearchPick(${p.id})">${esc(p.name||'—')}${p.sku?' · SKU '+esc(p.sku):''}</div>`).join('');
   box.style.display='block';
@@ -31447,7 +31520,7 @@ function renderJurnal(){
   const body=document.getElementById('jbody');
   if(!days.length){body.innerHTML=`<div class="jrnl-empty">Nicio vânzare înregistrată</div>`;document.getElementById('jtotal').textContent='';return;}
   body.innerHTML=days.map(day=>{
-    let ent=day.entries;if(q)ent=ent.filter(en=>en.name.toLowerCase().includes(q)||(en.category||'').toLowerCase().includes(q));if(!ent.length)return'';
+    let ent=day.entries;if(q)ent=ent.filter(en=>smartMatch(en.name+' '+(en.category||''),q));if(!ent.length)return'';
     const dQ=ent.reduce((a,en)=>a+en.qty,0),dV=ent.reduce((a,en)=>a+(en.qty*(en.priceSell||0)),0);
     gQ+=dQ;gV+=dV;
     const dlbl=new Date(day.date+'T12:00:00').toLocaleDateString('ro-RO',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
@@ -31466,7 +31539,7 @@ function renderJurnal(){
 function renderStockOrders(){
   const q=(document.getElementById('js').value||'').toLowerCase(),mo=document.getElementById('jm').value;
   let rows=[...OI];if(mo)rows=rows.filter(o=>(o.createdAt||'').startsWith(mo));
-  if(q)rows=rows.filter(o=>(o.source||'').toLowerCase().includes(q)||(o.invoiceNumber||'').toLowerCase().includes(q)||(o.supplier||'').toLowerCase().includes(q)||(o.details||[]).some(d=>[d.name,d.sku,d.status].some(v=>String(v||'').toLowerCase().includes(q))));
+  if(q)rows=rows.filter(o=>smartMatch([o.source,o.invoiceNumber,o.supplier,...(o.details||[]).flatMap(d=>[d.name,d.sku,d.status])].filter(Boolean).join(' '),q));
   const body=document.getElementById('jbody');
   jStockOrdersRendered=rows;
   if(!rows.length){body.innerHTML=`<div class="jrnl-empty">Nicio comandă de stoc încărcată</div>`;document.getElementById('jtotal').textContent='';return;}
