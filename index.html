@@ -5106,6 +5106,12 @@ poza principală a produsului — orice apel openImgZoom(src) deschide aceeași 
         <input type="date" id="cf-data-estimativa" class="invx-summary-input" title="Opțional — dacă lipsește, termenul de livrare se calculează de la data plasării comenzii">
       </div>
       <div class="invx-summary-card">
+        <div class="invx-summary-lbl">Monedă prețuri</div>
+        <select id="cf-moneda" class="invx-summary-input" onchange="renderFurnizorImportPreview()" title="Moneda în care sunt prețurile din comanda furnizorului — detectată automat de AI, se poate schimba. La salvare totul e convertit în RON.">
+          <option value="RON">RON</option><option value="EUR">EUR</option>
+        </select>
+      </div>
+      <div class="invx-summary-card">
         <div class="invx-summary-lbl">Status analiză AI</div>
         <div class="invx-summary-val" id="cfx-status">Se așteaptă text sau poză</div>
       </div>
@@ -5302,6 +5308,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:722,text:'Comandă furnizor așteptată — transport și monedă, cerut direct, pe o comandă Maxy reală (linia „delivery · 125.93"): „aici să selectăm transport, iar prețul în cazul ăsta e în euro". Înainte, AI-ului i se cerea explicit prețul „în lei", deci prețurile în EUR erau salvate ca RON, iar linia de livrare rămânea „doar text" (sau devenea produs nou și apărea în Staff ca marfă de primit). Acum, exact ca la Importă factură: (1) câmp nou „Monedă prețuri" (RON/EUR), completat automat de AI din document; prețurile EUR se arată și convertite (≈ RON) și se salvează în RON (inclusiv prețul de achiziție al produselor noi și „Alt furnizor"), cu același curs folosit deja la facturi; (2) liniile de transport („delivery/shipping/transport/livrare…") sunt marcate automat „🚚 Transport", iar orice linie poate fi marcată/demarcată manual — nu devin produse, nu apar în Staff, totalul lor (în RON) se salvează pe comandă și apare pe cardul „Comenzi furnizor — pe drum". Necesită coloana nouă `transport` (SQL în chat) — până atunci comanda se salvează normal, cu avertisment că transportul n-a fost salvat. Verificat de 2 ori: Playwright pe o comandă EUR cu „delivery" (monedă detectată, transport marcat automat, „Produs nou pentru toate" nu-l atinge, prețuri convertite corect, produsul nou cu preț în RON, fără coloana transport → salvare normală + avertisment, cu coloana → transport 638.47 RON salvat și afișat pe Dashboard) — zero erori JS.',date:'2026-11-17'},
   {n:721,text:'Comenzi Platforme — alegerea produsului pe o linie nu mai „rămâne blocată" și nu mai poate ajunge pe altă comandă, bug GRAV, raportat direct: „încerc să setez produsul corect și nu mă lasă, rămâne blocat pe acesta" (#581154471). Cauza, reprodusă exact: lista de produse ținea minte doar POZIȚIA liniei; reîmprospătarea automată (la 5 minute) scoate între timp din previzualizare comenzile care nu mai sunt deschise pe eMAG (azi multe, după emiterea AWB-urilor) — pozițiile se mutau, iar produsul ales era scris pe comanda de dedesubt, în timp ce linia aleasă rămânea neschimbată. Acum lista (și cea de AWB de pe linie) ține minte comanda însăși; dacă aceasta a dispărut între timp, nu se scrie nimic nicăieri și primești un mesaj. În plus, dacă eMAG nu răspunde pentru o țară (RO/BG/HU) la o reîmprospătare, comenzile acelei țări nu mai sunt scoase din previzualizare (înainte erau scoase și readuse cu potrivirea automată, pierzând produsul ales manual). Verificat: în bază nu a ajuns niciun produs greșit (95 de comenzi azi, toate conform codului). Verificat de 2 ori: Playwright (linie scoasă între deschiderea listei și alegere → produsul ajunge pe comanda corectă, cealaltă neatinsă; linie dispărută complet → nimic scris; țară eMAG fără răspuns → comenzile ei rămân) — zero erori JS.',date:'2026-11-17'},
   {n:720,text:'Marcajul verde „am lucrat pe comanda asta" — un marcaj șters din bază nu mai e „reînviat" de browser. Găsit verificând: varianta de la #712 urca la fiecare sincronizare (20s) ORICE marcaj din lista locală a browserului care lipsea din bază — deci o ștergere din bază era anulată imediat de orice browser deschis care îl preluase deja. Acum baza e sursa de adevăr: se urcă strict marcajele care chiar n-au putut fi salvate la copiere (offline/tabela încă inexistentă), iar restul se iau din bază. Verificat de 2 ori: Playwright cu rețeaua spre tabelă blocată (fără tabelă → local; cu tabelă → marcaje din alt dispozitiv, copiere nouă salvată; ștergere în bază → nu mai revine) — zero erori JS.',date:'2026-11-17'},
   {n:719,text:'Comenzi Platforme — comenzile incluse, cu AWB, nu mai dispar din previzualizare, raportat direct: „nu mai apar nici cele cu AWB în previzualizare Comenzi Platforme". Verificat pe date reale: 57 de comenzi incluse cu AWB, încă neaplicate (stoc nescăzut), dar previzualizarea avea 301 linii, NICIUNA cu AWB — 34 lipseau complet, iar la 23 linia nu avea AWB-ul pe ea. Cauza: previzualizarea fusese reconstruită de la zero, iar reconstruirea aduce din eMAG doar comenzile „Noi/În lucru" — o comandă cu AWB emis trece pe eMAG în „Pregătită" și nu mai era adusă (deci nici „Aplică import" n-o mai vedea). Acum, la deschiderea paginii și la fiecare reîmprospătare automată, orice comandă inclusă, neaplicată, neanulată, din ultimele 7 zile, care lipsește din previzualizare e readusă automat din bază, cu AWB-ul ei; liniile existente fără AWB primesc AWB-ul din bază. Comenzile mai vechi (câteva din septembrie, lăsate intenționat deoparte) rămân neatinse. Verificat de 2 ori: Playwright pe previzualizarea ta reală + comenzile reale (toate cele 51 de comenzi recente prezente, toate cu AWB, fără dubluri, fără cele vechi, a doua rulare nu mai adaugă nimic) + regresie Aplică import/stoc/AWB — zero erori JS.',date:'2026-11-17'},
@@ -6476,7 +6483,9 @@ function renderFurnizorDashboardCard(){
       const restul=Math.max(0,(Number(r.cantitate_comandata)||0)-(Number(r.cantitate_sosita)||0));
       return`${esc(p?p.name:r.titlu_extern)} (${fmtQty(r.cantitate_comandata)} buc${r.cantitate_sosita>0?` · sosit ${fmtQty(r.cantitate_sosita)}/rest ${fmtQty(restul)}`:''})`;
     }).join(' · ');
-    return`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${label}</strong>${deadlineBadge}<div class="jp-meta">${prodsHtml}</div></div><div style="display:flex;gap:6px;flex-wrap:wrap;align-self:flex-start">${facturiBtns}${delBtn}</div></div>`;
+    const transportRon=Number(g.rows[0]?.transport)||0;
+    const transportTxt=transportRon>0?` · <span title="Transport comandă">🚚 transport ${transportRon.toFixed(2)} RON</span>`:'';
+    return`<div class="pcom-batch-row"><div class="pcom-batch-info"><strong>${label}</strong>${deadlineBadge}<div class="jp-meta">${prodsHtml}${transportTxt}</div></div><div style="display:flex;gap:6px;flex-wrap:wrap;align-self:flex-start">${facturiBtns}${delBtn}</div></div>`;
   }).join('');
 }
 async function deleteFurnizorOrderGroup(key,label){
@@ -25845,6 +25854,7 @@ function openFurnizorComanda(){
   document.getElementById('cf-paste-text').value='';
   document.getElementById('cf-file').value='';
   document.getElementById('cf-invoice-files').innerHTML='';
+  document.getElementById('cf-moneda').value='RON';
   document.getElementById('cf-preview').innerHTML='';
   document.getElementById('cf-parsing').style.display='none';
   renderInvCatDatalist();
@@ -25863,17 +25873,35 @@ const FURNIZOR_ORDER_SCHEMA={
       cod:{type:['string','null'],description:'Codul produsului la furnizor (SKU/cod intern furnizor) — null dacă nu apare'},
       ean:{type:['string','null'],description:'Codul de bare EAN/GTIN (de obicei 13 cifre, uneori 8), NUMAI dacă apare explicit etichetat „EAN"/„Cod EAN"/„GTIN"/„Barcode" — diferit de „cod" (SKU-ul/codul intern al furnizorului). null dacă nu apare o asemenea etichetă explicită.'},
       qty:{type:'number',description:'Cantitatea comandată'},
-      pret:{type:['number','null'],description:'Prețul TOTAL al liniei (cantitate × preț unitar), în lei — null dacă nu apare'}
-    },required:['name','cod','ean','qty','pret'],additionalProperties:false}}
+      pret:{type:['number','null'],description:'Prețul TOTAL al liniei (cantitate × preț unitar), exact cum apare, în moneda documentului (vezi „moneda") — null dacă nu apare'},
+      esteTransport:{type:'boolean',description:'true dacă linia NU e un produs, ci costul de transport/livrare (ex. „delivery", „shipping", „transport", „livrare", „curier"); altfel false'}
+    },required:['name','cod','ean','qty','pret','esteTransport'],additionalProperties:false}},
+    moneda:{type:['string','null'],enum:['RON','EUR',null],description:'Moneda prețurilor din document: "EUR" dacă apar €/EUR, "RON" dacă apar lei/RON. null dacă nu se poate stabili.'}
   },
-  required:['comandaRef','items'],
+  required:['comandaRef','items','moneda'],
   additionalProperties:false
 };
+// Transport + monedă pe comanda furnizor — cerut direct, pe o comandă reală (linia „delivery · 125.93"):
+// „aici să selectăm transport, iar prețul în cazul ăsta e în euro". Exact ce face deja Importă factură
+// (shippingCost/shippingCurrency, EUR_RON): linia de transport NU e produs (nu devine produs nou, nu apare
+// în Staff ca marfă de primit) — totalul ei se salvează pe comandă (coloana transport, în RON); prețurile
+// în EUR se convertesc în RON la salvare (pret, prețul de achiziție al produselor noi, „Alt furnizor").
+const FURNIZOR_TRANSPORT_RE=/^(delivery|shipping|shipment|transport|livrare|curier|courier|freight|expediere)\b/i;
+function furnizorMoneda(){return document.getElementById('cf-moneda')?.value==='EUR'?'EUR':'RON';}
+function furnizorToRon(v){return Math.round((Number(v)||0)*(furnizorMoneda()==='EUR'?EUR_RON:1)*100)/100;}
+function toggleFurnizorTransport(idx){
+  const it=furnizorImpParsed[idx];if(!it)return;
+  it.transport=!it.transport;
+  if(it.transport){it.produsId=null;it.newProduct=false;it.score=0;}
+  renderFurnizorImportPreview();
+}
 async function furnizorApplyAiResult(resp){
   const objMatch=resp.match(/\{[\s\S]*\}/);
-  let comandaRef='',rawItems=[];
-  if(objMatch){try{const parsed=JSON.parse(objMatch[0]);if(Array.isArray(parsed.items)){rawItems=parsed.items;comandaRef=String(parsed.comandaRef||'').trim();}}catch(e){}}
+  let comandaRef='',rawItems=[],moneda='';
+  if(objMatch){try{const parsed=JSON.parse(objMatch[0]);if(Array.isArray(parsed.items)){rawItems=parsed.items;comandaRef=String(parsed.comandaRef||'').trim();moneda=String(parsed.moneda||'').toUpperCase();}}catch(e){}}
   if(!rawItems.length)throw new Error('Nu am găsit niciun produs.');
+  const monSel=document.getElementById('cf-moneda');
+  if(monSel&&(moneda==='EUR'||moneda==='RON'))monSel.value=moneda;
   const refInp=document.getElementById('cf-comanda-ref');
   if(refInp&&!refInp.value&&comandaRef)refInp.value=comandaRef;
   // Potrivire cu stocul existent — ACEEAȘI funcție folosită la Importă factură/Sincronizare, dar fără
@@ -25890,7 +25918,8 @@ async function furnizorApplyAiResult(resp){
     // codului, exact ca la Importă factură (mai stabil decât codul propriu al furnizorului, care se
     // poate schimba între reaprovizionări ale aceluiași produs fizic).
     const match=findExistingProduct({name:it.name,sku:cod,ean});
-    return{titluExtern:String(it.name||'').trim(),codExtern:cod,eanExtern:ean,cantitate:Math.max(0,Number(it.qty)||0)||1,pret:Math.max(0,Number(it.pret)||0),produsId:match?match.product.id:null,score:match?match.score:0,newProduct:false,category:'',img:''};
+    const transport=!!it.esteTransport||FURNIZOR_TRANSPORT_RE.test(String(it.name||'').trim());
+    return{titluExtern:String(it.name||'').trim(),codExtern:cod,eanExtern:ean,cantitate:Math.max(0,Number(it.qty)||0)||1,pret:Math.max(0,Number(it.pret)||0),produsId:transport?null:(match?match.product.id:null),score:transport?0:(match?match.score:0),transport,newProduct:false,category:'',img:''};
   });
   furnizorImpParsed=furnizorImpParsed.concat(newLines);
   renderFurnizorImportPreview();
@@ -25902,7 +25931,7 @@ async function parseFurnizorPastedText(){
   parsing.style.display='block';parsing.innerHTML='<span class="spin"></span> Se analizează textul cu AI…';
   document.getElementById('cfx-status').textContent='Se analizează…';
   try{
-    const prompt=`Ești expert în citirea comenzilor plasate la furnizori (ex. Jumbo, alți distribuitori). Extrage TOATE produsele din textul de mai jos, copiat direct de pe pagina de confirmare a comenzii: denumire completă, cod produs (dacă apare), cantitate comandată, prețul TOTAL al liniei. Caută și numărul comenzii, dacă apare.
+    const prompt=`Ești expert în citirea comenzilor plasate la furnizori (ex. Jumbo, alți distribuitori). Extrage TOATE produsele din textul de mai jos, copiat direct de pe pagina de confirmare a comenzii: denumire completă, cod produs (dacă apare), cantitate comandată, prețul TOTAL al liniei (exact cum apare) și moneda documentului (EUR/RON). Marchează liniile de transport/livrare (esteTransport). Caută și numărul comenzii, dacă apare.
 
 TEXT COMANDĂ:
 ${text}`;
@@ -25955,7 +25984,7 @@ async function handleFurnizorFiles(ev){
     if(imageFiles.length){
       const rawDataUrls=await Promise.all(imageFiles.map(f=>new Promise((resolve,reject)=>{const r=new FileReader();r.onload=e=>resolve(e.target.result);r.onerror=reject;r.readAsDataURL(f);})));
       const dataUrls=await Promise.all(rawDataUrls.map(u=>resizeImageDataUrl(u,1400,.85)));
-      const content=[{type:'text',text:`Ești expert în citirea paginilor de confirmare comandă plasată la un furnizor (ex. Jumbo, alți distribuitori en-gros/retail). Extrage TOATE produsele din ${dataUrls.length>1?'aceste poze — sunt capturi succesive ale ACELEIAȘI comenzi (scroll pe aceeași pagină)':'această poză'}: denumire completă, cod produs (dacă apare), cantitate comandată, prețul TOTAL al liniei. Caută și numărul comenzii, dacă apare undeva pe pagină.`}];
+      const content=[{type:'text',text:`Ești expert în citirea paginilor de confirmare comandă plasată la un furnizor (ex. Jumbo, alți distribuitori en-gros/retail). Extrage TOATE produsele din ${dataUrls.length>1?'aceste poze — sunt capturi succesive ale ACELEIAȘI comenzi (scroll pe aceeași pagină)':'această poză'}: denumire completă, cod produs (dacă apare), cantitate comandată, prețul TOTAL al liniei (exact cum apare) și moneda (EUR/RON). Marchează liniile de transport/livrare (esteTransport). Caută și numărul comenzii, dacă apare undeva pe pagină.`}];
       dataUrls.forEach(u=>{
         const mt=u.match(/data:(image\/\w+);/)?.[1]||'image/jpeg';
         const b64=u.split(',')[1];
@@ -25971,7 +26000,7 @@ async function handleFurnizorFiles(ev){
       const pages=await extractPdfPagesText(f);
       const pdfText=pages.join('\n');
       if(!pdfText||pdfText.trim().length<20){toast(`„${f.name}" — nu am găsit text în PDF`,'err');continue;}
-      const prompt=`Ești expert în citirea comenzilor plasate la furnizori (ex. Jumbo, alți distribuitori). Extrage TOATE produsele din textul de mai jos, extras dintr-un PDF de confirmare comandă/factură: denumire completă, cod produs (dacă apare), cantitate comandată, prețul TOTAL al liniei. Caută și numărul comenzii, dacă apare.
+      const prompt=`Ești expert în citirea comenzilor plasate la furnizori (ex. Jumbo, alți distribuitori). Extrage TOATE produsele din textul de mai jos, extras dintr-un PDF de confirmare comandă/factură: denumire completă, cod produs (dacă apare), cantitate comandată, prețul TOTAL al liniei (exact cum apare) și moneda documentului (EUR/RON). Marchează liniile de transport/livrare (esteTransport). Caută și numărul comenzii, dacă apare.
 
 TEXT PDF:
 ${pdfText.slice(0,40000)}`;
@@ -25986,21 +26015,30 @@ ${pdfText.slice(0,40000)}`;
 function renderFurnizorImportPreview(){
   const box=document.getElementById('cf-preview');if(!box)return;
   const furnizor=(document.getElementById('cf-furnizor')?.value||'').trim();
-  const unmatchedN=furnizorImpParsed.filter(x=>!x.produsId&&!x.newProduct).length;
+  const unmatchedN=furnizorImpParsed.filter(x=>!x.produsId&&!x.newProduct&&!x.transport).length;
+  const mon=furnizorMoneda();
   const bulk=unmatchedN?`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px"><button type="button" class="btn btn-sm" onclick="markAllFurnizorUnmatchedAsNew()" title="Marchează toate liniile fără potrivire ca produse noi — se creează la „Trimite ca așteptată", cu stoc 0">🆕 Produs nou pentru toate cele ${unmatchedN} nepotrivite</button><span style="font-size:15px;color:var(--t3)">Se creează cu stoc 0 — nu atinge stocul.</span></div>`:'';
   box.innerHTML=bulk+furnizorImpParsed.map((it,idx)=>{
+    const priceTxt=it.pret?` · ${it.pret.toFixed(2)} ${mon}${mon==='EUR'?` <span style="color:var(--t3)">(≈ ${furnizorToRon(it.pret).toFixed(2)} RON)</span>`:''}`:'';
+    if(it.transport)return`<div class="inv-prev-row" style="background:var(--surf2)">
+      <div style="flex:1;min-width:0"><b>🚚 Transport</b> — ${esc(it.titluExtern)}${priceTxt}
+        <div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap"><span style="font-size:15px;color:var(--t3)">Nu e produs — se salvează ca transport al comenzii, nu apare în Staff.</span><button type="button" class="btn btn-sm" onclick="toggleFurnizorTransport(${idx})">✕ Nu e transport</button></div>
+      </div>
+      <button type="button" class="btn btn-sm" onclick="removeFurnizorImpLine(${idx})">🗑</button>
+    </div>`;
     const p=it.produsId?P.find(x=>x.id===it.produsId):null;
     const scoreTag=p&&it.score<1?`<span style="font-size:14px;color:var(--t3);margin-left:6px">${Math.round(it.score*100)}% potrivire automată</span>`:'';
     const altK=p?altSupplierCheck(p,furnizor):'none';
     const altTag=altK==='alt'?`<span class="inv-match new" style="margin-left:6px" title="Furnizorul comenzii diferă de cel al produsului — la „Trimite ca așteptată" se adaugă automat în „Alt furnizor" (cod + preț). Stocul rămâne neatins.">➕ alt furnizor: ${esc(furnizor)}</span>`
       :altK==='full'?`<span class="inv-match miss" style="margin-left:6px" title="Produsul are deja 5 surse alternative — nu se mai adaugă automat">⚠ 5 surse alternative — nu se adaugă</span>`:'';
     return`<div class="inv-prev-row">
-      <div style="flex:1;min-width:0"><b>${esc(it.titluExtern)}</b>${it.codExtern?' · cod '+esc(it.codExtern):''} · ${fmtQty(it.cantitate)} buc${it.pret?' · '+it.pret.toFixed(2)+' RON':''}
+      <div style="flex:1;min-width:0"><b>${esc(it.titluExtern)}</b>${it.codExtern?' · cod '+esc(it.codExtern):''} · ${fmtQty(it.cantitate)} buc${priceTxt}
         <div style="margin-top:6px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <div class="smi-pick cf-pick-trigger" style="flex:1;max-width:340px">${furnizorPickBtnHtml(idx)}</div>
           ${p?`<button type="button" class="btn btn-sm" onclick="clearFurnizorPick(${idx})" title="Elimină asocierea — rândul rămâne doar text">✕</button>`:''}
           ${!p&&!it.newProduct?`<button type="button" class="btn btn-sm" onclick="markFurnizorNewProduct(${idx})" title="Creează produsul în inventar o dată cu comanda (stoc 0)">🆕 Produs nou</button>`:''}
           ${it.newProduct?`<button type="button" class="btn btn-sm" onclick="unmarkFurnizorNewProduct(${idx})" title="Nu mai crea produs nou — rândul rămâne doar text">✕ Anulează produs nou</button>`:''}
+          ${!p&&!it.newProduct?`<button type="button" class="btn btn-sm" onclick="toggleFurnizorTransport(${idx})" title="Linia e costul de transport/livrare, nu un produs">🚚 Transport</button>`:''}
           ${scoreTag}${altTag}
         </div>
         ${furnizorNewProductFormHtml(idx)}
@@ -26010,7 +26048,9 @@ function renderFurnizorImportPreview(){
   }).join('');
   const matched=furnizorImpParsed.filter(x=>x.produsId).length;
   const newN=furnizorImpParsed.filter(x=>!x.produsId&&x.newProduct).length;
-  document.getElementById('cf-info').textContent=furnizorImpParsed.length?`${furnizorImpParsed.length} produse · ${matched} potrivite din stoc${newN?` · ${newN} produse noi`:''} · ${furnizorImpParsed.length-matched-newN} rămân doar text`:'Adaugă produse pentru previzualizare';
+  const tr=furnizorImpParsed.filter(x=>x.transport),trTotal=tr.reduce((a,x)=>a+(Number(x.pret)||0),0);
+  const prodN=furnizorImpParsed.length-tr.length;
+  document.getElementById('cf-info').textContent=furnizorImpParsed.length?`${prodN} produse · ${matched} potrivite din stoc${newN?` · ${newN} produse noi`:''} · ${prodN-matched-newN} rămân doar text${tr.length?` · 🚚 transport ${trTotal.toFixed(2)} ${mon}${mon==='EUR'?` (≈ ${furnizorToRon(trTotal).toFixed(2)} RON)`:''}`:''}`:'Adaugă produse pentru previzualizare';
   document.getElementById('cf-apply-btn').disabled=!furnizorImpParsed.length;
 }
 function removeFurnizorImpLine(idx){furnizorImpParsed.splice(idx,1);renderFurnizorImportPreview();}
@@ -26037,7 +26077,7 @@ function unmarkFurnizorNewProduct(idx){
   renderFurnizorImportPreview();
 }
 function markAllFurnizorUnmatchedAsNew(){
-  const idxs=furnizorImpParsed.map((x,i)=>i).filter(i=>!furnizorImpParsed[i].produsId&&!furnizorImpParsed[i].newProduct);
+  const idxs=furnizorImpParsed.map((x,i)=>i).filter(i=>!furnizorImpParsed[i].produsId&&!furnizorImpParsed[i].newProduct&&!furnizorImpParsed[i].transport);
   if(!idxs.length){toast('Nu mai sunt linii nepotrivite','err');return;}
   idxs.forEach(i=>{furnizorImpParsed[i].newProduct=true;});
   renderFurnizorImportPreview();
@@ -26162,6 +26202,10 @@ async function applyFurnizorComanda(){
   const furnizor=document.getElementById('cf-furnizor').value.trim();
   if(!furnizor){toast('Completează furnizorul','err');return;}
   if(!furnizorImpParsed.length)return;
+  const prodLines=furnizorImpParsed.filter(x=>!x.transport);
+  if(!prodLines.length){toast('Comanda are doar transport — adaugă și produsele','err');return;}
+  // Transportul (în RON) — salvat pe comandă, nu ca produs (vezi FURNIZOR_TRANSPORT_RE).
+  const transportRon=Math.round(furnizorImpParsed.filter(x=>x.transport).reduce((a,x)=>a+furnizorToRon(x.pret),0)*100)/100;
   const comandaRef=document.getElementById('cf-comanda-ref').value.trim()||null;
   const dataEstimativa=document.getElementById('cf-data-estimativa').value||null;
   const btn=document.getElementById('cf-apply-btn');btn.disabled=true;btn.textContent='Se salvează…';
@@ -26171,9 +26215,10 @@ async function applyFurnizorComanda(){
     // un produs nou din Importă factură. Un eșec izolat lasă linia doar text (nu oprește comanda); la o
     // reîncercare după o eroare mai jos, produsele deja create au produsId setat — nu se dublează.
     let createdN=0,createFailN=0;
-    for(const it of furnizorImpParsed){
+    for(const it of prodLines){
       if(it.produsId||!it.newProduct)continue;
-      const unit=it.cantitate>0&&it.pret>0?Math.round(it.pret/it.cantitate*100)/100:0;
+      const pretRon=furnizorToRon(it.pret);
+      const unit=it.cantitate>0&&pretRon>0?Math.round(pretRon/it.cantitate*100)/100:0;
       const prices=unit>0?calcPrices(unit):{sell:0,emag:0,trendyol:0,rec:0};// fără preț în comandă → fără prețuri de vânzare inventate
       const newP={name:String(it.titluExtern||it.codExtern||'Produs nou').slice(0,240),sku:it.codExtern||null,ean:it.eanExtern||null,bought:0,sold:0,minQty:0,
         priceBuyTTC:unit,tvaAcq:0.21,priceSell:prices.sell,priceEmag:prices.emag,priceTrendyol:prices.trendyol,priceRec:prices.rec,
@@ -26190,11 +26235,11 @@ async function applyFurnizorComanda(){
     // rescriem și contoarele de stoc din memorie. Stocul NU se atinge aici — se adaugă la sosire, prin
     // Importă factură (cu cost mediu ponderat, iar sursa alternativă există atunci deja).
     const work=new Map();let altN=0,altFullN=0,altFailN=0;
-    for(const it of furnizorImpParsed){
+    for(const it of prodLines){
       const prod=it.produsId?P.find(x=>x.id===it.produsId):null;if(!prod)continue;
       let w=work.get(prod.id);
       if(!w){w={prod,clone:{supplier:prod.supplier,supplierSources:Array.isArray(prod.supplierSources)?prod.supplierSources.slice():[]},kinds:[],ean:null};work.set(prod.id,w);}
-      const unit=it.cantitate>0&&it.pret>0?it.pret/it.cantitate:0;
+      const pretRon=furnizorToRon(it.pret),unit=it.cantitate>0&&pretRon>0?pretRon/it.cantitate:0;
       const kind=ensureAltSupplierSource(w.clone,furnizor,it.codExtern,unit);
       if(kind==='alt'||kind==='primary')w.kinds.push(kind);
       else if(kind==='full')altFullN++;
@@ -26217,27 +26262,20 @@ async function applyFurnizorComanda(){
     }
     // 3) Comanda propriu-zisă, spre Staff. facturi — scrisă identic pe TOATE liniile lotului (redundant,
     // intenționat: schema e per-produs, nu per-comandă, la fel ca furnizor/comanda_ref mai sus).
-    const rows=furnizorImpParsed.map(it=>({furnizor,comanda_ref:comandaRef,titlu_extern:it.titluExtern,cod_extern:it.codExtern||null,produs_id:it.produsId,cantitate_comandata:it.cantitate,pret:it.pret||0,data_estimativa:dataEstimativa,facturi:furnizorInvoiceFiles}));
-    let dateSkipped=false,facturiSkipped=false,inserted=[];
-    try{
-      inserted=await dbPost('comenzi_furnizor',rows);
-    }catch(e){
-      // Coloane noi (data_estimativa/facturi) — degradare grațioasă dacă migrarea SQL corespunzătoare
-      // nu a rulat încă (fără asta, TOT lotul ar eșua la scriere doar din cauza unui câmp opțional).
-      if(/data_estimativa/i.test(String(e.message||e))){
-        try{
-          inserted=await dbPost('comenzi_furnizor',rows.map(({data_estimativa,...rest})=>rest));
-          dateSkipped=true;
-        }catch(e2){
-          if(!/facturi/i.test(String(e2.message||e2)))throw e2;
-          inserted=await dbPost('comenzi_furnizor',rows.map(({data_estimativa,facturi,...rest})=>rest));
-          dateSkipped=true;facturiSkipped=true;
-        }
-      }else if(/facturi/i.test(String(e.message||e))){
-        inserted=await dbPost('comenzi_furnizor',rows.map(({facturi,...rest})=>rest));
-        facturiSkipped=true;
-      }else throw e;
+    const rows=prodLines.map(it=>({furnizor,comanda_ref:comandaRef,titlu_extern:it.titluExtern,cod_extern:it.codExtern||null,produs_id:it.produsId,cantitate_comandata:it.cantitate,pret:furnizorToRon(it.pret),data_estimativa:dataEstimativa,facturi:furnizorInvoiceFiles,transport:transportRon}));
+    // Coloane opționale, adăugate prin migrări separate (data_estimativa / facturi / transport) — dacă una
+    // lipsește încă din bază, o scoatem și reîncercăm, ca TOT lotul să nu eșueze din cauza unui câmp opțional.
+    const optionalCols=['data_estimativa','facturi','transport'],skipped=new Set();
+    let inserted=[],body=rows;
+    for(let attempt=0;attempt<=optionalCols.length;attempt++){
+      try{inserted=await dbPost('comenzi_furnizor',body);break;}
+      catch(e){
+        const col=optionalCols.find(c=>!skipped.has(c)&&new RegExp(c,'i').test(String(e.message||e)));
+        if(!col)throw e;
+        skipped.add(col);body=rows.map(r=>{const x={...r};skipped.forEach(c=>delete x[c]);return x;});
+      }
     }
+    const dateSkipped=skipped.has('data_estimativa'),facturiSkipped=skipped.has('facturi'),transportSkipped=skipped.has('transport')&&transportRon>0;
     // Cardul de Dashboard trebuie să arate comanda IMEDIAT, nu abia la următorul poll (60s) — bug real
     // de UX, prezent deja și la cardul vechi din Raport stoc, pe care-l preluam altfel fără să-l observ:
     // nimic nu adăuga rândurile proaspăt scrise în FURNIZOR_ADMIN după salvare.
@@ -26245,7 +26283,8 @@ async function applyFurnizorComanda(){
     furnizorInvoiceFiles=[];
     if(createdN||altN){renderTable();renderSupplierDatalist();furnizorPickProds=null;invPickProds=null;}
     const extra=[createdN?`${createdN} produse noi create (stoc 0)`:'',altN?`${altN} surse „Alt furnizor" adăugate`:'',createFailN?`⚠ ${createFailN} produse noi NU s-au putut crea (au rămas doar text)`:'',altFullN?`${altFullN} produse au deja 5 surse alternative`:'',altFailN?`⚠ ${altFailN} surse „Alt furnizor" nescrise`:''].filter(Boolean);
-    toast(`✓ ${rows.length} produse trimise ca și comandă așteptată — apar în Staff${extra.length?' · '+extra.join(' · '):''}${dateSkipped?' (dată estimativă neinclusă — rulează migration_comenzi_furnizor.sql)':''}${facturiSkipped?' (factura neatașată — rulează migrarea coloanei facturi)':''}`,(dateSkipped||facturiSkipped||createFailN||altFailN)?'err':undefined);
+    if(transportRon)extra.push(transportSkipped?`⚠ transport ${transportRon.toFixed(2)} RON nesalvat — rulează migrarea coloanei transport`:`🚚 transport ${transportRon.toFixed(2)} RON salvat pe comandă`);
+    toast(`✓ ${rows.length} produse trimise ca și comandă așteptată — apar în Staff${extra.length?' · '+extra.join(' · '):''}${dateSkipped?' (dată estimativă neinclusă — rulează migration_comenzi_furnizor.sql)':''}${facturiSkipped?' (factura neatașată — rulează migrarea coloanei facturi)':''}`,(dateSkipped||facturiSkipped||transportSkipped||createFailN||altFailN)?'err':undefined);
     renderFurnizorDashboardCard();renderFurnizorStockCard();
     closeFurnizorComanda();
   }catch(e){
