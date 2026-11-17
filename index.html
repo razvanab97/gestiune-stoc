@@ -5302,6 +5302,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:712,text:'Comenzi Platforme — marcajul verde „am lucrat pe comanda asta" (după copierea numărului) se salvează acum în PLATFORMĂ, nu doar în browser, cerut direct: „asta să rămână salvat complet în platformă, să știm că am trecut prin această comandă și când dăm refresh". Tabelă nouă comenzi_lucrate (platformă + nr. comandă, unică) — verde pe orice dispozitiv/browser, după refresh sau reimport; marcajele făcute pe alt dispozitiv apar singure în cel mult 20s. Marcajele deja făcute până acum în acest browser se urcă automat în bază la prima încărcare. Necesită migrarea SQL din chat — până atunci funcționează ca înainte (doar în browserul curent), fără erori. Verificat de 2 ori: sintaxă + Playwright (fără tabelă: rămâne local, zero erori; cu tabelă: marcaj din alt dispozitiv apare verde, marcajele locale vechi urcate în bază, copiere nouă scrisă în bază, copiere pe o comandă deja marcată în altă parte fără eroare).',date:'2026-11-17'},
   {n:711,text:'Comenzi Platforme — buton nou „✗ Nu e pe stoc" pe fiecare linie, cerut direct: „să putem seta aici în comenzi fără stoc, astfel încât să se actualizeze și în stocul standard și să coboare comanda din cu stoc în fără stoc". Pentru cazul în care sistemul arată stoc (ex. „Stoc 3"), dar fizic produsul nu e pe raft: te întreabă câte bucăți ai fizic (implicit 0), corectează stocul real al produsului în Inventar (aceeași regulă ca „Actualizează stocul" din Raport stoc) și înregistrează scăderea în Mișcări de stoc. Comanda trece imediat pe „Fără stoc", coboară sub cele cu stoc în „📦 Cu stoc sus" și primește butoanele „Amână livrarea"/„Adaugă la comandat"; dacă ai fizic câteva bucăți, le primesc întâi comenzile mai vechi. Apare doar când sistemul arată stoc > 0. Verificat de 2 ori: sintaxă + Playwright (produs sintetic, stoc 3 → 0: stocul din Inventar devine 0, comanda coboară sub cea cu stoc, mișcarea „ieșire 3 buc." apare cu sursa comenzii; poza produsului neatinsă) — zero erori JS.',date:'2026-11-17'},
   {n:710,text:'Comenzi Platforme — numărul comenzii devine VERDE după ce îl copiezi (butonul ⧉ de lângă el), cerut direct: „o comandă copiată să se transforme din albastru în verde, astfel încât să știm pe care am lucrat". Rămâne verde și după reîncărcarea paginii sau un nou import (ținut în browser, pe platformă + număr comandă); celelalte comenzi rămân albastre. Verificat de 2 ori: sintaxă + Playwright (albastru înainte, verde imediat după copiere, doar pe comanda copiată, persistă după reload) — zero erori JS.',date:'2026-11-17'},
   {n:709,text:'Actualizare în timp real la intrarea/ieșirea de stoc, cerut direct: „când adaug comandă nouă, să se actualizeze și graficul și, în timp real, comenzile care primesc stoc la produsele care erau fără stoc să urce — cele vechi au prioritate". Până acum, toate fluxurile de stoc (Importă factură, adăugare stoc, editare, Aplică import, retururi) re-randau doar Inventarul — cardul „Situația stocului" din Dashboard și Comenzi Platforme rămâneau pe cifrele vechi până la reload; în plus, revenirea pe Comenzi Platforme nici măcar nu recalcula lista. Acum orice mișcare de stoc reîmprospătează automat pagina deschisă (o singură randare chiar la un import de 30 de linii): pe Dashboard cardul + graficul; în Comenzi Platforme stocul secvențial se recalculează — cea mai veche comandă pe produsul reaprovizionat primește bucățile și urcă singură în grupa „cu stoc" (cu „Cu stoc sus"), cele mai noi rămân jos dacă nu ajunge. Pe lângă asta, reîmprospătarea automată la 20s (modificări de pe alt dispozitiv/Staff) acoperă acum și Comenzi Platforme, iar pe Dashboard reîncarcă și istoricul de intrări, ca graficul să arate saltul în ziua corectă. Nu se re-randează în timpul unui „Aplică import" (butonul „Se aplică…" nu se reactivează la mijloc). Verificat de 2 ori: sintaxă + Playwright (stoc 0 → +1 buc.: comanda veche urcă, cea nouă rămâne jos, fără reload; cardul stocului se actualizează imediat; fără re-randare în timpul Aplică import; recalculare la revenirea pe pagină) + regresie pe testele Aplică import/sortare — zero erori JS.',date:'2026-11-17'},
@@ -9796,6 +9797,8 @@ async function load(){
     pcomApplyImportUiMode();
     checkSupplierRestockAlerts();
     checkEditProductDeepLink();
+    // Marcajele „comandă lucrată" (verde) din bază — în fundal; re-randăm Comenzi Platforme doar dacă e deschisă.
+    loadWorkedOrdersFromDb().then(ok=>{if(ok&&document.getElementById('page-pcom')?.classList.contains('on')&&!pcomApplyInFlight)renderPcomImportPreview();});
     startLiveSync();
     // Fire-and-forget — nu blochează restul încărcării paginii pentru o verificare de fundal. Verificarea
     // unică de-aici acoperă cazul „tocmai am deschis pagina, a doua zi, după ce pragul a trecut" —
@@ -9842,7 +9845,7 @@ async function liveRefreshProducts(){
       try{const o=await dbGet('comenzi_stoc?select=*&order=created_at.desc');if(Array.isArray(o))OI=mergeStockOrders(o.map(dbToStockOrder),loadLocalStockOrders());}catch(e){}
       renderDashboard();
     }
-    else if(activeId==='pcom'&&!pcomApplyInFlight)renderPcomImportPreview();
+    else if(activeId==='pcom'&&!pcomApplyInFlight){await loadWorkedOrdersFromDb();renderPcomImportPreview();}
     else if(activeId==='raport'){buildRaportCats();renderRaport();renderRptReorderList();}
     else if(activeId==='salesreport')renderSalesReport();
     else if(activeId==='sync'){if(!syncMapsLoaded)await loadSyncMappings();renderSyncPage();}
@@ -23091,25 +23094,47 @@ function pcxCopyCode(btn,text){
   btn._pcxCopyT=setTimeout(()=>btn.classList.remove('copied'),1200);
 }
 // Cerut direct: „o comandă copiată să se transforme din albastru în verde, astfel încât să știm pe care
-// am lucrat". Ținut per browser (localStorage), cheiat pe platformă+număr comandă — rămâne verde și după
-// reload/reimport. Plafonat la ultimele 3000, ca lista să nu crească la nesfârșit.
+// am lucrat", apoi: „asta să rămână salvat complet în platformă... și când dăm refresh". Sursa de adevăr
+// e tabela comenzi_lucrate din Supabase (aceeași pe orice dispozitiv); localStorage rămâne doar ca
+// copie locală/rezervă (dacă migrarea nu a rulat încă sau ești offline). Cheie: platformă + nr. comandă.
 const PCX_WORKED_KEY='sm6_pcx_worked_orders';
-let pcxWorkedOrders=null;
+let pcxWorkedOrders=null,pcxWorkedDbOk=false;
 function pcxWorkedSet(){
   if(!pcxWorkedOrders){try{pcxWorkedOrders=new Set(JSON.parse(localStorage.getItem(PCX_WORKED_KEY)||'[]'));}catch(e){pcxWorkedOrders=new Set();}}
   return pcxWorkedOrders;
 }
+function pcxWorkedSaveLocal(){safeLocalSet(PCX_WORKED_KEY,JSON.stringify([...pcxWorkedSet()].slice(-3000)));}
 function pcxOrderWorked(platforma,comandaId){return!!comandaId&&pcxWorkedSet().has(platforma+'|'+comandaId);}
-function pcxCopyOrderId(btn,platforma,comandaId){
+// Încarcă marcajele din bază și le unește cu cele locale; marcajele făcute doar local (înainte de
+// migrare / offline) se urcă acum în bază, o singură dată.
+async function loadWorkedOrdersFromDb(){
+  if(!sbReady)return false;
+  let rows;
+  try{rows=await dbGetAll('comenzi_lucrate?select=platforma,comanda_id&order=id.asc');}
+  catch(e){console.warn('comenzi_lucrate indisponibil (rulează migrarea SQL din chat) — marcajele „lucrat" rămân doar în acest browser:',e);pcxWorkedDbOk=false;return false;}
+  pcxWorkedDbOk=true;
+  const s=pcxWorkedSet(),inDb=new Set(rows.map(r=>r.platforma+'|'+r.comanda_id));
+  inDb.forEach(k=>s.add(k));
+  const localOnly=[...s].filter(k=>!inDb.has(k)).map(k=>{const i=k.indexOf('|');return{platforma:k.slice(0,i),comanda_id:k.slice(i+1)};}).filter(r=>r.comanda_id);
+  if(localOnly.length){try{await dbPost('comenzi_lucrate',localOnly);}catch(e){console.warn('Nu am putut urca marcajele locale „lucrat":',e);}}
+  pcxWorkedSaveLocal();
+  return true;
+}
+async function pcxCopyOrderId(btn,platforma,comandaId){
   pcxCopyCode(btn,comandaId);
   if(!comandaId)return;
-  const s=pcxWorkedSet(),k=platforma+'|'+comandaId;
-  s.delete(k);s.add(k);
-  const arr=[...s].slice(-3000);
-  pcxWorkedOrders=new Set(arr);
-  safeLocalSet(PCX_WORKED_KEY,JSON.stringify(arr));
+  const s=pcxWorkedSet(),k=platforma+'|'+comandaId,isNew=!s.has(k);
+  s.add(k);
+  pcxWorkedSaveLocal();
   const span=btn.closest('.pcx-order-id');
   if(span){span.classList.add('worked');btn.title='Copiat deja — ai lucrat pe această comandă';}
+  if(!isNew||!sbReady)return;
+  try{await dbPost('comenzi_lucrate',{platforma,comanda_id:String(comandaId)});pcxWorkedDbOk=true;}
+  catch(e){
+    // deja marcată de pe alt dispozitiv (cheie unică) — exact starea dorită, nu e o eroare
+    if(/duplicate key|23505|already exists/i.test(String(e.message||e)))return;
+    console.warn('Marcajul „lucrat" nu s-a salvat în bază (rămâne local):',e);
+  }
 }
 // O linie de produs, compactă — reutilizează FRAGMENTELE deja calculate corect în altă parte
 // (pcomPickBtnHtml pentru asociere, pcxFinancialsHtml/pcxGroupFinancialsHtml pentru profit — pe numerele
