@@ -5299,6 +5299,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:709,text:'Actualizare în timp real la intrarea/ieșirea de stoc, cerut direct: „când adaug comandă nouă, să se actualizeze și graficul și, în timp real, comenzile care primesc stoc la produsele care erau fără stoc să urce — cele vechi au prioritate". Până acum, toate fluxurile de stoc (Importă factură, adăugare stoc, editare, Aplică import, retururi) re-randau doar Inventarul — cardul „Situația stocului" din Dashboard și Comenzi Platforme rămâneau pe cifrele vechi până la reload; în plus, revenirea pe Comenzi Platforme nici măcar nu recalcula lista. Acum orice mișcare de stoc reîmprospătează automat pagina deschisă (o singură randare chiar la un import de 30 de linii): pe Dashboard cardul + graficul; în Comenzi Platforme stocul secvențial se recalculează — cea mai veche comandă pe produsul reaprovizionat primește bucățile și urcă singură în grupa „cu stoc" (cu „Cu stoc sus"), cele mai noi rămân jos dacă nu ajunge. Pe lângă asta, reîmprospătarea automată la 20s (modificări de pe alt dispozitiv/Staff) acoperă acum și Comenzi Platforme, iar pe Dashboard reîncarcă și istoricul de intrări, ca graficul să arate saltul în ziua corectă. Nu se re-randează în timpul unui „Aplică import" (butonul „Se aplică…" nu se reactivează la mijloc). Verificat de 2 ori: sintaxă + Playwright (stoc 0 → +1 buc.: comanda veche urcă, cea nouă rămâne jos, fără reload; cardul stocului se actualizează imediat; fără re-randare în timpul Aplică import; recalculare la revenirea pe pagină) + regresie pe testele Aplică import/sortare — zero erori JS.',date:'2026-11-17'},
   {n:708,text:'Comenzi Platforme — stoc secvențial și „📦 Cu stoc sus" reparate, 3 cereri directe pe capturi reale: (1) „ar trebui să fie cele mai vechi pe acest produs" — alocarea artificială a stocului (#703) sorta GREȘIT după termenul de expediere: o comandă mai nouă, dar cu termen mai apropiat, „sărea" înaintea uneia mai vechi și o lăsa pe minus. #703 pretindea că urmează criteriul din „Listă locală de aprovizionare" — fals: acela sortează după ora PLASĂRII comenzii. Acum ambele folosesc exact aceeași funcție (pclTs) — cea mai veche comandă primește stocul întâi; textul de pe card spune acum „prinse de comenzi mai vechi". (2) „am stabilit că sus vor veni doar cele cu stoc, dacă stocul e cu -, de ce mai apare?" — „Cu stoc sus" (și punctul verde) verificau doar stocul BRUT al produsului, fără să știe de alocarea secvențială — carduri cu „Fără stoc → după -3" urcau totuși sus. Acum folosesc aceeași alocare afișată pe card. (3) „comenzile urgente să fie primele, apoi cele mai puțin urgente, la eMAG dar și Trendyol" — cu „Cu stoc sus" activ, în fiecare grupă (cu stoc / fără stoc) comenzile se ordonează după termenul de expediere, cel mai apropiat primul; AWB rămâne criteriu de departajare. Verificat de 2 ori: sintaxă + Playwright (comandă veche vs. nouă pe stoc 1 — cea veche ia bucata; fără stoc coboară sub toate cele cu stoc; în interiorul grupelor ordinea pe urgență, eMAG și Trendyol separat; regresie pe 50 de comenzi reale) — zero erori JS.',date:'2026-11-17'},
   {n:707,text:'Categorii produse — bug GRAV reparat, raportat direct cu captură: lista de categorii (picker din fișa produsului + promptul AI-ului la crearea unui draft din poză) arăta/alegea dintr-o SINGURĂ categorie ("Umerașe"), deși produse reale din bază (ex. „Garaj parcare 4 niveluri Kruzzel 24646") aveau categoria „Jucarii" — AI-ul punea „Umerașe" și pe o jucărie, un platou decorativ, o pătură, fiindcă literalmente nu avea de unde alege altceva. Cauza: CATS citea STRICT din localStorage (customCategories) — NIMIC, niciunde, nu-l completa din categoriile REALE deja folosite de cele 610 produse din Supabase (43 distincte, verificat direct); pe acest browser, lista locală se redusese la practic un rând. Reparat la rădăcină: CATS se reconstruiește acum (rebuildCats) din valorile distincte produse.category + localStorage, la încărcare ȘI la fiecare reîmprospătare periodică (nu există o tabelă separată de categorii în schemă, verificat). Completări: (1) căutarea „Caută categorie..." ignoră acum diacritice/majuscule („jucar" găsește „Jucarii", „umerase" găsește „Umerașe"); (2) promptul AI-ului (draft din poză + celelalte 3 fluxuri care aleg categorie: analiză poză din Inventar, import din URL, import din screenshot) alege acum explicit DUPĂ TIPUL produsului, nu culoare/material, și poate răspunde „niciuna" (câmp gol) — NU prima din listă — dacă nimic nu se potrivește clar; (3) ORICE loc care altfel ar fi creat o categorie nouă (addCustomCategory, cele 4 fluxuri AI de mai sus) verifică ÎNTÂI dacă există deja o variantă echivalentă (doar diacritice/majuscule diferite) — motivul exact pentru care existau deja duplicate reale în bază: „Umerașe"/„Umerase" (71/4 produse), „Jucarii"/„Jucării" (23/3), „Casă"/„Casa" (7/1), „animale de companie"/„Animale de companie" (15/1); (4) unealtă nouă „🧹 Verifică duplicate categorii" (tab Categorii și etichete) — arată EXACT aceste 4 grupuri găsite live, cu alegere manuală a formei care rămâne per grup; NIMIC nu se scrie în bază până la click explicit pe „✓ Unifică" pe un grup anume. Verificat de 2 ori: sintaxă (node --check, de 2 ori) + 9 verificări izolate cu Playwright: reconstruirea CATS din produse reale (nu doar din lista locală redusă), findCatCI (potrivire exactă, insensibilă la diacritice/majuscule, fără fals-pozitiv pe substring), căutarea din picker, addCustomCategory fără duplicat nou, sugestiile AI (catSuggestChipsHtml) cu formă canonică, un draft AI simulat EXACT ca raportul (jucărie → „Jucarii" corect; o categorie inexistentă → gol, nu forțată), gruparea duplicatelor pe date sintetice + pe datele REALE de producție (confirmă cele 4 grupuri de mai sus, doar citire), aplicarea unificării pe date sintetice (niciun rând real touched în acest test) — zero erori JS, rulat de 2 ori.',date:'2026-11-17'},
   {n:706,text:'Dashboard — card nou „📥 Comenzi furnizor — pe drum", cerut direct: „stiu ca avem ceva de genul in platforma, dar verifica si spune mi cum sa facem sa fie cat mai simplu". Mecanismul (tabela comenzi_furnizor) exista deja, dar trăia doar ca un cărticel mic, ascuns în Raport stoc — mult prea departe de prima vedere ca să fie de folos zilnic. Acum e PRIMUL lucru vizibil la logare (chiar sub „Necesită atenție"), rămâne afișat și la 0 comenzi active (cu îndemn clar de adăugare), și sortează automat cea mai urgentă comandă primul (termen depășit > termen cel mai apropiat). Trei completări concrete cerute: (1) „adăugăm produsele" — rămâne exact fluxul deja existent (AI din text/poză, picker manual, „produs nou"), doar mult mai vizibil, cu buton „+ Comandă nouă" direct pe card; (2) „adăugăm facturile dacă le avem deja" — gol real găsit verificând: încărcarea accepta DOAR poze, iar fișierul însuși nu se salva nicăieri (folosit o dată la extragere AI, apoi pierdut) — acum accepă și PDF (extragere text, aceeași tehnică deja folosită la facturile din Inventar) ȘI salvează fișierul original (Storage, bucket nou) — „📄 Vezi factura" direct pe card, oricând mai târziu; (3) termen „aprox. 1 săptămână" + ce se întâmplă la expirare — deja implementat corect (7 zile de la data estimativă sau de la plasare, marcare automată „⛔ nu a ajuns"), confirmat să rămână AȘA, nu ștergere automată (o comandă cu bani reali în ea nu trebuie să dispară tăcut) — acum vizibil și countdown-ul („⏳ mai ai Nz") înainte de expirare, nu doar flag-ul roșu după. Migrare SQL + bucket Storage necesare, date în chat (nu scrise ca fișier nou în repo, convenție deja stabilită). Verificat de 2 ori: sintaxă (node --check, de 2 ori) + 7 verificări izolate cu Playwright: matematica termenului (prioritate dată estimativă, 7 zile corect), card gol cu îndemn, 3 comenzi cu sortare/badge-uri/factură corecte, „Vezi factura" (PDF→tab nou, poză→lightbox), degradare grațioasă dacă migrarea coloanei „facturi" nu a rulat încă (reîncercare automată, fără ea), extragere PDF reală (text simulat → AI → produs parsat corect, fișier original „salvat"), navigare din clopoțel spre Dashboard — zero erori JS, rulat de 2 ori.',date:'2026-11-17'},
@@ -6282,6 +6283,24 @@ function renderPretPrivat(){
 const AK='sm6_activity';
 let ACT=[];
 function loadLocalActivity(){try{return JSON.parse(localStorage.getItem(AK)||'[]');}catch(e){return[];}}
+// Cerut direct: „când adaug comandă nouă, să se actualizeze și graficul [Situația stocului] și, în timp
+// real, comenzile care primesc stoc la produsele care erau fără stoc să urce — cele vechi au prioritate".
+// Fluxurile de intrare/ieșire stoc (Importă factură, adăugare stoc, editare, Aplică import, retururi...)
+// re-randau doar Inventarul — Dashboard-ul și Comenzi Platforme rămâneau pe cifrele vechi până la un
+// reload. Toate trec prin logMove, deci de aici (debounce — un import cu 30 de linii = o singură
+// randare) reîmprospătăm pagina activă. Comenzi Platforme recalculează stocul secvențial (cea mai veche
+// comandă primește stocul întâi) și reordonează „Cu stoc sus". Sărit în timpul unui Aplică import (acela
+// randează singur la final; altfel butonul „Se aplică…" s-ar reactiva la mijlocul operației).
+let stockViewsRefreshTimer=null,pcomApplyInFlight=false;
+function scheduleStockViewsRefresh(){
+  clearTimeout(stockViewsRefreshTimer);
+  stockViewsRefreshTimer=setTimeout(refreshStockViews,250);
+}
+function refreshStockViews(){
+  const activeId=document.querySelector('.page.on')?.id?.replace(/^page-/,'');
+  if(activeId==='dashboard')renderDashboard();
+  else if(activeId==='pcom'&&!pcomApplyInFlight)renderPcomImportPreview();
+}
 async function logMove(tip,name,qty,sursa,productId){
   const q=Math.abs(parseQtyVal(qty))||0;
   if(!name||!q)return;
@@ -6289,6 +6308,7 @@ async function logMove(tip,name,qty,sursa,productId){
   ACT.unshift(entry);
   if(ACT.length>200)ACT.length=200;
   renderNotif();
+  scheduleStockViewsRefresh();
   if(sbReady){
     try{await dbPost('activitate_stoc',{tip:entry.tip,product_name:entry.name,qty:entry.qty,sursa:entry.sursa,product_id:entry.productId});}
     catch(e){console.warn('Nu s-a salvat mișcarea de stoc în Supabase (rulează migration_activity_log.sql):',e);safeLocalSet(AK,JSON.stringify(ACT));}
@@ -9810,7 +9830,14 @@ async function liveRefreshProducts(){
     // nu recalculăm degeaba ecrane pe care nimeni nu le vede în acest moment.
     renderTable();renderToday();
     const activeId=document.querySelector('.page.on')?.id?.replace(/^page-/,'');
-    if(activeId==='dashboard'){if(!syncMapsLoaded)await loadSyncMappings();renderDashboard();}
+    if(activeId==='dashboard'){
+      if(!syncMapsLoaded)await loadSyncMappings();
+      // Graficul „Situația stocului" reconstituie zilele trecute din OI (intrări) — o intrare făcută de
+      // pe alt dispozitiv nu era în OI-ul local, deci saltul de azi se „întindea" pe toată istoria.
+      try{const o=await dbGet('comenzi_stoc?select=*&order=created_at.desc');if(Array.isArray(o))OI=mergeStockOrders(o.map(dbToStockOrder),loadLocalStockOrders());}catch(e){}
+      renderDashboard();
+    }
+    else if(activeId==='pcom'&&!pcomApplyInFlight)renderPcomImportPreview();
     else if(activeId==='raport'){buildRaportCats();renderRaport();renderRptReorderList();}
     else if(activeId==='salesreport')renderSalesReport();
     else if(activeId==='sync'){if(!syncMapsLoaded)await loadSyncMappings();renderSyncPage();}
@@ -10319,6 +10346,9 @@ function goPage(id,btn){
       if(P.length>0){
         if(!syncMapsLoaded)await loadSyncMappings();
         renderPcomImportHistory();renderPcomProfit();renderPcomTotals();
+        // stocul s-a putut schimba cât timp erai pe altă pagină (ex. Importă factură din Dashboard) —
+        // fără asta, stocul secvențial și ordinea „Cu stoc sus" rămâneau pe cifrele vechi.
+        renderPcomImportPreview();
       }else if(n>0)setTimeout(()=>tryPc(n-1),300);
     };
     setTimeout(()=>tryPc(20),100);
@@ -24565,6 +24595,7 @@ async function applyPcomImport(){
   const btnRedesign=document.getElementById('pcx-apply-btn');
   if(btn){btn.disabled=true;btn.textContent='Se aplică…';}
   if(btnRedesign){btnRedesign.disabled=true;btnRedesign.textContent='Se aplică…';}
+  pcomApplyInFlight=true;
   let ok=0,failed=0;
   const succeeded=new Set();
   try{
@@ -24734,6 +24765,7 @@ async function applyPcomImport(){
   }finally{
     if(btn){btn.disabled=false;btn.textContent='Aplică import';}
     if(btnRedesign){btnRedesign.disabled=false;btnRedesign.textContent='Aplică import';}
+    pcomApplyInFlight=false;
   }
 }
 /* PROFIT VÂNZĂRI / TOTAL ÎNCASĂRI (agregări peste platforma_comenzi) */
