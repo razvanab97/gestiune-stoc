@@ -5302,6 +5302,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:714,text:'Asociere AWB Cargus (eMAG) — automată, fără să mai cauți comanda în eMAG, cerut direct, cu etichete reale (Mitroi Catalin #582166555, Toth Gyongyi #582291783): „fă un sistem și pentru Cargus să se asocieze automat, corect, fără să mai selectez, sau măcar să se găsească repede comanda". Patru reparații: (1) eticheta Cargus standard eMAG nu era recunoscută deloc în forma reală a textului („Nota:" separat de AWB, numele destinatarului pe rând propriu) — acum AWB-ul și destinatarul se citesc corect; (2) când fișierul se numește „<comandă>_Cargus_<AWB>.pdf" și AWB-ul din nume e identic cu cel de pe etichetă, numărul comenzii din nume e folosit direct (cel mai sigur semnal), în loc de potrivirea după nume; (3) când eticheta nu are numărul comenzii, iar clientul nu e printre comenzile din aplicație (AWB-ul deja emis → status „Pregătită" pe eMAG, pe care „Adu comenzi" nu-l aduce), sistemul caută automat clientul în comenzile eMAG din ultimele 5 zile, în orice status, și dacă găsește O SINGURĂ comandă cu acel nume o aduce și îi pune AWB-ul — dacă același client are 2 comenzi recente, rămâne pentru alegere manuală, nu ghicește; (4) în „🔗 Asociază manual", dacă scrii un număr de comandă eMAG care nu e în aplicație, e căutat și adus automat din eMAG. În plus, la PDF-urile cu mai multe etichete citite cu AI, o etichetă fără potrivire nu mai e aruncată la „nerecunoscută" — AWB-ul și numele rămân, pentru căutarea în eMAG. Necesită Conectorul local eMAG pornit (ca la „Adu comenzi"). Verificat de 2 ori: sintaxă + Playwright cu textul REAL al etichetei (AWB 1213218380, „Mitroi Catalin"), fișier standard → comanda adusă din eMAG cu AWB, fișier redenumit → găsită după nume în comenzile recente, același client cu 2 comenzi → neasociat automat, un nr. de comandă tipărit pe etichetă nu e niciodată înlocuit; plus pe conectorul eMAG real (doar citire): 161 de linii din ultimele 5 zile, fiecare nume → exact comanda corectă.',date:'2026-11-17'},
   {n:713,text:'Asociere AWB automată — etichetele ACS/DPD Grecia (și orice etichetă fără număr de comandă) se asociază acum singure după numele clientului, cerut direct, cu etichetă reală (Trendyol #11801996367, „Barvara Antoniadoy"): „vezi cum faci sistemul să asocieze comenzile atunci când adaug AWB-ul direct, să nu mai caut eu". Cauza: eticheta nu are numărul comenzii, deci sistemul caută după nume + sumă — dar suma era un filtru OBLIGATORIU, iar eticheta ACS tipărește „COD 14.00 €" în timp ce comanda are 17.17 € (suma curierului nu e mereu totalul comenzii); comanda era eliminată înainte să i se compare măcar numele, deși era IDENTIC. Acum: un nume clar (≥85%) ajunge, suma potrivită rămâne doar criteriu de departajare (ex. același client cu 2 comenzi — câștigă cea cu suma etichetei; dacă niciuna nu are suma, rămâne „ambiguu, verifică manual", nu ghicește). În plus, numele se compară și între alfabete: comanda în greacă/chirilică („Βαρβάρα Αντωνιάδου") se potrivește acum cu numele latin de pe etichetă („Barvara Antoniadoy"). Neschimbat: un client cu alt nume, chiar cu aceeași sumă, NU se asociază. Verificat de 2 ori: sintaxă + Playwright pe date reale (eticheta din captură → exact #11801996367) + cazuri izolate (greacă↔latin, același client cu 2 comenzi, nume diferit, nume slab + sumă diferită, flux complet AI → asociere) — zero erori JS.',date:'2026-11-17'},
   {n:712,text:'Comenzi Platforme — marcajul verde „am lucrat pe comanda asta" (după copierea numărului) se salvează acum în PLATFORMĂ, nu doar în browser, cerut direct: „asta să rămână salvat complet în platformă, să știm că am trecut prin această comandă și când dăm refresh". Tabelă nouă comenzi_lucrate (platformă + nr. comandă, unică) — verde pe orice dispozitiv/browser, după refresh sau reimport; marcajele făcute pe alt dispozitiv apar singure în cel mult 20s. Marcajele deja făcute până acum în acest browser se urcă automat în bază la prima încărcare. Necesită migrarea SQL din chat — până atunci funcționează ca înainte (doar în browserul curent), fără erori. Verificat de 2 ori: sintaxă + Playwright (fără tabelă: rămâne local, zero erori; cu tabelă: marcaj din alt dispozitiv apare verde, marcajele locale vechi urcate în bază, copiere nouă scrisă în bază, copiere pe o comandă deja marcată în altă parte fără eroare).',date:'2026-11-17'},
   {n:711,text:'Comenzi Platforme — buton nou „✗ Nu e pe stoc" pe fiecare linie, cerut direct: „să putem seta aici în comenzi fără stoc, astfel încât să se actualizeze și în stocul standard și să coboare comanda din cu stoc în fără stoc". Pentru cazul în care sistemul arată stoc (ex. „Stoc 3"), dar fizic produsul nu e pe raft: te întreabă câte bucăți ai fizic (implicit 0), corectează stocul real al produsului în Inventar (aceeași regulă ca „Actualizează stocul" din Raport stoc) și înregistrează scăderea în Mișcări de stoc. Comanda trece imediat pe „Fără stoc", coboară sub cele cu stoc în „📦 Cu stoc sus" și primește butoanele „Amână livrarea"/„Adaugă la comandat"; dacă ai fizic câteva bucăți, le primesc întâi comenzile mai vechi. Apare doar când sistemul arată stoc > 0. Verificat de 2 ori: sintaxă + Playwright (produs sintetic, stoc 3 → 0: stocul din Inventar devine 0, comanda coboară sub cea cu stoc, mișcarea „ieșire 3 buc." apare cu sursa comenzii; poza produsului neatinsă) — zero erori JS.',date:'2026-11-17'},
@@ -22377,7 +22378,10 @@ async function aiFallbackAwbMatch(text,blob,pageNum){
   // direct: „asociere mai inteligentă, cu mai multe semnale”). resolveAwbByNameAndAmount caută în TOATE
   // platformele, comise sau încă „Neinclus".
   const match=resolveAwbByNameAndAmount(extracted);
-  if(!match)return null;
+  // Fără potrivire locală — păstrăm totuși AWB-ul + numele citite (înainte se pierdeau complet, pagina
+  // cădea la „nerecunoscută"), ca bucla de asociere să mai poată căuta comanda direct pe eMAG după nume
+  // (awbFindEmagOrderByRecentName), iar altfel să rămână măcar „negăsită", cu AWB-ul știut.
+  if(!match)return{awb:extracted.awb,comandaId:'',courier:extracted.curier||'',aiExtracted:true,aiClientNume:extracted.clientNume||'',aiSuma:extracted.suma,aiMoneda:extracted.moneda||'',aiProdusText:extracted.produsText||''};
   if(match.ambiguous)return{awb:extracted.awb,comandaId:'',courier:extracted.curier||'',aiAmbiguous:true,aiClientNume:extracted.clientNume||'',aiSuma:extracted.suma,aiMoneda:extracted.moneda||'',reason:'Potrivire AI ambiguă (nume+sumă) — verifică manual'};
   return{awb:extracted.awb,comandaId:match.comandaId,courier:extracted.curier||'',matchScore:match.matchScore,_pendingMatch:match.pending,aiNameMatch:true,aiClientNume:extracted.clientNume||''};
 }
@@ -27300,10 +27304,15 @@ function parseAwbLabelText(text){
     // diferite: „Destinatar: NUME" e urmat MEREU de „Incercari permise" pe același rând (câmp fix de
     // template), deci delimitează sigur numele; dacă din vreun motiv „Incercari permise" nu apare,
     // destinatar rămâne gol — AWB-ul (singurul câmp esențial pentru asociere) nu depinde de el.
-    const cargusNotaM=text.match(/Nota:\s*(\d{10})\b/);
+    // Bug real #3, cerut direct, etichetă reală (582166555_Cargus_1213218380.pdf, Mitroi Catalin): în
+    // textul extras, „Nota:" stă singur pe rând, iar AWB-ul (10 cifre) apare MULT mai jos, pe rândul
+    // propriu, după „Destinatar: NUME" — tot formatul cădea la „nerecunoscut". Rezervă: un număr de
+    // exact 10 cifre singur pe rând (nimic altceva pe etichetă nu are această formă: telefoanele sunt
+    // „+40…", CIF-ul are 7 cifre, codurile poștale 6).
+    const cargusNotaM=text.match(/Nota:\s*(\d{10})\b/)||text.match(/(?:^|\n)[ \t]*(\d{10})[ \t]*(?=\n|$)/);
     if(cargusNotaM){
       const awb=cargusNotaM[1];
-      const cargusDestM=text.match(/Destinatar:\s*([^\n]+?)\s*Incercari permise/);
+      const cargusDestM=text.match(/Destinatar:\s*([^\n]+?)\s*Incercari permise/)||text.match(/Destinatar:[ \t]*([^\n]+?)[ \t]*(?=\n|$)/);
       const destinatar=cargusDestM?cargusDestM[1].trim():'';
       const phones=[...text.matchAll(/\+40\d{9}\b/g)].map(m=>m[0]);
       const destinatarPhone=phones.length?phones[phones.length-1]:'';
@@ -27339,6 +27348,66 @@ function awbFromFilename(fileName){
   const m2=name.match(/^([A-Za-z0-9]*EMG[A-Za-z0-9]{6,})\.pdf$/i);
   if(m2)return{comandaId:'',courier:'',awb:m2[1]};
   return null;
+}
+// Cerut direct, pe o etichetă Cargus eMAG reală („582166555_Cargus_1213218380.pdf"): „fă un sistem și
+// pentru Cargus să se asocieze automat, corect, fără să mai selectez — sau măcar să se găsească repede
+// comanda, să nu trebuiască s-o caut în eMAG". Eticheta Cargus standard nu are numărul comenzii, doar
+// destinatarul — deci se potrivea STRICT după nume, și STRICT cu comenzile deja aduse în aplicație; o
+// comandă căreia i s-a emis deja AWB-ul (status „Pregătită" pe eMAG, invizibilă pentru „Adu comenzi")
+// rămânea negăsită. Numele fișierului avea însă numărul EXACT al comenzii, ignorat fiindcă formatul
+// Cargus fusese deja recunoscut. Acum: dacă numele fișierului e „<comandă>_<curier>_<AWB>.pdf” ȘI AWB-ul
+// din nume e IDENTIC cu cel citit de pe etichetă, numărul comenzii din nume e semnalul cel mai sigur —
+// înlocuiește o potrivire după nume (sau o ambiguitate); dacă comanda nu e încă în aplicație, fluxul
+// existent o caută direct pe eMAG după număr (pcomFetchAndCreateEmagOrderById), indiferent de status.
+// Nu înlocuiește NICIODATĂ un număr de comandă tipărit pe etichetă (ex. „Continut:" FAN), doar o
+// potrivire indirectă; un AWB diferit în nume = fișier redenumit/greșit → ignorat.
+// Etichetă fără număr de comandă, nepotrivită cu nicio comandă din aplicație — cerut direct („să nu
+// trebuiască s-o mai caut în eMAG"), pe comanda reală Toth Gyongyi #582291783: comanda exista pe eMAG,
+// dar nu în aplicație (AWB deja emis → status „Pregătită", pe care „Adu comenzi eMAG" nu-l aduce). Citim
+// comenzile eMAG din ultimele 5 zile, în ORICE status (conectorul local, /orders pe zi — o singură dată
+// la 5 minute, comun pentru tot lotul de etichete) și căutăm destinatarul după nume. Strict: nume clar
+// (≥85%), o SINGURĂ comandă candidată fără AWB deja în aplicație — altfel (același client cu 2 comenzi
+// recente) rămâne „negăsită", pentru alegere manuală. Scopat la etichetele curierilor eMAG RO/HU/BG.
+function awbLabelLooksEmag(p){
+  if(!p)return false;
+  if(awbInferPlatformHint(p)==='eMAG')return true;
+  return /cargus|sameday|fan|emag|gls|express ?one|speedy|econt/i.test(String(p.courier||''));
+}
+let awbRecentEmagCache=null;
+function localIsoDay(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
+async function awbRecentEmagLines(){
+  if(awbRecentEmagCache&&Date.now()-awbRecentEmagCache.ts<5*60000)return awbRecentEmagCache.lines;
+  const days=[0,1,2,3,4].map(i=>{const d=new Date();d.setDate(d.getDate()-i);return localIsoDay(d);});
+  const res=await Promise.all(days.map(day=>localEmagJson('/orders',{date:day},45000).catch(e=>{console.warn('Comenzi eMAG recente indisponibile pentru',day,e);return null;})));
+  if(res.every(r=>!r))return[];
+  const lines=res.flatMap(r=>Array.isArray(r?.lines)?r.lines:[]);
+  awbRecentEmagCache={ts:Date.now(),lines};
+  return lines;
+}
+async function awbFindEmagOrderByRecentName(name){
+  if(!String(name||'').trim())return null;
+  const lines=await awbRecentEmagLines();
+  const best=new Map();
+  lines.forEach(l=>{
+    const id=String(l.comandaId||'');if(!id)return;
+    const s=safeNameScore(name,l.clientNume);
+    if(s>=0.85&&(best.get(id)||0)<s)best.set(id,s);
+  });
+  const cands=[...best.entries()].filter(([id])=>!PCOM.some(o=>o.comandaId===id&&o.awb&&!o.anulata)&&!pcImpParsed.some(x=>x.comandaId===id&&x.awb));
+  if(!cands.length)return null;
+  if(cands.length>1)return{ambiguous:true};
+  return cands[0][0];
+}
+function awbApplyFilenameOrderId(p,fileName,pagesCount){
+  if(!p||pagesCount!==1||p.courierCanceled)return p;
+  const fb=awbFromFilename(fileName);
+  if(!fb||!fb.comandaId)return p;
+  if(!p.awb||awbNorm(fb.awb)!==awbNorm(p.awb))return p;
+  if(p.comandaId===fb.comandaId)return p;
+  const indirect=!p.comandaId||p._pendingMatch||p.matchScore!=null||p.aiNameMatch;
+  if(!indirect)return p;
+  const{cargusEmagAmbiguous,emagHuAmbiguous,vintedAmbiguous,aiAmbiguous,_pendingMatch,matchScore,aiNameMatch,...rest}=p;
+  return{...rest,comandaId:fb.comandaId,_filenameOrderId:true};
 }
 // Rezolvă eticheta Vinted digitală (fără niciun ID de comandă propriu) la o comandă Vinted deja
 // importată, nerezolvată încă (fără AWB), prin potrivirea denumirii produsului — singura legătură
@@ -27755,6 +27824,7 @@ async function filterAwbPick(){
   const seq=++awbPickSeq;
   awbPickRenderList(localMatches);
   if(!words.length||q.length<3)return;
+  let extraMapped=[];
   try{
     // PostgREST nu poate exprima ușor direct „toate cuvintele, în orice coloană" — lărgim plasa live cu
     // primul cuvânt (cel mai probabil discriminant), apoi filtrăm local cu ACELEAȘI cuvinte complete,
@@ -27765,7 +27835,7 @@ async function filterAwbPick(){
     const extra=await dbGet(`platforma_comenzi?select=id,platforma,comanda_id,client_nume,produs_nume,titlu_extern,pret_total_cu_tva,moneda,data,awb&anulata=eq.false&or=(comanda_id.ilike.${like},client_nume.ilike.${like},produs_nume.ilike.${like},titlu_extern.ilike.${like},platforma.ilike.${like})&order=data.desc&limit=30`);
     if(seq!==awbPickSeq)return;
     const known=new Set(localMatches.map(o=>o.platforma+'|'+o.comandaId));
-    const extraMapped=extra.filter(r=>!known.has(r.platforma+'|'+r.comanda_id)).map(r=>({
+    extraMapped=extra.filter(r=>!known.has(r.platforma+'|'+r.comanda_id)).map(r=>({
       comandaId:r.comanda_id,platforma:r.platforma,clientNume:r.client_nume||'',produsNume:r.produs_nume||'',
       titluExtern:r.titlu_extern||'',pretTotalCuTva:r.pret_total_cu_tva||0,moneda:r.moneda||'RON',data:r.data||'',awb:r.awb||'',_pending:false}))
       .filter(r=>awbPickWordsMatch(awbPickSearchText(r),words));
@@ -27777,6 +27847,28 @@ async function filterAwbPick(){
     // afișare — ordinea finală e mereu strict descrescătoare, indiferent din ce sursă vine fiecare rând.
     if(extraMapped.length)awbPickRenderList([...localMatches,...extraMapped].sort((a,b)=>String(b.data||'').localeCompare(String(a.data||''))).slice(0,80));
   }catch(e){console.warn('Căutare live suplimentară în picker eșuată:',e);}
+  // Cerut direct: „măcar să se găsească repede comanda în comenzi, să nu trebuiască s-o mai caut în
+  // eMAG". Un număr de comandă complet (doar cifre, ≥8) care nu există NICĂIERI local (nici în
+  // previzualizare, nici în bază) — de obicei o comandă căreia i s-a emis deja AWB-ul, deci în status
+  // „Pregătită", invizibilă pentru „Adu comenzi eMAG" — se caută automat direct pe eMAG, după număr,
+  // indiferent de status (același apel ca la citirea etichetelor), și apare imediat în listă, gata de ales.
+  if(seq===awbPickSeq&&/^\d{8,}$/.test(q)&&![...localMatches,...extraMapped].some(o=>String(o.comandaId)===q))awbPickFetchFromEmag(q,seq);
+}
+const awbPickEmagTried=new Set();
+async function awbPickFetchFromEmag(q,seq){
+  const list=document.getElementById('awb-pick-list');if(!list)return;
+  if(awbPickEmagTried.has(q)){list.insertAdjacentHTML('beforeend',`<div class="smi-pick-empty" style="padding:8px 10px;color:var(--t3)">Comanda ${esc(q)} nu a fost găsită nici pe eMAG.</div>`);return;}
+  awbPickEmagTried.add(q);
+  list.insertAdjacentHTML('beforeend',`<div class="smi-pick-empty" id="awb-pick-emag-status" style="padding:8px 10px;color:var(--t3)"><span class="spin"></span> Caut comanda ${esc(q)} direct pe eMAG…</div>`);
+  const r=await pcomFetchAndCreateEmagOrderById(q,'','',null,'');
+  if(r.found){
+    renderPcomImportPreview();
+    toast(`✓ Comanda eMAG ${q} adusă din eMAG — alege-o din listă`);
+    if(seq===awbPickSeq)await filterAwbPick();
+  }else if(seq===awbPickSeq){
+    const st=document.getElementById('awb-pick-emag-status');
+    if(st)st.textContent=`Comanda ${q} nu a fost găsită pe eMAG (verifică numărul sau conectorul local eMAG).`;
+  }
 }
 const filterAwbPickDebounced=debounce(()=>filterAwbPick(),150);
 // Desface o potrivire AWB↔comandă deja aplicată (scrisă în bază) — cerut direct, pe un caz real (2
@@ -27960,7 +28052,8 @@ async function handleAwbPdfFile(ev){
         // e o SINGURĂ etichetă (nu un lot de mai multe pagini), numele fișierului poate da direct
         // comandaId+AWB, fără să mai depindă deloc de textul/limba etichetei.
         if(!p&&pages.length===1){const fb=awbFromFilename(file.name);if(fb)p={awb:fb.awb,comandaId:fb.comandaId,courier:fb.courier};}
-        awbTasks.push({p,text,blob:file,file:file.name,page:i+1});
+        p=awbApplyFilenameOrderId(p,file.name,pages.length);
+        awbTasks.push({p,text,blob:file,file:file.name,page:i+1,pagesCount:pages.length});
       }
     }
     // Pas 2 (lent, CONCURENT, cu limită) — ultima plasă de siguranță AI (text + imagine, vezi
@@ -27983,7 +28076,7 @@ async function handleAwbPdfFile(ev){
       async function awbAiWorker(){
         while(awbAiIdx<awbAiPending.length){
           const t=awbAiPending[awbAiIdx++];
-          t.p=await aiFallbackAwbMatch(t.text,t.blob,t.page);
+          t.p=awbApplyFilenameOrderId(await aiFallbackAwbMatch(t.text,t.blob,t.page),t.file,t.pagesCount);
           awbAiDone++;
           if(parsing)parsing.innerHTML=`<span class="spin"></span> Se citesc etichetele cu AI… ${awbAiDone}/${awbAiTotal}${t.p&&t.p.awb?` — ultima: AWB ${esc(t.p.awb)}${t.p.comandaId?` → comanda ${esc(t.p.comandaId)}`:''}`:` — ${esc(t.file)} p.${t.page} nerecunoscută`}`;
         }
@@ -28008,7 +28101,7 @@ async function handleAwbPdfFile(ev){
     if(!pairs.length&&!awbUnrecognizedPages.length&&!awbCanceledPages.length)throw new Error('PDF-ul pare gol.');
     const results=[];
     let awbEmagLookupCreated=0;
-    for(const p of pairs){
+    for(let p of pairs){
       // Verificare universală, ÎNAINTEA oricărui lookup după comandaId — vezi awbFindExactExisting,
       // „dacă există deja, de ce apare mai sus ca neasociat?". O etichetă recitită (același AWB, deja
       // scris pe o comandă, indiferent cu ce comandaId greșit a ieșit alături de data asta) e recunoscută
@@ -28020,7 +28113,13 @@ async function handleAwbPdfFile(ev){
       // platformă, nu doar Vinted; forma e superset-ul strict al variantei scopate la Vinted, deci
       // niciun caz existent nu se schimbă.
       if(p._pendingMatch){results.push({...p,rows:pendingImportRowSnapshot(p.comandaId)});continue;}
-      if(!p.comandaId){results.push({...p,rows:[]});continue;}
+      if(!p.comandaId){
+        // Ultimă încercare, înainte de „negăsită": comanda poate exista pe eMAG, dar nu încă în aplicație
+        // (AWB deja emis → status „Pregătită", invizibil pentru „Adu comenzi") — vezi awbFindEmagOrderByRecentName.
+        const recentId=awbLabelLooksEmag(p)?await awbFindEmagOrderByRecentName(p.destinatar||p.aiClientNume||p.destinatarHu||''):null;
+        if(recentId&&!recentId.ambiguous){const{cargusEmagAmbiguous,emagHuAmbiguous,aiAmbiguous,...rest}=p;p={...rest,comandaId:recentId,_recentEmagNameMatch:true};}
+        else{results.push({...p,rows:[]});continue;}
+      }
       const rows=await dbGet(`platforma_comenzi?comanda_id=eq.${p.comandaId}&select=id,platforma,client_nume,produs_nume,awb`);
       // Bug real, raportat direct („de ce nu se asociază AWB-ul comenzii?"): acest punct de intrare
       // (selectare manuală de PDF-uri — spre deosebire de readAwbFolderPdfs, „📂 Citește din dosar") nu
@@ -28260,7 +28359,8 @@ async function readAwbFolderPdfs(fromArchive){
           // e o SINGURĂ etichetă (nu un lot de mai multe pagini), numele fișierului poate da direct
           // comandaId+AWB, fără să mai depindă deloc de textul/limba etichetei.
           if(!p&&pages.length===1){const fb=awbFromFilename(f.name);if(fb)p={awb:fb.awb,comandaId:fb.comandaId,courier:fb.courier};}
-          awbTasks.push({p,text,blob,file:f.name,page:i+1});
+          p=awbApplyFilenameOrderId(p,f.name,pages.length);
+          awbTasks.push({p,text,blob,file:f.name,page:i+1,pagesCount:pages.length});
         }
       }catch(e){console.warn('PDF ignorat din dosar:',f.name,e);}
     }
@@ -28284,7 +28384,7 @@ async function readAwbFolderPdfs(fromArchive){
       async function awbAiWorker(){
         while(awbAiIdx<awbAiPending.length){
           const t=awbAiPending[awbAiIdx++];
-          t.p=await aiFallbackAwbMatch(t.text,t.blob,t.page);
+          t.p=awbApplyFilenameOrderId(await aiFallbackAwbMatch(t.text,t.blob,t.page),t.file,t.pagesCount);
           awbAiDone++;
           if(parsing)parsing.innerHTML=`<span class="spin"></span> Se citesc etichetele cu AI… ${awbAiDone}/${awbAiTotal}${t.p&&t.p.awb?` — ultima: AWB ${esc(t.p.awb)}${t.p.comandaId?` → comanda ${esc(t.p.comandaId)}`:''}`:` — ${esc(t.file)} p.${t.page} nerecunoscută`}`;
         }
@@ -28325,7 +28425,7 @@ async function readAwbFolderPdfs(fromArchive){
     }
     const results=[];
     let awbEmagLookupCreated=0;
-    for(const p of pairs){
+    for(let p of pairs){
       // Verificare universală, ÎNAINTEA oricărui lookup după comandaId — vezi awbFindExactExisting,
       // „dacă există deja, de ce apare mai sus ca neasociat?". O etichetă recitită (același AWB, deja
       // scris pe o comandă, indiferent cu ce comandaId greșit a ieșit alături de data asta) e recunoscută
@@ -28337,7 +28437,13 @@ async function readAwbFolderPdfs(fromArchive){
       // platformă, nu doar Vinted; forma e superset-ul strict al variantei scopate la Vinted, deci
       // niciun caz existent nu se schimbă.
       if(p._pendingMatch){results.push({...p,rows:pendingImportRowSnapshot(p.comandaId)});continue;}
-      if(!p.comandaId){results.push({...p,rows:[]});continue;}
+      if(!p.comandaId){
+        // Ultimă încercare, înainte de „negăsită": comanda poate exista pe eMAG, dar nu încă în aplicație
+        // (AWB deja emis → status „Pregătită", invizibil pentru „Adu comenzi") — vezi awbFindEmagOrderByRecentName.
+        const recentId=awbLabelLooksEmag(p)?await awbFindEmagOrderByRecentName(p.destinatar||p.aiClientNume||p.destinatarHu||''):null;
+        if(recentId&&!recentId.ambiguous){const{cargusEmagAmbiguous,emagHuAmbiguous,aiAmbiguous,...rest}=p;p={...rest,comandaId:recentId,_recentEmagNameMatch:true};}
+        else{results.push({...p,rows:[]});continue;}
+      }
       let rows=await dbGet(`platforma_comenzi?comanda_id=eq.${p.comandaId}&select=id,platforma,client_nume,produs_nume,awb`);
       // Comanda nu există local — cerut direct („astea s-au finalizat deja, ar fi trebuit să fie deja
       // importate; când avem AWB fără comandă, sistemul să caute comanda aia și în finalizate"): un AWB
