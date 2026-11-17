@@ -597,6 +597,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:440,date:'17.11.2026',text:'Staff citește acum toate paginile de comenzi din Supabase, nu doar primele 1.000 de rânduri. După ce baza a trecut de 1.000 de rânduri trimise spre Staff, ultimele comenzi nu mai erau încărcate deloc. Încărcarea continuă automat cu pagina următoare până nu mai există rânduri. Nu modifică AWB-uri, comenzi sau stoc; repară doar citirea lor în Staff.'},
   {n:439,date:'16.11.2026',text:'Coada de împachetat arată acum DOAR comenzile care au AWB — cerut direct: „când adăugăm AWB-uri în platformă, în Staff să apară doar comenzile care au AWB-uri". O comandă eMAG/Trendyol trimisă la împachetare, dar încă fără AWB, nu mai apare la „📦 Împachetare"; trece într-un tab nou, „⏳ Așteaptă AWB" (cu badge cu numărul lor), unde se vede clar ce comenzi lipsesc. De îndată ce i se asociază AWB-ul în aplicație și apeși „↻ Reîncarcă", comanda intră automat înapoi în coada de împachetat. Nu afectează vânzările directe (n-au AWB din principiu) și nici Vinted (acolo „AWB" e un Cod opțional) — ele rămân la Împachetare, exact ca înainte. Comenzile vechi, neîmpachetate (dinaintea resetului de 22:00) rămân pe calea „În așteptare", neschimbate. Contorul de sus („X comenzi" / procentul) numără doar comenzile gata de împachetat (cu AWB), nu și pe cele care așteaptă AWB. Verificat de 2 ori: sintaxă (node --check) + 2 rulări Playwright pe server local cu comenzi controlate — eMAG/Trendyol fără AWB scoase din coadă și mutate în „Așteaptă AWB", eMAG CU AWB rămâne la împachetat, Vinted fără cod și vânzarea directă rămân la împachetat, badge-ul arată numărul corect, tabul randează lista, zero erori JS.'},
   {n:438,date:'12.10.2026',text:'Imaginile produselor — recuperate și afișate corect, raportat direct (captură: comanda #535228705, „Covoraș impermeabil din silicon", fără poză). Cauza: 42 de produse active aveau imaginea ca LINK către furnizorul Verk (verk.store), care și-a schimbat/șters pozele — linkurile întorceau 404, deci în Staff rămânea un gol (poza era ascunsă, fără nicio căsuță în loc). Recuperate toate cele 42: pagina fiecărui produs la Verk a fost regăsită după ID-ul din numele pozei, imaginea curentă a fost verificată vizual produs cu produs și salvată în stocarea PROPRIE a aplicației (/api/ai-image — stabilă, nu mai depinde de furnizor), apoi legată de produs; plus ghiozdanul Sonic (poză curată din dosarul Research). În plus, când o imagine totuși nu se poate încărca, Staff arată acum căsuța „📦" (la comanda curentă, în liste și în Raport stoc), în loc de un spațiu gol — se vede imediat că poza lipsește. Au rămas fără poză: 5 produse ARHIVATE ale căror imagini erau pe vechiul proiect Supabase (nu mai există; Urs de pluș, Set breloc, Raft depozit, Suport perie, Dozator) și 43 de produse fără nicio imagine (40 arhivate, 3 active: Globuri Set 100, Proiector laser, Saltea electrică). Verificat: URL-urile funcționale 319 → 362 din 367 externe, direct și prin proxy, iar căsuța „📦" testată pe o imagine moartă.'},
   {n:437,date:'07.10.2026',text:'„↩ Readu în Împachetare" din „În așteptare" — cerut direct (cu poză a tabletei: comanda #533427463, „Din ziua anterioară", avea doar „Finalizează coletul"). Acum orice comandă din Așteptare are butonul „↩ Readu în Împachetare": pe card (sub „Finalizează coletul"), pe fiecare rând din listă („↩ Împachetare") și, deasupra listei, „↩ Readu toate cele din ziua anterioară (N) în Împachetare" — dintr-un click (cu confirmare). Comanda devine o comandă de azi, de finalizat: o „Din ziua anterioară" primește o retrimitere explicită spre împachetare (data trimiterii = acum — nimic nu reintră singur, ca la #435); o comandă cu problemă raportată cere confirmarea că problema e rezolvată (ca „✓ Problemă rezolvată"), apoi trece în Împachetare — în bloc nu se mută niciodată comenzile cu problemă. Merge și pe vânzările directe din Jurnal. După acțiune apare „↩ Comandă readusă în Împachetare — ANULEAZĂ · 10s" (anularea readuce comanda în Așteptare, cu data și problema vechi); apăsat din card, trece pe următoarea comandă din Așteptare, apăsat din listă rămâi pe listă. Dacă o scriere eșuează la mijloc, ce se scrisese se restaurează — nu rămâne nimic pe jumătate. Verificat de 2 ori: sintaxă + 24 de teste pe funcțiile reale (inclusiv clasificarea comenzilor, undo, Jurnal, în bloc, eșec la scriere) + test în pagina reală cu scrierile interceptate — confirmat că în baza reală nu s-a atins nimic.'},
@@ -2321,9 +2322,19 @@ async function refreshStaffNow(){
 // Degradare controlată dacă migration_staff_coada_anulare.sql nu a rulat încă: reîncearcă fără
 // filtrul pe `anulata`, ca Staff să rămână funcțional (doar fără curățarea prin „Anulează"), nu blocat.
 async function sbComenzi(url){
-  try{return await sb('GET',url);}
+  // PostgREST livrează cel mult 1.000 de rânduri implicit. Staff trebuie să citească toate
+  // comenzile trimise spre împachetare, altfel ultimele AWB-uri asociate nu ajung pe tabletă.
+  const loadAll=async target=>{
+    const size=1000,all=[];
+    for(let offset=0;;offset+=size){
+      const rows=await sb('GET',`${target}${target.includes('?')?'&':'?'}limit=${size}&offset=${offset}`);
+      all.push(...rows);
+      if(rows.length<size)return all;
+    }
+  };
+  try{return await loadAll(url);}
   catch(e){
-    if(/anulata/i.test(String(e.message||e))&&url.includes('&anulata=eq.false'))return sb('GET',url.replace('&anulata=eq.false',''));
+    if(/anulata/i.test(String(e.message||e))&&url.includes('&anulata=eq.false'))return loadAll(url.replace('&anulata=eq.false',''));
     throw e;
   }
 }
