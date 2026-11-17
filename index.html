@@ -1281,6 +1281,7 @@ body.pcl-lock{overflow:hidden}
 .pcl-chip.danger{background:#fee4e2;color:#b42318}
 .pcl-chip.hold{background:#fef0c7;color:#b54708}
 .pcl-chip.cap{background:#e0f2fe;color:#026aa2}
+.pcl-chip.fur{background:#fef3c7;color:#92400e}.pcl-chip.fur.late{background:#fee2e2;color:#b42318}
 .pcl-empty{padding:12px 4px;color:#667085;font-size:.85em}.pcl-empty.ok{color:#067647}
 .pcl-prow{display:flex;align-items:center;gap:14px;flex-wrap:wrap;padding:10px 12px;border-radius:14px;background:#f9fafb;margin-bottom:8px;border-left:4px solid transparent}
 .pcl-prow.low{background:#fef3f2;border-left-color:#f04438}
@@ -5308,6 +5309,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:724,text:'Listă locală (Comenzi & stoc) — comenzile de la furnizor aflate pe drum apar acum și aici, cerut direct: „când mă duc în secțiunea asta locală să vedem cum stăm cu stocurile și cu comenzile, să apară și aceste colete de pe drum, dar cu un simbol mic distinctiv". Fiecare produs dintr-o comandă furnizor încă neconfirmată („📥 Comenzi furnizor — pe drum" de pe Dashboard) primește pe card eticheta mică 🚚 „X pe drum" (cu furnizorul și nr. comenzii la hover; roșie cu ⚠ dacă termenul a expirat), iar cantitatea intră în „Comandat la furnizor" și scade din „Rămâne de comandat" — nu mai apare ca lipsă ceva deja comandat. Intră și în calculul „după sosirea mărfii". Dispare automat când apeși „✓ A sosit" și aplici factura. Produsele pe drum fără comenzi de clienți apar și ele, ca să vezi tot ce vine. Verificat de 2 ori: Playwright cu comenzi furnizor sintetice (fără scrieri reale) — zero erori JS.',date:'2026-11-17'},
   {n:723,text:'Comenzi furnizor — confirmare sosire cu intrare automată în stoc, cerut direct: „să putem confirma o astfel de comandă care e pe drum, atunci când a ajuns, și să se ducă automat factura în stoc și să se adauge acolo". Pe fiecare comandă din „📥 Comenzi furnizor — pe drum" (Dashboard) apare „✓ A sosit — adaugă în stoc": deschide „Importă factură" deja completată din comandă — produsele asociate, cantitățile comandate, prețul unitar în RON, transportul, furnizorul și numărul comenzii. Verifici (poți corecta cantitățile primite sau alege produsul la liniile nepotrivite) și apeși „Aplică": stocul crește exact ca la orice factură (cost mediu ponderat, transportul împărțit pe bucăți, Istoric „Comenzi stoc", mișcări de stoc), iar liniile intrate în stoc sunt închise automat pe comanda furnizor — dispar din „pe drum" și din Staff („Marfă furnizor"). Liniile lăsate nerezolvate rămân pe drum, pentru mai târziu. Verificat de 2 ori: Playwright cu o comandă sintetică (2 produse, unul nepotrivit, 50 RON transport, fără scrieri reale): factura se deschide completată corect, stocul crește (2→6), costul include transportul (25 + 10 = 35 RON/buc), Istoric stoc salvat, doar linia aplicată se închide; la a doua aplicare (produs nou) comanda dispare complet de pe card + regresie comenzi furnizor/Dashboard — zero erori JS.',date:'2026-11-17'},
   {n:722,text:'Comandă furnizor așteptată — transport și monedă, cerut direct, pe o comandă Maxy reală (linia „delivery · 125.93"): „aici să selectăm transport, iar prețul în cazul ăsta e în euro". Înainte, AI-ului i se cerea explicit prețul „în lei", deci prețurile în EUR erau salvate ca RON, iar linia de livrare rămânea „doar text" (sau devenea produs nou și apărea în Staff ca marfă de primit). Acum, exact ca la Importă factură: (1) câmp nou „Monedă prețuri" (RON/EUR), completat automat de AI din document; prețurile EUR se arată și convertite (≈ RON) și se salvează în RON (inclusiv prețul de achiziție al produselor noi și „Alt furnizor"), cu același curs folosit deja la facturi; (2) liniile de transport („delivery/shipping/transport/livrare…") sunt marcate automat „🚚 Transport", iar orice linie poate fi marcată/demarcată manual — nu devin produse, nu apar în Staff, totalul lor (în RON) se salvează pe comandă și apare pe cardul „Comenzi furnizor — pe drum". Necesită coloana nouă `transport` (SQL în chat) — până atunci comanda se salvează normal, cu avertisment că transportul n-a fost salvat. Verificat de 2 ori: Playwright pe o comandă EUR cu „delivery" (monedă detectată, transport marcat automat, „Produs nou pentru toate" nu-l atinge, prețuri convertite corect, produsul nou cu preț în RON, fără coloana transport → salvare normală + avertisment, cu coloana → transport 638.47 RON salvat și afișat pe Dashboard) — zero erori JS.',date:'2026-11-17'},
   {n:721,text:'Comenzi Platforme — alegerea produsului pe o linie nu mai „rămâne blocată" și nu mai poate ajunge pe altă comandă, bug GRAV, raportat direct: „încerc să setez produsul corect și nu mă lasă, rămâne blocat pe acesta" (#581154471). Cauza, reprodusă exact: lista de produse ținea minte doar POZIȚIA liniei; reîmprospătarea automată (la 5 minute) scoate între timp din previzualizare comenzile care nu mai sunt deschise pe eMAG (azi multe, după emiterea AWB-urilor) — pozițiile se mutau, iar produsul ales era scris pe comanda de dedesubt, în timp ce linia aleasă rămânea neschimbată. Acum lista (și cea de AWB de pe linie) ține minte comanda însăși; dacă aceasta a dispărut între timp, nu se scrie nimic nicăieri și primești un mesaj. În plus, dacă eMAG nu răspunde pentru o țară (RO/BG/HU) la o reîmprospătare, comenzile acelei țări nu mai sunt scoase din previzualizare (înainte erau scoase și readuse cu potrivirea automată, pierzând produsul ales manual). Verificat: în bază nu a ajuns niciun produs greșit (95 de comenzi azi, toate conform codului). Verificat de 2 ori: Playwright (linie scoasă între deschiderea listei și alegere → produsul ajunge pe comanda corectă, cealaltă neatinsă; linie dispărută complet → nimic scris; țară eMAG fără răspuns → comenzile ei rămân) — zero erori JS.',date:'2026-11-17'},
@@ -23863,16 +23865,26 @@ function pclData(){
     if(l.produsId&&P.some(p=>p.id===l.produsId)){cap.set(l.produsId,(cap.get(l.produsId)||0)+qn);capTotal+=qn;}
     else capUn.push({...l,capId:c.id});
   }));
+  // comenzi furnizor încă pe drum (Dashboard „📥 Comenzi furnizor") — intră și ele în „pe drum", cu simbol propriu 🚚
+  const fur=new Map();
+  (Array.isArray(FURNIZOR_ADMIN)?FURNIZOR_ADMIN:[]).forEach(r=>{
+    const id=Number(r.produs_id)||0;if(!id||r.finalizat||!P.some(p=>p.id===id))return;
+    const qn=Math.max(0,(Number(r.cantitate_comandata)||0)-(Number(r.cantitate_sosita)||0));if(!qn)return;
+    const f=fur.get(id)||{q:0,refs:[],late:false};f.q+=qn;
+    const ref=[r.furnizor||'',r.comanda_ref?'#'+r.comanda_ref:''].filter(Boolean).join(' ');if(ref&&!f.refs.includes(ref))f.refs.push(ref);
+    if(r.nu_a_sosit&&!r.nu_a_sosit_rezolvat)f.late=true;fur.set(id,f);
+  });
   cap.forEach((n,id)=>{if(!cardMap.has(id))cardMap.set(id,{id,demand:0,byPlat:{},orderKeys:new Set(),ords:new Map(),from:new Map()});});
+  fur.forEach((f,id)=>{if(!cardMap.has(id))cardMap.set(id,{id,demand:0,byPlat:{},orderKeys:new Set(),ords:new Map(),from:new Map()});});
   const ordList=[...orders.values()].sort((a,b)=>String(a.ts).localeCompare(String(b.ts))||a.i-b.i);
   const stockOf=id=>{const p=P.find(x=>x.id===id);if(!p)return 0;const s=counts[id]!=null?Number(counts[id]):qty(p);return Math.max(0,s);};
-  const transitOf=id=>{const p=P.find(x=>x.id===id);return p?Math.max(0,parseQtyVal(p.incomingQty,0))+(cap.get(id)||0):0;};
+  const transitOf=id=>{const p=P.find(x=>x.id===id);return p?Math.max(0,parseQtyVal(p.incomingQty,0))+(cap.get(id)||0)+(fur.get(id)?.q||0):0;};
   const cards=[...cardMap.values()].map(c=>{
     const p=P.find(x=>x.id===c.id);if(!p)return null;
     const erp=qty(p),counted=counts[c.id]!=null,stock=counted?Math.max(0,Number(counts[c.id])):Math.max(0,erp);   // stoc negativ în ERP => se arată 0 și se renumără de acolo (cerut direct)
-    const incoming=Math.max(0,parseQtyVal(p.incomingQty,0)),capq=cap.get(c.id)||0,transit=incoming+capq;
+    const incoming=Math.max(0,parseQtyVal(p.incomingQty,0)),capq=cap.get(c.id)||0,fr=fur.get(c.id),furq=fr?fr.q:0,transit=incoming+capq+furq;
     const need=Math.max(0,Math.round((c.demand-Math.max(0,stock)-transit)*100)/100);
-    return{...c,p,erp,counted,stock,incoming,capq,transit,need,plan:Number(plan[c.id])||0,orders:c.orderKeys.size};
+    return{...c,p,erp,counted,stock,incoming,capq,furq,furRefs:fr?fr.refs:[],furLate:!!(fr&&fr.late),transit,need,plan:Number(plan[c.id])||0,orders:c.orderKeys.size};
   }).filter(Boolean).sort((a,b)=>b.need-a.need||b.demand-a.demand||String(a.p.name).localeCompare(String(b.p.name),'ro'));
   // produse înlocuite (A -> B): necesarul lui A e luat din stocul lui B
   const ghosts=[];
@@ -23923,7 +23935,7 @@ function pclCardHtml(c,d){
   return`<article class="pcl-card ${c.need>0?'short':''}" data-s="${esc((p.name+' '+(p.sku||'')+' '+(p.ean||'')).toLowerCase())}">
     ${pclImg(p,'pcl-photo')}
     <div class="pcl-main">
-      <div class="pcl-tags">${plat}${c.need>0?'<span class="pcl-chip danger">Necesită comandă</span>':''}${c.capq?'<span class="pcl-chip cap">📷 comandat la furnizor</span>':''}</div>
+      <div class="pcl-tags">${plat}${c.need>0?'<span class="pcl-chip danger">Necesită comandă</span>':''}${c.capq?'<span class="pcl-chip cap">📷 comandat la furnizor</span>':''}${c.furq?`<span class="pcl-chip fur${c.furLate?' late':''}" title="Comandă furnizor pe drum${c.furRefs.length?': '+esc(c.furRefs.join(', ')):''}${c.furLate?' — termen depășit, încă neconfirmată':''}">🚚 ${fmtQty(c.furq)} pe drum${c.furLate?' ⚠':''}</span>`:''}</div>
       <h3><a class="pcl-name" onclick="openModal(${p.id})" title="Deschide fișa produsului">${esc(p.name)}</a></h3>
       <p class="pcl-code">Cod furnizor: <b>${esc(p.sku||'—')}</b> · EAN: <b>${esc(p.ean||'—')}</b></p>
       <p class="pcl-meta">${c.orders?`<button type="button" class="pcl-link" data-k="${esc(k)}" onclick="pclToggleRow(this)" title="Arată comenzile pentru acest produs">${c.orders} ${c.orders===1?'comandă':'comenzi'} ${open?'▴':'▾'}</button> · <b>${fmtQty(c.demand)} buc.</b> comandate`:'Fără comenzi curente'}${from?` · <span class="pcl-muted">include ${from}</span>`:''}</p>
@@ -23931,7 +23943,7 @@ function pclCardHtml(c,d){
       <div class="pcl-nums">
         <div><span>Stoc actual</span><b><input type="number" min="0" step="1" value="${esc(String(c.stock))}" onchange="pclSetCount(${p.id},this.value)" title="Stoc numărat — corectează aici dacă numărătoarea diferă de ERP (stocul negativ din ERP se arată ca 0)"></b><small>${c.counted?`numărat · ERP ${fmtQty(c.erp)} <button type="button" class="pcl-x" onclick="pclSetCount(${p.id},'')" title="Revino la stocul din ERP">↺</button>`:(c.erp<0?`ERP: ${fmtQty(c.erp)} → pornește de la 0`:'din ERP')}</small></div>
         <div><span>Vândut (clienți)</span><b>${fmtQty(c.demand)}</b><small>comenzi neincluse în import</small></div>
-        <div><span>Comandat la furnizor</span><b>${fmtQty(c.capq)}</b>${c.incoming?`<small>+ pe drum (ERP) ${fmtQty(c.incoming)}</small>`:(c.capq?'<small>din poze</small>':'<small>—</small>')}</div>
+        <div><span>Comandat la furnizor</span><b>${fmtQty(c.capq+c.furq)}</b>${c.furq?`<small>🚚 ${fmtQty(c.furq)} pe drum${c.furRefs.length?' · '+esc(c.furRefs.join(', ')):''}</small>`:''}${c.incoming?`<small>+ pe drum (ERP) ${fmtQty(c.incoming)}</small>`:(c.capq?'<small>din poze</small>':(c.furq?'':'<small>—</small>'))}</div>
         ${status}
       </div>
       <div class="pcl-plan-line pcl-noprint"><label>✍️ Vreau să comand:</label><input type="number" min="0" step="1" inputmode="numeric" placeholder="0" value="${c.plan?esc(String(c.plan)):''}" onchange="pclPlanSet(${p.id},this.value)" title="Scrie cât vrei să comanzi din acest produs — se adună în secțiunea „Ce comand""><span>buc.</span>${c.need>0&&c.plan!==c.need?`<button type="button" class="pcl-link" onclick="pclPlanSet(${p.id},${c.need})" title="Completează cu „Rămâne de comandat"">= ${fmtQty(c.need)}</button>`:''}${c.plan?(c.need>0?(c.plan>=c.need?'<span class="pcl-green">✓ acoperă necesarul</span>':`<span class="pcl-red">mai lipsesc ${fmtQty(c.need-c.plan)}</span>`):'<span class="pcl-muted">(nu era necesar)</span>'):''}</div>
