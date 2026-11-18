@@ -46,6 +46,11 @@ table td[style*="font-family:var(--mono)"],
    redesign complet dashboard, stil SaaS modern). Mecanismul de navigare (goPage/hash-routing/reordonare
    pagini) rămâne 100% neschimbat — .h-tabs/.h-tab își păstrează clasa+data-page+onclick identic, doar
    restilizate aici pe verticală în loc de orizontală. */
+/* Izolare (fluiditate): ceasurile din bara laterală („Timp azi", „Start comenzi") se actualizează în fiecare
+   secundă — fără izolare, fiecare tic obliga browserul să reașeze TOATĂ pagina (ex. tabelul Inventar,
+   ~17.000 de elemente: ~50 ms la fiecare secundă). Bara are dimensiuni fixe (sus/jos/lățime), deci izolarea
+   nu schimbă nimic vizual. */
+.sidebar{contain:size layout style}
 .sidebar{position:fixed;top:0;left:0;bottom:0;width:var(--sidebar-w);background:var(--surf);border-right:1px solid var(--b1);z-index:60;display:flex;flex-direction:column;padding:20px 14px}
 .h-logo{color:var(--t1);display:flex;align-items:center;gap:10px;padding:4px 8px 22px;flex-shrink:0}
 .h-logo-ic{width:38px;height:38px;background:var(--acc-light);color:var(--acc);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:23px;flex-shrink:0}
@@ -2549,7 +2554,8 @@ body .tt-widget .tt-panel{left:calc(100% + 14px);bottom:-84px;width:min(400px,ca
 .upd-btn:hover{border-color:var(--acc);color:var(--acc)}
 .upd-btn .dot{width:7px;height:7px;border-radius:50%;background:var(--acc)}
 .upd-panel{display:none;position:absolute;left:0;bottom:calc(100% + 8px);width:340px;max-width:calc(100vw - 28px);max-height:360px;overflow-y:auto;background:var(--surf);border:1px solid var(--b2);border-radius:var(--r2);box-shadow:var(--sh2);padding:10px}
-.upd-panel.on{display:block}
+.upd-panel.on{display:block;z-index:30}
+.upd-widget:has(.upd-panel.on){z-index:160} /* lista de actualizări deasupra ceasurilor din bara laterală (aceeași z-index 150, apăreau peste ea) */
 .upd-panel-title{font-size:24px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);padding:4px 6px 8px}
 .upd-row{padding:8px 6px;border-bottom:1px solid var(--b1);font-size:25px}
 .upd-row:last-child{border-bottom:none}
@@ -5379,6 +5385,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:737,text:'Platforma mai fluidă și fără consum inutil în fundal — analiză completă, cerut direct: „analizează toată platforma și vezi cum poți să o omogenizezi, să se miște mai cursiv, mai repede și mai ușor; vezi dacă sunt sisteme blocate, să nu mai ruleze în fundal și să consume memorie fără sens". Găsit și reparat, măsurat pe datele reale: (1) Dashboard-ul descărca tot istoricul de intrări în stoc (9 MB) la fiecare 20 de secunde — ~1,6 GB pe oră doar stând deschis; acum aduce doar intrările noi, iar lista completă cel mult o dată la 10 minute → de la 56 MB la 0,7 MB la 2 minute (de ~80× mai puțin). Cauza celor 9 MB: produsele noi din facturi își salvau poza în istoric ca imagine întreagă (base64), nu ca link — reparat pentru viitor; SQL-ul din chat le curăță pe cele 48 vechi (tabelul scade de la 12,5 MB la 0,4 MB, deci și pornirea aplicației devine mai rapidă). (2) Tabelul Inventar (543 de rânduri, ~17.000 de elemente) se reconstruia complet la fiecare 20 s, chiar fără nicio schimbare, și chiar dacă erai pe altă pagină — acum doar când un produs chiar s-a schimbat și doar dacă pagina e deschisă (altfel la revenire). Pe Inventar, timpul de reașezare a paginii a scăzut de la 7,7 s la sub 0,5 s pe minut, iar elementele acumulate de la 138.000 la 55.000. (3) Ceasurile din bara laterală („Timp azi", „Start comenzi") obligau browserul să reașeze toată pagina la fiecare secundă — bara e acum izolată (de la ~50 ms pe secundă la ~0). (4) Verificările periodice (probleme Staff la 1 minut, alerte furnizor la 10 minute) nu mai rulează cât fereastra e minimizată/ascunsă și se actualizează imediat la revenire; aplicarea automată de la 22:00 (pe pauză) nu mai pornește deloc verificarea. (5) Reparat și: lista „Update #N" era acoperită parțial de ceasurile din bara laterală. Staff verificat — deja ușor (8 KB/minut). Verificat de 2 ori: Playwright (audit de consum 1–2 minute pe Dashboard/Inventar/Comenzi Platforme/Staff înainte și după, redesenare doar la schimbare, actualizare la revenirea pe Inventar, istoric incremental, ferestrele din bara laterală) + regresie completă — zero erori JS.',date:'2026-11-18'},
   {n:736,text:'Comenzi Platforme — tabul se deschide mult mai repede, cerut direct: „când apăsăm pe tabul acesta cu comenzi, să apară mai repede, să se deschidă mai repede, să nu pierdem timpul". Măsurat pe previzualizarea reală (273 de comenzi): tabul apare acum în ~0,2 s (înainte ~0,7 s), iar lista e complet gata în ~0,8 s (înainte 1,4–1,9 s). Cauza principală: la deschidere, browserul așeza imediat toate cele ~18.500 de elemente ale tuturor cardurilor, deși pe ecran se văd 3–4 — acum se așază și se desenează doar cardurile din zona vizibilă, restul pe măsură ce ajungi la ele cu scroll (scroll-ul rămâne normal). În plus, căutările în asocierile de coduri sunt memorate între redesenări (rezultat identic, verificat pe 2.473 de cazuri reale). Verificat de 2 ori: Playwright (timpi vechi/nou pe datele reale, echivalența căutărilor, regresie Comenzi Platforme) — zero erori JS.',date:'2026-11-18'},
   {n:735,text:'Staff — comenzile în ordinea curierilor, cerut direct: „în Staff, AWB-urile să apară în ordinea curierilor: Cargus, Sameday și adiacente, FAN Courier și adiacente, Vinted (chiar dacă sunt de la Sameday, GLS, Cargus, FAN — toate Vinted la un loc) + GLS simplu". Ordinea cozii: 1 Cargus → 2 Sameday (apoi easybox, eMAG Courier) → 3 FAN Courier (apoi DPD, BoxNow, ACS, ELTA — curierii Trendyol Grecia/Bulgaria) → 4 Vinted, toate, indiferent de curier → 5 GLS simplu → alți curieri → comenzile fără AWB la final. În cadrul aceluiași curier rămâne ordinea de dinainte (eMAG, Trendyol, Vinted, apoi după ora comenzii). Verificat de 2 ori: Playwright pe coada reală din Staff (1.039 de comenzi, ordinea exactă pe grupuri) — zero erori JS.',date:'2026-11-18'},
   {n:734,text:'Comenzi Platforme — mai rapid cu multe comenzi + „Aplică import" doar pentru comenzile împachetate și confirmate în Staff, cerut direct: „merge foarte greu platforma când sunt mai multe comenzi, nu putem să facem să se miște mai repede? De asemenea, importul să se facă doar la ceea ce a fost setat în Staff ca împachetat și confirmat". (1) Viteză, măsurat pe previzualizarea reală (273 de linii, ~18.500 de elemente): o redesenare scade de la ~0,9 s la ~0,5 s când se schimbă ceva și la ~0,2 s când nu se schimbă nimic (reîmprospătarea automată la 20 s nu mai reconstruiește pagina degeaba, păstrează și poziția/scroll-ul). Cauze reparate: interfața veche, ascunsă, se construia la fiecare redesenare; etichetele de dată ale termenelor se recalculau de sute de ori; asocierile de coduri (~2.000) erau parcurse integral pentru fiecare linie — acum index. (2) „Aplică import" scade stocul DOAR pentru comenzile pe care Staff le-a împachetat și confirmat (coletul finalizat); starea se recitește din bază chiar la apăsare. Comenzile incluse, dar încă neconfirmate în Staff, rămân în previzualizare pentru mai târziu — confirmarea îți spune câte așteaptă, iar bara de jos arată „X incluse · Y împachetate și confirmate în Staff". Verificat de 2 ori: Playwright (măsurători vechi/nou pe datele reale; aplicare cu 3 comenzi — doar cea confirmată în Staff se aplică, cea doar împachetată și cea neîmpachetată rămân; nimic confirmat → mesaj, nimic aplicat) + regresie — zero erori JS.',date:'2026-11-18'},
@@ -9915,7 +9922,7 @@ async function load(){
     // istoric comenzi/incarcari stoc
     const oResult=await stockOrdersPromise;
     if(oResult&&!oResult.__err){
-      OI=mergeStockOrders(oResult.map(dbToStockOrder),loadLocalStockOrders());
+      OI=mergeStockOrders(oResult.map(dbToStockOrder),loadLocalStockOrders());stockOrdersFullAt=Date.now();
       safeLocalSet(OK,JSON.stringify(OI));
       resyncLocalOnlyStockOrders();
     }else{
@@ -10030,6 +10037,25 @@ let liveSyncTimer=null,liveSyncInFlight=false;
 // pentru un ciclu la fiecare 20s și nici nu ține de cererea „stoc/produs/imagine”. Sare peste ciclu
 // dacă fila e ascunsă, dacă editorul de produs e deschis (nu suprascrie o editare în curs) sau dacă
 // utilizatorul tastează undeva (input/textarea/select focusat) — exact grija din staff.html.
+// Istoricul de intrări (comenzi_stoc) — la fiecare 20s se aduc DOAR rândurile noi (created_at mai nou decât
+// cel mai nou cunoscut); lista completă (care prinde și ștergeri/modificări de pe alt dispozitiv) cel mult o
+// dată la 10 minute. Înainte se descărca tot tabelul (9 MB) la fiecare 20s cât stăteai pe Dashboard.
+var stockOrdersFullAt=0,liveProdSig='';
+async function refreshStockOrdersLive(){
+  const now=Date.now();
+  const newest=OI.reduce((m,o)=>{const t=String(o.createdAt||'');return t>m?t:m;},'');
+  if(!newest||now-stockOrdersFullAt>10*60000){
+    const o=await dbGet('comenzi_stoc?select=*&order=created_at.desc');
+    if(Array.isArray(o)){OI=mergeStockOrders(o.map(dbToStockOrder),loadLocalStockOrders());stockOrdersFullAt=now;}
+    return;
+  }
+  const o=await dbGet(`comenzi_stoc?select=*&created_at=gt.${encodeURIComponent(newest)}&order=created_at.desc`);
+  if(Array.isArray(o)&&o.length){
+    const known=new Set(OI.map(x=>String(x.id)));
+    const fresh=o.map(dbToStockOrder).filter(x=>!known.has(String(x.id)));
+    if(fresh.length)OI=mergeStockOrders(fresh,OI,loadLocalStockOrders());
+  }
+}
 async function liveRefreshProducts(){
   if(liveSyncInFlight||document.hidden||!sbReady)return;
   if(document.getElementById('ov')?.classList.contains('on'))return;
@@ -10037,18 +10063,24 @@ async function liveRefreshProducts(){
   liveSyncInFlight=true;
   try{
     const rows=await dbGet(`produse?select=${PROD_COLS}&order=id.asc`);
-    P=rows.map(r=>dbToP({...r,img:lazyProductImageRef(r.id)}));
-    rebuildCats();
-    // Inventarul/Vânzările (page-stoc) sunt randate mereu, indiferent de tab-ul activ — la fel ca la
-    // load() inițial. Restul paginilor se reîmprospătează doar dacă chiar sunt vizibile acum, ca să
-    // nu recalculăm degeaba ecrane pe care nimeni nu le vede în acest moment.
-    renderTable();renderToday();
+    // Fluiditate: dacă niciun produs nu s-a schimbat de la ultima citire (cazul obișnuit), nu mai
+    // reconstruim nimic — înainte, tabelul Inventar (543 de rânduri, ~17.000 de elemente) se redesena
+    // integral la fiecare 20s, cu o sacadare de ~0,5s, chiar dacă nu se modificase nimic.
+    const sig=JSON.stringify(rows);
+    const prodChanged=sig!==liveProdSig;liveProdSig=sig;
     const activeId=document.querySelector('.page.on')?.id?.replace(/^page-/,'');
+    if(prodChanged){
+      P=rows.map(r=>dbToP({...r,img:lazyProductImageRef(r.id)}));
+      rebuildCats();
+      // Tabelul Inventar se redesenează doar dacă pagina e vizibilă; altfel la deschiderea ei (goPage).
+      if(activeId==='stoc'){renderTable();invTableStale=false;}else invTableStale=true;
+      renderToday();
+    }
     if(activeId==='dashboard'){
       if(!syncMapsLoaded)await loadSyncMappings();
       // Graficul „Situația stocului" reconstituie zilele trecute din OI (intrări) — o intrare făcută de
       // pe alt dispozitiv nu era în OI-ul local, deci saltul de azi se „întindea" pe toată istoria.
-      try{const o=await dbGet('comenzi_stoc?select=*&order=created_at.desc');if(Array.isArray(o))OI=mergeStockOrders(o.map(dbToStockOrder),loadLocalStockOrders());}catch(e){}
+      try{await refreshStockOrdersLive();}catch(e){}
       renderDashboard();
     }
     else if(activeId==='pcom'&&!pcomApplyInFlight){await loadWorkedOrdersFromDb();await pcomRefreshStaffPackedState(pcImpParsed.filter(x=>x.include&&x._committedId));renderPcomImportPreview();}
@@ -10082,7 +10114,7 @@ function startLiveSync(){
 let autoApplyWatcherTimer=null;
 function startAutoApplyWatcher(){
   clearInterval(autoApplyWatcherTimer);
-  autoApplyWatcherTimer=setInterval(()=>{if(sbReady)autoApplyStalePendingImports();},5*60000);
+  autoApplyWatcherTimer=AUTO_APPLY_PAUSED?null:setInterval(()=>{if(sbReady&&!document.hidden)autoApplyStalePendingImports();},5*60000);
 }
 
 // Imaginile nu mai sunt citite în masă la pornire. Se folosesc doar când intră
@@ -10504,6 +10536,7 @@ function closeSidebarDrawer(){
   document.getElementById('app-sidebar')?.classList.remove('on');
   document.getElementById('sidebar-backdrop')?.classList.remove('on');
 }
+var invTableStale=false;
 function goPage(id,btn){
   const pageEl=document.getElementById('page-'+id);
   if(!pageEl)return;
@@ -10517,6 +10550,7 @@ function goPage(id,btn){
   btn.scrollIntoView({block:'nearest',inline:'nearest'});
   history.replaceState(null,'','#'+id);
   closeSidebarDrawer();
+  if(id==='stoc'&&invTableStale){invTableStale=false;setTimeout(()=>renderTable(),0);}
   if(id==='dashboard'){
     const tryD=async(n)=>{
       if(P.length>0){
@@ -24949,6 +24983,14 @@ async function pickPcomProduct(id){
 // corectarea asocierii, FIECARE comandă nouă pe aceeași ofertă ar veni din nou pe produsul greșit („rămâne
 // blocat pe acesta"). Întrebăm o dată și corectăm asocierea (+ liniile din previzualizare cu aceleași coduri).
 function syncMapIndexReset(){SYNCM_IDX=null;}
+// Poza pe o linie din istoricul de intrări (comenzi_stoc.details) — DOAR link, niciodată imaginea întreagă
+// codată base64 (12 MB din cei 12,3 MB ai tabelului erau astfel de poze, descărcate integral la fiecare
+// reîmprospătare a Dashboard-ului). Istoricul afișează oricum poza ACTUALĂ a produsului, după productId.
+function stockHistImg(pid,fallback){
+  const cur=pid?(P.find(x=>x.id===pid)||{}).img:'';
+  const v=[cur,fallback].find(x=>x&&!String(x).startsWith('data:')&&!String(x).startsWith('lazy-product://'));
+  return v||'';
+}
 async function pcomFixCodeMappingsAfterPick(line,id){
   if(!line||!id||!sbReady)return;
   const pl=line.platforma;if(pl!=='emag'&&pl!=='trendyol')return;
@@ -30498,7 +30540,7 @@ async function applyInvoice(){
       await saveProdToDb(newP,null);
       const newId=P[P.length-1]?.id||null;
       await logMove('in',newP.name,item.qty,invSourceName||'Import factură · produs nou',newId);
-      orderDetails.push({status:'produs nou',sku:item.sku||'',productId:newId,name:newP.name,qty:item.qty,price:costRon,productCost,shippingAlloc:transportPerUnit,value:Math.round((item.qty||0)*costRon*100)/100,img:newP.img});
+      orderDetails.push({status:'produs nou',sku:item.sku||'',productId:newId,name:newP.name,qty:item.qty,price:costRon,productCost,shippingAlloc:transportPerUnit,value:Math.round((item.qty||0)*costRon*100)/100,img:stockHistImg(newId,newP.img)});
       created++;
     } else {
       // Nici produs ales, nici "produs nou" confirmat — linie nerezolvată, se SARE la aplicare (nu se
@@ -31991,10 +32033,11 @@ function syncRowKeyHandler(e){
 document.addEventListener('keydown',syncRowKeyHandler);
 document.addEventListener('click',ev=>{if(!ev.target.closest('#ss-drop')&&!ev.target.closest('.ss-field'))document.getElementById('ss-drop').classList.remove('on');});
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')checkSupplierRestockAlerts();});
-setInterval(checkSupplierRestockAlerts,10*60*1000);
+setInterval(()=>{if(!document.hidden)checkSupplierRestockAlerts();},10*60*1000);
 // Problemele raportate de Staff vin de pe alt dispozitiv (tabletă) — fără polling, admin nu ar afla
 // niciodată de o problemă nouă decât la reîncărcarea completă a paginii.
-setInterval(loadStaffIssues,60*1000);
+setInterval(()=>{if(!document.hidden)loadStaffIssues();},60*1000);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&sbReady)loadStaffIssues();});
 // Deschide direct secțiunea din link (#stoc, #raport, #dashboard...), sau un dosar Research anume
 // (#research/<id>, generat de „🔗 Copiază link dosar" / goToResearchProject) — al doilea segment
 // există DOAR ca fiecare dosar să aibă un URL propriu, altfel toate dosarele arătau exact „#research",
