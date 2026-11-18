@@ -2963,6 +2963,7 @@ body .tt-widget .tt-panel{left:calc(100% + 14px);bottom:-84px;width:min(400px,ca
 /* Viteză (cerut direct: „când apăsăm pe tabul cu comenzi, să apară mai repede"): browserul așază și desenează
    doar cardurile din zona vizibilă — restul (sute, ~18.500 de elemente) sunt sărite până ajungi la ele cu scroll. */
 .pcx-orders-list>.pcx-order{content-visibility:auto;contain-intrinsic-size:auto 420px}
+.pcx-orders-list>.pcx-order:not(.open){contain-intrinsic-size:auto 150px}
 .pcx-order{border:2px solid var(--b3);border-radius:var(--r2);overflow:hidden;backdrop-filter:blur(16px) saturate(140%);-webkit-backdrop-filter:blur(16px) saturate(140%);box-shadow:0 6px 20px rgba(31,38,70,.07);transition:box-shadow .15s,border-color .15s}
 .pcx-order:hover{box-shadow:0 10px 30px rgba(31,38,70,.11);border-color:var(--acc)}
 .pcx-order.pcx-order-included{border-color:rgba(18,183,106,.55)}
@@ -5385,6 +5386,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:738,text:'Comenzi Platforme — lista stă pe loc și nu mai „tresare", raportat direct: „de ce atunci când apăs pe o comandă de pe Trendyol mă duce mai sus pe alte comenzi de la eMAG? Să rămână static acolo unde suntem" și „să nu mai tresară imaginea, ca și cum se încarcă, ca o pagină veche". Cauza: la orice click (deschis/închis comandă, inclus, produs ales) se reconstruia TOATĂ lista de comenzi — sute de carduri recreate de la zero, poze reîncărcate, iar cardurile din afara ecranului primeau o înălțime estimată, deci pagina sărea cu sute de pixeli. Acum se actualizează DOAR cardurile care s-au schimbat (de obicei unul singur); restul rămân exact aceleași, cu pozele deja încărcate, iar poziția pe ecran rămâne fixă. Verificat de 2 ori: Playwright pe previzualizarea reală (273 de comenzi) — click pe comenzi Trendyol/eMAG din mijlocul listei: cardul rămâne exact în același loc (înainte: salturi de până la 1.350 px), celelalte carduri nu sunt recreate; regresie Comenzi Platforme — zero erori JS.',date:'2026-11-18'},
   {n:737,text:'Platforma mai fluidă și fără consum inutil în fundal — analiză completă, cerut direct: „analizează toată platforma și vezi cum poți să o omogenizezi, să se miște mai cursiv, mai repede și mai ușor; vezi dacă sunt sisteme blocate, să nu mai ruleze în fundal și să consume memorie fără sens". Găsit și reparat, măsurat pe datele reale: (1) Dashboard-ul descărca tot istoricul de intrări în stoc (9 MB) la fiecare 20 de secunde — ~1,6 GB pe oră doar stând deschis; acum aduce doar intrările noi, iar lista completă cel mult o dată la 10 minute → de la 56 MB la 0,7 MB la 2 minute (de ~80× mai puțin). Cauza celor 9 MB: produsele noi din facturi își salvau poza în istoric ca imagine întreagă (base64), nu ca link — reparat pentru viitor; SQL-ul din chat le curăță pe cele 48 vechi (tabelul scade de la 12,5 MB la 0,4 MB, deci și pornirea aplicației devine mai rapidă). (2) Tabelul Inventar (543 de rânduri, ~17.000 de elemente) se reconstruia complet la fiecare 20 s, chiar fără nicio schimbare, și chiar dacă erai pe altă pagină — acum doar când un produs chiar s-a schimbat și doar dacă pagina e deschisă (altfel la revenire). Pe Inventar, timpul de reașezare a paginii a scăzut de la 7,7 s la sub 0,5 s pe minut, iar elementele acumulate de la 138.000 la 55.000. (3) Ceasurile din bara laterală („Timp azi", „Start comenzi") obligau browserul să reașeze toată pagina la fiecare secundă — bara e acum izolată (de la ~50 ms pe secundă la ~0). (4) Verificările periodice (probleme Staff la 1 minut, alerte furnizor la 10 minute) nu mai rulează cât fereastra e minimizată/ascunsă și se actualizează imediat la revenire; aplicarea automată de la 22:00 (pe pauză) nu mai pornește deloc verificarea. (5) Reparat și: lista „Update #N" era acoperită parțial de ceasurile din bara laterală. Staff verificat — deja ușor (8 KB/minut). Verificat de 2 ori: Playwright (audit de consum 1–2 minute pe Dashboard/Inventar/Comenzi Platforme/Staff înainte și după, redesenare doar la schimbare, actualizare la revenirea pe Inventar, istoric incremental, ferestrele din bara laterală) + regresie completă — zero erori JS.',date:'2026-11-18'},
   {n:736,text:'Comenzi Platforme — tabul se deschide mult mai repede, cerut direct: „când apăsăm pe tabul acesta cu comenzi, să apară mai repede, să se deschidă mai repede, să nu pierdem timpul". Măsurat pe previzualizarea reală (273 de comenzi): tabul apare acum în ~0,2 s (înainte ~0,7 s), iar lista e complet gata în ~0,8 s (înainte 1,4–1,9 s). Cauza principală: la deschidere, browserul așeza imediat toate cele ~18.500 de elemente ale tuturor cardurilor, deși pe ecran se văd 3–4 — acum se așază și se desenează doar cardurile din zona vizibilă, restul pe măsură ce ajungi la ele cu scroll (scroll-ul rămâne normal). În plus, căutările în asocierile de coduri sunt memorate între redesenări (rezultat identic, verificat pe 2.473 de cazuri reale). Verificat de 2 ori: Playwright (timpi vechi/nou pe datele reale, echivalența căutărilor, regresie Comenzi Platforme) — zero erori JS.',date:'2026-11-18'},
   {n:735,text:'Staff — comenzile în ordinea curierilor, cerut direct: „în Staff, AWB-urile să apară în ordinea curierilor: Cargus, Sameday și adiacente, FAN Courier și adiacente, Vinted (chiar dacă sunt de la Sameday, GLS, Cargus, FAN — toate Vinted la un loc) + GLS simplu". Ordinea cozii: 1 Cargus → 2 Sameday (apoi easybox, eMAG Courier) → 3 FAN Courier (apoi DPD, BoxNow, ACS, ELTA — curierii Trendyol Grecia/Bulgaria) → 4 Vinted, toate, indiferent de curier → 5 GLS simplu → alți curieri → comenzile fără AWB la final. În cadrul aceluiași curier rămâne ordinea de dinainte (eMAG, Trendyol, Vinted, apoi după ora comenzii). Verificat de 2 ori: Playwright pe coada reală din Staff (1.039 de comenzi, ordinea exactă pe grupuri) — zero erori JS.',date:'2026-11-18'},
@@ -23444,7 +23446,85 @@ let pcxExpandedOverride={}; // key -> true/false, DOAR pentru cardurile atinse m
 function pcxGroupKey(idxs){const it=pcImpParsed[idxs[0]];return (it.platforma||'necunoscut')+'|'+(it.pachetId||it.comandaId||('_line'+idxs[0]));}
 function pcxGroupDefaultOpen(idxs){return idxs.some(i=>pcImpParsed[i].include);}
 function pcxGroupIsOpen(key,idxs){return key in pcxExpandedOverride?pcxExpandedOverride[key]:pcxGroupDefaultOpen(idxs);}
+var pcxScrollAnchorKey=null;
+// Marchează copiii lui host cu cheia/HTML-ul bucății din care provin (doar dacă fiecare bucată = un element).
+function pcxTagChunks(host,chunks){
+  const els=host.children;
+  if(!chunks||els.length!==chunks.length){for(const el of els){el._k=null;el._h=null;}return;}
+  for(let i=0;i<chunks.length;i++){els[i]._k=chunks[i].k;els[i]._h=chunks[i].h;}
+}
+// Actualizează un element existent ca să arate ca `to`, schimbând doar ce diferă (text, atribute, copii) —
+// elementele identice (ex. pozele) rămân aceleași noduri, deci nu se reîncarcă și nu „tresar".
+function pcxMorph(from,to){
+  if(from.nodeType!==to.nodeType||(from.nodeType===1&&from.tagName!==to.tagName)){from.replaceWith(to);return to;}
+  if(from.nodeType!==1){if(from.nodeValue!==to.nodeValue)from.nodeValue=to.nodeValue;return from;}
+  for(const a of [...from.attributes])if(!to.hasAttribute(a.name))from.removeAttribute(a.name);
+  for(const a of to.attributes)if(from.getAttribute(a.name)!==a.value){
+    from.setAttribute(a.name,a.value);
+    if(a.name==='value'&&'value' in from&&document.activeElement!==from)from.value=a.value;
+  }
+  if((from.tagName==='INPUT')&&from.checked!==to.hasAttribute('checked')&&from.type!=='text')from.checked=to.hasAttribute('checked');
+  let fc=from.firstChild,tc=to.firstChild;
+  while(tc){
+    const tn=tc.nextSibling;
+    if(fc){const kept=pcxMorph(fc,tc);fc=kept.nextSibling;}
+    else from.appendChild(tc);
+    tc=tn;
+  }
+  while(fc){const n=fc.nextSibling;fc.remove();fc=n;}
+  return from;
+}
+// Actualizare pe bucăți: păstrează elementele neschimbate, înlocuiește doar bucățile modificate și le pune
+// în ordinea nouă. Întoarce false dacă lista curentă nu e marcată (prima randare) → randare completă.
+function pcxPatchChunks(host,chunks){
+  const cur=[...host.children];
+  if(!cur.length||cur.some(el=>!el._k))return false;
+  const byKey=new Map();cur.forEach(el=>{if(!byKey.has(el._k))byKey.set(el._k,el);});
+  const tpl=document.createElement('template');
+  const next=[];
+  for(const c of chunks){
+    let el=byKey.get(c.k);
+    if(el&&el._h===c.h){byKey.delete(c.k);next.push(el);continue;}
+    tpl.innerHTML=c.h;
+    if(tpl.content.children.length!==1)return false;   // bucată neobișnuită → randare completă, sigur
+    const fresh=tpl.content.firstElementChild;
+    if(el){const kept=pcxMorph(el,fresh);kept._k=c.k;kept._h=c.h;byKey.delete(c.k);next.push(kept);continue;}   // actualizare pe loc, nu înlocuire
+    fresh._k=c.k;fresh._h=c.h;
+    next.push(fresh);
+  }
+  byKey.forEach(el=>el.remove());
+  // ordinea: mutăm doar ce nu e deja la locul lui
+  let ref=host.firstElementChild;
+  for(const el of next){
+    if(el===ref){ref=ref.nextElementSibling;continue;}
+    host.insertBefore(el,ref);
+  }
+  // curăță eventuale noduri text rămase între elemente (nu sunt bucăți)
+  [...host.childNodes].forEach(n=>{if(n.nodeType===3&&!n.textContent.trim())n.remove();});
+  return true;
+}
+function pcxScrollParent(el){
+  for(let p=el.parentElement;p&&p!==document.body;p=p.parentElement){const o=getComputedStyle(p).overflowY;if((o==='auto'||o==='scroll')&&p.scrollHeight>p.clientHeight)return p;}
+  return null;   // fereastra
+}
+function pcxFindScrollAnchor(host){
+  if(!host.firstChild||!host.offsetParent)return null;
+  let el=pcxScrollAnchorKey?[...host.querySelectorAll(':scope>.pcx-order[data-key]')].find(x=>x.dataset.key===pcxScrollAnchorKey):null;
+  if(!el){
+    const vh=window.innerHeight;
+    el=[...host.querySelectorAll(':scope>.pcx-order[data-key]')].find(x=>{const r=x.getBoundingClientRect();return r.bottom>60&&r.top<vh;});
+  }
+  return el?{key:el.dataset.key,top:el.getBoundingClientRect().top}:null;
+}
+function pcxRestoreScrollAnchor(host,a){
+  if(!a)return;
+  const el=[...host.querySelectorAll(':scope>.pcx-order[data-key]')].find(x=>x.dataset.key===a.key);if(!el)return;
+  const d=el.getBoundingClientRect().top-a.top;if(Math.abs(d)<1)return;
+  const sp=pcxScrollParent(host);
+  if(sp)sp.scrollTop+=d;else window.scrollBy(0,d);
+}
 function pcxToggleExpand(key){
+  pcxScrollAnchorKey=key;   // cardul apăsat rămâne exact unde era pe ecran (vezi pcxRenderOrders)
   const idxs=pcomGroups.find(g=>pcxGroupKey(g)===key)||[];
   pcxExpandedOverride[key]=!pcxGroupIsOpen(key,idxs);
   pcxRenderOrders();
@@ -23837,7 +23917,7 @@ function pcxOrderCardHtml(idxs,gIdx){
   // Pachet cu mai multe produse → varianta de grup (un singur AWB pentru tot pachetul), exact ca la legacy
   // („Copiază tot pachetul").
   const awbChipHtml=multi?pcxGroupAwbChipHtml(gIdx):pcxAwbBoxHtml(idxs[0]);
-  return`<div class="pcx-order pcx-order-${platCls}${open?' open':''}${anyIncluded?' pcx-order-included':''}">
+  return`<div class="pcx-order pcx-order-${platCls}${open?' open':''}${anyIncluded?' pcx-order-included':''}" data-key="${esc(key)}">
     <div class="pcx-order-hd" onclick="pcxToggleExpand('${esc(key)}')">
       <span class="pcx-badge-stack"><span class="pcx-badge pcx-badge-${platCls}">${platLabel}</span>${stockReady?`<span class="pcx-stock-dot" title="Stoc disponibil acum pentru ${idxs.length>1?'toate produsele':'produsul'} din comandă"></span>`:''}</span>
       <span class="pcx-order-id${pcxOrderWorked(platform,it0.comandaId)?' worked':''}">#${esc(it0.comandaId||'—')}<button type="button" class="pcx-order-id-copy" onclick="event.stopPropagation();pcxCopyOrderId(this,'${esc(platform)}','${esc(it0.comandaId||'')}')" title="${pcxOrderWorked(platform,it0.comandaId)?'Copiat deja — ai lucrat pe această comandă':'Copiază numărul comenzii'}">⧉</button></span>
@@ -24574,8 +24654,9 @@ function pcxRenderOrders(){
     (buckets[plat]=buckets[plat]||[]).push(idxs);
   });
   const allPlats=platOrder.concat(Object.keys(buckets).filter(p=>!platOrder.includes(p)));
-  const html=allPlats.map(plat=>{
-    const list=buckets[plat];if(!list||!list.length)return'';
+  const chunks=[];   // bucăți separate (antet platformă / card), ca să actualizăm doar ce s-a schimbat
+  allPlats.forEach(plat=>{
+    const list=buckets[plat];if(!list||!list.length)return;
     const cls=plat==='trendyol'?'trendyol':plat==='vinted'?'vinted':'emag';
     const hd=`<div class="pcx-plat-divider"><span class="pcx-badge pcx-badge-${cls}">${esc(pcomPlatLabel(plat))}</span><span class="pcx-plat-divider-count">${list.length} ${list.length===1?'comandă':'comenzi'}</span></div>`;
     // Comenzile cu AWB deja asociat urcă deasupra celor fără, în cadrul aceleiași platforme — cerut
@@ -24596,12 +24677,27 @@ function pcxRenderOrders(){
       }
       return (pcxGroupHasAwb(b)?1:0)-(pcxGroupHasAwb(a)?1:0);
     });
-    return hd+sortedList.map(idxs=>pcxOrderCardHtml(idxs,pcomGroups.indexOf(idxs))).join('');
-  }).join('');
+    chunks.push({k:'hd:'+plat,h:hd});
+    sortedList.forEach(idxs=>chunks.push({k:pcxGroupKey(idxs),h:pcxOrderCardHtml(idxs,pcomGroups.indexOf(idxs))}));
+  });
+  const html=chunks.map(c=>c.h).join('');
   // Viteză: reîmprospătările periodice (la 20s / 5 min) redesenau sute de carduri identice (~18.000 de
   // elemente) — dacă nimic nu s-a schimbat, nu mai atingem DOM-ul deloc (păstrează și scroll-ul/focusul).
   const nextHtml=filtered.length?html:pcxSearchFallbackHtml(q);
-  if(host._pcxHtml!==nextHtml||!host.firstChild){host.innerHTML=nextHtml;host._pcxHtml=nextHtml;}
+  if(host._pcxHtml!==nextHtml||!host.firstChild){
+    // Poziția rămâne fixă (bug raportat direct: „când apăs pe o comandă de pe Trendyol, mă duce mai sus pe alte
+    // comenzi eMAG — să rămână static unde suntem"). Cardurile din afara ecranului au înălțime estimată
+    // (desenare doar a celor vizibile, vezi CSS .pcx-order), deci la reconstruirea listei pagina „sărea".
+    // Reținem cardul apăsat (sau primul card vizibil) și poziția lui, apoi îl readucem exact acolo.
+    const anchor=pcxFindScrollAnchor(host);
+    // Fără „tresărit" (cerut direct: „să nu mai tresară imaginea, ca și cum se încarcă, ca o pagină veche"):
+    // nu mai reconstruim toată lista — înlocuim DOAR cardurile al căror conținut s-a schimbat; restul rămân
+    // exact aceleași elemente (poze deja încărcate, aceeași poziție, nimic redesenat).
+    if(!filtered.length||!pcxPatchChunks(host,chunks)){host.innerHTML=nextHtml;pcxTagChunks(host,filtered.length?chunks:null);}
+    host._pcxHtml=nextHtml;
+    pcxRestoreScrollAnchor(host,anchor);
+  }
+  pcxScrollAnchorKey=null;
   // Numărători — informative, pe TOATE liniile (nu doar cele filtrate), ca la legacy (updPcomImportInfo)
   const total=pcImpParsed.length;
   const byPlat={};pcImpParsed.forEach(x=>{const pl=x.platforma||pcImpPlatforma;byPlat[pl]=(byPlat[pl]||0)+1;});
