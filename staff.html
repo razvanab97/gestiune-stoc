@@ -656,6 +656,26 @@ function findProdus(id){return id?PRODUSE.find(p=>p.id===id):null;}
 // Importă: eMAG, Trendyol, Vinted). „direct" (vânzare directă, fără platformă de marketplace) rămâne
 // ultima, prin fallback-ul ??9 de la locul de folosire — nu apare deloc în selectorul din admin.
 const PLATFORM_ORDER={emag:0,trendyol:1,vinted:2};
+// 0 Cargus · 1 Sameday și adiacente (Sameday, easybox, eMAG Courier) · 2 FAN Courier și adiacente (FANbox,
+// BoxNow, ACS, DPD, ELTA — curierii Trendyol GR/BG) · 3 Vinted (orice curier, sau „vinted" scris pe curier)
+// · 4 GLS simplu · 5 alt curier · 6 fără AWB
+function staffCourierRank(platforma,courier,hasAwb){
+  const c=String(courier||'').toLowerCase();
+  if(platforma==='vinted'||c.includes('vinted'))return 3;
+  if(!hasAwb)return 6;
+  // zecimala ține curierii apropiați grupați și în interiorul grupului (Sameday, apoi easybox, apoi eMAG Courier…)
+  if(c.includes('cargus'))return 0;
+  if(c.includes('sameday'))return 1;
+  if(c.includes('easybox'))return 1.1;
+  if(c.includes('emag courier'))return 1.2;
+  if(c.includes('fan'))return 2;
+  if(c.includes('dpd'))return 2.1;
+  if(c.includes('box now')||c.includes('boxnow'))return 2.2;
+  if(c.includes('acs'))return 2.3;
+  if(c.includes('elta'))return 2.4;
+  if(c.includes('gls'))return 4;
+  return 5;
+}
 
 function computeOrders(){
   const groups={};
@@ -704,7 +724,12 @@ function computeOrders(){
   // în selectorul din admin, Comenzi Platforme → Importă: eMAG, Trendyol, Vinted), iar data/ora rămâne
   // criteriul secundar, ca înainte, DOAR între comenzi de pe aceeași platformă. Vânzările directe
   // (fără platformă de marketplace) rămân ultimele — nu apar în selectorul din admin.
-  ORDERS=Object.values(groups).sort((a,b)=>(PLATFORM_ORDER[a.platforma]??9)-(PLATFORM_ORDER[b.platforma]??9)||String(a.sortAt).localeCompare(String(b.sortAt))||a.key.localeCompare(b.key));
+  // Ordinea pe curieri (cerut direct, 18.11.2026): Cargus → Sameday și adiacente → FAN Courier și adiacente
+  // → Vinted (TOATE comenzile Vinted, indiferent de curier) + GLS simplu → fără AWB. În cadrul aceluiași
+  // curier rămâne ordinea de dinainte: platformă (eMAG, Trendyol, Vinted), apoi data/ora comenzii.
+  const courierOf=g=>String((g.lines.find(l=>l.awb_courier)||{}).awb_courier||'');
+  const hasAwb=g=>g.lines.some(l=>l.awb);
+  ORDERS=Object.values(groups).sort((a,b)=>staffCourierRank(a.platforma,courierOf(a),hasAwb(a))-staffCourierRank(b.platforma,courierOf(b),hasAwb(b))||(PLATFORM_ORDER[a.platforma]??9)-(PLATFORM_ORDER[b.platforma]??9)||String(a.sortAt).localeCompare(String(b.sortAt))||a.key.localeCompare(b.key));
   ORDERS.forEach(g=>{
     g.allDone=g.lines.every(l=>l.impachetat||l.staff_blocked);
     g.hasUnresolvedIssue=g.lines.some(l=>l.staff_blocked&&!l.staff_issue_resolved);

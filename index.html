@@ -5376,6 +5376,8 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:735,text:'Staff — comenzile în ordinea curierilor, cerut direct: „în Staff, AWB-urile să apară în ordinea curierilor: Cargus, Sameday și adiacente, FAN Courier și adiacente, Vinted (chiar dacă sunt de la Sameday, GLS, Cargus, FAN — toate Vinted la un loc) + GLS simplu". Ordinea cozii: 1 Cargus → 2 Sameday (apoi easybox, eMAG Courier) → 3 FAN Courier (apoi DPD, BoxNow, ACS, ELTA — curierii Trendyol Grecia/Bulgaria) → 4 Vinted, toate, indiferent de curier → 5 GLS simplu → alți curieri → comenzile fără AWB la final. În cadrul aceluiași curier rămâne ordinea de dinainte (eMAG, Trendyol, Vinted, apoi după ora comenzii). Verificat de 2 ori: Playwright pe coada reală din Staff (1.039 de comenzi, ordinea exactă pe grupuri) — zero erori JS.',date:'2026-11-18'},
+  {n:734,text:'Comenzi Platforme — mai rapid cu multe comenzi + „Aplică import" doar pentru comenzile împachetate și confirmate în Staff, cerut direct: „merge foarte greu platforma când sunt mai multe comenzi, nu putem să facem să se miște mai repede? De asemenea, importul să se facă doar la ceea ce a fost setat în Staff ca împachetat și confirmat". (1) Viteză, măsurat pe previzualizarea reală (273 de linii, ~18.500 de elemente): o redesenare scade de la ~0,9 s la ~0,5 s când se schimbă ceva și la ~0,2 s când nu se schimbă nimic (reîmprospătarea automată la 20 s nu mai reconstruiește pagina degeaba, păstrează și poziția/scroll-ul). Cauze reparate: interfața veche, ascunsă, se construia la fiecare redesenare; etichetele de dată ale termenelor se recalculau de sute de ori; asocierile de coduri (~2.000) erau parcurse integral pentru fiecare linie — acum index. (2) „Aplică import" scade stocul DOAR pentru comenzile pe care Staff le-a împachetat și confirmat (coletul finalizat); starea se recitește din bază chiar la apăsare. Comenzile incluse, dar încă neconfirmate în Staff, rămân în previzualizare pentru mai târziu — confirmarea îți spune câte așteaptă, iar bara de jos arată „X incluse · Y împachetate și confirmate în Staff". Verificat de 2 ori: Playwright (măsurători vechi/nou pe datele reale; aplicare cu 3 comenzi — doar cea confirmată în Staff se aplică, cea doar împachetată și cea neîmpachetată rămân; nimic confirmat → mesaj, nimic aplicat) + regresie — zero erori JS.',date:'2026-11-18'},
   {n:733,text:'Aplicarea automată a importului la ora 22:00 — pusă pe pauză, cerut direct: „pune-o pe pauză până când facem din nou automat; acum să rămână pe manual". Comenzile „✓ Inclus" rămase neaplicate seara NU se mai aplică singure (stoc + Jurnal) — „Aplică import" se face doar manual, din Comenzi Platforme. Mecanismul a rămas intact și se poate reporni oricând, la cerere. Verificat de 2 ori: Playwright (funcția nu mai citește/scrie nimic, nici la deschidere, nici la verificarea de 5 minute) — zero erori JS.',date:'2026-11-18'},
   {n:732,text:'Stocuri fără minus, cerut direct: „să nu mai fie stocuri negative, cu minus — pe logica pe care o avem, unde doar cele cu stoc se vând, stocurile, atunci când nu mai există, să fie 0 și să rămână la 0". Acum o vânzare peste stocul existent scade stocul doar până la 0 (vânzarea rămâne înregistrată normal în Jurnal, cu profitul ei), iar marfa intrată după aceea pornește de la 0 — ex. stoc 0, vinzi 2, primești 5 → stoc 5 (înainte: -2, apoi 3). Peste tot: Inventar, Raport stoc, Dashboard, Comenzi Platforme, Listă locală, Staff. Cele 31 de produse cu minus (ex. Set 20 umerașe catifea Negru -15, Mousepad Harta -7) apar acum cu 0 și se corectează în bază la prima modificare; SQL-ul din chat le corectează pe toate deodată și pune aceeași regulă direct în baza de date, ca nimic (nici Staff, nici importuri) să nu mai poată scrie un minus. Verificat de 2 ori: Playwright (vânzare peste stoc → 0, intrare marfă după → exact cantitatea primită, produs negativ încărcat → 0, scrierea trimisă bazei fără minus) + regresie — zero erori JS.',date:'2026-11-18'},
   {n:731,text:'Comenzi Platforme — produsul greșit care „revenea" pe comenzi eMAG, raportat direct pe #581341024 („în continuare avem o problemă și nu putem selecta produsul corect"). Cauza, găsită în date: oferta are DOUĂ coduri, asociate în Sincronizare cu produse diferite — codul nostru AB291223 → „Costum pisică/vulpe din 3 elemente, gri Ruhhy 26586", iar PNK-ul eMAG DGLFTW3BM → „Masca 4 piese Pisică Vulpe - GRI - Ruhhy" (pe care au fost puse manual 6 din ultimele 7 comenzi cu acest titlu). Sistemul îl lua mereu pe primul, în tăcere, cu „✓ Cod cunoscut", la fiecare comandă nouă. Acum: (1) conflictul e semnalat pe linie — „⚠ Coduri în conflict — verifică produsul" (la hover vezi ambele asocieri), linia nu se mai consideră sigură, iar propunerea e produsul pe care au mers cele mai multe comenzi anterioare; (2) când alegi manual alt produs decât cel asociat codurilor comenzii, ești întrebat o dată „Le asociez cu produsul ales?" — la Da, asocierea din Sincronizare se corectează, iar comenzile din previzualizare cu aceleași coduri trec și ele pe produsul corect; comenzile viitoare vin direct corect. Verificat de 2 ori: Playwright pe exact această comandă (conflict detectat, propunere „Masca 4 piese GRI", alegere + corectare asociere AB291223, fără scrieri reale) + regresie — zero erori JS.',date:'2026-11-18'},
@@ -9382,6 +9384,7 @@ function pcomPlatLabel(platforma){return platforma==='trendyol'?'Trendyol':platf
 // Surse reale, verificate direct pe date live (nu ghicite din documentație, care era incompletă/veche):
 // eMAG — `maximum_date_for_shipment` (confirmat pe o comandă reală: comandă 20.09 08:54 → termen 22.09
 // 08:55, exact SLA-ul de 48h); Trendyol — `agreedDeliveryDate` (câmp oficial documentat, Unix ms).
+const DEADLINE_LABEL_CACHE=new Map();
 function deadlineInfo(iso){
   if(!iso)return null;
   const target=new Date(iso).getTime();
@@ -9389,8 +9392,10 @@ function deadlineInfo(iso){
   const diffMs=target-Date.now(),overdue=diffMs<0,absMs=Math.abs(diffMs);
   const totalH=Math.floor(absMs/3600000),d=Math.floor(totalH/24),h=totalH%24,m=Math.floor((absMs%3600000)/60000);
   const text=d>0?`${d}z ${h}h`:(totalH>0?`${totalH}h ${m}m`:`${m}m`);
-  const dt=new Date(iso);
-  const dateLabel=dt.toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit'})+' '+dt.toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'});
+  // toLocale*String e lent (Intl la fiecare apel) — pe sute de comenzi la fiecare randare conta ~0,4s; eticheta
+  // depinde doar de dată, deci o memorăm.
+  let dateLabel=DEADLINE_LABEL_CACHE.get(iso);
+  if(dateLabel===undefined){const dt=new Date(iso);dateLabel=dt.toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit'})+' '+dt.toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'});if(DEADLINE_LABEL_CACHE.size>5000)DEADLINE_LABEL_CACHE.clear();DEADLINE_LABEL_CACHE.set(iso,dateLabel);}
   const level=overdue?'overdue':totalH<6?'urgent':totalH<24?'soon':'ok';
   return{overdue,text,dateLabel,level};
 }
@@ -10042,7 +10047,7 @@ async function liveRefreshProducts(){
       try{const o=await dbGet('comenzi_stoc?select=*&order=created_at.desc');if(Array.isArray(o))OI=mergeStockOrders(o.map(dbToStockOrder),loadLocalStockOrders());}catch(e){}
       renderDashboard();
     }
-    else if(activeId==='pcom'&&!pcomApplyInFlight){await loadWorkedOrdersFromDb();renderPcomImportPreview();}
+    else if(activeId==='pcom'&&!pcomApplyInFlight){await loadWorkedOrdersFromDb();await pcomRefreshStaffPackedState(pcImpParsed.filter(x=>x.include&&x._committedId));renderPcomImportPreview();}
     else if(activeId==='raport'){buildRaportCats();renderRaport();renderRptReorderList();}
     else if(activeId==='salesreport')renderSalesReport();
     else if(activeId==='sync'){if(!syncMapsLoaded)await loadSyncMappings();renderSyncPage();}
@@ -18488,13 +18493,29 @@ function findProductByPnk(platforma,pnk,tara=''){
 }
 // Găsește maparea SYNCM deja confirmată pentru un titlu/PNK — folosit la captarea stocului extern
 // pentru rânduri DEJA mapate dintr-un import (spre deosebire de findProductByPnk, care caută produsul).
+// Index pe SYNCM (viteză, cerut direct: „merge foarte greu platforma când sunt mai multe comenzi"): funcția
+// e apelată pentru fiecare linie la fiecare randare și parcurgea toate ~2.000 de asocieri (cu toLowerCase pe
+// fiecare). Rezultatul e IDENTIC cu căutarea liniară de dinainte (prima potrivire în ordinea SYNCM); indexul
+// se reconstruiește când SYNCM se schimbă (alt array/altă lungime) și oricum cel puțin o dată la 2 secunde.
+let SYNCM_IDX=null;
+function syncMapIndex(){
+  const now=Date.now();
+  if(SYNCM_IDX&&SYNCM_IDX.ref===SYNCM&&SYNCM_IDX.len===SYNCM.length&&now-SYNCM_IDX.at<2000)return SYNCM_IDX;
+  const byPnk=new Map(),byTitle=new Map(),add=(map,k,s)=>{if(!map.has(k))map.set(k,s);};
+  SYNCM.forEach(s=>{
+    const t=String(s.titluExtern||'').toLowerCase().trim(),tr=s.tara||'';
+    if(s.idExtern){add(byPnk,s.platforma+'|*|'+s.idExtern,s);add(byPnk,s.platforma+'|'+tr+'|'+s.idExtern,s);}
+    add(byTitle,s.platforma+'|*|'+t,s);add(byTitle,s.platforma+'|'+tr+'|'+t,s);
+  });
+  SYNCM_IDX={ref:SYNCM,len:SYNCM.length,at:now,byPnk,byTitle};
+  return SYNCM_IDX;
+}
 function findSyncMapEntry(platforma,titlu,pnk,tara=''){
-  const sameMarket=s=>s.platforma===platforma&&(!tara||s.tara===tara);
-  const legacyMarket=s=>s.platforma===platforma&&!s.tara;
-  if(pnk){const m=SYNCM.find(s=>sameMarket(s)&&s.idExtern===pnk)||(tara&&SYNCM.find(s=>legacyMarket(s)&&s.idExtern===pnk));if(m)return m;}
+  const ix=syncMapIndex();
+  // sameMarket = aceeași țară (sau orice țară când tara lipsește); legacyMarket = rânduri fără țară
+  if(pnk){const m=ix.byPnk.get(platforma+'|'+(tara||'*')+'|'+pnk)||(tara&&ix.byPnk.get(platforma+'||'+pnk));if(m)return m;}
   const t=(titlu||'').toLowerCase().trim();
-  return SYNCM.find(s=>sameMarket(s)&&s.titluExtern.toLowerCase().trim()===t)
-    ||(tara&&SYNCM.find(s=>legacyMarket(s)&&s.titluExtern.toLowerCase().trim()===t))||null;
+  return ix.byTitle.get(platforma+'|'+(tara||'*')+'|'+t)||(tara&&ix.byTitle.get(platforma+'||'+t))||null;
 }
 // findSyncMapEntry (ca și .find() în general) întoarce mereu doar PRIMA potrivire — dacă PNK-ul e deja
 // dublat în platforma_mapari (ex. adăugat cronologic de două ori, o dată după titlu, o dată după PNK),
@@ -23207,7 +23228,9 @@ function renderPcomImportPreview(){
   const platformsPresent=new Set(pcImpParsed.map(x=>x.platforma).filter(Boolean));
   const multiPlatform=platformsPresent.size>1;
   let lastPlat=null;
-  const groupsHtml=pcomGroups.map((idxs,gIdx)=>{
+  // Interfața veche (#pcom-import-legacy) e ascunsă când USE_PCOM_REDESIGN — nu o mai construim degeaba
+  // (era jumătate din timpul fiecărei randări, pe sute de comenzi).
+  const groupsHtml=USE_PCOM_REDESIGN?'':pcomGroups.map((idxs,gIdx)=>{
     let divider='';
     const plat=pcImpParsed[idxs[0]].platforma;
     // Vinted arată mereu propria linie despărțitoare, chiar și fără alt import XLSX în paralel (single
@@ -24524,7 +24547,10 @@ function pcxRenderOrders(){
     });
     return hd+sortedList.map(idxs=>pcxOrderCardHtml(idxs,pcomGroups.indexOf(idxs))).join('');
   }).join('');
-  host.innerHTML=filtered.length?html:pcxSearchFallbackHtml(q);
+  // Viteză: reîmprospătările periodice (la 20s / 5 min) redesenau sute de carduri identice (~18.000 de
+  // elemente) — dacă nimic nu s-a schimbat, nu mai atingem DOM-ul deloc (păstrează și scroll-ul/focusul).
+  const nextHtml=filtered.length?html:pcxSearchFallbackHtml(q);
+  if(host._pcxHtml!==nextHtml||!host.firstChild){host.innerHTML=nextHtml;host._pcxHtml=nextHtml;}
   // Numărători — informative, pe TOATE liniile (nu doar cele filtrate), ca la legacy (updPcomImportInfo)
   const total=pcImpParsed.length;
   const byPlat={};pcImpParsed.forEach(x=>{const pl=x.platforma||pcImpPlatforma;byPlat[pl]=(byPlat[pl]||0)+1;});
@@ -24548,7 +24574,8 @@ function pcxRenderOrders(){
     const amanate=pcImpParsed.filter(x=>x.include&&x.produsId&&x.amanat).length;
     const newProd=pcImpParsed.filter(x=>x.include&&x.newProduct).length;
     bar.style.display=pcImpParsed.length?'flex':'none';
-    document.getElementById('pcx-stickybar-info').textContent=`${n} linii selectate pentru import${amanate?` · ${amanate} amânate`:''}${newProd?` · ${newProd} produse noi de adăugat`:''}`;
+    const readyStaff=pcImpParsed.filter(x=>x.include&&x.produsId&&!x.amanat&&pcomStaffPackedConfirmed(x)).length;
+    document.getElementById('pcx-stickybar-info').textContent=`${n} linii incluse · ${readyStaff} împachetate și confirmate în Staff (doar acestea se aplică)${amanate?` · ${amanate} amânate`:''}${newProd?` · ${newProd} produse noi de adăugat`:''}`;
     const aiBtn=document.getElementById('pcx-ai-btn');
     if(aiBtn)aiBtn.style.display=unmatched?'':'none';
     const applyBtn=document.getElementById('pcx-apply-btn');
@@ -25069,6 +25096,23 @@ Răspunde STRICT cu JSON, fără markdown: {"matches":[{"index":<indexul liniei>
     btn.disabled=false;btn.textContent='🤖 Potrivește restul cu AI';
   }
 }
+// O linie e gata de „Aplică import" doar dacă rândul ei din bază e împachetat ȘI confirmat în Staff
+// (finalizeOrder din staff.html scrie impachetat + staff_finalizat_at la confirmarea coletului).
+function pcomStaffPackedConfirmed(x){
+  if(!x||!x._committedId)return false;
+  const row=PCOM.find(o=>o.id===x._committedId);
+  return!!(row&&row.impachetat&&row.staffFinalizatAt);
+}
+async function pcomRefreshStaffPackedState(lines){
+  const ids=[...new Set((lines||[]).map(x=>x._committedId).filter(Boolean))];
+  for(let i=0;i<ids.length;i+=150){
+    const chunk=ids.slice(i,i+150);
+    try{
+      const rows=await dbGet(`platforma_comenzi?id=in.(${chunk.join(',')})&select=id,impachetat,impachetat_at,staff_finalizat_at,anulata`);
+      (rows||[]).forEach(r=>{const o=PCOM.find(x=>x.id===r.id);if(o){o.impachetat=!!r.impachetat;o.impachetatAt=r.impachetat_at||'';o.staffFinalizatAt=r.staff_finalizat_at||'';o.anulata=!!r.anulata;}});
+    }catch(e){console.warn('Nu am putut reciti starea din Staff:',e);}
+  }
+}
 async function applyPcomImport(){
   if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
   // liniile "produs nou" nu se aplică automat — omul le adaugă manual în Inventar (buton dedicat pe
@@ -25079,7 +25123,7 @@ async function applyPcomImport(){
   // previzualizare locală salvată ÎNAINTE de acel fix (localStorage, PCIK) ar fi putut tot scădea
   // stocul real pentru o comandă pe care omul a anulat-o explicit, contrazicând mesajul „Nu atinge
   // stocul" din dialogul de anulare.
-  const toApply=pcImpParsed.filter(x=>x.include&&x.produsId&&!x.amanat&&!(x._committedId&&PCOM.find(o=>o.id===x._committedId)?.anulata));
+  let toApply=pcImpParsed.filter(x=>x.include&&x.produsId&&!x.amanat&&!(x._committedId&&PCOM.find(o=>o.id===x._committedId)?.anulata));
   const amanateCount=pcImpParsed.filter(x=>x.include&&x.produsId&&x.amanat).length;
   const newProductCount=pcImpParsed.filter(x=>x.include&&x.newProduct).length;
   // Linii fără NICIO potrivire (nici produs ales, nici marcate „produs nou") — până acum dispăreau
@@ -25093,7 +25137,15 @@ async function applyPcomImport(){
   // locală veche, din înainte de acel fix), omul trebuie să vadă CĂ s-a ignorat ceva, nu să creadă că
   // butonul n-a făcut nimic.
   const cancelledSkippedCount=pcImpParsed.filter(x=>x.include&&x.produsId&&!x.amanat&&x._committedId&&PCOM.find(o=>o.id===x._committedId)?.anulata).length;
+  // DOAR comenzile împachetate și confirmate în Staff (cerut direct, 18.11.2026: „importul să se facă doar la
+  // ceea ce a fost setat în Staff ca împachetat și confirmat") — starea se recitește din bază chiar acum
+  // (tableta Staff o schimbă independent); restul rămân în previzualizare, neatinse, pentru mai târziu.
+  await pcomRefreshStaffPackedState(toApply);
+  const waitingStaff=toApply.filter(x=>!pcomStaffPackedConfirmed(x));
+  toApply=toApply.filter(pcomStaffPackedConfirmed);
+  const waitingStaffCount=waitingStaff.length;
   if(!toApply.length){
+    if(waitingStaffCount){toast(`Nimic de aplicat încă — ${waitingStaffCount} ${waitingStaffCount===1?'comandă inclusă așteaptă':'comenzi incluse așteaptă'} să fie împachetate și confirmate în Staff`,'warn');return;}
     if(amanateCount||newProductCount||unmatchedCount||cancelledSkippedCount)toast(`Nimic de aplicat acum${amanateCount?` · ${amanateCount} amânate`:''}${newProductCount?` · ${newProductCount} produse noi de adăugat mai întâi`:''}${unmatchedCount?` · ${unmatchedCount} linii fără produs — alege manual mai jos`:''}${cancelledSkippedCount?` · ⚠ ${cancelledSkippedCount} ignorate — anulate anterior`:''}`);
     return;
   }
@@ -25113,7 +25165,7 @@ async function applyPcomImport(){
   const MAXSHOW=15;
   const prodListTxt=prodLines.slice(0,MAXSHOW).map(x=>`• ${x.name} — ${fmtQty(x.qty)} buc. (${x.orders} ${x.orders===1?'comandă':'comenzi'})`).join('\n')
     +(prodLines.length>MAXSHOW?`\n… și încă ${prodLines.length-MAXSHOW} produse`:'');
-  if(!confirm(`Aplici stocul pentru ${toApply.length} ${toApply.length===1?'comandă':'comenzi'} · ${prodLines.length} produse · ${fmtQty(totalQty)} buc. total:\n\n${prodListTxt}\n\nContinui?`))return;
+  if(!confirm(`Aplici stocul pentru ${toApply.length} ${toApply.length===1?'comandă împachetată și confirmată':'comenzi împachetate și confirmate'} în Staff · ${prodLines.length} produse · ${fmtQty(totalQty)} buc. total:\n\n${prodListTxt}${waitingStaffCount?`\n\n⏳ ${waitingStaffCount} ${waitingStaffCount===1?'comandă inclusă nu e încă împachetată/confirmată':'comenzi incluse nu sunt încă împachetate/confirmate'} în Staff — rămân pentru mai târziu.`:''}\n\nContinui?`))return;
   const applyDay=td();
   // Bug real raportat direct („apăs pe Aplică import și nu merge"): butonul VIZIBIL în redesign
   // (#pcx-apply-btn, activ implicit — USE_PCOM_REDESIGN=true) nu primea NICIUN feedback la click —
