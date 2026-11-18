@@ -2964,7 +2964,7 @@ body .tt-widget .tt-panel{left:calc(100% + 14px);bottom:-84px;width:min(400px,ca
    doar cardurile din zona vizibilă — restul (sute, ~18.500 de elemente) sunt sărite până ajungi la ele cu scroll. */
 .pcx-orders-list>.pcx-order{content-visibility:auto;contain-intrinsic-size:auto 420px}
 .pcx-orders-list>.pcx-order:not(.open){contain-intrinsic-size:auto 150px}
-.pcx-order{border:2px solid var(--b3);border-radius:var(--r2);overflow:hidden;backdrop-filter:blur(16px) saturate(140%);-webkit-backdrop-filter:blur(16px) saturate(140%);box-shadow:0 6px 20px rgba(31,38,70,.07);transition:box-shadow .15s,border-color .15s}
+.pcx-order{border:2px solid var(--b3);border-radius:var(--r2);overflow:hidden;/* fără backdrop-filter: pe ~110 carduri îngreuna mult derularea, iar fundalul cardului e deja aproape opac */box-shadow:0 6px 20px rgba(31,38,70,.07);transition:box-shadow .15s,border-color .15s}
 .pcx-order:hover{box-shadow:0 10px 30px rgba(31,38,70,.11);border-color:var(--acc)}
 .pcx-order.pcx-order-included{border-color:rgba(18,183,106,.55)}
 .pcx-order-emag{background:radial-gradient(260px 140px at 100% 0%,rgba(118,87,246,.13),transparent 70%),linear-gradient(135deg,rgba(255,255,255,.85),rgba(248,250,255,.65))}
@@ -5386,6 +5386,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:741,text:'Comenzi Platforme — acțiunile de pe carduri de 2–3 ori mai rapide, raportat direct: „tot merge extrem de greu, de ce?". Măsurat pe previzualizarea reală de azi (116 linii, 58 de comenzi deschise): click pe „Inclus" 0,24–0,37 s (era 0,58–0,7 s), deschis/închis comandă 0,11 s (era 0,16 s), cantitate ±1 sub 0,08 s (era 0,12–0,21 s). Cauze găsite cu profilerul și reparate: (1) rândul din bază al fiecărei comenzi era căutat parcurgând toate cele ~1.000 de rânduri, de zeci de ori la fiecare desenare — acum index instant (rezultat identic, verificat inclusiv după ștergeri/adăugări de rânduri); (2) sortarea „Cu stoc sus" recalcula stocul/termenul/AWB-ul la fiecare comparație — acum o dată pe comandă; (3) formatarea numerelor (de mii de ori pe desenare) e memorată; (4) poziția pe ecran se află direct, fără a parcurge toate cardurile; (5) efectul de „sticlă estompată" de pe fiecare card (cel mai scump efect la derulare, pe ~110 carduri) a fost scos — vizual identic, fundalul cardurilor era deja aproape opac. Verificat de 2 ori: Playwright (timpi înainte/după pe datele reale, echivalența căutării rândurilor, capturi înainte/după) + regresie Comenzi Platforme/AWB/stoc — zero erori JS.',date:'2026-11-19'},
   {n:740,text:'AWB Cargus — comanda se găsește din nou fără căutare separată în eMAG, raportat direct pe #582414896 (etichetă „64 - 582414896_Cargus_1213470361.pdf", destinatar „Ancuta Vasile", comanda pe numele cumpărătorului „Darius Nicolae"): „am cerut ca comenzile de pe Cargus să apară atunci când le căutăm aici, fără a le mai căuta separat în eMAG". Trei cauze, toate reparate: (1) numărul comenzii din numele fișierului nu era citit dacă fișierul avea o numerotare în față („64 - …", pusă la descărcare/îmbinare) — acum e citit și eticheta se asociază automat, chiar dacă destinatarul diferă de cumpărător; (2) căutarea din „Asociază manual" căuta în bază după PRIMUL cuvânt („eMAG"), nu după număr — acum după numărul comenzii/AWB-ului (sau cel mai lung cuvânt); (3) căutarea directă pe eMAG pornea doar dacă scriai numai cifre — acum și cu text în jur („eMAG 582414896", „comanda 582414896"). Verificat de 2 ori: Playwright pe exact acest caz (asociere automată din nume cu prefix, căutare manuală găsește comanda în bază, număr inexistent local → căutat pe eMAG) + regresie AWB — zero erori JS.',date:'2026-11-19'},
   {n:739,text:'Trafic Supabase redus drastic — alertă reală primită pe e-mail („Egress 11,81 GB din 5,5 GB, proiectele se opresc pe 21.11 dacă nu se ia măsuri"). Cauza principală era deja reparată în #737 (istoricul de stoc de 9 MB descărcat la fiecare 20 s pe Dashboard, ~1,6 GB/oră/tab) și SQL-ul de curățare a fost rulat (istoricul are acum 0,38 MB). Acum, în plus: lista completă de produse (~73 KB) nu se mai descarcă la fiecare 20 s în fiecare tab deschis — se verifică doar „s-a schimbat ceva?" (~0,2 KB), iar lista se descarcă doar la o schimbare reală și oricum o dată la 2 minute; cronometrul „Timp azi" se reîmprospătează la 60 s (era 20 s). Măsurat cu aplicația deschisă, fără activitate: de la 56 MB la 0,125 MB pe 2 minute (~450× mai puțin; ~3,7 MB/oră/tab). Modificările de stoc de pe alt dispozitiv (ex. vânzări din Staff/tabletă) apar în maximum 20 s DUPĂ rularea SQL-ului din chat (o regulă în baza de date care actualizează automat data modificării produsului — verificat pe date reale: vânzările nu o actualizau); până atunci, în maximum 2 minute. Verificat de 2 ori: Playwright (verificare mică fără schimbări, descărcare la schimbare, plasa de siguranță la 2 minute, audit de trafic) + regresie — zero erori JS.',date:'2026-11-18'},
   {n:738,text:'Comenzi Platforme — lista stă pe loc și nu mai „tresare", raportat direct: „de ce atunci când apăs pe o comandă de pe Trendyol mă duce mai sus pe alte comenzi de la eMAG? Să rămână static acolo unde suntem" și „să nu mai tresară imaginea, ca și cum se încarcă, ca o pagină veche". Cauza: la orice click (deschis/închis comandă, inclus, produs ales) se reconstruia TOATĂ lista de comenzi — sute de carduri recreate de la zero, poze reîncărcate, iar cardurile din afara ecranului primeau o înălțime estimată, deci pagina sărea cu sute de pixeli. Acum se actualizează DOAR cardurile care s-au schimbat (de obicei unul singur); restul rămân exact aceleași, cu pozele deja încărcate, iar poziția pe ecran rămâne fixă. Verificat de 2 ori: Playwright pe previzualizarea reală (273 de comenzi) — click pe comenzi Trendyol/eMAG din mijlocul listei: cardul rămâne exact în același loc (înainte: salturi de până la 1.350 px), celelalte carduri nu sunt recreate; regresie Comenzi Platforme — zero erori JS.',date:'2026-11-18'},
@@ -9811,9 +9812,12 @@ function parseQtyVal(v,def=0){
   const n=Number(s);
   return Number.isFinite(n)?Math.round(n*100)/100:def;
 }
+const FMTQTY_CACHE=new Map();
 function fmtQty(n){
   n=Math.round((Number(n)||0)*100)/100;
-  return n.toLocaleString('ro-RO',{maximumFractionDigits:2});
+  // toLocaleString e lent (Intl la fiecare apel) și se cheamă de mii de ori la o randare — memorăm rezultatul
+  let r=FMTQTY_CACHE.get(n);if(r!==undefined)return r;
+  r=n.toLocaleString('ro-RO',{maximumFractionDigits:2});if(FMTQTY_CACHE.size>5000)FMTQTY_CACHE.clear();FMTQTY_CACHE.set(n,r);return r;
 }
 // Stoc niciodată negativ (cerut direct: „să nu mai fie stocuri negative, cu minus — pe logica noastră, unde
 // doar cele cu stoc se vând, stocurile, când nu mai există, să fie 0 și să rămână la 0"). O vânzare peste
@@ -20020,7 +20024,7 @@ function pcomPruneAppliedGhosts(){
   const before=pcImpParsed.length;
   pcImpParsed=pcImpParsed.filter(it=>{
     if(!it._committedId)return true;
-    const row=PCOM.find(o=>o.id===it._committedId);
+    const row=pcomRowById(it._committedId);
     return!(row&&row.efecteAplicate);
   });
   return before-pcImpParsed.length;
@@ -20058,7 +20062,7 @@ async function autoApplyStalePendingImports(){
         // peste, stocul NU se mai atinge a doua oară.
         const marked=await dbPatch(`platforma_comenzi?id=eq.${row.id}&efecte_aplicate=eq.false`,{efecte_aplicate:true});
         if(!marked?.length)continue;
-        const ex=PCOM.find(o=>o.id===row.id);if(ex)ex.efecteAplicate=true;
+        const ex=pcomRowById(row.id);if(ex)ex.efecteAplicate=true;
         // Aceeași secvență ca la Aplică import manual (applyPcomImport) — stoc, Jurnal, Vânzări azi,
         // mișcare de stoc — doar declanșată singură, nu de un click.
         p.sold=(p.sold||0)+it.cantitate;
@@ -20963,7 +20967,7 @@ function pcomPickBtnHtml(idx){
 // singur) rămâne, pentru orice alt apelant care nu are deja rândul la îndemână.
 function pcomAwbPickBtnHtml(idx,committedRow){
   const it=pcImpParsed[idx];if(!it)return'';
-  const row=committedRow!==undefined?committedRow:(it._committedId?PCOM.find(o=>o.id===it._committedId):null);
+  const row=committedRow!==undefined?committedRow:(it._committedId?pcomRowById(it._committedId):null);
   if(!row||row.anulata)return'';
   // Citește din cache (pcomRecomputeAwbIssueCounts, calculat o dată per randare — vezi pcxRenderOrders),
   // nu recalculează per linie — vezi comentariul de la cache, mai sus, pentru bug-ul real de performanță.
@@ -21005,7 +21009,7 @@ function pcomPendingQtyForProduct(produsId){
   let sum=0;
   pcImpParsed.forEach(it=>{
     if(it.produsId!==produsId)return;
-    const row=it._committedId?PCOM.find(o=>o.id===it._committedId):null;
+    const row=it._committedId?pcomRowById(it._committedId):null;
     // Exclude DOUĂ stări, nu doar „deja aplicată": o comandă ANULATĂ (cererea a dispărut — clientul nu
     // mai vrea produsul, indiferent dacă stocul fusese deja scăzut sau nu) NU trebuie să mai contribuie
     // la „cât mai trebuie comandat", la fel ca una deja scăzută REAL din stoc (deja reflectată în qty(p)).
@@ -21039,7 +21043,7 @@ function pcomRecomputeSeqStock(){
   const byProduct={};
   pcImpParsed.forEach((it,idx)=>{
     if(!it.produsId)return;
-    const row=it._committedId?PCOM.find(o=>o.id===it._committedId):null;
+    const row=it._committedId?pcomRowById(it._committedId):null;
     if(row&&(row.efecteAplicate||row.anulata))return;
     (byProduct[it.produsId]=byProduct[it.produsId]||[]).push(idx);
   });
@@ -21070,7 +21074,7 @@ function dismissRecentApplies(){pcomRecentApplies={};renderRecentAppliesCard();}
 // deja folosit la fel de deletePcomBatch) și „Vânzări azi" — apoi readuce comanda în previzualizare,
 // neaplicată, gata de corectat (ex. produs greșit potrivit) și reaplicat, sau anulată normal.
 async function revertAppliedPcomLine(id){
-  const row=PCOM.find(o=>o.id===id);
+  const row=pcomRowById(id);
   const rec=pcomRecentApplies[id];
   if(!row||!rec)return;
   if(!confirm(`Anulezi aplicarea pentru „${row.produsNume||row.titluExtern||'acest produs'}" (${fmtQty(rec.cantitate)} buc.)? Stocul, Jurnalul și „Vânzări azi" revin la valoarea de ÎNAINTE de „Aplică import" — comanda rămâne, neaplicată, ca să poți corecta produsul/cantitatea și reaplica, sau anula normal.`))return;
@@ -21110,7 +21114,7 @@ function pcomStockWarningHtml(idx){
   const cur=qty(p);
   // Linie al cărei stoc a fost DEJA scăzut — stocul actual include deja vânzarea, deci nu mai afișăm o
   // proiecție „după vânzare" (ar scădea cantitatea a doua oară pe ecran) și nici „Amână livrarea".
-  const appliedRow=it._committedId?PCOM.find(o=>o.id===it._committedId):null;
+  const appliedRow=it._committedId?pcomRowById(it._committedId):null;
   if(appliedRow&&appliedRow.efecteAplicate&&!appliedRow.anulata)return`<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:5px"><span style="font-size:21px;color:var(--t3);font-variant-numeric:tabular-nums">Stoc actual ${fmtQty(cur)} · deja scăzut pentru această comandă — poți modifica cantitatea sau produsul</span></div>`;
   const seq=pcomSeqStockCache[idx];
   const before=seq?seq.before:cur;
@@ -21431,7 +21435,7 @@ function pcomOpenAddProductForLine(idx){
 async function pcomPersistQtyIfCommitted(idx){
   const it=pcImpParsed[idx];
   if(!it._committedId)return;
-  const row=PCOM.find(o=>o.id===it._committedId);
+  const row=pcomRowById(it._committedId);
   if(!row)return;
   const delta=Math.round(((Number(it.cantitate)||0)-(Number(row.cantitate)||0))*100)/100;
   const revert=()=>{it.cantitate=row.cantitate;renderPcomImportPreview();};
@@ -21506,7 +21510,7 @@ async function pcomAdjustAppliedStock(row,p,delta){
 // produsul vechi și se scade din cel nou (stoc + Jurnal), apoi comanda trece pe produsul nou.
 async function pcomReassignCommittedProduct(idx,oldProdId){
   const it=pcImpParsed[idx];if(!it||!it._committedId)return;
-  const row=PCOM.find(o=>o.id===it._committedId);if(!row)return;
+  const row=pcomRowById(it._committedId);if(!row)return;
   const newP=P.find(x=>x.id===it.produsId),oldP=P.find(x=>x.id===(row.produsId||oldProdId));
   const revert=()=>{it.produsId=row.produsId||oldProdId||null;renderPcomImportPreview();};
   if(!newP||newP.id===row.produsId)return;
@@ -21883,7 +21887,7 @@ function pcomRowHtml(idx,showOwnAwb){
   // AWB-ul de expediere (numărul primit de la curier, asociat cu „📮 Asociază AWB-uri") — arătat direct
   // aici, ca să nu fie nevoie să verifici separat în Staff dacă asocierea chiar a scris ceva (cerut
   // direct, după o comandă unde asocierea părea că nu ajunge până la Staff).
-  const committedPcomRow=it._committedId?PCOM.find(o=>o.id===it._committedId):null;
+  const committedPcomRow=it._committedId?pcomRowById(it._committedId):null;
   const committedAwb=committedPcomRow?.awb||'';
   // Comenzi expediate în mai multe colete (cerut direct: „unele comenzi au 2/3 awb uri") — fiecare AWB
   // suplimentar adăugat manual (vezi pcomAddExtraAwbIfNeeded) apare aici, lângă cel principal.
@@ -22008,7 +22012,7 @@ async function commitPcomLine(idx,sendToStaff=true){
         // real, raportat direct), iar Staff nu poate arăta numele curierului pe card.
         const src=it.awbSourceFile?{awb_source_file:it.awbSourceFile,awb_source_page:it.awbSourcePage||null}:{};
         await patchAwbWithSource(`id=eq.${it._committedId}`,{awb:it.awb,...src,awb_courier:it.awbCourier||null});
-        const created=PCOM.find(o=>o.id===it._committedId);
+        const created=pcomRowById(it._committedId);
         if(created)Object.assign(created,{awb:it.awb,awbCourier:it.awbCourier||'',...(it.awbSourceFile?{awbSourceFile:it.awbSourceFile,awbSourcePage:it.awbSourcePage||null}:{})});
       }catch(e){console.warn('Nu am putut salva codul/AWB la creare:',e);}
     }
@@ -22053,7 +22057,7 @@ async function uncommitPcomLine(idx){
   const id=it._committedId;
   it._committing=true;renderPcomImportPreview();
   try{
-    const live=PCOM.find(o=>o.id===id);
+    const live=pcomRowById(id);
     if(live?.awb){
       it.awb=live.awb;
       it.awbSourceFile=live.awbSourceFile||it.awbSourceFile||'';
@@ -22144,7 +22148,7 @@ async function includeAllPcomPlatform(plat){
 // o nouă bifare. Linii care eșuează la ștergere rămân incluse (uncommitPcomLine le re-bifează).
 let pcomExcluding=false;
 function pcomExcludeProtection(it){
-  const row=it._committedId?PCOM.find(o=>o.id===it._committedId):null;
+  const row=it._committedId?pcomRowById(it._committedId):null;
   if(!row)return'';
   if(row.efecteAplicate)return'stoc scăzut';
   if(row.impachetat)return'împachetată';
@@ -23524,16 +23528,17 @@ function pcxScrollParent(el){
 }
 function pcxFindScrollAnchor(host){
   if(!host.firstChild||!host.offsetParent)return null;
-  let el=pcxScrollAnchorKey?[...host.querySelectorAll(':scope>.pcx-order[data-key]')].find(x=>x.dataset.key===pcxScrollAnchorKey):null;
+  let el=pcxScrollAnchorKey?host.querySelector(`:scope>.pcx-order[data-key="${CSS.escape(pcxScrollAnchorKey)}"]`):null;
   if(!el){
-    const vh=window.innerHeight;
-    el=[...host.querySelectorAll(':scope>.pcx-order[data-key]')].find(x=>{const r=x.getBoundingClientRect();return r.bottom>60&&r.top<vh;});
+    const hr=host.getBoundingClientRect(),y=Math.max(80,Math.min(window.innerHeight*0.4,hr.bottom-1)),x=hr.left+Math.min(40,hr.width/2);
+    const hit=hr.bottom>0&&hr.top<window.innerHeight?document.elementFromPoint(x,y):null;
+    el=hit&&hit.closest?hit.closest('#pcx-orders-list>.pcx-order[data-key]'):null;
   }
   return el?{key:el.dataset.key,top:el.getBoundingClientRect().top}:null;
 }
 function pcxRestoreScrollAnchor(host,a){
   if(!a)return;
-  const el=[...host.querySelectorAll(':scope>.pcx-order[data-key]')].find(x=>x.dataset.key===a.key);if(!el)return;
+  const el=host.querySelector(`:scope>.pcx-order[data-key="${CSS.escape(a.key)}"]`);if(!el)return;
   const d=el.getBoundingClientRect().top-a.top;if(Math.abs(d)<1)return;
   const sp=pcxScrollParent(host);
   if(sp)sp.scrollTop+=d;else window.scrollBy(0,d);
@@ -23793,7 +23798,7 @@ function pcxLineHtml(idx,groupIdxs){
     :'';
   const financialHtml=it.newProduct?'':(isVintedPriceConsolidated?(isVintedGroupFirst?pcxGroupFinancialsHtml(vintedGroupIdxs):''):pcxFinancialsHtml(idx));
   const stockHtml=it.newProduct?'':pcomStockWarningHtml(idx);
-  const committedRow=it._committedId?PCOM.find(o=>o.id===it._committedId):null;
+  const committedRow=it._committedId?pcomRowById(it._committedId):null;
   const committedAwb=committedRow?.awb||'';
   // Comenzi expediate în mai multe colete (cerut direct: „unele comenzi au 2/3 awb uri") — fiecare AWB
   // suplimentar adăugat manual (vezi pcomAddExtraAwbIfNeeded) apare aici, lângă cel principal.
@@ -23921,7 +23926,7 @@ function pcxOrderCardHtml(idxs,gIdx){
   const awbForHeader=pcxGroupAwb(idxs);
   // Comenzi expediate în mai multe colete (cerut direct: „unele comenzi au 2/3 awb uri") — citit mereu
   // din rândul PCOM (nu din linia locală, chiar și la Vinted mai sus) — awbExtra există STRICT acolo.
-  const awbExtraForHeader=PCOM.find(o=>o.id===it0._committedId)?.awbExtra||[];
+  const awbExtraForHeader=pcomRowById(it0._committedId)?.awbExtra||[];
   const platLabel=pcomPlatLabel(platform);
   const platCls=platform==='trendyol'?'trendyol':platform==='vinted'?'vinted':'emag';
   const stockReady=pcxOrderStockReady(idxs);
@@ -24056,7 +24061,7 @@ function pcxStockShortageList(){
   const sums=new Map();
   pcImpParsed.forEach(it=>{
     if(!it.produsId||it.newProduct||it._cancelledId)return;
-    const committedRow=it._committedId?PCOM.find(o=>o.id===it._committedId):null;
+    const committedRow=it._committedId?pcomRowById(it._committedId):null;
     if(committedRow&&(committedRow.anulata||committedRow.efecteAplicate))return;
     const cur=sums.get(it.produsId)||{cantitate:0,linii:0};
     cur.cantitate+=Number(it.cantitate)||0;
@@ -24624,9 +24629,24 @@ function renderPcomStockShortage(){
 function pcxGroupAwb(idxs){
   const it0=pcImpParsed[idxs[0]];
   if(!it0)return'';
-  return it0.platforma==='vinted'?(it0.awb||''):(PCOM.find(o=>o.id===it0._committedId)?.awb||'');
+  return it0.platforma==='vinted'?(it0.awb||''):(pcomRowById(it0._committedId)?.awb||'');
 }
 function pcxGroupHasAwb(idxs){return!!pcxGroupAwb(idxs);}
+// Rândul din PCOM după id — index rapid (PCOM are ~1.000 de rânduri și era parcurs integral de zeci de ori
+// la fiecare randare). Rezultat identic cu PCOM.find(o=>o.id===id): indexul se reconstruiește când PCOM e
+// alt array, își schimbă lungimea sau o poziție din index nu mai conține același rând.
+let PCOM_IDX=null;
+function pcomRowById(id){
+  if(id==null)return undefined;
+  if(!PCOM_IDX||PCOM_IDX.ref!==PCOM||PCOM_IDX.len!==PCOM.length){
+    const m=new Map();PCOM.forEach((o,i)=>{if(o&&!m.has(o.id))m.set(o.id,i);});PCOM_IDX={ref:PCOM,len:PCOM.length,m};
+  }
+  const i=PCOM_IDX.m.get(id);
+  if(i!==undefined&&PCOM[i]&&PCOM[i].id===id)return PCOM[i];
+  if(i===undefined){const r=PCOM.find(o=>o.id===id);if(r)PCOM_IDX=null;return r;}   // ex. scos un rând + adăugat altul (aceeași lungime)
+  // poziție schimbată (rând înlocuit/mutat pe loc) → căutare completă + reconstrucție la următorul apel
+  PCOM_IDX=null;return PCOM.find(o=>o.id===id);
+}
 // Cel mai apropiat termen de expediere din grup, ca timestamp comparabil (fără termen → la coadă).
 function pcxGroupDeadline(idxs){
   let best=Infinity;
@@ -24684,14 +24704,15 @@ function pcxRenderOrders(){
     // deci ordinea relativă din pcomGroups rămâne neatinsă în cadrul fiecărei grupe de egalitate.
     // Cerut direct: cu „Cu stoc sus" activ, în fiecare grupă (cu/fără stoc) cele mai urgente (termen de
     // expediere cel mai apropiat) primele, apoi cele mai puțin urgente — eMAG și Trendyol deopotrivă.
-    const sortedList=[...list].sort((a,b)=>{
+    // criteriile calculate O DATĂ pe grup (înainte, la fiecare comparație din sortare — de sute de ori)
+    const keyed=list.map((idxs,pos)=>({idxs,pos,ready:pcxStockSort?(pcxOrderStockReady(idxs)?1:0):0,dl:pcxStockSort?pcxGroupDeadline(idxs):0,awb:pcxGroupHasAwb(idxs)?1:0}));
+    const sortedList=keyed.sort((a,b)=>{
       if(pcxStockSort){
-        const d=(pcxOrderStockReady(b)?1:0)-(pcxOrderStockReady(a)?1:0);if(d)return d;
-        const ta=pcxGroupDeadline(a),tb=pcxGroupDeadline(b);
-        if(ta!==tb)return ta<tb?-1:1;
+        const d=b.ready-a.ready;if(d)return d;
+        if(a.dl!==b.dl)return a.dl<b.dl?-1:1;
       }
-      return (pcxGroupHasAwb(b)?1:0)-(pcxGroupHasAwb(a)?1:0);
-    });
+      return (b.awb-a.awb)||(a.pos-b.pos);
+    }).map(x=>x.idxs);
     chunks.push({k:'hd:'+plat,h:hd});
     sortedList.forEach(idxs=>chunks.push({k:pcxGroupKey(idxs),h:pcxOrderCardHtml(idxs,pcomGroups.indexOf(idxs))}));
   });
@@ -25187,7 +25208,7 @@ function filterPcomAwbPick(){
 async function pickPcomAwbIssue(i){
   const x=pcomAwbPickVisible?.[i];const idx=pcomResolvePickLine(pcomAwbPickLine,pcomAwbPickIdx);const it=pcImpParsed[idx];
   if(!x||!it)return;
-  const row=it._committedId?PCOM.find(o=>o.id===it._committedId):null;if(!row)return;
+  const row=it._committedId?pcomRowById(it._committedId):null;if(!row)return;
   document.getElementById('pcmi-awb-pickdrop').classList.remove('on');
   // Comandă cu AWB/Cod DEJA setat, diferit de cel ales acum — cerut direct („sa pot sa selectez AWB ul
   // daca e gresit pus"): fără întrebare explicită, associateAwbErrorToOrder l-ar fi adăugat tăcut ca
@@ -25271,7 +25292,7 @@ Răspunde STRICT cu JSON, fără markdown: {"matches":[{"index":<indexul liniei>
 // (finalizeOrder din staff.html scrie impachetat + staff_finalizat_at la confirmarea coletului).
 function pcomStaffPackedConfirmed(x){
   if(!x||!x._committedId)return false;
-  const row=PCOM.find(o=>o.id===x._committedId);
+  const row=pcomRowById(x._committedId);
   return!!(row&&row.impachetat&&row.staffFinalizatAt);
 }
 async function pcomRefreshStaffPackedState(lines){
@@ -25294,7 +25315,7 @@ async function applyPcomImport(){
   // previzualizare locală salvată ÎNAINTE de acel fix (localStorage, PCIK) ar fi putut tot scădea
   // stocul real pentru o comandă pe care omul a anulat-o explicit, contrazicând mesajul „Nu atinge
   // stocul" din dialogul de anulare.
-  let toApply=pcImpParsed.filter(x=>x.include&&x.produsId&&!x.amanat&&!(x._committedId&&PCOM.find(o=>o.id===x._committedId)?.anulata));
+  let toApply=pcImpParsed.filter(x=>x.include&&x.produsId&&!x.amanat&&!(x._committedId&&pcomRowById(x._committedId)?.anulata));
   const amanateCount=pcImpParsed.filter(x=>x.include&&x.produsId&&x.amanat).length;
   const newProductCount=pcImpParsed.filter(x=>x.include&&x.newProduct).length;
   // Linii fără NICIO potrivire (nici produs ales, nici marcate „produs nou") — până acum dispăreau
@@ -25307,7 +25328,7 @@ async function applyPcomImport(){
   // anuleazaLiniePlatforma debifează automat „Inclus" la anulare; dacă apare totuși (ex. o previzualizare
   // locală veche, din înainte de acel fix), omul trebuie să vadă CĂ s-a ignorat ceva, nu să creadă că
   // butonul n-a făcut nimic.
-  const cancelledSkippedCount=pcImpParsed.filter(x=>x.include&&x.produsId&&!x.amanat&&x._committedId&&PCOM.find(o=>o.id===x._committedId)?.anulata).length;
+  const cancelledSkippedCount=pcImpParsed.filter(x=>x.include&&x.produsId&&!x.amanat&&x._committedId&&pcomRowById(x._committedId)?.anulata).length;
   // DOAR comenzile împachetate și confirmate în Staff (cerut direct, 18.11.2026: „importul să se facă doar la
   // ceea ce a fost setat în Staff ca împachetat și confirmat") — starea se recitește din bază chiar acum
   // (tableta Staff o schimbă independent); restul rămân în previzualizare, neatinse, pentru mai târziu.
@@ -25447,7 +25468,7 @@ async function applyPcomImport(){
         if(markAppliedId){
           try{
             const marked=await dbPatch(`platforma_comenzi?id=eq.${markAppliedId}&efecte_aplicate=eq.false`,{efecte_aplicate:true});
-            const ex=PCOM.find(o=>o.id===markAppliedId);if(ex)ex.efecteAplicate=true;
+            const ex=pcomRowById(markAppliedId);if(ex)ex.efecteAplicate=true;
             if(!marked?.length){
               console.warn('Linia',it.comandaId,'era deja aplicată — stocul NU a fost scăzut a doua oară.');
               ok++;succeeded.add(it);continue;
@@ -25467,7 +25488,7 @@ async function applyPcomImport(){
           // mai vechi (ex. o linie trimisă deja manual, cu mult înainte ca „Aplică import" să ruleze).
           try{
             await dbPatch(`platforma_comenzi?id=eq.${markAppliedId}&staff_trimis_at=is.null`,{staff_trimis_at:new Date().toISOString()});
-            const ex2=PCOM.find(o=>o.id===markAppliedId);if(ex2&&!ex2.staffTrimisAt)ex2.staffTrimisAt=new Date().toISOString();
+            const ex2=pcomRowById(markAppliedId);if(ex2&&!ex2.staffTrimisAt)ex2.staffTrimisAt=new Date().toISOString();
           }catch(e){console.warn('Nu am putut trimite linia spre Staff la aplicare:',e);}
         }
         // scade stocul — o vânzare reală s-a produs
