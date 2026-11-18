@@ -977,7 +977,7 @@ function lineInfoHtml(l,showCheck){
   const issueHtml=l.staff_blocked?`<div class="line-issue">⛔ ${esc(ISSUE_LABELS[l.staff_issue_type]||'Problemă raportată')}</div>`:'';
   const resolveHtml=l.staff_blocked?`<button type="button" class="line-check" ${lineBusy[lk]?'disabled':''} onclick="resolveIssue('${lk}')">✓ Problemă rezolvată</button>`:'';
   const checkHtml=showCheck?`<button type="button" class="line-check ${l.impachetat?'on':''}" ${lineBusy[lk]?'disabled':''} onclick="toggleLineCheck('${lk}')">${l.impachetat?'✓ Confirmat':'Confirmă produs'}</button>`:'';
-  const stock=p?(Number(p.bought)||0)-(Number(p.sold)||0):null;
+  const stock=p?Math.max(0,(Number(p.bought)||0)-(Number(p.sold)||0)):null;
   const stockCls=stock===null?'':stock<=0?'zero':stock<Number(l.cantitate)?'low':'';
   const stockHtml=stock===null?'':`<div class="line-stock-box"><div class="line-qty-lbl">Stoc ERP</div><div class="line-stock ${stockCls}">${stock} BUC.</div></div>`;
   return`<div class="line-info">
@@ -1762,7 +1762,7 @@ function waitingListItemHtml(o){
   // direct cu ERP-ul deja încărcat (proaspăt după „↻ Reîncarcă”), ca să nu mai fie nevoie să deschizi
   // fiecare comandă blocată, una câte una, doar ca să afli dacă mai are sens s-o reiei acum.
   const isStockIssue=blockedLine.staff_issue_type==='stoc_zero'||blockedLine.staff_issue_type==='cantitate_insuficienta';
-  const stock=p?(Number(p.bought)||0)-(Number(p.sold)||0):null;
+  const stock=p?Math.max(0,(Number(p.bought)||0)-(Number(p.sold)||0)):null;
   const stockReady=isStockIssue&&stock!==null&&stock>=(Number(blockedLine.cantitate)||1);
   const readyBadge=stockReady?`<div class="list-item-ready">✓ Stoc disponibil acum — ${stock} buc.</div>`:'';
   return`<div class="list-item${stockReady?' list-item-ready-row':''}" onclick="curKey='${o.key}';renderMain()">
@@ -2041,7 +2041,7 @@ function staffStockProducts(){
   if(stockSortMode==='qty_desc')return list.sort((a,b)=>staffStockQty(b)-staffStockQty(a)||byName(a,b));
   return list.sort(byName);
 }
-function staffStockQty(p){return Number(p?.bought||0)-Number(p?.sold||0);}
+function staffStockQty(p){return Math.max(0,Number(p?.bought||0)-Number(p?.sold||0));}
 function stockClass(v){return v<=0?'zero':v<=3?'low':'';}
 // Schimbarea ordinii pornește mereu de la primul produs (cerut implicit de sensul acțiunii — treci pe
 // „stoc crescător” tocmai ca să vezi întâi produsele cu stoc 0/mic, nu ca să continui de unde ai rămas).
@@ -2156,7 +2156,7 @@ function renderReturnsResults(){
   if(!hits.length){box.innerHTML=`<div class="empty"><div class="big">🔍</div><div>Niciun produs găsit.</div></div>${returnsRecentHtml()}`;return;}
   box.innerHTML=`<div class="search-page-list">${hits.map(p=>{
     const img=p.img?`<img class="list-item-th" src="${esc(imgSrc(p.img))}" onerror="this.outerHTML='<div class=&quot;list-item-th-ph&quot;>📦</div>'">`:`<div class="list-item-th-ph">📦</div>`;
-    const stock=Number(p.bought||0)-Number(p.sold||0);
+    const stock=Math.max(0,Number(p.bought||0)-Number(p.sold||0));
     return`<div class="list-item" onclick="pickReturnProduct(${p.id})">${img}<div class="list-item-main"><div class="list-item-nm">${esc(p.name||'')}</div><div class="list-item-meta">${p.sku?'SKU '+esc(p.sku)+' · ':''}Stoc ERP ${stock} buc.</div></div></div>`;
   }).join('')}</div>${returnsRecentHtml()}`;
 }
@@ -2173,7 +2173,7 @@ function renderReturnsTab(host){
   const p=findProdus(returnsPickId);
   if(!p){returnsPickId=null;renderReturnsTab(host);return;}
   const img=productCarouselHtml(p,'stock-product-img','stock-product-ph');
-  const stock=Number(p.bought||0)-Number(p.sold||0);
+  const stock=Math.max(0,Number(p.bought||0)-Number(p.sold||0));
   const reasonOpts=Object.entries(RETURN_REASONS).map(([k,label])=>`<option value="${k}" ${returnsMotiv===k?'selected':''}>${esc(label)}</option>`).join('');
   host.innerHTML=`<div class="card">
     <div class="stock-product">${img}<div class="stock-product-info"><div class="stock-product-name">${esc(p.name||'Produs fără nume')}</div><div class="stock-product-meta">${p.sku?'SKU '+esc(p.sku)+' · ':''}Stoc ERP acum: ${stock} buc.</div></div></div>
