@@ -2954,6 +2954,9 @@ body .tt-widget .tt-panel{left:calc(100% + 14px);bottom:-84px;width:min(400px,ca
    fundal translucid+blur, un glow discret în culoarea platformei (mov eMAG/portocaliu Trendyol/verde
    Vinted, aceleași culori ca insigna .pcx-badge-*), border-ul rămâne opac și puternic — culoarea/glass-ul
    e strict fundalul, nu afectează lizibilitatea textului sau contururile deja cerute mai puternice. */
+/* Viteză (cerut direct: „când apăsăm pe tabul cu comenzi, să apară mai repede"): browserul așază și desenează
+   doar cardurile din zona vizibilă — restul (sute, ~18.500 de elemente) sunt sărite până ajungi la ele cu scroll. */
+.pcx-orders-list>.pcx-order{content-visibility:auto;contain-intrinsic-size:auto 420px}
 .pcx-order{border:2px solid var(--b3);border-radius:var(--r2);overflow:hidden;backdrop-filter:blur(16px) saturate(140%);-webkit-backdrop-filter:blur(16px) saturate(140%);box-shadow:0 6px 20px rgba(31,38,70,.07);transition:box-shadow .15s,border-color .15s}
 .pcx-order:hover{box-shadow:0 10px 30px rgba(31,38,70,.11);border-color:var(--acc)}
 .pcx-order.pcx-order-included{border-color:rgba(18,183,106,.55)}
@@ -5376,6 +5379,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:736,text:'Comenzi Platforme — tabul se deschide mult mai repede, cerut direct: „când apăsăm pe tabul acesta cu comenzi, să apară mai repede, să se deschidă mai repede, să nu pierdem timpul". Măsurat pe previzualizarea reală (273 de comenzi): tabul apare acum în ~0,2 s (înainte ~0,7 s), iar lista e complet gata în ~0,8 s (înainte 1,4–1,9 s). Cauza principală: la deschidere, browserul așeza imediat toate cele ~18.500 de elemente ale tuturor cardurilor, deși pe ecran se văd 3–4 — acum se așază și se desenează doar cardurile din zona vizibilă, restul pe măsură ce ajungi la ele cu scroll (scroll-ul rămâne normal). În plus, căutările în asocierile de coduri sunt memorate între redesenări (rezultat identic, verificat pe 2.473 de cazuri reale). Verificat de 2 ori: Playwright (timpi vechi/nou pe datele reale, echivalența căutărilor, regresie Comenzi Platforme) — zero erori JS.',date:'2026-11-18'},
   {n:735,text:'Staff — comenzile în ordinea curierilor, cerut direct: „în Staff, AWB-urile să apară în ordinea curierilor: Cargus, Sameday și adiacente, FAN Courier și adiacente, Vinted (chiar dacă sunt de la Sameday, GLS, Cargus, FAN — toate Vinted la un loc) + GLS simplu". Ordinea cozii: 1 Cargus → 2 Sameday (apoi easybox, eMAG Courier) → 3 FAN Courier (apoi DPD, BoxNow, ACS, ELTA — curierii Trendyol Grecia/Bulgaria) → 4 Vinted, toate, indiferent de curier → 5 GLS simplu → alți curieri → comenzile fără AWB la final. În cadrul aceluiași curier rămâne ordinea de dinainte (eMAG, Trendyol, Vinted, apoi după ora comenzii). Verificat de 2 ori: Playwright pe coada reală din Staff (1.039 de comenzi, ordinea exactă pe grupuri) — zero erori JS.',date:'2026-11-18'},
   {n:734,text:'Comenzi Platforme — mai rapid cu multe comenzi + „Aplică import" doar pentru comenzile împachetate și confirmate în Staff, cerut direct: „merge foarte greu platforma când sunt mai multe comenzi, nu putem să facem să se miște mai repede? De asemenea, importul să se facă doar la ceea ce a fost setat în Staff ca împachetat și confirmat". (1) Viteză, măsurat pe previzualizarea reală (273 de linii, ~18.500 de elemente): o redesenare scade de la ~0,9 s la ~0,5 s când se schimbă ceva și la ~0,2 s când nu se schimbă nimic (reîmprospătarea automată la 20 s nu mai reconstruiește pagina degeaba, păstrează și poziția/scroll-ul). Cauze reparate: interfața veche, ascunsă, se construia la fiecare redesenare; etichetele de dată ale termenelor se recalculau de sute de ori; asocierile de coduri (~2.000) erau parcurse integral pentru fiecare linie — acum index. (2) „Aplică import" scade stocul DOAR pentru comenzile pe care Staff le-a împachetat și confirmat (coletul finalizat); starea se recitește din bază chiar la apăsare. Comenzile incluse, dar încă neconfirmate în Staff, rămân în previzualizare pentru mai târziu — confirmarea îți spune câte așteaptă, iar bara de jos arată „X incluse · Y împachetate și confirmate în Staff". Verificat de 2 ori: Playwright (măsurători vechi/nou pe datele reale; aplicare cu 3 comenzi — doar cea confirmată în Staff se aplică, cea doar împachetată și cea neîmpachetată rămân; nimic confirmat → mesaj, nimic aplicat) + regresie — zero erori JS.',date:'2026-11-18'},
   {n:733,text:'Aplicarea automată a importului la ora 22:00 — pusă pe pauză, cerut direct: „pune-o pe pauză până când facem din nou automat; acum să rămână pe manual". Comenzile „✓ Inclus" rămase neaplicate seara NU se mai aplică singure (stoc + Jurnal) — „Aplică import" se face doar manual, din Comenzi Platforme. Mecanismul a rămas intact și se poate reporni oricând, la cerere. Verificat de 2 ori: Playwright (funcția nu mai citește/scrie nimic, nici la deschidere, nici la verificarea de 5 minute) — zero erori JS.',date:'2026-11-18'},
@@ -18447,6 +18451,7 @@ function renderArchivePage(){
 
 /* ── SINCRONIZARE PLATFORME (mapare produse) ── */
 async function loadSyncMappings(){
+  syncMapIndexReset();
   if(!sbReady)return;
   // Cele două tabele nu depind una de alta — pornesc deodată, nu una după alta.
   // Bug real, raportat direct, pe o captură („cort" potrivit automat cu „Amortizor Usa" — complet
@@ -18496,22 +18501,34 @@ function findProductByPnk(platforma,pnk,tara=''){
 // Index pe SYNCM (viteză, cerut direct: „merge foarte greu platforma când sunt mai multe comenzi"): funcția
 // e apelată pentru fiecare linie la fiecare randare și parcurgea toate ~2.000 de asocieri (cu toLowerCase pe
 // fiecare). Rezultatul e IDENTIC cu căutarea liniară de dinainte (prima potrivire în ordinea SYNCM); indexul
-// se reconstruiește când SYNCM se schimbă (alt array/altă lungime) și oricum cel puțin o dată la 2 secunde.
+// se reconstruiește când SYNCM se schimbă (alt array/altă lungime) și oricum cel puțin o dată la 15 secunde
+// (acoperă și o asociere editată pe loc, ex. corectarea codului din Comenzi Platforme — vezi și syncMapIndexReset).
 let SYNCM_IDX=null;
 function syncMapIndex(){
   const now=Date.now();
-  if(SYNCM_IDX&&SYNCM_IDX.ref===SYNCM&&SYNCM_IDX.len===SYNCM.length&&now-SYNCM_IDX.at<2000)return SYNCM_IDX;
+  // semnătură ieftină (lungime + suma id-urilor), verificată cel mult o dată la 100ms — prinde și „șterge una +
+  // adaugă alta" (aceeași lungime), nu doar adăugări/ștergeri simple
+  if(SYNCM_IDX&&SYNCM_IDX.ref===SYNCM&&now-SYNCM_IDX.at<15000){
+    if(now-SYNCM_IDX.chk<100)return SYNCM_IDX;
+    let sig=SYNCM.length;for(const m of SYNCM)sig+=Number(m.id)||0;
+    SYNCM_IDX.chk=now;if(sig===SYNCM_IDX.sig)return SYNCM_IDX;
+  }
+  let sig=SYNCM.length;for(const m of SYNCM)sig+=Number(m.id)||0;
   const byPnk=new Map(),byTitle=new Map(),add=(map,k,s)=>{if(!map.has(k))map.set(k,s);};
   SYNCM.forEach(s=>{
     const t=String(s.titluExtern||'').toLowerCase().trim(),tr=s.tara||'';
     if(s.idExtern){add(byPnk,s.platforma+'|*|'+s.idExtern,s);add(byPnk,s.platforma+'|'+tr+'|'+s.idExtern,s);}
     add(byTitle,s.platforma+'|*|'+t,s);add(byTitle,s.platforma+'|'+tr+'|'+t,s);
   });
-  SYNCM_IDX={ref:SYNCM,len:SYNCM.length,at:now,byPnk,byTitle};
+  SYNCM_IDX={ref:SYNCM,sig,at:now,chk:now,byPnk,byTitle,memo:new Map()};
   return SYNCM_IDX;
 }
 function findSyncMapEntry(platforma,titlu,pnk,tara=''){
-  const ix=syncMapIndex();
+  const ix=syncMapIndex(),mk=platforma+'\u0001'+(titlu||'')+'\u0001'+(pnk||'')+'\u0001'+tara;
+  if(ix.memo.has(mk))return ix.memo.get(mk);
+  const r=findSyncMapEntryRaw(ix,platforma,titlu,pnk,tara);ix.memo.set(mk,r);return r;
+}
+function findSyncMapEntryRaw(ix,platforma,titlu,pnk,tara){
   // sameMarket = aceeași țară (sau orice țară când tara lipsește); legacyMarket = rânduri fără țară
   if(pnk){const m=ix.byPnk.get(platforma+'|'+(tara||'*')+'|'+pnk)||(tara&&ix.byPnk.get(platforma+'||'+pnk));if(m)return m;}
   const t=(titlu||'').toLowerCase().trim();
@@ -24931,6 +24948,7 @@ async function pickPcomProduct(id){
 // Produsul ales manual diferă de cel asociat permanent codului/PNK-ului comenzii (Sincronizare) — fără
 // corectarea asocierii, FIECARE comandă nouă pe aceeași ofertă ar veni din nou pe produsul greșit („rămâne
 // blocat pe acesta"). Întrebăm o dată și corectăm asocierea (+ liniile din previzualizare cu aceleași coduri).
+function syncMapIndexReset(){SYNCM_IDX=null;}
 async function pcomFixCodeMappingsAfterPick(line,id){
   if(!line||!id||!sbReady)return;
   const pl=line.platforma;if(pl!=='emag'&&pl!=='trendyol')return;
@@ -24942,7 +24960,7 @@ async function pcomFixCodeMappingsAfterPick(line,id){
   if(!confirm(`Codurile acestei oferte ${pcomPlatLabel(pl)} sunt asociate permanent cu alt produs:\n${wrong.map(m=>`• ${m.idExtern} → „${nm(m.produsId)}"`).join('\n')}\n\nLe asociez cu „${np.name}", ca și comenzile viitoare cu aceste coduri să vină direct pe produsul corect?`))return;
   let ok=0;
   for(const m of wrong){
-    try{await dbPatch(`platforma_mapari?id=eq.${m.id}`,{produs_id:id});m.produsId=id;ok++;}
+    try{await dbPatch(`platforma_mapari?id=eq.${m.id}`,{produs_id:id});m.produsId=id;ok++;syncMapIndexReset();}
     catch(e){console.warn('Nu am putut corecta asocierea',m.id,e);}
   }
   let moved=0;
