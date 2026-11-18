@@ -5386,6 +5386,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:739,text:'Trafic Supabase redus drastic — alertă reală primită pe e-mail („Egress 11,81 GB din 5,5 GB, proiectele se opresc pe 21.11 dacă nu se ia măsuri"). Cauza principală era deja reparată în #737 (istoricul de stoc de 9 MB descărcat la fiecare 20 s pe Dashboard, ~1,6 GB/oră/tab) și SQL-ul de curățare a fost rulat (istoricul are acum 0,38 MB). Acum, în plus: lista completă de produse (~73 KB) nu se mai descarcă la fiecare 20 s în fiecare tab deschis — se verifică doar „s-a schimbat ceva?" (~0,2 KB), iar lista se descarcă doar la o schimbare reală și oricum o dată la 2 minute; cronometrul „Timp azi" se reîmprospătează la 60 s (era 20 s). Măsurat cu aplicația deschisă, fără activitate: de la 56 MB la 0,125 MB pe 2 minute (~450× mai puțin; ~3,7 MB/oră/tab). Modificările de stoc de pe alt dispozitiv (ex. vânzări din Staff/tabletă) apar în maximum 20 s DUPĂ rularea SQL-ului din chat (o regulă în baza de date care actualizează automat data modificării produsului — verificat pe date reale: vânzările nu o actualizau); până atunci, în maximum 2 minute. Verificat de 2 ori: Playwright (verificare mică fără schimbări, descărcare la schimbare, plasa de siguranță la 2 minute, audit de trafic) + regresie — zero erori JS.',date:'2026-11-18'},
   {n:738,text:'Comenzi Platforme — lista stă pe loc și nu mai „tresare", raportat direct: „de ce atunci când apăs pe o comandă de pe Trendyol mă duce mai sus pe alte comenzi de la eMAG? Să rămână static acolo unde suntem" și „să nu mai tresară imaginea, ca și cum se încarcă, ca o pagină veche". Cauza: la orice click (deschis/închis comandă, inclus, produs ales) se reconstruia TOATĂ lista de comenzi — sute de carduri recreate de la zero, poze reîncărcate, iar cardurile din afara ecranului primeau o înălțime estimată, deci pagina sărea cu sute de pixeli. Acum se actualizează DOAR cardurile care s-au schimbat (de obicei unul singur); restul rămân exact aceleași, cu pozele deja încărcate, iar poziția pe ecran rămâne fixă. Verificat de 2 ori: Playwright pe previzualizarea reală (273 de comenzi) — click pe comenzi Trendyol/eMAG din mijlocul listei: cardul rămâne exact în același loc (înainte: salturi de până la 1.350 px), celelalte carduri nu sunt recreate; regresie Comenzi Platforme — zero erori JS.',date:'2026-11-18'},
   {n:737,text:'Platforma mai fluidă și fără consum inutil în fundal — analiză completă, cerut direct: „analizează toată platforma și vezi cum poți să o omogenizezi, să se miște mai cursiv, mai repede și mai ușor; vezi dacă sunt sisteme blocate, să nu mai ruleze în fundal și să consume memorie fără sens". Găsit și reparat, măsurat pe datele reale: (1) Dashboard-ul descărca tot istoricul de intrări în stoc (9 MB) la fiecare 20 de secunde — ~1,6 GB pe oră doar stând deschis; acum aduce doar intrările noi, iar lista completă cel mult o dată la 10 minute → de la 56 MB la 0,7 MB la 2 minute (de ~80× mai puțin). Cauza celor 9 MB: produsele noi din facturi își salvau poza în istoric ca imagine întreagă (base64), nu ca link — reparat pentru viitor; SQL-ul din chat le curăță pe cele 48 vechi (tabelul scade de la 12,5 MB la 0,4 MB, deci și pornirea aplicației devine mai rapidă). (2) Tabelul Inventar (543 de rânduri, ~17.000 de elemente) se reconstruia complet la fiecare 20 s, chiar fără nicio schimbare, și chiar dacă erai pe altă pagină — acum doar când un produs chiar s-a schimbat și doar dacă pagina e deschisă (altfel la revenire). Pe Inventar, timpul de reașezare a paginii a scăzut de la 7,7 s la sub 0,5 s pe minut, iar elementele acumulate de la 138.000 la 55.000. (3) Ceasurile din bara laterală („Timp azi", „Start comenzi") obligau browserul să reașeze toată pagina la fiecare secundă — bara e acum izolată (de la ~50 ms pe secundă la ~0). (4) Verificările periodice (probleme Staff la 1 minut, alerte furnizor la 10 minute) nu mai rulează cât fereastra e minimizată/ascunsă și se actualizează imediat la revenire; aplicarea automată de la 22:00 (pe pauză) nu mai pornește deloc verificarea. (5) Reparat și: lista „Update #N" era acoperită parțial de ceasurile din bara laterală. Staff verificat — deja ușor (8 KB/minut). Verificat de 2 ori: Playwright (audit de consum 1–2 minute pe Dashboard/Inventar/Comenzi Platforme/Staff înainte și după, redesenare doar la schimbare, actualizare la revenirea pe Inventar, istoric incremental, ferestrele din bara laterală) + regresie completă — zero erori JS.',date:'2026-11-18'},
   {n:736,text:'Comenzi Platforme — tabul se deschide mult mai repede, cerut direct: „când apăsăm pe tabul acesta cu comenzi, să apară mai repede, să se deschidă mai repede, să nu pierdem timpul". Măsurat pe previzualizarea reală (273 de comenzi): tabul apare acum în ~0,2 s (înainte ~0,7 s), iar lista e complet gata în ~0,8 s (înainte 1,4–1,9 s). Cauza principală: la deschidere, browserul așeza imediat toate cele ~18.500 de elemente ale tuturor cardurilor, deși pe ecran se văd 3–4 — acum se așază și se desenează doar cardurile din zona vizibilă, restul pe măsură ce ajungi la ele cu scroll (scroll-ul rămâne normal). În plus, căutările în asocierile de coduri sunt memorate între redesenări (rezultat identic, verificat pe 2.473 de cazuri reale). Verificat de 2 ori: Playwright (timpi vechi/nou pe datele reale, echivalența căutărilor, regresie Comenzi Platforme) — zero erori JS.',date:'2026-11-18'},
@@ -10042,7 +10043,7 @@ let liveSyncTimer=null,liveSyncInFlight=false;
 // Istoricul de intrări (comenzi_stoc) — la fiecare 20s se aduc DOAR rândurile noi (created_at mai nou decât
 // cel mai nou cunoscut); lista completă (care prinde și ștergeri/modificări de pe alt dispozitiv) cel mult o
 // dată la 10 minute. Înainte se descărca tot tabelul (9 MB) la fiecare 20s cât stăteai pe Dashboard.
-var stockOrdersFullAt=0,liveProdSig='';
+var stockOrdersFullAt=0,liveProdSig='',liveProdFullAt=0,liveProdProbe='';
 async function refreshStockOrdersLive(){
   const now=Date.now();
   const newest=OI.reduce((m,o)=>{const t=String(o.createdAt||'');return t>m?t:m;},'');
@@ -10064,11 +10065,24 @@ async function liveRefreshProducts(){
   if(document.activeElement?.matches('input,textarea,select'))return;
   liveSyncInFlight=true;
   try{
-    const rows=await dbGet(`produse?select=${PROD_COLS}&order=id.asc`);
+    // Trafic Supabase (alertă reală de depășire „Egress", 18.11.2026): lista completă de produse (~73 KB)
+    // se descărca la fiecare 20s în fiecare tab deschis (~13 MB/oră/tab). Acum la 20s se cere doar
+    // produsul modificat cel mai recent (~0,2 KB); lista completă se descarcă doar dacă acesta s-a schimbat,
+    // și oricum cel puțin o dată la 2 minute (prinde și ștergeri / scrieri care n-ar atinge updated_at).
+    const nowMs=Date.now();
+    let rows=null;
+    if(liveProdSig&&nowMs-liveProdFullAt<120000){
+      const pr=await dbGet('produse?select=id,updated_at&order=updated_at.desc.nullslast&limit=1');
+      const probe=pr&&pr[0]?pr[0].id+'|'+pr[0].updated_at:'';
+      if(probe!==liveProdProbe){liveProdProbe=probe;rows=await dbGet(`produse?select=${PROD_COLS}&order=id.asc`);liveProdFullAt=nowMs;}
+    }else{
+      rows=await dbGet(`produse?select=${PROD_COLS}&order=id.asc`);liveProdFullAt=nowMs;
+      const top=(rows||[]).reduce((m,r)=>String(r.updated_at||'')>String(m.updated_at||'')?r:m,{});liveProdProbe=top.id?top.id+'|'+top.updated_at:liveProdProbe;
+    }
     // Fluiditate: dacă niciun produs nu s-a schimbat de la ultima citire (cazul obișnuit), nu mai
     // reconstruim nimic — înainte, tabelul Inventar (543 de rânduri, ~17.000 de elemente) se redesena
     // integral la fiecare 20s, cu o sacadare de ~0,5s, chiar dacă nu se modificase nimic.
-    const sig=JSON.stringify(rows);
+    const sig=rows?JSON.stringify(rows):liveProdSig;
     const prodChanged=sig!==liveProdSig;liveProdSig=sig;
     const activeId=document.querySelector('.page.on')?.id?.replace(/^page-/,'');
     if(prodChanged){
@@ -33332,6 +33346,6 @@ document.addEventListener('paste',ev=>{
 loadResearchProjects();
 </script>
 <!-- Time tracking: „Timp azi" pentru ACEST proiect (id propriu: gestiune-stoc). Sesiunile vin din trackerul de pe Mac, prin Supabase — vezi time-tracking.js / scripts/time-tracker.js -->
-<script src="/time-tracking.js" data-project="gestiune-stoc" defer></script>
+<script src="/time-tracking.js" data-project="gestiune-stoc" data-refresh="60" defer></script>
 </body>
 </html>

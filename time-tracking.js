@@ -100,7 +100,7 @@
     key:script.dataset.supaKey||'sb_publishable_m7_oRHyxmrrvuGpudY9V1g_LM85ubbr',
     tz:'Europe/Bucharest',
     liveSeconds:45,        // (modul „view") un heartbeat mai vechi de atât ⇒ sesiunea nu mai e activă
-    refreshMs:20000
+    refreshMs:Math.max(10,Number(script.dataset.refresh)||20)*1000   // data-refresh="60" = reîmprospătare la 60s (mai puțin trafic)
   };
   var PALETTE=['#7657F6','#F79009','#12B76A','#0BA5EC','#EE46BC','#F04438','#667085'];
   var DEV_SOURCES=['claude-code','codex'];
