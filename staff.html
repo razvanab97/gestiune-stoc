@@ -599,6 +599,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:444,date:'20.11.2026',text:'„🗑 Șterge din așteptare” nu mai trimite la începutul listei: din listă rămâi exact unde erai (rândul dispare pe loc), iar de pe card treci direct pe comanda următoare din „În așteptare”. Și „↩ Readu în Împachetare” de pe card continuă acum cu comanda următoare din listă, nu cu prima.'},
   {n:443,date:'20.11.2026',text:'„🗑 Șterge din așteptare — deja împachetată și livrată”: buton nou pe fiecare comandă din „În așteptare” (pe card și 🗑 în listă), cu confirmare și Anulează 10s. Marchează comanda împachetată și confirmată (problema raportată se închide) — nu șterge nimic din bază și nu modifică stocul aici.'},
   {n:442,date:'20.11.2026',text:'„În așteptare” arată acum data și ora la care fiecare comandă a ajuns acolo (problema raportată sau resetul de la 22:00), plus când a fost trimisă în Staff — pe card și în listă. Comenzile sunt ordonate în ordinea în care au ajuns în așteptare, cele mai vechi primele.'},
   {n:441,date:'20.11.2026',text:'Comenzile de ieri, neîmpachetate, care au AWB și încă așteaptă în admin rămân acum în coada de împachetat și după 22:00, nu mai trec în „În așteptare”. În „În așteptare” rămân doar comenzile cu o problemă raportată (ex. „stoc zero”) și cele vechi, deja aplicate în stoc.'},
@@ -803,6 +804,7 @@ function computeOrders(){
   });
 }
 function packQueue(){return ORDERS.filter(o=>!o.finalized&&!o.waiting&&!o.awaitingAwb);}
+let lastWaitingIdx=-1;
 function waitingQueue(){
   // în ordinea în care au ajuns în așteptare (cele mai vechi primele), apoi după momentul trimiterii în Staff
   return ORDERS.filter(o=>o.waiting).sort((a,b)=>String(a.waitingSince||'').localeCompare(String(b.waitingSince||''))||String(a.sentAt||'').localeCompare(String(b.sentAt||''))||a.key.localeCompare(b.key));
@@ -1501,7 +1503,15 @@ async function removeDeliveredOrder(orderKey){
   if(lineBusy[key])return;
   const ord=ORDERS.find(o=>o.key===orderKey);if(!ord||!ord.waiting)return;
   if(!confirm(`Ștergi din „În așteptare" comanda ${ord.comandaId?'#'+ord.comandaId:''}?\n\nFolosește doar dacă a fost DEJA împachetată și livrată între timp — o marchez împachetată și confirmată.`))return;
-  lineBusy[key]=true;renderMain();
+  // Cerut direct: „când se șterge unul, să nu mai dea lista de la capăt, să se șteargă acolo unde suntem și să
+  // putem continua" — din LISTĂ rămânem pe listă, la aceeași poziție de scroll; de pe CARD trecem imediat pe
+  // comanda care urma în „În așteptare" (nu pe prima).
+  const fromCard=curKey===orderKey;
+  const q0=waitingQueue(),i0=q0.findIndex(o=>o.key===orderKey);
+  const nextKey=fromCard?((q0[i0+1]||q0[i0-1]||{}).key||null):curKey;
+  const host=document.getElementById('main-area'),keepWin=window.scrollY,keepHost=host?host.scrollTop:0;
+  const keepPlace=()=>{if(fromCard)return;requestAnimationFrame(()=>{if(host)host.scrollTop=keepHost;window.scrollTo(0,keepWin);});};
+  lineBusy[key]=true;renderMain();keepPlace();
   const at=new Date().toISOString();
   const changes=[];let saved=false;
   try{
@@ -1516,12 +1526,15 @@ async function removeDeliveredOrder(orderKey){
     }
     logActivity('comanda_stearsa_livrata',ord.lines[0],{comandaId:ord.comandaId,awb:ord.awb||null});
     computeOrders();saved=true;
-    scheduleUndo(orderKey,changes,'pack','🗑 Ștearsă din așteptare — deja livrată');
+    curKey=nextKey;
+    scheduleUndo(orderKey,changes,'delete','🗑 Ștearsă din așteptare — deja livrată');
+    if(pendingUndo)pendingUndo.stayList=!fromCard;
+    if(fromCard)renderMain(true);else keepPlace();
   }catch(e){
     console.error(e);showToast('Eroare la ștergere — încearcă din nou');
     for(const ch of changes.reverse()){try{const l=findLineByKey(ch.table+'_'+ch.id);if(l)await patchLine(l,ch.prev);}catch(_){}}
     computeOrders();
-  }finally{lineBusy[key]=false;if(!saved)renderMain();}
+  }finally{lineBusy[key]=false;if(!saved){renderMain();keepPlace();}}
 }
 // Deselectare/reactivare (cerut direct — „pune o funcție de deselectare ca împachetat”): pentru o
 // comandă finalizată din greșeală, dincolo de fereastra de 10s de anulare a lui scheduleUndo. Aceeași
@@ -1549,7 +1562,7 @@ function scheduleUndo(orderKey,lineChanges,type,msgOverride){
   if(pendingUndo)clearTimeout(pendingUndo.timeoutId);
   // „requeue" (↩ Readu în Împachetare) a mutat deja vizualizarea pe următoarea comandă — după 10s NU mai
   // avansăm din nou, ca să nu sărim peste ce a deschis omul între timp.
-  const timeoutId=setTimeout(()=>{pendingUndo=null;hideToast();if(type!=='requeue'||curKey===orderKey)advanceAfterAction(orderKey);},10000);
+  const timeoutId=setTimeout(()=>{pendingUndo=null;hideToast();if((type!=='requeue'&&type!=='delete')||curKey===orderKey)advanceAfterAction(orderKey);},10000);
   pendingUndo={orderKey,lines:lineChanges,timeoutId,type};
   const msg=msgOverride||(type==='pack'?'✓ Comanda a fost împachetată':type==='requeue'?'↩ Comandă readusă în Împachetare':'⏸ Comandă mutată în „În așteptare"');
   showToast(msg,undoAction);
@@ -1560,7 +1573,8 @@ function scheduleUndo(orderKey,lineChanges,type,msgOverride){
 async function undoAction(){
   if(!pendingUndo)return;
   clearTimeout(pendingUndo.timeoutId);
-  const {orderKey,lines}=pendingUndo;
+  const {orderKey,lines,stayList}=pendingUndo;
+  const host0=document.getElementById('main-area'),keepWin=window.scrollY,keepHost=host0?host0.scrollTop:0;
   try{
     for(const ch of lines){
       const l=findLineByKey(ch.table+'_'+ch.id);
@@ -1574,6 +1588,8 @@ async function undoAction(){
   }catch(e){console.error(e);}
   pendingUndo=null;
   computeOrders();
+  // anulat dintr-o ștergere făcută din LISTĂ → rămânem pe listă, în același loc
+  if(stayList){curKey=null;renderMain();requestAnimationFrame(()=>{if(host0)host0.scrollTop=keepHost;window.scrollTo(0,keepWin);});return;}
   curKey=orderKey;
   renderMain();
 }
@@ -1581,6 +1597,8 @@ async function undoAction(){
 function advanceAfterAction(fromKey){
   const q=activeTab==='waiting'?waitingQueue():packQueue();
   if(!q.length){curKey=null;renderMain();return;}
+  // În „În așteptare" lista are ordinea ei (după data intrării) — continuăm cu comanda care era imediat după.
+  if(activeTab==='waiting'&&lastWaitingIdx>=0){curKey=q[Math.min(lastWaitingIdx,q.length-1)].key;renderMain();return;}
   const all=ORDERS;
   const idx=all.findIndex(o=>o.key===fromKey);
   const next=q.find(o=>all.findIndex(x=>x.key===o.key)>idx)||q[0];
@@ -1794,6 +1812,7 @@ function renderWaitingTab(host){
   }
   const ord=currentOrder();
   const wIdx=q.findIndex(o=>o.key===ord.key);
+  if(wIdx>=0)lastWaitingIdx=wIdx;
   const plLabel=ord.platforma==='emag'?'eMAG':ord.platforma==='trendyol'?'Trendyol':ord.platforma==='vinted'?'Vinted':'Extra';
   const linesHtml=ord.lines.map(l=>{
     const state=l.impachetat?'done':(l.staff_blocked?'blocked':'');
