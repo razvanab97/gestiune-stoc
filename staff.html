@@ -103,6 +103,8 @@ button{cursor:pointer}
 .ord-client{font-weight:700;font-size:35px;color:var(--t1)}
 .ord-date{color:var(--t3);font-size:17px;margin-left:auto}
 .ord-finalized-badge{background:var(--gr-bg);color:var(--gr);font-weight:700;padding:4px 12px;border-radius:999px;font-size:16px}
+.del-delivered-btn{color:var(--red,#D92D20)!important;border-color:rgba(217,45,32,.35)!important}.del-mini{color:var(--red,#D92D20)!important;margin-left:6px}
+.waiting-dates{color:var(--t2);font-size:16px;margin:6px 0 2px}.waiting-dates b{color:var(--or)}.waiting-dates.sm{font-size:13px;margin:3px 0 0}
 .ord-waiting-badge{background:var(--or-bg);color:var(--or);font-weight:700;padding:4px 12px;border-radius:999px;font-size:16px}
 /* Prezență/blocare moale (Faza 2) — doar avertisment, angajatul poate continua oricând, decizie
    confirmată direct. Nu e o măsură de securitate (nume din localStorage, peste cheia anon expusă). */
@@ -597,6 +599,8 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:443,date:'20.11.2026',text:'„🗑 Șterge din așteptare — deja împachetată și livrată”: buton nou pe fiecare comandă din „În așteptare” (pe card și 🗑 în listă), cu confirmare și Anulează 10s. Marchează comanda împachetată și confirmată (problema raportată se închide) — nu șterge nimic din bază și nu modifică stocul aici.'},
+  {n:442,date:'20.11.2026',text:'„În așteptare” arată acum data și ora la care fiecare comandă a ajuns acolo (problema raportată sau resetul de la 22:00), plus când a fost trimisă în Staff — pe card și în listă. Comenzile sunt ordonate în ordinea în care au ajuns în așteptare, cele mai vechi primele.'},
   {n:441,date:'20.11.2026',text:'Comenzile de ieri, neîmpachetate, care au AWB și încă așteaptă în admin rămân acum în coada de împachetat și după 22:00, nu mai trec în „În așteptare”. În „În așteptare” rămân doar comenzile cu o problemă raportată (ex. „stoc zero”) și cele vechi, deja aplicate în stoc.'},
   {n:440,date:'17.11.2026',text:'Staff citește acum toate paginile de comenzi din Supabase, nu doar primele 1.000 de rânduri. După ce baza a trecut de 1.000 de rânduri trimise spre Staff, ultimele comenzi nu mai erau încărcate deloc. Încărcarea continuă automat cu pagina următoare până nu mai există rânduri. Nu modifică AWB-uri, comenzi sau stoc; repară doar citirea lor în Staff.'},
   {n:439,date:'16.11.2026',text:'Coada de împachetat arată acum DOAR comenzile care au AWB — cerut direct: „când adăugăm AWB-uri în platformă, în Staff să apară doar comenzile care au AWB-uri". O comandă eMAG/Trendyol trimisă la împachetare, dar încă fără AWB, nu mai apare la „📦 Împachetare"; trece într-un tab nou, „⏳ Așteaptă AWB" (cu badge cu numărul lor), unde se vede clar ce comenzi lipsesc. De îndată ce i se asociază AWB-ul în aplicație și apeși „↻ Reîncarcă", comanda intră automat înapoi în coada de împachetat. Nu afectează vânzările directe (n-au AWB din principiu) și nici Vinted (acolo „AWB" e un Cod opțional) — ele rămân la Împachetare, exact ca înainte. Comenzile vechi, neîmpachetate (dinaintea resetului de 22:00) rămân pe calea „În așteptare", neschimbate. Contorul de sus („X comenzi" / procentul) numără doar comenzile gata de împachetat (cu AWB), nu și pe cele care așteaptă AWB. Verificat de 2 ori: sintaxă (node --check) + 2 rulări Playwright pe server local cu comenzi controlate — eMAG/Trendyol fără AWB scoase din coadă și mutate în „Așteaptă AWB", eMAG CU AWB rămâne la împachetat, Vinted fără cod și vânzarea directă rămân la împachetat, badge-ul arată numărul corect, tabul randează lista, zero erori JS.'},
@@ -780,6 +784,13 @@ function computeOrders(){
     const stillPendingWithAwb=!!g.awb&&g.platforma!=='direct'&&g.lines.some(l=>l._table==='platforma_comenzi'&&!l.efecte_aplicate);
     g.carried=!g.finalized&&sentMs<B&&!stillPendingWithAwb;
     g.waiting=g.hasUnresolvedIssue||g.carried;
+    // Cerut direct (20.11.2026): „să apară în așteptare și o dată, să vedem când au fost duse acolo și să fie puse
+    // în ordinea în care au ajuns acolo". Momentul intrării în așteptare: problema raportată → staff_blocked_at
+    // (cel mai vechi rând blocat nerezolvat); rămasă neîmpachetată → primul reset de 22:00 de după trimitere.
+    if(g.waiting){
+      const bl=g.lines.filter(l=>l.staff_blocked&&!l.staff_issue_resolved&&l.staff_blocked_at).map(l=>l.staff_blocked_at).sort()[0];
+      g.waitingSince=g.hasUnresolvedIssue&&bl?bl:(sentMs?new Date(Math.min(B,lastAutoReset(sentMs+86400000))).toISOString():(g.sentAt||''));
+    }else g.waitingSince='';
     g.oldDone=g.finalized&&packedMs<B;
     g.finalizedToday=g.finalized&&packedMs>=B;
     // Cerut direct: „când adăugăm AWB-uri în platformă, în Staff să apară doar comenzile care au AWB-uri".
@@ -792,7 +803,19 @@ function computeOrders(){
   });
 }
 function packQueue(){return ORDERS.filter(o=>!o.finalized&&!o.waiting&&!o.awaitingAwb);}
-function waitingQueue(){return ORDERS.filter(o=>o.waiting);}
+function waitingQueue(){
+  // în ordinea în care au ajuns în așteptare (cele mai vechi primele), apoi după momentul trimiterii în Staff
+  return ORDERS.filter(o=>o.waiting).sort((a,b)=>String(a.waitingSince||'').localeCompare(String(b.waitingSince||''))||String(a.sentAt||'').localeCompare(String(b.sentAt||''))||a.key.localeCompare(b.key));
+}
+function fmtWhen(iso){
+  const d=new Date(iso);if(!iso||isNaN(d))return'';
+  return d.toLocaleString('ro-RO',{timeZone:'Europe/Bucharest',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}).replace(',','');
+}
+function waitingDatesHtml(o){
+  const w=o.waitingSince?`⏸ În așteptare din <b>${esc(fmtWhen(o.waitingSince))}</b>`:'';
+  const t=o.sentAt&&o.platforma!=='direct'?`📥 trimisă în Staff ${esc(fmtWhen(o.sentAt))}`:'';
+  return[w,t].filter(Boolean).join(' · ');
+}
 function awaitingAwbQueue(){return ORDERS.filter(o=>o.awaitingAwb);}
 // listă completă (inclusiv comenzi deja împachetate) pt. navigare Anterioară/Următoare —
 // packQueue() se golește pe măsură ce lucrezi, așa că butonul "Anterioară" ar rămâne mereu
@@ -1469,6 +1492,37 @@ async function finalizeOrder(orderKey){
     console.error(e);showToast('Eroare la finalizare — încearcă din nou');renderMain();
   }finally{lineBusy[key]=false;if(!saved)renderMain();}
 }
+// „🗑 Șterge — deja livrată" (cerut direct, 20.11.2026: „buton de ștergere pentru cele care au fost împachetate
+// și livrate între timp"): scoate comanda din „În așteptare" marcând-o împachetată + confirmată (ca un colet
+// finalizat), cu problema raportată închisă. Nu șterge rândul din bază și nu atinge stocul aici — dacă stocul
+// ei nu fusese încă aplicat, admin-ul o va aplica la următorul „Aplică import" (acum e împachetată și confirmată).
+async function removeDeliveredOrder(orderKey){
+  const key='order_'+orderKey;
+  if(lineBusy[key])return;
+  const ord=ORDERS.find(o=>o.key===orderKey);if(!ord||!ord.waiting)return;
+  if(!confirm(`Ștergi din „În așteptare" comanda ${ord.comandaId?'#'+ord.comandaId:''}?\n\nFolosește doar dacă a fost DEJA împachetată și livrată între timp — o marchez împachetată și confirmată.`))return;
+  lineBusy[key]=true;renderMain();
+  const at=new Date().toISOString();
+  const changes=[];let saved=false;
+  try{
+    for(const l of ord.lines){
+      const pcom=l._table==='platforma_comenzi';
+      const body={impachetat:true,impachetat_at:l.impachetat_at||at};
+      if(pcom)body.staff_finalizat_at=l.staff_finalizat_at||at;
+      if(l.staff_blocked&&!l.staff_issue_resolved){body.staff_blocked=false;body.staff_issue_resolved=true;}
+      const prev={};Object.keys(body).forEach(k=>prev[k]=k==='impachetat'||k==='staff_blocked'||k==='staff_issue_resolved'?!!l[k]:(l[k]||null));
+      changes.push({table:l._table,id:l.id,prev});
+      await patchLine(l,body);
+    }
+    logActivity('comanda_stearsa_livrata',ord.lines[0],{comandaId:ord.comandaId,awb:ord.awb||null});
+    computeOrders();saved=true;
+    scheduleUndo(orderKey,changes,'pack','🗑 Ștearsă din așteptare — deja livrată');
+  }catch(e){
+    console.error(e);showToast('Eroare la ștergere — încearcă din nou');
+    for(const ch of changes.reverse()){try{const l=findLineByKey(ch.table+'_'+ch.id);if(l)await patchLine(l,ch.prev);}catch(_){}}
+    computeOrders();
+  }finally{lineBusy[key]=false;if(!saved)renderMain();}
+}
 // Deselectare/reactivare (cerut direct — „pune o funcție de deselectare ca împachetat”): pentru o
 // comandă finalizată din greșeală, dincolo de fereastra de 10s de anulare a lui scheduleUndo. Aceeași
 // acțiune, disponibilă oricând — din „Împachetare” (comanda curentă, dacă e deja finalizată) și din
@@ -1752,12 +1806,14 @@ function renderWaitingTab(host){
       <span class="ord-waiting-badge">⏸ În așteptare</span>
       ${ord.carried?`<span class="ord-waiting-badge">📅 Din ziua anterioară</span>`:''}
     </div>
+    ${waitingDatesHtml(ord)?`<div class="waiting-dates">${waitingDatesHtml(ord)}</div>`:''}
     <div id="lock-banner-slot"></div>
     ${ord.awb?awbBoxHtml(ord.awb,ord.awbCourier,ord.awbPreviewUrl,ord.comandaId,ord.platforma):''}
     ${ord.carried&&ord.hasUnresolvedIssue?'':deadlineBadgeHtml(ord.termenExpediere)}
     <div class="lines">${linesHtml}</div>
     ${ord.finalized?`<button type="button" class="big-pack-btn done" disabled>✓ Comandă finalizată</button>`:(ord.carried&&!ord.hasUnresolvedIssue?`<button type="button" class="big-pack-btn" ${lineBusy['order_'+ord.key]?'disabled':''} onclick="finalizeOrder('${ord.key}')">${ord.awb?'✓ Finalizează coletul':'✓ Marchează împachetat'}</button>`:'')}
     ${ord.waiting?`<button type="button" class="nav-btn requeue-btn" style="width:100%;margin-top:10px" ${lineBusy['order_'+ord.key]?'disabled':''} onclick="requeueOrder('${ord.key}')">↩ Readu în Împachetare${ord.hasUnresolvedIssue?' (problema rezolvată)':' — ca o comandă de azi'}</button>`:''}
+    ${ord.waiting?`<button type="button" class="nav-btn del-delivered-btn" style="width:100%;margin-top:10px" ${lineBusy['order_'+ord.key]?'disabled':''} onclick="removeDeliveredOrder('${ord.key}')">🗑 Șterge din așteptare — deja împachetată și livrată</button>`:''}
     <div class="nav-row">
       <button type="button" class="nav-btn" onclick="navStep(-1)" ${waitingNeighbor(-1)?'':'disabled'}>◀ Anterioară</button>
       <button type="button" class="nav-btn" onclick="curKey=null;renderMain()">☰ Lista</button>
@@ -1779,9 +1835,11 @@ function waitingListItemHtml(o){
       <div class="list-item-main">
         <div class="list-item-nm">${pl}${o.comandaId?' · #'+esc(o.comandaId):''} · ${esc(nm)}</div>
         <div class="list-item-issue">📅 Din ziua anterioară — neîmpachetată</div>
+        <div class="waiting-dates sm">${waitingDatesHtml(o)}</div>
       </div>
       <div class="list-item-time">${o.sentAt?esc(timeAgo(o.sentAt)):''}</div>
       <button type="button" class="line-check requeue-mini" ${lineBusy['order_'+o.key]?'disabled':''} onclick="event.stopPropagation();requeueOrder('${o.key}')" title="Readu comanda în Împachetare, ca o comandă de azi">↩ Împachetare</button>
+      <button type="button" class="line-check requeue-mini del-mini" ${lineBusy['order_'+o.key]?'disabled':''} onclick="event.stopPropagation();removeDeliveredOrder('${o.key}')" title="Deja împachetată și livrată — șterge din așteptare">🗑</button>
     </div>`;
   }
   const blockedLine=o.lines.find(l=>l.staff_blocked&&!l.staff_issue_resolved)||o.lines[0];
@@ -1801,9 +1859,11 @@ function waitingListItemHtml(o){
       <div class="list-item-nm">${o.comandaId?'#'+esc(o.comandaId)+' · ':''}${esc(blockedLine.produs_nume||'')}</div>
       <div class="list-item-issue">⛔ ${esc(ISSUE_LABELS[blockedLine.staff_issue_type]||'Problemă')}</div>
       ${readyBadge}
+      <div class="waiting-dates sm">${waitingDatesHtml(o)}</div>
     </div>
     <div class="list-item-time">${esc(since)}</div>
     <button type="button" class="line-check requeue-mini" ${lineBusy['order_'+o.key]?'disabled':''} onclick="event.stopPropagation();requeueOrder('${o.key}')" title="Problema e rezolvată? Readu comanda în Împachetare">↩ Împachetare</button>
+    <button type="button" class="line-check requeue-mini del-mini" ${lineBusy['order_'+o.key]?'disabled':''} onclick="event.stopPropagation();removeDeliveredOrder('${o.key}')" title="Deja împachetată și livrată — șterge din așteptare">🗑</button>
   </div>`;
 }
 function timeAgo(iso){
