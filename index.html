@@ -5387,6 +5387,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:750,text:'Comenzi Platforme — bug real, găsit pe date: comenzile Trendyol care rămâneau neprocesate mai mult de 14 zile DISPĂREAU singure din sistem. Reîmprospătarea automată (la 5 minute) citea doar ultimele 14 zile și ștergea din ciornă orice comandă necomisă care ieșea din fereastră, chiar dacă pe Trendyol era încă deschisă (exemplu: #11794090716, „Poker Game 200”, plasată pe 6 nov, încă „Created” după 17 zile, nici în ciornă, nici în Staff). Acum reîmprospătarea acoperă și istoricul: de la cea mai veche linie necomisă din ciornă, iar la prima rulare și apoi o dată pe oră, 45 de zile înapoi — deci și recuperează comenzile deja pierdute. Dacă o bucată de istoric nu se poate citi, liniile vechi rămân neatinse (nu se mai șterge nimic pe baza unei liste incomplete). Verificat de 2 ori: 5 teste pe API-ul real Trendyol + aplicația întreagă în copie cu scrieri blocate (comanda #11794090716 reapare în ciornă, asociată cu produsul 99).',date:'2026-11-23'},
   {n:749,text:'Mutare pe un proiect Supabase nou. Proiectul vechi fusese blocat de Supabase pentru depășirea cotei de trafic (egress 12,5 din 5 GB, ciclul gratuit), iar toate cererile primeau eroarea 402. Baza (34 de tabele, 30.006 de rânduri), pozele produselor și facturile au fost mutate într-un proiect nou, în Frankfurt (mai aproape de România decât Irlanda), iar funcțiile Vercel rulează acum tot în Frankfurt (fra1). Etichetele AWB vechi nu au fost mutate (nu mai sunt necesare). Adresa și cheia publică din aplicație, Staff, cronometru și scripturi au fost schimbate; backup-ul nocturn din Google Drive citește acum proiectul nou. Reparat și publicarea pe Vercel, care eșua de la Update #748: funcția de curățare a etichetelor AWB devenise a 13-a funcție din api/, iar planul gratuit permite maxim 12. Ea a fost mutată în lib/ și rulează prin api/settings.js (același cron zilnic, aceeași logică; adresa veche /api/awb-cleanup continuă să funcționeze).'},
   {n:748,text:'Pozele etichetelor AWB nu mai stau la nesfârșit în Supabase, cerut direct: „nu avem nevoie de o bază de date a AWB-urilor — pentru cele împachetate să se șteargă la distanță de 5 zile”. Un job zilnic pe Vercel (/api/awb-cleanup, 04:15 ora României) șterge poza AWB a comenzilor împachetate de peste 5 zile și pozele rămase fără comandă (înlocuite), mai vechi de 5 zile. Pe comandă rămân AWB-ul, curierul și fișierul-sursă, se șterge doar imaginea. Completarea automată a pozelor AWB lipsă nu le mai recreează pentru comenzile deja împachetate. Backupul de noapte nu mai copiază AWB-urile și consumă mult mai puțin trafic: baza zilnic fără tabelele mari, tabelele mari doar când se schimbă, fișierele doar cele noi, plafon de 1,5 GB/lună. Proiectul Supabase fusese blocat pentru depășirea traficului.'},
   {n:747,text:'Comenzi Platforme → „📮 Alege/Schimbă AWB”: secțiune nouă, separată, sus în listă — „📂 Alege fișier (PDF / poză)” citește AWB-ul din ORICE fișier local (PDF cu una sau mai multe pagini, sau o poză/captură a etichetei; aceleași formate ca „Citește din dosar”, cu AI ca plasă de siguranță) și îl asociază direct comenzii. Dacă fișierul are mai multe AWB-uri, le alegi din listă (cel al comenzii apare primul, marcat ✓). Sau scrii AWB-ul manual + „Asociază”. Cere confirmare dacă eticheta pare a altei comenzi, dacă AWB-ul e deja pe altă comandă, sau dacă comanda are deja alt AWB (înlocuiește / suplimentar). Cerut direct: „vreau să avem o secțiune separată prin care să putem adăuga un AWB din orice fișier local”.',date:'2026-11-20'},
@@ -20596,6 +20597,29 @@ function pcomReconcileApiDrafts(platform,keyOf,remoteKeys,keep){
   });
   return removed;
 }
+// Comenzile Trendyol mai vechi decât fereastra de 14 zile — bug real găsit pe date (23.11.2026): fereastra glisantă a
+// reîmprospătării automate (la 5 minute) ștergea din ciornă orice linie necomisă care ieșea din ea, deși comanda era încă
+// DESCHISĂ pe Trendyol (ex. #11794090716, plasată pe 6 nov, încă „Created" după 17 zile) → dispărea tăcut din sistem.
+// Acum reîmprospătarea acoperă și istoricul: de la cea mai veche linie necomisă din ciornă, iar la prima rulare și apoi o
+// dată pe oră, 45 de zile înapoi — ca să recupereze și comenzile deja pierdute. Dacă o bucată de istoric nu se poate citi,
+// `complete:false` și linia veche rămâne neatinsă (nu se mai șterge pe baza unei liste incomplete).
+let pcomTyLookbackAt=0;
+async function pcomTrendyolOlderOpenLines(windowStart){
+  const addDays=(s,n)=>new Date(Date.parse(s+'T00:00:00Z')+n*86400000).toISOString().slice(0,10);
+  const oldestDraft=pcImpParsed.filter(x=>x.platforma==='trendyol'&&!x._committedId&&x._source==='api'&&x.data&&x.data<windowStart).map(x=>x.data).sort()[0]||'';
+  const full=Date.now()-pcomTyLookbackAt>3600000;
+  let from=full?addDays(windowStart,-32):oldestDraft;
+  if(oldestDraft&&oldestDraft<from)from=oldestDraft;
+  if(!from||from>=windowStart)return{lines:[],complete:true};
+  const lines=[];let complete=true;
+  for(let s=from;s<windowStart;s=addDays(s,14)){
+    let e=addDays(s,13);if(e>=windowStart)e=addDays(windowStart,-1);
+    try{const r=await apiJson('/api/trendyol',{action:'orders',startDate:s,endDate:e},60000);lines.push(...(r.lines||[]));}
+    catch(err){complete=false;console.warn('Trendyol: istoric necitit',s,e,err);break;}
+  }
+  if(complete&&full)pcomTyLookbackAt=Date.now();
+  return{lines,complete};
+}
 async function importTrendyolApiOrders(silent=false){
   if(!sbReady){toast('Necesită conexiune Supabase activă','err');return;}
   const startInp=document.getElementById('pcx-trendyol-date-start'),endInp=document.getElementById('pcx-trendyol-date-end'),btn=document.getElementById('pcx-trendyol-import-btn');
@@ -20608,8 +20632,10 @@ async function importTrendyolApiOrders(silent=false){
   if(btn&&!silent){btn.disabled=true;btn.textContent='Se citesc comenzile…';}
   try{
     const r=await apiJson('/api/trendyol',{action:'orders',startDate,endDate},60000);
+    let olderComplete=true;
+    if(silent){const older=await pcomTrendyolOlderOpenLines(startDate);olderComplete=older.complete;if(older.lines.length)r.lines=[...(r.lines||[]),...older.lines];}
     const orderKey=o=>'trendyol|'+o.comandaId+'|'+(o.pnk||o.codProdus||o.titluExtern),remoteKeys=new Set((r.lines||[]).map(orderKey));
-    const removed=silent?pcomReconcileApiDrafts('trendyol',orderKey,remoteKeys):0,gate=pcomApiImportGate(orderKey);
+    const removed=silent?pcomReconcileApiDrafts('trendyol',orderKey,remoteKeys,olderComplete?undefined:(it=>String(it.data||'')<startDate)):0,gate=pcomApiImportGate(orderKey);
     let added=0,duplicates=0,restored=0,matched=0,cancelled=0;const newLines=[];
     for(const raw of r.lines||[]){
       const line={...pcomTrendyolMatchLine(raw),_source:'api'};
