@@ -5,15 +5,15 @@ const fs=require('fs'),path=require('path');
 const src=fs.readFileSync(path.join(__dirname,'..','staff.html'),'utf8');
 const grab=n=>{let i=src.indexOf('async function '+n+'(');if(i<0)i=src.indexOf('function '+n+'(');if(i<0)throw new Error('lipsește '+n);let d=0,j=src.indexOf('{',i);for(let k=j;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0)return src.slice(i,k+1)}}};
 const helpers=src.slice(src.indexOf("const QUEUE_RESET_HOUR"),src.indexOf("async function loadQueueMarker"));
-const names=['computeOrders','packQueue','waitingQueue','findLineByKey','orderOfLine','lineKey','patchLine','requeueChanges','requeueOrder','requeueAllCarried','scheduleUndo','undoAction','advanceAfterAction'];
-const code=[helpers,'const PLATFORM_ORDER={emag:0,trendyol:1,vinted:2};',...names.map(grab)].join('\n');
+const names=['staffCourierRank','computeOrders','packQueue','waitingQueue','findLineByKey','orderOfLine','lineKey','patchLine','requeueChanges','requeueOrder','requeueAllCarried','scheduleUndo','undoAction','advanceAfterAction'];
+const code=[helpers,'const PLATFORM_ORDER={emag:0,trendyol:1,vinted:2};','let lastWaitingIdx=-1;',...names.map(grab)].join('\n');
 let failed=0;const eq=(n,a,b)=>{const ok=JSON.stringify(a)===JSON.stringify(b);if(!ok)failed++;console.log((ok?'OK   ':'FAIL ')+n+(ok?'':`\n       primit:   ${JSON.stringify(a)}\n       așteptat: ${JSON.stringify(b)}`));};
 
 function world(opts={}){
   const NOW=Date.parse('2026-10-07T07:20:00Z');                     // 10:20 ora României, după resetul de 22:00 de ieri
   const calls=[],toasts=[];let failAt=opts.failAtCall||0,n=0;
   const mkC=(id,cid,extra={})=>({id,platforma:'emag',comanda_id:cid,client_nume:'C'+id,produs_id:id,produs_nume:'Produs '+id,cantitate:1,impachetat:false,impachetat_at:null,staff_blocked:false,staff_issue_resolved:false,
-    staff_trimis_at:'2026-10-06T10:00:00Z',created_at:'2026-10-06T10:00:00Z',data:'2026-10-06',awb:'AWB'+id,...extra});
+    staff_trimis_at:'2026-10-06T10:00:00Z',created_at:'2026-10-06T10:00:00Z',data:'2026-10-06',awb:'AWB'+id,efecte_aplicate:true,...extra});
   const COMENZI=[mkC(1,'A1'),mkC(2,'A2'),mkC(3,'B3',{staff_blocked:true,staff_issue_type:'stoc_zero',staff_trimis_at:'2026-10-07T05:00:00Z'}),
                  mkC(4,'C4',{staff_trimis_at:'2026-10-07T06:00:00Z'})];   // C4 = deja „de azi" (nu e în așteptare)
   const JURNAL=[{id:9,data:'2026-10-06',product_id:9,product_name:'Vânzare directă',qty:1,staff_trimis_at:'2026-10-06T11:00:00Z',created_at:'2026-10-06T11:00:00Z',impachetat:false}];
@@ -25,7 +25,9 @@ function world(opts={}){
     sb:async(m,p,b)=>{n++;if(failAt&&n===failAt)throw new Error('rețea');calls.push([m,p,b]);return[];},
     setTimeout:(f,t)=>0,clearTimeout(){},
     Date:class extends Date{constructor(...a){a.length?super(...a):super(NOW)}static now(){return NOW}},
-    console:{error(){},warn(){}}
+    console:{error(){},warn(){}},
+    window:{scrollY:0,scrollTo(){}},
+    document:{getElementById:()=>({style:{},classList:{add(){},remove(){},toggle(){}},dataset:{},set textContent(v){},set innerHTML(v){},addEventListener(){}}),querySelector:()=>null,querySelectorAll:()=>[],activeElement:null,hidden:false}
   };
   const keys=Object.keys(env);
   const api=new Function(...keys,code+';return {computeOrders,packQueue,waitingQueue,requeueOrder,requeueAllCarried,undoAction,get ORDERS(){return ORDERS},get pendingUndo(){return pendingUndo},get curKey(){return curKey},set curKey(v){curKey=v},set activeTab(v){activeTab=v}}')(...keys.map(k=>env[k]));

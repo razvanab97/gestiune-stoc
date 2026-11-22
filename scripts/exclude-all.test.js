@@ -4,7 +4,7 @@
 const fs=require('fs'),path=require('path');
 const src=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
 const grab=n=>{let i=src.indexOf('async function '+n+'(');if(i<0)i=src.indexOf('function '+n+'(');if(i<0)throw new Error('lipsește '+n);let d=0,j=src.indexOf('{',i);for(let k=j;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0)return src.slice(i,k+1)}}};
-const code='let pcomExcluding=false;\n'+['pcomExcludeProtection','excludeAllPcom','uncommitPcomLine'].map(grab).join('\n');
+const code='let pcomExcluding=false;\nlet PCOM_IDX=null;\n'+['pcomRowById','pcomExcludeProtection','excludeAllPcom','uncommitPcomLine'].map(grab).join('\n');
 let failed=0;const eq=(n,a,b)=>{const ok=JSON.stringify(a)===JSON.stringify(b);if(!ok)failed++;console.log((ok?'OK   ':'FAIL ')+n+(ok?'':`\n       primit:   ${JSON.stringify(a)}\n       așteptat: ${JSON.stringify(b)}`));};
 function world(opts={}){
   const log=[];
