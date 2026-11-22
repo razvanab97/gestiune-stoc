@@ -25,6 +25,8 @@ async function supa(method,path,body){
 }
 
 module.exports=async function handler(req,res){
+  // Job zilnic (Vercel Cron): curățarea etichetelor AWB — mutat din api/ în lib/ ca să nu depășim cele 12 funcții ale planului gratuit.
+  if(String(req.query?.job||'')==='awb-cleanup')return require('../lib/awb-cleanup.js')(req,res);
   try{
     if(req.method==='GET'){
       const key=String(req.query?.key||'').trim();

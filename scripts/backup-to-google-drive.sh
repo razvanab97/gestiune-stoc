@@ -134,7 +134,7 @@ NOI=0; OCT=0; ESUATE=0; LA_RAND=0
 while IFS=$'\t' read -r bucket is_public; do
   [[ -n "$bucket" ]] || continue
   # etichetele AWB nu se pastreaza (cerut direct: „nu avem nevoie de o baza de date a AWB-urilor”); se sterg si din
-  # Supabase la 5 zile dupa impachetare (api/awb-cleanup.js)
+  # Supabase la 5 zile dupa impachetare (lib/awb-cleanup.js, apelat din api/settings.js)
   [[ " $FARA_BUCKETS " == *" $bucket "* ]] && continue
   [[ "$is_public" == "t" ]] || { STATUS="partial"; NOTE+=("bucket privat neacoperit: $bucket"); continue; }
   mkdir -p "$FIS/$bucket"
