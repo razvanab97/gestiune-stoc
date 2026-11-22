@@ -7,7 +7,7 @@ Două tipuri de timp, **separate** în statistici:
 | **În aplicație** (`source='web'`) — cronometrul „Timp azi" | Cât lucrezi TU efectiv în aplicația respectivă: tabul e cel selectat, fereastra are focus și ai input real. **Se oprește imediat când pleci de pe tab** (taburile fixate rămân deschise în fundal fără să acumuleze nimic) și continuă când revii. | `time-tracking.js`, direct din pagină |
 | **Dezvoltare AI** (`source='claude-code'/'codex'`) | Cât lucrezi cu AI la codul proiectului (activitatea sesiunilor Claude Code / Codex). | trackerul de pe Mac, `scripts/time-tracker.js` |
 
-Totul se salvează în **Supabase** (proiectul `cbpavtvrfpkbaeueexlw`, tabelul `time_sessions`), nu doar în browser.
+Totul se salvează în **Supabase** (proiectul `fwjgtfjzgvelnmxoyief`, tabelul `time_sessions`), nu doar în browser.
 
 ## Cronometrul manual „Start comenzi" (doar în Stoc Manager)
 

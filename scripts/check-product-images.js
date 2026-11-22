@@ -4,7 +4,7 @@
    pot muri oricând — de aici imaginile „dispărute" din Staff.
    Rulează: node scripts/check-product-images.js            (rezumat)
             node scripts/check-product-images.js --list     (și lista produselor cu probleme) */
-const U='https://cbpavtvrfpkbaeueexlw.supabase.co/rest/v1',K='sb_publishable_m7_oRHyxmrrvuGpudY9V1g_LM85ubbr';
+const U='https://fwjgtfjzgvelnmxoyief.supabase.co/rest/v1',K='sb_publishable_HcSbNgRNv9UF92O0yLoNJw_PlIU5vQt';
 const H={apikey:K,Authorization:'Bearer '+K};
 async function check(url){
   try{

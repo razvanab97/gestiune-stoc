@@ -17,8 +17,8 @@ const fs=require('fs'),os=require('os'),path=require('path'),{execFileSync}=requ
 
 const HOME=os.homedir(),STATE_DIR=path.join(HOME,'.ab-homes','time-tracker');
 const DEFAULTS={
-  supabaseUrl:'https://cbpavtvrfpkbaeueexlw.supabase.co',
-  supabaseKey:'sb_publishable_m7_oRHyxmrrvuGpudY9V1g_LM85ubbr', // aceeași cheie publică ca în aplicații (RLS dezactivat, single-user)
+  supabaseUrl:'https://fwjgtfjzgvelnmxoyief.supabase.co',
+  supabaseKey:'sb_publishable_HcSbNgRNv9UF92O0yLoNJw_PlIU5vQt', // aceeași cheie publică ca în aplicații (RLS dezactivat, single-user)
   device:'mac',
   timezone:'Europe/Bucharest',
   tickSeconds:5,            // cât de des verificăm

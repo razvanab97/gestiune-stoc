@@ -96,8 +96,8 @@
     mountOnly:script.dataset.mountOnly==='true',
     mode:script.dataset.mode==='view'?'view':'tab',
     idleMs:(Number(script.dataset.idle)||180)*1000,
-    url:(script.dataset.supaUrl||'https://cbpavtvrfpkbaeueexlw.supabase.co').replace(/\/$/,'')+'/rest/v1',
-    key:script.dataset.supaKey||'sb_publishable_m7_oRHyxmrrvuGpudY9V1g_LM85ubbr',
+    url:(script.dataset.supaUrl||'https://fwjgtfjzgvelnmxoyief.supabase.co').replace(/\/$/,'')+'/rest/v1',
+    key:script.dataset.supaKey||'sb_publishable_HcSbNgRNv9UF92O0yLoNJw_PlIU5vQt',
     tz:'Europe/Bucharest',
     liveSeconds:45,        // (modul „view") un heartbeat mai vechi de atât ⇒ sesiunea nu mai e activă
     refreshMs:Math.max(10,Number(script.dataset.refresh)||20)*1000   // data-refresh="60" = reîmprospătare la 60s (mai puțin trafic)

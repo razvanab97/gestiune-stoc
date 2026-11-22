@@ -7,7 +7,7 @@
 // AWB-ul în sine (numărul, curierul, fișierul-sursă) rămâne pe comandă; se șterge doar imaginea etichetei.
 // GET /api/awb-cleanup?dry=1 → doar numără, nu șterge nimic (oricine). Ștergerea reală: doar Vercel Cron
 // (Authorization: Bearer $CRON_SECRET când CRON_SECRET e setat; altfel user-agent vercel-cron).
-const SUPA_URL=process.env.SUPABASE_URL||'https://cbpavtvrfpkbaeueexlw.supabase.co';
+const SUPA_URL=process.env.SUPABASE_URL||'https://fwjgtfjzgvelnmxoyief.supabase.co';
 const SERVICE_KEY=process.env.SUPABASE_SERVICE_ROLE_KEY||'';
 const BUCKET='awb-labels';
 const ZILE=5;

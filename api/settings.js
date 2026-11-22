@@ -1,5 +1,5 @@
-const SUPA_URL=process.env.SUPABASE_URL||'https://cbpavtvrfpkbaeueexlw.supabase.co';
-const SUPA_KEY=process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.SUPABASE_ANON_KEY||'sb_publishable_m7_oRHyxmrrvuGpudY9V1g_LM85ubbr';
+const SUPA_URL=process.env.SUPABASE_URL||'https://fwjgtfjzgvelnmxoyief.supabase.co';
+const SUPA_KEY=process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.SUPABASE_ANON_KEY||'sb_publishable_HcSbNgRNv9UF92O0yLoNJw_PlIU5vQt';
 
 async function supa(method,path,body){
   const r=await fetch(`${SUPA_URL}/rest/v1/${path}`,{

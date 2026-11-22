@@ -1,7 +1,7 @@
 #!/bin/zsh
 set -euo pipefail
 
-# Backup Stoc Manager (Supabase cbpavtvrfpkbaeueexlw) -> Google Drive, ECONOM LA TRAFIC.
+# Backup Stoc Manager (Supabase fwjgtfjzgvelnmxoyief) -> Google Drive, ECONOM LA TRAFIC.
 #
 # De ce asa: varianta veche descarca in fiecare noapte TOATA baza (~270 MB) + TOATE fisierele (~366 MB) + CSV-uri
 # duplicate = ~0,6 GB/noapte, ~18 GB/luna, fata de 5 GB/luna inclusi in planul gratuit Supabase. Pe 21.11.2026
@@ -24,13 +24,13 @@ set -euo pipefail
 # la encodarea numelor din Storage) nu era gasit si backupul nocturn cadea din 16.09.2026 cu exit 127.
 export PATH="/opt/homebrew/bin:/usr/local/bin:$PATH"
 
-PROJECT_REF="cbpavtvrfpkbaeueexlw"
-DB_HOST="aws-1-eu-west-1.pooler.supabase.com"
+PROJECT_REF="fwjgtfjzgvelnmxoyief"
+DB_HOST="aws-0-eu-central-1.pooler.supabase.com"
 DB_PORT="5432"
 DB_NAME="postgres"
-DB_USER="postgres.cbpavtvrfpkbaeueexlw"
+DB_USER="postgres.fwjgtfjzgvelnmxoyief"
 SUPA_URL="https://${PROJECT_REF}.supabase.co"
-KEYCHAIN_SERVICE="ab-homes-gestiune-supabase-db"
+KEYCHAIN_SERVICE="ab-homes-gestiune-supabase-db-nou"
 BACKUP_ROOT="${AB_HOMES_BACKUP_ROOT:-$HOME/Contul meu Drive/Backup Stoc-Manager}"
 PG_BIN="/opt/homebrew/opt/libpq/bin"
 LOG_DIR="$HOME/Library/Logs/AB-HOMES"

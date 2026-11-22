@@ -6,8 +6,8 @@
 // NU expunem aici date interne sensibile (furnizor, preț de achiziție, marjă/verdict research) —
 // doar ce ar apărea oricum public pe un anunț real (nume, imagini, descriere, caracteristici, EAN, brand).
 
-const SUPA_URL=process.env.SUPABASE_URL||'https://cbpavtvrfpkbaeueexlw.supabase.co';
-const SUPA_KEY=process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.SUPABASE_ANON_KEY||'sb_publishable_m7_oRHyxmrrvuGpudY9V1g_LM85ubbr';
+const SUPA_URL=process.env.SUPABASE_URL||'https://fwjgtfjzgvelnmxoyief.supabase.co';
+const SUPA_KEY=process.env.SUPABASE_SERVICE_ROLE_KEY||process.env.SUPABASE_ANON_KEY||'sb_publishable_HcSbNgRNv9UF92O0yLoNJw_PlIU5vQt';
 
 async function supa(path){
   const r=await fetch(`${SUPA_URL}/rest/v1/${path}`,{headers:{'apikey':SUPA_KEY,'authorization':'Bearer '+SUPA_KEY}});
