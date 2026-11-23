@@ -5,7 +5,7 @@
 const fs=require('fs'),path=require('path');
 const src=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
 const grab=n=>{let i=src.indexOf('async function '+n+'(');if(i<0)i=src.indexOf('function '+n+'(');if(i<0)throw new Error('lipsește '+n);let d=0,j=src.indexOf('{',src.indexOf(')',i));for(let k=j;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0)return src.slice(i,k+1);}}throw new Error('neînchis '+n);};
-const names=['pcomSnoozeLabel','pcomSnooze','pcomUnsnooze','pcomWakeSnoozed','pcomReconcileApiDrafts','pcxGroupAwb','pcomStaffPackedConfirmed','pcxDeckCat','pcxDeckAddDays','pcxDeckWakeKey','pcxDeckSort','pcomTrendyolOlderOpenLines'];
+const names=['pcomSnoozeLabel','pcomSnooze','pcomUnsnooze','pcomWakeSnoozed','pcomReconcileApiDrafts','pcxGroupAwb','pcomStaffPackedConfirmed','pcxDeckIsWorked','pcxDeckWorkedLast','pcxDeckCat','pcxDeckAddDays','pcxDeckWakeKey','pcxDeckSort','pcomTrendyolOlderOpenLines'];
 const code='let pcomWaking=false;let pcomTyLookbackAt=0;\n'+names.map(grab).join('\n');
 let failed=0;const eq=(n,a,b)=>{const ok=JSON.stringify(a)===JSON.stringify(b);if(!ok)failed++;console.log((ok?'OK   ':'FAIL ')+n+(ok?'':`\n       primit:   ${JSON.stringify(a)}\n       așteptat: ${JSON.stringify(b)}`));};
 const TODAY='2026-11-23';
@@ -15,6 +15,7 @@ function world(lines,opts={}){
   const env={
     P,td:()=>TODAY,qty:p=>Math.max(0,parseFloat(p.bought)-parseFloat(p.sold)),
     pcomRowById:id=>(opts.rows||{})[id],
+    pcxOrderWorked:(pl,id)=>(opts.worked||[]).includes(pl+'|'+id),pcImpPlatforma:'emag',
     pcxFmtShortDate:d=>d.split('-').reverse().join('.'),
     toast:(m,t)=>log.push(['toast',m,t||'ok']),
     renderPcomImportPreview(){log.push(['render']);},savePcomImportState(){log.push(['save']);},
@@ -25,7 +26,7 @@ function world(lines,opts={}){
     console:{warn(){}},state:{p:lines}
   };
   const keys=Object.keys(env);
-  const api=new Function(...keys,'let pcImpParsed=state.p;'+code+';return {pcomSnooze,pcomUnsnooze,pcomWakeSnoozed,pcomReconcileApiDrafts,pcxDeckCat,pcxDeckAddDays,pcxDeckWakeKey,pcxDeckSort,pcomTrendyolOlderOpenLines,pcomSnoozeLabel,get lines(){return pcImpParsed},set lines(v){pcImpParsed=v}}')(...keys.map(k=>env[k]));
+  const api=new Function(...keys,'let pcImpParsed=state.p;'+code+';return {pcxDeckWorkedLast,pcxDeckIsWorked,pcomSnooze,pcomUnsnooze,pcomWakeSnoozed,pcomReconcileApiDrafts,pcxDeckCat,pcxDeckAddDays,pcxDeckWakeKey,pcxDeckSort,pcomTrendyolOlderOpenLines,pcomSnoozeLabel,get lines(){return pcImpParsed},set lines(v){pcImpParsed=v}}')(...keys.map(k=>env[k]));
   return{api,log,P};
 }
 const L=(o={})=>({platforma:'trendyol',_source:'api',comandaId:'C'+Math.random().toString(36).slice(2,6),pnk:'p',titluExtern:'T',data:'2026-11-20',produsId:2,cantitate:2,include:false,amanat:false,...o});
@@ -89,6 +90,13 @@ const L=(o={})=>({platforma:'trendyol',_source:'api',comandaId:'C'+Math.random()
    eq('amânată → Amânate (chiar dacă e fără produs)',c(idx([L({amanat:true,produsId:0})])),'amanate');
    eq('închisă pe platformă are prioritate față de amânată',c(idx([L({_remoteGone:1,amanat:true})])),'verifica');
    eq('închisă pe platformă dar deja inclusă/comisă → nu mai e „De verificat"',[c(idx([L({_remoteGone:1,include:true,_committedId:5})])),c(idx([L({_remoteGone:1,_committedId:3})]))],['in_staff','de_inclus']);}
+  console.log('\n— Comenzi lucrate (număr copiat) → la coada etapei —');
+  {const a=L({comandaId:'A'}),b=L({comandaId:'B'}),c=L({comandaId:'C'}),d=L({comandaId:'D',platforma:'emag'});
+   const w=world([a,b,c,d],{worked:['trendyol|A','trendyol|C']});const it=n=>({idxs:[n],key:'k'+n});const items=[it(0),it(1),it(2),it(3)];
+   eq('lucratele (A, C) coboară la coadă, fiecare grup păstrându-și ordinea',w.api.pcxDeckWorkedLast(items).map(x=>x.key),['k1','k3','k0','k2']);
+   const w2=world([a,b],{worked:[]});eq('nimic lucrat → aceeași listă',w2.api.pcxDeckWorkedLast([it(0),it(1)]).map(x=>x.key),['k0','k1']);
+   const w3=world([a,b],{worked:['trendyol|A','trendyol|B']});eq('totul lucrat → aceeași listă (nu se răstoarnă nimic)',w3.api.pcxDeckWorkedLast([it(0),it(1)]).map(x=>x.key),['k0','k1']);
+   eq('marcajul e pe platformă + număr: același număr pe altă platformă nu contează',w.api.pcxDeckIsWorked([3]),false);}
   console.log('\n— Ordinea în deck —');
   {const w=world([]);const mk=(k,dl,pos)=>({key:k,idxs:[],dl,pos});
    eq('De inclus: cel mai apropiat termen primul, fără termen la coadă',w.api.pcxDeckSort('de_inclus',[mk('c',Infinity,0),mk('b',200,1),mk('a',100,2)]).map(x=>x.key),['a','b','c']);
