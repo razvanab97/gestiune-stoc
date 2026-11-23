@@ -133,6 +133,32 @@ console.log('\n— Navigare rapidă și lista de pași —');
   eq('lista de pași se aplică după construirea paginii',/pcxRelocateSharedNodes\(\);\s*pcxChecklistApply\(\);/.test(src),true);
 }
 
+/* ── 5) aranjarea cardului „Previzualizare comenzi" (Update #768) ── */
+console.log('\n— Aranjarea cardului Previzualizare comenzi —');
+{
+  const a=src.indexOf('id="pcx-preview-card"'),b=src.indexOf('id="pcx-orders-list"',a);
+  const card=src.slice(a,b);
+  const pos=k=>card.indexOf(k);
+  eq('ordinea de sus în jos: antet+unelte → restanțe → filtre → deck → lista completă',
+    [pos('class="pcx-preview-hd"'),pos('id="pcx-stock-shortage"'),pos('class="pcx-filters pcx-filterbar"'),pos('id="pcx-deck"'),pos('class="pcx-deck-sep"')].every((v,i,arr)=>v>=0&&(i===0||v>arr[i-1])),true);
+  eq('unelte în antet (Cu stoc sus, Lista de comandat), nu pe un rând separat sub el',/class="pcx-pv-tools">[\s\S]{0,900}id="pcx-stock-sort-btn"[\s\S]{0,900}openPcomOrderStockSummary\(\)/.test(card),true);
+  eq('platforma + căutarea sunt în ACEEAȘI bară de filtre',/class="pcx-filters pcx-filterbar">[\s\S]{0,1600}id="pcx-fplat"[\s\S]{0,1600}id="pcx-search"[\s\S]{0,300}id="pcx-filter-platform"/.test(card),true);
+  eq('filtrul de status (se aplică doar listei) stă în antetul „Lista completă", nu deasupra deck-ului',/class="pcx-deck-sep">[\s\S]{0,200}id="pcx-filter-status"/.test(card)&&pos('id="pcx-filter-status"')>pos('id="pcx-deck"'),true);
+  eq('cele 4 valori ale filtrului de status există',['all','unmatched','pending','included'].every(v=>card.includes('<option value="'+v+'">')),true);
+  eq('antetul „Lista completă" păstrează clasa pcx-deck-sep (pcxRenderDeck îl ascunde cu deck-ul)',/sepEl\.classList\.contains\('pcx-deck-sep'\)/.test(src),true);
+  // rezumatul înlocuiește contoarele care repetau platformele (cu alte numere) și „Debifează toate" (există în bara de jos)
+  const sum=src.slice(src.indexOf('if(counters)counters.innerHTML='),src.indexOf('if(counters)counters.innerHTML=')+900);
+  eq('rezumat: comenzi · linii · incluse, plus avertismentele fără produs / arhivate',/pcomGroups\.length[\s\S]{0,80}comenzi[\s\S]{0,160}linii[\s\S]{0,160}incluse/.test(sum)&&/fără produs/.test(sum)&&/produs arhivat/.test(sum),true);
+  eq('contoarele „Total/eMAG/Trendyol" și butonul „Debifează toate" din antet au dispărut',!/pcx-counter">Total/.test(sum)&&!/pcx-deselect-chip/.test(sum),true);
+  eq('butonul „Cu stoc sus" are stare proprie („on"), nu stilul de buton mare .btn-acc',/ssBtn\.classList\.toggle\('on',pcxStockSort\)/.test(src),true);
+  eq('etapele: săgeți între cele din flux; „Amânate / De verificat" într-un grup separat (trec împreună pe rândul următor)',/pcx-deck-pipe">'\+PCX_DECK_PIPE\.map\(tabBtn\)\.join\('<span class="pcx-deck-chev"/.test(src)&&/class="pcx-deck-extra">/.test(src),true);
+  // antetul cardului de comandă: rând flexibil (era grilă cu 10 coloane pentru 11 elemente)
+  eq('antetul cardului de comandă e flex cu wrap (nu grilă cu coloane fixe)',/#page-pcom \.pcx-order-hd\{display:flex;flex-wrap:wrap;/.test(src),true);
+  eq('cumpărătorul ia restul rândului și poate fi tăiat cu „…", fără să ajungă la 0 px',/#page-pcom \.pcx-order-hd>\.pcx-order-buyer\{flex:1 1 150px;min-width:0\}/.test(src),true);
+  eq('insigna de termen și rândul „AWB asociat" au font propriu (moșteneau ≈31px din pagină)',/\.pcx-order-deadline\{[^}]*font-size:15px/.test(src)&&/\.pcx-order-awb-row\{font-size:16px\}/.test(src),true);
+  eq('pe ecran îngust: cardul din deck ia tot rândul, săgețile trec dedesubt, grila poate să se îngusteze (min-width:0)',/\.pcx-deck-main\{min-width:0\}/.test(src)&&/grid-template-areas:"main main" "prev next"/.test(src),true);
+}
+
 console.log(failed?`\nESUATE: ${failed}`:'\nTOATE TESTELE DE VITEZĂ (COMENZI PLATFORME) AU TRECUT');
 process.exit(failed?1:0);
 })().catch(e=>{console.error(e);process.exit(1);});
