@@ -187,6 +187,15 @@ eq('clasificatorul cunoaște tipul „comenzi_produs”',/enum:\[[^\]]*'comenzi_
 eq('aiChatSend are ramura „comenzi_produs” înaintea identificării ieftine din poză',/else if\(intent\.tip==='comenzi_produs'\)\{[\s\S]{0,300}aiChatRunOrdersLookup/.test(src)&&/intent\.tip!=='comenzi_produs'&&!intent\.produsNume/.test(src),true);
 eq('butonul 🔎 există în tab și în pop-up',['tab','popup'].every(s=>src.includes(`aiChatOrdersFromInput('${s}')`)&&src.includes(`id="aic-orders-img-${s}"`)),true);
 eq('dosarul produsului primește butonul „Vezi comenzile”',/\[\[comenzi:\$\{aiChatContext\.produsId\}\]\]/.test(src),true);
+console.log('\n— Cardul de candidat nu se deformează —');
+{
+  // bug real (Update #764, pop-up îngust): butonul avea clasa aic-sim-btn (width:100%) iar suprascrierea width:auto era mai sus în fișier → butonul
+  // ocupa tot rândul flex și strivea numele produsului într-o coloană de câteva litere
+  const css=src.slice(src.indexOf('.aic-alege{'),src.indexOf('.aic-alege{')+1500);
+  eq('butonul cardului NU mai folosește aic-sim-btn (width:100%)',/class="btn aic-alege-btn"/.test(A.aiChatPickProductHtml(2,'x'))&&!/aic-sim-btn/.test(A.aiChatPickProductHtml(2,'x')),true);
+  eq('regula butonului are specificitate mai mare și lățime automată, fără micșorare',/\.aic-alege \.aic-alege-btn\{[^}]*flex:0 0 auto;[^}]*width:auto;[^}]*white-space:nowrap/.test(css),true);
+  eq('textul cardului ia restul rândului și se poate îngusta fără să iasă din card',/\.aic-alege-tx\{[^}]*flex:1 1 0;[^}]*min-width:0/.test(css),true);
+}
 console.log(failed?`\nESUATE: ${failed}`:'\nTOATE TESTELE „COMENZI PE PRODUS” AU TRECUT');
 process.exit(failed?1:0);
 })().catch(e=>{console.error(e);process.exit(1);});

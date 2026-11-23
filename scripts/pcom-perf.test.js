@@ -108,6 +108,31 @@ console.log('\n— Cardurile închise nu construiesc liniile —');
   eq('card deschis cu un singur produs: o linie',lineCalls,1);
 }
 
+/* ── 4) navigare rapidă + „Pașii zilei" restrâns (Update #765) ── */
+console.log('\n— Navigare rapidă și lista de pași —');
+{
+  const store={};
+  const el={style:{display:'none'}},btn={cls:new Set(),attrs:{},classList:{toggle(c,on){on?btn.cls.add(c):btn.cls.delete(c);}},setAttribute(k,v){btn.attrs[k]=v;}};
+  const env={document:{getElementById:id=>id==='pcx-checklist'?el:id==='pcx-checklist-btn'?btn:null},
+    localStorage:{getItem:k=>(k in store?store[k]:null),setItem:(k,v)=>{store[k]=v;}},PCX_CHECKLIST_KEY:'k'};
+  const names=Object.keys(env);
+  const api=new Function(...names,`${grab('pcxChecklistApply')}\n${grab('pcxChecklistToggle')}\nreturn{pcxChecklistApply,pcxChecklistToggle}`)(...names.map(n=>env[n]));
+  api.pcxChecklistApply();
+  eq('prima deschidere (nimic memorat): pașii sunt restrânși',[el.style.display,btn.attrs['aria-expanded'],btn.cls.has('on')],['none','false',false]);
+  api.pcxChecklistToggle();
+  eq('click pe „Pașii zilei": se deschid, butonul devine activ, starea se memorează',[el.style.display,btn.attrs['aria-expanded'],btn.cls.has('on'),store.k],['','true',true,'1']);
+  el.style.display='none';api.pcxChecklistApply();
+  eq('la următoarea încărcare (starea memorată = deschis) pașii rămân deschiși',[el.style.display,store.k],['','1']);
+  api.pcxChecklistToggle();
+  eq('al doilea click: se restrâng din nou și se memorează',[el.style.display,store.k,btn.attrs['aria-expanded']],['none','0','false']);
+  const bad=new Function('document','localStorage','PCX_CHECKLIST_KEY',`${grab('pcxChecklistApply')}\n${grab('pcxChecklistToggle')}\nreturn{pcxChecklistApply,pcxChecklistToggle}`)(env.document,{getItem(){throw new Error('blocat');},setItem(){throw new Error('blocat');}},'k');
+  let threw=false;try{bad.pcxChecklistApply();bad.pcxChecklistToggle();}catch(e){threw=true;}
+  eq('fără localStorage (mod privat/blocat): nu aruncă, doar nu memorează',threw,false);
+  eq('ancorele există în pagină (comenzi, unelte, pași) și butoanele chemă funcțiile reale',
+    ['id="pcx-preview-card"','id="pcx-tools-anchor"','id="pcx-checklist"',"onclick=\"pcxJump('pcx-preview-card')\"","onclick=\"pcxJump('pcx-tools-anchor')\"",'onclick="pcxChecklistToggle()"'].every(x=>src.includes(x)),true);
+  eq('lista de pași se aplică după construirea paginii',/pcxRelocateSharedNodes\(\);\s*pcxChecklistApply\(\);/.test(src),true);
+}
+
 console.log(failed?`\nESUATE: ${failed}`:'\nTOATE TESTELE DE VITEZĂ (COMENZI PLATFORME) AU TRECUT');
 process.exit(failed?1:0);
 })().catch(e=>{console.error(e);process.exit(1);});
