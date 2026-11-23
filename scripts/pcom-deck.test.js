@@ -5,7 +5,7 @@
 const fs=require('fs'),path=require('path');
 const src=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
 const grab=n=>{let i=src.indexOf('async function '+n+'(');if(i<0)i=src.indexOf('function '+n+'(');if(i<0)throw new Error('lipsește '+n);let d=0,j=src.indexOf('{',src.indexOf(')',i));for(let k=j;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0)return src.slice(i,k+1);}}throw new Error('neînchis '+n);};
-const names=['pcomSnoozeLabel','pcomSnooze','pcomUnsnooze','pcomWakeSnoozed','pcomReconcileApiDrafts','pcxDeckCat','pcxDeckAddDays','pcxDeckWakeKey','pcxDeckSort','pcomTrendyolOlderOpenLines'];
+const names=['pcomSnoozeLabel','pcomSnooze','pcomUnsnooze','pcomWakeSnoozed','pcomReconcileApiDrafts','pcxGroupAwb','pcomStaffPackedConfirmed','pcxDeckCat','pcxDeckAddDays','pcxDeckWakeKey','pcxDeckSort','pcomTrendyolOlderOpenLines'];
 const code='let pcomWaking=false;let pcomTyLookbackAt=0;\n'+names.map(grab).join('\n');
 let failed=0;const eq=(n,a,b)=>{const ok=JSON.stringify(a)===JSON.stringify(b);if(!ok)failed++;console.log((ok?'OK   ':'FAIL ')+n+(ok?'':`\n       primit:   ${JSON.stringify(a)}\n       așteptat: ${JSON.stringify(b)}`));};
 const TODAY='2026-11-23';
@@ -14,6 +14,7 @@ function world(lines,opts={}){
   const P=[{id:1,name:'Cutie',bought:'0',sold:'0'},{id:2,name:'Perie',bought:'10',sold:'2'}];
   const env={
     P,td:()=>TODAY,qty:p=>Math.max(0,parseFloat(p.bought)-parseFloat(p.sold)),
+    pcomRowById:id=>(opts.rows||{})[id],
     pcxFmtShortDate:d=>d.split('-').reverse().join('.'),
     toast:(m,t)=>log.push(['toast',m,t||'ok']),
     renderPcomImportPreview(){log.push(['render']);},savePcomImportState(){log.push(['save']);},
@@ -67,22 +68,31 @@ const L=(o={})=>({platforma:'trendyol',_source:'api',comandaId:'C'+Math.random()
    eq('doar linia API necomisă absentă din platformă e marcată (_remoteGone)',[!!open._remoteGone,!!gone._remoteGone,!!com._remoteGone,!!file._remoteGone,!!emag._remoteGone,ch],[false,true,false,false,false,1]);
    eq('deck: aceea e „De verificat"',w.api.pcxDeckCat([1]),'verifica');
    w.api.pcomReconcileApiDrafts('trendyol',keyOf,new Set([keyOf(gone),keyOf(open)]),undefined);
-   eq('dacă platforma o arată iar deschisă, marcajul dispare',[!!gone._remoteGone,w.api.pcxDeckCat([1])],[false,'proc']);
+   eq('dacă platforma o arată iar deschisă, marcajul dispare',[!!gone._remoteGone,w.api.pcxDeckCat([1])],[false,'de_inclus']);
    const kept=L({comandaId:'V1',data:'2026-10-01'}),w2=world([kept]);
    w2.api.pcomReconcileApiDrafts('trendyol',keyOf,new Set(),o=>o.data<'2026-11-10');
    eq('istoric necitit (keep): linia veche nu se marchează',!!kept._remoteGone,false);}
-  console.log('\n— Categorii deck —');
-  {const w=world([]);const c=w.api.pcxDeckCat;const idx=a=>{w.api.lines=a;return[...a.keys()]};
-   eq('neinclusă → De procesat',c(idx([L()])),'proc');
-   eq('inclusă → Incluse',c(idx([L({include:true})])),'incluse');
-   eq('amânată → Amânate',c(idx([L({amanat:true})])),'amanate');
-   eq('comandă cu 2 linii, una inclusă → încă De procesat',c(idx([L({include:true}),L()])),'proc');
+  console.log('\n— Etape deck —');
+  {const rows={5:{awb:'123'},6:{awb:''},7:{awb:'9',impachetat:true,staffFinalizatAt:'2026-11-23T10:00'},8:{awb:'9',impachetat:true,staffFinalizatAt:''},9:{awb:''}};
+   const w=world([],{rows});const c=w.api.pcxDeckCat;const idx=a=>{w.api.lines=a;return[...a.keys()]};
+   eq('fără produs → 🧩 Fără produs',c(idx([L({produsId:0})])),'produs');
+   eq('cu produs, neinclusă → ▶ De inclus',c(idx([L()])),'de_inclus');
+   eq('comandă cu 2 linii, una inclusă → încă De inclus',c(idx([L({include:true}),L()])),'de_inclus');
+   eq('o linie fără produs în comandă → Fără produs (nu poate fi inclusă)',c(idx([L({include:true}),L({produsId:0})])),'produs');
+   eq('inclusă Trendyol, fără AWB în bază → 📮 Așteaptă AWB',c(idx([L({include:true,_committedId:6})])),'awb');
+   eq('inclusă eMAG, fără AWB → 📮 Așteaptă AWB',c(idx([L({platforma:'emag',include:true,_committedId:9})])),'awb');
+   eq('inclusă, cu AWB → 📦 În Staff',c(idx([L({include:true,_committedId:5})])),'in_staff');
+   eq('Vinted inclusă fără cod → 📦 În Staff (codul e opțional)',c(idx([L({platforma:'vinted',include:true})])),'in_staff');
+   eq('împachetată DAR neconfirmată de Staff → încă În Staff',c(idx([L({include:true,_committedId:8})])),'in_staff');
+   eq('împachetată și confirmată în Staff → ✔ De închis',c(idx([L({include:true,_committedId:7})])),'de_inchis');
+   eq('comandă cu 2 linii, doar una confirmată → încă În Staff',c(idx([L({include:true,_committedId:7}),L({include:true,_committedId:5})])),'in_staff');
+   eq('amânată → Amânate (chiar dacă e fără produs)',c(idx([L({amanat:true,produsId:0})])),'amanate');
    eq('închisă pe platformă are prioritate față de amânată',c(idx([L({_remoteGone:1,amanat:true})])),'verifica');
-   eq('închisă pe platformă dar deja inclusă/comisă → nu mai e „De verificat"',[c(idx([L({_remoteGone:1,include:true})])),c(idx([L({_remoteGone:1,_committedId:3})]))],['incluse','proc']);}
+   eq('închisă pe platformă dar deja inclusă/comisă → nu mai e „De verificat"',[c(idx([L({_remoteGone:1,include:true,_committedId:5})])),c(idx([L({_remoteGone:1,_committedId:3})]))],['in_staff','de_inclus']);}
   console.log('\n— Ordinea în deck —');
   {const w=world([]);const mk=(k,dl,pos)=>({key:k,idxs:[],dl,pos});
-   eq('De procesat: cel mai apropiat termen primul, fără termen la coadă',w.api.pcxDeckSort('proc',[mk('c',Infinity,0),mk('b',200,1),mk('a',100,2)]).map(x=>x.key),['a','b','c']);
-   eq('termene egale → ordinea din listă',w.api.pcxDeckSort('proc',[mk('y',5,1),mk('x',5,0)]).map(x=>x.key),['x','y']);
+   eq('De inclus: cel mai apropiat termen primul, fără termen la coadă',w.api.pcxDeckSort('de_inclus',[mk('c',Infinity,0),mk('b',200,1),mk('a',100,2)]).map(x=>x.key),['a','b','c']);
+   eq('termene egale → ordinea din listă',w.api.pcxDeckSort('de_inclus',[mk('y',5,1),mk('x',5,0)]).map(x=>x.key),['x','y']);
    eq('pcxDeckAddDays(1) = mâine',w.api.pcxDeckAddDays(1),'2026-11-24');}
   console.log('\n— Istoric Trendyol peste fereastra de 14 zile —');
   {const w=world([],{apiLines:[{comandaId:'X1'}]});const r=await w.api.pcomTrendyolOlderOpenLines('2026-11-10');
