@@ -5,12 +5,12 @@
 const fs=require('fs'),path=require('path');
 const src=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
 const grab=n=>{let i=src.indexOf('async function '+n+'(');if(i<0)i=src.indexOf('function '+n+'(');if(i<0)throw new Error('lipsește '+n);let d=0,j=src.indexOf('{',src.indexOf(')',i));for(let k=j;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0)return src.slice(i,k+1);}}throw new Error('neînchis '+n);};
-const names=['pcomSnoozeLabel','pcomSnooze','pcomUnsnooze','pcomWakeSnoozed','pcomReconcileApiDrafts','pcxGroupAwb','pcomStaffPackedConfirmed','pcxDeckIsWorked','pcxDeckWorkedLast','pcxDeckCat','pcxDeckAddDays','pcxDeckWakeKey','pcxDeckSort','pcomTrendyolOlderOpenLines'];
-const code='let pcomWaking=false;let pcomTyLookbackAt=0;\n'+names.map(grab).join('\n');
+const names=['pcomSnoozeLabel','pcomSnooze','pcomUnsnooze','pcomWakeSnoozed','pcomReconcileApiDrafts','pcxGroupAwb','pcomStaffPackedConfirmed','pcxDeckIsWorked','pcxDeckWorkedLast','pcxDeckCat','pcxDeckAddDays','pcxDeckWakeKey','pcxDeckSort','pcomTrendyolOlderOpenLines','pcomFinDismissed','pcomFinDismissLines','pcomEmagFinalizedLookback'];
+const code='let pcomWaking=false;let pcomTyLookbackAt=0;const PCOM_FIN_DISMISS_KEY="k",PCOM_FIN_DAYS=14;let pcomEmagFinAt=0;\n'+names.map(grab).join('\n');
 let failed=0;const eq=(n,a,b)=>{const ok=JSON.stringify(a)===JSON.stringify(b);if(!ok)failed++;console.log((ok?'OK   ':'FAIL ')+n+(ok?'':`\n       primit:   ${JSON.stringify(a)}\n       așteptat: ${JSON.stringify(b)}`));};
 const TODAY='2026-11-23';
 function world(lines,opts={}){
-  const log=[];
+  const log=[],store=opts.store||{};
   const P=[{id:1,name:'Cutie',bought:'0',sold:'0'},{id:2,name:'Perie',bought:'10',sold:'2'}];
   const env={
     P,td:()=>TODAY,qty:p=>Math.max(0,parseFloat(p.bought)-parseFloat(p.sold)),
@@ -23,10 +23,14 @@ function world(lines,opts={}){
     pcomExcludeProtection:it=>it._protejat||'',
     isInReorderList:id=>!!opts.inReorder,pushReorderEntry:p=>log.push(['reorder',p.id]),
     apiJson:async(u,b)=>{log.push(['api',b.startDate,b.endDate]);if(opts.apiFail)throw new Error('rețea');return{lines:(opts.apiLines||[])};},
+    localEmagJson:async(pth,b)=>{log.push(['emag',pth,b.from,b.to]);if(opts.emagFail)throw new Error('conector oprit');return{lines:opts.finLines||[]};},
+    dbGet:async u=>{log.push(['db',u]);if(opts.dbFail)throw new Error('db');return opts.dbRows||[];},
+    pcomEmagMatchLine:r=>({...r,platforma:'emag',produsId:null,include:true}),pcomApplyRecentFlags(){},pcomTranslateForeignTitles(){},
+    localStorage:{getItem:k=>(store[k]===undefined?null:store[k]),setItem:(k,v)=>{store[k]=v;}},
     console:{warn(){}},state:{p:lines}
   };
   const keys=Object.keys(env);
-  const api=new Function(...keys,'let pcImpParsed=state.p;'+code+';return {pcxDeckWorkedLast,pcxDeckIsWorked,pcomSnooze,pcomUnsnooze,pcomWakeSnoozed,pcomReconcileApiDrafts,pcxDeckCat,pcxDeckAddDays,pcxDeckWakeKey,pcxDeckSort,pcomTrendyolOlderOpenLines,pcomSnoozeLabel,get lines(){return pcImpParsed},set lines(v){pcImpParsed=v}}')(...keys.map(k=>env[k]));
+  const api=new Function(...keys,'let pcImpParsed=state.p;'+code+';return {pcomEmagFinalizedLookback,pcomFinDismissLines,pcxDeckWorkedLast,pcxDeckIsWorked,pcomSnooze,pcomUnsnooze,pcomWakeSnoozed,pcomReconcileApiDrafts,pcxDeckCat,pcxDeckAddDays,pcxDeckWakeKey,pcxDeckSort,pcomTrendyolOlderOpenLines,pcomSnoozeLabel,get lines(){return pcImpParsed},set lines(v){pcImpParsed=v}}')(...keys.map(k=>env[k]));
   return{api,log,P};
 }
 const L=(o={})=>({platforma:'trendyol',_source:'api',comandaId:'C'+Math.random().toString(36).slice(2,6),pnk:'p',titluExtern:'T',data:'2026-11-20',produsId:2,cantitate:2,include:false,amanat:false,...o});
@@ -97,6 +101,32 @@ const L=(o={})=>({platforma:'trendyol',_source:'api',comandaId:'C'+Math.random()
    const w2=world([a,b],{worked:[]});eq('nimic lucrat → aceeași listă',w2.api.pcxDeckWorkedLast([it(0),it(1)]).map(x=>x.key),['k0','k1']);
    const w3=world([a,b],{worked:['trendyol|A','trendyol|B']});eq('totul lucrat → aceeași listă (nu se răstoarnă nimic)',w3.api.pcxDeckWorkedLast([it(0),it(1)]).map(x=>x.key),['k0','k1']);
    eq('marcajul e pe platformă + număr: același număr pe altă platformă nu contează',w.api.pcxDeckIsWorked([3]),false);}
+  console.log('\n— eMAG: finalizate (AWB emis) neînregistrate, ultimele 14 zile —');
+  {const F=(id,o={})=>({comandaId:id,titluExtern:'T'+id,cantitate:1,statusEmag:4,finalizareLa:'2026-11-20 10:00:00',tara:'RO',...o});
+   const known=L({platforma:'emag',comandaId:'K1'});
+   const w=world([known],{finLines:[F('N1'),F('K1'),F('D1'),F('N2'),F('DB1')],dbRows:[{comanda_id:'DB1'}],store:{k:JSON.stringify(['D1'])}});
+   const n=await w.api.pcomEmagFinalizedLookback(false);
+   const call=w.log.find(l=>l[0]==='emag');
+   eq('cere conectorului finalizatele din ultimele 14 zile (azi-14 → mâine)',[call[1],call[2],call[3]],['/orders-historical','2026-11-09','2026-11-24']);
+   eq('adaugă DOAR ce nu e în bază / ciornă / respins: N1 și N2',[n,w.api.lines.slice(1).map(x=>x.comandaId)],[2,['N1','N2']]);
+   const add=w.api.lines[1];
+   eq('liniile noi: finalizată, „închisă pe platformă" (→ De verificat), NEincluse, fără produs forțat',[add._finalizataEmag,!!add._remoteGone,add.include,add._source,w.api.pcxDeckCat([1])],[true,true,false,'api','verifica']);
+   eq('verifică în bază direct, în bucăți, cu ID-urile comenzilor',w.log.find(l=>l[0]==='db')[1].startsWith('platforma_comenzi?platforma=eq.emag&comanda_id=in.(N1,K1,D1,N2,DB1)'),true);
+   eq('nu scrie nimic: doar citire (conector + GET în bază) — fără comitere/salvare de linii',w.log.filter(l=>['sync','save','api'].includes(l[0])).length+w.log.filter(l=>l[0]==='db'&&/method|POST|PATCH/.test(String(l[1]))).length,0);
+   // eliminare → nu se mai readuce
+   w.api.pcomFinDismissLines([w.api.lines[1]]);w.api.lines=w.api.lines.filter(x=>x.comandaId!=='N1');w.log.length=0;
+   const n2=await w.api.pcomEmagFinalizedLookback(false);
+   eq('N1 eliminat de utilizator nu mai revine; N2 (deja în ciornă) nu se dublează',[n2,w.api.lines.map(x=>x.comandaId)],[0,['K1','N2']]);
+   // fundal: cel mult o dată pe oră
+   w.log.length=0;const n3=await w.api.pcomEmagFinalizedLookback(true);
+   eq('în fundal, în aceeași oră: nu mai apelează conectorul',[n3,w.log.length],[0,0]);}
+  {const w=world([],{finLines:[{comandaId:'X1',titluExtern:'T',cantitate:1}],dbFail:true});
+   eq('dacă nu se poate verifica în bază → nu adaugă nimic (nu riscă dubluri)',[await w.api.pcomEmagFinalizedLookback(false),w.api.lines.length],[0,0]);}
+  {const w=world([],{emagFail:true});
+   eq('conector oprit → 0, fără erori',await w.api.pcomEmagFinalizedLookback(false),0);}
+  {const a=L({comandaId:'A',_finalizataEmag:true}),b=L({comandaId:'B'}),store={},w=world([a,b],{store});
+   w.api.pcomFinDismissLines([a,b]);
+   eq('se memorează doar liniile „finalizate neînregistrate", nu orice linie eliminată',JSON.parse(store.k),['A']);}
   console.log('\n— Ordinea în deck —');
   {const w=world([]);const mk=(k,dl,pos)=>({key:k,idxs:[],dl,pos});
    eq('De inclus: cel mai apropiat termen primul, fără termen la coadă',w.api.pcxDeckSort('de_inclus',[mk('c',Infinity,0),mk('b',200,1),mk('a',100,2)]).map(x=>x.key),['a','b','c']);
