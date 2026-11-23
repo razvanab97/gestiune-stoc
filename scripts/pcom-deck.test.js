@@ -6,7 +6,7 @@ const fs=require('fs'),path=require('path');
 const src=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
 const grab=n=>{let i=src.indexOf('async function '+n+'(');if(i<0)i=src.indexOf('function '+n+'(');if(i<0)throw new Error('lipsește '+n);let d=0,j=src.indexOf('{',src.indexOf(')',i));for(let k=j;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0)return src.slice(i,k+1);}}throw new Error('neînchis '+n);};
 const names=['pcomSnoozeLabel','pcomSnooze','pcomUnsnooze','pcomWakeSnoozed','pcomReconcileApiDrafts','pcxGroupAwb','pcomStaffPackedConfirmed','pcxDeckIsWorked','pcxDeckWorkedLast','pcxDeckCat','pcxDeckAddDays','pcxDeckWakeKey','pcxDeckSort','pcomTrendyolOlderOpenLines','pcomFinDismissed','pcomFinDismissLines','pcomEmagFinalizedLookback'];
-const code='let pcomWaking=false;let pcomTyLookbackAt=0;const PCOM_FIN_DISMISS_KEY="k",PCOM_FIN_DAYS=14;let pcomEmagFinAt=0;\n'+names.map(grab).join('\n');
+const code='let pcomWaking=false;let pcomTyLookbackAt=0;const PCOM_FIN_DISMISS_KEY="k",PCOM_FIN_DAYS=14;let pcomEmagFinAt=0;const pcxDeckCopied=new Set();\n'+names.map(grab).join('\n');
 let failed=0;const eq=(n,a,b)=>{const ok=JSON.stringify(a)===JSON.stringify(b);if(!ok)failed++;console.log((ok?'OK   ':'FAIL ')+n+(ok?'':`\n       primit:   ${JSON.stringify(a)}\n       așteptat: ${JSON.stringify(b)}`));};
 const TODAY='2026-11-23';
 function world(lines,opts={}){
@@ -100,6 +100,7 @@ const L=(o={})=>({platforma:'trendyol',_source:'api',comandaId:'C'+Math.random()
    eq('lucratele (A, C) coboară la coadă, fiecare grup păstrându-și ordinea',w.api.pcxDeckWorkedLast(items).map(x=>x.key),['k1','k3','k0','k2']);
    const w2=world([a,b],{worked:[]});eq('nimic lucrat → aceeași listă',w2.api.pcxDeckWorkedLast([it(0),it(1)]).map(x=>x.key),['k0','k1']);
    const w3=world([a,b],{worked:['trendyol|A','trendyol|B']});eq('totul lucrat → aceeași listă (nu se răstoarnă nimic)',w3.api.pcxDeckWorkedLast([it(0),it(1)]).map(x=>x.key),['k0','k1']);
+   eq('cardul de pe ecran (copiat acum) rămâne pe loc; coboară abia după ce treci mai departe',[w.api.pcxDeckWorkedLast(items,'k0').map(x=>x.key),w.api.pcxDeckWorkedLast(items,'k1').map(x=>x.key)],[['k0','k1','k3','k2'],['k1','k3','k0','k2']]);
    eq('marcajul e pe platformă + număr: același număr pe altă platformă nu contează',w.api.pcxDeckIsWorked([3]),false);}
   console.log('\n— eMAG: finalizate (AWB emis) neînregistrate, ultimele 14 zile —');
   {const F=(id,o={})=>({comandaId:id,titluExtern:'T'+id,cantitate:1,statusEmag:4,finalizareLa:'2026-11-20 10:00:00',tara:'RO',...o});
