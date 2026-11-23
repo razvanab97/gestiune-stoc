@@ -5506,6 +5506,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:763,text:'Comenzi Platforme — viteză, cerut direct: „verifică pagina Comenzi Platforme și vezi ce merge greu”. Măsurat pe datele reale (214 linii, 207 carduri), în aplicația rulată: (1) ciorna previzualizării (~150 KB) se rescria în localStorage și se retrimitea în cloud după fiecare randare, chiar fără nicio schimbare — pagina se randează la 20s și la fiecare click, deci ~3 trimiteri de 150 KB pe minut cât era deschisă (trafic + scrieri inutile în bază, și un al doilea dispozitiv deschis îți putea suprascrie ciorna cu una veche). Acum se scrie doar când conținutul diferă de ce s-a salvat ultima oară (și doar dacă serverul răspunde OK); după „Resetează” se scrie din nou normal. 3 randări în repaus: 3 trimiteri → 0; o schimbare reală: 1. (2) Cardurile ÎNCHISE construiau în ascuns tot corpul cu liniile (poze, prețuri, butoane) — 1,5 MB de HTML și 14.600 de elemente pe pagină; acum corpul se construiește doar când deschizi cardul: 597 KB, 6.300 de elemente (pagina: 20.600 → 12.300), deschiderea/închiderea unui card 40 ms → ~20 ms, iar „Detalii în listă” din deck ajunge la fel de exact pe card. (3) Căutarea se reface după o pauză scurtă de tastare (180 ms), nu la fiecare literă: 6 litere tastate repede = 1 randare, nu 6. Nimic altceva nu s-a schimbat (aceleași carduri, aceleași butoane, aceleași reguli). Verificat de 2 ori: sintaxă (node --check) + test nou scripts/pcom-perf.test.js pe funcțiile reale (pică pe codul vechi) + toate cele 10 teste existente + măsurători în aplicația rulată (copie cu scrierile blocate).',date:'2026-11-24'},
   {n:762,text:'Restanțe pe stoc — produsele cu comenzi și fără stoc, evidența reparată (faza 1, doar citire), cerut direct: „avem o problemă în a ține evidența produselor care au comenzi și nu au stoc — verifică cum funcționează acum și propune cum am putea repara”. Verificat pe datele reale: existau 4 mecanisme care nu comunicau (lista manuală „Produse de comandat” — fără cantitate, fără legătură cu comenzile, resetată în fiecare lună; lista „fără stoc suficient” doar din buton; „Lista locală de aprovizionare”; comenzile furnizor „pe drum”), iar „Stoc zero” din Staff rămânea simplu badge. Rezultat: 45 de produse cu comenzi peste stoc (223 buc.), din care 17 fără nicio comandă la furnizor — dar pe lista lunii era doar 1. Acum: o singură bandă „📦 Restanțe pe stoc” în Comenzi Platforme (în locul butonului „Doar lipsurile de stoc”), CALCULATĂ din comenzile deschise, nu ținută de mână: cerut (liniile neaplicate încă + comenzile raportate „Stoc zero” de Staff, aplicate dar fără marfă fizică — stocul nu mai poate fi negativ, deci altfel nu s-ar mai vedea) − stoc − pe drum (comenzi furnizor nefinalizate + câmpul „Drum”). Patru stări automate: 🔴 de comandat (nimic comandat) · 🟠 comandat parțial · 🟡 comandat integral, așteaptă sosirea (⛔ dacă a întârziat) · dispare singur când stocul acoperă comenzile. Banda e o linie, restrânsă; la click arată pe fiecare produs: poza, furnizorul, codul (cu copiere), cerut/stoc/pe drum, comanda furnizor, comenzile care așteaptă (platformă, număr, dată, cantitate) și cât trebuie comandat; „📋 Copiază lista de comandat” dă textul gata de trimis, grupat pe furnizor. Dashboard → „De comandat” arată acum numărul real (produse cu comenzi fără marfă comandată), nu intrările din lista manuală. Nu scrie nimic nicăieri; „Produse de comandat” rămâne neschimbată (pentru reaprovizionare preventivă). Faza 2 (propusă): „Comandat” creează singur linia în comenzile furnizor. Verificat de 2 ori: sintaxă (node --check) + test nou scripts/backlog.test.js pe funcțiile reale + același calcul rulat pe datele de producție.',date:'2026-11-23'},
   {n:761,text:'Comenzi Platforme → deck — „↘ Detalii în listă” te duce EXACT pe rândul comenzii, cerut direct („exact pe rândul ei, nu în altă parte sau general”). Înainte, derularea pornea cât timp lista încă se schimba (cardul se deschidea, se re-randa) și te lăsa uneori la mii de pixeli de comandă, iar alteori rândul rămânea sub antetul fix. Acum: deschide cardul, aliniază capul rândului imediat sub antet (măsoară înălțimea antetului fix) și REVERIFICĂ de câteva ori în ~1,5 secunde, pe măsură ce pozele se încarcă și lista se așază, până rămâne fix pe rând; rândul e evidențiat scurt. Dacă derulezi tu între timp (roată, atingere, tastă), se oprește imediat. Verificat de 2 ori: browser pe copie izolată, 5 comenzi din etape și poziții diferite (inclusiv pornind de jos) — de fiecare dată rândul comenzii exacte, deschis, cu capul la 12 px sub antet — plus captură de ecran.',date:'2026-11-23'},
   {n:760,text:'Comenzi Platforme → deck — corecție la #756, cerut direct: „să se ducă în capătul listei cele copiate după ce am apăsat butonul de next, nu imediat ce am copiat”. Acum, după „⧉ Copiază”, cardul RĂMÂNE pe ecran (poți continua cu el: include, AWB, amânare), cu mențiunea „✓ copiată — trece la coadă la Următoarea”; abia când apeși „Următoarea ›” (sau săgețile / alt card) comanda coboară la sfârșitul listei din etapa ei, iar deck-ul arată următoarea. O re-randare (reîmprospătare automată, resincronizarea marcajelor din bază la 20 s) nu mută cardul de pe ecran. Verificat de 2 ori: sintaxă + testele din scripts/ + browser pe copie izolată (copiere → stă pe loc 1,5 s și după re-randare și după pierderea marcajului din bază → Următoarea: ultima din 66, pe loc apare următoarea).',date:'2026-11-23'},
@@ -23788,19 +23789,31 @@ function renderPcomImportPreview(){
 // inclus) tot se salvează, la fiecare rând. Dacă totuși scrierea eșuează (import foarte mare), utilizatorul
 // e avertizat direct, o singură dată, nu tăcut ca înainte.
 let pcomSaveFailWarned=false;
+// Ultimul conținut al ciornei deja scris local / deja trimis în cloud (Update #763). Pagina se randează
+// din nou la fiecare 20s (reîmprospătarea live) și la orice click, iar fiecare randare chema
+// savePcomImportState → ciorna întreagă (~150 KB, 200+ linii) se reScria în localStorage și se retrimitea
+// în cloud la 2s, CHIAR DACĂ nu se schimbase nimic: ~3 trimiteri/minut cât pagina era deschisă (măsurat pe
+// date reale: 3 randări în repaus = 3 POST-uri de 153 KB) — trafic și scrieri inutile în baza de date, și
+// un risc real: un al doilea dispozitiv cu pagina deschisă îți suprascria ciorna din cloud cu una veche.
+// Acum scriem doar când conținutul chiar diferă de ce am scris ultima oară.
+let pcomDraftLocalSig='',pcomDraftCloudSig='';
 function savePcomImportState(){
   const toSave=pcImpParsed.map(it=>it.vintedImg?{...it,vintedImg:''}:it);
-  try{
-    localStorage.setItem(PCIK,JSON.stringify({platforma:pcImpPlatforma,parsed:toSave}));
-    pcomSaveFailWarned=false;
-  }catch(e){
-    console.warn('Nu s-a putut salva automat previzualizarea Comenzi Platforme:',e);
-    if(!pcomSaveFailWarned){
-      pcomSaveFailWarned=true;
-      toast('⚠ Nu s-a putut salva automat progresul (prea multe date în previzualizare) — aplică importul curând, ca să nu-l pierzi la reîncărcare','err');
+  const json=JSON.stringify({platforma:pcImpPlatforma,parsed:toSave});
+  if(json!==pcomDraftLocalSig){
+    try{
+      localStorage.setItem(PCIK,json);
+      pcomDraftLocalSig=json;
+      pcomSaveFailWarned=false;
+    }catch(e){
+      console.warn('Nu s-a putut salva automat previzualizarea Comenzi Platforme:',e);
+      if(!pcomSaveFailWarned){
+        pcomSaveFailWarned=true;
+        toast('⚠ Nu s-a putut salva automat progresul (prea multe date în previzualizare) — aplică importul curând, ca să nu-l pierzi la reîncărcare','err');
+      }
     }
   }
-  schedulePcomCloudDraftSave(toSave);
+  if(json!==pcomDraftCloudSig)schedulePcomCloudDraftSave(toSave,json);
 }
 // Salvare în cloud, cu debounce (2s după ultima schimbare) — nu la fiecare randare (ar însemna un
 // request Supabase la fiecare bifă/cantitate ajustată, pe un import de zeci de linii). localStorage
@@ -23808,20 +23821,23 @@ function savePcomImportState(){
 // pentru „s-a blocat browser-ul"/„vreau să continui de pe alt calculator" — eșuează tăcut (doar
 // console.warn) dacă nu merge, ca să nu blocheze fluxul normal cu erori pentru o funcție de backup.
 let pcomCloudDraftTimer=null;
-function schedulePcomCloudDraftSave(toSave){
+function schedulePcomCloudDraftSave(toSave,json){
   clearTimeout(pcomCloudDraftTimer);
-  pcomCloudDraftTimer=setTimeout(()=>savePcomImportStateToCloud(toSave),2000);
+  pcomCloudDraftTimer=setTimeout(()=>savePcomImportStateToCloud(toSave,json),2000);
 }
-async function savePcomImportStateToCloud(toSave){
+async function savePcomImportStateToCloud(toSave,json){
   try{
     const value=toSave.length?JSON.stringify({platforma:pcImpPlatforma,parsed:toSave,savedAt:Date.now()}):'';
-    await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:PCOM_DRAFT_SETTINGS_KEY,value})});
+    const r=await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:PCOM_DRAFT_SETTINGS_KEY,value})});
+    // Marcăm „trimis” doar dacă serverul a răspuns OK — altfel următoarea randare încearcă din nou.
+    if(json&&r&&r.ok)pcomDraftCloudSig=json;
   }catch(e){console.warn('Nu am putut salva previzualizarea Comenzi Platforme în cloud (rămâne salvată local):',e);}
 }
 // Curăță explicit backup-ul din cloud — apelat la aplicare completă cu succes sau la „Resetează
 // pagina", ca un draft vechi/aplicat deja să nu fie oferit din greșeală la recuperare pe alt browser.
 async function clearPcomCloudDraft(){
   clearTimeout(pcomCloudDraftTimer);
+  pcomDraftLocalSig='';pcomDraftCloudSig='';   // ciorna a fost ștearsă: următoarea salvare, chiar identică cu cea veche, trebuie scrisă din nou
   try{await fetch('/api/settings',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({key:PCOM_DRAFT_SETTINGS_KEY,value:''})});}
   catch(e){console.warn('Nu am putut curăța backup-ul din cloud:',e);}
 }
@@ -24400,7 +24416,7 @@ function pcxOrderCardHtml(idxs,gIdx){
     ${awbExtraForHeader.length?`<div class="pcx-order-awb-row"><span style="font-weight:700;color:var(--gr)">📦 AWB suplimentar${awbExtraForHeader.length>1?'e':''}: <span style="font-family:var(--mono)">${awbExtraForHeader.map(esc).join(', ')}</span></span></div>`:''}
     ${awbChipHtml?`<div class="pcx-order-awb-row">${awbChipHtml}</div>`:''}
     <div class="pcx-order-body" style="${open?'':'display:none'}">
-      ${multi?idxs.map(i=>pcxLineHtml(i,idxs)).join(''):pcxLineHtml(idxs[0],idxs)}
+      ${open?(multi?idxs.map(i=>pcxLineHtml(i,idxs)).join(''):pcxLineHtml(idxs[0],idxs)):''}
     </div>
   </div>`;
 }
@@ -25541,7 +25557,13 @@ function pcxRenderPlatChips(){
     const nb=b.querySelector('b');if(nb&&nb.textContent!==String(n))nb.textContent=n;
   });
 }
+// Căutarea se reface după o scurtă pauză de tastare (Update #763), nu la fiecare literă: fiecare randare
+// parcurge toate comenzile (~40–70 ms pe 200+ comenzi), deci 10 litere tastate repede = 10 randări
+// la rând și tastarea „se târa". Citește valoarea curentă din câmp, deci nu se pierde nicio literă.
+let pcxSearchTimer=null;
+function pcxSearchDebounced(){clearTimeout(pcxSearchTimer);pcxSearchTimer=setTimeout(pcxRenderOrders,180);}
 function pcxRenderOrders(){
+  clearTimeout(pcxSearchTimer);   // o randare directă (filtru, click) acoperă și căutarea în așteptare
   renderCancelledPcomList();
   renderStaleStaffOrdersCard();
   renderRecentAppliesCard();
@@ -25751,7 +25773,7 @@ function renderPcomRedesign(){
           <button type="button" class="pcx-fp" data-pl="vinted" onclick="pcxSetPlatFilter('vinted')">Vinted <b>0</b></button>
         </div>
         <div class="pcx-filters">
-          <input type="text" id="pcx-search" placeholder="Caută comandă, cumpărător, produs, cod…" oninput="pcxRenderOrders()">
+          <input type="text" id="pcx-search" placeholder="Caută comandă, cumpărător, produs, cod…" oninput="pcxSearchDebounced()">
           <input type="hidden" id="pcx-filter-platform" value="all">
           <select id="pcx-filter-status" onchange="pcxRenderOrders()">
             <option value="all">Orice status</option>
