@@ -5655,6 +5655,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:774,text:'Vinted — comanda cu mai multe produse rămâne O SINGURĂ comandă, cerut direct: „trebuia să fie o comandă cu 3 produse și s-a spart în 3, nu e bine, să fie legată". Cauza: fiecare produs citit din captură primea alt număr de comandă (doar loturile „N articole" erau grupate). Acum toate produsele din aceeași captură au un singur număr și același AWB/cumpărător, un singur colet în Staff. Comenzile deja sparte (același cumpărător, aceeași zi, create din aceeași captură) se unesc singure la deschiderea Comenzi Platforme, sub numărul comenzii deja incluse, iar liniile neincluse preiau AWB-ul ei. Un AWB asociat unei linii trece pe toate produsele neincluse ale aceleiași comenzi.',date:'2026-11-24'},
   {n:773,text:'Citire AWB din PDF — comenzile mai vechi revin la împachetat, cerut direct: „unele comenzi sunt mai vechi, să fie readuse în împachetare pe baza AWB-urilor chiar dacă sunt mai vechi". Cauza, găsită pe lotul real de 24 de etichete: o comandă deja împachetată cu un AWB vechi (ex. Cargus) primea AWB-ul nou (Sameday) doar ca „suplimentar" și rămânea împachetată, invizibilă în Staff, iar o etichetă recitită pe o comandă împachetată nu o readucea în coadă. Acum, o etichetă citită ACUM dintr-un PDF (nu din arhivă) pe o comandă împachetată: AWB-ul nou devine principal (cel vechi rămâne suplimentar), comanda redevine neîmpachetată și intră în coada Staff, cu poza noii etichete; mesajul final spune câte comenzi au fost readuse. Protecție: același PDF recitit după împachetarea de azi NU readuce comenzile (doar AWB diferit sau împachetare dintr-o zi anterioară).',date:'2026-11-24'},
   {n:772,text:'Comenzi Platforme — „🧮 Simulare stoc după AWB”, cerut direct: „în momentul în care am adăugat stoc, dacă adaug AWB-uri, să se scadă artificial din produsele aflate în stoc, să vedem după câte mai rămân de împachetat; restul comenzilor în ordinea vechimii, scăzute la fel, artificial, local, să vedem dacă și pentru care mai avem stoc să generăm AWB”. Bandă nouă sub „Restanțe pe stoc” (restrânsă implicit, nu calculează nimic cât e închisă). Deschisă, arată: (1) 📮 comenzile CU AWB — scad primele din stoc, MEREU (eticheta există deja); cele la care stocul nu ajunge apar cu „AWB generat, dar stocul nu ajunge: lipsesc N × produs” (implicit se văd doar acestea, restul la „Arată și cele N fără probleme”); (2) ✓ „Mai ai stoc — poți genera AWB”: restul comenzilor, de la cea mai veche; o comandă cu mai multe produse e gata doar dacă le are pe toate, o comandă fără stoc complet NU rezervă nimic (stocul ei rămâne comenzilor mai noi), amânatele vin la coadă; buton „Copiază lista” (platformă + număr, în ordine); (3) ⛔ „Nu mai ai stoc pentru” cu ce lipsește pe fiecare; (4) tabel „Stoc după simulare”: Acum → După AWB → După restul, pe fiecare produs atins (negativ = cât lipsește). Numerele comenzilor deschid comanda în listă. Doar în memorie: nu scrie nimic în stoc, în comenzi sau în bază; ↻ Recalculează după ce adaugi stoc. Sursa = aceleași comenzi neaplicate ca la Restanțe (cele aplicate au stocul deja scăzut, cele anulate nu intră). Verificat pe datele reale (copie protejată la scriere): 121 comenzi neaplicate → 68 cu AWB (−109 buc., 14 fără stoc suficient, între ele cele două comenzi Army de 20 și 10 seturi la stoc 8), 29 poți genera AWB, 24 fără stoc; calculul durează ~4 ms; adăugând 20 buc. la lampa solară, cele 14 devin 10. Test: scripts/stock-sim.test.js (reguli + 300 scenarii aleatorii față de o implementare independentă + invariantul de conservare a stocului).',date:'2026-11-24'},
   {n:771,text:'Încărcări de stoc — distincție clară EUR / RON, cerut direct: „tot apar probleme de genul: pare că data trecută, în loc să ia prețul în euro, l-a luat în lei (10,33 «euro»); acum îmi zice că e prețul greșit, când de fapt e corect. Verifică toate stocurile și toate încărcările de stoc, unele produse în euro, altele în lei — trebuie făcută distincția clară”. Cauza (verificată pe date reale, doar citire): comanda furnizor Maxy din 19.11 era în EUR, dar moneda implicită a formularului e RON, așa că 20 de produse au intrat în stoc cu numerele în EUR luate drept lei (10,31 EUR → «10,33 RON»); încărcarea din 24.11 (factura reală, în RON, 52,27/buc.) a fost apoi amestecată cu acel cost vechi greșit, iar avertismentul „pare prețul TOTAL” învinuia prețul NOU, corect. Acum: (1) FIECARE LINIE are selector RON/EUR chiar sub preț, cu conversia vizibilă (≈ 52,27 RON la 5,07), iar în antet apare „Monedă factură” (RON / EUR / Mixtă) care schimbă toate liniile dintr-un click; factura mixtă primește un avertisment. (2) Detectare după RAPORTUL costurilor: dacă prețul nou e exact cursul EUR × costul din fișă (≈5,07×, ±3%), costul din fișă era în EUR reținut ca lei — se corectează AUTOMAT pentru media ponderată (10,33 → 52,37), vizibil într-un rând albastru cu „Anulează”, iar media iese 55,03 în loc de 32,10. Dacă „prețul TOTAL pentru N buc.” e la fel de plauzibil (cantitatea ≈ raportul și totalul din factură nu confirmă prețul pe unitate), nu corectează singur: arată ambele variante, să alegi tu. Același semnal prinde și invers: o linie în RON de ~5× mai mică decât costul din fișă → „poate e în EUR” cu „Treci în EUR”. (3) Avertismentul „pare prețul TOTAL” nu mai apare când explicația e moneda. (4) Comandă furnizor: același avertisment pe prețurile unitare (când moneda e pe RON și prețul = prețul EUR al produsului / ~5× mai mic decât costul din stoc) cu buton „Treci moneda pe EUR”; plus moneda obișnuită a furnizorului, învățată din istoric. (5) Istoricul încărcărilor păstrează acum pe fiecare linie moneda, numărul original, cursul și costul vechi corectat — se vede ulterior exact ce a intrat și în ce monedă. Test: scripts/invoice-currency.test.js (cazul real al produsului 10,33 → 52,27, fără alarme false) + verificat în aplicație pe o copie protejată la scriere (media ponderată 52,34 la 11 buc. în stoc + 5 noi; nimic scris în producție).',date:'2026-11-24'},
@@ -22487,6 +22488,7 @@ function pcomComputeGroups(){
   // Map, nu obiect simplu: comandaId/pachetId sunt șiruri numerice (ex: "499855037"), iar un obiect JS
   // reordonează automat cheile care arată ca numere întregi, în ordine crescătoare — asta amesteca ordinea
   // liniilor din previzualizare față de ordinea reală din fișier. Map păstrează mereu ordinea de inserare.
+  pcomHealSplitVintedCaptures();
   const map=new Map(),platformOrder={emag:0,trendyol:1,vinted:2};
   // Indiferent de ordinea în care au venit fișierele/API-ul/capturile, lucrul fizic urmează aceeași
   // succesiune: eMAG, apoi Trendyol, apoi Vinted. Indexul original rămâne intact, deci acțiunile de
@@ -23746,6 +23748,10 @@ async function vintedRunRecognition(imageContent,previewSrc){
     const produsRows=randuri.filter(r=>r.tip==='produs'&&r.produs);
     const lotRows=randuri.filter(r=>r.tip==='lot'&&r.articole>1);
     const newIdxs=[];
+    // Cerut direct (24.11, comanda Vinted anamariabk cu 3 produse spartă în 3 comenzi): toate produsele
+    // din ACEEAȘI captură sunt o singură comandă (un cumpărător, un colet) — un singur comandaId/pachetId,
+    // ca la eMAG/Trendyol, nu câte unul pe produs.
+    const captureComandaId=produsRows.length>1?'VNT-'+Date.now().toString(36).toUpperCase()+Math.random().toString(36).slice(2,5).toUpperCase():null;
     for(const r of produsRows){
       // findExistingProduct — potrivirea exactă (EAN/SKU/scor fuzzy ≥70%) folosită și la eMAG/Trendyol —
       // dar Vinted n-are PNK/SKU, deci pragul strict de-acolo lăsa gol prea des (raportat direct: „2 din
@@ -23783,8 +23789,8 @@ async function vintedRunRecognition(imageContent,previewSrc){
       // numele cumpărătorului deja extras de AI (parsed.cumparator), spre deosebire de rândul „lot” de
       // mai jos, care îl folosea corect. Fără el, singurul reper vizibil pentru asocierea unui AWB era
       // acel ID tehnic, nefolositor de recunoscut dintr-o etichetă/conversație reală.
-      pcImpParsed.push({platforma:'vinted',comandaId:'VNT-'+Date.now().toString(36).toUpperCase()+Math.random().toString(36).slice(2,5).toUpperCase(),
-        pachetId:'',data:td(),pnk:'',tara:'',codProdus:'',clientNume:parsed.cumparator||'',titluExtern:r.produs,vintedImg:previewSrc||'',
+      pcImpParsed.push({platforma:'vinted',comandaId:captureComandaId||'VNT-'+Date.now().toString(36).toUpperCase()+Math.random().toString(36).slice(2,5).toUpperCase(),
+        pachetId:captureComandaId||'',data:td(),pnk:'',tara:'',codProdus:'',clientNume:parsed.cumparator||'',titluExtern:r.produs,vintedImg:previewSrc||'',
         cantitate:1,suggestedCantitate:0,pretFaraTva:Math.round(pretTotalCuTva/1.21*100)/100,pretTotalCuTva,moneda,
         produsId,score,viaPnk:false,viaTitle:false,viaCode:false,
         include:false,awb:'',_source:'vinted'});
@@ -23829,6 +23835,10 @@ async function vintedRunRecognition(imageContent,previewSrc){
       }
     }else if(newIdxs.length>1&&lotRows.length===1&&parsed.cod){
       glsTarget={titluExtern:`Pachet Vinted — ${newIdxs.length} articole`,awb:parsed.cod};
+    }else if(newIdxs.length>1&&!lotRows.length&&captureComandaId&&(parsed.cod||parsed.cumparator)){
+      // o singură comandă cu mai multe produse — același cod/AWB și cumpărător pe toate liniile ei
+      newIdxs.forEach(i=>{if(parsed.cod)pcImpParsed[i].awb=parsed.cod;if(parsed.cumparator)pcImpParsed[i].clientNume=parsed.cumparator;});
+      if(parsed.cod)glsTarget={titluExtern:`Pachet Vinted — ${newIdxs.length} articole`,awb:parsed.cod};
     }
     renderPcomImportPreview();
     if(parsed.cod&&vintedIsGlsCarrier(parsed.curier)&&glsTarget){
@@ -24022,6 +24032,46 @@ async function vintedLotSubmit(){
   renderVintedLotRows();
   renderPcomImportPreview();
   toast(valid.length===1?'1 produs adăugat ca lot Vinted ✓':`${valid.length} produse adăugate ca un singur lot Vinted ✓`);
+}
+// Reparație pentru comenzile Vinted deja sparte (înainte de captureComandaId din vintedRunRecognition): liniile
+// create din ACEEAȘI captură — același cumpărător, aceeași zi, ID-uri generate la max. 5 s una de alta
+// (partea de timp din „VNT-<Date.now() base36>…") — sunt unite sub un singur comandaId: cel al unei linii deja
+// incluse, dacă există, altfel primul. Liniile neincluse preiau și AWB-ul comenzii. O linie deja inclusă cu
+// alt ID e mutată și în bază (comanda_id), ca Staff să le vadă ca un singur colet.
+function pcomVntTs(id){const m=/^VNT-([0-9A-Z]{8})[0-9A-Z]{0,3}$/.exec(String(id||''));return m?parseInt(m[1],36):null;}
+function pcomHealSplitVintedCaptures(){
+  const lines=pcImpParsed.filter(it=>it.platforma==='vinted'&&it.clientNume&&pcomVntTs(it.comandaId)!=null)
+    .sort((a,b)=>pcomVntTs(a.comandaId)-pcomVntTs(b.comandaId));
+  const buckets=new Map();
+  lines.forEach(it=>{const k=it.clientNume.trim().toLowerCase()+'|'+(it.data||'');if(!buckets.has(k))buckets.set(k,[]);buckets.get(k).push(it);});
+  let changed=false;
+  buckets.forEach(arr=>{
+    let grp=[];
+    const flush=()=>{
+      if(new Set(grp.map(x=>x.comandaId)).size>1){
+        const lead=grp.find(x=>x._committedId)||grp[0],target=lead.comandaId;
+        const awbSrc=grp.find(x=>x.awb&&x.comandaId===target)||grp.find(x=>x.awb);
+        grp.forEach(x=>{
+          if(x.comandaId!==target){
+            const old=x.comandaId;
+            x.comandaId=target;x.pachetId=target;changed=true;
+            if(x._committedId){
+              dbPatch(`platforma_comenzi?id=eq.${x._committedId}`,{comanda_id:target}).catch(e=>console.warn('Nu am putut uni comanda Vinted '+old+' în '+target+':',e));
+              PCOM.filter(o=>o.id===x._committedId).forEach(o=>{o.comandaId=target;});
+            }
+          }else if(x.pachetId&&x.pachetId!==target){x.pachetId=target;changed=true;}
+          if(!x._committedId&&!x.awb&&awbSrc){Object.assign(x,{awb:awbSrc.awb,awbSourceFile:awbSrc.awbSourceFile||'',awbSourcePage:awbSrc.awbSourcePage||null,awbCourier:awbSrc.awbCourier||''});changed=true;}
+        });
+      }
+      grp=[];
+    };
+    arr.forEach(it=>{
+      if(grp.length&&pcomVntTs(it.comandaId)-pcomVntTs(grp[grp.length-1].comandaId)>5000)flush();
+      grp.push(it);
+    });
+    flush();
+  });
+  return changed;
 }
 function renderPcomImportPreview(){
   const prev=document.getElementById('pcmi-preview');
@@ -31287,6 +31337,8 @@ async function applyOneAwbMatch(p){
     const it=findPendingImportLineByComandaId(p.comandaId);
     if(it){
       Object.assign(it,{awb:p.awb,awbSourceFile:p.file||'',awbSourcePage:p.page||null,awbCourier:p.courier||''});
+      // comandă cu mai multe produse (ex. Vinted, o captură = un colet): același AWB pe toate liniile ei neincluse
+      pcImpParsed.forEach(x=>{if(x!==it&&!x._committedId&&x.comandaId===it.comandaId&&x.platforma===it.platforma&&!x.awb)Object.assign(x,{awb:p.awb,awbSourceFile:p.file||'',awbSourcePage:p.page||null,awbCourier:p.courier||''});});
       // Bug real, raportat direct („aleg comanda din picker, scriu AWB-ul în căsuța corectă, dar nu
       // se întâmplă nimic" — pe o comandă Vinted „Neinclus" fără produs ales încă, deci it.produsId
       // null): syncPcomLineCommitState de mai jos NU scrie nimic în bază fără it.produsId
