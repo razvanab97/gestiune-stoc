@@ -977,6 +977,15 @@ tr:hover td{background:var(--surf2)}
 .invx-conf.low{background:#FEF3F2;color:#D92D20}
 .invx-conf.na{background:#F3F4F6;color:#6B7280}
 .invx-warn-line{font-size:15px;color:#D92D20;margin-top:5px;display:flex;align-items:flex-start;gap:4px;line-height:1.4}
+/* Moneda pe linie (Update #771) — distincție clară EUR / RON la încărcările de stoc */
+.invx-info-line{font-size:15px;color:#175CD3;margin-top:5px;display:flex;align-items:flex-start;gap:4px;line-height:1.4;flex-wrap:wrap}
+.invx-warn-line .btn,.invx-info-line .btn{padding:2px 8px;font-size:15px}
+.invx-cur{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:4px}
+.invx-cur-sel{border:1px solid #E5E7EB;border-radius:8px;padding:2px 6px;font-family:var(--mono);font-size:16px;font-weight:700;background:#FFFFFF;color:#172033;cursor:pointer}
+.invx-cur-sel.eur{background:#EFF8FF;border-color:#84CAFF;color:#175CD3}
+.inv-cur-banner{border:1px solid #FEC84B;background:#FFFAEB;color:#93370D;border-radius:12px;padding:10px 14px;margin-bottom:10px;font-size:16px;line-height:1.5;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.inv-cur-banner b{font-weight:700}
+@media(min-width:901px){#ov-inv .invx-summary{grid-template-columns:repeat(5,minmax(0,1fr))}}
 .invx-actions{display:flex;flex-direction:column;gap:8px}
 .invx-actions .smi-pick-btn{width:100%}
 .invx-del-btn{display:flex;align-items:center;justify-content:center;gap:6px;padding:6px;border-radius:8px;border:1px solid #FEE2E2;background:#FFFFFF;color:var(--rd);font-size:16px;font-weight:600;cursor:pointer;transition:all .15s}
@@ -5334,6 +5343,13 @@ poza principală a produsului — orice apel openImgZoom(src) deschide aceeași 
         <div class="invx-summary-val muted" id="inv-shipping-hint" style="font-size:16px"></div>
       </div>
       <div class="invx-summary-card">
+        <div class="invx-summary-lbl">Monedă factură</div>
+        <select id="inv-currency" class="invx-summary-input" onchange="setInvAllCurrency(this.value)" title="Moneda prețurilor din factură. EUR se convertește în RON la cursul din aplicație; alegerea se aplică tuturor liniilor, iar pe fiecare linie o poți schimba separat (factură cu produse în EUR și în RON)">
+          <option value="RON">RON</option><option value="EUR">EUR</option><option value="MIXT" disabled>Mixtă</option>
+        </select>
+        <div class="invx-summary-val muted" id="inv-currency-hint" style="font-size:16px"></div>
+      </div>
+      <div class="invx-summary-card">
         <div class="invx-summary-lbl">Status analiză AI</div>
         <div class="invx-summary-val" id="invx-status">Se așteaptă fișier</div>
       </div>
@@ -5609,6 +5625,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:771,text:'Încărcări de stoc — distincție clară EUR / RON, cerut direct: „tot apar probleme de genul: pare că data trecută, în loc să ia prețul în euro, l-a luat în lei (10,33 «euro»); acum îmi zice că e prețul greșit, când de fapt e corect. Verifică toate stocurile și toate încărcările de stoc, unele produse în euro, altele în lei — trebuie făcută distincția clară”. Cauza (verificată pe date reale, doar citire): comanda furnizor Maxy din 19.11 era în EUR, dar moneda implicită a formularului e RON, așa că 20 de produse au intrat în stoc cu numerele în EUR luate drept lei (10,31 EUR → «10,33 RON»); încărcarea din 24.11 (factura reală, în RON, 52,27/buc.) a fost apoi amestecată cu acel cost vechi greșit, iar avertismentul „pare prețul TOTAL” învinuia prețul NOU, corect. Acum: (1) FIECARE LINIE are selector RON/EUR chiar sub preț, cu conversia vizibilă (≈ 52,27 RON la 5,07), iar în antet apare „Monedă factură” (RON / EUR / Mixtă) care schimbă toate liniile dintr-un click; factura mixtă primește un avertisment. (2) Detectare după RAPORTUL costurilor: dacă prețul nou e exact cursul EUR × costul din fișă (≈5,07×, ±3%), costul din fișă era în EUR reținut ca lei — se corectează AUTOMAT pentru media ponderată (10,33 → 52,37), vizibil într-un rând albastru cu „Anulează”, iar media iese 55,03 în loc de 32,10. Dacă „prețul TOTAL pentru N buc.” e la fel de plauzibil (cantitatea ≈ raportul și totalul din factură nu confirmă prețul pe unitate), nu corectează singur: arată ambele variante, să alegi tu. Același semnal prinde și invers: o linie în RON de ~5× mai mică decât costul din fișă → „poate e în EUR” cu „Treci în EUR”. (3) Avertismentul „pare prețul TOTAL” nu mai apare când explicația e moneda. (4) Comandă furnizor: același avertisment pe prețurile unitare (când moneda e pe RON și prețul = prețul EUR al produsului / ~5× mai mic decât costul din stoc) cu buton „Treci moneda pe EUR”; plus moneda obișnuită a furnizorului, învățată din istoric. (5) Istoricul încărcărilor păstrează acum pe fiecare linie moneda, numărul original, cursul și costul vechi corectat — se vede ulterior exact ce a intrat și în ce monedă. Test: scripts/invoice-currency.test.js (cazul real al produsului 10,33 → 52,27, fără alarme false) + verificat în aplicație pe o copie protejată la scriere (media ponderată 52,34 la 11 buc. în stoc + 5 noi; nimic scris în producție).',date:'2026-11-24'},
   {n:770,text:'Admin → Staff — două probleme reale, cerut direct: „avem o problemă la transmiterea informației de la Admin la Staff: tocmai am adăugat o comandă de la Army, sunt 2 în total și Staff îmi arată doar una; verifică să funcționeze 100% și Staff-ul pe baza tuturor regulilor”. Cauze găsite (verificat pe datele reale, read-only): (1) SEMNALUL către Staff nu pleca singur. Staff își reîncarcă lista strict manual (decizie deliberată — lista nu se mișcă sub degetul celui care împachetează), iar singurul indiciu („📤 Admin a trimis o actualizare” + bulina de la ↻ Reîncarcă) se trimitea DOAR din clopoțelul din Admin sau după un mesaj. La includerea / retrimiterea / anularea unei comenzi sau la asocierea unui AWB, Staff nu afla nimic și rămânea cu lista veche. Acum semnalul pleacă automat, central, din sb() (funcția prin care trece orice scriere în bază), după orice scriere REUȘITĂ care schimbă coada Staff: comandă nouă trimisă efectiv în Staff, retrimitere, anulare, ștergere, AWB scris, cantitate/produs schimbat; NU la scrieri fără efect în Staff (poza etichetei, Aplică import, alte tabele), NU la comitări automate netrimise, NU la scrieri eșuate; o singură dată pentru un lot (debounce 3 s: rutina zilnică cu 36 de comenzi = 1 semnal). Lista din Staff tot nu se schimbă singură — apare doar bulina și toast-ul. (2) Fișierele de etichete numerotate „NNN_<comandă>_<curier>_<AWB>.pdf” (lotul AWB_numerotate_49) NU erau recunoscute de awbFromFilename (accepta doar „64 - ”, „64. ”, „64) ”): o etichetă Cargus, care nu are număr de comandă pe ea, a doua comenzi către ACELAȘI client (Army, 582410324 și 582410751) rămânea ambiguă și fără AWB — deci fără Staff; iar o etichetă Sameday BG, nerecunoscută din text, ajungea la AI, care a trunchiat un AWB (012EMGXB23960265 în loc de …265001). Acum numerotarea cu „_” (și numai codul AWB în nume) se recunoaște; un număr de comandă (≥ 6 cifre) nu se atinge niciodată. AUDIT Staff pe datele reale (codul real din staff.html, 1268 de comenzi): nicio comandă eMAG/Trendyol fără AWB în coada de împachetat, nicio comandă anulată vizibilă, nicio comandă netrimisă, ordinea pe curieri corectă (Cargus → Sameday → FAN → GLS), niciun AWB duplicat pe 2 comenzi, încărcare paginată (nu se taie la 1000 de rânduri); ambele comenzi Army sunt acum în coadă (20 și 10 buc.). Rămase de corectat de mână (nu s-a scris nimic în bază): 3 comenzi cu AWB greșit/lipsă în Staff (582512996 are AWB-ul Cargus al altei comenzi, 1028046067 are AWB trunchiat, 1027892682 fără AWB) și 3 comenzi din lot care nu au ajuns în Staff fiindcă n-au produs asociat (583140692, 1137534315, 1137618639). Verificat de 2 ori: sintaxă + teste noi scripts/staff-signal.test.js (24 de verificări, cu sb() real și fetch simulat) și extinderi în scripts/awb-parse.test.js + toate testele existente + în Staff rulat pe date reale (bulina și toast-ul apar o dată, lista nu se schimbă singură).',date:'2026-11-24'},
   {n:769,text:'Etichete AWB — text selectabil și copiabil, cerut direct, cu captura lightbox-ului: „cum facem să poată fi citibil acest document, să pot da copiază la text, la numărul de telefon, la denumire”. Problema: preview-ul unei etichete e o POZĂ (JPEG randat din PDF), deci nu puteai selecta nimic din ea. Acum, când mărești o etichetă (miniatura din „Asociază AWB-uri” sau „👁 Vezi AWB”), fereastra are (1) un strat de text selectabil PESTE etichetă — selectezi direct cu mouse-ul și dai Cmd+C, selecția cade exact peste litere (verificat față de pdftotext -bbox pe o etichetă Cargus reală: abatere medie sub 1,3 pt pe o pagină de 420 pt) — și (2) un panou „📋 Text din etichetă”: butoane mari pentru NUMELE destinatarului (👤) și TELEFOANE (📞, formă curată +40…), apoi fiecare rând al etichetei, copiabil dintr-un click (apeși pe text sau pe ⧉), cu „doar valoarea” la rândurile „Eticheta: valoare” și „Copiază tot textul”. Textul e cel EXACT din PDF (PDF.js, nu AI), deci cifrele sunt corecte. De unde ia PDF-ul: din memorie (lista „Asociază AWB-uri”); pentru etichete deja salvate, din PDF-ul original de pe Mac prin conectorul local (awbSourceFile/awbSourcePage, arhiva procesate/ inclusă); iar dacă nu e disponibil nicăieri (alt dispozitiv, fișier șters), eticheta se citește din imagine cu AI, cu avertisment vizibil „verifică cifrele”, rezultat ținut minte pe acest dispozitiv. Detalii de acuratețe, găsite pe etichete reale: rândurile din tabelul Cargus se despart pe celule (gol > 0,55 × fontul), dar „Nota:” rămâne lipită de valoarea ei; un ID de 9 cifre din referința Sameday („…_583304927_266750487”) NU mai e luat drept telefon (telefon = 0… sau +40…, niciodată lipit de litere/cifre/„_”). Imaginea din lightbox nu mai are stil inline, iar la o deschidere obișnuită (poză de produs) lightbox-ul rămâne exact ca înainte. Nu s-a scris nimic în bază/Storage. Verificat de 2 ori: sintaxă + scripts/awb-text.test.js (45+ verificări pe funcțiile reale) + toate testele existente + în aplicația rulată pe 3 etichete reale (Cargus, Sameday, FAN): 96/33/46 fragmente extrase, telefonul destinatarului găsit pe Cargus, nicio detecție falsă pe FAN/Sameday, selecția „Destinatar: …” copiază exact textul cerut, calea AI pe o etichetă sintetică (fără date reale) dă toate rândurile, cu avertisment și cache (a doua deschidere: 0 apeluri AI).',date:'2026-11-24'},
   {n:768,text:'Comenzi Platforme — cardul „Previzualizare comenzi” aranjat, cerut direct, cu captură: „așază mai bine aici, e foarte dezorganizat și fără sens”. Ce era fără sens, măsurat pe datele reale: aceleași informații apăreau de două ori, cu numere diferite (sus „Total 273 · eMAG 212”, dedesubt „Toate 266 · eMAG 205” — linii vs. comenzi, nesemnalat); butoanele de unelte erau uriașe și pe un rând separat; „Debifează toate” exista și în antet, și în bara de jos; filtrul „Orice status” stătea deasupra deck-ului deși se aplica doar listei de jos; etapele de lucru (un flux: Fără produs → De inclus → Așteaptă AWB → În Staff → De închis) arătau ca niște butoane întâmplătoare și se rupeau pe 2 rânduri; insigna de termen și rândul „AWB asociat” moșteneau fontul paginii (~31px) și păreau titluri; iar antetul fiecărui card era o grilă cu 10 coloane fixe pentru 11 elemente (data e opțională), deci coloanele se decalau, numele cumpărătorului ajungea la 0 px și antetul ieșea din card (17 din 266 de carduri la 1400 px). Acum, de sus în jos: (1) titlu + rezumat într-o linie („266 comenzi · 273 linii · 27 incluse”, plus „⚠ fără produs” / „⚠️ cu produs arhivat” doar când există) în stânga, uneltele („📦 Cu stoc sus”, „📊 Lista de comandat”) compacte în dreapta; (2) banda „Restanțe pe stoc”; (3) O SINGURĂ bară de filtre: platformă (cu numărul de comenzi) + căutare; (4) etapele, cu săgeți între cele din flux și „Amânate / De verificat” separat, apoi explicația etapei într-un chenar discret, apoi deck-ul; (5) „Lista completă”, cu filtrul „Arată: Toate comenzile / Fără produs / Neincluse / Incluse” chiar în antetul ei. Antetul cardului de comandă e un rând flexibil: platformă + număr + dată în stânga, cumpărătorul ia restul rândului (tăiat cu „…” dacă e lung), cifrele (poză, produse, total, status) în dreapta; AWB-ul din antet (repeta rândul verde „AWB asociat” de sub el) și placeholderul invizibil „NOU” nu mai ocupă loc; insigna de termen e acum o pastilă mică, iar rândul AWB are font normal. Pe telefon: uneltele și platformele trec pe rânduri complete, cardul din deck ia toată lățimea, iar săgețile înapoi/înainte trec sub el (înainte îi mâncau lățimea și blocul cu numărul comenzii ieșea din ecran). Nimic din logică nu s-a schimbat: aceleași id-uri, aceleași funcții, aceleași filtre. Verificat de 2 ori: sintaxă + teste noi în scripts/pcom-perf.test.js (12 puncte care pică pe codul vechi: ordinea secțiunilor, filtrul de status lângă listă, rezumatul, antetul flex, mobil) + toate testele existente + în aplicația rulată pe ciorna reală (266 de comenzi): la 1700 px 0 din 266 de antete ies din card și etapele încap pe un rând; la 1400 px 0 ieșite; la 1000 px 0 ieșite; pe telefon nimic nu iese din ecran, săgețile de sub card navighează, etapele schimbă lista; filtrul „Arată: Incluse” din noua poziție dă 23 de comenzi, iar „Toate” le readuce pe toate 266.',date:'2026-11-24'},
@@ -27958,6 +27975,27 @@ const FURNIZOR_ORDER_SCHEMA={
 const FURNIZOR_TRANSPORT_RE=/^(delivery|shipping|shipment|transport|livrare|curier|courier|freight|expediere)\b/i;
 function furnizorMoneda(){return document.getElementById('cf-moneda')?.value==='EUR'?'EUR':'RON';}
 function furnizorToRon(v){return Math.round((Number(v)||0)*(furnizorMoneda()==='EUR'?EUR_RON:1)*100)/100;}
+// #771 — aceeași distincție EUR/RON și la „Comandă furnizor": moneda implicită e RON, iar o comandă în EUR lăsată pe RON
+// intra în stoc cu numerele în EUR luate drept lei. Avertizăm când prețul unitar al unei linii potrivite = prețul EUR al
+// produsului, sau când furnizorul facturează de obicei în EUR; „pret" e totalul liniei (unitar = pret / cantitate).
+function furnizorSetMoneda(m){const sel=document.getElementById('cf-moneda');if(sel){sel.value=m==='EUR'?'EUR':'RON';renderFurnizorImportPreview();}}
+function furnizorCurrencyBannerHtml(){
+  if(!furnizorImpParsed.length)return'';
+  const mon=furnizorMoneda();
+  const furnizor=(document.getElementById('cf-furnizor')?.value||'').trim();
+  const usual=invSupplierUsualCurrency(furnizor,P,OI);
+  let strongN=0,weakN=0;
+  if(mon==='RON')furnizorImpParsed.forEach(it=>{
+    if(it.transport||!it.produsId||!(it.cantitate>0)||!(it.pret>0))return;
+    const p=P.find(x=>x.id===it.produsId);const a=invCurrencyAdvice({priceBuy:it.pret/it.cantitate,currency:'RON',qty:it.cantitate},p);
+    if(a&&a.kind==='eur-as-ron'){if(a.strong)strongN++;else weakN++;}
+  });
+  const out=[];
+  if(strongN)out.push(`<div class="inv-cur-banner">💱 <span><b>${strongN} ${strongN===1?'linie are':'linii au'} prețul unitar egal cu prețul în EUR al produsului</b>, dar moneda e pe RON — probabil comanda e în EUR.</span><button type="button" class="btn btn-sm" onclick="furnizorSetMoneda('EUR')">Treci moneda pe EUR</button></div>`);
+  else if(weakN)out.push(`<div class="inv-cur-banner">💱 <span><b>${weakN} ${weakN===1?'linie are':'linii au'} prețul unitar de ~5× mai mic decât costul din stoc</b> — exact cursul EUR. Dacă prețurile din comandă sunt în euro, schimbă moneda.</span><button type="button" class="btn btn-sm" onclick="furnizorSetMoneda('EUR')">Treci moneda pe EUR</button></div>`);
+  if(usual&&usual!==mon&&!strongN&&!weakN)out.push(`<div class="inv-cur-banner">💱 <span>De obicei <b>${esc(furnizor)}</b> facturează în <b>${usual}</b>, dar moneda de aici e <b>${mon}</b>. Verifică.</span><button type="button" class="btn btn-sm" onclick="furnizorSetMoneda('${usual}')">Treci pe ${usual}</button></div>`);
+  return out.join('');
+}
 function toggleFurnizorTransport(idx){
   const it=furnizorImpParsed[idx];if(!it)return;
   it.transport=!it.transport;
@@ -28123,7 +28161,7 @@ function renderFurnizorImportPreview(){
   const unmatchedN=furnizorImpParsed.filter(x=>!x.produsId&&!x.newProduct&&!x.transport).length;
   const mon=furnizorMoneda();
   const bulk=unmatchedN?`<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px"><button type="button" class="btn btn-sm" onclick="markAllFurnizorUnmatchedAsNew()" title="Marchează toate liniile fără potrivire ca produse noi — se creează la „Trimite ca așteptată", cu stoc 0">🆕 Produs nou pentru toate cele ${unmatchedN} nepotrivite</button><span style="font-size:15px;color:var(--t3)">Se creează cu stoc 0 — nu atinge stocul.</span></div>`:'';
-  box.innerHTML=furnizorDupHtml()+bulk+furnizorImpParsed.map((it,idx)=>{
+  box.innerHTML=furnizorDupHtml()+furnizorCurrencyBannerHtml()+bulk+furnizorImpParsed.map((it,idx)=>{
     const pricePill=it.pret?`<span class="cf-pill price">${it.pret.toFixed(2)} ${mon}${mon==='EUR'?` <small>≈ ${furnizorToRon(it.pret).toFixed(2)} RON</small>`:''}</span>`:'';
     if(it.transport)return`<div class="inv-prev-row cf-row transport">
       <div class="cf-row-main"><div class="cf-row-title">🚚 Transport <span class="cf-muted">— ${esc(it.titluExtern)}</span></div>
@@ -31843,6 +31881,112 @@ function invxConfBadgeHtml(item){
   const lbl=c>=85?'Sigur':c>=60?'Verifică':'Nesigur';
   return`<span class="invx-conf ${cls}" title="Încredere AI: ${c}%">${lbl} ${c}%</span>`;
 }
+// ── Distincția clară EUR / RON la încărcările de stoc (Update #771) ──
+// Problema reală: un preț în EUR (10,31) intrat ca RON — sau invers, un cost vechi din fișa produsului
+// salvat în EUR dar scris ca RON — strică media ponderată și produce avertismente greșite („pare prețul
+// TOTAL") tocmai când prețul nou e corect. Toate verificările de mai jos sunt PURE (fără DOM) și se
+// testează în scripts/invoice-currency.test.js.
+const INV_CUR_TOL=0.06;
+function invNear(a,b,tol){a=Number(a)||0;b=Number(b)||0;return a>0&&b>0&&Math.abs(a-b)/Math.max(a,b)<=(tol==null?INV_CUR_TOL:tol);}
+function invCostRon(price,cur){price=Number(price)||0;return cur==='EUR'?Math.round(price*EUR_RON*100)/100:price;}
+// Costul „vechi" folosit la media ponderată/comparație: cel corectat (dacă linia a primit corecția) sau cel din fișă.
+function invOldCostEffective(item,p){return item&&item._oldCostFix>0&&p&&item._oldCostFixFor===p.id?item._oldCostFix:(Number(p&&p.priceBuyTTC)||0);}
+// Sfat de monedă pentru o linie de factură față de produsul asociat. null = nimic suspect.
+// Semnalul principal e RAPORTUL dintre costul nou (în RON) și costul din fișă: dacă e exact cursul EUR (≈5,07), unul din
+// cele două numere e în EUR luat drept lei. (Câmpul priceBuyEur al produsului e doar o dovadă în plus — în practică e gol.)
+//  · 'old-cost-eur' — costul nou = costul vechi × curs → costul din fișă a fost reținut în EUR ca RON la o încărcare veche
+//                     (cazul real: 10,33 „RON" era 10,31 EUR; factura în RON dădea 52,27). strong=true → corecție automată,
+//                     vizibilă și anulabilă; altfel (sau când „prețul TOTAL" e la fel de plauzibil) doar sugestie.
+//  · 'eur-as-ron'   — linie în RON, dar numărul e egal cu prețul EUR al produsului, ori de ~5× mai mic decât costul din fișă.
+function invCurrencyAdvice(item,p){
+  if(!item||!p)return null;
+  const price=Number(item.priceBuy)||0;if(!(price>0))return null;
+  const eur=Number(p.priceBuyEur)||0,oldRaw=Number(p.priceBuyTTC)||0,qty=Number(item.qty)||0;
+  const costRon=Number(item.costRon)||invCostRon(price,item.currency);
+  if(item.currency!=='EUR'&&eur>0&&invNear(price,eur))return{kind:'eur-as-ron',eur,strong:true};
+  if(!(oldRaw>0)||!(costRon>0))return null;
+  const ratio=costRon/oldRaw,dev=Math.abs(ratio-EUR_RON)/EUR_RON;
+  if(dev<=0.08){
+    const confirmed=eur>0&&invNear(oldRaw,eur,0.03);
+    // „preț TOTAL pentru N buc." e explicația concurentă când raportul seamănă și cu cantitatea — o excludem doar dacă
+    // prețul e verificat pe unitate (total din factură ≈ unitar × cantitate, sau calculat de AI din total ÷ cantitate).
+    const unitOk=!!item.calculatedFromTotal||(Number(item.lineTotalOriginal)>0&&invNear(item.lineTotalOriginal,price*qty,0.03));
+    const qtyAmbig=qty>1&&ratio>=qty*0.8&&ratio<=qty*1.25&&!unitOk;
+    const strong=confirmed||(dev<=0.03&&!item._curUser&&!qtyAmbig);
+    return{kind:'old-cost-eur',oldCost:oldRaw,fixed:Math.round(oldRaw*EUR_RON*100)/100,ratio,strong,confirmed,qtyAmbig};
+  }
+  if(item.currency!=='EUR'&&invNear(oldRaw/price,EUR_RON,0.06))return{kind:'eur-as-ron',eur:0,oldCost:oldRaw,strong:false};
+  return null;
+}
+// Moneda „obișnuită" a unui furnizor, din ce știm deja: produsele lui cu preț în EUR salvat + încărcările vechi
+// (câmpul currency din detaliile comenzii de stoc, scris începând cu #771). null = nu știm / mixt.
+function invSupplierUsualCurrency(name,prods,orders){
+  const s=String(name||'').trim().toLowerCase();if(!s)return null;
+  let eur=0,ron=0;
+  (prods||[]).forEach(p=>{if(String(p.supplier||'').trim().toLowerCase()!==s)return;if((Number(p.priceBuyEur)||0)>0)eur++;});
+  (orders||[]).forEach(o=>{if(String(o.supplier||'').trim().toLowerCase()!==s)return;(o.details||[]).forEach(d=>{if(d.currency==='EUR')eur++;else if(d.currency==='RON')ron++;});});
+  if(eur>=3&&eur>=ron*2)return'EUR';
+  if(ron>=3&&ron>=eur*2)return'RON';
+  return null;
+}
+// Câmpuri de monedă scrise pe fiecare linie din istoricul încărcărilor (#771): se vede ulterior ce număr și în ce monedă a intrat.
+function invLineCurrencyFields(item,p){
+  const eur=item.currency==='EUR';
+  const f={currency:eur?'EUR':'RON',priceOriginal:Number(item.priceBuy)||0};
+  if(eur)f.eurRate=EUR_RON;
+  if(p&&item._oldCostFix>0&&item._oldCostFixFor===p.id)f.oldPriceCorrected=item._oldCostFix;
+  return f;
+}
+function invFixOldCost(idx){
+  const item=invParsed[idx];if(!item)return;
+  const p=item.produsId?P.find(x=>x.id===item.produsId):null;if(!p)return;
+  const adv=invCurrencyAdvice(item,p);if(!adv||adv.kind!=='old-cost-eur'){renderInvPreview();return;}   // costul din fișă s-a schimbat între timp → nu aplicăm o corecție fără bază
+  item._oldCostFix=Math.round((Number(p.priceBuyTTC)||0)*EUR_RON*100)/100;item._oldCostFixFor=p.id;item._oldCostUndo=null;item._oldCostAuto=false;
+  renderInvPreview();toast('Cost vechi corectat (era în EUR) ✓');
+}
+function invUndoOldCost(idx){
+  const item=invParsed[idx];if(!item)return;
+  item._oldCostUndo=item._oldCostFixFor;item._oldCostFix=0;item._oldCostFixFor=null;item._oldCostAuto=false;
+  renderInvPreview();
+}
+function setInvItemCurrency(idx,cur){
+  const item=invParsed[idx];if(!item)return;
+  item.currency=cur==='EUR'?'EUR':'RON';item._curUser=true;
+  item.costRon=invCostRon(item.priceBuy,item.currency);
+  item.calculatedFromTotal=false;item._oldCostFix=0;item._oldCostFixFor=null;item._oldCostUndo=null;
+  setTimeout(renderInvPreview,0);
+}
+function setInvAllCurrency(cur){
+  if(cur!=='EUR'&&cur!=='RON')return;
+  invParsed.forEach(item=>{item.currency=cur;item._curUser=true;item.costRon=invCostRon(item.priceBuy,cur);item.calculatedFromTotal=false;item._oldCostFix=0;item._oldCostFixFor=null;item._oldCostUndo=null;});
+  renderInvPreview();toast(cur==='EUR'?'Toate liniile trecute în EUR (convertite la '+EUR_RON+' RON/EUR) ✓':'Toate liniile trecute în RON ✓');
+}
+// Liniile în RON al căror număr = prețul EUR al produsului — le trece pe toate în EUR dintr-un click.
+function invFixAllEurAsRon(){
+  let n=0;
+  invParsed.forEach(item=>{const p=item.produsId?P.find(x=>x.id===item.produsId):null;const a=invCurrencyAdvice(item,p);if(a&&a.kind==='eur-as-ron'&&a.strong){item.currency='EUR';item._curUser=true;item.costRon=invCostRon(item.priceBuy,'EUR');item.calculatedFromTotal=false;n++;}});
+  renderInvPreview();toast(n?`${n} ${n===1?'linie trecută':'linii trecute'} în EUR ✓`:'Nimic de schimbat');
+}
+// Avertismente la nivel de factură (deasupra liniilor): monedă mixtă, linii suspecte, furnizor obișnuit în altă monedă.
+function invCurrencyBannerHtml(){
+  if(!invParsed.length)return'';
+  const eurN=invParsed.filter(i=>i.currency==='EUR').length,ronN=invParsed.length-eurN;
+  const sus=invParsed.filter(i=>{const p=i.produsId?P.find(x=>x.id===i.produsId):null;const a=invCurrencyAdvice(i,p);return a&&a.kind==='eur-as-ron'&&a.strong;}).length;
+  const usual=invSupplierUsualCurrency(document.getElementById('inv-supplier')?.value,P,OI);
+  const out=[];
+  if(sus)out.push(`<div class="inv-cur-banner">💱 <span><b>${sus} ${sus===1?'linie are':'linii au'} prețul egal cu prețul în EUR al produsului</b>, dar ${sus===1?'e trecută':'sunt trecute'} în RON — probabil e în EUR.</span><button type="button" class="btn btn-sm" onclick="invFixAllEurAsRon()">Treci-le în EUR</button></div>`);
+  if(eurN&&ronN)out.push(`<div class="inv-cur-banner">💱 <span>Factura are <b>${eurN} ${eurN===1?'linie':'linii'} în EUR</b> și <b>${ronN} în RON</b>. Verifică moneda fiecărei linii (selectorul de sub preț).</span></div>`);
+  else if(usual&&((usual==='EUR')!==(eurN>0)))out.push(`<div class="inv-cur-banner">💱 <span>De obicei <b>${esc((document.getElementById('inv-supplier')?.value||'').trim())}</b> facturează în <b>${usual}</b>, dar liniile de aici sunt în <b>${eurN?'EUR':'RON'}</b>. Verifică moneda.</span><button type="button" class="btn btn-sm" onclick="setInvAllCurrency('${usual}')">Toate în ${usual}</button></div>`);
+  return out.join('');
+}
+// Selectorul din antet urmărește liniile: toate EUR → EUR, toate RON → RON, altfel „mixtă".
+function syncInvCurrencySelect(){
+  const sel=document.getElementById('inv-currency');if(!sel)return;
+  const eurN=invParsed.filter(i=>i.currency==='EUR').length;
+  sel.value=!invParsed.length?'RON':eurN===invParsed.length?'EUR':eurN===0?'RON':'MIXT';
+  const hint=document.getElementById('inv-currency-hint');
+  if(hint)hint.textContent=eurN===invParsed.length&&eurN>0?`× ${EUR_RON} RON/EUR`:(eurN&&eurN<invParsed.length?`${eurN} EUR · ${invParsed.length-eurN} RON`:'');
+}
 function invxRowHtml(idx){
   const item=invParsed[idx];
   const p=item.produsId?P.find(x=>x.id===item.produsId):null;
@@ -31867,15 +32011,25 @@ function invxRowHtml(idx){
     tag=`<span class="inv-match miss" title="Nicio potrivire sigură — alege manual un produs sau marchează „produs nou" din meniul de alături, altfel linia NU se aplică la Importă în stoc">⚠ alege produs</span>`;
     nm=item.name||item.sku||'Produs necunoscut';
   }
-  const oldPrice=p?.priceBuyTTC||0;
+  const oldPrice=invOldCostEffective(item,p);
   const delta=p&&item._landedCost>0?priceDeltaHtml(oldPrice,item._landedCost):'';
+  // Distincția EUR/RON (#771): ce știm despre moneda liniei față de produs, în loc de un avertisment greșit de „preț total".
+  const curAdv=invCurrencyAdvice(item,p);
+  const oldFixed=!!(p&&item._oldCostFix>0&&item._oldCostFixFor===p.id);
+  let curAdviceHtml='';
+  const advRatio=p&&(Number(p.priceBuyTTC)||0)>0?(Number(item.costRon)||0)/Number(p.priceBuyTTC):0;
+  if(oldFixed)curAdviceHtml=`<div class="invx-info-line">💱 Costul din fișă (${(Number(p.priceBuyTTC)||0).toFixed(2)} RON) era în EUR, nu în lei — ${curAdv&&curAdv.confirmed?'confirmat de prețul EUR al produsului':`prețul nou e de ${advRatio.toFixed(2)}× costul din fișă, exact cursul EUR`}. La media ponderată se folosește ${item._oldCostFix.toFixed(2)} RON. <button type="button" class="btn btn-sm" onclick="invUndoOldCost(${idx})">Anulează</button></div>`;
+  else if(curAdv&&curAdv.kind==='eur-as-ron')curAdviceHtml=curAdv.eur>0
+    ?`<div class="invx-warn-line">💱 ${item.priceBuy.toFixed(2)} coincide cu prețul în EUR al produsului (${curAdv.eur.toFixed(2)} EUR), dar linia e în RON — probabil e în EUR. <button type="button" class="btn btn-sm" onclick="setInvItemCurrency(${idx},'EUR')">Treci în EUR</button></div>`
+    :`<div class="invx-warn-line">💱 ${item.priceBuy.toFixed(2)} RON e de ~${(curAdv.oldCost/item.priceBuy).toFixed(2)}× mai mic decât costul din fișă (${curAdv.oldCost.toFixed(2)} RON) — exact cursul EUR. Poate prețul e în EUR. <button type="button" class="btn btn-sm" onclick="setInvItemCurrency(${idx},'EUR')">Treci în EUR</button></div>`;
+  else if(curAdv&&curAdv.kind==='old-cost-eur')curAdviceHtml=`<div class="invx-warn-line">💱 Prețul nou (${(Number(item.costRon)||0).toFixed(2)} RON) e de ${curAdv.ratio.toFixed(2)}× costul din fișă (${curAdv.oldCost.toFixed(2)} RON) — exact cursul EUR${curAdv.qtyAmbig?`; dar seamănă și cu prețul TOTAL pentru ${fmtQty(item.qty)} buc. (vezi mai jos)`:''}. Probabil costul din fișă a fost reținut în EUR ca RON — corect ar fi ${curAdv.fixed.toFixed(2)} RON. <button type="button" class="btn btn-sm" onclick="invFixOldCost(${idx})">Corectează costul vechi</button>${item.currency==='EUR'?` <button type="button" class="btn btn-sm" onclick="setInvItemCurrency(${idx},'RON')" title="Numărul din factură e de fapt în lei">Linia e în RON</button>`:''}</div>`;
   const stockPlan=p?stockImportPlan(p,item.qty):null;
   const stockInfo=stockPlan?`<div class="invx-code" style="margin-top:5px">Stoc: ${fmtQty(stockPlan.before)} + ${fmtQty(stockPlan.add)} = ${fmtQty(stockPlan.after)}${stockPlan.compensated>0?' · compensează minus '+fmtQty(stockPlan.compensated):''}</div>`:'';
   // Plasă de siguranță suplimentară, independentă de promptul AI — dacă bug-ul total/cantitate
   // reapare din orice motiv, o creștere de preț de acest calibru tot ajunge vizibilă, apăsat, înainte
   // de aplicare. Semnul cel mai clar: raportul noul_preț/preț_vechi e aproape identic cu cantitatea.
   let extremeWarn='';
-  if(p&&oldPrice>0&&item._landedCost>0){
+  if(p&&oldPrice>0&&item._landedCost>0&&(!curAdv||(curAdv.qtyAmbig&&!oldFixed))){
     const ratio=item._landedCost/oldPrice;
     if(ratio>=2.5){
       const looksLikeQtyBug=item.qty>1&&ratio>=item.qty*0.5&&ratio<=item.qty*2;
@@ -31894,11 +32048,11 @@ function invxRowHtml(idx){
   // Cerut direct: costul real al produsului include transportul alocat, nu doar prețul de achiziție —
   // afișat mereu ca sumă (produs + transport), ca să se vadă exact ce se scrie ca priceBuyTTC la aplicare.
   const shippingLine=landedCost!==item.costRon?`<div class="invx-price-ron">${item.costRon.toFixed(2)} produs + ${(landedCost-item.costRon).toFixed(2)} transport</div>`:'';
-  const col1=`<div class="invx-col invx-prod"><div>${rowImg}</div><div style="min-width:0"><div class="invx-prod-nm">${esc(nm)}</div><div class="invx-prod-tags">${tag}</div>${stockInfo}${extremeWarn}${aiWarnLines}${newProdForm}</div></div>`;
+  const col1=`<div class="invx-col invx-prod"><div>${rowImg}</div><div style="min-width:0"><div class="invx-prod-nm">${esc(nm)}</div><div class="invx-prod-tags">${tag}</div>${stockInfo}${curAdviceHtml}${extremeWarn}${aiWarnLines}${newProdForm}</div></div>`;
   const col2=`<div class="invx-col"><div class="invx-col-lbl">SKU / Cod</div><input type="text" class="invx-price-input" style="font-family:var(--mono)" value="${esc(item.sku||'')}" placeholder="cod manual" onchange="setInvSku(${idx},this.value)" title="Codul extern al produsului — completează manual dacă lipsește din factură, ajută la potrivirea cu un produs existent">${item.ean?`<div class="invx-code" title="EAN — folosit prioritar la potrivire">EAN ${esc(item.ean)}</div>`:''}</div>`;
   const col3=`<div class="invx-col"><div class="invx-col-lbl">Cantitate</div><div class="invx-qty-step"><button type="button" onclick="adjustInvQty(${idx},-1)" title="Scade cantitatea">−</button><input type="number" min="1" step="1" value="${item.qty}" onchange="setInvQty(${idx},this.value)" title="Cantitatea comandată"><button type="button" onclick="adjustInvQty(${idx},1)" title="Crește cantitatea">+</button></div></div>`;
   const col4=`<div class="invx-col"><div class="invx-col-lbl">Buc./set</div><div class="invx-pieces" title="${item.piecesPerUnit>1?totalPieces+' piese fizice în total ('+item.qty+' × '+item.piecesPerUnit+')':'1 piesă per exemplar comandat'}">${item.piecesPerUnit>1?item.piecesPerUnit+' → '+totalPieces+' buc.':'—'}</div></div>`;
-  const col5=`<div class="invx-col"><div class="invx-col-lbl">Preț unitar original</div><input type="number" min="0" step="0.01" class="invx-price-input" value="${item.priceBuy.toFixed(2)}" onchange="setInvUnitPriceOriginal(${idx},this.value)" title="Preț pe exemplar comandat, în moneda facturii">${item.currency==='EUR'?'<div class="invx-price-ron">EUR</div>':''}${item.calculatedFromTotal?'<div class="invx-calc-badge">Calculat din total ÷ cantitate</div>':''}</div>`;
+  const col5=`<div class="invx-col"><div class="invx-col-lbl">Preț unitar original</div><input type="number" min="0" step="0.01" class="invx-price-input" value="${item.priceBuy.toFixed(2)}" onchange="setInvUnitPriceOriginal(${idx},this.value)" title="Preț pe exemplar comandat, în moneda facturii"><div class="invx-cur"><select class="invx-cur-sel${item.currency==='EUR'?' eur':''}" onchange="setInvItemCurrency(${idx},this.value)" title="Moneda acestui preț — EUR se convertește în RON la ${EUR_RON}"><option value="RON"${item.currency==='EUR'?'':' selected'}>RON</option><option value="EUR"${item.currency==='EUR'?' selected':''}>EUR</option></select>${item.currency==='EUR'?`<span class="invx-price-ron" style="margin-top:0">≈ ${item.costRon.toFixed(2)} RON</span>`:''}</div>${item.calculatedFromTotal?'<div class="invx-calc-badge">Calculat din total ÷ cantitate</div>':''}</div>`;
   const col6=`<div class="invx-col"><div class="invx-col-lbl">Preț unitar RON</div><div class="invx-total" style="font-size:18px">${landedCost.toFixed(2)} RON</div>${shippingLine}${delta}</div>`;
   const col7=`<div class="invx-col"><div class="invx-col-lbl">Total</div><div class="invx-total">${lineTotalRon.toFixed(2)} RON</div>${item.lineTotalOriginal!=null?`<div class="invx-price-ron">${item.lineTotalOriginal.toFixed(2)} ${item.currency}</div>`:''}</div>`;
   const col8=`<div class="invx-col"><div class="invx-col-lbl">Încredere</div>${invxConfBadgeHtml(item)}</div>`;
@@ -32031,6 +32185,15 @@ function renderInvPreview(){
     if(item.produsId===undefined&&item.newProduct===undefined){
       item.produsId=match?match.product.id:null;
     }
+    // #771: produsul asociat se poate schimba din picker → corecția costului vechi e valabilă doar pentru produsul pentru care s-a făcut.
+    const pCur=item.produsId?P.find(x=>x.id===item.produsId):null;
+    if(item._oldCostFixFor!=null&&(!pCur||item._oldCostFixFor!==pCur.id)){item._oldCostFix=0;item._oldCostFixFor=null;item._oldCostAuto=false;}
+    if(item._oldCostUndo!=null&&(!pCur||item._oldCostUndo!==pCur.id))item._oldCostUndo=null;
+    // Dovadă puternică (produsul însuși are prețul EUR ≈ costul lui „în RON") → corecție automată, vizibilă și anulabilă.
+    if(pCur&&!(item._oldCostFix>0)&&item._oldCostUndo!==pCur.id){
+      const adv=invCurrencyAdvice(item,pCur);
+      if(adv&&adv.kind==='old-cost-eur'&&adv.strong){item._oldCostFix=adv.fixed;item._oldCostFixFor=pCur.id;item._oldCostAuto=true;}
+    }
     item._landedCost=Math.round((item.costRon+transportPerUnit)*100)/100;
     const prices=calcPrices(item._landedCost);
     item._sell=prices.sell;
@@ -32043,7 +32206,8 @@ function renderInvPreview(){
   const missC=invParsed.filter(i=>!i.produsId&&!i.newProduct&&i.onlyExisting).length;
   const receiptC=invParsed.filter(i=>i.produsId&&invoiceReceiptPlan(P.find(x=>x.id===i.produsId),i.qty).fromIncoming>0).length;
   const receiptQty=invParsed.reduce((n,i)=>{const p=i.produsId?P.find(x=>x.id===i.produsId):null;return n+(p?invoiceReceiptPlan(p,i.qty).fromIncoming:0);},0);
-  prev.innerHTML=invoiceDuplicateBannerHtml()+rows;
+  prev.innerHTML=invoiceDuplicateBannerHtml()+invCurrencyBannerHtml()+rows;
+  syncInvCurrencySelect();
   // Footer sticky — X produse / Y unități comandate / Z articole fizice / Total estimat, cerut explicit
   const totalUnits=invParsed.reduce((s,i)=>s+(Number(i.qty)||0),0);
   const totalPieces=invParsed.reduce((s,i)=>s+(Number(i.qty)||0)*(Number(i.piecesPerUnit)||1),0);
@@ -32143,7 +32307,8 @@ async function applyInvoice(){
         if(receipt.fromIncoming>0){receivedLines++;receivedQty+=receipt.fromIncoming;}
         extraQty+=receipt.extra;
         if(costRon>0){
-          const oldCost=oldCostBefore;
+          // #771: costul vechi corectat (era în EUR reținut ca RON) intră în media ponderată; fără corecție = cel din fișă.
+          const oldCost=invOldCostEffective(item,P[idx]);
           // Cost mediu ponderat (weightedAvgCost) — cerut direct („cum ne raportăm la prețurile de la
           // 2 furnizori diferiți"), nu suprascriere: stockPlan.before e stocul rămas ÎNAINTE de această
           // intrare (calculat mai sus, la fel folosit și pentru raportul de negativ compensat).
@@ -32167,7 +32332,7 @@ async function applyInvoice(){
         await saveProdToDb(P[idx],P[idx].id);
         await logMove('in',P[idx].name,item.qty,invSourceName||'Import factură',P[idx].id);
         await logPriceChanges(P[idx].id,P[idx].name,priceBefore,P[idx],invSourceName||'Import factură');
-        orderDetails.push({status:'actualizat',sku:item.sku||P[idx].sku||'',productId:P[idx].id,name:P[idx].name,qty:item.qty,price:costRon,productCost,shippingAlloc:transportPerUnit,value:Math.round((item.qty||0)*costRon*100)/100,oldPrice:oldCostBefore,stockBefore:stockPlan.before,stockAfter:stockPlan.after,negativeCompensated:stockPlan.compensated});
+        orderDetails.push({status:'actualizat',sku:item.sku||P[idx].sku||'',productId:P[idx].id,name:P[idx].name,qty:item.qty,price:costRon,productCost,shippingAlloc:transportPerUnit,value:Math.round((item.qty||0)*costRon*100)/100,oldPrice:oldCostBefore,stockBefore:stockPlan.before,stockAfter:stockPlan.after,negativeCompensated:stockPlan.compensated,...invLineCurrencyFields(item,P[idx])});
         updated++;
       }
     } else if(item.newProduct){
@@ -32186,13 +32351,13 @@ async function applyInvoice(){
       await saveProdToDb(newP,null);
       const newId=P[P.length-1]?.id||null;
       await logMove('in',newP.name,item.qty,invSourceName||'Import factură · produs nou',newId);
-      orderDetails.push({status:'produs nou',sku:item.sku||'',productId:newId,name:newP.name,qty:item.qty,price:costRon,productCost,shippingAlloc:transportPerUnit,value:Math.round((item.qty||0)*costRon*100)/100,img:stockHistImg(newId,newP.img)});
+      orderDetails.push({status:'produs nou',sku:item.sku||'',productId:newId,name:newP.name,qty:item.qty,price:costRon,productCost,shippingAlloc:transportPerUnit,value:Math.round((item.qty||0)*costRon*100)/100,img:stockHistImg(newId,newP.img),...invLineCurrencyFields(item,null)});
       created++;
     } else {
       // Nici produs ales, nici "produs nou" confirmat — linie nerezolvată, se SARE la aplicare (nu se
       // creează nimic pe ghicite). item.onlyExisting distinge doar mesajul ("cod negăsit" la
       // reaprovizionare) de cazul general ("alege manual"), comportamentul (sărire) e identic.
-      orderDetails.push({status:item.onlyExisting?'cod negăsit':'nerezolvat — alege manual',sku:item.sku||'',productId:null,name:item.name||item.sku||'Produs necunoscut',qty:item.qty,price:costRon,value:Math.round((item.qty||0)*costRon*100)/100});
+      orderDetails.push({status:item.onlyExisting?'cod negăsit':'nerezolvat — alege manual',sku:item.sku||'',productId:null,name:item.name||item.sku||'Produs necunoscut',qty:item.qty,price:costRon,value:Math.round((item.qty||0)*costRon*100)/100,...invLineCurrencyFields(item,null)});
       skipped++;
       if(!item.onlyExisting)unresolved++;
       continue;
