@@ -23,6 +23,24 @@ eq('nume fișier cu numerotare în față și sufix (1)',A.awbFromFilename('64 -
 eq('o potrivire indirectă (pe nume) devine determinist când AWB-ul din nume = AWB-ul de pe etichetă',A.awbApplyFilenameOrderId({awb:'1213629115',cargusEmagLabel:true,destinatar:'X',courier:'Cargus'},'568193459_Cargus_1213629115.pdf',1).comandaId,'568193459');
 eq('AWB diferit între nume și etichetă: nu se atinge',A.awbApplyFilenameOrderId({awb:'999',cargusEmagLabel:true,courier:'Cargus'},'568193459_Cargus_1213629115.pdf',1).comandaId,undefined);
 
+console.log('\n— Fișiere numerotate „NNN_…” (Update #770, lotul AWB_numerotate_49) —');
+{
+  const f=A.awbFromFilename;
+  eq('„018_582410751_Cargus_1214069732.pdf" → comanda 582410751 (înainte: null → etichetă Cargus ambiguă la 2 comenzi către același client, fără AWB, fără Staff)',f('018_582410751_Cargus_1214069732.pdf'),{comandaId:'582410751',courier:'Cargus',awb:'1214069732'});
+  eq('Sameday BG numerotat: „015_1028046067_Sameday_012EMGXB23960265001.pdf" → AWB complet (19 caractere), nu cel trunchiat de AI',f('015_1028046067_Sameday_012EMGXB23960265001.pdf'),{comandaId:'1028046067',courier:'Sameday',awb:'012EMGXB23960265001'});
+  eq('numerotat + sufix „(1)" din browser',f('030_583304927_eMAG_Courier_4EMGLN199690149001 (1).pdf'),{comandaId:'583304927',courier:'eMAG Courier',awb:'4EMGLN199690149001'});
+  eq('numai codul AWB în nume, numerotat: „007_012EMGXL23176005001.pdf"',f('007_012EMGXL23176005001.pdf'),{comandaId:'',courier:'',awb:'012EMGXL23176005001'});
+  eq('numerotarea veche „64 - …” rămâne',f('64 - 582414896_Cargus_1213470361.pdf'),{comandaId:'582414896',courier:'Cargus',awb:'1213470361'});
+  eq('un număr de comandă (≥ 6 cifre) NU se confundă cu numerotarea și nu se taie',f('582410751_Cargus_1214069732.pdf').comandaId,'582410751');
+  eq('nume cu numerotare dar fără structură de etichetă (042_ksaiiqwq.pdf) → tot null (are comanda pe etichetă)',f('042_ksaiiqwq.pdf'),null);
+  // fluxul complet: Cargus, 2 comenzi către același client (ambiguu pe nume) → numele fișierului hotărăște
+  const amb={awb:'1214069732',cargusEmagLabel:true,cargusEmagAmbiguous:true,destinatar:'RO-FIRMA TEST SA',courier:'Cargus'};
+  const r=A.awbApplyFilenameOrderId(amb,'018_582410751_Cargus_1214069732.pdf',1);
+  eq('2 comenzi cu același destinatar: numele fișierului numerotat rezolvă ambiguitatea (comanda din nume, fără steagul „ambiguu")',[r.comandaId,r.cargusEmagAmbiguous,r._filenameOrderId],['582410751',undefined,true]);
+  const r2=A.awbApplyFilenameOrderId({...amb,awb:'1214069727'},'018_582410751_Cargus_1214069732.pdf',1);
+  eq('AWB-ul din nume diferit de cel de pe etichetă (fișier redenumit greșit) → ignorat, rămâne ambiguu',[r2.comandaId,r2.cargusEmagAmbiguous],[undefined,true]);
+}
+
 console.log('\n— Plauzibilitate AWB (plasa de siguranță pentru AI) —');
 const ok=(a,c)=>A.awbLooksPlausible(a,c);
 eq('ACS: AWB numeric 11 cifre / 10 cifre acceptate',[ok('81408625808','ACS'),ok('2876470645','ACS'),ok('81410458531','DPD')],[true,true,true]);
