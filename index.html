@@ -664,6 +664,29 @@ tr:hover td{background:var(--surf2)}
 /* MODAL */
 .ov{display:none;position:fixed;inset:0;background:rgba(15,23,42,.34);z-index:200;align-items:flex-start;justify-content:center;overflow-y:auto;padding:1.5rem 1rem;backdrop-filter:blur(2px)}
 .ov.on{display:flex}
+/* Lightbox poză / etichetă AWB (Update #769) */
+#imgzoom-src{max-width:92vw;max-height:92vh;object-fit:contain;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.45);background:#fff}
+.imgzoom-box{display:flex;gap:16px;align-items:flex-start;justify-content:center;max-width:96vw}
+.imgzoom-fig{position:relative;line-height:0;flex:0 1 auto}
+#ov-imgzoom.awb #imgzoom-src{width:auto;height:auto;max-width:min(560px,52vw);max-height:90vh}
+.imgzoom-text{position:absolute;left:0;top:0;overflow:hidden}
+.imgzoom-text span{position:absolute;white-space:pre;color:transparent;line-height:1;cursor:text;user-select:text;-webkit-user-select:text;transform-origin:0 0}
+.imgzoom-text span::selection{background:rgba(118,87,246,.38);color:transparent}
+.imgzoom-panel{width:370px;max-width:92vw;max-height:90vh;overflow:auto;background:var(--surf);color:var(--t1);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.45);padding:14px 14px 12px;font-size:15px;line-height:1.35}
+.izp-h{font-weight:800;font-size:17px;margin-bottom:3px}
+.izp-note{font-size:13px;color:var(--t3);margin-bottom:10px}
+.izp-note.warn{color:var(--or);font-weight:600}
+.izp-chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.izp-chip{font-family:inherit;font-size:15px;font-weight:700;padding:6px 11px;border-radius:999px;border:1px solid var(--acc);background:var(--acc-light);color:var(--acc);cursor:pointer}
+.izp-chip:hover{background:var(--acc);color:var(--acc-fg)}
+.izp-row{display:flex;align-items:flex-start;gap:6px;padding:6px 0;border-bottom:1px dashed var(--b1)}
+.izp-tx{flex:1;min-width:0;overflow-wrap:anywhere;cursor:copy}
+.izp-tx:hover{color:var(--acc)}
+.izp-cp{flex:none;font-family:inherit;font-size:12px;font-weight:700;padding:3px 8px;border-radius:7px;border:1px solid var(--b3);background:var(--surf2);color:var(--t2);cursor:pointer;white-space:nowrap}
+.izp-cp:hover{border-color:var(--acc);color:var(--acc)}
+.izp-all{margin-top:10px;width:100%;font-family:inherit;font-size:15px;font-weight:700;padding:9px;border-radius:10px;border:1px solid var(--acc);background:var(--acc);color:var(--acc-fg);cursor:pointer}
+.izp-load{color:var(--t3);padding:8px 0}
+@media(max-width:820px){.imgzoom-box{flex-direction:column;align-items:center}#ov-imgzoom.awb #imgzoom-src{max-width:92vw;max-height:62vh}.imgzoom-panel{width:92vw;max-height:none}}
 .modal{background:#fff;border-radius:24px;border:1px solid rgba(15,23,42,.08);width:min(1880px,97vw);max-width:100%;height:min(94vh,1320px);max-height:calc(100vh - 3rem);box-shadow:0 24px 70px rgba(15,23,42,.18);margin:auto;overflow:hidden;display:flex;flex-direction:column;color:#172033}
 .m-head{padding:22px 28px 0;border-bottom:1px solid #E9EDF3;background:#fff;position:sticky;top:0;z-index:4}
 .m-head-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
@@ -5277,7 +5300,12 @@ button.pcx-include-btn.included{border-color:var(--gr)}
 <!-- ZOOM POZĂ (cerut direct — „aici, când apas pe poză, să se facă mare"): reutilizabil, nu doar pentru
 poza principală a produsului — orice apel openImgZoom(src) deschide aceeași fereastră mare. -->
 <div class="ov" id="ov-imgzoom" style="z-index:300;align-items:center" onclick="if(event.target===this)closeImgZoom()">
-  <img id="imgzoom-src" alt="" style="max-width:92vw;max-height:92vh;object-fit:contain;border-radius:12px;box-shadow:0 20px 60px rgba(0,0,0,.45)">
+  <!-- Mod „etichetă AWB” (Update #769): peste imagine un strat de text selectabil + un panou cu rândurile copiabile; pentru orice altă poză
+       (produs etc.) rămâne doar imaginea, ca înainte. -->
+  <div class="imgzoom-box">
+    <div class="imgzoom-fig"><img id="imgzoom-src" alt="" draggable="false"><div class="imgzoom-text" id="imgzoom-text"></div></div>
+    <aside class="imgzoom-panel" id="imgzoom-panel" style="display:none" onclick="event.stopPropagation()"></aside>
+  </div>
 </div>
 
 <!-- INVOICE MODAL -->
@@ -5581,6 +5609,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:769,text:'Etichete AWB — text selectabil și copiabil, cerut direct, cu captura lightbox-ului: „cum facem să poată fi citibil acest document, să pot da copiază la text, la numărul de telefon, la denumire”. Problema: preview-ul unei etichete e o POZĂ (JPEG randat din PDF), deci nu puteai selecta nimic din ea. Acum, când mărești o etichetă (miniatura din „Asociază AWB-uri” sau „👁 Vezi AWB”), fereastra are (1) un strat de text selectabil PESTE etichetă — selectezi direct cu mouse-ul și dai Cmd+C, selecția cade exact peste litere (verificat față de pdftotext -bbox pe o etichetă Cargus reală: abatere medie sub 1,3 pt pe o pagină de 420 pt) — și (2) un panou „📋 Text din etichetă”: butoane mari pentru NUMELE destinatarului (👤) și TELEFOANE (📞, formă curată +40…), apoi fiecare rând al etichetei, copiabil dintr-un click (apeși pe text sau pe ⧉), cu „doar valoarea” la rândurile „Eticheta: valoare” și „Copiază tot textul”. Textul e cel EXACT din PDF (PDF.js, nu AI), deci cifrele sunt corecte. De unde ia PDF-ul: din memorie (lista „Asociază AWB-uri”); pentru etichete deja salvate, din PDF-ul original de pe Mac prin conectorul local (awbSourceFile/awbSourcePage, arhiva procesate/ inclusă); iar dacă nu e disponibil nicăieri (alt dispozitiv, fișier șters), eticheta se citește din imagine cu AI, cu avertisment vizibil „verifică cifrele”, rezultat ținut minte pe acest dispozitiv. Detalii de acuratețe, găsite pe etichete reale: rândurile din tabelul Cargus se despart pe celule (gol > 0,55 × fontul), dar „Nota:” rămâne lipită de valoarea ei; un ID de 9 cifre din referința Sameday („…_583304927_266750487”) NU mai e luat drept telefon (telefon = 0… sau +40…, niciodată lipit de litere/cifre/„_”). Imaginea din lightbox nu mai are stil inline, iar la o deschidere obișnuită (poză de produs) lightbox-ul rămâne exact ca înainte. Nu s-a scris nimic în bază/Storage. Verificat de 2 ori: sintaxă + scripts/awb-text.test.js (45+ verificări pe funcțiile reale) + toate testele existente + în aplicația rulată pe 3 etichete reale (Cargus, Sameday, FAN): 96/33/46 fragmente extrase, telefonul destinatarului găsit pe Cargus, nicio detecție falsă pe FAN/Sameday, selecția „Destinatar: …” copiază exact textul cerut, calea AI pe o etichetă sintetică (fără date reale) dă toate rândurile, cu avertisment și cache (a doua deschidere: 0 apeluri AI).',date:'2026-11-24'},
   {n:768,text:'Comenzi Platforme — cardul „Previzualizare comenzi” aranjat, cerut direct, cu captură: „așază mai bine aici, e foarte dezorganizat și fără sens”. Ce era fără sens, măsurat pe datele reale: aceleași informații apăreau de două ori, cu numere diferite (sus „Total 273 · eMAG 212”, dedesubt „Toate 266 · eMAG 205” — linii vs. comenzi, nesemnalat); butoanele de unelte erau uriașe și pe un rând separat; „Debifează toate” exista și în antet, și în bara de jos; filtrul „Orice status” stătea deasupra deck-ului deși se aplica doar listei de jos; etapele de lucru (un flux: Fără produs → De inclus → Așteaptă AWB → În Staff → De închis) arătau ca niște butoane întâmplătoare și se rupeau pe 2 rânduri; insigna de termen și rândul „AWB asociat” moșteneau fontul paginii (~31px) și păreau titluri; iar antetul fiecărui card era o grilă cu 10 coloane fixe pentru 11 elemente (data e opțională), deci coloanele se decalau, numele cumpărătorului ajungea la 0 px și antetul ieșea din card (17 din 266 de carduri la 1400 px). Acum, de sus în jos: (1) titlu + rezumat într-o linie („266 comenzi · 273 linii · 27 incluse”, plus „⚠ fără produs” / „⚠️ cu produs arhivat” doar când există) în stânga, uneltele („📦 Cu stoc sus”, „📊 Lista de comandat”) compacte în dreapta; (2) banda „Restanțe pe stoc”; (3) O SINGURĂ bară de filtre: platformă (cu numărul de comenzi) + căutare; (4) etapele, cu săgeți între cele din flux și „Amânate / De verificat” separat, apoi explicația etapei într-un chenar discret, apoi deck-ul; (5) „Lista completă”, cu filtrul „Arată: Toate comenzile / Fără produs / Neincluse / Incluse” chiar în antetul ei. Antetul cardului de comandă e un rând flexibil: platformă + număr + dată în stânga, cumpărătorul ia restul rândului (tăiat cu „…” dacă e lung), cifrele (poză, produse, total, status) în dreapta; AWB-ul din antet (repeta rândul verde „AWB asociat” de sub el) și placeholderul invizibil „NOU” nu mai ocupă loc; insigna de termen e acum o pastilă mică, iar rândul AWB are font normal. Pe telefon: uneltele și platformele trec pe rânduri complete, cardul din deck ia toată lățimea, iar săgețile înapoi/înainte trec sub el (înainte îi mâncau lățimea și blocul cu numărul comenzii ieșea din ecran). Nimic din logică nu s-a schimbat: aceleași id-uri, aceleași funcții, aceleași filtre. Verificat de 2 ori: sintaxă + teste noi în scripts/pcom-perf.test.js (12 puncte care pică pe codul vechi: ordinea secțiunilor, filtrul de status lângă listă, rezumatul, antetul flex, mobil) + toate testele existente + în aplicația rulată pe ciorna reală (266 de comenzi): la 1700 px 0 din 266 de antete ies din card și etapele încap pe un rând; la 1400 px 0 ieșite; la 1000 px 0 ieșite; pe telefon nimic nu iese din ecran, săgețile de sub card navighează, etapele schimbă lista; filtrul „Arată: Incluse” din noua poziție dă 23 de comenzi, iar „Toate” le readuce pe toate 266.',date:'2026-11-24'},
   {n:767,text:'Comenzi Platforme — „Set 5 cutii” × 1 buc. acum iese 5, singur (problemă raportată de mai multe ori, cu captură: eMAG #582841809, titlu „Set 5 cutii depozitare…”, produs „Cutie depozitare…12L”, cantitate 1 în loc de 5). Cauze găsite, ambele confirmate pe datele reale: (1) alegerea MANUALĂ a produsului nu mai reevalua cantitatea — comanda din captură avea produs ales manual (scor 1, fără PNK), deci nu primea nici conversia, nici sugestia 💡; (2) conversia automată cerea „Nx” în numele produsului („Statie radio 2x”), iar un produs fără număr primea doar o sugestie, de apăsat la fiecare comandă. Acum conversia se aplică singură, cu chip „⇄ 1 × set de 5 buc. → 5 × buc.” și „↶ anulează conversia”, în 3 situații sigure: (a) MEMORIE per listare — ce ai confirmat o dată (apeși 💡 Aplică, sau scrii tu exact cantitatea sugerată) se aplică singur la toate comenzile următoare cu același cod PNK + același produs (se salvează local și în cloud, setări pcom_pack_memory); anularea unei conversii memorează „fără conversie” pentru listarea respectivă; o cantitate diferită de ce sugerează regula (ex. 6 în loc de 5) e o excepție a ta și NU se memorează; (b) numele produsului declară pachetul (regula veche, „2x”); (c) „un singur exemplar”: titlul zice „Set 5 cutii”, produsul e „Cutie…” (același cuvânt, la singular, fără set/pachet/kit/buc în nume) — dacă produsul are același cuvânt la plural sau e declarat set, rămâne doar sugestie. Linia se reevaluează la fiecare randare (nu doar la potrivire), deci și după o alegere manuală, o potrivire AI sau o schimbare de produs; la schimbarea produsului se desface conversia făcută pentru cel vechi. Liniile deja în Staff nu se schimbă în tăcere (doar primesc 💡), cele pe care le-ai modificat tu nu se ating, iar liniile amânate nu se ating. O sugestie NOUĂ nu apare pe produse cu „set/kit/pachet/buc” în nume (zgomot). Titlul AWB și stocul scăzut folosesc cantitatea convertită („5x Cutie depozitare… | 1211814”), iar totalul încasat rămâne neschimbat (145,95 RON). Verificat de 2 ori: sintaxă + scripts/pack-size.test.js extins (69 de verificări: titlul real din captură, cazurile „nu se aplică”, alegere manuală, memorie, anulare, editări manuale, îmbinare cu cloud) + toate testele existente + în aplicația rulată, pe ciorna reală: linia din captură 1 → 5 (preț/buc 24,13, AWB „5x…”), chip și buton de anulare reale, comandă nouă pe aceeași listare → neconvertită după anulare și convertită după ce scrii 5, alegerea manuală a produsului prin pickPcomProduct reevaluează; pe ciorna reală niciun alt rând nu e convertit în tăcere (doar 6 sugestii noi, de verificat).',date:'2026-11-24'},
   {n:766,text:'Asistent AI — card „candidat de ales” deformat, reparat (bug din #764, raportat direct, cu captură din pop-up: numele produsului era strivit într-o coloană de câteva litere, iar butonul „🔎 Comenzi” se întindea peste tot cardul). Cauza: butonul avea clasa aic-sim-btn (width:100%), iar suprascrierea mea width:auto era scrisă mai sus în fișierul CSS, deci pierdea — în rândul flex butonul lua toată lățimea și lăsa textului câțiva pixeli. Acum cardul are reguli proprii (butonul pe lățimea lui, în dreapta; numele ia restul rândului și trece pe 2–3 rânduri dacă e lung). Verificat de 2 ori: test nou în scripts/chat-comenzi.test.js (butonul nu mai folosește aic-sim-btn; regulile de lățime) + măsurat în aplicația rulată, cu un nume de 47 de caractere: pop-up de 600 px (text 245 px, buton 86 px) și de 340 px (text 135 px, buton 86 px, 3 rânduri) — fără suprapunere, totul în interiorul cardului.',date:'2026-11-24'},
@@ -21565,7 +21594,7 @@ function pcomAwbPickBtnHtml(idx,committedRow){
 // avea ce arăta — Comenzi Platforme nu are cameră, acel flux rămâne strict în Staff).
 function pcomAwbPreviewBtnHtml(committedRow){
   const url=committedRow?.awbPreviewUrl;if(!url)return'';
-  return`<button type="button" class="pcx-btn" style="padding:4px 10px;font-size:14px;align-self:flex-start" onclick="openImgZoom('${esc(url.replace(/'/g,"\\'"))}')" title="Previzualizare etichetă AWB">👁 Vezi AWB</button>`;
+  return`<button type="button" class="pcx-btn" style="padding:4px 10px;font-size:14px;align-self:flex-start" onclick="pcomZoomAwbPreview(${Number(committedRow.id)})" title="Previzualizare etichetă AWB — în fereastra mărită poți selecta și copia textul (nume, telefon, adresă)">👁 Vezi AWB</button>`;
 }
 // La momentul asocierii (automată sau manuală), arată imediat stocul intern — actual și proiectat
 // după scăderea cantității de mai jos — ca omul să decidă pe loc: confirmă vânzarea (nu face nimic)
@@ -27431,13 +27460,194 @@ function clearImg(){curImg='';document.getElementById('f-img').value='';document
 // (#img-zone) are dedesubt un input de fișier invizibil, pe toată suprafața (ca să deschidă selectorul
 // de fișiere la click) — fără z-index mai mare pe #f-prev (vezi CSS .img-prev), click-ul pe poza deja
 // existentă ar fi ajuns tot la inputul de fișier, deschizând selectorul, nu zoom-ul.
-function openImgZoom(src){
+function openImgZoom(src,awbMode){
   if(!src)return;
   const img=document.getElementById('imgzoom-src');
+  const ov=document.getElementById('ov-imgzoom');
+  // orice deschidere obișnuită (poză de produs etc.) oprește modul „etichetă AWB” rămas de la o deschidere anterioară
+  if(!awbMode){awbZoomToken++;ov.classList.remove('awb');document.getElementById('imgzoom-text').innerHTML='';const pn=document.getElementById('imgzoom-panel');pn.style.display='none';pn.innerHTML='';}
+  img.onload=awbLayoutZoomText;
   img.src=src;
-  document.getElementById('ov-imgzoom').classList.add('on');
+  ov.classList.add('on');
 }
-function closeImgZoom(){document.getElementById('ov-imgzoom').classList.remove('on');}
+function closeImgZoom(){awbZoomToken++;const ov=document.getElementById('ov-imgzoom');ov.classList.remove('on','awb');document.getElementById('imgzoom-text').innerHTML='';const pn=document.getElementById('imgzoom-panel');pn.style.display='none';pn.innerHTML='';}
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// TEXT SELECTABIL DIN ETICHETELE AWB (Update #769) — cerut direct, cu captura lightbox-ului: „cum facem să poată fi citibil acest
+// document, în ideea în care să pot da copiază la text, la numărul de telefon, la denumire”. Preview-ul unei etichete e o POZĂ (JPEG
+// randat din PDF), deci nu poți selecta nimic din ea. Acum lightbox-ul etichetei are (1) un strat de text selectabil PESTE imagine
+// (selectezi direct pe etichetă și dai Cmd+C) și (2) un panou „Text din etichetă”: telefoanele detectate ca butoane și fiecare rând
+// copiabil dintr-un click (plus „doar valoarea” la rândurile „Eticheta: valoare”). Textul e cel EXACT din PDF (PDF.js, nu AI):
+//   1. PDF-ul e în memorie (lista „Asociază AWB-uri”)              → text exact, cu poziții → strat selectabil + panou;
+//   2. etichetă deja salvată („👁 Vezi AWB”) → PDF-ul original, prin conectorul de pe Mac (awbSourceFile/awbSourcePage) → la fel;
+//   3. fără PDF (altă mașină / arhivă ștearsă) → citire din imagine cu AI, DOAR panou și marcat „verifică cifrele”.
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+let awbZoomToken=0;
+const AWB_THUMB_P={},awbTextCache=new Map();
+async function awbEnsurePdfJs(){
+  if(window.pdfjsLib)return;
+  await new Promise((resolve,reject)=>{const sc=document.createElement('script');sc.src='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';sc.onload=resolve;sc.onerror=reject;document.head.appendChild(sc);});
+  window.pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+}
+// înmulțirea matricelor PDF (identică cu pdfjsLib.Util.transform)
+const awbMul=(a,b)=>[a[0]*b[0]+a[2]*b[1],a[1]*b[0]+a[3]*b[1],a[0]*b[2]+a[2]*b[3],a[1]*b[2]+a[3]*b[3],a[0]*b[4]+a[2]*b[5]+a[4],a[1]*b[4]+a[3]*b[5]+a[5]];
+// Fragmentele de text ale unei pagini → {items:[{s,x,y,w,h}]}, toate ca FRACȚII din lățimea/înălțimea paginii (x,y = colțul stânga-sus),
+// deci stratul se poate așeza pe imagine la orice dimensiune. Textul rotit (filigranul „First Mile easybox” de pe Sameday) e ignorat.
+function awbBuildTextLayer(rawItems,vpW,vpH,vpTransform){
+  const items=[];
+  (rawItems||[]).forEach(it=>{
+    const str=String(it.str==null?'':it.str);
+    if(!str.trim()||!it.transform)return;
+    const t=awbMul(vpTransform,it.transform);
+    const fh=Math.hypot(t[2],t[3]);
+    if(!(fh>0)||Math.abs(t[1])>0.2*Math.abs(t[0]))return;
+    const w=Number(it.width)||fh*0.5*str.length;
+    items.push({s:str,x:t[4]/vpW,y:(t[5]-fh*0.82)/vpH,w:w/vpW,h:fh/vpH});
+  });
+  return{items,aspect:vpW/vpH};   // aspect = lățime/înălțime pagină, ca să putem compara goluri pe orizontală cu înălțimea fontului
+}
+async function awbExtractTextLayer(blob,pageNum){
+  await awbEnsurePdfJs();
+  const pdf=await window.pdfjsLib.getDocument({data:await blob.arrayBuffer()}).promise;
+  const page=await pdf.getPage(pageNum||1);
+  const vp=page.getViewport({scale:1});
+  const content=await page.getTextContent();
+  return awbBuildTextLayer(content.items,vp.width,vp.height,vp.transform);
+}
+// Rânduri de text, de sus în jos: fragmentele cu același „y” (în jumătate de înălțime de font) se unesc, de la stânga la dreapta.
+// Pe același rând vizual, fragmentele despărțite de un gol mare (> 0,55 × înălțimea fontului) sunt CELULE diferite ale tabelului din etichetă
+// („Expeditor: AB TEXTILE SRL” | „Plic Colet Palet”) — rânduri separate, nu un text lipit.
+function awbTextLines(layer){
+  const rows=[],aspect=(layer&&layer.aspect)||0.71;
+  (layer&&layer.items||[]).slice().sort((a,b)=>a.y-b.y||a.x-b.x).forEach(it=>{
+    const r=rows.find(q=>Math.abs(q.y-it.y)<Math.max(it.h,q.h)*0.45);
+    if(r)r.its.push(it);else rows.push({y:it.y,h:it.h,its:[it]});
+  });
+  const out=[];
+  rows.sort((a,b)=>a.y-b.y).forEach(r=>{
+    const its=r.its.sort((a,b)=>a.x-b.x);
+    let seg=[];
+    its.forEach((it,i)=>{
+      const prev=its[i-1];
+      // gol > 0,55 × fontul = altă celulă (în propoziții golurile sunt ≤ 0,5; între celule ≥ 1,1 — măsurat pe o etichetă Cargus reală); EXCEPȚIE:
+      // „Nota:” urmat de valoarea din celula de lângă (la distanță mare) rămân împreună — eticheta și valoarea ei
+      if(prev&&(it.x-(prev.x+prev.w))*aspect>Math.max(it.h,prev.h)*0.55&&!/:\s*$/.test(seg.map(q=>q.s).join(' '))){out.push(seg);seg=[];}
+      seg.push(it);
+    });
+    out.push(seg);
+  });
+  return out.map(seg=>seg.map(i=>i.s).join(' ').replace(/\s+/g,' ').trim()).filter(Boolean);
+}
+// Telefoane românești (mobil sau fix), cu sau fără prefix: +40 768 198 389, 0768198389, 021 933 0123… Un AWB (10–18 cifre, altă formă) NU e telefon.
+function awbPhonesInLines(lines){
+  const out=[],seen=new Set();
+  (lines||[]).forEach(ln=>{
+    // nu lipit de litere/cifre/„_” (altfel o parte dintr-o referință „AWB_comandă_266750487” ar părea telefon)
+    (String(ln).match(/(?<![\w.])\+?\d[\d\s.\-]{7,}\d(?![\w])/g)||[]).forEach(m=>{
+      const digits=m.replace(/\D/g,'');
+      // național: 0 + (7|2|3) + 8 cifre; internațional: (+)40 + (7|2|3) + 8 cifre. Fără 0 sau 40 în față NU e telefon (ar fi un ID).
+      if(!/^(?:40[237]\d{8}|0[237]\d{8})$/.test(digits)||seen.has(digits))return;
+      seen.add(digits);
+      out.push({show:m.trim(),copy:(digits.startsWith('40')?'+':'')+digits});
+    });
+  });
+  return out;
+}
+// „Destinatar: RO-ARMYSECURITY SA” → {k:'Destinatar',v:'RO-ARMYSECURITY SA'}; altfel null
+function awbSplitKV(line){
+  const m=String(line).match(/^([A-Za-zĂÂÎȘȚăâîșțşţ][A-Za-zĂÂÎȘȚăâîșțşţ .\/]{1,26}):\s*(\S.*)$/);
+  return m?{k:m[1].trim(),v:m[2].trim()}:null;
+}
+function awbZoomPanelHtml(lines,source){
+  const phones=awbPhonesInLines(lines);
+  const cp=v=>`copyText(${esc(JSON.stringify(v))})`;
+  const note=source==='ai'
+    ?'<div class="izp-note warn">⚠ Nu am găsit PDF-ul etichetei — textul e citit din imagine (AI). Verifică cifrele (telefon, AWB) înainte să le copiezi.</div>'
+    :'<div class="izp-note">Text exact din PDF. Selectează direct pe etichetă, sau apasă pe un rând ca să-l copiezi.</div>';
+  // numele destinatarului („Destinatar: RO-ARMYSECURITY SA” pe Cargus) ca buton, lângă telefoane
+  const dest=lines.map(awbSplitKV).find(k=>k&&/^destinatar$/i.test(k.k));
+  const destChip=dest?`<button type="button" class="izp-chip" onclick="${cp(dest.v)}" title="Copiază numele destinatarului">👤 ${esc(dest.v)}</button>`:'';
+  const chips=(destChip||phones.length)?`<div class="izp-chips">${destChip}${phones.map(ph=>`<button type="button" class="izp-chip" onclick="${cp(ph.copy)}" title="Copiază numărul de telefon">📞 ${esc(ph.show)}</button>`).join('')}</div>`:'';
+  const rows=lines.map(ln=>{
+    const kv=awbSplitKV(ln);
+    return`<div class="izp-row"><span class="izp-tx" onclick="${cp(ln)}" title="Copiază rândul">${esc(ln)}</span>${kv?`<button type="button" class="izp-cp" onclick="${cp(kv.v)}" title="Copiază doar „${esc(kv.v)}”">doar valoarea</button>`:''}<button type="button" class="izp-cp" onclick="${cp(ln)}" title="Copiază rândul">⧉</button></div>`;
+  }).join('');
+  return`<div class="izp-h">📋 Text din etichetă</div>${note}${chips}${rows||'<div class="izp-load">Nu am găsit text în etichetă.</div>'}<button type="button" class="izp-all" onclick="${cp(lines.join('\n'))}">Copiază tot textul</button>`;
+}
+// Așează stratul de text selectabil peste imagine (la încărcarea imaginii și la redimensionarea ferestrei): poziție + mărime de font din
+// fracțiile paginii, iar lățimea fiecărui fragment se potrivește cu cea din PDF (scaleX), ca selecția să urmeze literele.
+function awbLayoutZoomText(){
+  const img=document.getElementById('imgzoom-src'),box=document.getElementById('imgzoom-text');
+  if(!img||!box||!box.firstChild)return;
+  const W=img.clientWidth,H=img.clientHeight;if(!W||!H)return;
+  box.style.width=W+'px';box.style.height=H+'px';
+  box.querySelectorAll('span').forEach(sp=>{
+    const d=sp.dataset;
+    sp.style.transform='none';
+    sp.style.fontSize=(H*parseFloat(d.h))+'px';
+    sp.style.left=(parseFloat(d.x)*W)+'px';sp.style.top=(parseFloat(d.y)*H)+'px';
+    const target=parseFloat(d.w)*W,actual=sp.getBoundingClientRect().width;
+    if(actual>0&&target>0)sp.style.transform=`scaleX(${Math.min(3,Math.max(0.3,target/actual))})`;
+  });
+}
+window.addEventListener('resize',()=>{if(document.getElementById('ov-imgzoom')?.classList.contains('awb'))awbLayoutZoomText();});
+// Fără PDF: citește textul din imagine cu AI (doar rânduri, fără poziții). Rezultatul se ține minte pe acest dispozitiv.
+async function awbTextFromImageAI(src){
+  const resp=await fetch(src);if(!resp.ok)throw new Error('Imaginea etichetei nu se poate citi');
+  const blob=await resp.blob();
+  const dataUrl=await new Promise((res,rej)=>{const fr=new FileReader();fr.onload=e=>res(e.target.result);fr.onerror=rej;fr.readAsDataURL(blob);});
+  const m=dataUrl.match(/^data:(image\/[\w.+-]+);base64,(.+)$/);if(!m)throw new Error('Format de imagine neacceptat');
+  const out=await callAI([{role:'user',content:[{type:'image',source:{type:'base64',media_type:m[1],data:m[2]}},{type:'text',text:'Transcrie fidel TOT textul de pe această etichetă de colet, rând cu rând, de sus în jos. Nu corecta, nu traduce și nu rezuma; păstrează cifrele exact așa cum sunt scrise. Un rând al etichetei = un element al listei.'}]}],
+    'Ești un OCR riguros. Răspunzi doar cu JSON-ul cerut, doar cu ce se vede clar în imagine.',1500,'analysis',{type:'object',properties:{randuri:{type:'array',items:{type:'string'}}},required:['randuri'],additionalProperties:false},'awb_label_ocr');
+  return(JSON.parse(out).randuri||[]).map(x=>String(x).trim()).filter(Boolean);
+}
+async function awbTextFromConnector(file,page){
+  if(!file)return null;
+  const data=await localEmagJson('/awb-folder-print',{names:[file]},30000);
+  const f=(Array.isArray(data&&data.files)?data.files:[]).find(x=>x.name===file);
+  return f?awbExtractTextLayer(base64ToBlob(f.data,'application/pdf'),page||1):null;
+}
+// Întoarce {layer,lines,source:'pdf'|'ai'}; ordinea: PDF din memorie → PDF din arhiva de pe Mac → AI pe imagine.
+async function awbResolveLabelText(src,opts){
+  const key=opts.blob?`b:${opts.file||''}|${opts.page||1}`:`u:${src}`;
+  if(awbTextCache.has(key))return awbTextCache.get(key);
+  let layer=null;
+  if(opts.blob){try{layer=await awbExtractTextLayer(opts.blob,opts.page||1);}catch(e){console.warn('Textul din PDF-ul etichetei nu s-a putut extrage:',e);}}
+  if((!layer||layer.items.length<3)&&opts.file){try{layer=await awbTextFromConnector(opts.file,opts.page);}catch(e){layer=null;}}
+  let res;
+  if(layer&&layer.items.length>=3)res={layer,lines:awbTextLines(layer),source:'pdf'};
+  else{
+    let lines=null;const lsKey='sm6_awb_ocr';
+    try{lines=(JSON.parse(localStorage.getItem(lsKey)||'{}')[src]||{}).lines||null;}catch(e){}
+    if(!lines){
+      lines=await awbTextFromImageAI(src);
+      try{const all=JSON.parse(localStorage.getItem(lsKey)||'{}');all[src]={lines,at:Date.now()};const ks=Object.keys(all);if(ks.length>40)ks.sort((a,b)=>(all[a].at||0)-(all[b].at||0)).slice(0,ks.length-40).forEach(k=>delete all[k]);localStorage.setItem(lsKey,JSON.stringify(all));}catch(e){}
+    }
+    res={layer:null,lines,source:'ai'};
+  }
+  awbTextCache.set(key,res);
+  return res;
+}
+// Deschide lightbox-ul în mod „etichetă”: imaginea apare imediat, textul se încarcă după.
+async function openAwbLabelZoom(src,opts){
+  opts=opts||{};
+  if(!src)return;
+  openImgZoom(src,true);
+  const ov=document.getElementById('ov-imgzoom'),panel=document.getElementById('imgzoom-panel'),box=document.getElementById('imgzoom-text');
+  ov.classList.add('awb');box.innerHTML='';
+  panel.style.display='';panel.innerHTML='<div class="izp-h">📋 Text din etichetă</div><div class="izp-load"><span class="spin"></span> Citesc textul din etichetă…</div>';
+  const token=++awbZoomToken;
+  let res;
+  try{res=await awbResolveLabelText(src,opts);}
+  catch(e){if(token===awbZoomToken)panel.innerHTML=`<div class="izp-h">📋 Text din etichetă</div><div class="izp-note warn">Nu am putut citi textul etichetei: ${esc(e.message||String(e))}</div>`;return;}
+  if(token!==awbZoomToken)return;   // între timp s-a închis sau s-a deschis altă etichetă
+  panel.innerHTML=awbZoomPanelHtml(res.lines,res.source);
+  if(res.layer){
+    box.innerHTML=res.layer.items.map(it=>`<span data-x="${it.x}" data-y="${it.y}" data-w="${it.w}" data-h="${it.h}">${esc(it.s)}</span>`).join('');
+    awbLayoutZoomText();
+  }
+}
+function awbZoomFromThumb(img,key){const p=AWB_THUMB_P[key];openAwbLabelZoom(img.src,{blob:p&&p._blob,page:p&&p.page,file:p&&p.file});}
+function pcomZoomAwbPreview(id){const r=pcomRowById(id);if(!r||!r.awbPreviewUrl)return;openAwbLabelZoom(r.awbPreviewUrl,{file:r.awbSourceFile,page:r.awbSourcePage});}
 async function pasteImgFromClipboard(){
   if(!navigator.clipboard?.read){toast('Browserul nu suportă citirea directă din clipboard — încarcă manual fișierul','err');return;}
   try{
@@ -30631,7 +30841,8 @@ function awbCopyChip(value){
 }
 function awbThumbHtml(p,idx,prefix){
   prefix=prefix||'awb-thumb';
-  return p._blob?`<img id="${prefix}-${idx}" class="awb-thumb" alt="" style="cursor:pointer" title="Previzualizare etichetă — click pentru mărit" onclick="openImgZoom(this.src)">`:'';
+  if(p._blob)AWB_THUMB_P[prefix+'-'+idx]=p;   // lightbox-ul etichetei (Update #769) citește textul exact din PDF-ul din memorie
+  return p._blob?`<img id="${prefix}-${idx}" class="awb-thumb" alt="" style="cursor:pointer" title="Previzualizare etichetă — click pentru mărit; în fereastra mărită poți selecta și copia textul" onclick="awbZoomFromThumb(this,'${prefix}-${idx}')">`:'';
 }
 function awbFillThumb(p,idx,prefix){
   prefix=prefix||'awb-thumb';
