@@ -5,7 +5,7 @@
 const fs=require('fs'),path=require('path');
 const src=fs.readFileSync(path.join(__dirname,'..','index.html'),'utf8');
 const grab=n=>{let i=src.indexOf('async function '+n+'(');if(i<0)i=src.indexOf('function '+n+'(');if(i<0)throw new Error('lipsește '+n);let d=0,j=src.indexOf('{',src.indexOf(')',i));for(let k=j;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0)return src.slice(i,k+1);}}throw new Error('neînchis '+n);};
-const names=['pcomSnoozeLabel','pcomSnooze','pcomUnsnooze','pcomWakeSnoozed','pcomReconcileApiDrafts','pcxGroupAwb','pcomStaffPackedConfirmed','pcxDeckIsWorked','pcxDeckWorkedLast','pcxDeckCat','pcxDeckAddDays','pcxDeckWakeKey','pcxDeckSort','pcomTrendyolOlderOpenLines','pcomFinDismissed','pcomFinDismissLines','pcomEmagFinalizedLookback'];
+const names=['pcomLineHasAwb','pcomSnoozeLabel','pcomSnooze','pcomUnsnooze','pcomWakeSnoozed','pcomReconcileApiDrafts','pcxGroupAwb','pcomStaffPackedConfirmed','pcxDeckIsWorked','pcxDeckWorkedLast','pcxDeckCat','pcxDeckAddDays','pcxDeckWakeKey','pcxDeckSort','pcomTrendyolOlderOpenLines','pcomFinDismissed','pcomFinDismissLines','pcomEmagFinalizedLookback'];
 const code='let pcomWaking=false;let pcomTyLookbackAt=0;const PCOM_FIN_DISMISS_KEY="k",PCOM_FIN_DAYS=14;let pcomEmagFinAt=0;const pcxDeckCopied=new Set();\n'+names.map(grab).join('\n');
 let failed=0;const eq=(n,a,b)=>{const ok=JSON.stringify(a)===JSON.stringify(b);if(!ok)failed++;console.log((ok?'OK   ':'FAIL ')+n+(ok?'':`\n       primit:   ${JSON.stringify(a)}\n       așteptat: ${JSON.stringify(b)}`));};
 const TODAY='2026-11-23';

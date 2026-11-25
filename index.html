@@ -5709,6 +5709,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:781,text:'AWB-uri care nu apăreau în Staff — cauza găsită și reparată, cerut direct: „avem 70 și ceva de AWB-uri în total și doar 59 apar — verifică-le pe restul, de ce nu apar; dacă sunt comenzi în așteptare să fie aduse în împachetare, dacă au alte statusuri, arată-mi”. Verificat pe cele 80 de etichete de azi (45 citite dimineața + 35 din dosar): 44 în Staff, 1 împachetată, 3 în „În așteptare” (stoc zero real: Set 5 roti, stoc ERP 0), iar 32 NU erau în Staff. Cele 32 aveau AWB-ul deja asociat în Admin, dar erau marcate „De verificat — închise pe platformă”: eMAG finalizează comanda chiar la emiterea AWB-ului, deci orice comandă cu AWB generat arată „închisă”. CAUZA: la asocierea AWB-ului, linia potrivită nu se mai includea dacă era „închisă pe platformă” (regresie introdusă de mine la #775, când am făcut ca AWB-ul să includă toată comanda) — rămânea cu AWB, dar neinclusă și necomisă, deci invizibilă în Staff. Acum: (1) linia potrivită cu un AWB se include MEREU (și surorile ei, dacă pot fi incluse); (2) o comandă cu AWB asociat NU mai e „De verificat”, chiar dacă eMAG o arată închisă (rămâne „De verificat” doar fără AWB); (3) AUTO-VINDECARE: comenzile cu AWB care nu sunt în Staff (închise pe eMAG, fără produs, sau Vinted cu linii rămase) se trimit singure când deschizi Comenzi Platforme (max. o trecere pe minut, max. 2 încercări pe linie) — doar etichetele din lotul zilei (au „N/M”) sau comenzile de ≤10 zile; un AWB vechi fără lot rămâne în bandă „📦 N comenzi cu AWB nu sunt în Staff”, cu „Trimite în Staff”; comenzile deja existente în bază (nelegate de ciornă) nu se dublează. Stocul NU se atinge. La data verificării, din cele 32: 21 sunt pe produse cu stoc ERP 0 (Set 5 roti ×11, Set figurine animale ×5, Stație radio ×1, Joc macara ×2) — Staff le va raporta „stoc zero” dacă marfa chiar lipsește. Test: scripts/staff-order-unit.test.js.',date:'2026-11-25'},
   {n:780,text:'Comenzi cu AWB fără produs asociat apar în Staff, cerut direct: „dacă o comandă nu e pusă în Staff, dar există în Admin pentru că nu e asociată, de exemplu, cu produsul, în momentul în care are AWB asociat să apară cu denumirea oficială, de pe site, și în Staff”. Înainte, o linie fără produs nu se putea scrie în bază (commitPcomLine cerea produs), deci comanda cu AWB tipărit rămânea invizibilă pentru angajați (cazurile 583140692, 1137534315, 1137618639). Acum: (1) asocierea unui AWB (din dosar, din PDF, manual sau dintr-o eroare) include și trimite în Staff TOATE liniile comenzii, chiar și fără produs — rândul se scrie cu produs_id gol și produs_nume = titlul de pe site; (2) stocul NU se atinge (Aplică import sare peste liniile fără produs), iar profitul estimat rămâne gol; când alegi produsul, rândul din Staff se completează singur (pcomReassignCommittedProduct) și abia atunci se poate scădea stocul; (3) comenzile cu AWB deja existente, fără produs și netrimise, apar într-o bandă „📦 N comenzi cu AWB nu sunt în Staff” cu „Trimite în Staff” pe fiecare și „Trimite toate”; (4) pe card apare „📦 În Staff fără produs asociat — se vede cu denumirea de pe site”; în Staff, linia arată denumirea de pe site cu eticheta „🏷 Denumirea de pe site — produs neasociat în Admin”. Fără AWB, o linie fără produs rămâne ca înainte (nu intră în Staff). Test: scripts/staff-order-unit.test.js.',date:'2026-11-25'},
   {n:779,text:'Comenzi Platforme — „🔢 Verificare loturi AWB”, cerut direct: „dacă sunt în ordine 1-30 și lipsesc câteva comenzi din AWB-urile 1-30, să primim informația că avem AWB-ul 29 și nu e comandă, să verificăm ce s-a întâmplat, să putem anula dacă e o greșeală”. Bandă nouă (sub „Simulare stoc”), cu antet „⚠ N de verificat”: pentru fiecare lot de azi/ieri (zi + total, ex. „Lot 25.11 · 30 colete”) pune cap la cap numerele 1..M: ✓ comandă în Staff, ⚠ comandă cu AWB dar NETRIMISĂ în Staff, 🚫 comandă ANULATĂ, 🟠 AWB FĂRĂ comandă (eroare de asociere nerezolvată), ✗ nicio etichetă citită. Pe fiecare problemă, rând cu informația și acțiunile: „🟠 AWB 1214… există (Cargus), dar nu e nicio comandă” → 🔗 Asociază / 🚫 Anulează — greșeală (închide eroarea, rămâne notat) / ⧉ copiază AWB; „⚠ netrimisă” → 📦 Trimite în Staff; „🚫 anulată” → Vezi comanda; lipsurile se grupează („Lipsesc din lot: 7, 12”) cu „✓ Nu există (confirmă)”. Confirmările se păstrează (setari_app.awb_lot_ack). Numărul „N/M” se citește de pe etichetă (colțul de jos-dreapta) și se salvează acum și pe erorile de asociere (staff_awb_erori.lot — rulează din nou migration_platforma_comenzi_lot_cautare.sql, idempotent) și pe comanda asociată manual dintr-o eroare; ziua lotului e momentul includerii (nu se schimbă când o comandă e readusă în coadă). Pe rândurile listei de etichete citite apare „📦 29/30”. Onest despre date: comenzile citite înainte de #775 nu au numărul înregistrat, deci un lot cu mai puțin de jumătate din numere cunoscute arată „ℹ doar X din M au numărul înregistrat — lipsurile nu sunt sigure” (nu le numără ca probleme). Test: scripts/staff-order-unit.test.js.',date:'2026-11-25'},
   {n:778,text:'Staff — butonul „🔍 Căutare” mutat imediat după „Împachetare” și „În așteptare”, cerut direct. Ordinea filelor: Împachetare, În așteptare, Căutare, Așteaptă AWB, Finalizate azi, Raport stoc, Pre-împachetate, Marfă furnizor, Retururi.',date:'2026-11-25'},
@@ -23185,7 +23186,7 @@ function pcomOrderSiblingIdxs(idx){
   const out=[];pcImpParsed.forEach((x,i)=>{if(i!==idx&&pcomOrderKeyOf(x)===k)out.push(i);});return out;
 }
 // Linia poate fi inclusă acum? (are produs, nu e amânată/anulată/închisă pe platformă, nu se scrie chiar acum)
-function pcomLineIncludable(x){return!!(x&&(x.produsId||pcomLineHasAwb(x))&&!x.include&&!x.amanat&&!x._cancelledId&&!x.anulata&&!x._committing&&!(x._remoteGone&&!x._committedId));}   // #780: fără produs doar cu AWB
+function pcomLineIncludable(x){return!!(x&&(x.produsId||pcomLineHasAwb(x))&&!x.include&&!x.amanat&&!x._cancelledId&&!x.anulata&&!x._committing&&!(x._remoteGone&&!x._committedId&&!pcomLineHasAwb(x)));}   // #780: fără produs doar cu AWB; #781: „închisă pe platformă” doar dacă NU are AWB
 function pcomIncludableSiblings(idx){return pcomOrderSiblingIdxs(idx).filter(i=>pcomLineIncludable(pcImpParsed[i]));}
 // Starea de completitudine a unei comenzi (lista de indici ai liniilor ei): câte linii în Staff din câte, și ce lipsește.
 function pcomOrderCompleteness(idxs){
@@ -23258,21 +23259,42 @@ function pcomPublishIncomplete(list){
 function pcomAwbNotInStaff(){
   const groups=new Map();
   pcImpParsed.forEach((x,i)=>{
-    if(x._committedId||x.produsId||!pcomLineHasAwb(x)||x.amanat||x._cancelledId||x.anulata||x._committing||(x._remoteGone&&!x._committedId))return;
+    if(x._committedId||!pcomLineHasAwb(x)||x.amanat||x._cancelledId||x.anulata||x._committing)return;   // #781: și cele „închise pe platformă”, și cele cu produs
+    const plx=x.platforma||pcImpPlatforma,idx0=String(x.pachetId||x.comandaId||''),tl=String(x.titluExtern||'').toLowerCase().trim();
+    if(PCOM.some(r=>!r.anulata&&r.platforma===plx&&String(r.comandaId)===idx0&&(x.pnk?r.pnk===x.pnk:String(r.titluExtern||'').toLowerCase().trim()===tl)))return;   // rândul există deja în bază (ciorna nu l-a legat)
     const k=pcomOrderKeyOf(x);if(!k)return;
     (groups.get(k)||groups.set(k,{key:k,platforma:x.platforma||pcImpPlatforma,id:String(x.pachetId||x.comandaId||''),client:x.clientNume||'',awb:x.awb,idxs:[],titles:[]}).get(k)).idxs.push(i);
     groups.get(k).titles.push(`${fmtQty(Number(x.cantitate)||1)}× ${String(x.titluRo||x.titluExtern||'produs').slice(0,60)}`);
   });
   return[...groups.values()];
 }
-async function pcomSendNoProductToStaff(key){
+async function pcomSendNoProductToStaff(key,silent){
   const g=pcomAwbNotInStaff().find(o=>o.key===key);if(!g)return;
-  const all=[];pcImpParsed.forEach((x,i)=>{if(pcomOrderKeyOf(x)===key&&pcomLineIncludable(x))all.push(i);});
+  // toate liniile comenzii care pot ajunge în Staff: cu AWB (chiar fără produs) sau cu produs; nu amânate/anulate
+  const all=[];pcImpParsed.forEach((x,i)=>{if(pcomOrderKeyOf(x)===key&&!x._committedId&&!x.amanat&&!x._cancelledId&&!x.anulata&&!x._committing&&(x.produsId||pcomLineHasAwb(x)))all.push(i);});
   all.forEach(i=>{pcImpParsed[i].include=true;});
-  renderPcomImportPreview();
+  if(!silent)renderPcomImportPreview();
   for(const i of all)await syncPcomLineCommitState(i,true);
-  renderPcomImportPreview();
-  toast(`📦 #${g.id} trimisă în Staff cu denumirea de pe site (${all.length} ${all.length===1?'linie':'linii'})`);
+  if(!silent){renderPcomImportPreview();toast(`📦 #${g.id} trimisă în Staff (${all.length} ${all.length===1?'linie':'linii'})`);}
+}
+// #781 — Auto-vindecare: comenzile cu AWB asociat care nu sunt în Staff (închise pe eMAG la emiterea AWB-ului sau fără produs) se trimit singure, conform regulii
+// „AWB asociat = comandă inclusă”. Doar etichetele din lotul zilei (au „N/M”, și pot fi pentru comenzi de acum 2 săptămâni, generate azi) sau comenzile de ≤10 zile;
+// cele vechi (ex. AWB din septembrie) rămân în bandă, pentru trimitere manuală. Cel mult o trecere pe minut.
+let pcomHealAt=0,pcomHealBusy=false;
+async function pcomHealAwbOrders(){
+  if(pcomHealBusy||!sbReady||typeof pcomApplyInFlight!=='undefined'&&pcomApplyInFlight||Date.now()-pcomHealAt<60000)return;
+  if(!PCOM.length)return;   // PCOM încărcat: altfel liniile deja scrise ar părea necomise
+  const cut=new Date(Date.now()-10*86400000).toISOString().slice(0,10);
+  const g=pcomAwbNotInStaff().filter(o=>o.idxs.every(i=>(pcImpParsed[i].awbLot||String(pcImpParsed[i].data||'9999-12-31')>=cut)&&(pcImpParsed[i]._healTries||0)<2));   // etichetă din lotul zilei (are „N/M”, citită după #775) sau comandă de ≤10 zile   // cel mult 2 încercări pe linie, ca o eroare să nu se repete la nesfârșit
+  if(!g.length)return;
+  g.forEach(o=>o.idxs.forEach(i=>{pcImpParsed[i]._healTries=(pcImpParsed[i]._healTries||0)+1;}));
+  pcomHealBusy=true;pcomHealAt=Date.now();
+  try{
+    for(const o of g)await pcomSendNoProductToStaff(o.key,true);
+    renderPcomImportPreview();
+    toast(`📦 ${g.length} ${g.length===1?'comandă cu AWB a fost trimisă':'comenzi cu AWB au fost trimise'} în Staff (erau „De verificat” — eMAG le închide la emiterea AWB-ului — sau fără produs)`);
+  }catch(e){console.warn('Auto-vindecare comenzi cu AWB:',e);}
+  finally{pcomHealBusy=false;}
 }
 async function pcomSendNoProductAll(){
   const keys=pcomAwbNotInStaff().map(o=>o.key);
@@ -23284,15 +23306,17 @@ function renderPcxIncomplete(){
   const list=pcomIncompleteOrders();
   if(sbReady&&pcImpParsed.length)pcomPublishIncomplete(list);
   const noStaff=pcomAwbNotInStaff();
-  const noStaffHtml=noStaff.length?`<div class="pcx-inc-hd" style="${list.length?'margin-top:12px;':''}"><b>📦 ${noStaff.length} ${noStaff.length===1?'comandă cu AWB nu e':'comenzi cu AWB nu sunt'} în Staff</b><span>— nu au produs asociat. Se pot trimite acum cu denumirea oficială de pe site; stocul se scade abia după ce alegi produsul.</span><button type="button" class="pcx-bl-f on" onclick="pcomSendNoProductAll()">Trimite toate în Staff (${noStaff.length})</button></div>`
+  const noStaffHtml=noStaff.length?`<div class="pcx-inc-hd" style="${list.length?'margin-top:12px;':''}"><b>📦 ${noStaff.length} ${noStaff.length===1?'comandă cu AWB nu e':'comenzi cu AWB nu sunt'} în Staff</b><span>— au AWB asociat, dar sunt „De verificat” (eMAG le închide la emiterea AWB-ului) sau n-au produs asociat. Se trimit cu denumirea de pe site; stocul se scade abia după ce alegi produsul.</span><button type="button" class="pcx-bl-f on" onclick="pcomSendNoProductAll()">Trimite toate în Staff (${noStaff.length})</button></div>`
     +noStaff.map(o=>`<div class="pcx-inc-row"><span class="pl">${esc(pcomPlatLabel(o.platforma))}</span><a onclick="aiChatGoToOrders('${esc(o.id.replace(/'/g,''))}')">#${esc(o.id)}</a><span class="pcx-inc-n">AWB ${esc(o.awb)}</span><span class="pcx-inc-m">${o.titles.map(esc).join(' · ')}</span><button type="button" class="pcx-bl-f" onclick="pcomSendNoProductToStaff('${esc(o.key.replace(/'/g,''))}')">Trimite în Staff</button></div>`).join(''):'';
   if(!list.length&&!noStaff.length){host.innerHTML='';host.style.display='none';return;}
   host.style.display='';
+  if(noStaff.length)setTimeout(pcomHealAwbOrders,2500);
   if(!list.length){host.innerHTML=noStaffHtml;return;}
   const fixN=list.filter(o=>o.fixable).length;
   host.innerHTML=`<div class="pcx-inc-hd"><b>⚠ ${list.length} ${list.length===1?'comandă incompletă':'comenzi incomplete'} în Staff</b><span>— au doar o parte din produse trimise; angajatul ar împacheta un colet incomplet.</span>${fixN?`<button type="button" class="pcx-bl-f on" onclick="pcomIncludeRestAll()">Include restul la toate (${fixN})</button>`:''}</div>`
     +list.map(o=>`<div class="pcx-inc-row"><span class="pl">${esc(pcomPlatLabel(o.platforma))}</span><a onclick="aiChatGoToOrders('${esc(o.id.replace(/'/g,''))}')">#${esc(o.id)}</a><span class="pcx-inc-n">${o.inc} din ${o.total} în Staff</span><span class="pcx-inc-m">lipsește: ${o.missing.map(m=>`${fmtQty(m.q)}× ${esc(String(m.title).slice(0,50))}${m.why?` <em>(${m.why})</em>`:''}`).join(' · ')}</span>${o.fixable?`<button type="button" class="pcx-bl-f" onclick="pcomIncludeRestOfOrder('${esc(o.key.replace(/'/g,''))}')">Include restul</button>`:''}</div>`).join('');
   host.innerHTML+=noStaffHtml;
+  if(noStaff.length)setTimeout(pcomHealAwbOrders,2500);
 }
 // Cerut direct — pe un import mixt eMAG+Trendyol cu multe linii, bifarea „✓ Inclus” una câte una pe
 // fiecare produs era greoaie. Un click include tot ce mai e neinclus DOAR din secțiunea acelei
@@ -26101,7 +26125,7 @@ const PCX_DECK_HELP={
 const PCX_DECK_EMPTY={produs:'Toate comenzile au produs asociat. 👍',de_inclus:'🎉 Nimic de inclus acum.',awb:'Nicio comandă nu așteaptă AWB.',in_staff:'Nimic în Staff, la împachetat.',de_inchis:'Nimic de închis acum.',amanate:'Nicio comandă amânată.',verifica:'Nicio comandă de verificat.'};
 function pcxDeckCat(idxs){
   const its=idxs.map(i=>pcImpParsed[i]);
-  if(its.some(x=>x._remoteGone&&!x.include&&!x._committedId))return'verifica';
+  if(its.some(x=>x._remoteGone&&!x.include&&!x._committedId&&!pcomLineHasAwb(x)))return'verifica';   // #781: cu AWB asociat NU e „de verificat” — eMAG o finalizează chiar la emiterea AWB-ului
   if(its.some(x=>x.amanat))return'amanate';
   if(!its.every(x=>x.produsId))return'produs';
   if(!its.every(x=>x.include))return'de_inclus';
@@ -31870,7 +31894,8 @@ async function applyOneAwbMatch(p){
       // se întâmplă nimic" — pe o comandă Vinted „Neinclus" fără produs ales încă, deci it.produsId
       // null): syncPcomLineCommitState NU scrie nimic în bază fără it.produsId — AWB-ul rămâne reținut pe linie
       // (Object.assign de mai sus) și se comite singur când produsul e ales (pickPcomProduct).
-      const toInclude=[idx,...sibIdx].filter(i=>i>=0&&pcImpParsed[i]&&(pcImpParsed[i].include||pcomLineIncludable(pcImpParsed[i])));
+      // linia potrivită cu AWB-ul se include MEREU (inclusiv „închisă pe platformă”: eMAG finalizează comanda când emite AWB-ul — #781); surorile doar dacă pot fi incluse
+      const toInclude=[idx,...sibIdx].filter(i=>i>=0&&pcImpParsed[i]&&(i===idx||pcImpParsed[i].include||pcomLineIncludable(pcImpParsed[i])));
       const noProduct=[idx,...sibIdx].filter(i=>i>=0&&pcImpParsed[i]&&!pcImpParsed[i].produsId&&!pcImpParsed[i]._committedId);
       if(!toInclude.length){
         toast('AWB reținut pe comandă, dar ea nu are încă un produs ales — alege produsul în Comenzi Platforme, apoi se include automat cu acest AWB','err');

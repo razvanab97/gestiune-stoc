@@ -350,15 +350,15 @@ console.log('\n— Comandă cu AWB fără produs asociat → în Staff cu denumi
     }
     {
       const w=mk();const I=w.api.pcomLineIncludable;
-      eq('„includibil”: fără produs doar cu AWB; amânată/anulată/închisă pe platformă nu',[I(line({awb:'1',include:false})),I(line({include:false})),I(line({awb:'1',include:false,amanat:true})),I(line({awb:'1',include:false,_cancelledId:3})),I(line({awb:'1',include:false,_remoteGone:true}))],[true,false,false,false,false]);
+      eq('„includibil”: fără produs doar cu AWB; amânată/anulată nu; „închisă pe platformă” doar fără AWB nu (cu AWB da, #781)',[I(line({awb:'1',include:false})),I(line({include:false})),I(line({awb:'1',include:false,amanat:true})),I(line({awb:'1',include:false,_cancelledId:3})),I(line({awb:'1',include:false,_remoteGone:true})),I(line({include:false,produsId:7,_remoteGone:true}))],[true,false,false,false,true,false]);
     }
     {
       // banda „comenzi cu AWB care nu sunt în Staff”
-      const env={pcImpParsed:[line({awb:'A1',include:false}),line({awb:'A1',include:false,titluExtern:'Al doilea produs'}),line({comandaId:'X2',include:false}),line({comandaId:'X3',awb:'A3',_committedId:9}),line({comandaId:'X4',awb:'A4',produsId:7})],pcImpPlatforma:'emag',fmtQty:n=>String(n)};
+      const env={PCOM:[{platforma:'emag',comandaId:'X5',pnk:'PNK-X5',anulata:false}],pcImpParsed:[line({awb:'A1',include:false}),line({awb:'A1',include:false,titluExtern:'Al doilea produs'}),line({comandaId:'X2',include:false}),line({comandaId:'X3',awb:'A3',_committedId:9}),line({comandaId:'X4',awb:'A4',produsId:7}),line({comandaId:'X5',awb:'A5',pnk:'PNK-X5'})],pcImpPlatforma:'emag',fmtQty:n=>String(n)};
       const names=Object.keys(env);
       const api=new Function(...names,['pcomOrderKeyOf','pcomLineHasAwb','pcomAwbNotInStaff'].map(n=>grabFrom(adm,n)).join('\n')+';return{pcomAwbNotInStaff}')(...names.map(n=>env[n]));
       const g=api.pcomAwbNotInStaff();
-      eq('banda: o singură comandă (cu AWB, fără produs, necomisă) cu ambele linii; fără AWB / deja în Staff / cu produs nu apar',g.map(o=>[o.id,o.awb,o.idxs.length,o.titles.length]),[['583140692','A1',2,2]]);
+      eq('banda: comenzile cu AWB, necomise (cu SAU fără produs); fără AWB, deja legate de un rând din bază (X3) sau existente în bază fără legătură în ciornă (X5) nu apar',g.map(o=>[o.id,o.awb,o.idxs.length,o.titles.length]),[['583140692','A1',2,2],['X4','A4',1,1]]);
     }
     {
       const stfEnv={findProdus:()=>null,esc:v=>String(v),lineKey:l=>'k',lineBusy:{},ISSUE_LABELS:{}};
@@ -369,6 +369,17 @@ console.log('\n— Comandă cu AWB fără produs asociat → în Staff cu denumi
       const h2=li({_table:'platforma_comenzi',produs_id:null,titlu_extern:'Doar titlul',cantitate:1},false);
       eq('Staff: fără produs_nume, se folosește titlul extern',/Doar titlul/.test(h2),true);
     }
+    {
+      // #781: comandă „închisă pe platformă” (eMAG o finalizează la emiterea AWB-ului) CU AWB asociat → nu e „De verificat”, intră în Staff
+      const stubs={pcImpParsed:[],pcImpPlatforma:'emag',pcomStaffPackedConfirmed:()=>false};
+      const names=Object.keys(stubs);
+      const api=new Function(...names,['pcomLineHasAwb','pcxDeckCat','pcomLineIncludable'].map(n=>grabFrom(adm,n)).join('\n')+';return{pcxDeckCat,pcomLineIncludable}')(...names.map(n=>stubs[n]));
+      stubs.pcImpParsed.push(line({awb:'A1',_remoteGone:1795601378887,include:false,produsId:7}),line({_remoteGone:1795601378887,include:false,produsId:7}));
+      eq('„închisă pe platformă” CU AWB → etapa „De inclus” (nu „De verificat”); FĂRĂ AWB → rămâne „De verificat”',[api.pcxDeckCat([0]),api.pcxDeckCat([1])],['de_inclus','verifica']);
+      eq('„includibilă”: închisă pe platformă + AWB da; fără AWB nu',[api.pcomLineIncludable(stubs.pcImpParsed[0]),api.pcomLineIncludable(stubs.pcImpParsed[1])],[true,false]);
+    }
+    eq('la asocierea AWB-ului, linia potrivită se include MEREU (regresia din #775 reparată): i===idx în filtru',/\(i===idx\|\|pcImpParsed\[i\]\.include\|\|pcomLineIncludable\(pcImpParsed\[i\]\)\)/.test(adm),true);
+    eq('auto-vindecare: comenzile recente cu AWB dar netrimise se trimit singure (max. 1/minut, max. 2 încercări pe linie)',/Date\.now\(\)-pcomHealAt<60000/.test(adm)&&/_healTries\|\|0\)<2/.test(adm)&&/setTimeout\(pcomHealAwbOrders,2500\)/.test(adm),true);
     eq('Aplică import sare peste liniile fără produs (stocul nu se atinge)',/let toApply=pcImpParsed\.filter\(x=>x\.include&&x\.produsId&&!x\.amanat/.test(adm),true);
     eq('la alegerea produsului, rândul fără produs din Staff se completează singur (pcomReassignCommittedProduct)',/id&&pcImpParsed\[idx\]\._committedId&&id!==oldProdId\)\{await pcomReassignCommittedProduct/.test(adm),true);
   }
