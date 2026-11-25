@@ -211,6 +211,19 @@ console.log('\n— URGENT după AWB —');
   eq('Admin: scrierea cheii staff_urgent semnalează Staff (bulina ↻)',/URGENT_ADMIN=orders;\s*try\{await pushStaffRefresh\(true\);\}/.test(adm),true);
 }
 
+console.log('\n— Ordinea după numărul AWB-ului (1, 2, 3…) și butonul de urgență —');
+{
+  const api=new Function(['lotKeyOf','lotCmp'].map(n=>grabFrom(stf,n)).join('\n')+';return{lotKeyOf,lotCmp}')();
+  const G=(lot,file)=>({lines:[{awb_lot:lot||null,awb_source_file:file||null}]});
+  eq('„7/43” → n=7, m=43; prefix de fișier „007_…” → n=7; fără număr → null',[api.lotKeyOf(G('7/43')),api.lotKeyOf(G(null,'007_x.pdf')),api.lotKeyOf(G(null,'Unknown-61.pdf'))],[{n:7,m:43},{n:7,m:0},null]);
+  const list=[G(null,null),G('10/43'),G('2/43'),G(null,'003_a.pdf'),G('1/14'),G('2/14')];
+  const ord=list.slice().sort(api.lotCmp).map(g=>{const k=api.lotKeyOf(g);return k?k.n+(k.m?'/'+k.m:''):'-';});
+  eq('numerotatele în ordinea 1,2,3… (la același număr, lotul mai mic întâi), cele fără număr la urmă',ord,['1/14','2/14','2/43','3','10/43','-']);
+  eq('comparatorul principal: urgent → curier → NUMĂR AWB → platformă → dată',/urgentRankOf\(b\)-urgentRankOf\(a\)\|\|staffCourierRank\(.*?\)\|\|lotCmp\(a,b\)\|\|\(PLATFORM_ORDER/.test(stf),true);
+  eq('butonul de urgență e MIC, în antetul cardului (nu mai e un buton lat pe tot cardul)',/class="urgent-mini \$\{ord\.urgent\?'off':''\}"/.test(stf)&&!/nav-btn urgent-toggle/.test(stf),true);
+  eq('comanda urgentă are cadru roșu pe tot cardul',/\.card\.urgent\{border:3px solid #D92D20/.test(stf)&&/'multi-line':'single-line'\}\$\{ord\.urgent\?' urgent':''\}/.test(stf),true);
+}
+
 console.log('\n— Integrare Admin —');
 {
   eq('la asocierea AWB pe comandă încă necomisă se includ TOATE liniile ei (nu doar prima)',/const toInclude=\[idx,\.\.\.sibIdx\]/.test(adm)&&/for\(const i of toInclude\)\{pcImpParsed\[i\]\.include=true;await syncPcomLineCommitState\(i,true\);\}/.test(adm),true);
