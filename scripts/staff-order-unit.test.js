@@ -267,6 +267,13 @@ console.log('\n— Căutare în secțiunea „Asociază AWB-uri” (Admin) —')
   eq('căutarea principală (Comenzi Platforme) cuprinde acum AWB suplimentar, colet, telefon și curier',/row&&row\.awbExtra\|\|\[\]\)\.join\(' '\),\(row&&row\.awbLot\)\|\|it\.awbLot,lab/.test(adm),true);
 }
 
+console.log('\n— Ordinea filelor din Staff —');
+{
+  const tabs=[...stf.matchAll(/class="tab-btn[^"]*" data-tab="(\w+)"/g)].map(m=>m[1]);
+  eq('„Căutare” e a treia fila, imediat după Împachetare și În așteptare',tabs.slice(0,4),['pack','waiting','search','awaitawb']);
+  eq('toate filele există o singură dată',[tabs.length,new Set(tabs).size],[9,9]);
+}
+
 console.log('\n— Integrare Admin —');
 {
   eq('la asocierea AWB pe comandă încă necomisă se includ TOATE liniile ei (nu doar prima)',/const toInclude=\[idx,\.\.\.sibIdx\]/.test(adm)&&/for\(const i of toInclude\)\{pcImpParsed\[i\]\.include=true;await syncPcomLineCommitState\(i,true\);\}/.test(adm),true);
