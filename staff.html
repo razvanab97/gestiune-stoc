@@ -628,6 +628,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:447,date:'25.11.2026',text:'Butonul mic „🚨 Urgent” e acum pe FIECARE comandă, nu doar pe cardul din Împachetare: și în cardul din „În așteptare”, în listele „În așteptare” și „Așteaptă AWB” (iconița 🚨 lângă „↩ Împachetare”) și în rezultatele Căutării (acolo, marcarea nu șterge textul scris). Pe o comandă urgentă apare „🚨 ✕” pentru a scoate urgența.'},
   {n:446,date:'25.11.2026',text:'Două ajustări cerute direct: (1) Butonul „🚨 Urgent” de pe card e acum mic, în antetul comenzii (lângă număr), nu mai ocupă jumătate de ecran; o comandă urgentă are tot cardul încercuit cu roșu, banda „🚨 URGENT” și stă prima în coadă. (2) Comenzile se pun în ordinea NUMĂRULUI din lot de pe AWB (1, 2, 3…), în cadrul aceluiași curier — în ordinea stivei de etichete; cele fără număr vin după cele numerotate.'},
   {n:445,date:'25.11.2026',text:'Staff mai simplu și mai sigur: (1) 🔢 Pe cardul comenzii apare acum NUMĂRUL COLETULUI din lot de pe etichetă (ex. „Colet 7/43”), ca să găsești repede eticheta în stivă. (2) ⛔ Dacă o comandă are mai multe produse și din Admin au ajuns doar o parte, cardul spune „COMANDĂ INCOMPLETĂ” cu ce lipsește, iar la finalizare cere confirmare. (3) 🔍 Căutarea găsește după nume (în orice ordine), AWB (și ultimele cifre, și al doilea colet), telefon (număr întreg sau ultimele 4 cifre), număr comandă, produs/cod, curier și număr de colet — scrii mai multe cuvinte împreună („ion 4012”) și vezi CE s-a potrivit. (4) 🚨 Buton „Urgent” sus: scrii sau scanezi AWB-ul și comanda trece prima în coadă, cu bandă roșie. (5) Dacă raportezi „Stoc zero” deși ERP arată stoc, cere o confirmare. Comenzile blocate pe „stoc zero” revin singure în Împachetare când Admin încarcă stoc.'},
   {n:444,date:'20.11.2026',text:'„🗑 Șterge din așteptare” nu mai trimite la începutul listei: din listă rămâi exact unde erai (rândul dispare pe loc), iar de pe card treci direct pe comanda următoare din „În așteptare”. Și „↩ Readu în Împachetare” de pe card continuă acum cu comanda următoare din listă, nu cu prima.'},
@@ -746,6 +747,12 @@ async function saveUrgentMap(mutator){
   if(!upd?.length)await sb('POST','setari_app',{key:'staff_urgent',value:val});
   URGENT=orders;
 }
+// Butonul mic de urgență, același peste tot (card, liste, căutare): „🚨 Urgent” / „✕ scoate”; în liste e doar iconița (compact).
+function urgentMiniHtml(o,compact){
+  if(!o||o.finalized||o.platforma==='direct'||!o.comandaId)return'';
+  const on=!!o.urgent;
+  return`<button type="button" class="urgent-mini ${on?'off':''}" onclick="event.stopPropagation();toggleUrgent('${o.key}')" title="${on?'Scoate urgența':'Marchează urgent — trece prima în coadă'}">${on?(compact?'🚨 ✕':'✕ scoate'):(compact?'🚨':'🚨 Urgent')}</button>`;
+}
 async function toggleUrgent(orderKey){
   const ord=ORDERS.find(o=>o.key===orderKey);if(!ord||!ord.comandaId)return;
   const k=urgentKeyOf(ord),on=!URGENT[k];
@@ -754,7 +761,8 @@ async function toggleUrgent(orderKey){
     computeOrders();
     if(on&&activeTab==='pack')curKey=orderKey;
     showToast(on?'🚨 Marcată URGENT — a trecut prima în coadă':'✓ Nu mai e urgentă');
-    renderMain();
+    if(activeTab==='search'&&document.getElementById('search-page-input'))onSearchPageInput();   // din Căutare: doar rezultatele se reiau, textul scris rămâne
+    else renderMain();
   }catch(e){console.error(e);showToast('Nu am putut salva — încearcă din nou');}
 }
 // Comenzile (neîmpachetate) al căror AWB se potrivește cu textul scris/scanat: AWB întreg, ultimele cifre (≥4) sau cod scanat care conține AWB-ul.
@@ -1205,7 +1213,7 @@ function renderPackTab(host){
         ${ord.comandaId?`<span class="ord-num">#${esc(ord.comandaId)}</span>`:''}
         <span class="ord-date">${esc(ord.data||'')}</span>
         ${ord.urgent?'<span class="urgent-badge">🚨 URGENT</span>':''}
-        ${!ord.finalized&&ord.platforma!=='direct'&&ord.comandaId?`<button type="button" class="urgent-mini ${ord.urgent?'off':''}" onclick="toggleUrgent('${ord.key}')" title="${ord.urgent?'Scoate urgența':'Marchează urgent — trece prima în coadă'}">${ord.urgent?'✕ scoate':'🚨 Urgent'}</button>`:''}
+        ${urgentMiniHtml(ord)}
       </div>
       ${ord.clientNume?`<div class="ord-client">${esc(ord.clientNume)}</div>`:''}
     </div>
@@ -1937,6 +1945,7 @@ function awaitAwbListItemHtml(o){
       <div class="list-item-issue">⏳ AWB în așteptare — ${esc(nm)}</div>
     </div>
     <div class="list-item-time">${o.sentAt?esc(timeAgo(o.sentAt)):''}</div>
+    ${urgentMiniHtml(o,true)}
   </div>`;
 }
 function renderWaitingTab(host){
@@ -1956,12 +1965,13 @@ function renderWaitingTab(host){
     const state=l.impachetat?'done':(l.staff_blocked?'blocked':'');
     return`<div class="line ${state}">${lineThumbHtml(l)}${lineInfoHtml(l,true)}</div>`;
   }).join('');
-  host.innerHTML=`<div class="card waiting">
+  host.innerHTML=`<div class="card waiting${ord.urgent?' urgent':''}">
     <div class="ord-hdr">
       <span class="ord-pl ${ord.platforma}">${plLabel}</span>
       ${ord.comandaId?`<span class="ord-num">#${esc(ord.comandaId)}</span>`:''}
       <span class="ord-waiting-badge">⏸ În așteptare</span>
       ${ord.carried?`<span class="ord-waiting-badge">📅 Din ziua anterioară</span>`:''}
+      ${ord.urgent?'<span class="urgent-badge">🚨 URGENT</span>':''}${urgentMiniHtml(ord)}
     </div>
     ${waitingDatesHtml(ord)?`<div class="waiting-dates">${waitingDatesHtml(ord)}</div>`:''}
     <div id="lock-banner-slot"></div>
@@ -1995,6 +2005,7 @@ function waitingListItemHtml(o){
         <div class="waiting-dates sm">${waitingDatesHtml(o)}</div>
       </div>
       <div class="list-item-time">${o.sentAt?esc(timeAgo(o.sentAt)):''}</div>
+      ${urgentMiniHtml(o,true)}
       <button type="button" class="line-check requeue-mini" ${lineBusy['order_'+o.key]?'disabled':''} onclick="event.stopPropagation();requeueOrder('${o.key}')" title="Readu comanda în Împachetare, ca o comandă de azi">↩ Împachetare</button>
       <button type="button" class="line-check requeue-mini del-mini" ${lineBusy['order_'+o.key]?'disabled':''} onclick="event.stopPropagation();removeDeliveredOrder('${o.key}')" title="Deja împachetată și livrată — șterge din așteptare">🗑</button>
     </div>`;
@@ -2019,6 +2030,7 @@ function waitingListItemHtml(o){
       <div class="waiting-dates sm">${waitingDatesHtml(o)}</div>
     </div>
     <div class="list-item-time">${esc(since)}</div>
+    ${urgentMiniHtml(o,true)}
     <button type="button" class="line-check requeue-mini" ${lineBusy['order_'+o.key]?'disabled':''} onclick="event.stopPropagation();requeueOrder('${o.key}')" title="Problema e rezolvată? Readu comanda în Împachetare">↩ Împachetare</button>
     <button type="button" class="line-check requeue-mini del-mini" ${lineBusy['order_'+o.key]?'disabled':''} onclick="event.stopPropagation();removeDeliveredOrder('${o.key}')" title="Deja împachetată și livrată — șterge din așteptare">🗑</button>
   </div>`;
@@ -2259,6 +2271,7 @@ function onSearchPageInput(){
         <div class="list-item-via">${d.vias.map(esc).join(' · ')}</div>
       </div>
       <div class="list-item-time">${status}</div>
+      ${urgentMiniHtml(o,true)}
     </div>`;
   }).join('')+(hits.length>SHOW?`<div class="search-more">… încă ${hits.length-SHOW} rezultate — scrie mai mult ca să restrângi</div>`:'');
 }

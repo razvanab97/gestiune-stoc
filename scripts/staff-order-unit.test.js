@@ -220,8 +220,51 @@ console.log('\n— Ordinea după numărul AWB-ului (1, 2, 3…) și butonul de u
   const ord=list.slice().sort(api.lotCmp).map(g=>{const k=api.lotKeyOf(g);return k?k.n+(k.m?'/'+k.m:''):'-';});
   eq('numerotatele în ordinea 1,2,3… (la același număr, lotul mai mic întâi), cele fără număr la urmă',ord,['1/14','2/14','2/43','3','10/43','-']);
   eq('comparatorul principal: urgent → curier → NUMĂR AWB → platformă → dată',/urgentRankOf\(b\)-urgentRankOf\(a\)\|\|staffCourierRank\(.*?\)\|\|lotCmp\(a,b\)\|\|\(PLATFORM_ORDER/.test(stf),true);
-  eq('butonul de urgență e MIC, în antetul cardului (nu mai e un buton lat pe tot cardul)',/class="urgent-mini \$\{ord\.urgent\?'off':''\}"/.test(stf)&&!/nav-btn urgent-toggle/.test(stf),true);
+  eq('butonul de urgență e MIC, în antetul cardului (nu mai e un buton lat pe tot cardul)',/class="urgent-mini \$\{on\?'off':''\}"/.test(stf)&&!/nav-btn urgent-toggle/.test(stf),true);
+  eq('butonul 🚨 există pe fiecare comandă: card Împachetare, card În așteptare, liste (Așteaptă AWB, În așteptare ×2) și rezultatele căutării',(stf.match(/urgentMiniHtml\(/g)||[]).length-1,6);
+  const mini=new Function('urgentMiniHtml',grabFrom(stf,'urgentMiniHtml')+';return urgentMiniHtml')();
+  eq('mic în card („🚨 Urgent”), iconiță în liste; când e urgentă: „✕ scoate”; niciun buton pe vânzări directe, finalizate sau fără număr',[/🚨 Urgent/.test(mini({key:'k',platforma:'emag',comandaId:'1'})),/>🚨<\/button>/.test(mini({key:'k',platforma:'emag',comandaId:'1'},true)),/✕ scoate/.test(mini({key:'k',platforma:'emag',comandaId:'1',urgent:true})),mini({key:'k',platforma:'direct',comandaId:'1'}),mini({key:'k',platforma:'emag',comandaId:'1',finalized:true}),mini({key:'k',platforma:'emag',comandaId:''})],[true,true,true,'','','']);
+  eq('din Căutare, urgența nu șterge textul scris (se reiau doar rezultatele)',/activeTab==='search'&&document\.getElementById\('search-page-input'\)\)onSearchPageInput\(\);/.test(stf),true);
   eq('comanda urgentă are cadru roșu pe tot cardul',/\.card\.urgent\{border:3px solid #D92D20/.test(stf)&&/'multi-line':'single-line'\}\$\{ord\.urgent\?' urgent':''\}/.test(stf),true);
+}
+
+console.log('\n— Căutare în secțiunea „Asociază AWB-uri” (Admin) —');
+{
+  const strip=s=>String(s).normalize('NFD').replace(/[̀-ͯ]/g,'');
+  const mkEl=(k,s)=>({dataset:{k,s},style:{display:''}});
+  const kids=[];
+  const box={get children(){return kids;},querySelectorAll:()=>({forEach(){}}),insertAdjacentHTML(){}};
+  const els={};
+  const getEl=id=>els[id]||(els[id]={id,style:{display:'none'},textContent:'',innerHTML:'',value:''});
+  getEl('pcmi-awb-preview');els['pcmi-awb-preview']=Object.assign(box,{style:{display:''}});
+  const env={stripDiacritics:strip,document:{getElementById:getEl}};
+  const names=Object.keys(env);
+  const code="let awbQStatus='all';"+['awbQFold','awbRowSearchText','awbQTokens','awbFilterSetStatus','awbFilterApply'].map(n=>grabFrom(adm,n)).join('\n')+';return{awbRowSearchText,awbQTokens,awbFilterApply,awbFilterSetStatus}';
+  const api=new Function(...names,code)(...names.map(n=>env[n]));
+  const P1={awb:'1214217869',comandaId:'582542584',file:'001_582542584_Cargus_1214217869.pdf',courier:'Cargus',rows:[{client_nume:'Ion Țuțuianu',produs_nume:'Cutie depozitare 30L'}],lot:'1/14',cauta:'Ion Tutuianu | 0712345678 | *2055'};
+  const P2={awb:'7000182438622',comandaId:'11820951962',courier:'FAN Courier',rows:[],destinatar:'Maria Irimia',destinatarPhone:'+40 744 111 222'};
+  const t1=api.awbRowSearchText(P1),t2=api.awbRowSearchText(P2);
+  const has=(t,q)=>api.awbQTokens(q).every(w=>t.includes(w));
+  eq('rând găsit: AWB întreg, ultimele cifre, comandă, nume fără diacritice, produs, fișier, lot',['1214217869','7869','582542584','tutuianu','cutie','cargus_1214','1/14'].map(q=>has(t1,q)),[true,true,true,true,true,true,true]);
+  eq('telefon: număr întreg (cu spații/semne) și ultimele 4 cifre; coada mascată',['0712-345-678','0712 345 678','5678','2055'].map(q=>has(t1,q)),[true,true,true,true]);
+  eq('mai multe cuvinte (ȘI) în orice ordine: „cutie ion”; nepotrivire clară → fals',[has(t1,'cutie ion'),has(t1,'ion 9999')],[true,false]);
+  eq('rând negăsit: nume destinatar + telefon cu +40',[has(t2,'irimia'),has(t2,'744111222'),has(t2,'111 222'),has(t2,'fan')],[true,true,true,true]);
+  eq('numerele nu se confundă între rânduri („7869” nu e pe al doilea)',has(t2,'7869'),false);
+  // filtrarea rândurilor + chip-uri
+  kids.push(mkEl('ok',t1),mkEl('no',t2),mkEl('dup',t1),mkEl('nr',''));
+  els['pcmi-awb-q']={value:'tutuianu'};
+  api.awbFilterApply();
+  eq('„tutuianu” → rămân doar rândurile care îl conțin (găsit + duplicat)',kids.map(k=>k.style.display),['','none','','none']);
+  eq('contorul „N din M etichete”',els['pcmi-awb-qn'].textContent,'2 din 4 etichete');
+  els['pcmi-awb-q'].value='';api.awbFilterSetStatus('no');
+  eq('chip „Negăsite” = negăsite + nerecunoscute',kids.map(k=>k.style.display),['none','','none','']);
+  api.awbFilterSetStatus('all');
+  eq('„Toate” + câmp gol → totul vizibil, fără contor',[kids.map(k=>k.style.display).join('|'),els['pcmi-awb-qn'].textContent],['|||','']);
+  eq('chip-urile arată numerele pe stări',/Găsite <b>1<\/b>/.test(els['pcmi-awb-chips'].innerHTML)&&/Negăsite <b>2<\/b>/.test(els['pcmi-awb-chips'].innerHTML)&&/Duplicate <b>1<\/b>/.test(els['pcmi-awb-chips'].innerHTML),true);
+  eq('randarea listei etichetează rândurile și reaplică filtrul (awbTagRows + awbFilterApply)',/box\.innerHTML=html;\s*\n\s*awbTagRows\(box\);awbFilterApply\(\);/.test(adm),true);
+  eq('bara de căutare există în secțiune, deasupra listei',/id="pcmi-awb-search"[\s\S]*?id="pcmi-awb-q"[\s\S]*?<div id="pcmi-awb-preview"><\/div>/.test(adm),true);
+  eq('în interfața nouă (redesign) bara se mută în slotul din „Expediere” împreună cu lista (altfel rămâne în panoul vechi, ascuns)',/\['pcx-awb-search-slot','pcmi-awb-search'\],\['pcx-awb-preview-slot','pcmi-awb-preview'\]/.test(adm)&&/id="pcx-awb-search-slot"><\/div><div id="pcx-awb-preview-slot">/.test(adm),true);
+  eq('căutarea principală (Comenzi Platforme) cuprinde acum AWB suplimentar, colet, telefon și curier',/row&&row\.awbExtra\|\|\[\]\)\.join\(' '\),\(row&&row\.awbLot\)\|\|it\.awbLot,lab/.test(adm),true);
 }
 
 console.log('\n— Integrare Admin —');

@@ -3224,6 +3224,15 @@ body .tt-widget .tt-panel{left:calc(100% + 14px);bottom:-84px;width:min(400px,ca
 .pcx-order-status.included{background:var(--gr-bg);color:var(--gr)}
 .pcx-order-status.pending{background:var(--surf2);color:var(--t3)}
 .pcx-order-status.unmatched{background:var(--rd-bg);color:var(--rd)}
+.awbq{position:sticky;top:60px;z-index:5;background:var(--surf);border:1px solid var(--b2);border-radius:12px;padding:10px 12px;margin:10px 0;display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;box-shadow:0 2px 10px rgba(16,24,40,.06)}
+.awbq input[type=search]{flex:1 1 320px;min-width:0;font-size:18px;padding:9px 12px;border:1px solid var(--b2);border-radius:10px;background:var(--bg);color:var(--t1);font-family:inherit}
+.awbq input[type=search]:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-light)}
+.awbq-chips{display:flex;gap:6px;flex-wrap:wrap}
+.awbq-chip{font-family:inherit;font-size:15px;font-weight:600;padding:5px 12px;border-radius:999px;border:1px solid var(--b2);background:var(--surf2);color:var(--t2);cursor:pointer}
+.awbq-chip.on{background:var(--acc-light);color:var(--acc);border-color:var(--acc-mid)}
+.awbq-chip b{font-variant-numeric:tabular-nums}
+.awbq-n{font-size:15px;color:var(--t3);flex-basis:100%}
+.awbq-none{padding:14px;text-align:center;color:var(--t3);font-size:17px}
 .pcx-urg-form{display:inline-flex;gap:6px;align-items:center}
 .pcx-urg-form input{width:130px;font-family:var(--mono);font-size:15px;padding:6px 8px;border:1px solid var(--b2);border-radius:8px;background:var(--surf)}
 .pcx-urg-btn{border-color:rgba(217,45,32,.5)!important;color:#B42318!important}
@@ -4533,6 +4542,12 @@ button.pcx-include-btn.included{border-color:var(--gr)}
           </div>
         </div>
         <div id="pcmi-awb-parsing" style="display:none;font-size:24px;color:var(--t3);margin:8px 0"><span class="spin"></span> Se citește PDF-ul…</div>
+        <!-- Căutare ușoară în etichetele citite (Update #777, cerut direct: „zona de căutare ușoară în secțiunea de AWB-uri”) -->
+        <div id="pcmi-awb-search" class="awbq" style="display:none">
+          <input type="search" id="pcmi-awb-q" placeholder="🔍 Caută în etichete: AWB (sau ultimele cifre), comandă, nume, telefon, produs, fișier, colet 7/43…" oninput="awbFilterApply()" autocomplete="off">
+          <div class="awbq-chips" id="pcmi-awb-chips"></div>
+          <span class="awbq-n" id="pcmi-awb-qn"></span>
+        </div>
         <div id="pcmi-awb-preview"></div>
         <div id="pcmi-awb-foot" style="display:none;justify-content:space-between;align-items:center;margin-top:12px">
           <span id="pcmi-awb-info" style="font-size:24px;color:var(--t3)"></span>
@@ -5674,6 +5689,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:777,text:'Asociază AWB-uri — zonă de CĂUTARE ușoară, cerută direct: „am cerut și zona de căutare ușoară în secțiunea de AWB-uri”. (1) În „Expediere → A. Asociază AWB-uri”, deasupra listei cu etichetele citite, apare un câmp „🔍 Caută în etichete” care filtrează rândurile pe loc după AWB (întreg sau ultimele cifre), număr de comandă, nume, telefon (întreg, cu spații/semne, sau ultimele 4 cifre), produs, numele fișierului, curier și numărul din lot („1/14”); mai multe cuvinte = ȘI, în orice ordine, fără diacritice. Chip-uri „Toate / ✓ Găsite / ⚠ Negăsite / ↺ Duplicate” cu numere și contorul „N din M etichete”; rămâne la re-randare. Verificat pe 14 etichete reale citite cu aplicația (AWB, comandă, curier, telefon/colet). (2) Căutarea principală din Comenzi Platforme (#pcx-search) găsește acum și după AWB suplimentar, numărul coletului („7/43”), telefon/nume de pe etichetă, curier, EAN și PNK/cod produs (înainte: doar comandă, cumpărător, titlu, AWB, produs, SKU). (3) În Staff, butonul mic „🚨 Urgent” e pe FIECARE comandă (card Împachetare, card și liste „În așteptare”, „Așteaptă AWB”, rezultatele Căutării). Test: scripts/staff-order-unit.test.js.',date:'2026-11-25'},
   {n:776,text:'Staff — două ajustări cerute direct, cu captură: „e prea mare secțiunea asta (Marchează urgent)… dacă e setat urgent, să fie încercuită secțiunea cu roșu și pusă în primele comenzi” + „dacă avem AWB-uri numerotate 1,2,3, comenzile să se pună în ordinea AWB-urilor”. (1) Butonul de urgență din cardul Staff e acum mic, în antetul comenzii (lângă număr; „✕ scoate” când e urgentă) — înainte era un buton lat care umplea cardul; comanda urgentă rămâne încercuită cu roșu pe tot cardul și prima în coadă; în Admin rămân butonul 🚨 de pe card și câmpul „AWB urgent”. (2) Ordinea cozii în Staff: urgente → curier → NUMĂRUL AWB-ului din lot (1, 2, 3…; „7/43” sau prefixul „007_” din numele fișierului; la același număr, lotul mai mic întâi) → platformă → dată; comenzile fără număr vin după cele numerotate. Test: scripts/staff-order-unit.test.js.',date:'2026-11-25'},
   {n:775,text:'Staff — comanda e unitatea, căutare nouă, urgent după AWB, curățarea „În așteptare”, cerut direct: „comanda e creată din 2 produse, în Staff apare doar una — fă să nu se mai întâmple”; „adaugă search după nume, AWB, telefon, sau ce se mai poate identifica, să funcționeze 100% și repede”; „unde pe AWB avem un număr 3/40, să apară în Staff”; „curăță comenzile în așteptare… multe AWB-uri rămase fără comenzi în împachetare”; „să putem seta urgent o comandă după AWB”. (1) CAUZA comenzii pe jumătate trimise (582542584, verificată în baza de date: cele 2 rânduri au fost incluse la 3 minute distanță): „✓ Inclus” era per LINIE, iar la asocierea AWB-ului pe o comandă încă necomisă se includea doar PRIMA linie găsită; antetul cardului arăta „✓ Inclus” dacă ORICE linie era inclusă. Acum: AWB-ul se aplică pe TOATE liniile comenzii și toate cele cu produs se includ odată cu ea; bifarea unei linii include toată comanda; antetul zice „⚠ 1/2 în Staff” și arată ce lipsește, cu „Include restul”; o bandă „Comenzi incomplete” adună cazurile. Admin publică lista în setari_app.staff_incomplete, iar Staff arată pe card „⛔ COMANDĂ INCOMPLETĂ — în Staff sunt 1 din 2 produse” și cere confirmare la finalizare. (2) NUMĂRUL DIN LOT „N/M” (ex. 7/43, colțul de jos-dreapta al etichetei) se citește la asocierea AWB-ului (verificat pe 160 de etichete reale: 96/96 numerotate corecte) și apare în Staff ca „Colet 7/43” lângă AWB; la comenzile vechi, „Nr. 7” din numele fișierului. Telefonul și numele destinatarului de pe etichetă (fără numărul curierului, care era pe toate) se salvează pentru căutare. Rulează o dată migration_platforma_comenzi_lot_cautare.sql (awb_lot, awb_cauta); până atunci aplicația merge ca înainte. (3) CĂUTARE Staff: mai multe cuvinte în orice ordine („ion 4012”), nume, AWB (și ultimele cifre, și al doilea colet), telefon (întreg sau ultimele 4 cifre), comandă, produs/SKU/EAN/PNK, curier, „7/43”, cu etichete „ce s-a potrivit”; index calculat o singură dată pe comandă (5000 de comenzi × 3 căutări < 400 ms) + căutare LIVE în istoric, grupată pe comandă. (4) 🚨 URGENT după AWB: câmp „AWB urgent” în Previzualizare comenzi și buton 🚨 pe card (Admin), buton „🚨 Urgent” sus în Staff cu AWB scris/scanat; comanda urgentă trece prima în coadă, cu bandă roșie; iese singură când e finalizată. (5) „ÎN AȘTEPTARE”: din 78 de comenzi — 38 vechi (2–51 de zile, stoc deja aplicat, nemarcate niciodată împachetate) + 40 cu probleme, dintre care 37 „stoc zero”, iar 14 aveau marfa intrată între timp (încărcarea din 24.11), cu AWB tipărit. Curățate: 37 vechi marcate împachetate (data lor originală, deci nu intră în „Finalizate azi”) și 13 „stoc zero” readuse în Împachetare (rămase 28; excluse 2 cu AWB greșit, în așteptarea corecției). Backup în scratchpad. Ca să nu mai rămână așa: după fiecare încărcare de stoc, o comandă blocată DOAR pe „stoc zero” revine singură în Împachetare dacă marfa a intrat DUPĂ raport (+ stocul o acoperă, în ordinea simulării) — buton și în banda „Simulare stoc”; iar Staff cere confirmare dacă raportezi „Stoc zero” deși ERP arată stoc. Teste: scripts/staff-order-unit.test.js (etichete, comanda ca unitate, stoc zero, căutare, urgent) + verificat în aplicație pe date reale (copie protejată la scriere).',date:'2026-11-25'},
   {n:774,text:'Vinted — comanda cu mai multe produse rămâne O SINGURĂ comandă, cerut direct: „trebuia să fie o comandă cu 3 produse și s-a spart în 3, nu e bine, să fie legată". Cauza: fiecare produs citit din captură primea alt număr de comandă (doar loturile „N articole" erau grupate). Acum toate produsele din aceeași captură au un singur număr și același AWB/cumpărător, un singur colet în Staff. Comenzile deja sparte (același cumpărător, aceeași zi, create din aceeași captură) se unesc singure la deschiderea Comenzi Platforme, sub numărul comenzii deja incluse, iar liniile neincluse preiau AWB-ul ei. Un AWB asociat unei linii trece pe toate produsele neincluse ale aceleiași comenzi.',date:'2026-11-24'},
@@ -24466,7 +24482,7 @@ function pcxRelocateSharedNodes(){
   [['pcx-parsing-slot','pcmi-parsing'],['pcx-vinted-parsing-slot','vinted-parsing'],
    ['pcx-lot-rows-slot','vinted-lot-rows'],['pcx-lot-client-slot','vinted-lot-client'],['pcx-lot-awb-slot','vinted-lot-awb'],
    ['pcx-gls-label-slot','gls-label-fld'],
-   ['pcx-awb-parsing-slot','pcmi-awb-parsing'],['pcx-awb-preview-slot','pcmi-awb-preview'],
+   ['pcx-awb-parsing-slot','pcmi-awb-parsing'],['pcx-awb-search-slot','pcmi-awb-search'],['pcx-awb-preview-slot','pcmi-awb-preview'],
    ['pcx-awb-foot-slot','pcmi-awb-foot'],['pcx-history-slot','pcom-import-history']].forEach(([slotId,nodeId])=>{
     const slot=document.getElementById(slotId),node=document.getElementById(nodeId);
     if(slot&&node&&node.parentElement!==slot)slot.appendChild(node);
@@ -25035,7 +25051,10 @@ function pcxFilteredGroups(q,platF,statF){
     if(statF==='unmatched'&&idxs.every(i=>pcImpParsed[i].produsId||pcImpParsed[i].newProduct))return false;
     if(statF==='pending'&&(idxs.some(i=>pcImpParsed[i].include)||!idxs.every(i=>pcImpParsed[i].produsId||pcImpParsed[i].newProduct)))return false;
     if(q){
-      const hay=idxs.map(i=>{const it=pcImpParsed[i];const p=it.produsId?P.find(x=>x.id===it.produsId):null;return[it.comandaId,it.clientNume,it.titluExtern,it.awb,p?.name,p?.sku].filter(Boolean).join(' ');}).join(' ').toLowerCase();
+      const hay=idxs.map(i=>{const it=pcImpParsed[i];const p=it.produsId?P.find(x=>x.id===it.produsId):null;
+        const row=it._committedId?pcomRowById(it._committedId):null;   // #777: și AWB suplimentar, colet „7/43”, telefon/nume de pe etichetă, curier, cod produs
+        const lab=(row&&row.awbCauta)||it.awbCauta||'';
+        return[it.comandaId,it.clientNume,it.titluExtern,it.awb,p?.name,p?.sku,p?.ean,it.pnk,it.codProdus,(row&&row.awbExtra||[]).join(' '),(row&&row.awbLot)||it.awbLot,lab,lab.replace(/\D+/g,' '),lab.replace(/\|/g,' ').replace(/\D/g,''),(row&&row.awbCourier)||it.awbCourier].filter(Boolean).join(' ');}).join(' ').toLowerCase();
       if(!hay.includes(q)&&!smartMatch(hay,q))return false;
     }
     return true;
@@ -26443,7 +26462,7 @@ function renderPcomRedesign(){
       <div class="pcx-card">
         <div class="pcx-card-hd"><div><div class="pcx-card-title">Expediere</div><div class="pcx-card-sub">Asociază AWB-urile existente sau generează etichete pentru expediere.</div></div><button type="button" class="pcx-help-btn" onclick="pcxToggleHelp('awb')">Cum funcționează?</button></div><div class="pcx-help" id="pcx-help-awb" style="display:none">${PCX_HELP.awb}</div>
         <div class="pcx-shipping-grid">
-          <section class="pcx-shipping-module"><h3>A. Asociază AWB-uri existente</h3><p>Încarcă PDF-uri de la FAN Courier, Trendyol sau alți curieri. Fișierele procesate din dosarul Mac rămân protejate împotriva recitirii.</p><div class="pcx-dropzone" onclick="document.getElementById('pcmi-awb-file').click()"><span class="ic">📮</span>Alege PDF-uri cu etichete AWB<span class="sub">Poți selecta mai multe PDF-uri deodată</span></div><div class="pcx-shipping-actions"><button type="button" class="btn btn-sm" id="pcx-awb-folder-btn" onclick="readAwbFolderPdfs()">📂 Citește din dosarul AWB-uri de pe Mac</button><button type="button" class="btn btn-sm" id="pcx-awb-archive-btn" onclick="readAwbFolderPdfs(true)" title="Pentru AWB-uri deja descărcate (arhivate automat), dar care lipsesc de pe o comandă — caută direct în Desktop/AWB-uri/procesate, STRICT ziua de azi">🔁 Repune AWB-uri din arhivă (azi)</button><button type="button" class="btn btn-sm" id="pcx-awb-print-btn" onclick="downloadActiveAwbPdf()">🖨️ PDF AWB comenzi incluse</button><button type="button" class="btn btn-sm" onclick="retrySavedAwbErrors()">↻ Reîncearcă erorile</button><button type="button" class="btn btn-sm" id="pcx-awb-backfill-btn" onclick="backfillMissingAwbPreviews()" title="Completează poza etichetei pentru comenzi care au AWB asociat, dar la care generarea pozei a eșuat — recitește eticheta originală din arhiva de pe Mac">🖼️ Completează poze AWB lipsă</button></div><div id="pcx-awb-parsing-slot"></div><div id="pcx-awb-preview-slot"></div><div id="pcx-awb-foot-slot" style="display:flex;justify-content:flex-end;margin-top:10px"></div></section>
+          <section class="pcx-shipping-module"><h3>A. Asociază AWB-uri existente</h3><p>Încarcă PDF-uri de la FAN Courier, Trendyol sau alți curieri. Fișierele procesate din dosarul Mac rămân protejate împotriva recitirii.</p><div class="pcx-dropzone" onclick="document.getElementById('pcmi-awb-file').click()"><span class="ic">📮</span>Alege PDF-uri cu etichete AWB<span class="sub">Poți selecta mai multe PDF-uri deodată</span></div><div class="pcx-shipping-actions"><button type="button" class="btn btn-sm" id="pcx-awb-folder-btn" onclick="readAwbFolderPdfs()">📂 Citește din dosarul AWB-uri de pe Mac</button><button type="button" class="btn btn-sm" id="pcx-awb-archive-btn" onclick="readAwbFolderPdfs(true)" title="Pentru AWB-uri deja descărcate (arhivate automat), dar care lipsesc de pe o comandă — caută direct în Desktop/AWB-uri/procesate, STRICT ziua de azi">🔁 Repune AWB-uri din arhivă (azi)</button><button type="button" class="btn btn-sm" id="pcx-awb-print-btn" onclick="downloadActiveAwbPdf()">🖨️ PDF AWB comenzi incluse</button><button type="button" class="btn btn-sm" onclick="retrySavedAwbErrors()">↻ Reîncearcă erorile</button><button type="button" class="btn btn-sm" id="pcx-awb-backfill-btn" onclick="backfillMissingAwbPreviews()" title="Completează poza etichetei pentru comenzi care au AWB asociat, dar la care generarea pozei a eșuat — recitește eticheta originală din arhiva de pe Mac">🖼️ Completează poze AWB lipsă</button></div><div id="pcx-awb-parsing-slot"></div><div id="pcx-awb-search-slot"></div><div id="pcx-awb-preview-slot"></div><div id="pcx-awb-foot-slot" style="display:flex;justify-content:flex-end;margin-top:10px"></div></section>
           <section class="pcx-shipping-module"><h3>B. Generează etichetă GLS — Vinted</h3><p>Generează PDF-ul pentru comenzile Vinted expediate prin punct de depunere GLS.</p><div id="pcx-gls-label-slot"></div></section>
           <section class="pcx-shipping-module"><h3>C. eMAG — Trimite AWB</h3><p>Emite direct o etichetă eMAG pentru o comandă confirmată.</p><div class="pcx-emag-awb-fields"><div class="pcx-fld"><label>Număr comandă</label><input id="pcx-emag-awb-order" inputmode="numeric" placeholder="ex. 123456789"></div><div class="pcx-fld"><label>Kg</label><input id="pcx-emag-awb-weight" type="number" min="0.01" step="0.01" value="1"></div><div class="pcx-fld"><label>Colete</label><input id="pcx-emag-awb-parcels" type="number" min="1" step="1" value="1"></div><button type="button" class="pcx-btn pcx-btn-primary" id="pcx-emag-awb-btn" onclick="issueEmagAwb()">Trimite AWB prin eMAG</button></div>
           <!-- IP public al conectorului (cerut direct — „se tot schimbă IP-ul, o secțiune unde-l putem
@@ -26490,7 +26509,7 @@ function renderPcomRedesign(){
           <button type="button" class="pcx-fp" data-pl="trendyol" onclick="pcxSetPlatFilter('trendyol')">Trendyol <b>0</b></button>
           <button type="button" class="pcx-fp" data-pl="vinted" onclick="pcxSetPlatFilter('vinted')">Vinted <b>0</b></button>
         </div>
-          <input type="text" id="pcx-search" placeholder="Caută comandă, cumpărător, produs, cod…" oninput="pcxSearchDebounced()">
+          <input type="text" id="pcx-search" placeholder="Caută comandă, cumpărător, produs, cod, AWB, telefon…" oninput="pcxSearchDebounced()">
           <input type="hidden" id="pcx-filter-platform" value="all">
         </div>
         <div id="pcx-deck" tabindex="0" onkeydown="pcxDeckKeydown(event)" style="display:none"></div>
@@ -31386,6 +31405,53 @@ function awbMarkDuplicates(list){
   return list;
 }
 function awbActive(p){return!p._duplicateOf;}
+// ── Căutare în etichetele citite (Update #777) ──
+// Fiecare rând al listei primește un text de căutare (AWB, comandă, nume, telefon, produs, fișier, curier, lot) și o stare (găsită / negăsită /
+// duplicat / nerecunoscută); câmpul de sus filtrează rândurile pe loc, cu mai multe cuvinte (ȘI, în orice ordine) și numere (AWB, telefon: întreg sau
+// ultimele cifre). Nu atinge datele — doar ascunde rânduri; filtrul rămâne la re-randări.
+let awbQStatus='all';
+function awbQFold(v){return(typeof stripDiacritics==='function'?stripDiacritics(String(v==null?'':v)):String(v==null?'':v)).toLowerCase();}
+function awbRowSearchText(p){
+  const r0=(p.rows&&p.rows[0])||{};
+  const vals=[p.awb,p.comandaId,p.file,p.courier,r0.client_nume,(p.rows||[]).map(x=>x.produs_nume).join(' '),p.destinatar,p.destinatarHu,p.aiClientNume,p.produs,p.destinatarPhone,p.lot,p.cauta,p.label,p.reason];
+  const out=[];
+  vals.forEach(v=>{if(v==null||v==='')return;const t=String(v);out.push(awbQFold(t));if(/\d/.test(t))out.push(t.replace(/\D/g,''));});
+  return out.join(' ');
+}
+function awbQTokens(q){
+  const t=String(q||'').trim();if(!t)return[];
+  if(/^[\d\s+\-.()]+$/.test(t)&&t.replace(/\D/g,'').length>=6)return[t.replace(/\D/g,'')];   // „0712 345 678”, „1214 2178 69” = un singur număr
+  return awbQFold(t).split(/\s+/).filter(Boolean);
+}
+function awbFilterSetStatus(k){awbQStatus=k;awbFilterApply();}
+function awbFilterApply(){
+  const box=document.getElementById('pcmi-awb-preview'),bar=document.getElementById('pcmi-awb-search');
+  if(!box||!bar)return;
+  const rows=[...box.children].filter(el=>el.dataset&&el.dataset.k);
+  bar.style.display=rows.length?'':'none';
+  if(!rows.length)return;
+  const toks=awbQTokens(document.getElementById('pcmi-awb-q')?.value);
+  const cnt={all:0,ok:0,no:0,dup:0};
+  rows.forEach(el=>{cnt.all++;if(el.dataset.k==='ok')cnt.ok++;else if(el.dataset.k==='dup')cnt.dup++;else cnt.no++;});
+  let shown=0;
+  rows.forEach(el=>{
+    const k=el.dataset.k,stOk=awbQStatus==='all'||(awbQStatus==='no'?(k==='no'||k==='nr'||k==='can'):k===awbQStatus);
+    const txt=el.dataset.s||'',hit=!toks.length||toks.every(t=>txt.includes(t));
+    const vis=stOk&&hit;el.style.display=vis?'':'none';if(vis)shown++;
+  });
+  const chip=(k,l,n)=>`<button type="button" class="awbq-chip${awbQStatus===k?' on':''}" onclick="awbFilterSetStatus('${k}')">${l} <b>${n}</b></button>`;
+  document.getElementById('pcmi-awb-chips').innerHTML=chip('all','Toate',cnt.all)+chip('ok','✓ Găsite',cnt.ok)+chip('no','⚠ Negăsite',cnt.no)+(cnt.dup?chip('dup','↺ Duplicate',cnt.dup):'');
+  document.getElementById('pcmi-awb-qn').textContent=toks.length||awbQStatus!=='all'?`${shown} din ${cnt.all} etichete`:'';
+  box.querySelectorAll('.awbq-none').forEach(e=>e.remove());
+  if(!shown)box.insertAdjacentHTML('afterbegin','<div class="awbq-none">Nicio etichetă nu se potrivește — încearcă mai puține cuvinte sau „Toate”.</div>');
+}
+// Marchează rândurile randate (ordinea e fixă: awbParsed, apoi rezumatul „anulate”, apoi paginile nerecunoscute) cu starea și textul de căutare.
+function awbTagRows(box){
+  const kids=[...box.children];let i=0;
+  awbParsed.forEach(p=>{const el=kids[i++];if(!el)return;el.dataset.k=p._duplicateOf?'dup':(pcomAwbMatched(p)?'ok':'no');el.dataset.s=awbRowSearchText(p);});
+  if(awbCanceledPages.length)i++;                       // rezumatul „etichete anulate” nu se filtrează
+  awbUnrecognizedPages.forEach(x=>{const el=kids[i++];if(!el)return;el.dataset.k='nr';el.dataset.s=awbRowSearchText(x);});
+}
 function renderAwbPreview(){
   const box=document.getElementById('pcmi-awb-preview');
   awbMarkDuplicates(awbParsed);
@@ -31475,6 +31541,7 @@ function renderAwbPreview(){
     `<div class="inv-prev-row" style="color:var(--t3);flex-wrap:wrap;gap:8px">${awbThumbHtml(x,idx,'awb-unrec-thumb')}<span style="flex:1;min-width:260px">❔ ${esc(x.label)} — format nerecunoscut, fără AWB/comandă identificabile</span><button type="button" class="btn btn-sm awb-pick-trigger" style="flex-shrink:0" onclick="openAwbUnrecognizedPick(event,${idx})">🔗 Asociază manual</button></div>`
   ).join('');
   box.innerHTML=html;
+  awbTagRows(box);awbFilterApply();   // #777: căutare în etichete
   // Previzualizare etichetă — cerut direct: „să avem previzualizare la AWB să vedem unde se potrivește"
   // (atât pe liniile negăsite/ambigue, de ales manual, cât și pe cele deja potrivite, ca verificare
   // vizuală înainte de „✓ Asociază AWB-urile"). Pozele „apar treptat" — randarea PDF.js e async, DOM-ul
