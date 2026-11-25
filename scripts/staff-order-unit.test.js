@@ -49,7 +49,7 @@ console.log('\n— Comanda ca unitate: completitudine, bifare, AWB —');
       syncPcomLineCommitState:async(i,send)=>{log.commits.push(i);},
       pcomPlatLabel:p=>p,esc:x=>String(x)};
     const names=Object.keys(env);
-    const code=['pcomOrderKeyOf','pcomOrderSiblingIdxs','pcomLineIncludable','pcomIncludableSiblings','pcomOrderCompleteness','togglePcomInclude','pcomIncludeRestOfOrder','pcomIncompleteOrders'].map(n=>grabFrom(adm,n)).join('\n')+';return{pcomOrderKeyOf,pcomOrderSiblingIdxs,pcomLineIncludable,pcomOrderCompleteness,togglePcomInclude,pcomIncludeRestOfOrder,pcomIncompleteOrders}';
+    const code=['pcomLineHasAwb','pcomOrderKeyOf','pcomOrderSiblingIdxs','pcomLineIncludable','pcomIncludableSiblings','pcomOrderCompleteness','togglePcomInclude','pcomIncludeRestOfOrder','pcomIncompleteOrders'].map(n=>grabFrom(adm,n)).join('\n')+';return{pcomOrderKeyOf,pcomOrderSiblingIdxs,pcomLineIncludable,pcomOrderCompleteness,togglePcomInclude,pcomIncludeRestOfOrder,pcomIncompleteOrders}';
     return{api:new Function(...names,code)(...names.map(n=>env[n])),log};
   };
   const ln=(id,pid,extra)=>({platforma:'emag',comandaId:id,produsId:pid,include:false,cantitate:5,titluExtern:'Produs '+pid,...extra});
@@ -302,6 +302,76 @@ console.log('\n— Verificare loturi AWB: 1..M, AWB fără comandă, lipsuri —
   eq('integrare: erorile de asociere păstrează lotul (persistAwbErrors cu fallback dacă lipsește coloana)',/lot:p\.lot\|\|null\};/.test(adm)&&/Could not find the 'lot' column/.test(adm),true);
   eq('integrare: asocierea manuală dintr-o eroare scrie lotul pe comandă',/\.\.\.\(x\.lot\?\{awb_lot:x\.lot\}:\{\}\)/.test(adm),true);
   eq('integrare: banda se randează odată cu celelalte și are punct de montare',/renderPcxLotBoard\(\);\s*\n\s*pcxRenderDeck\(\);/.test(adm)&&/id="pcx-lot-board"/.test(adm),true);
+}
+
+console.log('\n— Comandă cu AWB fără produs asociat → în Staff cu denumirea de pe site —');
+{
+  const mk=()=>{
+    const posts=[],patches=[];
+    const P=[{id:7,name:'Cutie 30L',sku:'S7'}];
+    const env={P,PCOM:[],SYNCM:[],pcImpParsed:[],pcImpPlatforma:'emag',
+      renderPcomImportPreview(){},toast(){},console:{error(){},warn(){}},
+      pcomToRon:v=>Number(v)||0,pcomSaleFinancials:(p)=>({profit:10,marja:20}),
+      pcomToDb:o=>({platforma:o.platforma,comanda_id:o.comandaId,produs_id:o.produsId||null,produs_nume:o.produsNume||null,titlu_extern:o.titluExtern,cantitate:o.cantitate,awb:o.awb||null,profit_estimat:o.profitEstimat,staff_trimis_at:o.staffTrimisAt||null,termen_expediere:o.termenExpediere||null}),
+      pcImpBatchIdFor:()=>'b1',
+      pcomPostWithFallback:async row=>{posts.push(row);return[{id:500+posts.length,...row}];},
+      dbGet:async()=>[],dbPost:async()=>[],dbToPcom:r=>({id:r.id,produsId:r.produs_id,produsNume:r.produs_nume}),
+      patchAwbWithSource:async(f,b)=>{patches.push([f,b]);},
+      pcomRowById:()=>null,syncMapToDb:o=>o,dbToSyncMap:o=>o};
+    const names=Object.keys(env);
+    const code=['pcomLineHasAwb','commitPcomLine','syncPcomLineCommitState','pcomLineIncludable'].map(n=>grabFrom(adm,n)).join('\n')+';return{commitPcomLine,syncPcomLineCommitState,pcomLineIncludable,pcomLineHasAwb}';
+    return{api:new Function(...names,code)(...names.map(n=>env[n])),env,posts,patches};
+  };
+  const line=(extra)=>({platforma:'emag',comandaId:'583140692',data:'2026-11-25',clientNume:'C',titluExtern:'Cutie depozitare, de mare rezistenta, 60x39x20cm',cantitate:2,pretFaraTva:10,pretTotalCuTva:24.2,moneda:'RON',pnk:'AV-1',include:true,produsId:null,...extra});
+  {
+    {
+      const w=mk();w.env.pcImpParsed.push(line({awb:'1214217869',awbCourier:'Cargus'}));
+      await w.api.syncPcomLineCommitState(0,true);
+      const row=w.posts[0];
+      eq('fără produs + AWB → se scrie în bază, cu produs gol și denumirea de pe site, trimis în Staff',[w.posts.length,row&&row.produs_id,row&&row.produs_nume,row&&!!row.staff_trimis_at],[1,null,'Cutie depozitare, de mare rezistenta, 60x39x20cm',true]);
+      eq('fără produs: profitul estimat rămâne 0 (nu există cost de achiziție)',row.profit_estimat,0);
+      eq('AWB-ul se scrie pe rând',w.patches.length&&w.patches[0][1].awb,'1214217869');
+      eq('linia are acum rândul din bază (_committedId)',w.env.pcImpParsed[0]._committedId>0,true);
+    }
+    {
+      const w=mk();w.env.pcImpParsed.push(line({}));
+      await w.api.syncPcomLineCommitState(0,true);
+      eq('fără produs ȘI fără AWB → NU se scrie nimic (ca înainte)',w.posts.length,0);
+    }
+    {
+      const w=mk();w.env.pcImpParsed.push(line({produsId:7,awb:'1214217869'}));
+      await w.api.syncPcomLineCommitState(0,true);
+      eq('cu produs: comportament neschimbat (produs_id și nume din stoc)',[w.posts[0].produs_id,w.posts[0].produs_nume],[7,'Cutie 30L']);
+    }
+    {
+      const w=mk();w.env.pcImpParsed.push(line({awb:'1',amanat:true}));
+      await w.api.syncPcomLineCommitState(0,true);
+      eq('amânată → nu se trimite, nici cu AWB',w.posts.length,0);
+    }
+    {
+      const w=mk();const I=w.api.pcomLineIncludable;
+      eq('„includibil”: fără produs doar cu AWB; amânată/anulată/închisă pe platformă nu',[I(line({awb:'1',include:false})),I(line({include:false})),I(line({awb:'1',include:false,amanat:true})),I(line({awb:'1',include:false,_cancelledId:3})),I(line({awb:'1',include:false,_remoteGone:true}))],[true,false,false,false,false]);
+    }
+    {
+      // banda „comenzi cu AWB care nu sunt în Staff”
+      const env={pcImpParsed:[line({awb:'A1',include:false}),line({awb:'A1',include:false,titluExtern:'Al doilea produs'}),line({comandaId:'X2',include:false}),line({comandaId:'X3',awb:'A3',_committedId:9}),line({comandaId:'X4',awb:'A4',produsId:7})],pcImpPlatforma:'emag',fmtQty:n=>String(n)};
+      const names=Object.keys(env);
+      const api=new Function(...names,['pcomOrderKeyOf','pcomLineHasAwb','pcomAwbNotInStaff'].map(n=>grabFrom(adm,n)).join('\n')+';return{pcomAwbNotInStaff}')(...names.map(n=>env[n]));
+      const g=api.pcomAwbNotInStaff();
+      eq('banda: o singură comandă (cu AWB, fără produs, necomisă) cu ambele linii; fără AWB / deja în Staff / cu produs nu apar',g.map(o=>[o.id,o.awb,o.idxs.length,o.titles.length]),[['583140692','A1',2,2]]);
+    }
+    {
+      const stfEnv={findProdus:()=>null,esc:v=>String(v),lineKey:l=>'k',lineBusy:{},ISSUE_LABELS:{}};
+      const names=Object.keys(stfEnv);
+      const li=new Function(...names,grabFrom(stf,'lineInfoHtml')+';return lineInfoHtml')(...names.map(n=>stfEnv[n]));
+      const h=li({_table:'platforma_comenzi',produs_id:null,produs_nume:'Titlu oficial de pe site',cantitate:2},false);
+      eq('Staff: linia fără produs arată denumirea de pe site + mențiunea „produs neasociat în Admin”',[/Titlu oficial de pe site/.test(h),/Denumirea de pe site — produs neasociat în Admin/.test(h)],[true,true]);
+      const h2=li({_table:'platforma_comenzi',produs_id:null,titlu_extern:'Doar titlul',cantitate:1},false);
+      eq('Staff: fără produs_nume, se folosește titlul extern',/Doar titlul/.test(h2),true);
+    }
+    eq('Aplică import sare peste liniile fără produs (stocul nu se atinge)',/let toApply=pcImpParsed\.filter\(x=>x\.include&&x\.produsId&&!x\.amanat/.test(adm),true);
+    eq('la alegerea produsului, rândul fără produs din Staff se completează singur (pcomReassignCommittedProduct)',/id&&pcImpParsed\[idx\]\._committedId&&id!==oldProdId\)\{await pcomReassignCommittedProduct/.test(adm),true);
+  }
 }
 
 console.log('\n— Ordinea filelor din Staff —');
