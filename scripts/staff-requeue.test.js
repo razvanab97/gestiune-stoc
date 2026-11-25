@@ -5,8 +5,8 @@ const fs=require('fs'),path=require('path');
 const src=fs.readFileSync(path.join(__dirname,'..','staff.html'),'utf8');
 const grab=n=>{let i=src.indexOf('async function '+n+'(');if(i<0)i=src.indexOf('function '+n+'(');if(i<0)throw new Error('lipsește '+n);let d=0,j=src.indexOf('{',i);for(let k=j;k<src.length;k++){if(src[k]==='{')d++;else if(src[k]==='}'){d--;if(d===0)return src.slice(i,k+1)}}};
 const helpers=src.slice(src.indexOf("const QUEUE_RESET_HOUR"),src.indexOf("async function loadQueueMarker"));
-const names=['staffCourierRank','computeOrders','packQueue','waitingQueue','findLineByKey','orderOfLine','lineKey','patchLine','requeueChanges','requeueOrder','requeueAllCarried','scheduleUndo','undoAction','advanceAfterAction'];
-const code=[helpers,'const PLATFORM_ORDER={emag:0,trendyol:1,vinted:2};','let lastWaitingIdx=-1;',...names.map(grab)].join('\n');
+const names=['urgentKeyOf','urgentRankOf','awbLotFromFile','staffCourierRank','computeOrders','packQueue','waitingQueue','findLineByKey','orderOfLine','lineKey','patchLine','requeueChanges','requeueOrder','requeueAllCarried','scheduleUndo','undoAction','advanceAfterAction'];
+const code=[helpers,'const PLATFORM_ORDER={emag:0,trendyol:1,vinted:2};let URGENT={},INCOMPLETE={};','let lastWaitingIdx=-1;',...names.map(grab)].join('\n');
 let failed=0;const eq=(n,a,b)=>{const ok=JSON.stringify(a)===JSON.stringify(b);if(!ok)failed++;console.log((ok?'OK   ':'FAIL ')+n+(ok?'':`\n       primit:   ${JSON.stringify(a)}\n       așteptat: ${JSON.stringify(b)}`));};
 
 function world(opts={}){

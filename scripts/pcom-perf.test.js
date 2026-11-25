@@ -93,6 +93,7 @@ console.log('\n— Cardurile închise nu construiesc liniile —');
     pcxGroupKey:()=>'emag|111',pcxGroupIsOpen:()=>openFlag,esc:s=>String(s),pcomToRon:v=>v,imgSrc:s=>s,pcxGroupAwb:()=>'',
     pcomRowById:()=>null,pcomPlatLabel:()=>'eMAG',pcxOrderStockReady:()=>false,pcxGroupAwbChipHtml:()=>'',pcxAwbBoxHtml:()=>'',
     pcxOrderWorked:()=>false,pcxFmtShortDate:()=>'',deadlineBadgeHtml:()=>'',pcxDeckStatusRowHtml:()=>'',
+    pcomOrderCompleteness:()=>({total:2,inc:0,missing:[],partial:false}),pcomLineIncludable:()=>false,URGENT_ADMIN:{},urgentKeyAdmin:()=>'',
     pcxLineHtml:(i)=>{lineCalls++;return`<div class="pcx-line">L${i}</div>`;}
   };
   const names=Object.keys(stubs);

@@ -115,6 +115,21 @@ button{cursor:pointer}
 .awb-box{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:16px 18px;background:linear-gradient(135deg,rgba(243,240,255,.75),rgba(255,255,255,.55));backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(118,87,246,.25);border-radius:var(--r2)}
 .awb-lbl{font-size:15px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--acc2)}
 .awb-num{font-family:var(--mono);font-weight:800;font-size:29px;color:var(--t1);word-break:break-all}
+.list-item-via{font-size:13px;font-weight:700;color:var(--acc2);margin-top:2px}
+.search-hint{font-size:15px;color:var(--t3);margin:0 2px 10px;line-height:1.4}
+.search-more{text-align:center;color:var(--t3);font-size:15px;padding:10px}
+.urgent-btn{background:#FEF3F2;border-color:#F04438;color:#B42318;font-weight:800}
+.urgent-badge{display:inline-block;padding:3px 12px;border-radius:999px;background:#D92D20;color:#fff;font-size:17px;font-weight:800;letter-spacing:.03em;animation:urgPulse 1.6s ease-in-out infinite}
+@keyframes urgPulse{50%{box-shadow:0 0 0 6px rgba(217,45,32,.18)}}
+.card.urgent{border:3px solid #D92D20;box-shadow:0 0 0 4px rgba(217,45,32,.12)}
+.nav-btn.urgent-toggle{width:100%;border-color:#F04438;color:#B42318}
+.nav-btn.urgent-toggle.on{background:#D92D20;color:#fff}
+.urg-chip{display:inline-block;padding:1px 8px;border-radius:999px;background:#D92D20;color:#fff;font-size:12px;font-weight:800}
+.awb-lot{display:inline-block;margin-left:10px;padding:1px 10px;border-radius:999px;background:var(--acc);color:#fff;font-size:15px;font-weight:700;letter-spacing:0;text-transform:none;vertical-align:middle}
+.awb-lot b{font-family:var(--mono);font-size:19px}
+.inc-banner{padding:12px 14px;border-radius:12px;background:#FEF3F2;border:2px solid #F04438;color:#B42318;font-size:18px;font-weight:700;line-height:1.4}
+.inc-banner small{display:block;font-weight:500;font-size:16px;color:#7A271A;margin-top:4px}
+.inc-chip{display:inline-block;padding:2px 9px;border-radius:999px;background:#FEF3F2;border:1px solid #F04438;color:#B42318;font-size:13px;font-weight:700}
 .awb-num-tail{font-size:41px;color:#1D4ED8;margin-left:2px}
 .awb-pending{color:var(--t3);font-size:17px;font-weight:600}
 /* Previzualizare vizuală AWB — cerut direct (vezi .tmp/grill-me/staff-awb-preview.md): „pe lângă
@@ -325,6 +340,7 @@ button{cursor:pointer}
   <div class="hdr">
     <div class="hdr-title"><h1>📦 Comenzi de împachetat</h1><span class="order-count" id="progress-txt">Se încarcă…</span><button type="button" class="update-btn" id="staff-update-btn" onclick="openUpdatesSheet()"></button></div>
     <div style="display:flex;align-items:center;gap:10px">
+      <button type="button" class="refresh-btn urgent-btn" id="staff-urgent-btn" onclick="openUrgentSheet()" title="Marchează o comandă URGENTĂ după AWB">🚨 Urgent</button>
       <button type="button" class="refresh-btn" id="staff-newqueue-btn" onclick="newQueueNow()" title="Pornește coada nouă: împachetatele dispar din listă, cele neîmpachetate trec în „În așteptare">↺ Coadă nouă</button>
       <button type="button" class="refresh-btn" id="staff-refresh-btn" onclick="refreshStaffNow()">↻ Reîncarcă<span class="refresh-ping" id="refresh-ping"></span></button>
       <button type="button" class="staff-name-badge" id="staff-name-badge" onclick="editStaffName()"></button>
@@ -425,14 +441,16 @@ function imgSrc(url){if(!url)return'';if(url.startsWith('data:'))return url;if(u
 // previewUrl/comandaId/platforma — previzualizare vizuală AWB, cerut direct (vezi .tmp/grill-me/
 // staff-awb-preview.md). Fără poză (AWB emis direct prin eMAG, comenzi vechi, sau fără comandaId/
 // platforma cunoscute — ex. linie din Jurnal, „direct") → placeholder cu buton „adaugă poză" live.
-function awbBoxHtml(awb,courier,previewUrl,comandaId,platforma){
+function awbBoxHtml(awb,courier,previewUrl,comandaId,platforma,lot){
   if(!awb)return'';
   const s=esc(awb),head=s.slice(0,-4),tail=s.slice(-4);
   const lbl=courier?`${esc(courier)} · AWB`:'AWB';
   const previewHtml=previewUrl
     ?`<img class="awb-preview-thumb" src="${esc(previewUrl)}" data-comanda-id="${esc(comandaId)}" data-platforma="${esc(platforma)}" onclick="event.stopPropagation();openAwbPreviewZoom('${esc(previewUrl)}')" onerror="replaceBrokenAwbPreview(this)">`
     :(comandaId&&platforma?`<button type="button" class="awb-preview-placeholder" onclick="event.stopPropagation();openAwbPreviewCapture('${esc(comandaId)}','${esc(platforma)}')" title="Adaugă poză etichetă">📷</button>`:'');
-  return`<div class="awb-box"><div><div class="awb-lbl">${lbl}</div><div class="awb-num">${head}<span class="awb-num-tail">${tail}</span></div></div>${previewHtml}</div>`;
+  // #775: numărul din lot de pe etichetă (ex. „7/43”) — la vedere, ca să găsești repede coletul în stiva de etichete
+  const lotHtml=lot?`<div class="awb-lot" title="Numărul coletului în lotul curierului, de pe etichetă">${/^Nr\./.test(lot)?'':'📦 Colet '}<b>${esc(lot)}</b></div>`:'';
+  return`<div class="awb-box"><div><div class="awb-lbl">${lbl}${lotHtml}</div><div class="awb-num">${head}<span class="awb-num-tail">${tail}</span></div></div>${previewHtml}</div>`;
 }
 function replaceBrokenAwbPreview(img){
   const comandaId=img?.dataset?.comandaId,platforma=img?.dataset?.platforma;
@@ -547,6 +565,17 @@ function queueDayId(ms=Date.now()){
   const p=tzParts(lastAutoReset(ms)+3*3600000);
   return`${p.year}-${p.month}-${p.day}`;
 }
+// Comenzi trimise DOAR PARȚIAL din Admin (#775): Admin publică în setari_app.staff_incomplete {orders:{"emag|582542584":{n:2,i:1,m:[{t,q}]}}}
+// lista celor la care au rămas produse neincluse (liniile netrimise nu există încă în bază, deci Staff nu le poate deduce singur).
+async function loadIncomplete(){
+  try{
+    const rows=await sb('GET','setari_app?key=in.(staff_incomplete,staff_urgent)&select=key,value');
+    const get=k=>{const v=(rows||[]).find(r=>r.key===k)?.value;try{return typeof v==='string'?JSON.parse(v):v;}catch(e){return null;}};
+    const inc=get('staff_incomplete'),urg=get('staff_urgent');
+    INCOMPLETE=(inc&&inc.orders&&typeof inc.orders==='object')?inc.orders:{};
+    URGENT=(urg&&urg.orders&&typeof urg.orders==='object')?urg.orders:{};
+  }catch(e){INCOMPLETE={};URGENT={};}
+}
 async function loadQueueMarker(){
   try{
     const rows=await sb('GET',`setari_app?key=eq.${STAFF_QUEUE_KEY}&select=value`);
@@ -584,7 +613,7 @@ const STAFF_PUSH_KEY='staff_push_refresh';
 let lastPushSignal=null;
 const ISSUE_LABELS={stoc_zero:'Stoc zero',cantitate_insuficienta:'Cantitate insuficientă',produs_deteriorat:'Produs deteriorat',produs_gresit:'Produs greșit',nu_gasesc:'Nu găsesc produsul',alta:'Altă problemă'};
 
-let PRODUSE=[],COMENZI=[],JURNAL=[],ORDERS=[],PREPACK=[],STAFFMSG=[],FURNIZOR=[],curKey=null,activeTab='pack',activeImg={},stockCardIdx=0,stockSaveBusy=false,stockSwipeX=null,stockSortMode='alpha';
+let URGENT={},INCOMPLETE={},PRODUSE=[],COMENZI=[],JURNAL=[],ORDERS=[],PREPACK=[],STAFFMSG=[],FURNIZOR=[],curKey=null,activeTab='pack',activeImg={},stockCardIdx=0,stockSaveBusy=false,stockSwipeX=null,stockSortMode='alpha';
 const RETURN_REASONS={client_renunta:'Client a renunțat',produs_defect:'Produs defect',trimis_gresit:'Trimis greșit',alt_motiv:'Alt motiv'};
 let returnsQuery='',returnsPickId=null,returnsQty=1,returnsMotiv='client_renunta',returnsBusy=false,returnsRecent=[];
 let sheetCtx=null; // {lk} sau {lk,type:'stoc_redus'} — comanda/linia pentru care e deschis sheet-ul de probleme
@@ -599,6 +628,7 @@ let staffName='';
 try{staffName=localStorage.getItem(STAFF_NAME_KEY)||'';}catch(e){}
 const STAFF_UPDATE_KEY='sm6_staff_seen_update';
 const STAFF_UPDATES=[
+  {n:445,date:'25.11.2026',text:'Staff mai simplu și mai sigur: (1) 🔢 Pe cardul comenzii apare acum NUMĂRUL COLETULUI din lot de pe etichetă (ex. „Colet 7/43”), ca să găsești repede eticheta în stivă. (2) ⛔ Dacă o comandă are mai multe produse și din Admin au ajuns doar o parte, cardul spune „COMANDĂ INCOMPLETĂ” cu ce lipsește, iar la finalizare cere confirmare. (3) 🔍 Căutarea găsește după nume (în orice ordine), AWB (și ultimele cifre, și al doilea colet), telefon (număr întreg sau ultimele 4 cifre), număr comandă, produs/cod, curier și număr de colet — scrii mai multe cuvinte împreună („ion 4012”) și vezi CE s-a potrivit. (4) 🚨 Buton „Urgent” sus: scrii sau scanezi AWB-ul și comanda trece prima în coadă, cu bandă roșie. (5) Dacă raportezi „Stoc zero” deși ERP arată stoc, cere o confirmare. Comenzile blocate pe „stoc zero” revin singure în Împachetare când Admin încarcă stoc.'},
   {n:444,date:'20.11.2026',text:'„🗑 Șterge din așteptare” nu mai trimite la începutul listei: din listă rămâi exact unde erai (rândul dispare pe loc), iar de pe card treci direct pe comanda următoare din „În așteptare”. Și „↩ Readu în Împachetare” de pe card continuă acum cu comanda următoare din listă, nu cu prima.'},
   {n:443,date:'20.11.2026',text:'„🗑 Șterge din așteptare — deja împachetată și livrată”: buton nou pe fiecare comandă din „În așteptare” (pe card și 🗑 în listă), cu confirmare și Anulează 10s. Marchează comanda împachetată și confirmată (problema raportată se închide) — nu șterge nimic din bază și nu modifică stocul aici.'},
   {n:442,date:'20.11.2026',text:'„În așteptare” arată acum data și ora la care fiecare comandă a ajuns acolo (problema raportată sau resetul de la 22:00), plus când a fost trimisă în Staff — pe card și în listă. Comenzile sunt ordonate în ordinea în care au ajuns în așteptare, cele mai vechi primele.'},
@@ -683,6 +713,79 @@ function staffCourierRank(platforma,courier,hasAwb){
   return 5;
 }
 
+// Numărul din numele fișierului de etichetă („007_1027849694_eMAG_Courier_….pdf” → „7”) — doar pentru comenzile vechi, fără „N/M” salvat.
+function awbLotFromFile(name){const m=String(name||'').match(/^\s*0*(\d{1,3})\s*[-–—._ ]/);return m&&+m[1]>0?'Nr. '+(+m[1]):'';}
+// ── URGENT (Update #775) — cerut direct: „să putem seta urgent o comandă care trebuie expediată, pe baza AWB-ului” ──
+// Starea e în setari_app.staff_urgent {orders:{"emag|582542584":{at}}} (fără migrare; aceeași cheie o scrie și Admin). O comandă urgentă trece prima
+// în „Împachetare”, are banda roșie „🚨 URGENT” și iese din urgent singură când e finalizată (sau după 21 de zile).
+function urgentKeyOf(g){return(g.platforma||'')+'|'+(g.comandaId||'');}
+function urgentRankOf(g){const u=g&&g.comandaId?URGENT[urgentKeyOf(g)]:null;return u?1:0;}
+async function saveUrgentMap(mutator){
+  const rows=await sb('GET','setari_app?key=eq.staff_urgent&select=value');
+  let cur={};try{const v=rows?.[0]?.value;cur=(typeof v==='string'?JSON.parse(v):v)||{};}catch(e){}
+  const orders=cur.orders&&typeof cur.orders==='object'?{...cur.orders}:{};
+  mutator(orders);
+  const lim=Date.now()-21*86400000;Object.keys(orders).forEach(k=>{if(Date.parse(orders[k]&&orders[k].at)<lim)delete orders[k];});
+  const val=JSON.stringify({orders});
+  const upd=await sb('PATCH','setari_app?key=eq.staff_urgent',{value:val});
+  if(!upd?.length)await sb('POST','setari_app',{key:'staff_urgent',value:val});
+  URGENT=orders;
+}
+async function toggleUrgent(orderKey){
+  const ord=ORDERS.find(o=>o.key===orderKey);if(!ord||!ord.comandaId)return;
+  const k=urgentKeyOf(ord),on=!URGENT[k];
+  try{
+    await saveUrgentMap(m=>{if(on)m[k]={at:new Date().toISOString(),by:staffName||''};else delete m[k];});
+    computeOrders();
+    if(on&&activeTab==='pack')curKey=orderKey;
+    showToast(on?'🚨 Marcată URGENT — a trecut prima în coadă':'✓ Nu mai e urgentă');
+    renderMain();
+  }catch(e){console.error(e);showToast('Nu am putut salva — încearcă din nou');}
+}
+// Comenzile (neîmpachetate) al căror AWB se potrivește cu textul scris/scanat: AWB întreg, ultimele cifre (≥4) sau cod scanat care conține AWB-ul.
+function ordersByAwb(text){
+  const t=sFold(text).replace(/\s/g,''),d=sDigits(text);if(t.length<4)return[];
+  return ORDERS.filter(o=>o.platforma!=='direct'&&!o.finalized&&awbsOfLines(o.lines).some(a=>{
+    const as=sFold(a),ad=sDigits(a);
+    return as===t||(d.length>=4&&ad&&ad.endsWith(d))||(as.length>=8&&t.includes(as))||(t.length>=6&&as.includes(t));
+  }));
+}
+function openUrgentSheet(prefill){
+  sheetCtx={urgent:true};
+  document.getElementById('sheet-body').innerHTML=`
+    <div class="sheet-title">🚨 Marchează URGENT după AWB</div>
+    <div class="sheet-sub">Scrie AWB-ul (sau ultimele cifre) ori scanează eticheta. Comanda trece prima în coadă.</div>
+    <div class="search-row" style="margin:10px 0"><input type="text" id="urgent-awb-input" placeholder="AWB sau ultimele cifre…" oninput="onUrgentAwbInput()" onkeydown="if(event.key==='Enter')urgentSubmit()" autocomplete="off" inputmode="search" value="${esc(prefill||'')}">
+      <button type="button" class="scan-open-btn" onclick="urgentScan()" title="Scanează AWB-ul">📷</button></div>
+    <div id="urgent-awb-res"></div>
+    <button type="button" class="sheet-close" onclick="closeSheet()">Închide</button>`;
+  document.getElementById('sheet-overlay').classList.add('on');
+  setTimeout(()=>{const i=document.getElementById('urgent-awb-input');if(i){i.focus();if(prefill)onUrgentAwbInput();}},60);
+}
+function onUrgentAwbInput(){
+  const v=document.getElementById('urgent-awb-input')?.value||'',box=document.getElementById('urgent-awb-res');if(!box)return;
+  if(sFold(v).replace(/\s/g,'').length<4){box.innerHTML=v?'<div class="search-hint">Scrie minim 4 caractere din AWB.</div>':'';return;}
+  const hits=ordersByAwb(v);
+  if(!hits.length){box.innerHTML='<div class="search-hint">Nicio comandă neîmpachetată cu acest AWB în Staff.</div>';return;}
+  box.innerHTML=hits.slice(0,8).map(o=>{
+    const on=!!URGENT[urgentKeyOf(o)];
+    return`<div class="list-item" style="cursor:default"><div class="list-item-main"><div class="list-item-nm">${platformLabel(o.platforma)} · #${esc(o.comandaId)}${o.clientNume?' · '+esc(o.clientNume):''}</div><div class="list-item-meta">${esc(o.awb||'')}${o.awbCourier?' ('+esc(o.awbCourier)+')':''}${o.awbLot?' · colet '+esc(o.awbLot):''}</div></div>
+      <button type="button" class="line-check ${on?'on':''}" onclick="urgentSheetToggle('${o.key}')">${on?'✓ Urgentă — scoate':'🚨 Marchează urgent'}</button></div>`;
+  }).join('')+(hits.length>8?`<div class="search-more">… încă ${hits.length-8} — scrie mai multe cifre</div>`:'');
+}
+async function urgentSheetToggle(key){await toggleUrgent(key);onUrgentAwbInput();}
+async function urgentSubmit(){
+  const v=document.getElementById('urgent-awb-input')?.value||'',hits=ordersByAwb(v);
+  if(hits.length===1){const k=hits[0].key;if(!URGENT[urgentKeyOf(hits[0])])await toggleUrgent(k);closeSheet();}
+  else onUrgentAwbInput();
+}
+let scanMode='';
+function urgentScan(){closeSheet();scanMode='urgent';openScanner();}
+async function urgentFromScan(text){
+  const hits=ordersByAwb(text);
+  if(hits.length===1){if(!URGENT[urgentKeyOf(hits[0])])await toggleUrgent(hits[0].key);else showToast('🚨 Era deja urgentă');}
+  else openUrgentSheet(text);
+}
 function computeOrders(){
   const groups={};
   COMENZI.forEach(o=>{
@@ -735,7 +838,7 @@ function computeOrders(){
   // curier rămâne ordinea de dinainte: platformă (eMAG, Trendyol, Vinted), apoi data/ora comenzii.
   const courierOf=g=>String((g.lines.find(l=>l.awb_courier)||{}).awb_courier||'');
   const hasAwb=g=>g.lines.some(l=>l.awb);
-  ORDERS=Object.values(groups).sort((a,b)=>staffCourierRank(a.platforma,courierOf(a),hasAwb(a))-staffCourierRank(b.platforma,courierOf(b),hasAwb(b))||(PLATFORM_ORDER[a.platforma]??9)-(PLATFORM_ORDER[b.platforma]??9)||String(a.sortAt).localeCompare(String(b.sortAt))||a.key.localeCompare(b.key));
+  ORDERS=Object.values(groups).sort((a,b)=>urgentRankOf(b)-urgentRankOf(a)||staffCourierRank(a.platforma,courierOf(a),hasAwb(a))-staffCourierRank(b.platforma,courierOf(b),hasAwb(b))||(PLATFORM_ORDER[a.platforma]??9)-(PLATFORM_ORDER[b.platforma]??9)||String(a.sortAt).localeCompare(String(b.sortAt))||a.key.localeCompare(b.key));
   ORDERS.forEach(g=>{
     g.allDone=g.lines.every(l=>l.impachetat||l.staff_blocked);
     g.hasUnresolvedIssue=g.lines.some(l=>l.staff_blocked&&!l.staff_issue_resolved);
@@ -758,6 +861,12 @@ function computeOrders(){
     g.finalized=g.allDone&&!g.hasUnresolvedIssue;
     g.finalizedWithoutAwb=g.finalized&&g.needsAwb;
     g.complete=g.finalized&&!g.needsAwb;
+    // #775 — numărul din lot de pe etichetă („7/43”, citit de Admin la asocierea AWB-ului) sau, la comenzile vechi, numărul din numele fișierului.
+    g.urgent=!g.finalized&&urgentRankOf(g)===1;   // #775: marcată URGENT (după AWB) — trece prima în coadă
+    g.awbLot=(g.lines.find(l=>l.awb_lot)||{}).awb_lot||awbLotFromFile((g.lines.find(l=>l.awb_source_file)||{}).awb_source_file);
+    // #775 — comandă trimisă doar parțial: Admin știe câte produse are în total; dacă în Staff sunt mai puține, comanda e incompletă.
+    const incInfo=g.platforma!=='direct'?INCOMPLETE[(g.platforma||'')+'|'+g.comandaId]:null;
+    g.incomplete=incInfo&&!g.finalized&&Number(incInfo.n)>g.lines.length?incInfo:null;
     // RESET TOTAL (#519), cerut direct, cu o captură reală („ce caută aceste comenzi în staff la de
     // împachetat în condițiile în care acestea sunt de astăzi?" — o comandă din 21.09 apărută în coada
     // ACTIVĂ de azi): „carry-over”/isCarryover (comparație de dată pe sortAt) a fost chiar mecanismul
@@ -1046,6 +1155,11 @@ function lineInfoHtml(l,showCheck){
   </div>`;
 }
 
+function incompleteBannerHtml(ord){
+  const inc=ord.incomplete;if(!inc)return'';
+  const miss=(inc.m||[]).map(x=>`${esc(String(x.q))}× ${esc(x.t)}`).join(' · ');
+  return`<div class="inc-banner">⛔ COMANDĂ INCOMPLETĂ — în Staff sunt ${ord.lines.length} din ${esc(String(inc.n))} produse.${miss?`<small>Lipsește: ${miss}</small>`:''}<small>Nu trimite coletul până nu e completă — anunță Admin să includă și restul.</small></div>`;
+}
 function renderPackTab(host){
   const q=packQueue();
   if(!q.length){
@@ -1069,18 +1183,21 @@ function renderPackTab(host){
   const bigBtnHtml=ord.finalized
     ?`<button type="button" class="big-pack-btn done" disabled>✓ Comandă finalizată</button><button type="button" class="nav-btn" style="margin-top:8px" ${lineBusy['order_'+ord.key]?'disabled':''} onclick="reactivateOrder('${ord.key}')">↺ Reactivează pentru împachetare</button>`
     :`<button type="button" class="big-pack-btn" ${lineBusy['order_'+ord.key]?'disabled':''} onclick="finalizeOrder('${ord.key}')">${ord.awb?'✓ Finalizează coletul':'✓ Marchează finalizat'}</button>`;
-  host.innerHTML=`<div class="card ${multi?'multi-line':'single-line'}">
+  host.innerHTML=`<div class="card ${multi?'multi-line':'single-line'}${ord.urgent?' urgent':''}">
     <div class="ord-hdr">
       <div class="ord-hdr-row1">
         <span class="ord-pl ${ord.platforma}">${plLabel}</span>
         ${ord.comandaId?`<span class="ord-num">#${esc(ord.comandaId)}</span>`:''}
         <span class="ord-date">${esc(ord.data||'')}</span>
+        ${ord.urgent?'<span class="urgent-badge">🚨 URGENT</span>':''}
       </div>
       ${ord.clientNume?`<div class="ord-client">${esc(ord.clientNume)}</div>`:''}
     </div>
     <div id="lock-banner-slot"></div>
-    ${ord.awb?awbBoxHtml(ord.awb,ord.awbCourier,ord.awbPreviewUrl,ord.comandaId,ord.platforma):(ord.platforma!=='direct'?`<div class="awb-box"><span class="awb-pending">AWB în așteptare</span></div>`:'')}
+    ${ord.awb?awbBoxHtml(ord.awb,ord.awbCourier,ord.awbPreviewUrl,ord.comandaId,ord.platforma,ord.awbLot):(ord.platforma!=='direct'?`<div class="awb-box"><span class="awb-pending">AWB în așteptare</span></div>`:'')}
     ${!ord.finalized?deadlineBadgeHtml(ord.termenExpediere):''}
+    ${ord.incomplete?incompleteBannerHtml(ord):''}
+    ${!ord.finalized&&ord.platforma!=='direct'&&ord.comandaId?`<button type="button" class="nav-btn urgent-toggle ${ord.urgent?'on':''}" onclick="toggleUrgent('${ord.key}')">${ord.urgent?'✓ Urgentă — scoate urgent':'🚨 Marchează urgent'}</button>`:''}
     ${multi?`<div class="progress-mini">${ord.lines.length} produse în același colet</div>`:''}
     <div class="lines">${linesHtml}</div>
     ${bigBtnHtml}
@@ -1480,6 +1597,7 @@ async function finalizeOrder(orderKey){
   const key='order_'+orderKey;
   if(lineBusy[key])return;
   const ord=ORDERS.find(o=>o.key===orderKey);if(!ord)return;
+  if(ord.incomplete&&!confirm(`⛔ Comanda e INCOMPLETĂ: în Staff sunt ${ord.lines.length} din ${ord.incomplete.n} produse.\n\nSigur finalizezi coletul fără restul produselor?`))return;
   lineBusy[key]=true;renderMain();
   const at=new Date().toISOString();
   const changes=ord.lines.map(l=>({table:l._table,id:l.id,prev:{impachetat:l.impachetat,impachetat_at:l.impachetat_at||null,staff_finalizat_at:l.staff_finalizat_at||null}}));
@@ -1675,6 +1793,11 @@ async function submitStockReport(bucket){
 async function submitIssue(type,note){
   const l=findLineByKey(sheetCtx.lk);
   const orderKey=sheetCtx.orderKey;
+  // #775: „Stoc zero” raportat deși ERP arată stoc → comanda ar sta în „În așteptare” degeaba (cu AWB tipărit). Mai întâi o confirmare.
+  if(type==='stoc_zero'&&l){
+    const pr=findProdus(l.produs_id),er=pr?Math.max(0,(Number(pr.bought)||0)-(Number(pr.sold)||0)):0;
+    if(er>=(Number(l.cantitate)||1)&&!confirm(`ERP arată ${er} buc. în stoc pentru acest produs (comanda cere ${l.cantitate}).\n\nCaută-l mai întâi în depozit. Raportezi totuși „Stoc zero”? Comanda va sta în „În așteptare”.`))return;
+  }
   closeSheet();
   if(!l)return;
   const prev={staff_blocked:l.staff_blocked,staff_blocked_at:l.staff_blocked_at,staff_issue_type:l.staff_issue_type,staff_issue_note:l.staff_issue_note,staff_issue_resolved:l.staff_issue_resolved,fara_stoc:l.fara_stoc,fara_stoc_at:l.fara_stoc_at};
@@ -1795,7 +1918,7 @@ function awaitAwbListItemHtml(o){
   return`<div class="list-item">
     ${im}
     <div class="list-item-main">
-      <div class="list-item-nm">${pl}${o.comandaId?' · #'+esc(o.comandaId):''}${o.clientNume?' · '+esc(o.clientNume):''}</div>
+      <div class="list-item-nm">${pl}${o.comandaId?' · #'+esc(o.comandaId):''}${o.clientNume?' · '+esc(o.clientNume):''}${o.urgent?' <span class="urg-chip">🚨 URGENT</span>':''}</div>
       <div class="list-item-issue">⏳ AWB în așteptare — ${esc(nm)}</div>
     </div>
     <div class="list-item-time">${o.sentAt?esc(timeAgo(o.sentAt)):''}</div>
@@ -1827,7 +1950,7 @@ function renderWaitingTab(host){
     </div>
     ${waitingDatesHtml(ord)?`<div class="waiting-dates">${waitingDatesHtml(ord)}</div>`:''}
     <div id="lock-banner-slot"></div>
-    ${ord.awb?awbBoxHtml(ord.awb,ord.awbCourier,ord.awbPreviewUrl,ord.comandaId,ord.platforma):''}
+    ${ord.awb?awbBoxHtml(ord.awb,ord.awbCourier,ord.awbPreviewUrl,ord.comandaId,ord.platforma,ord.awbLot):''}
     ${ord.carried&&ord.hasUnresolvedIssue?'':deadlineBadgeHtml(ord.termenExpediere)}
     <div class="lines">${linesHtml}</div>
     ${ord.finalized?`<button type="button" class="big-pack-btn done" disabled>✓ Comandă finalizată</button>`:(ord.carried&&!ord.hasUnresolvedIssue?`<button type="button" class="big-pack-btn" ${lineBusy['order_'+ord.key]?'disabled':''} onclick="finalizeOrder('${ord.key}')">${ord.awb?'✓ Finalizează coletul':'✓ Marchează împachetat'}</button>`:'')}
@@ -1921,106 +2044,169 @@ function renderFinalizedTab(host){
 // Diacritice-insensibil (la fel ca fmFold din index.html) — cerut direct („căutarea să fie mult mai
 // ușoară la câteva caractere"): un client scris „Gheorghiță" în bază trebuie găsit și scriind
 // „gheorghita", fără diacritice, cum tastează majoritatea pe tabletă.
+// ── CĂUTARE (Update #775) — nume, număr AWB (și ultimele cifre), telefon, comandă, produs/cod, curier, numărul din lot „7/43” ──
+// Cerut direct: „secțiune de search pe bază de nume, număr AWB, număr de telefon sau ce se mai poate identifica, să funcționeze 100% și repede”.
+//  · mai multe cuvinte = ȘI, în orice ordine („popescu ion” = „ion popescu”, „dpd 4012”, „ion tricou”);
+//  · fiecare comandă are un INDEX calculat o singură dată (toate câmpurile identificabile, normalizate fără diacritice), deci fiecare literă
+//    tastată costă doar câteva comparații de text, nu recalcularea lui — instant și pe mii de comenzi;
+//  · rezultatul spune CE s-a potrivit (🔎 AWB / 📞 telefon / 👤 nume / 📦 produs / 🔢 colet / 🚚 curier), ca să vezi imediat că e comanda bună;
+//  · telefonul și numele destinatarului vin de pe etichetă (citite de Admin la asocierea AWB-ului, coloana awb_cauta); eMAG mascează numărul
+//    („***2055”), deci pe acele comenzi se găsește după ultimele 4 cifre, iar pe Cargus/Sameday după numărul întreg;
+//  · ce nu e în coada încărcată (vechi, în afara ferestrei de 90 de zile, netrimis în Staff) se caută LIVE în bază și se afișează dedesubt.
 function sFold(s){return String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/ș/gi,'s').replace(/ț/gi,'t').toLowerCase();}
-// Doar cifrele — pentru „ultimele 4 cifre din AWB" (exemplul dat direct) să se potrivească indiferent
-// de eventuale spații/liniuțe cu care ar fi format AWB-ul la afișare, nu doar ca substring brut.
 function sDigits(s){return String(s||'').replace(/\D/g,'');}
 function platformLabel(pl){return pl==='emag'?'eMAG':pl==='trendyol'?'Trendyol':pl==='vinted'?'Vinted':'Extra';}
-// Scor de potrivire, nu doar da/nu (cerut direct — „rezultatul să fie mult mai ușor" la câteva
-// caractere, exemple date direct: ultimele cifre din AWB, primele litere din numele clientului, sau
-// numele curierului — „scriem DPD, să ne dea comenzile cu livrare la DPD"): comandă/AWB exacte sau la
-// început de text ies primele, apoi client, apoi curier, abia apoi produs/cod intern — cu multe
-// comenzi potrivite parțial, cele mai relevante s-ar putea pierde needitor într-o listă nesortată.
-function matchScoreOrder(o,q){
-  const s=sFold(q);if(!s)return 0;
-  const sDig=sDigits(q);
-  const comandaId=sFold(o.comandaId),clientNume=sFold(o.clientNume),awbDig=sDigits(o.awb),courier=sFold(o.awbCourier),plat=sFold(platformLabel(o.platforma));
-  // Bug real găsit pe drum, raportat direct („scanul AWB nu recunoaște, deși AWB-ul există"): codul de
-  // bare FIZIC de pe etichetă nu conține mereu exact AWB-ul salvat la noi — verificat direct, decodificând
-  // codurile reale de pe 3 etichete diferite (Sameday, FAN Courier, DPD): FAN Courier codifică
-  // "7000167148503" + "001F5159" (AWB + sufix intern curier), DPD codifică AWB-ul curat pe UN cod, dar și
-  // un cod de rutare mai lung care îl conține ca substring. Verificăm ambele direcții: AWB-ul salvat
-  // conține textul, SAU textul (scanat) conține AWB-ul.
-  const awbL=sFold(o.awb);
-  let best=0;
-  const bump=v=>{if(v>best)best=v;};
-  if(comandaId){
-    if(comandaId===s)bump(100);
-    else if(comandaId.startsWith(s))bump(90);
-    else if(comandaId.includes(s))bump(60);
-  }
-  if(awbL){
-    if(awbL===s)bump(100);
-    else if(sDig&&awbDig&&awbDig.length>=sDig.length&&awbDig.endsWith(sDig))bump(95); // exact exemplul dat: ultimele N cifre din AWB
-    else if(awbL.startsWith(s))bump(90);
-    else if(awbL.includes(s)||s.includes(awbL))bump(60);
-  }
-  if(clientNume){
-    if(clientNume===s)bump(95);
-    else if(clientNume.split(' ').some(w=>w.startsWith(s)))bump(85); // primele litere din prenume SAU din nume
-    else if(clientNume.includes(s))bump(55);
-  }
-  if(courier){
-    if(courier===s||courier.startsWith(s))bump(75); // „scriem DPD" → toate comenzile cu livrare la DPD
-    else if(courier.includes(s))bump(45);
-  }
-  if(plat&&(plat===s||plat.startsWith(s)))bump(50);
-  // Bug real găsit pe drum: placeholder-ul căutării promitea deja „...SKU sau cod intern", dar codul
-  // intern (internalCode) nu era de fapt verificat — util mai ales la pre-împachetare, ca eticheta
-  // tipărită (care arată codul intern) să poată fi găsită manual când nu ai cameră. ean — codul de bare
-  // fizic de pe ambalajul produsului (diferit de SKU-ul intern) — verificat ca să funcționeze scanarea
-  // din cameră (📷 Scanează): cine scanează produsul, nu AWB-ul, trimite exact valoarea EAN.
-  if(best<40){
-    const lineHit=o.lines.some(l=>{
-      const p=findProdus(l.produs_id);
-      return[sFold(l.produs_nume||l.titlu_extern),sFold(p?.sku),sFold(p?.internalCode),sFold(p?.ean)].some(v=>v&&v.includes(s));
-    });
-    if(lineHit)bump(40);
-  }
-  return best;
+function awbsOfLines(lines){
+  const set=new Set();
+  (lines||[]).forEach(l=>{if(l.awb)set.add(String(l.awb));(Array.isArray(l.awb_extra)?l.awb_extra:[]).forEach(x=>{if(x)set.add(String(x));});});
+  return[...set];
 }
+// Indexul de căutare al unei comenzi (sau al unui pseudo-obiect cu aceleași câmpuri: comandaId, clientNume, awb, awbCourier, platforma, awbLot, lines[]).
+function orderSearchIndex(o){
+  if(o._si)return o._si;
+  const lines=o.lines||[];
+  const cauta=lines.map(l=>l.awb_cauta).filter(Boolean).join(' | ');
+  const phones=[];
+  String(cauta).split('|').forEach(part=>{const d=sDigits(part);if(d.length>=4)phones.push(d);});
+  const awbs=awbsOfLines(lines);if(o.awb&&!awbs.includes(String(o.awb)))awbs.unshift(String(o.awb));
+  const lot=String(o.awbLot||'');
+  o._si={
+    id:sFold(o.comandaId),
+    awbs:awbs.map(a=>({s:sFold(a),d:sDigits(a)})),
+    name:sFold(o.clientNume),
+    cauta:sFold(cauta.replace(/\|/g,' ')),
+    phones,
+    lot:/\//.test(lot)?lot.replace(/\s/g,''):'',
+    lotNr:(lot.match(/(\d{1,3})/)||[])[1]||'',
+    courier:sFold(o.awbCourier),
+    plat:sFold(platformLabel(o.platforma)),
+    prods:lines.map(l=>{const p=findProdus(l.produs_id);return{
+      n:sFold(l.produs_nume||l.titlu_extern),t:sFold(l.titlu_extern),
+      codes:[p&&p.sku,p&&p.internalCode,p&&p.ean,l.pnk,l.cod_produs].filter(Boolean).map(sFold)};})
+  };
+  return o._si;
+}
+// Cuvintele interogării: ≥2 caractere (un cuvânt de o literă nu restrânge nimic); dacă toate sunt de o literă, se folosește tot șirul.
+function searchTokens(q){
+  // un număr scris cu spații/semne („+40 712 345 678”, „0712-345-678”, „1214 2178 69”) e UN singur cuvânt, nu mai multe
+  if(/^[\d\s+\-.()]+$/.test(String(q||''))&&sDigits(q).length>=6){const d=sDigits(q);return[{s:d,d}];}
+  const raw=String(q||'').trim().split(/\s+/).filter(Boolean);
+  const long=raw.filter(w=>w.length>=2);
+  return(long.length?long:raw.slice(0,1)).map(w=>({s:sFold(w),d:sDigits(w)})).filter(t=>t.s);
+}
+// Scorul unui cuvânt pe o comandă: cea mai bună potrivire pe orice câmp + CE s-a potrivit (via). 0 = nepotrivit.
+function tokenScore(si,t){
+  let best=0,via='';
+  const bump=(v,w)=>{if(v>best){best=v;via=w;}};
+  if(si.id){
+    if(si.id===t.s)bump(100,'🔎 comandă');
+    else if(si.id.startsWith(t.s))bump(90,'🔎 comandă');
+    else if(t.s.length>=3&&si.id.includes(t.s))bump(60,'🔎 comandă');
+  }
+  for(const a of si.awbs){
+    if(a.s===t.s)bump(100,'🔎 AWB');
+    else if(t.d.length>=4&&a.d&&a.d.endsWith(t.d))bump(95,'🔎 AWB');            // ultimele N cifre din AWB
+    else if(t.s.length>=4&&a.s.startsWith(t.s))bump(90,'🔎 AWB');
+    else if((t.s.length>=4&&a.s.includes(t.s))||(a.s.length>=8&&t.s.includes(a.s)))bump(60,'🔎 AWB'); // scanarea poate conține AWB-ul + sufix de curier
+  }
+  if(t.d.length>=4&&t.d.length===t.s.replace(/[\s+\-.()*]/g,'').length){          // pare telefon / cifre: telefon (întreg sau ultimele cifre)
+    for(const p of si.phones){
+      if(p===t.d||p===t.d.replace(/^40/,'0'))bump(98,'📞 telefon');
+      else if(p.endsWith(t.d))bump(94,'📞 telefon');
+      else if(p.includes(t.d))bump(78,'📞 telefon');
+    }
+  }
+  if(si.name){
+    if(si.name===t.s)bump(95,'👤 nume');
+    else if(si.name.split(' ').some(w=>w.startsWith(t.s)))bump(85,'👤 nume');
+    else if(t.s.length>=3&&si.name.includes(t.s))bump(55,'👤 nume');
+  }
+  if(t.s.length>=3&&si.cauta&&si.cauta.includes(t.s))bump(70,'👤 etichetă');
+  if(t.s.includes('/')&&si.lot&&si.lot===t.s.replace(/\s/g,''))bump(92,'🔢 colet');
+  if(/^#\d{1,3}$/.test(t.s)&&si.lotNr&&si.lotNr===t.s.slice(1))bump(80,'🔢 colet');
+  if(si.courier){
+    if(si.courier===t.s||si.courier.startsWith(t.s))bump(75,'🚚 curier');
+    else if(t.s.length>=3&&si.courier.includes(t.s))bump(45,'🚚 curier');
+  }
+  if(si.plat&&(si.plat===t.s||si.plat.startsWith(t.s)))bump(50,'🏷 platformă');
+  if(best<70){
+    for(const p of si.prods){
+      if(p.codes.some(c=>c===t.s))bump(80,'📦 cod produs');
+      else if(p.codes.some(c=>c.includes(t.s)&&t.s.length>=3))bump(55,'📦 cod produs');
+      else if(t.s.length>=2&&(p.n.includes(t.s)||p.t.includes(t.s)))bump(42,'📦 produs');
+    }
+  }
+  return{score:best,via};
+}
+// {score,vias[]}: toate cuvintele trebuie să se potrivească (ȘI); scorul = media celor mai bune potriviri pe cuvânt.
+function matchDetailOrder(o,q){
+  const toks=searchTokens(q);if(!toks.length)return{score:0,vias:[]};
+  const si=orderSearchIndex(o);let sum=0;const vias=[];
+  for(const t of toks){const r=tokenScore(si,t);if(r.score<=0)return{score:0,vias:[]};sum+=r.score;if(r.via&&!vias.includes(r.via))vias.push(r.via);}
+  return{score:Math.round(sum/toks.length),vias};
+}
+function matchScoreOrder(o,q){return matchDetailOrder(o,q).score;}
 function matchOrder(o,q){return matchScoreOrder(o,q)>0;}
 function renderSearchTab(host){
   document.getElementById('search-dock').innerHTML=`<div class="search-row search-drop">
-    <input type="text" id="search-page-input" placeholder="Caută după client, AWB, curier (ex. DPD), comandă, produs sau cod…" oninput="onSearchPageInput()" autofocus>
+    <input type="text" id="search-page-input" placeholder="Caută: nume, AWB (sau ultimele cifre), telefon, comandă, produs, curier, colet 7/43…" oninput="onSearchPageInput()" autofocus autocomplete="off" inputmode="search">
     <button type="button" class="scan-open-btn" onclick="openScanner()" title="Scanează codul de bare (AWB sau produs)">📷</button>
   </div>`;
-  host.innerHTML='<div class="search-page-list" id="search-page-results"></div><div id="search-page-hist"></div>';
+  host.innerHTML='<div class="search-hint">💡 Poți scrie mai multe cuvinte (ex. „ion 4012”, „dpd popescu”). Telefonul se găsește după numărul întreg sau ultimele 4 cifre.</div><div class="search-page-list" id="search-page-results"></div><div id="search-page-hist"></div>';
 }
-// Căutare istorică, SEPARATĂ de cea de mai jos — cerut direct: „cel împachetat, totuși să rămână
-// salvate ca informații... să găsim pe baza AWB-ului, a numărului de comandă, a numelui clientului...
-// să vedem că de fapt a fost împachetată, ca să știm de unde și încotro mergem". Căutarea de mai jos
-// (ORDERS) e STRICT coada activă de azi (RESET TOTAL, #519 — doar ce a fost trimis explicit spre
-// Packing) — corect pentru lucrul curent, dar nu mai acoperă istoricul (nimic de dinainte de #519, și
-// nimic mai vechi decât pragul de performanță din staffComenziUrl). Interogare LIVE, directă către
-// platforma_comenzi — FĂRĂ nicio legătură cu staff_trimis_at/coada activă — ca orice comandă, oricât
-// de veche, să rămână găsibilă permanent, cu statusul ei real (împachetată/anulată/neîmpachetată).
-// Debounced (400ms, minim 3 caractere) — nu o interogare la fiecare literă; `seq` ignoră un răspuns
-// întârziat dintr-o tastare anterioară, ca să nu suprascrie rezultatul unei căutări mai noi.
+// Căutare istorică / completă, SEPARATĂ de coada încărcată — cerut direct: „cel împachetat, totuși să rămână salvate ca informații... să găsim pe
+// baza AWB-ului, a numărului de comandă, a numelui clientului...”. Interogare LIVE în platforma_comenzi (fără legătură cu staff_trimis_at):
+// orice comandă, oricât de veche sau netrimisă în Staff, rămâne găsibilă cu statusul ei real. Serverul filtrează după cel mai lung cuvânt
+// (superset), apoi aceleași reguli ȘI ca mai sus se aplică local pe rezultat. Debounce scurt (250 ms, minim 3 caractere); `seq` ignoră un
+// răspuns întârziat. Dacă coloanele noi (awb_cauta/awb_lot) nu există încă, se reîncearcă fără ele — căutarea nu se oprește.
 let searchHistTimer=null,searchHistSeq=0;
+const HIST_COLS_BASE='id,platforma,comanda_id,client_nume,produs_nume,titlu_extern,awb,awb_courier,awb_extra,pnk,cod_produs,produs_id,impachetat,impachetat_at,anulata,created_at,data';
 async function searchOrderHistoryLive(q,seq){
   const histBox=document.getElementById('search-page-hist');
   if(!histBox)return;
+  const toks=searchTokens(q);if(!toks.length)return;
+  const main=toks.slice().sort((a,b)=>b.s.length-a.s.length)[0];
+  const raw=String(q).trim().split(/\s+/).sort((a,b)=>b.length-a.length)[0].replace(/[(),*]/g,'');
+  if(raw.length<3){histBox.innerHTML='';return;}
+  const like=encodeURIComponent(`*${raw}*`);
+  const likeDig=main.d.length>=4?encodeURIComponent(`*${main.d}*`):'';
+  const baseOr=[`comanda_id.ilike.${like}`,`client_nume.ilike.${like}`,`awb.ilike.${like}`,`produs_nume.ilike.${like}`,`titlu_extern.ilike.${like}`,`pnk.ilike.${like}`,`cod_produs.ilike.${like}`];
+  if(likeDig)baseOr.push(`awb.ilike.${likeDig}`);
+  const tryQuery=async(cols,or)=>sb('GET',`platforma_comenzi?select=${cols}&or=(${or.join(',')})&order=created_at.desc&limit=80`);
   try{
-    const like=encodeURIComponent(`*${q}*`);
-    const rows=await sb('GET',`platforma_comenzi?select=id,platforma,comanda_id,client_nume,produs_nume,titlu_extern,awb,awb_courier,impachetat,impachetat_at,anulata,created_at,data&or=(comanda_id.ilike.${like},client_nume.ilike.${like},awb.ilike.${like},produs_nume.ilike.${like},titlu_extern.ilike.${like})&order=created_at.desc&limit=25`);
+    let rows;
+    try{rows=await tryQuery(HIST_COLS_BASE+',awb_cauta,awb_lot',[...baseOr,`awb_cauta.ilike.${likeDig||like}`]);}
+    catch(e){rows=await tryQuery(HIST_COLS_BASE,baseOr);}
     if(seq!==searchHistSeq)return;
-    // Nu dublăm ce apare deja în rezultatul de mai sus (coada activă, din ORDERS) — doar ce e STRICT
-    // în afara ei (vechi, fără staff_trimis_at, sau mai vechi decât pragul de performanță).
-    const localIds=new Set(ORDERS.flatMap(o=>o.lines.map(l=>l.id)));
-    const extra=rows.filter(r=>!localIds.has(r.id));
-    if(!extra.length){histBox.innerHTML='';return;}
-    histBox.innerHTML=`<div style="font-size:15px;color:var(--t3);font-weight:700;margin:16px 0 8px">📜 Din istoric (în afara cozii active)</div>`+extra.map(r=>{
-      const statusChip=r.anulata?'<span style="color:var(--rd)">🚫 Anulată</span>'
-        :r.impachetat?`<span style="color:var(--gr)">✓ Împachetată${r.impachetat_at?' · '+esc(new Date(r.impachetat_at).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric'})):''}</span>`
+    // grupăm pe comandă (platformă + număr) și aplicăm aceeași potrivire ȘI ca în coada încărcată
+    const groups=new Map();
+    rows.forEach(r=>{const k=`platforma:${r.platforma||'necunoscut'}:${r.comanda_id||('_row'+r.id)}`;(groups.get(k)||groups.set(k,[]).get(k)).push(r);});
+    const localKeys=new Set(ORDERS.map(o=>o.key));
+    const found=[];
+    groups.forEach((ls,k)=>{
+      if(localKeys.has(k))return;                                   // deja în rezultatul de sus
+      const r0=ls[0];
+      const po={comandaId:r0.comanda_id||'',clientNume:r0.client_nume||'',awb:(ls.find(x=>x.awb)||{}).awb||'',awbCourier:(ls.find(x=>x.awb_courier)||{}).awb_courier||'',platforma:r0.platforma,awbLot:(ls.find(x=>x.awb_lot)||{}).awb_lot||'',lines:ls};
+      const d=matchDetailOrder(po,q);
+      if(d.score>0)found.push({po,ls,d});
+    });
+    found.sort((a,b)=>b.d.score-a.d.score);
+    if(!found.length){histBox.innerHTML='';return;}
+    histBox.innerHTML=`<div style="font-size:15px;color:var(--t3);font-weight:700;margin:16px 0 8px">📜 Din istoric (în afara cozii active)</div>`+found.slice(0,30).map(({po,ls,d})=>{
+      const allPacked=ls.every(r=>r.impachetat),anyCanceled=ls.every(r=>r.anulata);
+      const lastPacked=ls.map(r=>r.impachetat_at).filter(Boolean).sort().slice(-1)[0];
+      const statusChip=anyCanceled?'<span style="color:var(--rd)">🚫 Anulată</span>'
+        :allPacked?`<span style="color:var(--gr)">✓ Împachetată${lastPacked?' · '+esc(new Date(lastPacked).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric'})):''}</span>`
         :'<span style="color:var(--t3)">Neîmpachetată — nu e în coada activă</span>';
-      const dt=r.created_at?new Date(r.created_at).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric'}):(r.data||'');
-      const meta=[r.client_nume,r.produs_nume||r.titlu_extern,r.awb?('AWB '+r.awb+(r.awb_courier?' ('+r.awb_courier+')':'')):''].filter(Boolean).join(' · ');
+      const r0=ls[0],dt=r0.created_at?new Date(r0.created_at).toLocaleDateString('ro-RO',{day:'2-digit',month:'2-digit',year:'numeric'}):(r0.data||'');
+      const extra=awbsOfLines(ls).filter(a=>a!==po.awb);
+      const meta=[po.clientNume,ls.map(r=>r.produs_nume||r.titlu_extern).filter(Boolean).join(', '),po.awb?('AWB '+po.awb+(po.awbCourier?' ('+po.awbCourier+')':'')):'',extra.length?('+ '+extra.join(', ')):'',po.awbLot?('colet '+po.awbLot):''].filter(Boolean).join(' · ');
       return`<div class="list-item">
         <div class="list-item-th-ph">📦</div>
         <div class="list-item-main">
-          <div class="list-item-nm">${esc(platformLabel(r.platforma))} ${r.comanda_id?'· #'+esc(r.comanda_id):''} <span style="color:var(--t3);font-weight:400">· ${esc(dt)}</span></div>
+          <div class="list-item-nm">${esc(platformLabel(po.platforma))} ${po.comandaId?'· #'+esc(po.comandaId):''} <span style="color:var(--t3);font-weight:400">· ${esc(dt)}</span></div>
           <div class="list-item-meta">${esc(meta)}</div>
+          <div class="list-item-via">${d.vias.map(esc).join(' · ')}</div>
         </div>
         <div class="list-item-time">${statusChip}</div>
       </div>`;
@@ -2033,37 +2219,33 @@ function onSearchPageInput(){
   clearTimeout(searchHistTimer);
   const seq=++searchHistSeq;
   const histBox=document.getElementById('search-page-hist');
-  if(q.length>=3)searchHistTimer=setTimeout(()=>searchOrderHistoryLive(q,seq),400);
+  if(q.length>=3)searchHistTimer=setTimeout(()=>searchOrderHistoryLive(q,seq),250);
   else if(histBox)histBox.innerHTML='';
   if(!q){box.innerHTML='';return;}
-  // Sortate după relevanță (matchScoreOrder — comandă/AWB exact sau la început de text > client >
-  // curier > produs/cod), iar la scor egal, cele mai recente primele — „chiar dacă sunt noi, de azi
-  // sau de zilele trecute" înseamnă că trebuie găsite, dar cele proaspete sunt cel mai probabil ce
-  // caută omul chiar acum.
-  const hits=ORDERS.map(o=>({o,score:matchScoreOrder(o,q)})).filter(x=>x.score>0)
-    .sort((a,b)=>b.score-a.score||String(b.o.sortAt||'').localeCompare(String(a.o.sortAt||'')))
-    .map(x=>x.o);
-  if(!hits.length){box.innerHTML=`<div class="empty"><div class="big">🔍</div><div>Nicio comandă găsită.</div></div>`;return;}
-  box.innerHTML=hits.map(o=>{
+  // Sortate după relevanță (scor), iar la scor egal, cele mai recente primele.
+  const hits=ORDERS.map(o=>({o,d:matchDetailOrder(o,q)})).filter(x=>x.d.score>0)
+    .sort((a,b)=>b.d.score-a.d.score||String(b.o.sortAt||'').localeCompare(String(a.o.sortAt||'')));
+  if(!hits.length){box.innerHTML=`<div class="empty"><div class="big">🔍</div><div>Nicio comandă în coada încărcată${q.length>=3?' — caut și în istoric…':'.'}</div></div>`;return;}
+  const SHOW=60;
+  box.innerHTML=hits.slice(0,SHOW).map(({o,d})=>{
     const l=o.lines[0];
     const p=findProdus(l.produs_id);
     const img=p&&p.img?`<img class="list-item-th" src="${esc(imgSrc(p.img))}" onerror="this.outerHTML='<div class=&quot;list-item-th-ph&quot;>📦</div>'">`:`<div class="list-item-th-ph">📦</div>`;
     const plLabel=platformLabel(o.platforma);
     const nm=o.lines.map(x=>x.produs_nume).filter(Boolean).join(', ');
-    const status=o.finalized?'✓ Finalizată':o.waiting?'⏸ În așteptare':'📦 De împachetat';
-    // Numele clientului lipsea complet din rezultat (doar produs + AWB) — greu de confirmat că ai găsit
-    // comanda corectă atunci când cauți exact după nume sau curier (acum căutabile, vezi
-    // matchScoreOrder), fără să vezi de fapt CE s-a potrivit.
-    const metaParts=[o.clientNume,nm,o.awb?`AWB ${o.awb}${o.awbCourier?' ('+o.awbCourier+')':''}`:''].filter(Boolean);
+    const status=o.finalized?'✓ Finalizată':o.waiting?'⏸ În așteptare':o.awaitingAwb?'⏳ Așteaptă AWB':'📦 De împachetat';
+    const extra=awbsOfLines(o.lines).filter(a=>a!==o.awb);
+    const metaParts=[o.clientNume,nm,o.awb?`AWB ${o.awb}${o.awbCourier?' ('+o.awbCourier+')':''}`:'',extra.length?('+ '+extra.join(', ')):'',o.awbLot?(/^Nr\./.test(o.awbLot)?o.awbLot:'colet '+o.awbLot):''].filter(Boolean);
     return`<div class="list-item" onclick="jumpToOrder('${o.key}')">
       ${img}
       <div class="list-item-main">
-        <div class="list-item-nm">${plLabel} ${o.comandaId?'· #'+esc(o.comandaId):''}</div>
+        <div class="list-item-nm">${plLabel} ${o.comandaId?'· #'+esc(o.comandaId):''}${o.urgent?' <span class="urg-chip">🚨 URGENT</span>':''}${o.incomplete?' <span class="inc-chip">⛔ incompletă</span>':''}</div>
         <div class="list-item-meta">${esc(metaParts.join(' · '))}</div>
+        <div class="list-item-via">${d.vias.map(esc).join(' · ')}</div>
       </div>
       <div class="list-item-time">${status}</div>
     </div>`;
-  }).join('');
+  }).join('')+(hits.length>SHOW?`<div class="search-more">… încă ${hits.length-SHOW} rezultate — scrie mai mult ca să restrângi</div>`:'');
 }
 function jumpToOrder(key){
   const ord=ORDERS.find(o=>o.key===key);if(!ord)return;
@@ -2114,6 +2296,7 @@ async function openScanner(){
   }
 }
 function closeScanner(){
+  if(scanMode&&!lastScanValue)scanMode='';
   scannerOpen=false;
   document.getElementById('scan-overlay').classList.remove('on');
   try{zxingReader?.reset();}catch(e){}
@@ -2126,6 +2309,7 @@ function handleScanResult(text){
   if(text===lastScanValue&&now-lastScanAt<2000)return;
   lastScanValue=text;lastScanAt=now;
   closeScanner();
+  if(scanMode==='urgent'){scanMode='';urgentFromScan(text);return;}
   const input=document.getElementById('search-page-input');
   if(input){input.value=text;onSearchPageInput();}
   const hits=ORDERS.filter(o=>matchOrder(o,text));
@@ -2487,6 +2671,7 @@ async function refreshData(){
       sb('GET','comenzi_furnizor?select=*&finalizat=eq.false&order=created_at.asc').catch(e=>{console.warn('comenzi_furnizor indisponibil (rulează migration_comenzi_furnizor.sql):',e);return FURNIZOR;})
     ]);
     COMENZI=comRows;JURNAL=jurnalRows;PREPACK=prepackRows;STAFFMSG=msgRows;FURNIZOR=furnizorRows;
+    await loadIncomplete();
     document.getElementById('sync-dot').className='sync-dot ok';
     computeOrders();lastBoundaryMs=queueBoundary();
     renderMain();
@@ -2588,6 +2773,7 @@ async function load(){
     PREPACK=prepackRows;
     STAFFMSG=msgRows;
     FURNIZOR=furnizorRows;
+    await loadIncomplete();
     try{
       JURNAL=await sbComenzi(staffJurnalUrl());
     }catch(e){

@@ -1,0 +1,4 @@
+-- Update #775 — Staff: numărul din lot de pe etichetă (ex. „7/43") + textul de căutare citit de pe etichetă (nume destinatar, telefon).
+-- Rulează o dată în Supabase → SQL Editor. Idempotent. Până atunci aplicația merge ca înainte (câmpurile noi se omit automat).
+alter table platforma_comenzi add column if not exists awb_lot text;     -- ex. „7/43" = coletul 7 din 43 din lotul curierului
+alter table platforma_comenzi add column if not exists awb_cauta text;   -- ex. „ion popescu | 0712345678 | *2055" — doar pentru Căutarea din Staff
