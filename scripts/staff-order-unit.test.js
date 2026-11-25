@@ -267,6 +267,43 @@ console.log('\n— Căutare în secțiunea „Asociază AWB-uri” (Admin) —')
   eq('căutarea principală (Comenzi Platforme) cuprinde acum AWB suplimentar, colet, telefon și curier',/row&&row\.awbExtra\|\|\[\]\)\.join\(' '\),\(row&&row\.awbLot\)\|\|it\.awbLot,lab/.test(adm),true);
 }
 
+console.log('\n— Verificare loturi AWB: 1..M, AWB fără comandă, lipsuri —');
+{
+  const romaniaDayOf=iso=>String(iso||'').slice(0,10);
+  const api=new Function('romaniaDayOf',['awbLotParse','awbLotBoard','awbLotRanges'].map(n=>grabFrom(adm,n)).join('\n')+';return{awbLotParse,awbLotBoard,awbLotRanges}')(romaniaDayOf);
+  eq('„29/30” → {n:29,m:30}; „1/1”, „31/30”, „abc”, gol → null',[api.awbLotParse('29/30'),api.awbLotParse('1/1'),api.awbLotParse('31/30'),api.awbLotParse('abc'),api.awbLotParse('')],[{n:29,m:30},null,null,null,null]);
+  const T='2026-11-25T08:00:00Z';
+  const ord=(n,m,extra)=>({id:100+n,comandaId:'C'+n,platforma:'emag',awbLot:n+'/'+m,staffTrimisAt:T,staffInclusAt:T,createdAt:T,anulata:false,awb:'AWB'+n,clientNume:'Client '+n,...extra});
+  // lot de 30: lipsesc 7 și 12 (nicio etichetă), 29 are etichetă dar nu comandă, 15 anulată, 20 netrimisă în Staff
+  const orders=[];for(let n=1;n<=30;n++)if(![7,12,29,15,20].includes(n))orders.push(ord(n,30));
+  orders.push(ord(15,30,{anulata:true}),ord(20,30,{staffTrimisAt:null,createdAt:T}));
+  const issues=[{id:9,lot:'29/30',awb:'1214000029',courier:'Cargus',created_at:T,reason:'Comanda nu există în Comenzi Platforme',source_file:'029_x.pdf'}];
+  const [L]=api.awbLotBoard(orders,issues,{},['2026-11-25']);
+  eq('un singur lot de 30 de colete, cu 30 de celule 1..30',[L.m,L.cells.length,L.cells[0].n,L.cells[29].n],[30,30,1,30]);
+  eq('stările: 29 = AWB fără comandă; 15 = anulată; 20 = netrimisă; 7 și 12 = lipsă; restul ✓',
+    [L.cells[28].state,L.cells[14].state,L.cells[19].state,L.cells[6].state,L.cells[11].state,L.cells[0].state],['orphan','cancelled','notsent','missing','missing','ok']);
+  eq('contoare: 25 ✓, 1 fără comandă, 1 anulată, 1 netrimisă, 2 lipsă',L.cnt,{ok:25,notsent:1,cancelled:1,orphan:1,missing:2,ack:0});
+  eq('problemele sunt exact cele 5 numere (7, 12, 15, 20, 29)',L.problems.map(c=>c.n),[7,12,15,20,29]);
+  eq('„AWB 29 există și nu e comandă” poartă AWB-ul, curierul și motivul',[L.problems[4].issue.awb,L.problems[4].issue.courier,L.problems[4].issue.reason],['1214000029','Cargus','Comanda nu există în Comenzi Platforme']);
+  // confirmări: 7 = „nu există”, 29 = anulat ca greșeală (eroarea e deja rezolvată → nu mai e în issues)
+  const [L2]=api.awbLotBoard(orders,[],{'2026-11-25|30|7':{at:T,state:'nu_exista'},'2026-11-25|30|29':{at:T,state:'anulat',awb:'1214000029'}},['2026-11-25']);
+  eq('după confirmare/anulare, 7 și 29 devin „confirmate” și nu mai sunt probleme',[L2.cells[6].state,L2.cells[28].state,L2.problems.map(c=>c.n)],['ack','ack',[12,15,20]]);
+  eq('o confirmare NU ascunde o comandă reală apărută ulterior pe același număr',api.awbLotBoard([...orders,ord(7,30)],[],{'2026-11-25|30|7':{at:T}},['2026-11-25'])[0].cells[6].state,'ok');
+  eq('două loturi în aceeași zi (14 și 43) rămân separate; zile în afara ferestrei nu intră',api.awbLotBoard([ord(1,14),ord(2,14),ord(1,43),{...ord(1,50),staffTrimisAt:'2026-11-01T08:00:00Z',staffInclusAt:'2026-11-01T08:00:00Z',createdAt:'2026-11-01T08:00:00Z'}],[],{},['2026-11-25']).map(l=>l.m),[43,14]);
+  eq('o comandă cu mai multe linii (același AWB/lot) se numără o singură dată',api.awbLotBoard([ord(3,10),ord(3,10,{id:999})],[],{},['2026-11-25'])[0].cnt.ok,1);
+  eq('comenzile fără lot (vechi) și loturile necitite nu creează nimic',api.awbLotBoard([{comandaId:'X',platforma:'emag',awbLot:'',staffTrimisAt:T}],[{id:1,lot:'',created_at:T}],{},['2026-11-25']).length,0);
+  eq('intervale: 1,2,3,5,8,9,31 → „1–3, 5, 8–9, 31”',api.awbLotRanges([1,2,3,5,8,9,31]),'1–3, 5, 8–9, 31');
+  const part=api.awbLotBoard([ord(1,44),ord(2,44),ord(3,44)],[],{},['2026-11-25'])[0];
+  eq('lot cu puține numere înregistrate (3 din 44) → acoperire scăzută, lipsurile nu sunt sigure',[part.known,part.lowCoverage],[3,true]);
+  eq('lot cu aproape toate numerele (25 din 30) → acoperire bună',api.awbLotBoard(orders,issues,{},['2026-11-25'])[0].lowCoverage,false);
+  eq('ziua lotului = momentul includerii: o comandă readusă azi în coadă (staffTrimisAt nou) rămâne în lotul zilei ei',
+    api.awbLotBoard([ord(1,43,{staffInclusAt:'2026-11-24T09:00:00Z',staffTrimisAt:'2026-11-25T09:00:00Z'})],[],{},['2026-11-24'])[0].cells[0].state,'ok');
+  eq('antetul nu zice „✓ toate au comandă” când lotul are acoperire scăzută (mesaj „nu se pot verifica încă”)',/unsure\?`<span class="pcx-bl-sub">ℹ/.test(adm),true);
+  eq('integrare: erorile de asociere păstrează lotul (persistAwbErrors cu fallback dacă lipsește coloana)',/lot:p\.lot\|\|null\};/.test(adm)&&/Could not find the 'lot' column/.test(adm),true);
+  eq('integrare: asocierea manuală dintr-o eroare scrie lotul pe comandă',/\.\.\.\(x\.lot\?\{awb_lot:x\.lot\}:\{\}\)/.test(adm),true);
+  eq('integrare: banda se randează odată cu celelalte și are punct de montare',/renderPcxLotBoard\(\);\s*\n\s*pcxRenderDeck\(\);/.test(adm)&&/id="pcx-lot-board"/.test(adm),true);
+}
+
 console.log('\n— Ordinea filelor din Staff —');
 {
   const tabs=[...stf.matchAll(/class="tab-btn[^"]*" data-tab="(\w+)"/g)].map(m=>m[1]);
