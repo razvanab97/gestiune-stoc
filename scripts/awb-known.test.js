@@ -86,6 +86,7 @@ sender AB HOMES
   eq('…și DUPĂ AI, pentru un cod citit greșit drept AWB',(src.match(/awbResolveByKnownAwb\(awbTasks,t=>!t\.p\|\|!awbLooksPlausible\(t\.p\.awb,t\.p\.courier\)\)/g)||[]).length,2);
   eq('AWB suplimentar: comanda neîmpachetată e readusă în coada de azi (staff_trimis_at)',/pcomAddExtraAwbIfNeeded\(p\.comandaId,platforma,p\.awb\)\)\{[\s\S]{0,700}staff_trimis_at:nowIso/.test(src),true);
   eq('etichetă fără „N/M” nu mai scrie awb_lot:null peste numărul salvat (ambele PATCH-uri)',(src.match(/awb_lot:p\.lot\|\|null/g)||[]).length,0);
+  eq('#784: rând existent și împachetat într-o zi anterioară + AWB pe linie + trimitere în Staff → pcomReopenPackedForAwb',/inserted=await dbGet\(dupQ\);[\s\S]{0,400}if\(sendToStaff&&it\.awb&&\(inserted\|\|\[\]\)\.some\(r=>r\.impachetat\)\)\{[\s\S]{0,300}pcomReopenPackedForAwb\(\{awb:it\.awb,comandaId:it\.comandaId/.test(src),true);
   console.log(failed?`\nESUATE: ${failed}`:'\nTOATE TESTELE AWB CUNOSCUT AU TRECUT');
   process.exit(failed?1:0);
 })().catch(e=>{console.error(e);process.exit(1);});
