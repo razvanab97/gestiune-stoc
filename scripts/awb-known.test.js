@@ -86,7 +86,74 @@ sender AB HOMES
   eq('…și DUPĂ AI, pentru un cod citit greșit drept AWB',(src.match(/awbResolveByKnownAwb\(awbTasks,t=>!t\.p\|\|!awbLooksPlausible\(t\.p\.awb,t\.p\.courier\)\)/g)||[]).length,2);
   eq('AWB suplimentar: comanda neîmpachetată e readusă în coada de azi (staff_trimis_at)',/pcomAddExtraAwbIfNeeded\(p\.comandaId,platforma,p\.awb\)\)\{[\s\S]{0,700}staff_trimis_at:nowIso/.test(src),true);
   eq('etichetă fără „N/M” nu mai scrie awb_lot:null peste numărul salvat (ambele PATCH-uri)',(src.match(/awb_lot:p\.lot\|\|null/g)||[]).length,0);
-  eq('#784: rând existent și împachetat într-o zi anterioară + AWB pe linie + trimitere în Staff → pcomReopenPackedForAwb',/inserted=await dbGet\(dupQ\);[\s\S]{0,400}if\(sendToStaff&&it\.awb&&\(inserted\|\|\[\]\)\.some\(r=>r\.impachetat\)\)\{[\s\S]{0,300}pcomReopenPackedForAwb\(\{awb:it\.awb,comandaId:it\.comandaId/.test(src),true);
+
+  console.log('\n— #785: AWB-ul încărcat devine AWB-ul comenzii și comanda se reactivează —');
+  {
+    const mkA=(rows)=>{
+      const log={patches:[]};
+      const env={PCOM:[],awbReopenedPacked:0,romaniaDayOf:iso=>String(iso||'').slice(0,10),
+        dbGet:async()=>rows,patchAwbWithSource:async(f,b)=>{log.patches.push({f,b});}};
+      const keys=Object.keys(env);
+      const code=['awbNorm','pcomActivateWithAwb'].map(grabFn).join('\n')+';return{pcomActivateWithAwb,get reopened(){return awbReopenedPacked;},PCOM}';
+      const api=new Function(...keys,code)(...keys.map(k=>env[k]));
+      return{api,log,env};
+    };
+    const today=new Date().toISOString(),yesterday=new Date(Date.now()-86400000*1.2).toISOString();
+    const P=(awb,o={})=>({awb,comandaId:'1028080170',file:'014_x.pdf',page:1,courier:'Sameday',...o});
+    {
+      const {api,log}=mkA([{id:1,awb:'OLD1111111111',awb_extra:[],impachetat:false,impachetat_at:null}]);
+      const r=await api.pcomActivateWithAwb(P('NEW2222222222'),'emag');
+      const b=log.patches[0].b;
+      eq('comandă cu alt AWB, neîmpachetată: AWB-ul nou devine principal, cel vechi rămâne în awb_extra, comanda intră în coadă',[r.found,r.reactivated,r.replaced,b.awb,b.awb_extra,b.impachetat,!!b.staff_trimis_at,b.staff_finalizat_at],[true,true,true,'NEW2222222222',['OLD1111111111'],false,true,null]);
+    }
+    {
+      const {api,log}=mkA([{id:1,awb:'AAA1111111111',awb_extra:['BBB2222222222'],impachetat:false}]);
+      await api.pcomActivateWithAwb(P('BBB2222222222'),'emag');
+      eq('se încarcă eticheta unui AWB suplimentar → devine principal, principalul de până atunci trece în awb_extra (schimb, nu pierdere)',[log.patches[0].b.awb,log.patches[0].b.awb_extra],['BBB2222222222',['AAA1111111111']]);
+    }
+    {
+      const {api,log,env}=mkA([{id:1,awb:'OLD1111111111',awb_extra:[],impachetat:true,impachetat_at:yesterday}]);
+      const r=await api.pcomActivateWithAwb(P('NEW2222222222'),'emag');
+      eq('împachetată ieri, alt AWB → reactivată (impachetat=false, impachetat_at/staff_finalizat_at șterse)',[r.reactivated,log.patches[0].b.impachetat,log.patches[0].b.impachetat_at,log.patches[0].b.staff_finalizat_at,api.reopened],[true,false,null,null,1]);
+    }
+    {
+      const {api,log}=mkA([{id:1,awb:'SAME111111111',awb_extra:[],impachetat:true,impachetat_at:yesterday}]);
+      const r=await api.pcomActivateWithAwb(P('SAME111111111'),'emag');
+      eq('împachetată ieri, ACELAȘI AWB citit azi → reactivată',[r.reactivated,log.patches[0].b.impachetat],[true,false]);
+    }
+    {
+      const {api,log}=mkA([{id:1,awb:'SAME111111111',awb_extra:[],impachetat:true,impachetat_at:today}]);
+      const r=await api.pcomActivateWithAwb(P('SAME111111111',{lot:'3/21'}),'emag');
+      eq('împachetată AZI cu același AWB (același PDF citit de 2 ori) → NU se readuce la împachetat; se actualizează doar sursa/lotul',[r.reactivated,'impachetat' in log.patches[0].b,log.patches[0].b.awb_lot,'staff_trimis_at' in log.patches[0].b],[false,false,'3/21',false]);
+    }
+    {
+      const {api,log}=mkA([{id:1,awb:'OLD1111111111',awb_extra:[],impachetat:true,impachetat_at:today}]);
+      const r=await api.pcomActivateWithAwb(P('NEW2222222222'),'emag');
+      eq('împachetată azi, dar cu ALT AWB (colet nou) → reactivată',[r.reactivated,log.patches[0].b.awb,log.patches[0].b.awb_extra],[true,'NEW2222222222',['OLD1111111111']]);
+    }
+    {
+      const {api}=mkA([]);
+      const r=await api.pcomActivateWithAwb(P('NEW2222222222'),'emag');
+      eq('nicio comandă în bază → found=false (fluxul vechi continuă)',[r.found,r.reactivated],[false,false]);
+    }
+    {
+      const {api,log}=mkA([{id:1,awb:'OLD1111111111',awb_extra:[],impachetat:false}]);
+      await api.pcomActivateWithAwb(P('NEW2222222222'),'emag');
+      eq('fără lot/căutare pe etichetă → nu se scrie awb_lot/awb_cauta (nu șterge ce era)',['awb_lot' in log.patches[0].b,'awb_cauta' in log.patches[0].b],[false,false]);
+    }
+    {
+      const {api,log}=mkA([{id:1,awb:'PLACEHOLDER1',awb_extra:['EXTRA11111111'],impachetat:false},{id:2,awb:'PLACEHOLDER1',awb_extra:['EXTRA11111111'],impachetat:false}]);
+      await api.pcomActivateWithAwb(P('NEW2222222222'),'emag');
+      eq('comandă cu 2 linii: AWB-urile vechi se adună o singură dată în awb_extra',log.patches[0].b.awb_extra,['PLACEHOLDER1','EXTRA11111111']);
+    }
+  }
+
+  console.log('\n— #785: în Staff doar cu AWB sau trimitere explicită —');
+  eq('„Aplică import” nu mai trimite singur în Staff: rândul nou primește staff_trimis_at doar dacă are AWB',/staffTrimisAt:it\.awb\?new Date\(\)\.toISOString\(\):null,termenExpediere:it\.termenExpediere\}\);   \/\/ #785/.test(src),true);
+  eq('…iar la scăderea stocului nu se mai scrie staff_trimis_at pe o comandă fără AWB real',/if\(ex2&&pcomHasRealAwb\(ex2\)&&!ex2\.staffTrimisAt&&!ex2\.impachetat\)\{\s*\n\s*await dbPatch\(`platforma_comenzi\?id=eq\.\$\{markAppliedId\}&staff_trimis_at=is\.null`/.test(src),true);
+  eq('etichetă citită (nu din arhivă) → pcomActivateWithAwb înaintea vechii logici (AWB suplimentar / redeschidere)',/if\(\(p\.file\|\|p\._blob\)&&!awbFilesFromArchive\)\{[\s\S]{0,260}const act=await pcomActivateWithAwb\(p,platforma\);/.test(src),true);
+  eq('rând existent în bază + AWB citit acum (marcaj _awbLoadedAt) → pcomActivateWithAwb; fără marcaj, nimic (linii învechite nu redeschid colete expediate)',/if\(sendToStaff&&it\.awb&&it\._awbLoadedAt&&\(inserted\|\|\[\]\)\.length\)\{[\s\S]{0,420}pcomActivateWithAwb\(/.test(src),true);
+  eq('asocierea manuală (picker, clopoțel) folosește aceeași activare',/const act=x\.awb\?await pcomActivateWithAwb\(\{awb:x\.awb,comandaId:o\.comandaId/.test(src),true);
   console.log(failed?`\nESUATE: ${failed}`:'\nTOATE TESTELE AWB CUNOSCUT AU TRECUT');
   process.exit(failed?1:0);
 })().catch(e=>{console.error(e);process.exit(1);});

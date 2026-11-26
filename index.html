@@ -5709,6 +5709,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:785,text:'Regula Staff, cerută direct: „totul să se bazeze pe AWB-uri + dacă apăsăm noi separat ca ceva să apară în Staff, în rest nu trebuie să apară nimic” și „tot ce are AWB să fie reactivat și asociat cu AWB-ul încărcat, chiar dacă mai avea un AWB înainte”. (1) AWB-ul citit (din etichetă sau ales manual) devine AWB-ul comenzii; cel vechi — principalul de până atunci și cele suplimentare — se păstrează în awb_extra, ca istoric, nu se pierde (schimb: dacă încarci eticheta unui AWB suplimentar, el devine principal, iar principalul trece în suplimentare). Până acum, la o comandă cu alt AWB, cel nou ajungea doar „suplimentar”, iar comanda rămânea unde era (în așteptare / împachetată). (2) Comanda se reactivează: redevine neîmpachetată, i se șterge finalizarea și intră în coada de azi din Staff — indiferent dacă era în așteptare, împachetată sau avea alt AWB. Singura excepție: aceeași etichetă citită a doua oară pe o comandă împachetată AZI cu același AWB (același PDF citit de 2 ori) — se actualizează doar sursa/lotul, nu se readuce la împachetat. Pentru rândurile deja existente în bază și legate de linii din ciornă, reactivarea se face doar când eticheta a fost citită acum (marcaj pe linie), ca linii învechite din ciornă să nu redeschidă colete deja expediate. (3) „Aplică import” (inclusiv rutina de la 22:00) NU mai trimite singur comenzile în Staff: scăderea stocului nu e un semnal de împachetare; în Staff intră doar comenzile cu AWB asociat sau cele trimise de tine (✓ Inclus / Trimite în Staff); vânzările directe făcute de tine rămân ca înainte. Verificat pe cele 21 de etichete reale: împachetatele azi cu același AWB nu se readuc; comenzile cu 2 etichete (13/21 și 14/21) păstrează ambele AWB-uri. Test: node scripts/awb-known.test.js.',date:'2026-11-26'},
   {n:784,text:'Comenzi cu AWB trimise în Staff — a mai rămas un caz, găsit la verificarea celor 8 AWB-uri „fără Staff” rămase din ciornă: 7 erau de fapt deja în bază și deja împachetate (ciorna nu le legase de rândurile din bază), iar una, 516658254 (comandă din septembrie, etichetă citită ieri, lotul 29/44), era o comandă veche împachetată pe care ciorna o lega de rândul vechi fără s-o readucă la împachetat. Acum, când „Trimite în Staff”/AWB asociat dă peste un rând deja existent și împachetat într-o zi anterioară, comanda se redeschide pentru împachetat (aceeași regulă și aceeași protecție ca la etichetele citite: împachetată AZI, cu același AWB, nu se redeschide). Comanda 516658254 a fost readusă acum în Staff. Test: node scripts/awb-known.test.js.',date:'2026-11-26'},
   {n:783,text:'AWB-uri — eticheta fără număr de comandă nu mai rămâne „format nerecunoscut”, cerut direct: „nu găsește comanda de pe Trendyol asociată acestui AWB, de ce? rezolvă”. Cauza (găsită pe eticheta reală, ACS/DPD Grecia, pagina 6 din Unknown-99.pdf): eticheta n-are numărul comenzii, iar AI-ul citea codul de client „2ΘΣ232960” drept AWB, cod respins ca implauzibil — deși AWB-ul real (2876970014) era DEJA salvat pe comanda 11824598207 (împachetată ieri). Acum, înainte de AI (și după el, când a citit un cod greșit), se caută pe pagină orice AWB deja cunoscut (awb + awb_extra ale comenzilor, din memorie și din bază; minim 10 caractere; AWB-urile scrise cu spații, ca „8 140 974 389 7”, se potrivesc); dacă pagina conține AWB-ul unei SINGURE comenzi, eticheta e a ei — și, fiind citită azi, o readuce la împachetat în Staff (comanda deja împachetată într-o zi anterioară se redeschide). Plus: (1) o comandă cu AWB suplimentar nou (al doilea colet) rămâne/intră și ea în coada de azi din Staff, nu mai stă „În așteptare” (ex. 1028080170, etichetele 13/21 și 14/21); (2) o etichetă fără „N/M” nu mai șterge numărul de lot deja salvat pe comandă. Reprodus pe cele 21 de etichete de azi (15 rămase „Neincluse” în Admin, 6 deja în Staff): cu codul nou toate 21 ajung în Staff — la o reîncărcare a Admin-ului, comenzile cu AWB rămase necomise se trimit singure în Staff (Update #781). Test: node scripts/awb-known.test.js.',date:'2026-11-26'},
   {n:782,text:'Staff — rând sus cu curierii care ridică și câte AWB-uri are fiecare azi, cerut direct: „Cargus - X, FAN Courier - X, DPD - X, Sameday - X; doar aceștia ridică, unele se combină cu FAN, DPD sau Sameday”. Curierii se contopesc: easybox / eMAG Courier / eMAG Ungaria → Sameday; BoxNow, ACS, ELTA și „FAN Courier / BoxNow” → FAN; „ACS / DPD GR” → DPD; ce nu ridică niciunul (GLS, Vinted fără curier) apare separat ca „Alt curier”, ca totalul să se adune. Se numără AWB-urile coletelor de azi (inclusiv AWB-urile suplimentare), cu „gata/total” = câte sunt deja împachetate; „În așteptare” nu intră. Apăsarea pe curier rămâne „a venit” (✓ ora). Test: node scripts/staff-couriers.test.js.',date:'2026-11-25'},
@@ -22861,19 +22862,29 @@ async function commitPcomLine(idx,sendToStaff=true){
       if(/duplicate key|already exists|23505/i.test(String(errInsert.message||errInsert))){
         const dupQ=`platforma_comenzi?platforma=eq.${encodeURIComponent(platforma)}&comanda_id=eq.${encodeURIComponent(it.comandaId||'')}&pnk=eq.${encodeURIComponent(it.pnk||'')}&select=*`;
         inserted=await dbGet(dupQ);
-        // #784: rândul există deja în bază, dar împachetat într-o zi anterioară, iar linia din ciornă are un AWB nou/citit acum → comanda trebuie readusă la împachetat
-        // (cazul 516658254: etichetă citită pe o comandă veche; ciorna n-o știa comisă, iar „trimite în Staff” o lega de rândul vechi fără s-o redeschidă)
-        if(sendToStaff&&it.awb&&(inserted||[]).some(r=>r.impachetat)){
+        // #784/#785: rândul există deja în bază, iar pe linie e un AWB CITIT DE CURÂND dintr-o etichetă (_awbLoadedAt, pus de applyOneAwbMatch) → comanda se reactivează cu acel AWB
+        // (cel vechi rămâne în awb_extra), chiar dacă era împachetată sau avea alt AWB. Fără marcajul (linie veche din ciornă, trimitere automată) nu se atinge nimic —
+        // altfel o linie învechită ar redeschide colete deja expediate.
+        if(sendToStaff&&it.awb&&it._awbLoadedAt&&(inserted||[]).length){
           try{
-            if(await pcomReopenPackedForAwb({awb:it.awb,comandaId:it.comandaId,file:it.awbSourceFile||null,page:it.awbSourcePage||null,courier:it.awbCourier||''},platforma))inserted=await dbGet(dupQ);
-          }catch(eRe){console.warn('Nu am putut readuce la împachetat comanda existentă:',eRe);}
+            const act=await pcomActivateWithAwb({awb:it.awb,comandaId:it.comandaId,file:it.awbSourceFile||null,page:it.awbSourcePage||null,courier:it.awbCourier||'',lot:it.awbLot||'',cauta:it.awbCauta||''},platforma);
+            if(act.found)inserted=await dbGet(dupQ);
+          }catch(eRe){console.warn('Nu am putut reactiva comanda existentă:',eRe);}
         }
       }else throw errInsert;
     }
     if(inserted?.[0]){
       it._committedId=inserted[0].id;
       PCOM.unshift(dbToPcom(inserted[0]));
+      // #785: AWB-urile vechi ale liniei (suprascrise de un AWB nou, ex. 2 etichete pentru aceeași comandă) se păstrează în awb_extra
+      if(Array.isArray(it.awbExtra)&&it.awbExtra.length){
+        try{
+          await dbPatch(`platforma_comenzi?comanda_id=eq.${encodeURIComponent(it.comandaId||'')}&platforma=eq.${encodeURIComponent(platforma)}`,{awb_extra:it.awbExtra});
+          PCOM.filter(o=>o.comandaId===it.comandaId&&o.platforma===platforma).forEach(o=>{o.awbExtra=[...it.awbExtra];});
+        }catch(eEx){console.warn('Nu am putut păstra AWB-urile vechi (awb_extra):',eEx);}
+      }
     }
+    delete it._awbLoadedAt;
     // Vinted nu are AWB clasic la creare (vine separat, din eticheta de expediere) — dacă linia are deja
     // un cod (introdus manual sau extras dintr-o captură a etichetei), îl scriem direct acum. `it.awb`
     // nu există niciodată pe liniile din import XLSX eMAG/Trendyol (setat doar mai târziu, prin Asociază
@@ -27455,7 +27466,7 @@ async function applyPcomImport(){
             clientNume:it.clientNume,titluExtern:it.titluExtern,produsId:p.id,produsNume:p.name,cantitate:it.cantitate,awb:it.awb,
             pretFaraTva:it.pretFaraTva,pretTotalCuTva:it.pretTotalCuTva,moneda:it.moneda,pretTotalCuTvaRon:totalRon,
             profitEstimat:profit,marjaEstimata:margin,importBatchId:pcImpBatchIdFor(platforma),
-            staffTrimisAt:new Date().toISOString(),termenExpediere:it.termenExpediere});
+            staffTrimisAt:it.awb?new Date().toISOString():null,termenExpediere:it.termenExpediere});   // #785: în Staff doar cu AWB (sau trimitere explicită); „Aplică import” singur nu mai trimite nimic
           row.efecte_aplicate=true;
           let inserted;
           try{
@@ -27534,9 +27545,14 @@ async function applyPcomImport(){
           // împachetare" (aceeași regulă ca la AWB — #519/applyOneAwbMatch) — scris DOAR dacă nu exista
           // deja (filtru explicit `staff_trimis_at=is.null`), ca să nu suprascriem un timestamp real,
           // mai vechi (ex. o linie trimisă deja manual, cu mult înainte ca „Aplică import" să ruleze).
+          // #785 (inversat, cerut direct: „totul să se bazeze pe AWB-uri + dacă apăsăm noi separat ca ceva să apară în Staff, în rest nu trebuie să apară nimic”):
+          // scăderea stocului NU mai trimite singură comanda în Staff; intră în coadă doar cu AWB asociat sau prin „Trimite în Staff”/„✓ Inclus” apăsat de om.
           try{
-            await dbPatch(`platforma_comenzi?id=eq.${markAppliedId}&staff_trimis_at=is.null`,{staff_trimis_at:new Date().toISOString()});
-            const ex2=pcomRowById(markAppliedId);if(ex2&&!ex2.staffTrimisAt)ex2.staffTrimisAt=new Date().toISOString();
+            const ex2=pcomRowById(markAppliedId);
+            if(ex2&&pcomHasRealAwb(ex2)&&!ex2.staffTrimisAt&&!ex2.impachetat){
+              await dbPatch(`platforma_comenzi?id=eq.${markAppliedId}&staff_trimis_at=is.null`,{staff_trimis_at:new Date().toISOString()});
+              ex2.staffTrimisAt=new Date().toISOString();
+            }
           }catch(e){console.warn('Nu am putut trimite linia spre Staff la aplicare:',e);}
         }
         // scade stocul — o vânzare reală s-a produs
@@ -31063,6 +31079,7 @@ async function associateAwbErrorToOrder(x,o,forceReplace){
       const it=findPendingImportLineByComandaId(o.comandaId);
       if(it){
         Object.assign(it,{awb:x.awb||'',awbSourceFile:x.source_file||'',awbSourcePage:x.source_page||null,awbCourier:x.courier||''});
+        it._awbLoadedAt=Date.now();   // #785: AWB asociat acum — dacă rândul există deja în bază, comanda se reactivează cu el
         // Același bug, aceeași reparație ca la applyOneAwbMatch (vezi comentariul de-acolo) — fără
         // produs ales, syncPcomLineCommitState nu scrie nimic, iar toast-ul final de mai jos ar minți
         // „asociat cu succes" deși comanda rămâne „Neinclus". AWB-ul rămâne reținut pe linie.
@@ -31075,8 +31092,10 @@ async function associateAwbErrorToOrder(x,o,forceReplace){
       // Comandă care are DEJA un AWB DIFERIT — adaugă ca suplimentar, nu suprascrie (vezi
       // pcomAddExtraAwbIfNeeded/awbPickCandidates, aceeași reparație ca la applyOneAwbMatch) — DECÂT
       // dacă omul a ales explicit să înlocuiască (forceReplace, mai sus).
-      addedExtra=forceReplace?false:await pcomAddExtraAwbIfNeeded(o.comandaId,o.platforma,x.awb||'');
-      if(!addedExtra){
+      // #785: AWB-ul asociat acum devine AWB-ul comenzii (cel vechi rămâne în awb_extra) și comanda se reactivează în Staff — regula e aceeași, fie că vine dintr-o etichetă, fie dintr-o alegere manuală
+      const act=x.awb?await pcomActivateWithAwb({awb:x.awb,comandaId:o.comandaId,file:x.source_file||null,page:x.source_page||null,courier:x.courier||'',lot:x.lot||''},o.platforma):{found:false};
+      addedExtra=false;
+      if(!act.found){
         // RESET TOTAL (#519) — rezolvarea manuală a unei erori AWB NU mai avansează nimic legat de
         // vizibilitatea în Staff (vezi comentariul identic din issueEmagAwb).
         const source={awb:x.awb||null,awb_source_file:x.source_file||null,awb_source_page:x.source_page||null,awb_courier:x.courier||null,...(x.lot?{awb_lot:x.lot}:{})};
@@ -31892,6 +31911,34 @@ async function pcomAddExtraAwbIfNeeded(comandaId,platforma,newAwb){
 // Readuce la împachetat o comandă deja împachetată, pe baza unui AWB citit acum — vezi apelul din
 // applyOneAwbMatch. Citește starea LIVE din bază (PCOM poate să nu conțină comenzile vechi). Întoarce
 // true dacă a redeschis comanda (apelantul sare peste restul), false dacă nu era împachetată.
+// #785 — „tot ce are AWB să fie reactivat și asociat cu AWB-ul încărcat, chiar dacă mai avea un AWB înainte”: AWB-ul citit acum devine AWB-ul comenzii (principal);
+// cele vechi (principalul de până atunci + suplimentarele) se păstrează în awb_extra, ca istoric, nu se pierd; comanda se reactivează — redevine neîmpachetată
+// și intră în coada de azi din Staff — indiferent dacă era în așteptare, împachetată sau avea alt AWB. Singura excepție: aceeași etichetă citită a doua oară
+// pe o comandă împachetată AZI cu același AWB (același PDF citit de 2 ori) — nu o readuce la împachetat. Întoarce {found,reactivated,replaced}.
+async function pcomActivateWithAwb(p,platforma){
+  const out={found:false,reactivated:false,replaced:false};
+  const filter=`comanda_id=eq.${encodeURIComponent(p.comandaId)}&platforma=eq.${encodeURIComponent(platforma)}&anulata=eq.false`;
+  let cur=[];
+  try{cur=await dbGet(`platforma_comenzi?${filter}&select=id,awb,awb_extra,impachetat,impachetat_at`)||[];}catch(e){return out;}
+  if(!cur.length)return out;
+  out.found=true;
+  const nw=awbNorm(p.awb),azi=romaniaDayOf(new Date().toISOString());
+  const old=[];
+  cur.forEach(r=>{[r.awb,...(Array.isArray(r.awb_extra)?r.awb_extra:[])].forEach(a=>{const n=awbNorm(a);if(n&&n!==nw&&n!==awbNorm(p.comandaId)&&!old.some(x=>awbNorm(x)===n))old.push(a);});});
+  const sameDayRepeat=cur.every(r=>!r.impachetat||(awbNorm(r.awb)===nw&&romaniaDayOf(r.impachetat_at)>=azi));
+  const wasPacked=cur.some(r=>r.impachetat);
+  const now=new Date().toISOString();
+  const meta={awb:p.awb,awb_source_file:p.file||null,awb_source_page:p.page||null,awb_courier:p.courier||null,...(p.lot?{awb_lot:p.lot}:{}),...(p.cauta?{awb_cauta:p.cauta}:{})};
+  const body=sameDayRepeat&&wasPacked?{...meta}:{...meta,awb_extra:old,impachetat:false,impachetat_at:null,staff_finalizat_at:null,staff_trimis_at:now};
+  await patchAwbWithSource(filter,body);
+  const patch=sameDayRepeat&&wasPacked
+    ?{awb:p.awb,awbSourceFile:p.file||'',awbSourcePage:p.page||null,awbCourier:p.courier||'',...(p.lot?{awbLot:p.lot}:{}),...(p.cauta?{awbCauta:p.cauta}:{})}
+    :{awb:p.awb,awbSourceFile:p.file||'',awbSourcePage:p.page||null,awbCourier:p.courier||'',awbExtra:old,impachetat:false,impachetatAt:'',staffFinalizatAt:'',staffTrimisAt:now,...(p.lot?{awbLot:p.lot}:{}),...(p.cauta?{awbCauta:p.cauta}:{})};
+  PCOM.filter(o=>o.comandaId===p.comandaId&&o.platforma===platforma&&!o.anulata).forEach(o=>Object.assign(o,patch));
+  out.reactivated=!(sameDayRepeat&&wasPacked);out.replaced=old.length>0&&cur.some(r=>awbNorm(r.awb)!==nw&&awbNorm(r.awb));
+  if(wasPacked&&out.reactivated)awbReopenedPacked++;
+  return out;
+}
 let awbReopenedPacked=0;
 async function pcomReopenPackedForAwb(p,platforma){
   const filter=`comanda_id=eq.${encodeURIComponent(p.comandaId)}&platforma=eq.${encodeURIComponent(platforma)}`;
@@ -31949,7 +31996,11 @@ async function applyOneAwbMatch(p){
     const it=findPendingImportLineByComandaId(p.comandaId);
     if(it){
       const awbFields={awb:p.awb,awbSourceFile:p.file||'',awbSourcePage:p.page||null,awbCourier:p.courier||'',awbLot:p.lot||'',awbCauta:p.cauta||''};
+      // #785: dacă linia avea deja un AWB diferit (ex. două etichete pentru aceeași comandă în același lot), cel vechi nu se pierde: rămâne în awb_extra
+      const prevAwbs=[it.awb,...(it.awbExtra||[])].filter(a=>a&&awbNorm(a)!==awbNorm(p.awb));
       Object.assign(it,awbFields);
+      if(prevAwbs.length)it.awbExtra=[...new Set([...(it.awbExtra||[]).filter(a=>awbNorm(a)!==awbNorm(p.awb)),...prevAwbs])];
+      if(p.file||p._blob)it._awbLoadedAt=Date.now();   // #784/#785: eticheta a fost citită acum — dacă rândul există deja în bază și e împachetat, se redeschide
       // #775 — COMANDA e unitatea: AWB-ul se aplică pe TOATE liniile comenzii (nu doar pe prima găsită) și toate cele cu produs ales
       // se includ odată cu ea. Înainte rămânea „Neinclus” a doua linie → în Staff ajungea doar un produs din două (cazul 582542584).
       const idx=pcImpParsed.indexOf(it);
@@ -31994,6 +32045,11 @@ async function applyOneAwbMatch(p){
   // (ex. AWB Cargus vechi înlocuit cu unul Sameday nou): AWB-ul nou devine principal (cel vechi rămâne în
   // awb_extra, nu se pierde), comanda redevine neîmpachetată și intră în coada Staff de azi. Înainte, AWB-ul
   // nou ajungea doar „suplimentar" (pcomAddExtraAwbIfNeeded) și comanda rămânea împachetată, invizibilă.
+  if((p.file||p._blob)&&!awbFilesFromArchive){
+    // #785: AWB-ul încărcat devine AWB-ul comenzii (cel vechi rămâne în awb_extra) și comanda se reactivează în Staff
+    const act=await pcomActivateWithAwb(p,platforma);
+    if(act.found){if(p._blob)generateAwbPreviewInBackground(p._blob,p.page,p.awb,p.comandaId,platforma);return;}
+  }
   if((p.file||p._blob)&&!awbFilesFromArchive&&await pcomReopenPackedForAwb(p,platforma))return;
   // Comandă care are DEJA un AWB DIFERIT — adaugă ca suplimentar, nu suprascrie (vezi
   // pcomAddExtraAwbIfNeeded/awbPickCandidates mai sus în fișier).
