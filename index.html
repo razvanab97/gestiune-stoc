@@ -5709,6 +5709,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:783,text:'AWB-uri — eticheta fără număr de comandă nu mai rămâne „format nerecunoscut”, cerut direct: „nu găsește comanda de pe Trendyol asociată acestui AWB, de ce? rezolvă”. Cauza (găsită pe eticheta reală, ACS/DPD Grecia, pagina 6 din Unknown-99.pdf): eticheta n-are numărul comenzii, iar AI-ul citea codul de client „2ΘΣ232960” drept AWB, cod respins ca implauzibil — deși AWB-ul real (2876970014) era DEJA salvat pe comanda 11824598207 (împachetată ieri). Acum, înainte de AI (și după el, când a citit un cod greșit), se caută pe pagină orice AWB deja cunoscut (awb + awb_extra ale comenzilor, din memorie și din bază; minim 10 caractere; AWB-urile scrise cu spații, ca „8 140 974 389 7”, se potrivesc); dacă pagina conține AWB-ul unei SINGURE comenzi, eticheta e a ei — și, fiind citită azi, o readuce la împachetat în Staff (comanda deja împachetată într-o zi anterioară se redeschide). Plus: (1) o comandă cu AWB suplimentar nou (al doilea colet) rămâne/intră și ea în coada de azi din Staff, nu mai stă „În așteptare” (ex. 1028080170, etichetele 13/21 și 14/21); (2) o etichetă fără „N/M” nu mai șterge numărul de lot deja salvat pe comandă. Reprodus pe cele 21 de etichete de azi (15 rămase „Neincluse” în Admin, 6 deja în Staff): cu codul nou toate 21 ajung în Staff — la o reîncărcare a Admin-ului, comenzile cu AWB rămase necomise se trimit singure în Staff (Update #781). Test: node scripts/awb-known.test.js.',date:'2026-11-26'},
   {n:782,text:'Staff — rând sus cu curierii care ridică și câte AWB-uri are fiecare azi, cerut direct: „Cargus - X, FAN Courier - X, DPD - X, Sameday - X; doar aceștia ridică, unele se combină cu FAN, DPD sau Sameday”. Curierii se contopesc: easybox / eMAG Courier / eMAG Ungaria → Sameday; BoxNow, ACS, ELTA și „FAN Courier / BoxNow” → FAN; „ACS / DPD GR” → DPD; ce nu ridică niciunul (GLS, Vinted fără curier) apare separat ca „Alt curier”, ca totalul să se adune. Se numără AWB-urile coletelor de azi (inclusiv AWB-urile suplimentare), cu „gata/total” = câte sunt deja împachetate; „În așteptare” nu intră. Apăsarea pe curier rămâne „a venit” (✓ ora). Test: node scripts/staff-couriers.test.js.',date:'2026-11-25'},
   {n:781,text:'AWB-uri care nu apăreau în Staff — cauza găsită și reparată, cerut direct: „avem 70 și ceva de AWB-uri în total și doar 59 apar — verifică-le pe restul, de ce nu apar; dacă sunt comenzi în așteptare să fie aduse în împachetare, dacă au alte statusuri, arată-mi”. Verificat pe cele 80 de etichete de azi (45 citite dimineața + 35 din dosar): 44 în Staff, 1 împachetată, 3 în „În așteptare” (stoc zero real: Set 5 roti, stoc ERP 0), iar 32 NU erau în Staff. Cele 32 aveau AWB-ul deja asociat în Admin, dar erau marcate „De verificat — închise pe platformă”: eMAG finalizează comanda chiar la emiterea AWB-ului, deci orice comandă cu AWB generat arată „închisă”. CAUZA: la asocierea AWB-ului, linia potrivită nu se mai includea dacă era „închisă pe platformă” (regresie introdusă de mine la #775, când am făcut ca AWB-ul să includă toată comanda) — rămânea cu AWB, dar neinclusă și necomisă, deci invizibilă în Staff. Acum: (1) linia potrivită cu un AWB se include MEREU (și surorile ei, dacă pot fi incluse); (2) o comandă cu AWB asociat NU mai e „De verificat”, chiar dacă eMAG o arată închisă (rămâne „De verificat” doar fără AWB); (3) AUTO-VINDECARE: comenzile cu AWB care nu sunt în Staff (închise pe eMAG, fără produs, sau Vinted cu linii rămase) se trimit singure când deschizi Comenzi Platforme (max. o trecere pe minut, max. 2 încercări pe linie) — doar etichetele din lotul zilei (au „N/M”) sau comenzile de ≤10 zile; un AWB vechi fără lot rămâne în bandă „📦 N comenzi cu AWB nu sunt în Staff”, cu „Trimite în Staff”; comenzile deja existente în bază (nelegate de ciornă) nu se dublează. Stocul NU se atinge. La data verificării, din cele 32: 21 sunt pe produse cu stoc ERP 0 (Set 5 roti ×11, Set figurine animale ×5, Stație radio ×1, Joc macara ×2) — Staff le va raporta „stoc zero” dacă marfa chiar lipsește. Test: scripts/staff-order-unit.test.js.',date:'2026-11-25'},
   {n:780,text:'Comenzi cu AWB fără produs asociat apar în Staff, cerut direct: „dacă o comandă nu e pusă în Staff, dar există în Admin pentru că nu e asociată, de exemplu, cu produsul, în momentul în care are AWB asociat să apară cu denumirea oficială, de pe site, și în Staff”. Înainte, o linie fără produs nu se putea scrie în bază (commitPcomLine cerea produs), deci comanda cu AWB tipărit rămânea invizibilă pentru angajați (cazurile 583140692, 1137534315, 1137618639). Acum: (1) asocierea unui AWB (din dosar, din PDF, manual sau dintr-o eroare) include și trimite în Staff TOATE liniile comenzii, chiar și fără produs — rândul se scrie cu produs_id gol și produs_nume = titlul de pe site; (2) stocul NU se atinge (Aplică import sare peste liniile fără produs), iar profitul estimat rămâne gol; când alegi produsul, rândul din Staff se completează singur (pcomReassignCommittedProduct) și abia atunci se poate scădea stocul; (3) comenzile cu AWB deja existente, fără produs și netrimise, apar într-o bandă „📦 N comenzi cu AWB nu sunt în Staff” cu „Trimite în Staff” pe fiecare și „Trimite toate”; (4) pe card apare „📦 În Staff fără produs asociat — se vede cu denumirea de pe site”; în Staff, linia arată denumirea de pe site cu eticheta „🏷 Denumirea de pe site — produs neasociat în Admin”. Fără AWB, o linie fără produs rămâne ca înainte (nu intră în Staff). Test: scripts/staff-order-unit.test.js.',date:'2026-11-25'},
@@ -23935,6 +23936,57 @@ function awbFindExactExisting(awb){
   if(!v)return null;
   return PCOM.find(o=>!o.anulata&&awbNorm(o.awb)===v)||null;
 }
+// #783 — „Nu găsește comanda de pe Trendyol asociată acestui AWB”: o etichetă fără număr de comandă (ACS/DPD Grecia: doar AWB + cod de client „2ΘΣ232960”,
+// pe care AI-ul îl citea drept AWB și era respins) rămânea „format nerecunoscut”, deși AWB-ul ei era deja salvat pe comandă. Acum, înainte de AI, se caută pe pagină
+// ORICE AWB deja cunoscut (comanda din memorie sau din bază: awb + awb_extra, minim 10 caractere); dacă pagina conține AWB-ul unei SINGURE comenzi, eticheta e a ei.
+function awbTextView(text){return String(text||'').toUpperCase().replace(/(\d)[ \t]+(?=\d)/g,'$1');}   // „8 140 974 389 7” → „81409743897”
+function awbKnownAwbIndex(){
+  const m=new Map();
+  PCOM.forEach(o=>{
+    if(o.anulata)return;
+    [o.awb,...(Array.isArray(o.awbExtra)?o.awbExtra:[])].forEach(a=>{
+      const n=awbNorm(a);
+      if(n.length<10||awbNorm(o.comandaId)===n)return;
+      (m.get(n)||m.set(n,[]).get(n)).push({row:o,awb:a});
+    });
+  });
+  return m;
+}
+function awbKnownPick(hits){   // hits: Map "platformă|comandă" → {comandaId,awb,courier}; exact o singură comandă, altfel nu ghicește
+  if(hits.size!==1)return null;
+  const h=[...hits.values()][0];
+  return{awb:h.awb,comandaId:h.comandaId,courier:h.courier||'',_knownAwb:true};
+}
+function awbMatchKnownInText(text,index){
+  const hay=awbTextView(text);if(hay.length<10)return null;
+  const hits=new Map();
+  index.forEach((list,n)=>{if(hay.includes(n))list.forEach(h=>hits.set(h.row.platforma+'|'+h.row.comandaId,{comandaId:h.row.comandaId,awb:h.awb,courier:h.row.awbCourier}));});
+  return awbKnownPick(hits);
+}
+function awbDigitRuns(text){
+  const out=new Set();
+  (awbTextView(text).match(/\d{10,22}/g)||[]).forEach(r=>{out.add(r);const z=r.replace(/^0+/,'');if(z.length>=10)out.add(z);});
+  return[...out];
+}
+async function awbResolveByKnownAwb(tasks,isBad){
+  const pend=tasks.filter(t=>isBad(t));if(!pend.length)return 0;
+  const index=awbKnownAwbIndex();let n=0;const left=[];
+  pend.forEach(t=>{const m=awbMatchKnownInText(t.text,index);if(m){t.p=m;n++;}else left.push(t);});
+  if(left.length){   // comenzi mai vechi, care nu mai sunt în memorie (PCOM e limitat): căutare în bază după numerele de pe pagină
+    try{
+      const per=left.map(t=>awbDigitRuns(t.text).slice(0,24)),all=[...new Set(per.flat())].slice(0,120);
+      if(all.length){
+        const rows=await dbGet(`platforma_comenzi?select=platforma,comanda_id,awb,awb_extra,awb_courier&anulata=eq.false&awb=in.(${all.map(encodeURIComponent).join(',')})&limit=200`)||[];
+        left.forEach((t,i)=>{
+          const set=new Set(per[i]),hits=new Map();
+          rows.forEach(r=>{if(set.has(awbNorm(r.awb))&&awbNorm(r.awb)!==awbNorm(r.comanda_id))hits.set(r.platforma+'|'+r.comanda_id,{comandaId:r.comanda_id,awb:r.awb,courier:r.awb_courier});});
+          const m=awbKnownPick(hits);if(m){t.p=m;n++;}
+        });
+      }
+    }catch(e){console.warn('Căutarea AWB-urilor cunoscute în bază a eșuat:',e);}
+  }
+  return n;
+}
 function resolveAwbByNameAndAmount(extracted){
   if(!extracted||(!extracted.clientNume&&extracted.suma==null&&!extracted.produsText))return null;
   const nameQ=extracted.clientNume||'';
@@ -31109,6 +31161,7 @@ async function handleAwbPdfFile(ev){
     // între ele, deci rulate acum concurent, cu o limită (același tipar ca la generarea galeriei AI —
     // vezi GALLERY_MAX_CONCURRENT), nu toate deodată (ar risca limite de rată pe server).
     const AWB_AI_MAX_CONCURRENT=3;
+    await awbResolveByKnownAwb(awbTasks,t=>!t.p);   // #783: AWB deja salvat pe o comandă, găsit pe pagină
     const awbAiPending=awbTasks.filter(t=>!t.p);
     if(awbAiPending.length){
       let awbAiIdx=0,awbAiDone=0;
@@ -31128,6 +31181,7 @@ async function handleAwbPdfFile(ev){
       }
       await Promise.all(Array.from({length:Math.min(AWB_AI_MAX_CONCURRENT,awbAiPending.length)},awbAiWorker));
     }
+    await awbResolveByKnownAwb(awbTasks,t=>!t.p||!awbLooksPlausible(t.p.awb,t.p.courier));   // #783: și când AI-ul a citit un cod greșit drept AWB (ex. codul de client ACS)
     // Pas 3 (rapid, secvențial, ordinea originală) — finalizare identică cu ce era înainte imediat după
     // aiFallbackAwbMatch, neschimbată ca logică, doar separată de pasul lent de mai sus.
     for(const t of awbTasks){
@@ -31417,6 +31471,7 @@ async function readAwbFolderPdfs(fromArchive){
     // între ele, deci rulate acum concurent, cu o limită (același tipar ca la generarea galeriei AI —
     // vezi GALLERY_MAX_CONCURRENT), nu toate deodată (ar risca limite de rată pe server).
     const AWB_AI_MAX_CONCURRENT=3;
+    await awbResolveByKnownAwb(awbTasks,t=>!t.p);   // #783: AWB deja salvat pe o comandă, găsit pe pagină
     const awbAiPending=awbTasks.filter(t=>!t.p);
     if(awbAiPending.length){
       let awbAiIdx=0,awbAiDone=0;
@@ -31436,6 +31491,7 @@ async function readAwbFolderPdfs(fromArchive){
       }
       await Promise.all(Array.from({length:Math.min(AWB_AI_MAX_CONCURRENT,awbAiPending.length)},awbAiWorker));
     }
+    await awbResolveByKnownAwb(awbTasks,t=>!t.p||!awbLooksPlausible(t.p.awb,t.p.courier));   // #783: și când AI-ul a citit un cod greșit drept AWB (ex. codul de client ACS)
     // Pas 3 (rapid, secvențial, ordinea originală) — finalizare identică cu ce era înainte imediat după
     // aiFallbackAwbMatch, neschimbată ca logică, doar separată de pasul lent de mai sus.
     for(const t of awbTasks){
@@ -31910,7 +31966,7 @@ async function applyOneAwbMatch(p){
       if(sibIdx.some(i=>pcImpParsed[i]&&pcImpParsed[i]._committedId)||toInclude.length>1){
         const plat=it.platforma||pcImpPlatforma;
         try{
-          const src={awb:p.awb,awb_source_file:p.file||null,awb_source_page:p.page||null,awb_courier:p.courier||null,awb_lot:p.lot||null,awb_cauta:p.cauta||null,staff_trimis_at:new Date().toISOString()};
+          const src={awb:p.awb,awb_source_file:p.file||null,awb_source_page:p.page||null,awb_courier:p.courier||null,...(p.lot?{awb_lot:p.lot}:{}),...(p.cauta?{awb_cauta:p.cauta}:{}),staff_trimis_at:new Date().toISOString()};
           await patchAwbWithSource(`comanda_id=eq.${encodeURIComponent(p.comandaId)}&platforma=eq.${encodeURIComponent(plat)}&impachetat=eq.false`,src);
           PCOM.filter(o=>o.comandaId===p.comandaId&&o.platforma===plat&&!o.impachetat).forEach(o=>Object.assign(o,{awb:p.awb,awbSourceFile:p.file||'',awbSourcePage:p.page||null,awbCourier:p.courier||'',awbLot:p.lot||'',awbCauta:p.cauta||'',staffTrimisAt:src.staff_trimis_at}));
         }catch(e){console.warn('Nu am putut uniformiza AWB-ul pe toate liniile comenzii:',e);}
@@ -31933,10 +31989,16 @@ async function applyOneAwbMatch(p){
   // Comandă care are DEJA un AWB DIFERIT — adaugă ca suplimentar, nu suprascrie (vezi
   // pcomAddExtraAwbIfNeeded/awbPickCandidates mai sus în fișier).
   if(await pcomAddExtraAwbIfNeeded(p.comandaId,platforma,p.awb)){
+    // #783: o etichetă citită ACUM = comanda se expediază azi — și cu AWB suplimentar rămâne/intră în coada de azi din Staff (nu rămâne „În așteptare”)
+    try{
+      const nowIso=new Date().toISOString();
+      await dbPatch(`platforma_comenzi?comanda_id=eq.${encodeURIComponent(p.comandaId)}&platforma=eq.${encodeURIComponent(platforma)}&anulata=eq.false&impachetat=eq.false`,{staff_trimis_at:nowIso});
+      PCOM.filter(o=>o.comandaId===p.comandaId&&o.platforma===platforma&&!o.anulata&&!o.impachetat).forEach(o=>{o.staffTrimisAt=nowIso;});
+    }catch(e){console.warn('Nu am putut readuce comanda în coada de azi:',e);}
     if(p._blob)generateAwbPreviewInBackground(p._blob,p.page,p.awb,p.comandaId,platforma);
     return;
   }
-  const source={awb:p.awb,awb_source_file:p.file||null,awb_source_page:p.page||null,awb_courier:p.courier||null,awb_lot:p.lot||null,awb_cauta:p.cauta||null};   // #775: numărul din lot (N/M) + textul de căutare de pe etichetă
+  const source={awb:p.awb,awb_source_file:p.file||null,awb_source_page:p.page||null,awb_courier:p.courier||null,...(p.lot?{awb_lot:p.lot}:{}),...(p.cauta?{awb_cauta:p.cauta}:{})};   // #783: o etichetă fără „N/M” nu mai șterge numărul de lot deja salvat | #775: numărul din lot (N/M) + textul de căutare de pe etichetă
   // RESET TOTAL (#519) — ACESTA era mecanismul EXACT care a produs bug-ul real, raportat direct, cu
   // o captură: „ce caută aceste comenzi în staff la de împachetat în condițiile în care acestea sunt
   // de astăzi?" — o comandă din 21.09, neatinsă de nimic altceva, și-a avansat singură created_at la
