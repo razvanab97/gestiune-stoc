@@ -5709,6 +5709,7 @@ if(/^((?!chrome|crios|fxios|edg|android).)*safari/i.test(navigator.userAgent))do
 
 // ── UPDATES WIDGET (istoric modificări cod, cel mai recent = numărul cel mai mare) ──
 const UPDATES=[
+  {n:786,text:'Raport vânzări / Istoric lunar — comenzile de platformă nu mai sunt numărate de două ori, cerut direct: „nu au cum să fie vânzări de 118.000 RON... o comandă care a fost vândută și apoi readusă să nu fie pusă ca vânzare dublă, ci ca o singură vânzare". Cauza, verificată pe date reale: la aplicarea unei comenzi eMAG/Trendyol/Vinted se scrie și un „ecou" în Jurnal, în ziua aplicării; dacă aplicarea era în altă zi decât comanda (readusă, aplicată a doua zi sau automat la 22:00), ecoul apărea în plus ca „vânzare directă" — în noiembrie 24.267 RON, toți ecou, nicio vânzare directă reală. Acum, de la 02.10.2026, ca vânzare directă contează doar o vânzare directă reală (trimisă în Staff), iar liniile anulate nu contează. Noiembrie: 97.548 RON (era 121.815), octombrie: 50.472 RON (era 62.095). Profitul estimat se corectează la fel.',date:'2026-11-28'},
   {n:785,text:'Regula Staff, cerută direct: „totul să se bazeze pe AWB-uri + dacă apăsăm noi separat ca ceva să apară în Staff, în rest nu trebuie să apară nimic” și „tot ce are AWB să fie reactivat și asociat cu AWB-ul încărcat, chiar dacă mai avea un AWB înainte”. (1) AWB-ul citit (din etichetă sau ales manual) devine AWB-ul comenzii; cel vechi — principalul de până atunci și cele suplimentare — se păstrează în awb_extra, ca istoric, nu se pierde (schimb: dacă încarci eticheta unui AWB suplimentar, el devine principal, iar principalul trece în suplimentare). Până acum, la o comandă cu alt AWB, cel nou ajungea doar „suplimentar”, iar comanda rămânea unde era (în așteptare / împachetată). (2) Comanda se reactivează: redevine neîmpachetată, i se șterge finalizarea și intră în coada de azi din Staff — indiferent dacă era în așteptare, împachetată sau avea alt AWB. Singura excepție: aceeași etichetă citită a doua oară pe o comandă împachetată AZI cu același AWB (același PDF citit de 2 ori) — se actualizează doar sursa/lotul, nu se readuce la împachetat. Pentru rândurile deja existente în bază și legate de linii din ciornă, reactivarea se face doar când eticheta a fost citită acum (marcaj pe linie), ca linii învechite din ciornă să nu redeschidă colete deja expediate. (3) „Aplică import” (inclusiv rutina de la 22:00) NU mai trimite singur comenzile în Staff: scăderea stocului nu e un semnal de împachetare; în Staff intră doar comenzile cu AWB asociat sau cele trimise de tine (✓ Inclus / Trimite în Staff); vânzările directe făcute de tine rămân ca înainte. Verificat pe cele 21 de etichete reale: împachetatele azi cu același AWB nu se readuc; comenzile cu 2 etichete (13/21 și 14/21) păstrează ambele AWB-uri. Test: node scripts/awb-known.test.js.',date:'2026-11-26'},
   {n:784,text:'Comenzi cu AWB trimise în Staff — a mai rămas un caz, găsit la verificarea celor 8 AWB-uri „fără Staff” rămase din ciornă: 7 erau de fapt deja în bază și deja împachetate (ciorna nu le legase de rândurile din bază), iar una, 516658254 (comandă din septembrie, etichetă citită ieri, lotul 29/44), era o comandă veche împachetată pe care ciorna o lega de rândul vechi fără s-o readucă la împachetat. Acum, când „Trimite în Staff”/AWB asociat dă peste un rând deja existent și împachetat într-o zi anterioară, comanda se redeschide pentru împachetat (aceeași regulă și aceeași protecție ca la etichetele citite: împachetată AZI, cu același AWB, nu se redeschide). Comanda 516658254 a fost readusă acum în Staff. Test: node scripts/awb-known.test.js.',date:'2026-11-26'},
   {n:783,text:'AWB-uri — eticheta fără număr de comandă nu mai rămâne „format nerecunoscut”, cerut direct: „nu găsește comanda de pe Trendyol asociată acestui AWB, de ce? rezolvă”. Cauza (găsită pe eticheta reală, ACS/DPD Grecia, pagina 6 din Unknown-99.pdf): eticheta n-are numărul comenzii, iar AI-ul citea codul de client „2ΘΣ232960” drept AWB, cod respins ca implauzibil — deși AWB-ul real (2876970014) era DEJA salvat pe comanda 11824598207 (împachetată ieri). Acum, înainte de AI (și după el, când a citit un cod greșit), se caută pe pagină orice AWB deja cunoscut (awb + awb_extra ale comenzilor, din memorie și din bază; minim 10 caractere; AWB-urile scrise cu spații, ca „8 140 974 389 7”, se potrivesc); dacă pagina conține AWB-ul unei SINGURE comenzi, eticheta e a ei — și, fiind citită azi, o readuce la împachetat în Staff (comanda deja împachetată într-o zi anterioară se redeschide). Plus: (1) o comandă cu AWB suplimentar nou (al doilea colet) rămâne/intră și ea în coada de azi din Staff, nu mai stă „În așteptare” (ex. 1028080170, etichetele 13/21 și 14/21); (2) o etichetă fără „N/M” nu mai șterge numărul de lot deja salvat pe comandă. Reprodus pe cele 21 de etichete de azi (15 rămase „Neincluse” în Admin, 6 deja în Staff): cu codul nou toate 21 ajung în Staff — la o reîncărcare a Admin-ului, comenzile cu AWB rămase necomise se trimit singure în Staff (Update #781). Test: node scripts/awb-known.test.js.',date:'2026-11-26'},
@@ -8382,6 +8383,21 @@ function pcomThisMonthTotal(){
 // exact cum se scrie ecoul în Jurnal (saveJurnalEntry folosește mereu td(), ziua importului).
 // Totalurile COMBINATE (toate canalele adunate) NU au nevoie de deduplicare — Jurnalul e un singur
 // registru aditiv, nu dublează nimic la nivel combinat.
+// Cantitatea dintr-o linie de Jurnal care e VÂNZARE DIRECTĂ reală — cerut direct (28.11): „nu au cum să fie
+// vânzări de 118.000 RON... o comandă care a fost vândută și apoi readusă să nu fie pusă ca vânzare dublă".
+// Cauza: la aplicarea unei comenzi de platformă se scrie și un ECOU în Jurnal (saveJurnalEntry(...,false)),
+// în ziua APLICĂRII; deduplicarea scădea doar comenzile create în ACEEAȘI zi, deci o comandă aplicată în
+// altă zi (readusă, aplicată a doua zi / automat la 22:00) apărea a doua oară, ca „vânzare directă" —
+// 24.267 RON în noiembrie, toți ecou. De la resetul #519 (02.10.2026) o vânzare directă reală are mereu
+// staff_trimis_at (en.direct=true), ecoul nu (false) — ecoul nu mai e numărat deloc, comanda contează o
+// singură dată, prin rândul ei de platformă. Liniile anulate nu contează. Liniile vechi / din cache-ul
+// local fără marcaj (en.direct undefined) păstrează deduplicarea veche pe zi.
+const JL_DIRECT_FLAG_FROM='2026-10-02';
+function jlDirectQty(en,date,coveredQty){
+  if(en.anulata)return 0;
+  if(en.direct===false&&String(date||'')>=JL_DIRECT_FLAG_FROM)return 0;
+  return Math.max(0,(Number(en.qty)||0)-(coveredQty||0));
+}
 function platformCoveredByDay(){
   const map={}; // "produsId|zi_import" -> cantitate
   pcomActiveRows().forEach(o=>{
@@ -8406,7 +8422,7 @@ function dedupedSalesByDate(){
   JL.forEach(day=>{
     (day.entries||[]).forEach(en=>{
       const k=en.id+'|'+day.date;
-      const remaining=Math.max(0,(Number(en.qty)||0)-(covered[k]||0));
+      const remaining=jlDirectQty(en,day.date,covered[k]);
       if(remaining<=0)return;
       const b=ensure(day.date);
       b.direct.qty+=remaining;b.direct.value+=remaining*(Number(en.priceSell)||0);
@@ -8437,7 +8453,7 @@ function profitInRange(from,to){
     if(day.date<from||day.date>to)return;
     (day.entries||[]).forEach(en=>{
       const k=en.id+'|'+day.date;
-      const remaining=Math.max(0,(Number(en.qty)||0)-(covered[k]||0));
+      const remaining=jlDirectQty(en,day.date,covered[k]);
       if(remaining<=0)return;
       const p=P.find(x=>x.id===en.id);
       const cost=p?(Number(p.priceBuyTTC)||0):0;
@@ -8545,7 +8561,7 @@ function profitByDate(){
   JL.forEach(day=>{
     (day.entries||[]).forEach(en=>{
       const k=en.id+'|'+day.date;
-      const remaining=Math.max(0,(Number(en.qty)||0)-(covered[k]||0));
+      const remaining=jlDirectQty(en,day.date,covered[k]);
       if(remaining<=0)return;
       const p=P.find(x=>x.id===en.id);
       const cost=p?(Number(p.priceBuyTTC)||0):0;
@@ -8805,7 +8821,7 @@ function productSalesInRange(from,to){
     if(day.date<from||day.date>to)return;
     (day.entries||[]).forEach(en=>{
       const k=en.id+'|'+day.date;
-      const remaining=Math.max(0,(Number(en.qty)||0)-(covered[k]||0));
+      const remaining=jlDirectQty(en,day.date,covered[k]);
       if(remaining<=0)return;
       const p=P.find(x=>x.id===en.id);
       const cost=p?(Number(p.priceBuyTTC)||0):0;
@@ -8832,7 +8848,7 @@ function categorySalesInRange(from,to){
     if(day.date<from||day.date>to)return;
     (day.entries||[]).forEach(en=>{
       const k=en.id+'|'+day.date;
-      const remaining=Math.max(0,(Number(en.qty)||0)-(covered[k]||0));
+      const remaining=jlDirectQty(en,day.date,covered[k]);
       if(remaining<=0)return;
       const e=ensure(en.category||'Fără categorie');
       e.qty+=remaining;e.value+=remaining*(Number(en.priceSell)||0);
@@ -10360,7 +10376,7 @@ async function load(){
     };
     const prodPromise=loadProducts(prodCols);
     const todayPromise=dbGet(`vanzari_zilnice?data=eq.${today}&select=*`);
-    const jurnalPromise=dbGet('jurnal?select=data,product_id,product_name,category,price_sell,qty&order=data.desc');
+    const jurnalPromise=dbGet('jurnal?select=data,product_id,product_name,category,price_sell,qty,staff_trimis_at,anulata&order=data.desc');
     const stockOrdersPromise=dbGet('comenzi_stoc?select=*&order=created_at.desc').catch(e=>({__err:e}));
     const activityPromise=dbGet('activitate_stoc?select=*&order=created_at.desc&limit=100').catch(e=>({__err:e}));
     const priceHistPromise=dbGet('istoric_preturi?select=*&order=created_at.desc&limit=200').catch(e=>({__err:e}));
@@ -10384,7 +10400,7 @@ async function load(){
     const jMap={};
     jRows.forEach(r=>{
       if(!jMap[r.data])jMap[r.data]={date:r.data,entries:[]};
-      jMap[r.data].entries.push({id:r.product_id,name:r.product_name,category:r.category||'',priceSell:r.price_sell||0,img:lazyProductImageRef(r.product_id),qty:r.qty});
+      jMap[r.data].entries.push({id:r.product_id,name:r.product_name,category:r.category||'',priceSell:r.price_sell||0,img:lazyProductImageRef(r.product_id),qty:r.qty,direct:!!r.staff_trimis_at,anulata:!!r.anulata});
     });
     JL=Object.values(jMap).sort((a,b)=>b.date.localeCompare(a.date));
 
@@ -10936,11 +10952,11 @@ async function saveTodayAllSales(){
 
 // ── SAVE JURNAL ──
 // Actualizează JL (în memorie) direct cu o singură intrare — fără să re-descarce tot jurnalul.
-function applyJurnalEntryLocal(ds,p,q){
+function applyJurnalEntryLocal(ds,p,q,direct){
   let day=JL.find(d=>d.date===ds);
   if(!day){day={date:ds,entries:[]};JL.unshift(day);}
   const ex=day.entries.find(en=>en.id===p.id);
-  if(ex)ex.qty+=q;else day.entries.push({id:p.id,name:p.name,category:p.category||'',priceSell:p.priceSell||0,img:p.img||'',qty:q});
+  if(ex){ex.qty+=q;if(direct)ex.direct=true;}else day.entries.push({id:p.id,name:p.name,category:p.category||'',priceSell:p.priceSell||0,img:p.img||'',qty:q,direct:!!direct});
 }
 // Data e mereu AZI (nu data reală a comenzii de pe platformă) — cerință explicită: importul unei
 // comenzi (indiferent din ce zi e comanda pe eMAG/Trendyol) trebuie să se vadă în Jurnal/Vânzări azi
@@ -10963,7 +10979,7 @@ function applyJurnalEntryLocal(ds,p,q){
 async function saveJurnalEntry(p, q, sendToStaff=true){
   const ds=td();
   if(!sbReady){
-    applyJurnalEntryLocal(ds,p,q);
+    applyJurnalEntryLocal(ds,p,q,sendToStaff);
     safeLocalSet(JK,JSON.stringify(JL));
     return;
   }
@@ -10989,7 +11005,7 @@ async function saveJurnalEntry(p, q, sendToStaff=true){
     // actualizează local, fără re-descărcare completă — jurnalul poate avea mii de rânduri după luni
     // de utilizare, iar refetch-ul întregii tabele la fiecare vânzare (inclusiv la import în bloc din
     // Comenzi Platforme, unde se apelează o dată per linie) e exact ce făcea Jurnalul lent la deschidere
-    applyJurnalEntryLocal(ds,p,q);
+    applyJurnalEntryLocal(ds,p,q,sendToStaff);
     setSyncStatus('ok',new Date().toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}));
   }catch(err){setSyncStatus('err','Eroare jurnal');safeLocalSet(JK,JSON.stringify(JL));}
 }
